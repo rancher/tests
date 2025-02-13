@@ -37,7 +37,7 @@ func InstallCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	}
 
-	benchmarkChartInstallActionPayload := &payloadOpts{
+	benchmarkChartInstallActionPayload := &PayloadOpts{
 		InstallOptions:  *installOptions,
 		Name:            CISBenchmarkName,
 		Namespace:       CISBenchmarkNamespace,
@@ -56,7 +56,7 @@ func InstallCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 	}
 
 	client.Session.RegisterCleanupFunc(func() error {
-		defaultChartUninstallAction := newChartUninstallAction()
+		defaultChartUninstallAction := NewChartUninstallAction()
 
 		err = catalogClient.UninstallChart(CISBenchmarkName, CISBenchmarkNamespace, defaultChartUninstallAction)
 		if err != nil {
@@ -190,12 +190,12 @@ func InstallCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 }
 
 // newCISBenchmarkChartInstallAction is a private helper function that returns chart install action with CIS benchmark and payload options.
-func newCISBenchmarkChartInstallAction(p *payloadOpts) (*types.ChartInstallAction, error) {
-	chartInstall := newChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
-	chartInstallCRD := newChartInstall(p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
+func newCISBenchmarkChartInstallAction(p *PayloadOpts) (*types.ChartInstallAction, error) {
+	chartInstall := NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
+	chartInstallCRD := NewChartInstall(p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
 	chartInstalls := []types.ChartInstall{*chartInstallCRD, *chartInstall}
 
-	chartInstallAction := newChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	chartInstallAction := NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
 
 	return chartInstallAction, nil
 }
@@ -212,7 +212,7 @@ func UpgradeCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	}
 
-	benchmarkChartUpgradeActionPayload := &payloadOpts{
+	benchmarkChartUpgradeActionPayload := &PayloadOpts{
 		InstallOptions:  *installOptions,
 		Name:            CISBenchmarkName,
 		Namespace:       CISBenchmarkNamespace,
@@ -290,12 +290,12 @@ func UpgradeCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 }
 
 // newCISBenchmarkChartUpgradeAction is a private helper function that returns chart upgrade action.
-func newCISBenchmarkChartUpgradeAction(p *payloadOpts) *types.ChartUpgradeAction {
-	chartUpgrade := newChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, nil)
-	chartUpgradeCRD := newChartUpgrade(p.Name+"-crd", p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, nil)
+func newCISBenchmarkChartUpgradeAction(p *PayloadOpts) *types.ChartUpgradeAction {
+	chartUpgrade := NewChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, nil)
+	chartUpgradeCRD := NewChartUpgrade(p.Name+"-crd", p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, nil)
 	chartUpgrades := []types.ChartUpgrade{*chartUpgradeCRD, *chartUpgrade}
 
-	chartUpgradeAction := newChartUpgradeAction(p.Namespace, chartUpgrades)
+	chartUpgradeAction := NewChartUpgradeAction(p.Namespace, chartUpgrades)
 
 	return chartUpgradeAction
 }

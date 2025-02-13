@@ -7,4 +7,4 @@ echo | corral config
 corral list
 
 echo "cleanup rancher"
-tests/v2/validation/registries/bin/ranchercleanup
+validation/registries/bin/ranchercleanup

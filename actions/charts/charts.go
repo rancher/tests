@@ -22,9 +22,9 @@ type InstallOptions struct {
 	ProjectID string
 }
 
-// payloadOpts is a private struct that contains the options for the chart payloads.
+// PayloadOpts is a struct that contains the options for the chart payloads.
 // It is used to avoid passing the same options to different functions while using the chart helpers.
-type payloadOpts struct {
+type PayloadOpts struct {
 	InstallOptions
 	Name            string
 	Namespace       string

@@ -8,8 +8,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// newChartUninstallAction is a private constructor that creates a default payload for chart uninstall action with all disabled options.
-func newChartUninstallAction() *types.ChartUninstallAction {
+// NewChartUninstallAction is a private constructor that creates a default payload for chart uninstall action with all disabled options.
+func NewChartUninstallAction() *types.ChartUninstallAction {
 	return &types.ChartUninstallAction{
 		DisableHooks: false,
 		DryRun:       false,
@@ -19,8 +19,8 @@ func newChartUninstallAction() *types.ChartUninstallAction {
 	}
 }
 
-// newChartInstallAction is a private constructor that creates a payload for chart install action with given namespace, projectId and chartInstalls.
-func newChartInstallAction(namespace, projectID string, chartInstalls []types.ChartInstall) *types.ChartInstallAction {
+// NewChartInstallAction is a private constructor that creates a payload for chart install action with given namespace, projectId and chartInstalls.
+func NewChartInstallAction(namespace, projectID string, chartInstalls []types.ChartInstall) *types.ChartInstallAction {
 	return &types.ChartInstallAction{
 		DisableHooks:             false,
 		Timeout:                  &metav1.Duration{Duration: 600 * time.Second},
@@ -32,8 +32,8 @@ func newChartInstallAction(namespace, projectID string, chartInstalls []types.Ch
 	}
 }
 
-// newChartUpgradeAction is a private constructor that creates a payload for chart upgrade action with given namespace and chartUpgrades.
-func newChartUpgradeAction(namespace string, chartUpgrades []types.ChartUpgrade) *types.ChartUpgradeAction {
+// NewChartUpgradeAction is a private constructor that creates a payload for chart upgrade action with given namespace and chartUpgrades.
+func NewChartUpgradeAction(namespace string, chartUpgrades []types.ChartUpgrade) *types.ChartUpgradeAction {
 	return &types.ChartUpgradeAction{
 		DisableHooks:             false,
 		Timeout:                  &metav1.Duration{Duration: 600 * time.Second},
@@ -46,8 +46,8 @@ func newChartUpgradeAction(namespace string, chartUpgrades []types.ChartUpgrade)
 	}
 }
 
-// newChartInstallAction is a private constructor that creates a chart install with given chart values that can be used for chart install action.
-func newChartInstall(name, version, clusterID, clusterName, url, repoName, projectID, defaultRegistry string, chartValues map[string]interface{}) *types.ChartInstall {
+// NewChartInstallAction is a private constructor that creates a chart install with given chart values that can be used for chart install action.
+func NewChartInstall(name, version, clusterID, clusterName, url, repoName, projectID, defaultRegistry string, chartValues map[string]interface{}) *types.ChartInstall {
 	chartInstall := types.ChartInstall{
 		Annotations: map[string]string{
 			"catalog.cattle.io/ui-source-repo":      repoName,
@@ -79,8 +79,8 @@ func newChartInstall(name, version, clusterID, clusterName, url, repoName, proje
 	return &chartInstall
 }
 
-// newChartUpgradeAction is a private constructor that creates a chart upgrade with given chart values that can be used for chart upgrade action.
-func newChartUpgrade(chartName, releaseName, version, clusterID, clusterName, url, defaultRegistry string, chartValues map[string]interface{}) *types.ChartUpgrade {
+// NewChartUpgradeAction is a private constructor that creates a chart upgrade with given chart values that can be used for chart upgrade action.
+func NewChartUpgrade(chartName, releaseName, version, clusterID, clusterName, url, defaultRegistry string, chartValues map[string]interface{}) *types.ChartUpgrade {
 	chartUpgrade := types.ChartUpgrade{
 		Annotations: map[string]string{
 			"catalog.cattle.io/ui-source-repo":      "rancher-charts",

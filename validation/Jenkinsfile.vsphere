@@ -96,18 +96,18 @@ node("vsphere-vpn-1") {
             try {
               stage('Configure and Build') {
                 if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
-                  dir("./tests/v2/validation/.ssh") {
+                  dir("./validation/.ssh") {
                     def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
                     writeFile file: AWS_SSH_KEY_NAME, text: decoded
                   }
                 }
 
-                dir("./tests/v2/validation/.ssh") {
+                dir("./validation/.ssh") {
                   def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
                   writeFile file: JENKINS_RKE_VALIDATION, text: decodedRsa
                 }
 
-                dir("./tests/v2/validation") {
+                dir("./validation") {
                   def filename = "config.yaml"
                   def configContents = env.CONFIG
 
@@ -115,8 +115,8 @@ node("vsphere-vpn-1") {
                   env.CATTLE_TEST_CONFIG = rootPath+filename
                 }
 
-                sh "./tests/v2/validation/configure.sh"
-                sh "./tests/v2/validation/build.sh"
+                sh "./validation/configure.sh"
+                sh "./validation/build.sh"
               }
               stage('Run Validation Tests') {
                 try {

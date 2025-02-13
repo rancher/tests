@@ -36,7 +36,7 @@ func InstallRancherAlertingChart(client *rancher.Client, installOptions *Install
 		return err
 	}
 
-	alertingChartInstallActionPayload := &payloadOpts{
+	alertingChartInstallActionPayload := &PayloadOpts{
 		InstallOptions:  *installOptions,
 		Name:            RancherAlertingName,
 		Namespace:       RancherAlertingNamespace,
@@ -57,7 +57,7 @@ func InstallRancherAlertingChart(client *rancher.Client, installOptions *Install
 	// Cleanup registration
 	client.Session.RegisterCleanupFunc(func() error {
 		// UninstallAction for when uninstalling the rancher-alerting-drivers chart
-		defaultChartUninstallAction := newChartUninstallAction()
+		defaultChartUninstallAction := NewChartUninstallAction()
 
 		err = catalogClient.UninstallChart(RancherAlertingName, RancherAlertingNamespace, defaultChartUninstallAction)
 		if err != nil {
@@ -165,7 +165,7 @@ func InstallRancherAlertingChart(client *rancher.Client, installOptions *Install
 	})
 }
 
-func newAlertingChartInstallAction(p *payloadOpts, opts *RancherAlertingOpts) *types.ChartInstallAction {
+func newAlertingChartInstallAction(p *PayloadOpts, opts *RancherAlertingOpts) *types.ChartInstallAction {
 	alertingValues := map[string]interface{}{
 		"prom2teams": map[string]interface{}{
 			"enabled": opts.Teams,
@@ -175,8 +175,8 @@ func newAlertingChartInstallAction(p *payloadOpts, opts *RancherAlertingOpts) *t
 		},
 	}
 
-	chartInstall := newChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, alertingValues)
+	chartInstall := NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, alertingValues)
 	chartInstalls := []types.ChartInstall{*chartInstall}
 
-	return newChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	return NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
 }

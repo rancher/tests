@@ -17,13 +17,14 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
-	"github.com/rancher/tests/actions/fleet"
 	"github.com/rancher/tests/actions/kubeapi/namespaces"
 	kubeprojects "github.com/rancher/tests/actions/kubeapi/projects"
-	"github.com/rancher/tests/actions/observability"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/uiplugins"
+	interoperability "github.com/rancher/tests/interoperability/charts"
+	"github.com/rancher/tests/interoperability/fleet"
+	"github.com/rancher/tests/interoperability/observability"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -73,14 +74,14 @@ func (rb *StackStateRBACTestSuite) SetupSuite() {
 	require.NoError(rb.T(), err)
 
 	projectTemplate := kubeprojects.NewProjectTemplate(cluster.ID)
-	projectTemplate.Name = charts.StackstateNamespace
+	projectTemplate.Name = interoperability.StackstateNamespace
 	project, err := client.Steve.SteveType(project).Create(projectTemplate)
 	require.NoError(rb.T(), err)
 	rb.projectID = project.ID
 
-	ssNamespaceExists, err := namespaces.GetNamespaceByName(client, cluster.ID, charts.StackstateNamespace)
+	ssNamespaceExists, err := namespaces.GetNamespaceByName(client, cluster.ID, interoperability.StackstateNamespace)
 	if ssNamespaceExists == nil && k8sErrors.IsNotFound(err) {
-		_, err = namespaces.CreateNamespace(client, cluster.ID, project.Name, charts.StackstateNamespace, "", map[string]string{}, map[string]string{})
+		_, err = namespaces.CreateNamespace(client, cluster.ID, project.Name, interoperability.StackstateNamespace, "", map[string]string{}, map[string]string{})
 	}
 	require.NoError(rb.T(), err)
 
@@ -111,16 +112,16 @@ func (rb *StackStateRBACTestSuite) SetupSuite() {
 	client, err = client.ReLogin()
 	require.NoError(rb.T(), err)
 
-	initialStackstateExtension, err := extencharts.GetChartStatus(client, localCluster, charts.StackstateExtensionNamespace, charts.StackstateExtensionsName)
+	initialStackstateExtension, err := extencharts.GetChartStatus(client, localCluster, interoperability.StackstateExtensionNamespace, interoperability.StackstateExtensionsName)
 	require.NoError(rb.T(), err)
 
 	if !initialStackstateExtension.IsAlreadyInstalled {
-		latestUIPluginVersion, err := rb.client.Catalog.GetLatestChartVersion(charts.StackstateExtensionsName, charts.UIPluginName)
+		latestUIPluginVersion, err := rb.client.Catalog.GetLatestChartVersion(interoperability.StackstateExtensionsName, interoperability.UIPluginName)
 		require.NoError(rb.T(), err)
 
 		extensionOptions := &uiplugins.ExtensionOptions{
-			ChartName:   charts.StackstateExtensionsName,
-			ReleaseName: charts.StackstateExtensionsName,
+			ChartName:   interoperability.StackstateExtensionsName,
+			ReleaseName: interoperability.StackstateExtensionsName,
 			Version:     latestUIPluginVersion,
 		}
 
@@ -132,11 +133,11 @@ func (rb *StackStateRBACTestSuite) SetupSuite() {
 	steveAdminClient, err := client.Steve.ProxyDownstream(localCluster)
 	require.NoError(rb.T(), err)
 
-	crdConfig := observability.NewStackstateCRDConfiguration(charts.StackstateNamespace, observability.StackstateName, rb.stackstateConfigs)
-	_, err = steveAdminClient.SteveType(charts.StackstateCRD).Create(crdConfig)
+	crdConfig := observability.NewStackstateCRDConfiguration(interoperability.StackstateNamespace, observability.StackstateName, rb.stackstateConfigs)
+	_, err = steveAdminClient.SteveType(interoperability.StackstateCRD).Create(crdConfig)
 	require.NoError(rb.T(), err, "Unable to install stackstate CRD configuration.")
 
-	latestSSVersion, err := rb.client.Catalog.GetLatestChartVersion(charts.StackstateK8sAgent, rancherPartnerCharts)
+	latestSSVersion, err := rb.client.Catalog.GetLatestChartVersion(interoperability.StackstateK8sAgent, rancherPartnerCharts)
 	require.NoError(rb.T(), err)
 	rb.stackstateAgentInstallOptions = &charts.InstallOptions{
 		Cluster:   cluster,
@@ -152,7 +153,7 @@ func (rb *StackStateRBACTestSuite) TestClusterOwnerInstallStackstate() {
 	client, err := rb.client.WithSession(subSession)
 	require.NoError(rb.T(), err)
 
-	initialStackstateAgent, err := extencharts.GetChartStatus(client, rb.cluster.ID, charts.StackstateNamespace, charts.StackstateK8sAgent)
+	initialStackstateAgent, err := extencharts.GetChartStatus(client, rb.cluster.ID, interoperability.StackstateNamespace, interoperability.StackstateK8sAgent)
 	require.NoError(rb.T(), err)
 
 	if initialStackstateAgent.IsAlreadyInstalled {
@@ -176,17 +177,17 @@ func (rb *StackStateRBACTestSuite) TestClusterOwnerInstallStackstate() {
 	require.NotNil(rb.T(), systemProject.ID, "System project is nil.")
 	systemProjectID := strings.Split(systemProject.ID, ":")[1]
 
-	rb.Run(charts.StackstateK8sAgent+" "+rb.stackstateAgentInstallOptions.Version, func() {
-		err = charts.InstallStackstateAgentChart(standardClient, rb.stackstateAgentInstallOptions, rb.stackstateConfigs, systemProjectID)
+	rb.Run(interoperability.StackstateK8sAgent+" "+rb.stackstateAgentInstallOptions.Version, func() {
+		err = interoperability.InstallStackstateAgentChart(standardClient, rb.stackstateAgentInstallOptions, rb.stackstateConfigs, systemProjectID)
 		require.NoError(rb.T(), err)
 		log.Info("Stackstate agent chart installed successfully")
 
 		rb.T().Log("Verifying the deployments of stackstate agent chart to have expected number of available replicas")
-		err = extencharts.WatchAndWaitDeployments(client, rb.cluster.ID, charts.StackstateNamespace, meta.ListOptions{})
+		err = extencharts.WatchAndWaitDeployments(client, rb.cluster.ID, interoperability.StackstateNamespace, meta.ListOptions{})
 		require.NoError(rb.T(), err)
 
 		rb.T().Log("Verifying the daemonsets of stackstate agent chart to have expected number of available replicas nodes")
-		err = extencharts.WatchAndWaitDaemonSets(client, rb.cluster.ID, charts.StackstateNamespace, meta.ListOptions{})
+		err = extencharts.WatchAndWaitDaemonSets(client, rb.cluster.ID, interoperability.StackstateNamespace, meta.ListOptions{})
 		require.NoError(rb.T(), err)
 
 		clusterObject, _, _ := extensionscluster.GetProvisioningClusterByName(rb.client, rb.client.RancherConfig.ClusterName, fleet.Namespace)
@@ -213,7 +214,7 @@ func (rb *StackStateRBACTestSuite) TestMembersCannotInstallStackstate() {
 	client, err := rb.client.WithSession(subSession)
 	require.NoError(rb.T(), err)
 
-	initialStackstateAgent, err := extencharts.GetChartStatus(client, rb.cluster.ID, charts.StackstateNamespace, charts.StackstateK8sAgent)
+	initialStackstateAgent, err := extencharts.GetChartStatus(client, rb.cluster.ID, interoperability.StackstateNamespace, interoperability.StackstateK8sAgent)
 	require.NoError(rb.T(), err)
 
 	if initialStackstateAgent.IsAlreadyInstalled {
@@ -254,8 +255,8 @@ func (rb *StackStateRBACTestSuite) TestMembersCannotInstallStackstate() {
 		require.NoError(rb.T(), err)
 		require.NotNil(rb.T(), systemProject.ID, "System project is nil.")
 		systemProjectID := strings.Split(systemProject.ID, ":")[1]
-		rb.Run(charts.StackstateK8sAgent+" "+rb.stackstateAgentInstallOptions.Version, func() {
-			err = charts.InstallStackstateAgentChart(standardClient, rb.stackstateAgentInstallOptions, rb.stackstateConfigs, systemProjectID)
+		rb.Run(interoperability.StackstateK8sAgent+" "+rb.stackstateAgentInstallOptions.Version, func() {
+			err = interoperability.InstallStackstateAgentChart(standardClient, rb.stackstateAgentInstallOptions, rb.stackstateConfigs, systemProjectID)
 			require.Error(rb.T(), err)
 			k8sErrors.IsForbidden(err)
 		})

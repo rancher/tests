@@ -586,10 +586,10 @@ provisioningInput:
             package and use the existing registries flag in CONFIG
 - To debug if the `corralPackageImages` filesystem path values in
     CONFIG are correct this can be debugged by editing
-    `setup_environment.sh` in `tests/v2/validation/pipeline/scripts`
+    `setup_environment.sh` in `validation/pipeline/scripts`
   - This is in the `rancher/rancher` repo
   - Adding a directory list ( ls ) command after the line:
-        `sh tests/v2/validation/pipeline/scripts/build_corral_packages.sh`
+        `sh validation/pipeline/scripts/build_corral_packages.sh`
     - `For example: ls /root/src/github.com/rancherlabs/corral-packages/dist`
 - If the `Jenkinsfile.e2e`  needs some update as part of a code
     change. In order to test the changes the repo url and branch should

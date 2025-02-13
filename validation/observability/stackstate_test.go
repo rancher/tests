@@ -18,12 +18,13 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
-	"github.com/rancher/tests/actions/fleet"
 	"github.com/rancher/tests/actions/kubeapi/namespaces"
 	kubeprojects "github.com/rancher/tests/actions/kubeapi/projects"
-	"github.com/rancher/tests/actions/observability"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/uiplugins"
+	interoperablecharts "github.com/rancher/tests/interoperability/charts"
+	"github.com/rancher/tests/interoperability/fleet"
+	"github.com/rancher/tests/interoperability/observability"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -72,14 +73,14 @@ func (ss *StackStateTestSuite) SetupSuite() {
 	ss.cluster = cluster
 
 	projectTemplate := kubeprojects.NewProjectTemplate(cluster.ID)
-	projectTemplate.Name = charts.StackstateNamespace
+	projectTemplate.Name = interoperablecharts.StackstateNamespace
 	project, err := client.Steve.SteveType(project).Create(projectTemplate)
 	require.NoError(ss.T(), err)
 	ss.projectID = project.ID
 
-	ssNamespaceExists, err := namespaces.GetNamespaceByName(client, cluster.ID, charts.StackstateNamespace)
+	ssNamespaceExists, err := namespaces.GetNamespaceByName(client, cluster.ID, interoperablecharts.StackstateNamespace)
 	if ssNamespaceExists == nil && k8sErrors.IsNotFound(err) {
-		_, err = namespaces.CreateNamespace(client, cluster.ID, project.Name, charts.StackstateNamespace, "", map[string]string{}, map[string]string{})
+		_, err = namespaces.CreateNamespace(client, cluster.ID, project.Name, interoperablecharts.StackstateNamespace, "", map[string]string{}, map[string]string{})
 	}
 	require.NoError(ss.T(), err)
 
@@ -109,16 +110,16 @@ func (ss *StackStateTestSuite) SetupSuite() {
 	client, err = client.ReLogin()
 	require.NoError(ss.T(), err)
 
-	initialStackstateExtension, err := extencharts.GetChartStatus(client, localCluster, charts.StackstateExtensionNamespace, charts.StackstateExtensionsName)
+	initialStackstateExtension, err := extencharts.GetChartStatus(client, localCluster, interoperablecharts.StackstateExtensionNamespace, interoperablecharts.StackstateExtensionsName)
 	require.NoError(ss.T(), err)
 
 	if !initialStackstateExtension.IsAlreadyInstalled {
-		latestUIPluginVersion, err := ss.client.Catalog.GetLatestChartVersion(charts.StackstateExtensionsName, charts.UIPluginName)
+		latestUIPluginVersion, err := ss.client.Catalog.GetLatestChartVersion(interoperablecharts.StackstateExtensionsName, interoperablecharts.UIPluginName)
 		require.NoError(ss.T(), err)
 
 		extensionOptions := &uiplugins.ExtensionOptions{
-			ChartName:   charts.StackstateExtensionsName,
-			ReleaseName: charts.StackstateExtensionsName,
+			ChartName:   interoperablecharts.StackstateExtensionsName,
+			ReleaseName: interoperablecharts.StackstateExtensionsName,
 			Version:     latestUIPluginVersion,
 		}
 
@@ -130,15 +131,15 @@ func (ss *StackStateTestSuite) SetupSuite() {
 	steveAdminClient, err := client.Steve.ProxyDownstream(localCluster)
 	require.NoError(ss.T(), err)
 
-	crdConfig := observability.NewStackstateCRDConfiguration(charts.StackstateNamespace, observability.StackstateName, ss.stackstateConfigs)
-	crd, err := steveAdminClient.SteveType(charts.StackstateCRD).Create(crdConfig)
+	crdConfig := observability.NewStackstateCRDConfiguration(interoperablecharts.StackstateNamespace, observability.StackstateName, ss.stackstateConfigs)
+	crd, err := steveAdminClient.SteveType(interoperablecharts.StackstateCRD).Create(crdConfig)
 	require.NoError(ss.T(), err)
 	log.Info("Created stackstate ui extensions configuration")
 
-	_, err = steveAdminClient.SteveType(charts.StackstateCRD).ByID(crd.ID)
+	_, err = steveAdminClient.SteveType(interoperablecharts.StackstateCRD).ByID(crd.ID)
 	require.NoError(ss.T(), err)
 
-	latestSSVersion, err := ss.client.Catalog.GetLatestChartVersion(charts.StackstateK8sAgent, rancherPartnerCharts)
+	latestSSVersion, err := ss.client.Catalog.GetLatestChartVersion(interoperablecharts.StackstateK8sAgent, rancherPartnerCharts)
 	require.NoError(ss.T(), err)
 
 	ss.stackstateAgentInstallOptions = &charts.InstallOptions{
@@ -155,7 +156,7 @@ func (ss *StackStateTestSuite) TestStackStateAgentChart() {
 	client, err := ss.client.WithSession(subSession)
 	require.NoError(ss.T(), err)
 
-	initialStackstateAgent, err := extencharts.GetChartStatus(client, ss.cluster.ID, charts.StackstateNamespace, charts.StackstateK8sAgent)
+	initialStackstateAgent, err := extencharts.GetChartStatus(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, interoperablecharts.StackstateK8sAgent)
 	require.NoError(ss.T(), err)
 
 	if initialStackstateAgent.IsAlreadyInstalled {
@@ -169,16 +170,16 @@ func (ss *StackStateTestSuite) TestStackStateAgentChart() {
 	require.NotNil(ss.T(), systemProject.ID)
 	systemProjectID := strings.Split(systemProject.ID, ":")[1]
 
-	ss.Run(charts.StackstateK8sAgent+" "+ss.stackstateAgentInstallOptions.Version, func() {
-		err = charts.InstallStackstateAgentChart(ss.client, ss.stackstateAgentInstallOptions, ss.stackstateConfigs, systemProjectID)
+	ss.Run(interoperablecharts.StackstateK8sAgent+" "+ss.stackstateAgentInstallOptions.Version, func() {
+		err = interoperablecharts.InstallStackstateAgentChart(ss.client, ss.stackstateAgentInstallOptions, ss.stackstateConfigs, systemProjectID)
 		require.NoError(ss.T(), err)
 
 		ss.T().Log("Verifying the deployments of stackstate agent chart to have expected number of available replicas")
-		err = extencharts.WatchAndWaitDeployments(client, ss.cluster.ID, charts.StackstateNamespace, meta.ListOptions{})
+		err = extencharts.WatchAndWaitDeployments(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, meta.ListOptions{})
 		require.NoError(ss.T(), err)
 
 		ss.T().Log("Verifying the daemonsets of stackstate agent chart to have expected number of available replicas nodes")
-		err = extencharts.WatchAndWaitDaemonSets(client, ss.cluster.ID, charts.StackstateNamespace, meta.ListOptions{})
+		err = extencharts.WatchAndWaitDaemonSets(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, meta.ListOptions{})
 		require.NoError(ss.T(), err)
 
 		clusterObject, _, _ := extensionscluster.GetProvisioningClusterByName(ss.client, ss.client.RancherConfig.ClusterName, fleet.Namespace)
@@ -200,7 +201,7 @@ func (ss *StackStateTestSuite) TestUpgradeStackstateAgentChart() {
 	client, err := ss.client.WithSession(subSession)
 	require.NoError(ss.T(), err)
 
-	versionsList, err := client.Catalog.GetListChartVersions(charts.StackstateK8sAgent, rancherPartnerCharts)
+	versionsList, err := client.Catalog.GetListChartVersions(interoperablecharts.StackstateK8sAgent, rancherPartnerCharts)
 	require.NoError(ss.T(), err)
 
 	if len(versionsList) < 2 {
@@ -211,8 +212,8 @@ func (ss *StackStateTestSuite) TestUpgradeStackstateAgentChart() {
 	versionBeforeLatest := versionsList[1]
 	ss.stackstateAgentInstallOptions.Version = versionBeforeLatest
 
-	ss.Run(charts.StackstateK8sAgent+" "+ss.stackstateAgentInstallOptions.Version, func() {
-		initialStackstateAgent, err := extencharts.GetChartStatus(client, ss.cluster.ID, charts.StackstateNamespace, charts.StackstateK8sAgent)
+	ss.Run(interoperablecharts.StackstateK8sAgent+" "+ss.stackstateAgentInstallOptions.Version, func() {
+		initialStackstateAgent, err := extencharts.GetChartStatus(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, interoperablecharts.StackstateK8sAgent)
 		require.NoError(ss.T(), err)
 
 		if initialStackstateAgent.IsAlreadyInstalled {
@@ -225,18 +226,18 @@ func (ss *StackStateTestSuite) TestUpgradeStackstateAgentChart() {
 		systemProjectID := strings.Split(systemProject.ID, ":")[1]
 
 		ss.T().Logf("Installing stackstate agent chart with the version before the latest version %v", ss.stackstateAgentInstallOptions.Version)
-		err = charts.InstallStackstateAgentChart(client, ss.stackstateAgentInstallOptions, ss.stackstateConfigs, systemProjectID)
+		err = interoperablecharts.InstallStackstateAgentChart(client, ss.stackstateAgentInstallOptions, ss.stackstateConfigs, systemProjectID)
 		require.NoError(ss.T(), err)
 
 		ss.T().Log("Verifying the deployments of stackstate agent chart to have expected number of available replicas")
-		err = extencharts.WatchAndWaitDeployments(client, ss.cluster.ID, charts.StackstateNamespace, meta.ListOptions{})
+		err = extencharts.WatchAndWaitDeployments(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, meta.ListOptions{})
 		require.NoError(ss.T(), err)
 
 		ss.T().Log("Verifying the daemonsets of stackstate agent chart to have expected number of available replicas nodes")
-		err = extencharts.WatchAndWaitDaemonSets(client, ss.cluster.ID, charts.StackstateNamespace, meta.ListOptions{})
+		err = extencharts.WatchAndWaitDaemonSets(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, meta.ListOptions{})
 		require.NoError(ss.T(), err)
 
-		stackstateAgentChartPreUpgrade, err := extencharts.GetChartStatus(client, ss.cluster.ID, charts.StackstateNamespace, charts.StackstateK8sAgent)
+		stackstateAgentChartPreUpgrade, err := extencharts.GetChartStatus(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, interoperablecharts.StackstateK8sAgent)
 		require.NoError(ss.T(), err)
 
 		// Validate current version of stackstate agent is one of the versions before latest
@@ -246,15 +247,15 @@ func (ss *StackStateTestSuite) TestUpgradeStackstateAgentChart() {
 		ss.stackstateAgentInstallOptions.Version = versionLatest
 
 		ss.T().Logf("Upgrading stackstate agent chart to the latest version %v", ss.stackstateAgentInstallOptions.Version)
-		err = charts.UpgradeStackstateAgentChart(client, ss.stackstateAgentInstallOptions, ss.stackstateConfigs, systemProject.ID)
+		err = interoperablecharts.UpgradeStackstateAgentChart(client, ss.stackstateAgentInstallOptions, ss.stackstateConfigs, systemProject.ID)
 		require.NoError(ss.T(), err)
 
 		ss.T().Log("Verifying the deployments of stackstate agent chart to have expected number of available replicas")
-		err = extencharts.WatchAndWaitDeployments(client, ss.cluster.ID, charts.StackstateNamespace, meta.ListOptions{})
+		err = extencharts.WatchAndWaitDeployments(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, meta.ListOptions{})
 		require.NoError(ss.T(), err)
 
 		ss.T().Log("Verifying the daemonsets of stackstate agent chart to have expected number of available replicas nodes")
-		err = extencharts.WatchAndWaitDaemonSets(client, ss.cluster.ID, charts.StackstateNamespace, meta.ListOptions{})
+		err = extencharts.WatchAndWaitDaemonSets(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, meta.ListOptions{})
 		require.NoError(ss.T(), err)
 
 		clusterObject, _, err := extensionscluster.GetProvisioningClusterByName(ss.client, ss.client.RancherConfig.ClusterName, fleet.Namespace)
@@ -274,7 +275,7 @@ func (ss *StackStateTestSuite) TestUpgradeStackstateAgentChart() {
 		podErrors := pods.StatusPods(client, clusterName)
 		require.Empty(ss.T(), podErrors)
 
-		stackstateAgentChartPostUpgrade, err := extencharts.GetChartStatus(client, ss.cluster.ID, charts.StackstateNamespace, charts.StackstateK8sAgent)
+		stackstateAgentChartPostUpgrade, err := extencharts.GetChartStatus(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, interoperablecharts.StackstateK8sAgent)
 		require.NoError(ss.T(), err)
 
 		ss.T().Log("Comparing installed and desired stackstate agent versions")
@@ -296,8 +297,8 @@ func (ss *StackStateTestSuite) TestDynamicUpgradeStackstateAgentChart() {
 		ss.T().Skip("Skipping the test as no user version provided")
 	}
 
-	ss.Run(charts.StackstateK8sAgent+" "+ss.stackstateAgentInstallOptions.Version, func() {
-		initialStackstateAgent, err := extencharts.GetChartStatus(client, ss.cluster.ID, charts.StackstateNamespace, charts.StackstateK8sAgent)
+	ss.Run(interoperablecharts.StackstateK8sAgent+" "+ss.stackstateAgentInstallOptions.Version, func() {
+		initialStackstateAgent, err := extencharts.GetChartStatus(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, interoperablecharts.StackstateK8sAgent)
 		require.NoError(ss.T(), err)
 
 		if !initialStackstateAgent.IsAlreadyInstalled || initialStackstateAgent.ChartDetails.Spec.Chart.Metadata.Version == versionToUpgrade {
@@ -308,15 +309,15 @@ func (ss *StackStateTestSuite) TestDynamicUpgradeStackstateAgentChart() {
 		require.NoError(ss.T(), err)
 
 		ss.T().Logf("Upgrading stackstate agent chart to the user provided version %v", ss.stackstateAgentInstallOptions.Version)
-		err = charts.UpgradeStackstateAgentChart(client, ss.stackstateAgentInstallOptions, ss.stackstateConfigs, systemProject)
+		err = interoperablecharts.UpgradeStackstateAgentChart(client, ss.stackstateAgentInstallOptions, ss.stackstateConfigs, systemProject)
 		require.NoError(ss.T(), err)
 
 		ss.T().Log("Verifying the deployments of stackstate agent chart to have expected number of available replicas")
-		err = extencharts.WatchAndWaitDeployments(client, ss.cluster.ID, charts.StackstateNamespace, meta.ListOptions{})
+		err = extencharts.WatchAndWaitDeployments(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, meta.ListOptions{})
 		require.NoError(ss.T(), err)
 
 		ss.T().Log("Verifying the daemonsets of stackstate agent chart to have expected number of available replicas nodes")
-		err = extencharts.WatchAndWaitDaemonSets(client, ss.cluster.ID, charts.StackstateNamespace, meta.ListOptions{})
+		err = extencharts.WatchAndWaitDaemonSets(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, meta.ListOptions{})
 		require.NoError(ss.T(), err)
 
 		clusterObject, _, _ := extensionscluster.GetProvisioningClusterByName(ss.client, ss.client.RancherConfig.ClusterName, fleet.Namespace)
@@ -334,7 +335,7 @@ func (ss *StackStateTestSuite) TestDynamicUpgradeStackstateAgentChart() {
 		podErrors := pods.StatusPods(client, clusterName)
 		require.Empty(ss.T(), podErrors)
 
-		stackstateAgentChartPostUpgrade, err := extencharts.GetChartStatus(client, ss.cluster.ID, charts.StackstateNamespace, charts.StackstateK8sAgent)
+		stackstateAgentChartPostUpgrade, err := extencharts.GetChartStatus(client, ss.cluster.ID, interoperablecharts.StackstateNamespace, interoperablecharts.StackstateK8sAgent)
 		require.NoError(ss.T(), err)
 
 		ss.T().Log("Comparing installed and desired stackstate agent versions")

@@ -37,7 +37,7 @@ func InstallRancherLoggingChart(client *rancher.Client, installOptions *InstallO
 		return err
 	}
 
-	loggingChartInstallActionPayload := &payloadOpts{
+	loggingChartInstallActionPayload := &PayloadOpts{
 		InstallOptions:  *installOptions,
 		Name:            RancherLoggingName,
 		Namespace:       RancherLoggingNamespace,
@@ -55,7 +55,7 @@ func InstallRancherLoggingChart(client *rancher.Client, installOptions *InstallO
 	// Cleanup registration
 	client.Session.RegisterCleanupFunc(func() error {
 		// UninstallAction for when uninstalling the rancher-logging chart
-		defaultChartUninstallAction := newChartUninstallAction()
+		defaultChartUninstallAction := NewChartUninstallAction()
 
 		err = catalogClient.UninstallChart(RancherLoggingName, RancherLoggingNamespace, defaultChartUninstallAction)
 		if err != nil {
@@ -183,7 +183,7 @@ func InstallRancherLoggingChart(client *rancher.Client, installOptions *InstallO
 }
 
 // newLoggingChartInstallAction is a private helper function that returns chart install action with logging and payload options.
-func newLoggingChartInstallAction(p *payloadOpts, rancherLoggingOpts *RancherLoggingOpts) *types.ChartInstallAction {
+func newLoggingChartInstallAction(p *PayloadOpts, rancherLoggingOpts *RancherLoggingOpts) *types.ChartInstallAction {
 	loggingValues := map[string]any{
 		string(p.Cluster.Provider): map[string]any{
 			"additionalLoggingSources": map[string]any{
@@ -192,11 +192,11 @@ func newLoggingChartInstallAction(p *payloadOpts, rancherLoggingOpts *RancherLog
 		},
 	}
 
-	chartInstall := newChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, loggingValues)
-	chartInstallCRD := newChartInstall(p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
+	chartInstall := NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, loggingValues)
+	chartInstallCRD := NewChartInstall(p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
 	chartInstalls := []types.ChartInstall{*chartInstallCRD, *chartInstall}
 
-	chartInstallAction := newChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	chartInstallAction := NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
 
 	return chartInstallAction
 }

@@ -12,7 +12,7 @@ node {
     def testsDir = "github.com/rancher/tests/validation/${env.TEST_PACKAGE}"
     def testResultsOut = "results.xml"
     def upgradeTestResultsOut = "results_upgrade.xml"
-    def localPipelinePath = "./tests/v2/validation/pipeline/"
+    def localPipelinePath = "./validation/pipeline/"
     def testResultsJSON = "results.json"
     def envFile = ".env"
     def rancherConfig = "rancher_env.config"
@@ -98,13 +98,13 @@ node {
             try {
               stage('Configure and Build') {
                 if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
-                  dir("./tests/v2/validation/.ssh") {
+                  dir("./validation/.ssh") {
                     def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
                     writeFile file: AWS_SSH_KEY_NAME, text: decoded
                   }
                 }
 
-                dir("./tests/v2/validation") {
+                dir("./validation") {
                   def filename = "config.yaml"
                   def configContents = env.CONFIG
 
@@ -112,8 +112,8 @@ node {
                   env.CATTLE_TEST_CONFIG = "/go/src/github.com/rancher/tests/validation/"+filename
                 }
 
-                sh "./tests/v2/validation/configure.sh"
-                sh "./tests/v2/validation/build.sh"
+                sh "./validation/configure.sh"
+                sh "./validation/build.sh"
               }
               stage('Run Validation Tests') {
                 try {
@@ -158,7 +158,7 @@ node {
               stage('Test Report') {
                 sh "docker cp ${testContainer}:${rootPath}${testResultsOut} ."
                 sh "docker cp ${upgradeTestContainer}:${rootPath}${upgradeTestResultsOut} ."
-                sh "./rancher/tests/v2/validation/pipeline/reporter"
+                sh "./tests/validation/pipeline/reporter"
                 step([$class: 'JUnitResultArchiver', testResults: "**/${testResultsOut}"])
                 step([$class: 'JUnitResultArchiver', testResults: "**/${upgradeTestResultsOut}"])
                 sh "docker stop ${testContainer}"

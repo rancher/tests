@@ -73,7 +73,7 @@ node {
         withEnv(paramsMap) {
           stage('Checkout') {
             deleteDir()
-            dir("./rancher") {
+            dir("./tests") {
               checkout([
                       $class: 'GitSCM',
                       branches: [[name: "*/${branch}"]],
@@ -105,12 +105,12 @@ node {
           dir ("./") {
             stage('Configure and Build') {
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
-                dir("./rancher/tests/v2/validation/.ssh") {
+                dir("./tests/validation/.ssh") {
                   def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
                   writeFile file: AWS_SSH_KEY_NAME, text: decoded
                 }
               }
-              dir("./rancher/tests/v2/validation") {
+              dir("./tests/validation") {
                 def filename = "config.yaml"
                 def configContents = env.CONFIG
 
@@ -118,8 +118,8 @@ node {
                 env.CATTLE_TEST_CONFIG = "${workPath}"+filename
               }
               dir ("./") {
-                sh "./rancher/tests/v2/validation/configure.sh"
-                sh "docker build . -f ./rancher/tests/v2/validation/Dockerfile.e2e --build-arg CORRAL_VERSION=${env.CORRAL_VERSION} -t ${golangImageName}"
+                sh "./tests/validation/configure.sh"
+                sh "docker build . -f ./tests/validation/Dockerfile.e2e --build-arg CORRAL_VERSION=${env.CORRAL_VERSION} -t ${golangImageName}"
                 sh "docker volume create --name ${validationVolume}"
               }
             }

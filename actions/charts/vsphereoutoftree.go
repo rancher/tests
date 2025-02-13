@@ -92,7 +92,7 @@ func InstallVsphereOutOfTreeCharts(client *rancher.Client, repoName, clusterName
 		ProjectID: project.ID,
 	}
 
-	chartInstallActionPayload := &payloadOpts{
+	chartInstallActionPayload := &PayloadOpts{
 		InstallOptions:  *installCPIOptions,
 		Name:            vsphereCPIchartName,
 		Namespace:       kubeSystemNamespace,
@@ -126,7 +126,7 @@ func InstallVsphereOutOfTreeCharts(client *rancher.Client, repoName, clusterName
 		ProjectID: project.ID,
 	}
 
-	chartInstallActionPayload = &payloadOpts{
+	chartInstallActionPayload = &PayloadOpts{
 		InstallOptions:  *installCSIOptions,
 		Name:            vsphereCSIchartName,
 		Namespace:       kubeSystemNamespace,
@@ -150,7 +150,7 @@ func InstallVsphereOutOfTreeCharts(client *rancher.Client, repoName, clusterName
 }
 
 // vsphereCPIChartInstallAction is a helper function that returns a chartInstallAction for vsphere out-of-tree chart.
-func vsphereCPIChartInstallAction(client *catalog.Client, chartInstallActionPayload *payloadOpts, vsphereTemplateConfig *nodetemplates.VmwareVsphereNodeTemplateConfig, installOptions *InstallOptions, repoName, chartNamespace string) (*types.ChartInstallAction, error) {
+func vsphereCPIChartInstallAction(client *catalog.Client, chartInstallActionPayload *PayloadOpts, vsphereTemplateConfig *nodetemplates.VmwareVsphereNodeTemplateConfig, installOptions *InstallOptions, repoName, chartNamespace string) (*types.ChartInstallAction, error) {
 	chartValues, err := client.GetChartValues(repoName, vsphereCPIchartName, installOptions.Version)
 	if err != nil {
 		return nil, err
@@ -162,7 +162,7 @@ func vsphereCPIChartInstallAction(client *catalog.Client, chartInstallActionPayl
 	chartValues[vcenter].(map[string]interface{})[username] = vsphereTemplateConfig.Username
 	chartValues[vcenter].(map[string]interface{})[port] = vsphereTemplateConfig.VcenterPort
 
-	chartInstall := newChartInstall(
+	chartInstall := NewChartInstall(
 		chartInstallActionPayload.Name,
 		chartInstallActionPayload.Version,
 		chartInstallActionPayload.Cluster.ID,
@@ -174,11 +174,11 @@ func vsphereCPIChartInstallAction(client *catalog.Client, chartInstallActionPayl
 		chartValues)
 	chartInstalls := []types.ChartInstall{*chartInstall}
 
-	return newChartInstallAction(chartNamespace, chartInstallActionPayload.ProjectID, chartInstalls), nil
+	return NewChartInstallAction(chartNamespace, chartInstallActionPayload.ProjectID, chartInstalls), nil
 }
 
 // vsphereCSIChartInstallAction is a helper function that returns a chartInstallAction for vsphere out-of-tree chart.
-func vsphereCSIChartInstallAction(client *catalog.Client, chartInstallActionPayload *payloadOpts, vsphereTemplateConfig *nodetemplates.VmwareVsphereNodeTemplateConfig, installOptions *InstallOptions, repoName, chartNamespace string) (*types.ChartInstallAction, error) {
+func vsphereCSIChartInstallAction(client *catalog.Client, chartInstallActionPayload *PayloadOpts, vsphereTemplateConfig *nodetemplates.VmwareVsphereNodeTemplateConfig, installOptions *InstallOptions, repoName, chartNamespace string) (*types.ChartInstallAction, error) {
 	chartValues, err := client.GetChartValues(repoName, vsphereCSIchartName, installOptions.Version)
 	if err != nil {
 		return nil, err
@@ -193,7 +193,7 @@ func vsphereCSIChartInstallAction(client *catalog.Client, chartInstallActionPayl
 
 	chartValues[storageclass].(map[string]interface{})[datastoreurl] = vsphereTemplateConfig.DatastoreURL
 
-	chartInstall := newChartInstall(
+	chartInstall := NewChartInstall(
 		chartInstallActionPayload.Name,
 		chartInstallActionPayload.Version,
 		chartInstallActionPayload.Cluster.ID,
@@ -205,7 +205,7 @@ func vsphereCSIChartInstallAction(client *catalog.Client, chartInstallActionPayl
 		chartValues)
 	chartInstalls := []types.ChartInstall{*chartInstall}
 
-	return newChartInstallAction(chartNamespace, chartInstallActionPayload.ProjectID, chartInstalls), nil
+	return NewChartInstallAction(chartNamespace, chartInstallActionPayload.ProjectID, chartInstalls), nil
 }
 
 // UpgradeVsphereOutOfTreeCharts upgrades the CPI and CSI chart for vsphere cloud provider in a given cluster to the latest version.
@@ -284,7 +284,7 @@ func UpgradeVsphereOutOfTreeCharts(client *rancher.Client, repoName, clusterName
 			ProjectID: project.ID,
 		}
 
-		chartInstallActionPayload := &payloadOpts{
+		chartInstallActionPayload := &PayloadOpts{
 			InstallOptions:  *installCPIOptions,
 			Name:            cpiChartName,
 			Namespace:       kubeSystemNamespace,
@@ -323,7 +323,7 @@ func UpgradeVsphereOutOfTreeCharts(client *rancher.Client, repoName, clusterName
 			ProjectID: project.ID,
 		}
 
-		chartInstallActionPayload := &payloadOpts{
+		chartInstallActionPayload := &PayloadOpts{
 			InstallOptions:  *installCSIOptions,
 			Name:            csiChartName,
 			Namespace:       kubeSystemNamespace,
@@ -362,7 +362,7 @@ func UpgradeVsphereOutOfTreeCharts(client *rancher.Client, repoName, clusterName
 }
 
 // vsphereCPIChartUpgradeAction is a helper function that returns a chartUpgradeAction for vsphere out-of-tree chart.
-func vsphereCPIChartUpgradeAction(client *catalog.Client, chartUpgradeActionPayload *payloadOpts, vsphereTemplateConfig *nodetemplates.VmwareVsphereNodeTemplateConfig, repoName, chartNamespace string) (*types.ChartUpgradeAction, error) {
+func vsphereCPIChartUpgradeAction(client *catalog.Client, chartUpgradeActionPayload *PayloadOpts, vsphereTemplateConfig *nodetemplates.VmwareVsphereNodeTemplateConfig, repoName, chartNamespace string) (*types.ChartUpgradeAction, error) {
 	chartValues, err := client.GetChartValues(repoName, chartUpgradeActionPayload.Name, chartUpgradeActionPayload.InstallOptions.Version)
 	if err != nil {
 		return nil, err
@@ -374,7 +374,7 @@ func vsphereCPIChartUpgradeAction(client *catalog.Client, chartUpgradeActionPayl
 	chartValues[vcenter].(map[string]interface{})[username] = vsphereTemplateConfig.Username
 	chartValues[vcenter].(map[string]interface{})[port] = vsphereTemplateConfig.VcenterPort
 
-	chartUpgrade := newChartUpgrade(
+	chartUpgrade := NewChartUpgrade(
 		vsphereCPIchartName,
 		chartUpgradeActionPayload.Name,
 		chartUpgradeActionPayload.Version,
@@ -385,11 +385,11 @@ func vsphereCPIChartUpgradeAction(client *catalog.Client, chartUpgradeActionPayl
 		chartValues)
 	chartUpgrades := []types.ChartUpgrade{*chartUpgrade}
 
-	return newChartUpgradeAction(chartNamespace, chartUpgrades), nil
+	return NewChartUpgradeAction(chartNamespace, chartUpgrades), nil
 }
 
 // vsphereCSIChartUpgradeAction is a helper function that returns a chartUpgradeAction for vsphere out-of-tree chart.
-func vsphereCSIChartUpgradeAction(client *catalog.Client, chartUpgradeActionPayload *payloadOpts, vsphereTemplateConfig *nodetemplates.VmwareVsphereNodeTemplateConfig, repoName, chartNamespace string) (*types.ChartUpgradeAction, error) {
+func vsphereCSIChartUpgradeAction(client *catalog.Client, chartUpgradeActionPayload *PayloadOpts, vsphereTemplateConfig *nodetemplates.VmwareVsphereNodeTemplateConfig, repoName, chartNamespace string) (*types.ChartUpgradeAction, error) {
 	chartValues, err := client.GetChartValues(repoName, vsphereCSIchartName, chartUpgradeActionPayload.InstallOptions.Version)
 	if err != nil {
 		return nil, err
@@ -404,7 +404,7 @@ func vsphereCSIChartUpgradeAction(client *catalog.Client, chartUpgradeActionPayl
 
 	chartValues[storageclass].(map[string]interface{})[datastoreurl] = vsphereTemplateConfig.DatastoreURL
 
-	chartUpgrade := newChartUpgrade(
+	chartUpgrade := NewChartUpgrade(
 		vsphereCSIchartName,
 		chartUpgradeActionPayload.Name,
 		chartUpgradeActionPayload.Version,
@@ -415,7 +415,7 @@ func vsphereCSIChartUpgradeAction(client *catalog.Client, chartUpgradeActionPayl
 		chartValues)
 	chartUpgrades := []types.ChartUpgrade{*chartUpgrade}
 
-	return newChartUpgradeAction(chartNamespace, chartUpgrades), nil
+	return NewChartUpgradeAction(chartNamespace, chartUpgrades), nil
 }
 
 // getExistingChartInstall returns the App object of an installed chart.

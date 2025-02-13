@@ -81,7 +81,7 @@ node {
         withEnv(paramsMap) {
           stage('Checkout') {
             deleteDir()
-            dir("./rancher") {
+            dir("./tests") {
               checkout([
                       $class: 'GitSCM',
                       branches: [[name: "*/${branch}"]],
@@ -113,18 +113,18 @@ node {
               config = config.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
 
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
-                dir("./rancher/tests/v2/validation/.ssh") {
+                dir("./tests/validation/.ssh") {
                   def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
                   writeFile file: AWS_SSH_KEY_NAME, text: decoded
                 }
               }
-              dir("./rancher/tests/v2/validation") {
+              dir("./tests/validation") {
                 writeFile file: filename, text: config
                 env.CATTLE_TEST_CONFIG = "${workPath}${filename}"
               }
               dir ("./") {
-                sh "./rancher/tests/v2/validation/configure.sh"
-                sh "docker build . -f ./rancher/tests/v2/validation/Dockerfile.e2e -t ${imageName}"
+                sh "./tests/validation/configure.sh"
+                sh "docker build . -f ./tests/validation/Dockerfile.e2e -t ${imageName}"
                 sh "docker volume create --name ${validationVolume}"
               }
             }
@@ -159,8 +159,8 @@ node {
                   }
 
                   println "Building the image again with the config files"
-                  sh "./rancher/tests/v2/validation/configure.sh"
-                  sh "docker build . -f ./rancher/tests/v2/validation/Dockerfile.e2e -t ${imageName}"
+                  sh "./tests/validation/configure.sh"
+                  sh "docker build . -f ./tests/validation/Dockerfile.e2e -t ${imageName}"
               }
               stage('Deploys clusters') {
                 try {

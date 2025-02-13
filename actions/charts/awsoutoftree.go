@@ -35,7 +35,7 @@ func InstallAWSOutOfTreeChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	}
 
-	awsChartInstallActionPayload := &payloadOpts{
+	awsChartInstallActionPayload := &PayloadOpts{
 		InstallOptions:  *installOptions,
 		Name:            AwsUpstreamChartName,
 		Namespace:       kubeSystemNamespace,
@@ -74,7 +74,7 @@ func InstallAWSOutOfTreeChart(client *rancher.Client, installOptions *InstallOpt
 }
 
 // awsChartInstallAction is a helper function that returns a chartInstallAction for aws out-of-tree chart.
-func awsChartInstallAction(awsChartInstallActionPayload *payloadOpts, repoName, chartNamespace, chartProject string, isLeaderMigration bool) *types.ChartInstallAction {
+func awsChartInstallAction(awsChartInstallActionPayload *PayloadOpts, repoName, chartNamespace, chartProject string, isLeaderMigration bool) *types.ChartInstallAction {
 	chartValues := map[string]interface{}{
 		"args": []interface{}{
 			"--use-service-account-credentials=true",
@@ -222,7 +222,7 @@ func awsChartInstallAction(awsChartInstallActionPayload *payloadOpts, repoName, 
 		chartValues["args"] = append(chartValues["args"].([]interface{}), "--enable-leader-migration=true")
 	}
 
-	chartInstall := newChartInstall(
+	chartInstall := NewChartInstall(
 		awsChartInstallActionPayload.Name,
 		awsChartInstallActionPayload.Version,
 		awsChartInstallActionPayload.Cluster.ID,
@@ -234,7 +234,7 @@ func awsChartInstallAction(awsChartInstallActionPayload *payloadOpts, repoName, 
 		chartValues)
 	chartInstalls := []types.ChartInstall{*chartInstall}
 
-	return newChartInstallAction(chartNamespace, awsChartInstallActionPayload.ProjectID, chartInstalls)
+	return NewChartInstallAction(chartNamespace, awsChartInstallActionPayload.ProjectID, chartInstalls)
 }
 
 // updateHelmNodeSelectors is a function that updates the newNodeSelector for a given Daemonset's nodeSelector. This is required due to an

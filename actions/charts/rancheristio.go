@@ -35,7 +35,7 @@ func InstallRancherIstioChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	}
 
-	istioChartInstallActionPayload := &payloadOpts{
+	istioChartInstallActionPayload := &PayloadOpts{
 		InstallOptions:  *installOptions,
 		Name:            RancherIstioName,
 		Namespace:       RancherIstioNamespace,
@@ -53,7 +53,7 @@ func InstallRancherIstioChart(client *rancher.Client, installOptions *InstallOpt
 	// Cleanup registration
 	client.Session.RegisterCleanupFunc(func() error {
 		// UninstallAction for when uninstalling the rancher-istio chart
-		defaultChartUninstallAction := newChartUninstallAction()
+		defaultChartUninstallAction := NewChartUninstallAction()
 
 		err := catalogClient.UninstallChart(RancherIstioName, RancherIstioNamespace, defaultChartUninstallAction)
 		if err != nil {
@@ -153,7 +153,7 @@ func InstallRancherIstioChart(client *rancher.Client, installOptions *InstallOpt
 }
 
 // newIstioChartInstallAction is a private helper function that returns chart install action with istio and payload options.
-func newIstioChartInstallAction(p *payloadOpts, rancherIstioOpts *RancherIstioOpts) *types.ChartInstallAction {
+func newIstioChartInstallAction(p *PayloadOpts, rancherIstioOpts *RancherIstioOpts) *types.ChartInstallAction {
 	istioValues := map[string]interface{}{
 		"tracing": map[string]interface{}{
 			"enabled": rancherIstioOpts.Tracing,
@@ -177,10 +177,10 @@ func newIstioChartInstallAction(p *payloadOpts, rancherIstioOpts *RancherIstioOp
 			"enabled": rancherIstioOpts.CNI,
 		},
 	}
-	chartInstall := newChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, istioValues)
+	chartInstall := NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, istioValues)
 	chartInstalls := []types.ChartInstall{*chartInstall}
 
-	chartInstallAction := newChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	chartInstallAction := NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
 
 	return chartInstallAction
 }
@@ -197,7 +197,7 @@ func UpgradeRancherIstioChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	}
 
-	istioChartUpgradeActionPayload := &payloadOpts{
+	istioChartUpgradeActionPayload := &PayloadOpts{
 		InstallOptions:  *installOptions,
 		Name:            RancherIstioName,
 		Namespace:       RancherIstioNamespace,
@@ -274,7 +274,7 @@ func UpgradeRancherIstioChart(client *rancher.Client, installOptions *InstallOpt
 }
 
 // newIstioChartUpgradeAction is a private helper function that returns chart upgrade action with istio and payload options.
-func newIstioChartUpgradeAction(p *payloadOpts, rancherIstioOpts *RancherIstioOpts) *types.ChartUpgradeAction {
+func newIstioChartUpgradeAction(p *PayloadOpts, rancherIstioOpts *RancherIstioOpts) *types.ChartUpgradeAction {
 	istioValues := map[string]interface{}{
 		"tracing": map[string]interface{}{
 			"enabled": rancherIstioOpts.Tracing,
@@ -298,10 +298,10 @@ func newIstioChartUpgradeAction(p *payloadOpts, rancherIstioOpts *RancherIstioOp
 			"enabled": rancherIstioOpts.CNI,
 		},
 	}
-	chartUpgrade := newChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, istioValues)
+	chartUpgrade := NewChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, istioValues)
 	chartUpgrades := []types.ChartUpgrade{*chartUpgrade}
 
-	chartUpgradeAction := newChartUpgradeAction(p.Namespace, chartUpgrades)
+	chartUpgradeAction := NewChartUpgradeAction(p.Namespace, chartUpgrades)
 
 	return chartUpgradeAction
 }

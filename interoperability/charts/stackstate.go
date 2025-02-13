@@ -9,9 +9,10 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
+	"github.com/rancher/tests/actions/charts"
 	kubenamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/namespaces"
-	"github.com/rancher/tests/actions/observability"
+	"github.com/rancher/tests/interoperability/observability"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -26,6 +27,9 @@ const (
 	StackstateNamespace          = "stackstate"
 	StackstateCRD                = "observability.rancher.io.configuration"
 	RancherPartnerChartRepo      = "rancher-partner-charts"
+	rancherChartsName            = "rancher-charts"
+	rancherPartnerCharts         = "rancher-partner-charts"
+	serverURLSettingID           = "server-url"
 )
 
 var (
@@ -33,14 +37,14 @@ var (
 )
 
 // InstallStackstateAgentChart is a private helper function that returns chart install action with stack state agent and payload options.
-func InstallStackstateAgentChart(client *rancher.Client, installOptions *InstallOptions, stackstateConfigs *observability.StackStateConfig, systemProjectID string) error {
+func InstallStackstateAgentChart(client *rancher.Client, installOptions *charts.InstallOptions, stackstateConfigs *observability.StackStateConfig, systemProjectID string) error {
 	serverSetting, err := client.Management.Setting.ByID(serverURLSettingID)
 	if err != nil {
 		log.Info("Error getting server setting.")
 		return err
 	}
 
-	stackstateAgentChartInstallActionPayload := &payloadOpts{
+	stackstateAgentChartInstallActionPayload := &charts.PayloadOpts{
 		InstallOptions: *installOptions,
 		Name:           StackstateK8sAgent,
 		Namespace:      StackstateNamespace,
@@ -57,7 +61,7 @@ func InstallStackstateAgentChart(client *rancher.Client, installOptions *Install
 
 	// register uninstall stackstate agent as a cleanup function
 	client.Session.RegisterCleanupFunc(func() error {
-		defaultChartUninstallAction := newChartUninstallAction()
+		defaultChartUninstallAction := charts.NewChartUninstallAction()
 
 		err := catalogClient.UninstallChart(StackstateK8sAgent, StackstateNamespace, defaultChartUninstallAction)
 		if err != nil {
@@ -164,8 +168,8 @@ func InstallStackstateAgentChart(client *rancher.Client, installOptions *Install
 	return nil
 }
 
-// newStackstateAgentChartInstallAction is a helper function that returns an array of newChartInstallActions for installing the stackstate agent charts
-func newStackstateAgentChartInstallAction(p *payloadOpts, stackstateConfigs *observability.StackStateConfig, systemProjectID string) *types.ChartInstallAction {
+// newStackstateAgentChartInstallAction is a helper function that returns an array of charts.NewChartInstallActions for installing the stackstate agent charts
+func newStackstateAgentChartInstallAction(p *charts.PayloadOpts, stackstateConfigs *observability.StackStateConfig, systemProjectID string) *types.ChartInstallAction {
 	stackstateValues := map[string]interface{}{
 		"stackstate": map[string]interface{}{
 			"cluster": map[string]interface{}{
@@ -176,22 +180,22 @@ func newStackstateAgentChartInstallAction(p *payloadOpts, stackstateConfigs *obs
 		},
 	}
 
-	chartInstall := newChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherPartnerCharts, systemProjectID, p.DefaultRegistry, stackstateValues)
+	chartInstall := charts.NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherPartnerCharts, systemProjectID, p.DefaultRegistry, stackstateValues)
 
 	chartInstalls := []types.ChartInstall{*chartInstall}
-	chartInstallAction := newChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	chartInstallAction := charts.NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
 
 	return chartInstallAction
 }
 
 // UpgradeStackstateAgentChart is a helper function that upgrades the stackstate agent chart.
-func UpgradeStackstateAgentChart(client *rancher.Client, installOptions *InstallOptions, stackstateConfigs *observability.StackStateConfig, systemProjectID string) error {
+func UpgradeStackstateAgentChart(client *rancher.Client, installOptions *charts.InstallOptions, stackstateConfigs *observability.StackStateConfig, systemProjectID string) error {
 	serverSetting, err := client.Management.Setting.ByID(serverURLSettingID)
 	if err != nil {
 		return err
 	}
 
-	stackstateAgentChartUpgradeActionPayload := &payloadOpts{
+	stackstateAgentChartUpgradeActionPayload := &charts.PayloadOpts{
 		InstallOptions: *installOptions,
 		Name:           StackstateK8sAgent,
 		Namespace:      StackstateNamespace,
@@ -267,7 +271,7 @@ func UpgradeStackstateAgentChart(client *rancher.Client, installOptions *Install
 }
 
 // newStackstateAgentChartUpgradeAction is a private helper function that returns chart upgrade action.
-func newStackstateAgentChartUpgradeAction(p *payloadOpts, stackstateConfigs *observability.StackStateConfig) *types.ChartUpgradeAction {
+func newStackstateAgentChartUpgradeAction(p *charts.PayloadOpts, stackstateConfigs *observability.StackStateConfig) *types.ChartUpgradeAction {
 
 	stackstateValues := map[string]interface{}{
 		"stackstate": map[string]interface{}{
@@ -279,9 +283,9 @@ func newStackstateAgentChartUpgradeAction(p *payloadOpts, stackstateConfigs *obs
 		},
 	}
 
-	chartUpgrade := newChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, stackstateValues)
+	chartUpgrade := charts.NewChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, stackstateValues)
 	chartUpgrades := []types.ChartUpgrade{*chartUpgrade}
-	chartUpgradeAction := newChartUpgradeAction(p.Namespace, chartUpgrades)
+	chartUpgradeAction := charts.NewChartUpgradeAction(p.Namespace, chartUpgrades)
 
 	return chartUpgradeAction
 }

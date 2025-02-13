@@ -4,6 +4,11 @@ package vai
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
@@ -17,13 +22,9 @@ import (
 	"github.com/stretchr/testify/suite"
 	coreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"net/url"
-	"strings"
-	"testing"
-	"time"
 )
 
-const scriptURL = "https://raw.githubusercontent.com/rancher/rancher/main/tests/v2/validation/steve/vai/scripts/script.sh"
+const scriptURL = "https://raw.githubusercontent.com/rancher/tests/main/validation/steve/vai/scripts/script.sh"
 
 type VaiTestSuite struct {
 	suite.Suite

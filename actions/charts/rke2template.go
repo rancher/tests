@@ -50,7 +50,7 @@ func InstallTemplateChart(client *rancher.Client, repoName, templateName, cluste
 		return err
 	}
 
-	chartInstallActionPayload := &payloadOpts{
+	chartInstallActionPayload := &PayloadOpts{
 		InstallOptions:  *installOptions,
 		Name:            templateName,
 		Namespace:       fleetNamespace,
@@ -76,7 +76,7 @@ func InstallTemplateChart(client *rancher.Client, repoName, templateName, cluste
 	}
 
 	client.Session.RegisterCleanupFunc(func() error {
-		err := client.Catalog.UninstallChart(templateName, fleetNamespace, newChartUninstallAction())
+		err := client.Catalog.UninstallChart(templateName, fleetNamespace, NewChartUninstallAction())
 		if err != nil {
 			return err
 		}
@@ -105,7 +105,7 @@ func InstallTemplateChart(client *rancher.Client, repoName, templateName, cluste
 }
 
 // TemplateInstallAction creates the payload used when installing a template chart
-func TemplateInstallAction(InstallActionPayload *payloadOpts, repoName, clusterName, cloudCredential, k8sVersion, namespace string, chartValues map[string]any) *types.ChartInstallAction {
+func TemplateInstallAction(InstallActionPayload *PayloadOpts, repoName, clusterName, cloudCredential, k8sVersion, namespace string, chartValues map[string]any) *types.ChartInstallAction {
 	chartValues["cloudCredentialSecretName"] = cloudCredential
 	chartValues["kubernetesVersion"] = k8sVersion
 	chartValues["cluster"].(map[string]any)["name"] = clusterName
@@ -114,7 +114,7 @@ func TemplateInstallAction(InstallActionPayload *payloadOpts, repoName, clusterN
 		chartValues["nodepools"].(map[string]any)[index].(map[string]any)["name"] = namegenerator.AppendRandomString("nodepool")
 	}
 
-	chartInstall := newChartInstall(
+	chartInstall := NewChartInstall(
 		InstallActionPayload.Name,
 		InstallActionPayload.InstallOptions.Version,
 		InstallActionPayload.InstallOptions.Cluster.ID,
@@ -126,5 +126,5 @@ func TemplateInstallAction(InstallActionPayload *payloadOpts, repoName, clusterN
 		chartValues)
 	chartInstalls := []types.ChartInstall{*chartInstall}
 
-	return newChartInstallAction(namespace, InstallActionPayload.ProjectID, chartInstalls)
+	return NewChartInstallAction(namespace, InstallActionPayload.ProjectID, chartInstalls)
 }

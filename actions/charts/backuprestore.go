@@ -36,7 +36,7 @@ func InstallRancherBackupChart(client *rancher.Client, installOptions *InstallOp
 		return err
 	}
 
-	backupChartInstallActionPayload := &payloadOpts{
+	backupChartInstallActionPayload := &PayloadOpts{
 		InstallOptions: *installOptions,
 		Name:           backupChartName,
 		Namespace:      backupChartNamespace,
@@ -51,7 +51,7 @@ func InstallRancherBackupChart(client *rancher.Client, installOptions *InstallOp
 	}
 
 	client.Session.RegisterCleanupFunc(func() error {
-		defaultChartUninstallAction := newChartUninstallAction()
+		defaultChartUninstallAction := NewChartUninstallAction()
 
 		err = catalogClient.UninstallChart(backupChartName, backupChartNamespace, defaultChartUninstallAction)
 		if err != nil {
@@ -151,7 +151,7 @@ func InstallRancherBackupChart(client *rancher.Client, installOptions *InstallOp
 }
 
 // newBackupChartInstallAction is a private helper function that returns chart install action with backup and payload options.
-func newBackupChartInstallAction(p *payloadOpts, withStorage bool, rancherBackupOpts *RancherBackupOpts) *types.ChartInstallAction {
+func newBackupChartInstallAction(p *PayloadOpts, withStorage bool, rancherBackupOpts *RancherBackupOpts) *types.ChartInstallAction {
 	// If BRO is installed without any storage options selected, then only the basic chart install options are sent
 	backupValues := map[string]interface{}{}
 	if withStorage {
@@ -167,11 +167,11 @@ func newBackupChartInstallAction(p *payloadOpts, withStorage bool, rancherBackup
 			},
 		}
 	}
-	chartInstall := newChartInstall(p.Name, p.InstallOptions.Version, p.InstallOptions.Cluster.ID, p.InstallOptions.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, backupValues)
-	chartInstallCRD := newChartInstall(p.Name+"-crd", p.InstallOptions.Version, p.InstallOptions.Cluster.ID, p.InstallOptions.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
+	chartInstall := NewChartInstall(p.Name, p.InstallOptions.Version, p.InstallOptions.Cluster.ID, p.InstallOptions.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, backupValues)
+	chartInstallCRD := NewChartInstall(p.Name+"-crd", p.InstallOptions.Version, p.InstallOptions.Cluster.ID, p.InstallOptions.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
 	chartInstalls := []types.ChartInstall{*chartInstallCRD, *chartInstall}
 
-	chartInstallAction := newChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	chartInstallAction := NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
 
 	return chartInstallAction
 }

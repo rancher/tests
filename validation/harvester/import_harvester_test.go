@@ -12,7 +12,7 @@ import (
 
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
-	harvesteraction "github.com/rancher/tests/actions/harvester"
+	harvesteraction "github.com/rancher/tests/interoperability/harvester"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )

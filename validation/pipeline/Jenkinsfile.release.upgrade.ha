@@ -112,13 +112,13 @@ node {
             try {
               stage('Configure and Build') {
                 if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
-                  dir("./tests/v2/validation/.ssh") {
+                  dir("./validation/.ssh") {
                     def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
                     writeFile file: AWS_SSH_KEY_NAME, text: decoded
                   }
                 }
 
-                dir("./tests/v2/validation") {
+                dir("./validation") {
                   def filename = "config.yaml"
                   def configContents = env.CONFIG
 
@@ -126,14 +126,14 @@ node {
                   env.CATTLE_TEST_CONFIG = workPath+filename
                 }
 
-                sh "./tests/v2/validation/configure.sh"
-                sh "./tests/v2/validation/build.sh"
+                sh "./validation/configure.sh"
+                sh "./validation/build.sh"
               }
               stage('Setup') {
                 sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
                 sh returnStdout:true, script: 'chmod a+x ./yq'
 
-                def initConfigPath = "./tests/v2/validation/config.yaml"
+                def initConfigPath = "./validation/config.yaml"
 
                 env.HA_HOST= sh (
                   script: "./yq '.ha.host' ${initConfigPath}",
@@ -280,8 +280,8 @@ node {
                 sh "docker rmi -f ${imageName}"
 
                 println "Building the image again with the config files"
-                sh "./tests/v2/validation/build.sh"
-                sh "./tests/v2/validation/configure.sh"
+                sh "./validation/build.sh"
+                sh "./validation/configure.sh"
               }
               stage('Deploys clusters') {
                 try {

@@ -37,7 +37,7 @@ func InstallRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 		return err
 	}
 
-	gatekeeperChartInstallActionPayload := &payloadOpts{
+	gatekeeperChartInstallActionPayload := &PayloadOpts{
 		InstallOptions:  *installOptions,
 		Name:            RancherGatekeeperName,
 		Namespace:       RancherGatekeeperNamespace,
@@ -57,7 +57,7 @@ func InstallRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 	// register uninstall rancher-gatekeeper as a cleanup function
 	client.Session.RegisterCleanupFunc(func() error {
 		// UninstallAction for when uninstalling the rancher-gatekeeper chart
-		defaultChartUninstallAction := newChartUninstallAction()
+		defaultChartUninstallAction := NewChartUninstallAction()
 
 		err := catalogClient.UninstallChart(RancherGatekeeperName, RancherGatekeeperNamespace, defaultChartUninstallAction)
 		if err != nil {
@@ -187,14 +187,14 @@ func InstallRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 	return nil
 }
 
-// newGatekeeperChartInstallAction is a helper function that returns an array of newChartInstallActions for installing the gatekeeper and gatekeepr-crd charts
-func newGatekeeperChartInstallAction(p *payloadOpts) *types.ChartInstallAction {
-	chartInstall := newChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
-	chartInstallCRD := newChartInstall(p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
+// newGatekeeperChartInstallAction is a helper function that returns an array of NewChartInstallActions for installing the gatekeeper and gatekeepr-crd charts
+func newGatekeeperChartInstallAction(p *PayloadOpts) *types.ChartInstallAction {
+	chartInstall := NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
+	chartInstallCRD := NewChartInstall(p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
 
 	chartInstalls := []types.ChartInstall{*chartInstallCRD, *chartInstall}
 
-	chartInstallAction := newChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	chartInstallAction := NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
 
 	return chartInstallAction
 }
@@ -211,7 +211,7 @@ func UpgradeRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 		return err
 	}
 
-	gatekeeperChartUpgradeActionPayload := &payloadOpts{
+	gatekeeperChartUpgradeActionPayload := &PayloadOpts{
 		InstallOptions:  *installOptions,
 		Name:            RancherGatekeeperName,
 		Namespace:       RancherGatekeeperNamespace,
@@ -288,12 +288,12 @@ func UpgradeRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 }
 
 // newGatekeeperChartUpgradeAction is a private helper function that returns chart upgrade action.
-func newGatekeeperChartUpgradeAction(p *payloadOpts) *types.ChartUpgradeAction {
-	chartUpgrade := newChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, nil)
-	chartUpgradeCRD := newChartUpgrade(p.Name+"-crd", p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, nil)
+func newGatekeeperChartUpgradeAction(p *PayloadOpts) *types.ChartUpgradeAction {
+	chartUpgrade := NewChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, nil)
+	chartUpgradeCRD := NewChartUpgrade(p.Name+"-crd", p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, nil)
 	chartUpgrades := []types.ChartUpgrade{*chartUpgradeCRD, *chartUpgrade}
 
-	chartUpgradeAction := newChartUpgradeAction(p.Namespace, chartUpgrades)
+	chartUpgradeAction := NewChartUpgradeAction(p.Namespace, chartUpgrades)
 
 	return chartUpgradeAction
 }
