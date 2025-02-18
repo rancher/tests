@@ -5,8 +5,6 @@ set -eu
 
 DEBUG="${DEBUG:-false}"
 CLI_VERSION="${CLI_VERSION:-}"
-EXTERNAL_ENCODED_VPN="${EXTERNAL_ENCODED_VPN:-}"
-VPN_ENCODED_LOGIN="${VPN_ENCODED_LOGIN:-}"
 
 TRIM_JOB_NAME=$(basename "$JOB_NAME")
 
@@ -17,7 +15,7 @@ fi
 
 count=0
 while [[ 3 -gt $count ]]; do
-    docker build . -f validation/Dockerfile.validation --build-arg CLI_VERSION="$CLI_VERSION" --build-arg EXTERNAL_ENCODED_VPN="$EXTERNAL_ENCODED_VPN" --build-arg VPN_ENCODED_LOGIN="$VPN_ENCODED_LOGIN" -t rancher-validation-"${TRIM_JOB_NAME}""${BUILD_NUMBER}"   
+    docker build . -f validation/Dockerfile.validation --build-arg CLI_VERSION="$CLI_VERSION" -t rancher-validation-"${TRIM_JOB_NAME}""${BUILD_NUMBER}"   
 
     if [[ $? -eq 0 ]]; then break; fi
     count=$(($count + 1))
