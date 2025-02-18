@@ -21,7 +21,7 @@ node {
     def testRunConfig = "testrunconfig.yaml"
     def envFile = ".env"
     def rancherConfig = "rancher_env.config"
-    def branch = "release/v2.8"
+    def branch = "main"
     def corralBranch = "main"
     def config = env.CONFIG
     def rancherToken = ""

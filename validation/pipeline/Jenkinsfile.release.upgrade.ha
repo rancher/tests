@@ -27,7 +27,7 @@ node {
     def testResultsOut = "results.xml"
     def envFile = ".env"
     def rancherConfig = "rancher_env.config"
-    def branch = "release/v2.8"
+    def branch = "main"
     def defaultTag = "validation"
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
