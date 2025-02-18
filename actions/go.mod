@@ -62,7 +62,6 @@ require github.com/rancher/rancher/pkg/apis v0.0.0
 require (
 	github.com/aws/aws-sdk-go v1.50.38
 	github.com/pkg/errors v0.9.1
-	github.com/rancher/backup-restore-operator v1.2.1
 	github.com/rancher/machine v0.15.0-rancher113
 	github.com/rancher/norman v0.5.1
 	github.com/rancher/rancher v0.0.0-20240618122559-b9ec494d4f6f
