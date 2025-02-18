@@ -1,6 +1,6 @@
 #!groovy
 node {
-    def rootPath = "/root/go/src/github.com/rancher/rancher/"
+    def rootPath = "/root/go/src/github.com/rancher/tests/"
     def workPath = "/root/go/src/github.com/rancher/tests/validation/"
     def jobName = "${JOB_NAME}"
     if (jobName.contains('/')) { 

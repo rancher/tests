@@ -1,6 +1,6 @@
-# Interoperable Actions
+# Interoperability
 
-Interoperable actions are:
+This folder is designated for packages that fit the following description:
 * actions
 * functions or packages that are non-rancher in nature
   * i.e. adds to go.mod in any way
