@@ -11,9 +11,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
-	"github.com/rancher/tests/actions/charts"
+	actionscharts "github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/secrets"
+	"github.com/rancher/tests/interoperability/charts"
 
 	shepClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/tests/actions/provisioning"
@@ -106,12 +107,12 @@ func installBroChart(client *rancher.Client) error {
 
 	config.LoadConfig(charts.BackupRestoreConfigurationFileKey, backupRestoreConfig)
 
-	chartInstallOptions := charts.InstallOptions{
+	chartInstallOptions := actionscharts.InstallOptions{
 		Cluster:   cluster,
 		Version:   latestBackupVersion,
 		ProjectID: project.ID,
 	}
-	chartFeatureOptions := &charts.RancherBackupOpts{
+	chartFeatureOptions := &actionscharts.RancherBackupOpts{
 		VolumeName:                backupRestoreConfig.VolumeName,
 		BucketName:                backupRestoreConfig.S3BucketName,
 		CredentialSecretName:      secretName,

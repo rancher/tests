@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
+	"github.com/rancher/tests/actions/charts"
 	kubenamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/sirupsen/logrus"
@@ -25,18 +26,19 @@ import (
 const (
 	backupChartNamespace = "cattle-resources-system"
 	backupChartName      = "rancher-backup"
+	metadataName         = "metadata.name="
 )
 
 var chartInstallAction *types.ChartInstallAction
 
 // InstallRancherBackupChart is a helper function that installs the Rancher Backups chart.
-func InstallRancherBackupChart(client *rancher.Client, installOptions *InstallOptions, rancherBackupOpts *RancherBackupOpts, withStorage bool) error {
+func InstallRancherBackupChart(client *rancher.Client, installOptions *charts.InstallOptions, rancherBackupOpts *charts.RancherBackupOpts, withStorage bool) error {
 	serverSetting, err := client.Management.Setting.ByID(serverURLSettingID)
 	if err != nil {
 		return err
 	}
 
-	backupChartInstallActionPayload := &PayloadOpts{
+	backupChartInstallActionPayload := &charts.PayloadOpts{
 		InstallOptions: *installOptions,
 		Name:           backupChartName,
 		Namespace:      backupChartNamespace,
@@ -51,7 +53,7 @@ func InstallRancherBackupChart(client *rancher.Client, installOptions *InstallOp
 	}
 
 	client.Session.RegisterCleanupFunc(func() error {
-		defaultChartUninstallAction := NewChartUninstallAction()
+		defaultChartUninstallAction := charts.NewChartUninstallAction()
 
 		err = catalogClient.UninstallChart(backupChartName, backupChartNamespace, defaultChartUninstallAction)
 		if err != nil {
@@ -151,7 +153,7 @@ func InstallRancherBackupChart(client *rancher.Client, installOptions *InstallOp
 }
 
 // newBackupChartInstallAction is a private helper function that returns chart install action with backup and payload options.
-func newBackupChartInstallAction(p *PayloadOpts, withStorage bool, rancherBackupOpts *RancherBackupOpts) *types.ChartInstallAction {
+func newBackupChartInstallAction(p *charts.PayloadOpts, withStorage bool, rancherBackupOpts *charts.RancherBackupOpts) *types.ChartInstallAction {
 	// If BRO is installed without any storage options selected, then only the basic chart install options are sent
 	backupValues := map[string]interface{}{}
 	if withStorage {
@@ -167,11 +169,11 @@ func newBackupChartInstallAction(p *PayloadOpts, withStorage bool, rancherBackup
 			},
 		}
 	}
-	chartInstall := NewChartInstall(p.Name, p.InstallOptions.Version, p.InstallOptions.Cluster.ID, p.InstallOptions.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, backupValues)
-	chartInstallCRD := NewChartInstall(p.Name+"-crd", p.InstallOptions.Version, p.InstallOptions.Cluster.ID, p.InstallOptions.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
+	chartInstall := charts.NewChartInstall(p.Name, p.InstallOptions.Version, p.InstallOptions.Cluster.ID, p.InstallOptions.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, backupValues)
+	chartInstallCRD := charts.NewChartInstall(p.Name+"-crd", p.InstallOptions.Version, p.InstallOptions.Cluster.ID, p.InstallOptions.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
 	chartInstalls := []types.ChartInstall{*chartInstallCRD, *chartInstall}
 
-	chartInstallAction := NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	chartInstallAction := charts.NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
 
 	return chartInstallAction
 }
