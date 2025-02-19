@@ -30,12 +30,8 @@ linters-settings:
         msg: "No format prints, please testing or logrus packages"
 run:
   tests: false
-  timeout: 10m
+  timeout: 8m
 issues:
-  exclude-dirs:
-    - pkg/generated/*
-    - clients/rancher/generated/*
   exclude-files:
     - ^*\.yaml$
     - ^*\.yml$
-  exclude-generated-strict: true
