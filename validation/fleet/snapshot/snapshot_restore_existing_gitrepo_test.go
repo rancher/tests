@@ -160,7 +160,7 @@ func (f *FleetWithSnapshotTestSuite) TestSnapshotThenFleetRestore() {
 
 			var gitRepoObject *steveV1.SteveAPIObject
 
-			logrus.Info("deploying fleet post-snapshot to test persistance after restore is complete")
+			logrus.Info("deploying fleet post-snapshot to test persistence after restore is complete")
 
 			cluster, snapshotName, postDeploymentResp, postServiceResp, err := etcdsnapshot.CreateAndValidateSnapshotV2Prov(client, &podTemplate, deploymentTemplate, client.RancherConfig.ClusterName, f.clusterID, tt.etcdSnapshot, isRKE1)
 			require.NoError(f.T(), err)
