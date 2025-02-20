@@ -6,14 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/etcdsnapshot"
 	"github.com/rancher/shepherd/extensions/users"
-	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/projects"
 	rbac "github.com/rancher/tests/actions/rbac"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -22,34 +17,7 @@ const (
 	restrictedAdmin rbac.Role = "restricted-admin"
 )
 
-func (etcd *SnapshotRBACTestSuite) TearDownSuite() {
-	etcd.session.Cleanup()
-}
-
-func (etcd *SnapshotRBACTestSuite) SetupSuite() {
-	etcd.session = session.NewSession()
-
-	client, err := rancher.NewClient("", etcd.session)
-	require.NoError(etcd.T(), err)
-
-	etcd.client = client
-	clusterName := client.RancherConfig.ClusterName
-	require.NotEmptyf(etcd.T(), clusterName, "Cluster name to install should be set")
-	clusterID, err := clusters.GetClusterIDByName(etcd.client, clusterName)
-	require.NoError(etcd.T(), err, "Error getting cluster ID")
-	etcd.cluster, err = etcd.client.Management.Cluster.ByID(clusterID)
-	require.NoError(etcd.T(), err)
-}
-
-func (etcd *SnapshotRBACTestSuite) testRKE2K3SSnapshotRBAC(role string, standardUserClient *rancher.Client) {
-	log.Info("Test case - Take Etcd snapshot of a cluster as a " + role)
-	_, err := etcdsnapshot.CreateRKE2K3SSnapshot(standardUserClient, etcd.cluster.Name)
-
-	require.NoError(etcd.T(), err)
-
-}
-
-func (etcd *SnapshotRBACTestSuite) TestRKE2K3SSnapshotRBAC() {
+func (etcd *SnapshotRBACTestSuite) TestRKE2K3SSnapshotRBACRA() {
 	subSession := etcd.session.NewSession()
 	defer subSession.Cleanup()
 

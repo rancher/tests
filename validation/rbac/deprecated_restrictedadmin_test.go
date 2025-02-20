@@ -6,42 +6,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/config"
-	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
-func (rb *RBTestSuite) TearDownSuite() {
-	rb.session.Cleanup()
-}
-
-func (rb *RBTestSuite) SetupSuite() {
-	testSession := session.NewSession()
-	rb.session = testSession
-
-	client, err := rancher.NewClient("", testSession)
-	require.NoError(rb.T(), err)
-
-	rb.client = client
-
-	log.Info("Getting cluster name from the config file and append cluster details in rb")
-	clusterName := client.RancherConfig.ClusterName
-	require.NotEmptyf(rb.T(), clusterName, "Cluster name to install should be set")
-	clusterID, err := clusters.GetClusterIDByName(rb.client, clusterName)
-	require.NoError(rb.T(), err, "Error getting cluster ID")
-	rb.cluster, err = rb.client.Management.Cluster.ByID(clusterID)
-	require.NoError(rb.T(), err)
-}
-
-func (rb *RBTestSuite) sequentialTestRBAC(role rbac.Role, member string, user *management.User) {
+func (rb *RBTestSuite) sequentialTestRBACRA(role rbac.Role, member string, user *management.User) {
 	standardClient, err := rb.client.AsUser(user)
 	require.NoError(rb.T(), err)
 
@@ -106,7 +80,7 @@ func (rb *RBTestSuite) sequentialTestRBAC(role rbac.Role, member string, user *m
 	})
 }
 
-func (rb *RBTestSuite) TestRBAC() {
+func (rb *RBTestSuite) TestRBACRA() {
 	tests := []struct {
 		name   string
 		role   rbac.Role
@@ -125,14 +99,14 @@ func (rb *RBTestSuite) TestRBAC() {
 		})
 
 		if newUser != nil {
-			rb.sequentialTestRBAC(tt.role, tt.member, newUser)
+			rb.sequentialTestRBACRA(tt.role, tt.member, newUser)
 			subSession := rb.session.NewSession()
 			defer subSession.Cleanup()
 		}
 	}
 }
 
-func (rb *RBTestSuite) TestRBACDynamicInput() {
+func (rb *RBTestSuite) TestRBACDynamicInputRA() {
 	roles := map[string]string{
 		"restricted-admin": restrictedAdmin.String(),
 	}
@@ -160,7 +134,7 @@ func (rb *RBTestSuite) TestRBACDynamicInput() {
 
 	member = restrictedAdmin.String()
 
-	rb.sequentialTestRBAC(role, member, user)
+	rb.sequentialTestRBACRA(role, member, user)
 
 }
 

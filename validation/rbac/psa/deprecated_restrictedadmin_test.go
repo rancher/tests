@@ -6,12 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/rancher"
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/namespaces"
 	psadeploy "github.com/rancher/tests/actions/psact"
 	rbac "github.com/rancher/tests/actions/rbac"
@@ -25,43 +21,7 @@ const (
 	restrictedAdmin rbac.Role = "restricted-admin"
 )
 
-func (rb *PSATestSuite) TearDownSuite() {
-	// reset the PSACT
-	_, err := editPsactCluster(rb.client, rb.clusterName, rbac.DefaultNamespace, "")
-	require.NoError(rb.T(), err)
-	rb.session.Cleanup()
-}
-
-func (rb *PSATestSuite) SetupSuite() {
-	testSession := session.NewSession()
-	rb.session = testSession
-
-	client, err := rancher.NewClient("", testSession)
-	require.NoError(rb.T(), err)
-
-	rb.client = client
-	rb.clusterName = client.RancherConfig.ClusterName
-	require.NotEmptyf(rb.T(), rb.clusterName, "Cluster name to install should be set")
-	rb.clusterID, err = clusters.GetClusterIDByName(rb.client, rb.clusterName)
-	require.NoError(rb.T(), err, "Error getting cluster ID")
-	rb.cluster, err = rb.client.Management.Cluster.ByID(rb.clusterID)
-	require.NoError(rb.T(), err)
-
-	context := "cluster"
-	roleName := namegen.AppendRandomString("psarole-")
-	rules := []management.PolicyRule{
-		{
-			APIGroups: []string{"management.cattle.io"},
-			Resources: []string{"projects"},
-			Verbs:     []string{psaRole},
-		},
-	}
-	psaRollUpdate, err := createRole(rb.client, context, roleName, rules)
-	require.NoError(rb.T(), err)
-	rb.psaRole = psaRollUpdate
-}
-
-func (rb *PSATestSuite) ValidatePSA(role string, customRole bool) {
+func (rb *PSATestSuite) ValidatePSARA(role string, customRole bool) {
 	labels := map[string]string{
 		psaWarn:    pssPrivilegedPolicy,
 		psaEnforce: pssPrivilegedPolicy,
@@ -118,7 +78,7 @@ func (rb *PSATestSuite) ValidatePSA(role string, customRole bool) {
 
 }
 
-func (rb *PSATestSuite) ValidateEditPsactCluster(role string, psact string) {
+func (rb *PSATestSuite) ValidateEditPsactClusterRA(role string, psact string) {
 	_, err := editPsactCluster(rb.nonAdminUserClient, rb.clusterName, rbac.DefaultNamespace, psact)
 
 	require.NoError(rb.T(), err)
@@ -126,7 +86,7 @@ func (rb *PSATestSuite) ValidateEditPsactCluster(role string, psact string) {
 	require.NoError(rb.T(), err)
 }
 
-func (rb *PSATestSuite) TestPSA() {
+func (rb *PSATestSuite) TestPSARA() {
 	role := restrictedAdmin.String()
 	var customRole bool
 	if role == rbac.CreateNS.String() {
@@ -195,7 +155,7 @@ func (rb *PSATestSuite) TestPSA() {
 	}
 }
 
-func (rb *PSATestSuite) TestPsactRBAC() {
+func (rb *PSATestSuite) TestPsactRBACRA() {
 	tests := []struct {
 		name   string
 		role   string
