@@ -45,3 +45,5 @@ jobs:
         with:
           # Patch version isn't needed; https://github.com/golangci/golangci-lint-action?tab=readme-ov-file#internals
           version: v1.64.5
+          # only run on changed files in this PR / push
+          only-new-issues: true
