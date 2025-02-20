@@ -10,7 +10,7 @@ stable - rebased from main after each rancher/rancher release. This branch shoul
 
 ## Deprecation of a Feature for an Upcoming Release
 
-we use //go:build tags in our tests suites. The new branching strategy requires us to introduce a way to deprecate tests as well. We will be using go:build tags to deprecate tests. 
+we use //go:build tags in our test suites. The new branching strategy requires us to introduce a way to deprecate tests as well. We will be using go:build tags to deprecate tests. 
 **NOTE:** All tests that are deprecated need the tag associated with the rancher version it is supported on to be included when running the test. Remember to do this step when running tests manually. 
 
 [restrictedadmin rbac test cases](./validation/rbac/deprecated_restrictedadmin_test.go)
@@ -48,8 +48,8 @@ simply add go:build tags to the existing ones at the top of each file.
 4. add go:build tags to the existing ones at the top of the new file
 
 #### Deprecating Actions
-1. if the **tests** being deprecated are spread across multiple packages, the deprecated action(s) used by said tests should be moved to a new file in the same folder of actions, named appropriately, signifying they contain deprecated actions
-2. If the **tests** being deprecated are iscolated to one package, the deprecated action(s) used by said tests should be moved to be a test helper within the deprecated test folder
+1. if the **tests** being deprecated are spread across multiple packages, the deprecated action(s) used by said tests should be moved to a new file in the same folder of actions, named appropriately, signifying they contain deprecated actions. All functions in the new file should have `//Deprecated` in their godoc comment(s)
+2. If the **tests** being deprecated are isolated to one package, the deprecated action(s) used by said tests should be moved to be a test helper within the deprecated test folder
 
 ##### Example action -> deprecated action
 
