@@ -1,0 +1,12 @@
+/actions/fleet @rancher/qa-pit-crew
+
+/interoperability @rancher/qa-pit-crew
+
+/validation/fleet @rancher/qa-pit-crew
+/validation/observability @rancher/qa-pit-crew
+
+
+/actions/provisioning @rancher/rancher-team-2-hostbusters-qa
+/actions/provisioninginput @rancher/rancher-team-2-hostbusters-qa
+
+/validation/provisioning @rancher/rancher-team-2-hostbusters-qa
