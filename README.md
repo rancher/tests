@@ -1,3 +1,8 @@
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/rancher/tests)](https://goreportcard.com/report/github.com/rancher/tests)
+
+[![Latest Build](https://github.com/rancher/tests/actions/workflows/ci.yml/badge.svg)](https://github.com/rancher/tests/actions/workflows/ci.yml)
+
 # Rancher Tests
 
 Welcome to the rancher test repo. 

@@ -35,7 +35,7 @@ const (
 	CniCalico          = "calico"
 )
 
-// GitRepoConfig is a function that reads in the gitRepo object from the config file
+// GitRepoConfig is a function that reads in the gitRepo object from the config file this is a test
 func GitRepoConfig() *v1alpha1.GitRepo {
 	var gitRepo v1alpha1.GitRepo
 	config.LoadConfig(gitRepoConfigConfigurationFileKey, &gitRepo)
