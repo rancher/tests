@@ -74,3 +74,28 @@ actions/fleet/fleet.go
   * these should now all be private functions, as they should not be imported outside of the test. Therefore, no importing necessary
 
 
+## Addition of a Feature for an Upcoming Release
+we use //go:build tags in our test suites. The new branching strategy requires us to introduce a way to introduce features and tests around said feature. We will be using go:build tags to add feature tests. 
+
+### How to Add Tests for a New Feature
+Tags added to new features should _not_ all versions of rancher that are in limited support and do not support the new feature.
+Follow these steps:
+1. add _notted_ go:build tags for each rancher version that both:
+
+* in [limited support](https://endoflife.date/rancher)
+* does _not_ support the feature
+
+2. [Add Tests for a New Feature](#adding-tests-for-a-new-feature)
+
+#### Adding Tests for a New Feature
+i.e. clusterAgent and fleetAgent overrides were introduced in 2.7
+
+At the time of introduction, 2.5 and 2.6 had limited support. Therefore any new test(s) for this feature should have `&& !(2.5 || 2.6)` go:build tags added. 
+
+All tests for a new feature should have dedicated file(s) for each area they are being tested in. i.e. for clusterAgent and fleetAgent, there would be the following files added:
+validaiton/provisioning/k3s/agent_test.go
+validaiton/provisioning/rke2/agent_test.go
+validaiton/provisioning/rke1/agent_test.go
+validaiton/fleet/agent_test.go
+
+all of which would have the _not_ tags added. 
