@@ -29,9 +29,12 @@ linters-settings:
       - p: ^fmt\.Print.*$
         msg: "No format prints, please testing or logrus packages"
 run:
-  tests: false
+  tests: true
+  relative-path-mode: wd
+  build-tags: [validation,"2.10"]
   timeout: 8m
 issues:
+  max-issues-per-linter: 0
   exclude-files:
     - ^*\.yaml$
     - ^*\.yml$

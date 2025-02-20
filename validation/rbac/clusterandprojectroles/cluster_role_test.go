@@ -74,7 +74,7 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsUserAsProjectOwner() {
 
 	err = users.RemoveProjectMember(clusterAdminClient, additionalUser)
 	require.NoError(rb.T(), err)
-	projectListClusterAdditionalUser, err = projects.ListProjectNames(additionalUserClient, rb.cluster.ID)
+	projectListClusterAdditionalUser, _ = projects.ListProjectNames(additionalUserClient, rb.cluster.ID)
 	require.Empty(rb.T(), projectListClusterAdditionalUser)
 }
 
@@ -104,7 +104,7 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsUserAsClusterOwner() {
 
 	err = users.RemoveClusterRoleFromUser(clusterAdminClient, additionalUser)
 	require.NoError(rb.T(), err)
-	clusterList, err = additionalUserClient.Steve.SteveType(clusters.ProvisioningSteveResourceType).ListAll(nil)
+	clusterList, _ = additionalUserClient.Steve.SteveType(clusters.ProvisioningSteveResourceType).ListAll(nil)
 	require.Empty(rb.T(), clusterList.Data)
 }
 

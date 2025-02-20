@@ -76,9 +76,8 @@ func (grw *GlobalRolesV2WebhookTestSuite) TestRemoveOwnerLabelRejectedByWebhook(
 	crtbList, err, _ := getCRTBFromGRBOwner(grw.T(), grw.client, user, grw.clusterCount)
 	require.NoError(grw.T(), err)
 
-	var existingCRTB = &v3.ClusterRoleTemplateBinding{}
 	for _, crtb := range crtbList.Items {
-		existingCRTB = crtb.DeepCopy()
+		existingCRTB := crtb.DeepCopy()
 		newLabels := crtb.Labels
 		if newLabels == nil {
 			newLabels = make(map[string]string)

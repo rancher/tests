@@ -8,7 +8,6 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	"github.com/rancher/tests/actions/configmaps"
@@ -24,8 +23,7 @@ import (
 )
 
 var (
-	deploymentName = namegen.AppendRandomString("testcm-dep-")
-	data           = map[string]string{"foo": "bar"}
+	data = map[string]string{"foo": "bar"}
 )
 
 type ConfigmapsRBACTestSuite struct {
@@ -216,7 +214,7 @@ func (cm *ConfigmapsRBACTestSuite) TestListConfigmaps() {
 			configMapCreatedByAdmin, err := configmaps.CreateConfigmap(namespace.Name, cm.client, data, cm.cluster.ID)
 			require.NoError(cm.T(), err)
 
-			downstreamWranglerContext, err := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(cm.cluster.ID)
+			downstreamWranglerContext, _ := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(cm.cluster.ID)
 			configMapListAsUser, err := downstreamWranglerContext.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{
 				FieldSelector: "metadata.name=" + configMapCreatedByAdmin.Name,
 			})
@@ -313,7 +311,7 @@ func (cm *ConfigmapsRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
 		configMapCreatedByUser, err := downstreamWranglerContextAsClusterMember.Core.ConfigMap().Update(configMapCreatedByAdmin)
 		require.NoError(cm.T(), err)
 
-		configmapListAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().List(namespace.Namespace, metav1.ListOptions{
+		configmapListAsAdmin, _ := cm.ctxAsAdmin.Core.ConfigMap().List(namespace.Namespace, metav1.ListOptions{
 			FieldSelector: "metadata.name=" + configMapCreatedByUser.Name,
 		})
 

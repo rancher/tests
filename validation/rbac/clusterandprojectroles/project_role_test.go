@@ -82,7 +82,7 @@ func (pr *ProjectRolesTestSuite) TestProjectOwnerAddsAndRemovesOtherProjectOwner
 	errRemoveMember := users.RemoveProjectMember(standardUserClient, additionalUser)
 	require.NoError(pr.T(), errRemoveMember)
 
-	userProjectEmptyAfterRemoval, err := projects.ListProjectNames(additionalUserClient, pr.cluster.ID)
+	userProjectEmptyAfterRemoval, _ := projects.ListProjectNames(additionalUserClient, pr.cluster.ID)
 	require.Empty(pr.T(), userProjectEmptyAfterRemoval)
 }
 
