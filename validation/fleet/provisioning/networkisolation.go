@@ -127,7 +127,7 @@ func testPNI(client *rancher.Client, clusterName, deploymentNamespace, deploymen
 
 	var podLogs string
 
-	// pod will come to an active state breifly when healthy. i.e. when sending the ping, before receiving the failure
+	// pod will come to an active state briefly when healthy. i.e. when sending the ping, before receiving the failure
 	err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		podObject, err := downstreamClient.SteveType(extensionpods.PodResourceSteveType).ByID(defaultNamespace + "/" + jobPodObject.Name)
 		if err != nil {
