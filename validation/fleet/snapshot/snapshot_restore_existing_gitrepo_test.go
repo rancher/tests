@@ -35,11 +35,10 @@ const (
 
 type FleetWithSnapshotTestSuite struct {
 	suite.Suite
-	client         *rancher.Client
-	session        *session.Session
-	fleetGitRepo   *v1alpha1.GitRepo
-	clustersConfig *etcdsnapshot.Config
-	clusterID      string
+	client       *rancher.Client
+	session      *session.Session
+	fleetGitRepo *v1alpha1.GitRepo
+	clusterID    string
 }
 
 func (f *FleetWithSnapshotTestSuite) TearDownSuite() {
