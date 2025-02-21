@@ -1,4 +1,5 @@
 /actions/fleet @rancher/qa-pit-crew
+/actions/go.* @rancher/qa-pit-crew
 
 /interoperability @rancher/qa-pit-crew
 
