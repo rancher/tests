@@ -1,7 +1,6 @@
 #!groovy
 
 node("vsphere-vpn-1") {
-  def rootPath = "/root/go/src/github.com/rancher/rancher/tests/scripts/"
   def job_name = "${JOB_NAME}"
   if (job_name.contains('/')) {
     job_names = job_name.split('/')
@@ -64,7 +63,7 @@ node("vsphere-vpn-1") {
             userRemoteConfigs: repo
           ])
         }
-        dir("./tests/scripts/custodian/") {
+        dir("./scripts/custodian/") {
           try {
             stage('Build Docker Image') {
               try {
