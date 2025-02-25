@@ -21,3 +21,51 @@ rancher:
   cleanup: True #optional
   clusterName: "cluster_name"
 ```
+For the restrictedadmin_replacement_role_test.go run, we need the following additional parameters to be passed in the config file as we create a downstream k3s cluster:
+
+```yaml
+provisioningInput:
+  machinePools:
+  - machinePoolConfig:
+      etcd: true
+      controlplane: true
+      worker: true
+      quantity: 1
+      drainBeforeDelete: true
+      hostnameLengthLimit: 29
+      nodeStartupTimeout: "600s"
+      unhealthyNodeTimeout: "300s"
+      maxUnhealthy: "2"
+      unhealthyRange: "2-4"
+  - machinePoolConfig:
+      worker: true
+      quantity: 2
+  - machinePoolConfig:
+      windows: true
+      quantity: 1
+  k3sKubernetesVersion: [""]
+  providers: ["aws"]
+  cni: ["calico"]
+  nodeProviders: ["ec2"]
+  hardened: false
+  psact: ""
+
+awsCredentials:
+ accessKey: ""
+ secretKey: ""
+ defaultRegion: ""
+ 
+awsMachineConfigs:
+ region: ""
+ awsMachineConfig:
+ - roles: ["etcd","controlplane","worker"]
+   ami: ""
+   instanceType: "t3a.medium"                
+   sshUser: "ubuntu"
+   vpcId: ""
+   volumeType: "gp2"                         
+   zone: "a"
+   retries: "5"                              
+   rootSize: "60"                            
+   securityGroup: []
+```
