@@ -9,7 +9,7 @@ Your GO suite should be set to `-run ^TestVaiTestSuite$`.
 In your config file, set the following:
 
 ```yaml
-rancher: 
+rancher:
   host: "rancher_server_address"
   adminToken: "rancher_admin_token"
   insecure: True # optional
