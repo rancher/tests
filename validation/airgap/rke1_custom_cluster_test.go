@@ -22,7 +22,6 @@ import (
 	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/validation/pipeline/rancherha/corralha"
 	"github.com/rancher/tests/validation/provisioning/registries"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -47,9 +46,6 @@ func (a *AirGapRKE1CustomClusterTestSuite) SetupSuite() {
 
 	a.clustersConfig = new(provisioninginput.Config)
 	config.LoadConfig(provisioninginput.ConfigurationFileKey, a.clustersConfig)
-
-	corralRancherHA := new(corralha.CorralRancherHA)
-	config.LoadConfig(corralha.CorralRancherHAConfigConfigurationFileKey, corralRancherHA)
 
 	registriesConfig := new(registries.Registries)
 	config.LoadConfig(registries.RegistriesConfigKey, registriesConfig)
@@ -76,35 +72,17 @@ func (a *AirGapRKE1CustomClusterTestSuite) SetupSuite() {
 
 	a.client = standardUserClient
 
-	listOfCorrals, err := corral.ListCorral()
-	require.NoError(a.T(), err)
+	corralRancherHA := new(corralha.CorralRancherHA)
+	config.LoadConfig(corralha.CorralRancherHAConfigConfigurationFileKey, corralRancherHA)
+	if corralRancherHA.Name == "" {
+		a.registryFQDN = airgapCorral(a.T(), corralRancherHA)
+		corralConfig := corral.Configurations()
 
-	corralConfig := corral.Configurations()
-
-	err = corral.SetupCorralConfig(corralConfig.CorralConfigVars, corralConfig.CorralConfigUser, corralConfig.CorralSSHPath)
-	require.NoError(a.T(), err)
-
-	a.corralPackage = corral.PackagesConfig()
-
-	_, corralExist := listOfCorrals[corralRancherHA.Name]
-	if corralExist {
-		bastionIP, err := corral.GetCorralEnvVar(corralRancherHA.Name, corralRegistryIP)
+		err = corral.SetupCorralConfig(corralConfig.CorralConfigVars, corralConfig.CorralConfigUser, corralConfig.CorralSSHPath)
 		require.NoError(a.T(), err)
 
-		err = corral.UpdateCorralConfig(corralBastionIP, bastionIP)
-		require.NoError(a.T(), err)
-
-		registryFQDN, err := corral.GetCorralEnvVar(corralRancherHA.Name, corralRegistryFQDN)
-		require.NoError(a.T(), err)
-		logrus.Infof("registry fqdn is %s", registryFQDN)
-
-		err = corral.SetCorralSSHKeys(corralRancherHA.Name)
-		require.NoError(a.T(), err)
-		a.registryFQDN = registryFQDN
-	} else {
-		a.registryFQDN = registriesConfig.ExistingNoAuthRegistryURL
+		a.corralPackage = corral.PackagesConfig()
 	}
-
 }
 
 func (a *AirGapRKE1CustomClusterTestSuite) TestProvisioningAirGapRKE1CustomCluster() {

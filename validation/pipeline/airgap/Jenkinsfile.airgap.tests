@@ -1,0 +1,134 @@
+#!groovy
+node {
+  def homePath = pwd() + "/"
+  def rootPath = "/root/go/src/github.com/rancher/tfp-automation/"
+  def TERRAFORM_DIR = './root/go/src/github.com/rancher/tfp-automation/modules/airgap'
+  def testsDir = "github.com/rancher/tfp-automation/tests/${env.TEST_PACKAGE}"
+  def filename = "config.yml"
+  def configPath = ""
+  def job_name = "${JOB_NAME}"
+  if (job_name.contains('/')) { 
+    job_names = job_name.split('/')
+    job_name = job_names[job_names.size() - 1] 
+  }
+  def testContainer = "${job_name}${env.BUILD_NUMBER}_test"
+  def imageName = "tfp-automation-validation-${job_name}${env.BUILD_NUMBER}"
+  def testResultsOut = "results.xml"
+  def testResultsJSON = "results.json"
+  def envFile = ".env"
+  def config = env.CONFIG
+  def runFlag = "AirGap"
+  def rancherUrl = ""
+  def rancherPassword = ""
+  def privateRegistry = ""
+
+  def infraBranch = "${env.INFRA_BRANCH}"
+  if ("${env.INFRA_BRANCH}" != "null" && "${env.INFRA_BRANCH}" != "") {
+        infraBranch = "${env.INFRA_BRANCH}"
+  }
+  def testBranch = "${env.TEST_BRANCH}"
+  if ("${env.TEST_BRANCH}" != "null" && "${env.TEST_BRANCH}" != "") {
+        testBranch = "${env.TEST_BRANCH}"
+  }
+  def infraRepo = scm.userRemoteConfigs
+  if ("${env.INFRA_REPO}" != "null" && "${env.INFRA_REPO}" != "") {
+    infraRepo = [[url: "${env.INFRA_REPO}"]]
+  }
+  def testRepo = scm.userRemoteConfigs
+  if ("${env.TEST_REPO}" != "null" && "${env.TEST_REPO}" != "") {
+    testRepo = [[url: "${env.TEST_REPO}"]]
+  }
+  def timeout = "${env.TIMEOUT}"
+  if ("${env.TIMEOUT}" != "null" && "${env.TIMEOUT}" != "") {
+        timeout = "${env.TIMEOUT}" 
+  }
+  def testPackage = "airgap/"
+  //def testCaseName = `-run \"TestWorkloadUpgradeTestSuite/TestWorkloadPreUpgrade\"`
+
+  withCredentials([ string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+                    string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+                    string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')]){
+
+    stage('Checkout Infrastructure Repo') {
+        deleteDir()
+        checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${infraBranch}"]],
+                    extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                    userRemoteConfigs: infraRepo
+                ])
+     }
+
+    stage('Configure and Build') {
+        config = config.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+        config = config.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+
+        writeFile file: filename, text: config
+
+        def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
+        writeFile file: 'key.pem', text: decoded
+        
+        env.CATTLE_TEST_CONFIG=rootPath+filename
+        configPath = "./rancher/tests/v2/validation/${filename}"
+
+        sh "./configure.sh"
+        sh "./build.sh"
+     }
+
+    stage('Run Infrastructure Module Test') {
+        try {
+            sh """
+            docker run --name ${testContainer} -t -v ${homePath}key.pem:${rootPath}key.pem --env-file ${envFile} -v ${homePath}/tfp_output.log:/root/tfp_output.log ${imageName} sh -c "
+            /root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -timeout=${timeout} -v ${params.TEST_CASE};
+            if [ -f ${rootPath}reporter ]; then ${rootPath}reporter; fi"
+            """
+            sh "docker cp ${testContainer}:/root/ ./"
+
+            // rancherPassword = sh(script: "yq '.rancher_url' tfpOutput", returnStdout: true).trim()
+            // rancherUrl = sh(script: "awk -F'URL: ' '/Rancher server URL:/ {print \$2}' tfp_output.log", returnStdout: true).trim()
+            // rancherPassword = sh(script: "awk -F'password: ' '/Booststrap password:/ {print \$2}' tfp_output.log", returnStdout: true).trim()
+            // privateRegistry = sh(script: "awk -F'registry: ' '/Private registry:/ {print \$2}' tfp_output.log", returnStdout: true).trim()
+
+        } catch(err) {
+            echo 'Test run had failures. Collecting results...'
+        }
+     }
+
+    stage('Checkout Test Repo') {
+        checkout([  
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${testBranch}"]],
+                    extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                    userRemoteConfigs: testRepo
+                ])
+    }
+
+    stage('Setup') {
+        sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
+        sh returnStdout:true, script: 'chmod a+x ./yq'
+     }
+
+    stage('Run Downstream cluster tests'){
+        sh "./configure.sh"
+        sh "./build.sh"
+        
+        def configYaml = readFile(file: "${configPath}")
+        def goValidationParams = [
+            text(name: 'CONFIG', value: configYaml),
+            string(name: 'BRANCH', value: "main"),
+            string(name: 'TEST_RUN_NAME', value: ${testPackage}),
+            string(name: 'GOTEST_TESTCASE', value: "${[runFlag]} -p 1"),
+        ]
+
+        jobs["$testTag-test-validation"] = { build job: 'go-automation-freeform-job', parameters: goValidationParams }
+    
+    }
+
+    stage('Cleanup terraform resources'){
+        sh """
+            docker exec $testContainer sh -c "chmod +x -R /terraform-files && terraform -chdir=/terraform-files init && terraform -chdir=/terraform-files destroy -auto-approve"
+        """
+     } //cleanup
+  } //credentials
+} // node
