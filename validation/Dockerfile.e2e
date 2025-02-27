@@ -10,7 +10,7 @@ ENV WORKSPACE2 ${GOPATH}/src/github.com/rancherlabs/corral-packages
 
 WORKDIR $WORKSPACE
 
-COPY ["./tests", "$WORKSPACE"]
+COPY ["./validation", "$WORKSPACE"]
 COPY ["./corral-packages", "$WORKSPACE2"]
 
 ARG CORRAL_VERSION=v1.1.1
