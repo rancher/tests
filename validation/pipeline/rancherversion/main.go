@@ -32,8 +32,8 @@ type RancherK8sVersions struct {
 }
 
 var (
-	rancherVersion            = os.Getenv("RANCHER_VERSION")
-	rancherVersionToUpgrade   = os.Getenv("RANCHER_VERSION_TO_UPGRADE")
+	rancherVersion          = os.Getenv("RANCHER_VERSION")
+	rancherVersionToUpgrade = os.Getenv("RANCHER_VERSION_TO_UPGRADE")
 )
 
 const (
@@ -50,11 +50,11 @@ func main() {
 	var err error
 	urlb := baseURL + "index.html"
 
-	communityBaseURL          := "https://github.com/rancher/rancher/releases/download/" + rancherVersion + "/rancher-images.txt"
+	communityBaseURL := "https://github.com/rancher/rancher/releases/download/" + rancherVersion + "/rancher-images.txt"
 	communityBaseURLToUpgrade := "https://github.com/rancher/rancher/releases/download/" + rancherVersionToUpgrade + "/rancher-images.txt"
-	primeRelease              := true
-	primeReleaseToUpgrade     := false
-	
+	primeRelease := true
+	primeReleaseToUpgrade := false
+
 	rancherChartVersion, err := extractRancherVersion(urlb, rancherVersion)
 	if err != nil {
 		return
@@ -64,12 +64,15 @@ func main() {
 		primeRelease = false
 		err = downloadFile(communityBaseURL, fileName)
 		if err != nil {
-			fmt.Println("Failed to download Rancher images file:", err)
+			logrus.Info("Failed to download Rancher images file:", err)
 			return
 		}
 	}
 	if rancherVersionToUpgrade != "" {
 		err = downloadFile(communityBaseURLToUpgrade, fileNameUpgradeVersion)
+		if err != nil {
+			return
+		}
 		data, err := os.ReadFile(fileNameUpgradeVersion)
 		if string(data) == "Not Found" {
 			primeReleaseToUpgrade = true
@@ -130,7 +133,7 @@ func getResponseData(urlb string) ([]byte, error) {
 	logrus.Info("This is the urlb", urlb)
 	resp, err := http.Get(urlb)
 	if err != nil {
-		fmt.Printf("Error fetching URL: %v\n", err)
+		logrus.Info("Error fetching URL: ", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -155,13 +158,13 @@ func getRke2K3sVersionMap(urlb, matchFilter, file string, primeRelease bool) (la
 
 		logrus.Info("This is the k8sVersionData")
 		if string(k8sVersionData) == "Not Found" {
-			return nil, errors.New("Community version file is empty")
+			return nil, errors.New("community version file is empty")
 		}
 	}
 	versions := versionFilter.FindAllStringSubmatch(string(k8sVersionData), -1)
 
 	if len(versions) == 0 {
-		fmt.Println("No versions found in the response.")
+		logrus.Info("No versions found in the response.")
 		return nil, err
 	}
 
@@ -193,13 +196,16 @@ func getRke2K3sVersionMap(urlb, matchFilter, file string, primeRelease bool) (la
 // extractRke2K3sVersions is a helper that returns the rke2 and k3s versions from the provided rancher release versions
 func extractRke2K3sVersions(urlb, matchFilter string, primeRelease, primeReleaseToUpgrade bool) (k8sVersions []string, err error) {
 	latestVersions, err := getRke2K3sVersionMap(urlb, matchFilter, fileName, primeRelease)
+	if err != nil {
+		return nil, err
+	}
 	var k8sVersionUpgrade []*version.Version
 
 	for i, ver := range latestVersions {
 		modifiedVersionStr := strings.Replace(ver.String(), "-", "+", 1)
 		newVersion, err := version.NewVersion("v" + modifiedVersionStr)
 		if err != nil {
-			fmt.Printf("Error parsing version: %v\n", err)
+			logrus.Info("Error parsing version: ", err)
 			continue
 		}
 		latestVersions[i] = newVersion
@@ -236,14 +242,14 @@ func getRkeVersionMap(urlb, file string, primeRelease bool) ([]string, error) {
 			return nil, err
 		}
 		if len(k8sVersionData) == 0 {
-			return nil, fmt.Errorf("Empty list")
+			return nil, fmt.Errorf("empty list")
 		}
 
 		k8sVersions := strings.TrimSpace(string(k8sVersionData))
 
 		versions = strings.Split(k8sVersions, "\n")
 		if len(versions) > 4 {
-			return nil, fmt.Errorf("Unexpected count of versions %s", versions)
+			return nil, fmt.Errorf("unexpected count of versions %s", versions)
 		}
 	} else {
 		k8sVersions, err := os.ReadFile(file)
@@ -253,7 +259,7 @@ func getRkeVersionMap(urlb, file string, primeRelease bool) ([]string, error) {
 		versionFilter := regexp.MustCompile("rancher/hyperkube:(v[0-9]+.[0-9]+.[0-9]+-rancher[0-9]+)")
 		allRKE1Versions := versionFilter.FindAllStringSubmatch(string(k8sVersions), -1)
 		if len(allRKE1Versions) == 0 {
-			return nil, errors.New("No RKE1 versions found.")
+			return nil, errors.New("no RKE1 versions found")
 		}
 		for _, ver := range allRKE1Versions {
 			if len(ver) > 1 {
@@ -300,7 +306,7 @@ func extractRancherVersion(urlb, rancherVersion string) (string, error) {
 	ids := versionFilter.FindAllStringSubmatch(string(rancherVersionData), -1)
 
 	if len(ids) == 0 {
-		fmt.Println("No matching `id` fields found in the response.")
+		logrus.Info("No matching `id` fields found in the response.")
 		return "", err
 	}
 	var versions []*version.Version
@@ -330,14 +336,14 @@ func extractRancherVersion(urlb, rancherVersion string) (string, error) {
 func downloadFile(url, file string) error {
 	resp, err := http.Get(url)
 	if err != nil {
-		fmt.Printf("Error fetching URL: %v\n", err)
+		logrus.Info("Error fetching URL: ", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	out, err := os.Create(file)
 	if err != nil {
-		fmt.Printf("Error creating file: %v\n", err)
+		logrus.Info("Error creating file: ", err)
 		return err
 	}
 	defer out.Close()
@@ -352,7 +358,7 @@ func writeToConfigFile(config RancherK8sVersions) error {
 
 	dir, dirErr := os.Getwd()
 	if dirErr != nil {
-		logrus.Errorf("Failed to get current directory: %v", dirErr)
+		logrus.Error("Failed to get current directory: ", dirErr)
 	} else {
 		logrus.Infof("Current directory: %s", dir)
 	}

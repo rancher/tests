@@ -5,13 +5,13 @@ package upgrade
 import (
 	"testing"
 
+	"github.com/rancher/norman/types"
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/upgradeinput"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/rancher/norman/types"
-	"github.com/rancher/shepherd/extensions/clusters"
 )
 
 var verifyIngress = true
