@@ -24,12 +24,11 @@ import (
 	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/validation/pipeline/rancherha/corralha"
 	"github.com/rancher/tests/validation/provisioning/registries"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
-type AirGapK3SCustomClusterTestSuite struct {
+type AirGapRKE2CustomClusterTestSuite struct {
 	suite.Suite
 	client             *rancher.Client
 	standardUserClient *rancher.Client
@@ -39,19 +38,16 @@ type AirGapK3SCustomClusterTestSuite struct {
 	registryFQDN       string
 }
 
-func (a *AirGapK3SCustomClusterTestSuite) TearDownSuite() {
+func (a *AirGapRKE2CustomClusterTestSuite) TearDownSuite() {
 	a.session.Cleanup()
 }
 
-func (a *AirGapK3SCustomClusterTestSuite) SetupSuite() {
+func (a *AirGapRKE2CustomClusterTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	a.session = testSession
 
 	a.clustersConfig = new(provisioninginput.Config)
 	config.LoadConfig(provisioninginput.ConfigurationFileKey, a.clustersConfig)
-
-	corralRancherHA := new(corralha.CorralRancherHA)
-	config.LoadConfig(corralha.CorralRancherHAConfigConfigurationFileKey, corralRancherHA)
 
 	registriesConfig := new(registries.Registries)
 	config.LoadConfig(registries.RegistriesConfigKey, registriesConfig)
@@ -78,38 +74,20 @@ func (a *AirGapK3SCustomClusterTestSuite) SetupSuite() {
 
 	a.client = standardUserClient
 
-	listOfCorrals, err := corral.ListCorral()
-	require.NoError(a.T(), err)
+	corralRancherHA := new(corralha.CorralRancherHA)
+	config.LoadConfig(corralha.CorralRancherHAConfigConfigurationFileKey, corralRancherHA)
+	if corralRancherHA.Name == "" {
+		a.registryFQDN = airgapCorral(a.T(), corralRancherHA)
+		corralConfig := corral.Configurations()
 
-	corralConfig := corral.Configurations()
-
-	err = corral.SetupCorralConfig(corralConfig.CorralConfigVars, corralConfig.CorralConfigUser, corralConfig.CorralSSHPath)
-	require.NoError(a.T(), err)
-
-	a.corralPackage = corral.PackagesConfig()
-
-	_, corralExist := listOfCorrals[corralRancherHA.Name]
-	if corralExist {
-		bastionIP, err := corral.GetCorralEnvVar(corralRancherHA.Name, corralRegistryIP)
+		err = corral.SetupCorralConfig(corralConfig.CorralConfigVars, corralConfig.CorralConfigUser, corralConfig.CorralSSHPath)
 		require.NoError(a.T(), err)
 
-		err = corral.UpdateCorralConfig(corralBastionIP, bastionIP)
-		require.NoError(a.T(), err)
-
-		registryFQDN, err := corral.GetCorralEnvVar(corralRancherHA.Name, corralRegistryFQDN)
-		require.NoError(a.T(), err)
-		logrus.Infof("registry fqdn is %s", registryFQDN)
-
-		err = corral.SetCorralSSHKeys(corralRancherHA.Name)
-		require.NoError(a.T(), err)
-
-		a.registryFQDN = registryFQDN
-	} else {
-		a.registryFQDN = registriesConfig.ExistingNoAuthRegistryURL
+		a.corralPackage = corral.PackagesConfig()
 	}
 }
 
-func (a *AirGapK3SCustomClusterTestSuite) TestProvisioningAirGapK3SCustomCluster() {
+func (a *AirGapRKE2CustomClusterTestSuite) TestProvisioningAirGapRKE2CustomCluster() {
 	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
 	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
@@ -126,18 +104,18 @@ func (a *AirGapK3SCustomClusterTestSuite) TestProvisioningAirGapK3SCustomCluster
 	for _, tt := range tests {
 		a.clustersConfig.MachinePools = tt.machinePool
 
-		if a.clustersConfig.K3SKubernetesVersions == nil {
-			k3sVersions, err := kubernetesversions.ListK3SAllVersions(a.client)
+		if a.clustersConfig.RKE2KubernetesVersions == nil {
+			rke2Versions, err := kubernetesversions.ListRKE2AllVersions(a.client)
 			require.NoError(a.T(), err)
 
-			a.clustersConfig.K3SKubernetesVersions = k3sVersions
+			a.clustersConfig.RKE2KubernetesVersions = rke2Versions
 		}
 
-		permutations.RunTestPermutations(&a.Suite, tt.name, tt.client, a.clustersConfig, permutations.K3SAirgapCluster, nil, a.corralPackage)
+		permutations.RunTestPermutations(&a.Suite, tt.name, tt.client, a.clustersConfig, permutations.RKE2AirgapCluster, nil, a.corralPackage)
 	}
 }
 
-func (a *AirGapK3SCustomClusterTestSuite) TestProvisioningUpgradeAirGapK3SCustomCluster() {
+func (a *AirGapRKE2CustomClusterTestSuite) TestProvisioningAirGapUpgradeRKE2CustomCluster() {
 	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
 	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
@@ -147,29 +125,30 @@ func (a *AirGapK3SCustomClusterTestSuite) TestProvisioningUpgradeAirGapK3SCustom
 		client      *rancher.Client
 		machinePool []provisioninginput.MachinePools
 	}{
-		{"Upgrading 1 node all Roles " + provisioninginput.StandardClientName.String(), a.standardUserClient, nodeRolesAll},
-		{"Upgrading 2 nodes - etcd|cp roles per 1 node " + provisioninginput.StandardClientName.String(), a.standardUserClient, nodeRolesShared},
-		{"Upgrading 3 nodes - 1 role per node " + provisioninginput.StandardClientName.String(), a.standardUserClient, nodeRolesDedicated},
+		{"Upgrading 1 node all Roles from " + provisioninginput.StandardClientName.String(), a.standardUserClient, nodeRolesAll},
+		{"Upgrading 2 nodes - etcd|cp roles per 1 node from " + provisioninginput.StandardClientName.String(), a.standardUserClient, nodeRolesShared},
+		{"Upgrading 3 nodes - 1 role per node from " + provisioninginput.StandardClientName.String(), a.standardUserClient, nodeRolesDedicated},
 	}
 
 	for _, tt := range tests {
 		a.clustersConfig.MachinePools = tt.machinePool
-		k3sVersions, err := kubernetesversions.ListK3SAllVersions(a.client)
+
+		rke2Versions, err := kubernetesversions.ListRKE2AllVersions(a.client)
 		require.NoError(a.T(), err)
 
 		require.Equal(a.T(), len(a.clustersConfig.CNIs), 1)
 
-		if a.clustersConfig.K3SKubernetesVersions != nil {
-			k3sVersions = a.clustersConfig.K3SKubernetesVersions
+		if a.clustersConfig.RKE2KubernetesVersions != nil {
+			rke2Versions = a.clustersConfig.RKE2KubernetesVersions
 		}
 
-		numOfK3SVersions := len(k3sVersions)
+		numOfRKE2Versions := len(rke2Versions)
 
 		testConfig := clusters.ConvertConfigToClusterConfig(a.clustersConfig)
-		testConfig.KubernetesVersion = k3sVersions[numOfK3SVersions-2]
+		testConfig.KubernetesVersion = rke2Versions[numOfRKE2Versions-2]
 		testConfig.CNI = a.clustersConfig.CNIs[0]
 
-		versionToUpgrade := k3sVersions[numOfK3SVersions-1]
+		versionToUpgrade := rke2Versions[numOfRKE2Versions-1]
 		tt.name += testConfig.KubernetesVersion + " to " + versionToUpgrade
 
 		a.Run(tt.name, func() {
@@ -201,7 +180,7 @@ func (a *AirGapK3SCustomClusterTestSuite) TestProvisioningUpgradeAirGapK3SCustom
 
 // In order for 'go test' to run this suite, we need to create
 // a normal test function and pass our suite to suite.Run
-func TestAirGapCustomClusterK3SProvisioningTestSuite(t *testing.T) {
+func TestAirGapCustomClusterRKE2ProvisioningTestSuite(t *testing.T) {
 	t.Skip("This test has been deprecated; check https://github.com/rancher/tfp-automation for updated tests")
-	suite.Run(t, new(AirGapK3SCustomClusterTestSuite))
+	suite.Run(t, new(AirGapRKE2CustomClusterTestSuite))
 }
