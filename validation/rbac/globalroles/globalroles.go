@@ -30,14 +30,6 @@ var (
 			},
 		},
 	}
-
-	globalRoleBinding = &v3.GlobalRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "",
-		},
-		GlobalRoleName: "",
-		UserName:       "",
-	}
 )
 
 func createCustomGlobalRole(client *rancher.Client) (*v3.GlobalRole, error) {
@@ -66,6 +58,9 @@ func createUserWithBuiltinRole(client *rancher.Client, builtinGlobalRole rbac.Ro
 
 func createCustomGlobalRoleAndUser(client *rancher.Client) (*v3.GlobalRole, *management.User, error) {
 	createdGlobalRole, err := createCustomGlobalRole(client)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	createdUser, err := users.CreateUserWithRole(client, users.UserConfig(), rbac.StandardUser.String(), createdGlobalRole.Name)
 	if err != nil {
