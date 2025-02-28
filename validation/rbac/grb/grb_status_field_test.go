@@ -98,8 +98,8 @@ func (grbs *GlobalRoleBindingStatusFieldTestSuite) TestGlobalRoleBindingStatusFi
 	require.NoError(grbs.T(), err)
 	require.NotEmpty(grbs.T(), grb, "Global Role Binding not found for the user")
 
-	log.Info("Add environment variable CATTLE_RESYNC_DEFAULT and set it to 60 seconds")
-	err = deployment.UpdateOrRemoveEnvVarForDeployment(grbs.client, deploymentNamespace, deploymentName, deploymentEnvVarName, "60")
+	log.Info("Add environment variable CATTLE_RESYNC_DEFAULT and set it to 1 minute")
+	err = deployment.UpdateOrRemoveEnvVarForDeployment(grbs.client, deploymentNamespace, deploymentName, deploymentEnvVarName, "1")
 	require.NoError(grbs.T(), err, "Failed to add environment variable")
 
 	log.Info("Verify that global role binding resourceVersion and generation have not been updated upon reconciliation")
