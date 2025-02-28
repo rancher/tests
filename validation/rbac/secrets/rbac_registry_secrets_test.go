@@ -78,7 +78,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestCreateRegistrySecret() {
 
 		rbrs.Run("Validate registry secret creation for user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the projects.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(rbrs.client, rbrs.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbrs.client, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -126,7 +126,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestListRegistrySecret() {
 
 		rbrs.Run("Validate listing registry secret for user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the projects.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(rbrs.client, rbrs.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbrs.client, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -177,9 +177,9 @@ func (rbrs *RbacRegistrySecretTestSuite) TestUpdateRegistrySecret() {
 		subSession := rbrs.session.NewSession()
 		defer subSession.Cleanup()
 
-		rbrs.Run("Validate updating secret as user with role "+tt.role.String(), func() {
+		rbrs.Run("Validate updating registry secret as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the projects.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(rbrs.client, rbrs.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbrs.client, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -237,7 +237,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestDeleteRegistrySecret() {
 
 		rbrs.Run("Validate deleting registry secret as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the projects.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(rbrs.client, rbrs.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbrs.client, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)

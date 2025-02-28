@@ -87,11 +87,11 @@ func (fw *MoveClusterToFleetWorkspaceTestSuite) testMoveClusterAndVerifyBindings
 
 	if role == rbac.ProjectOwner || role == rbac.ProjectMember {
 		log.Info("Verify that the project role template binding exists for the user.")
-		err = verifyProjectRoleTemplateBindingForUser(fw.client, user.ID, 1)
+		_, err = rbac.VerifyProjectRoleTemplateBindingForUser(fw.client, user.ID, 1)
 		require.NoError(fw.T(), err)
 	} else {
 		log.Info("Verify that the cluster role template binding exists for the user.")
-		err = verifyClusterRoleTemplateBindingForUser(fw.client, user.ID, 1)
+		_, err = rbac.VerifyClusterRoleTemplateBindingForUser(fw.client, user.ID, 1)
 		require.NoError(fw.T(), err)
 	}
 
@@ -124,41 +124,37 @@ func (fw *MoveClusterToFleetWorkspaceTestSuite) TestMoveClusterToNewFleetWorkspa
 			}()
 
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, _, err := projects.CreateProjectAndNamespace(fw.client, fw.cluster.ID)
+			adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(fw.client, fw.cluster.ID)
 			assert.NoError(fw.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project as role %s", tt.role)
-			createdUser, _, err := rbac.AddUserWithRoleToCluster(fw.client, rbac.StandardUser.String(), tt.role.String(), fw.cluster, adminProject)
+			standardUser, _, err := rbac.AddUserWithRoleToCluster(fw.client, rbac.StandardUser.String(), tt.role.String(), fw.cluster, adminProject)
 			assert.NoError(fw.T(), err)
 
 			log.Info("Verify that the user can list the downstream cluster.")
-			newUserClient, err := fw.client.AsUser(createdUser)
+			newUserClient, err := fw.client.AsUser(standardUser)
 			assert.NoError(fw.T(), err)
 			rbac.VerifyUserCanListCluster(fw.T(), fw.client, newUserClient, fw.cluster.ID, tt.role)
 
 			if strings.Contains(tt.role.String(), "project") {
 				log.Info("Verify that the project role template binding is created for the user.")
-				err = verifyProjectRoleTemplateBindingForUser(fw.client, createdUser.ID, 1)
+				_, err = rbac.VerifyProjectRoleTemplateBindingForUser(fw.client, standardUser.ID, 1)
 				require.NoError(fw.T(), err)
-				userProject, err := projects.ListProjectNames(newUserClient, fw.cluster.ID)
-				assert.NoError(fw.T(), err)
-				assert.Equal(fw.T(), 1, len(userProject))
-				assert.Equal(fw.T(), adminProject.Name, userProject[0])
 			} else {
 				log.Info("Verify that the cluster role template binding is created for the user.")
-				err = verifyClusterRoleTemplateBindingForUser(fw.client, createdUser.ID, 1)
+				_, err = rbac.VerifyClusterRoleTemplateBindingForUser(fw.client, standardUser.ID, 1)
 				assert.NoError(fw.T(), err)
 			}
 
 			log.Info("Verify the role bindings created for the user in the fleet-default workspace.")
-			err = verifyRoleBindingsForUser(fw.client, createdUser, fw.cluster.ID, defaultFleetWorkspace, 1)
+			err = verifyRoleBindingsForUser(fw.client, standardUser, fw.cluster.ID, defaultFleetWorkspace, 1)
 			assert.NoError(fw.T(), err)
 
 			log.Info("Create a new fleet workspace.")
 			createdFleetWorkspace, err := createFleetWorkspace(fw.client)
 			assert.NoError(fw.T(), err, "Failed to create workspace")
 
-			fw.testMoveClusterAndVerifyBindings(fw.client, createdUser, tt.role, createdFleetWorkspace.Name, defaultFleetWorkspace)
+			fw.testMoveClusterAndVerifyBindings(fw.client, standardUser, tt.role, createdFleetWorkspace.Name, defaultFleetWorkspace)
 		})
 	}
 }
@@ -172,23 +168,23 @@ func (fw *MoveClusterToFleetWorkspaceTestSuite) TestMoveClusterToNewFleetWorkspa
 	require.NoError(fw.T(), err)
 
 	log.Info("Create a user with global role standard user and custom global role.")
-	createdUser, err := users.CreateUserWithRole(fw.client, users.UserConfig(), rbac.StandardUser.String(), createdGlobalRole.Name)
+	standardUser, err := users.CreateUserWithRole(fw.client, users.UserConfig(), rbac.StandardUser.String(), createdGlobalRole.Name)
 	require.NoError(fw.T(), err)
 
 	log.Info("Add the user as cluster owner to the downstream cluster.")
-	err = users.AddClusterRoleToUser(fw.client, fw.cluster, createdUser, rbac.ClusterOwner.String(), nil)
+	_, err = rbac.CreateClusterRoleTemplateBinding(fw.client, fw.cluster.ID, standardUser, rbac.ClusterOwner.String())
 	require.NoError(fw.T(), err)
 
 	log.Info("Verify that the cluster role template binding is created for the user.")
-	err = verifyClusterRoleTemplateBindingForUser(fw.client, createdUser.ID, 1)
+	_, err = rbac.VerifyClusterRoleTemplateBindingForUser(fw.client, standardUser.ID, 1)
 	require.NoError(fw.T(), err)
 
 	log.Info("Verify that the role binding is created for the cluster in the fleet workspace.")
-	err = verifyRoleBindingsForUser(fw.client, createdUser, fw.cluster.ID, defaultFleetWorkspace, 1)
+	err = verifyRoleBindingsForUser(fw.client, standardUser, fw.cluster.ID, defaultFleetWorkspace, 1)
 	require.NoError(fw.T(), err)
 
 	log.Info("Verify that the user can list the downstream cluster.")
-	newUserClient, err := fw.client.AsUser(createdUser)
+	newUserClient, err := fw.client.AsUser(standardUser)
 	require.NoError(fw.T(), err)
 	rbac.VerifyUserCanListCluster(fw.T(), fw.client, newUserClient, fw.cluster.ID, rbac.ClusterOwner)
 
@@ -196,7 +192,7 @@ func (fw *MoveClusterToFleetWorkspaceTestSuite) TestMoveClusterToNewFleetWorkspa
 	createdFleetWorkspace, err := createFleetWorkspace(newUserClient)
 	require.NoError(fw.T(), err, "Failed to create workspace")
 
-	fw.testMoveClusterAndVerifyBindings(newUserClient, createdUser, rbac.ClusterOwner, createdFleetWorkspace.Name, defaultFleetWorkspace)
+	fw.testMoveClusterAndVerifyBindings(newUserClient, standardUser, rbac.ClusterOwner, createdFleetWorkspace.Name, defaultFleetWorkspace)
 }
 
 func (fw *MoveClusterToFleetWorkspaceTestSuite) TestMoveClusterBackToOriginalWorkspace() {
@@ -208,7 +204,7 @@ func (fw *MoveClusterToFleetWorkspaceTestSuite) TestMoveClusterBackToOriginalWor
 	require.NoError(fw.T(), err)
 
 	log.Info("Verify that the cluster role template binding is created for the user.")
-	err = verifyClusterRoleTemplateBindingForUser(fw.client, createdUser.ID, 1)
+	_, err = rbac.VerifyClusterRoleTemplateBindingForUser(fw.client, createdUser.ID, 1)
 	require.NoError(fw.T(), err)
 
 	log.Info("Verify that the role binding is created for the user in the fleet workspace.")

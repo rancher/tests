@@ -5,17 +5,18 @@ package clusterandprojectroles
 import (
 	"testing"
 
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/projects"
 	rbac "github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type ProjectRolesTestSuite struct {
@@ -45,20 +46,21 @@ func (pr *ProjectRolesTestSuite) SetupSuite() {
 	require.NoError(pr.T(), err)
 }
 
-func (pr *ProjectRolesTestSuite) testSetupUserAndProject() (*rancher.Client, *management.Project) {
-	pr.T().Log("Set up User with cluster Role for additional rbac test cases " + rbac.ClusterOwner)
+func (pr *ProjectRolesTestSuite) testSetupUserAndProject() (*rancher.Client, *v3.Project) {
+	pr.T().Log("Set up User with cluster role for additional rbac test cases.")
 	newUser, standardUserClient, err := rbac.SetupUser(pr.client, rbac.StandardUser.String())
 	require.NoError(pr.T(), err)
 
-	createProjectAsAdmin, err := pr.client.Management.Project.Create(projects.NewProjectConfig(pr.cluster.ID))
+	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(pr.client, pr.cluster.ID)
 	require.NoError(pr.T(), err)
 
-	log.Info("Adding a standard user as project Owner in the admin project")
-	errUserRole := users.AddProjectMember(pr.client, createProjectAsAdmin, newUser, rbac.ProjectOwner.String(), nil)
+	log.Info("Adding a standard user as project owner in the admin project")
+	_, errUserRole := rbac.CreateProjectRoleTemplateBinding(pr.client, newUser, adminProject, rbac.ProjectOwner.String())
 	require.NoError(pr.T(), errUserRole)
 	standardUserClient, err = standardUserClient.ReLogin()
 	require.NoError(pr.T(), err)
-	return standardUserClient, createProjectAsAdmin
+
+	return standardUserClient, adminProject
 }
 
 func (pr *ProjectRolesTestSuite) TestProjectOwnerAddsAndRemovesOtherProjectOwners() {
@@ -66,24 +68,27 @@ func (pr *ProjectRolesTestSuite) TestProjectOwnerAddsAndRemovesOtherProjectOwner
 	defer subSession.Cleanup()
 
 	standardUserClient, adminProject := pr.testSetupUserAndProject()
+
 	additionalUser, additionalUserClient, err := rbac.SetupUser(pr.client, rbac.StandardUser.String())
 	require.NoError(pr.T(), err)
 
-	errUserRole := users.AddProjectMember(standardUserClient, adminProject, additionalUser, rbac.ProjectOwner.String(), nil)
+	prtb, errUserRole := rbac.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, adminProject, rbac.ProjectOwner.String())
 	require.NoError(pr.T(), errUserRole)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(pr.T(), err)
 
-	userGetProject, err := projects.ListProjectNames(additionalUserClient, pr.cluster.ID)
+	userGetProject, err := additionalUserClient.WranglerContext.Mgmt.Project().Get(pr.cluster.ID, adminProject.Name, metav1.GetOptions{})
 	require.NoError(pr.T(), err)
-	assert.Equal(pr.T(), 1, len(userGetProject))
-	assert.Equal(pr.T(), adminProject.Name, userGetProject[0])
+	require.Equal(pr.T(), userGetProject.Name, adminProject.Name)
 
-	errRemoveMember := users.RemoveProjectMember(standardUserClient, additionalUser)
+	errRemoveMember := standardUserClient.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Delete(adminProject.Name, prtb.Name, &metav1.DeleteOptions{})
 	require.NoError(pr.T(), errRemoveMember)
+	additionalUserClient, err = additionalUserClient.ReLogin()
+	require.NoError(pr.T(), err)
 
-	userProjectEmptyAfterRemoval, _ := projects.ListProjectNames(additionalUserClient, pr.cluster.ID)
-	require.Empty(pr.T(), userProjectEmptyAfterRemoval)
+	_, err = additionalUserClient.WranglerContext.Mgmt.Project().Get(pr.cluster.ID, adminProject.Name, metav1.GetOptions{})
+	require.Error(pr.T(), err)
+	require.True(pr.T(), apierrors.IsForbidden(err))
 }
 
 func (pr *ProjectRolesTestSuite) TestManageProjectUserRoleCannotAddProjectOwner() {
@@ -94,7 +99,7 @@ func (pr *ProjectRolesTestSuite) TestManageProjectUserRoleCannotAddProjectOwner(
 	additionalUser, additionalUserClient, err := rbac.SetupUser(pr.client, rbac.StandardUser.String())
 	require.NoError(pr.T(), err)
 
-	errUserRole := users.AddProjectMember(standardUserClient, adminProject, additionalUser, rbac.CustomManageProjectMember.String(), nil)
+	_, errUserRole := rbac.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, adminProject, rbac.CustomManageProjectMember.String())
 	require.NoError(pr.T(), errUserRole)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(pr.T(), err)
@@ -102,16 +107,14 @@ func (pr *ProjectRolesTestSuite) TestManageProjectUserRoleCannotAddProjectOwner(
 	addNewUserAsProjectOwner, addNewUserAsPOClient, err := rbac.SetupUser(pr.client, rbac.StandardUser.String())
 	require.NoError(pr.T(), err)
 
-	errUserRole2 := users.AddProjectMember(additionalUserClient, adminProject, addNewUserAsProjectOwner, rbac.ProjectOwner.String(), nil)
+	_, errUserRole2 := rbac.CreateProjectRoleTemplateBinding(additionalUserClient, addNewUserAsProjectOwner, adminProject, rbac.ProjectOwner.String())
 	require.Error(pr.T(), errUserRole2)
-	assert.Contains(pr.T(), errUserRole2.Error(), "422 Unprocessable Entity")
-
 	addNewUserAsPOClient, err = addNewUserAsPOClient.ReLogin()
 	require.NoError(pr.T(), err)
 
-	userGetProject, err := projects.ListProjectNames(addNewUserAsPOClient, pr.cluster.ID)
-	require.NoError(pr.T(), err)
-	assert.Equal(pr.T(), 0, len(userGetProject))
+	_, err = addNewUserAsPOClient.WranglerContext.Mgmt.Project().Get(pr.cluster.ID, adminProject.Name, metav1.GetOptions{})
+	require.Error(pr.T(), err)
+	require.True(pr.T(), apierrors.IsForbidden(err))
 }
 
 func TestProjectRolesTestSuite(t *testing.T) {

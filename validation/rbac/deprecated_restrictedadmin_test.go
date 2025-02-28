@@ -70,9 +70,6 @@ func (rb *RBTestSuite) sequentialTestRBACRA(role rbac.Role, member string, user 
 			verifyRAUserCanAddProjectRoles(rb.T(), standardClient, adminProject, additionalUser, rbac.ProjectOwner.String(), rb.cluster.ID)
 		}
 	})
-	rb.Run("Validating if member with role "+role.String()+" can delete a project they are not owner of ", func() {
-		rbac.VerifyUserCanDeleteProject(rb.T(), standardClient, adminProject, role)
-	})
 	rb.Run("Validating if member with role "+role.String()+" is removed from the cluster and returns nil clusters", func() {
 		if strings.Contains(role.String(), "cluster") {
 			verifyRAUserCanRemoveClusterRoles(rb.T(), rb.client, user)

@@ -8,8 +8,8 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
+	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/secrets"
@@ -68,7 +68,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCreateSecretAsEnvVar() {
 	for _, tt := range tests {
 		rbos.Run("Validate secret creation for user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(rbos.client, rbos.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbos.client, rbos.cluster.ID)
 			assert.NoError(rbos.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -113,7 +113,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCreateSecretAsVolume() {
 	for _, tt := range tests {
 		rbos.Run("Validate secret creation for user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(rbos.client, rbos.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbos.client, rbos.cluster.ID)
 			assert.NoError(rbos.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -158,7 +158,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestListSecret() {
 	for _, tt := range tests {
 		rbos.Run("Validate listing secret for user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(rbos.client, rbos.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbos.client, rbos.cluster.ID)
 			assert.NoError(rbos.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -208,7 +208,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestUpdateSecret() {
 	for _, tt := range tests {
 		rbos.Run("Validate updating secret as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(rbos.client, rbos.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbos.client, rbos.cluster.ID)
 			assert.NoError(rbos.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -268,7 +268,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestDeleteSecret() {
 	for _, tt := range tests {
 		rbos.Run("Validate deleting secret as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(rbos.client, rbos.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbos.client, rbos.cluster.ID)
 			assert.NoError(rbos.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -307,19 +307,24 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCrudSecretAsClusterMember() {
 	defer subSession.Cleanup()
 
 	role := rbac.ClusterMember.String()
-	log.Infof("Create a standard user.")
-	user, standardUserClient, err := rbac.SetupUser(rbos.client, rbac.StandardUser.String())
-	assert.NoError(rbos.T(), err)
+	log.Info("Creating a standard user and adding them to cluster as a cluster member.")
+	standardUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(rbos.client, rbac.StandardUser.String(), role, rbos.cluster, nil)
+	require.NoError(rbos.T(), err)
 
-	log.Infof("Add the user to the downstream cluster with role %s", role)
-	err = users.AddClusterRoleToUser(rbos.client, rbos.cluster, user, role, nil)
-	assert.NoError(rbos.T(), err)
+	projectTemplate := projectsapi.NewProjectTemplate(rbos.cluster.ID)
+	projectTemplate.Annotations = map[string]string{
+		"field.cattle.io/creatorId": standardUser.ID,
+	}
+	createdProject, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
+	require.NoError(rbos.T(), err)
 
-	log.Infof("As a %v, create a project and a namespace in the project.", role)
-	project, namespace, err := projects.CreateProjectAndNamespace(standardUserClient, rbos.cluster.ID)
-	assert.NoError(rbos.T(), err)
+	err = projects.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
+	require.NoError(rbos.T(), err)
 
-	log.Infof("As a %v, create a secret in the project %v", role, project.Name)
+	namespace, err := projects.CreateNamespaceUsingWrangler(standardUserClient, rbos.cluster.ID, createdProject.Name)
+	require.NoError(rbos.T(), err)
+
+	log.Infof("As a %v, create a secret in the project %v", role, createdProject.Name)
 	secretData := map[string][]byte{
 		"hello": []byte("world"),
 	}

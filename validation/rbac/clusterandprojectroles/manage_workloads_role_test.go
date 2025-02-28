@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"testing"
 
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
@@ -54,37 +54,34 @@ func (mw *ManageWorkloadsRoleTestSuite) SetupSuite() {
 	require.NoError(mw.T(), err)
 }
 
-func (mw *ManageWorkloadsRoleTestSuite) testSetupUserAndProject() (*rancher.Client, *management.Project, *corev1.Namespace) {
+func (mw *ManageWorkloadsRoleTestSuite) testSetupUserAndProject() (*rancher.Client, *v3.Project, *corev1.Namespace) {
 	log.Info("Create a standard user.")
 	newUser, standardUserClient, err := rbac.SetupUser(mw.client, rbac.StandardUser.String())
 	require.NoError(mw.T(), err)
 
 	log.Info("Create a project and a namespace")
-	createdProject, createdNamespace, err := projectsapi.CreateProjectAndNamespace(mw.client, mw.cluster.ID)
+	createdProject, createdNamespace, err := projectsapi.CreateProjectAndNamespaceUsingWrangler(mw.client, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 
 	log.Infof("Add the user %s as Project Owner to the project %s", newUser.Name, createdProject.Name)
-	errUserRole := users.AddProjectMember(mw.client, createdProject, newUser, rbac.ProjectOwner.String(), nil)
+	_, errUserRole := rbac.CreateProjectRoleTemplateBinding(mw.client, newUser, createdProject, rbac.ProjectOwner.String())
 	require.NoError(mw.T(), errUserRole)
-
 	standardUserClient, err = standardUserClient.ReLogin()
 	require.NoError(mw.T(), err)
 
 	return standardUserClient, createdProject, createdNamespace
 }
 
-func (mw *ManageWorkloadsRoleTestSuite) testSetupWorkloadUserAndAddToProject(adminProject *management.Project) (*management.User, *rancher.Client) {
+func (mw *ManageWorkloadsRoleTestSuite) testSetupWorkloadUserAndAddToProject(adminProject *v3.Project) (*management.User, *rancher.Client) {
 	log.Info("Create a new standard user.")
 	workloadUser, workloadUserClient, err := rbac.SetupUser(mw.client, rbac.StandardUser.String())
 	require.NoError(mw.T(), err, "Failed to create a new standard user.")
 
 	log.Infof("Verify that the project owner is able to add the new user %s to the project %s with 'Manage Workloads' role.", workloadUser.Username, adminProject.Name)
-	errUserRole := users.AddProjectMember(mw.client, adminProject, workloadUser, rbac.ManageWorkloads.String(), nil)
+	_, errUserRole := rbac.CreateProjectRoleTemplateBinding(mw.client, workloadUser, adminProject, rbac.ManageWorkloads.String())
 	require.NoError(mw.T(), errUserRole, "Project owner failed to add the new user to the project with 'Manage Workloads' role.")
-
-	log.Infof("Login as user %s.", workloadUser.Name)
 	workloadUserClient, err = workloadUserClient.ReLogin()
-	require.NoError(mw.T(), err, "Failed to log in as the new workload user.")
+	require.NoError(mw.T(), err)
 
 	return workloadUser, workloadUserClient
 }

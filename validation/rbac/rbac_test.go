@@ -31,10 +31,9 @@ func (rb *RBTestSuite) TearDownSuite() {
 }
 
 func (rb *RBTestSuite) SetupSuite() {
-	testSession := session.NewSession()
-	rb.session = testSession
+	rb.session = session.NewSession()
 
-	client, err := rancher.NewClient("", testSession)
+	client, err := rancher.NewClient("", rb.session)
 	require.NoError(rb.T(), err)
 
 	rb.client = client
@@ -49,22 +48,24 @@ func (rb *RBTestSuite) SetupSuite() {
 }
 
 func (rb *RBTestSuite) sequentialTestRBAC(role rbac.Role, member string, user *management.User) {
+	subSession := rb.session.NewSession()
+	defer subSession.Cleanup()
+
 	standardClient, err := rb.client.AsUser(user)
 	require.NoError(rb.T(), err)
 
-	adminProject, err := rb.client.Management.Project.Create(projects.NewProjectConfig(rb.cluster.ID))
+	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(rb.client, rb.cluster.ID)
 	require.NoError(rb.T(), err)
 
 	if member == rbac.StandardUser.String() {
 		if strings.Contains(role.String(), "project") {
-			err := users.AddProjectMember(rb.client, adminProject, user, role.String(), nil)
+			_, err = rbac.CreateProjectRoleTemplateBinding(rb.client, user, adminProject, role.String())
 			require.NoError(rb.T(), err)
 		} else {
-			err := users.AddClusterRoleToUser(rb.client, rb.cluster, user, role.String(), nil)
+			_, err = rbac.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, user, role.String())
 			require.NoError(rb.T(), err)
 		}
 	}
-
 	standardClient, err = standardClient.ReLogin()
 	require.NoError(rb.T(), err)
 
@@ -74,23 +75,23 @@ func (rb *RBTestSuite) sequentialTestRBAC(role rbac.Role, member string, user *m
 	rb.Run("Validating Global Role Binding is created for "+role.String(), func() {
 		rbac.VerifyGlobalRoleBindingsForUser(rb.T(), user, rb.client)
 	})
-	rb.Run("Validating corresponding role bindings for users", func() {
-		rbac.VerifyRoleBindingsForUser(rb.T(), user, rb.client, rb.cluster.ID, role)
-	})
 	rb.Run("Validating if "+role.String()+" can list any downstream clusters", func() {
 		rbac.VerifyUserCanListCluster(rb.T(), rb.client, standardClient, rb.cluster.ID, role)
 	})
 	rb.Run("Validating if members with role "+role.String()+" are able to list all projects", func() {
 		rbac.VerifyUserCanListProject(rb.T(), rb.client, standardClient, rb.cluster.ID, adminProject.Name, role)
 	})
+	rb.Run("Validating if members with role "+role.String()+" are able to list all projects", func() {
+		rbac.VerifyUserCanGetProject(rb.T(), rb.client, standardClient, rb.cluster.ID, adminProject.Name, role)
+	})
 	rb.Run("Validating if members with role "+role.String()+" is able to create a project in the cluster", func() {
 		rbac.VerifyUserCanCreateProjects(rb.T(), rb.client, standardClient, rb.cluster.ID, role)
 	})
-	rb.Run("Validate namespaces checks for members with role "+role.String(), func() {
-		rbac.VerifyUserCanCreateNamespace(rb.T(), rb.client, standardClient, adminProject, rb.cluster.ID, role)
-	})
 	rb.Run("Validating if "+role.String()+" can lists all namespaces in a cluster.", func() {
 		rbac.VerifyUserCanListNamespace(rb.T(), rb.client, standardClient, adminProject, rb.cluster.ID, role)
+	})
+	rb.Run("Validate namespaces checks for members with role "+role.String(), func() {
+		rbac.VerifyUserCanCreateNamespace(rb.T(), rb.client, standardClient, adminProject, rb.cluster.ID, role)
 	})
 	rb.Run("Validating if "+role.String()+" can delete a namespace from a project they own.", func() {
 		rbac.VerifyUserCanDeleteNamespace(rb.T(), rb.client, standardClient, adminProject, rb.cluster.ID, role)
@@ -114,6 +115,9 @@ func (rb *RBTestSuite) sequentialTestRBAC(role rbac.Role, member string, user *m
 }
 
 func (rb *RBTestSuite) TestRBAC() {
+	subSession := rb.session.NewSession()
+	defer subSession.Cleanup()
+
 	tests := []struct {
 		name   string
 		role   rbac.Role
@@ -143,6 +147,9 @@ func (rb *RBTestSuite) TestRBAC() {
 }
 
 func (rb *RBTestSuite) TestRBACDynamicInput() {
+	subSession := rb.session.NewSession()
+	defer subSession.Cleanup()
+
 	roles := map[string]string{
 		"cluster-owner":  rbac.ClusterOwner.String(),
 		"cluster-member": rbac.ClusterMember.String(),
@@ -171,7 +178,6 @@ func (rb *RBTestSuite) TestRBACDynamicInput() {
 	}
 
 	rb.sequentialTestRBAC(role, rbac.StandardUser.String(), user)
-
 }
 
 func TestRBACTestSuite(t *testing.T) {

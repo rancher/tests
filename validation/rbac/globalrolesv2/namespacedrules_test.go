@@ -8,11 +8,9 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/users"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/kubeapi/secrets"
-	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
@@ -72,13 +70,9 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithNamespacedRules() {
 	defer subSession.Cleanup()
 
 	log.Info("Validate creating a global role with namespacedRules and assign it to a user.")
-
-	project, err := ns.client.Management.Project.Create(projects.NewProjectConfig(localcluster))
+	_, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(ns.client, localcluster)
 	require.NoError(ns.T(), err)
 
-	namespaceName := namegen.AppendRandomString("testns-")
-	namespace, err := namespaces.CreateNamespace(ns.client, namespaceName, "{}", map[string]string{}, map[string]string{}, project)
-	require.NoError(ns.T(), err)
 	log.Info("Create a global role with namespacedRules.")
 	namespacedRules := map[string][]rbacv1.PolicyRule{
 		namespace.Name: {
@@ -156,7 +150,6 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarForResourcesAndGroups(
 	defer subSession.Cleanup()
 
 	log.Info("Create a global role with * as resources and api groups in namespacedRules in a custom namespace.")
-
 	customNS, err := createProjectAndAddANamespace(ns.client, "ns-readall")
 	require.NoError(ns.T(), err)
 
@@ -203,7 +196,6 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithMultipleNSInNamespacedRule
 	defer subSession.Cleanup()
 
 	log.Info("Create a global role with multiple namespaces in namespacedRules.")
-
 	customNS, err := createProjectAndAddANamespace(ns.client, "ns-readcrtbs")
 	require.NoError(ns.T(), err)
 

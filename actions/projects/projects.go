@@ -1,6 +1,7 @@
 package projects
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -10,8 +11,10 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	"github.com/rancher/shepherd/pkg/wrangler"
 	"github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -93,6 +96,78 @@ func CreateProjectAndNamespace(client *rancher.Client, clusterID string) (*manag
 	}
 
 	return createdProject, createdNamespace, nil
+}
+
+// CreateProjectAndNamespaceUsingWrangler is a helper to create a project (wrangler context) and a namespace in the project
+func CreateProjectAndNamespaceUsingWrangler(client *rancher.Client, clusterID string) (*v3.Project, *corev1.Namespace, error) {
+	createdProject, err := CreateProjectUsingWrangler(client, clusterID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	createdNamespace, err := CreateNamespaceUsingWrangler(client, clusterID, createdProject.Name)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return createdProject, createdNamespace, nil
+}
+
+// CreateProjectUsingWrangler is a helper to create a project using wrangler context
+func CreateProjectUsingWrangler(client *rancher.Client, clusterID string) (*v3.Project, error) {
+	projectTemplate := projectsapi.NewProjectTemplate(clusterID)
+	createdProject, err := client.WranglerContext.Mgmt.Project().Create(projectTemplate)
+	if err != nil {
+		return nil, err
+	}
+
+	err = WaitForProjectFinalizerToUpdate(client, createdProject.Name, createdProject.Namespace, 2)
+	if err != nil {
+		return nil, err
+	}
+
+	createdProject, err = client.WranglerContext.Mgmt.Project().Get(clusterID, createdProject.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return createdProject, nil
+}
+
+// CreateNamespaceUsingWrangler is a helper to create a namespace (wrangler context) in the project
+func CreateNamespaceUsingWrangler(client *rancher.Client, clusterID string, projectName string) (*corev1.Namespace, error) {
+	namespaceName := namegen.AppendRandomString("testns")
+	annotations := map[string]string{
+		"field.cattle.io/projectId": clusterID + ":" + projectName,
+	}
+
+	var ctx *wrangler.Context
+	var err error
+	if clusterID != rbacapi.LocalCluster {
+		ctx, err = client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get downstream context: %w", err)
+		}
+	} else {
+		ctx = client.WranglerContext
+	}
+
+	createdNamespace, err := ctx.Core.Namespace().Create(&corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        namespaceName,
+			Annotations: annotations,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = WaitForProjectIDUpdate(client, clusterID, projectName, createdNamespace.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	return createdNamespace, nil
 }
 
 // WaitForProjectFinalizerToUpdate is a helper to wait for project finalizer to update to match the expected finalizer count

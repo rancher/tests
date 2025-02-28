@@ -139,6 +139,8 @@ func (grw *GlobalRolesV2WebhookTestSuite) TestAddGlobalRoleWithCustomTemplateAnd
 	_, err = createGlobalRoleWithInheritedClusterRolesWrangler(grw.client, []string{customRoleTemplate.Name})
 	require.NoError(grw.T(), err)
 
+	customRoleTemplate, err = grw.client.WranglerContext.Mgmt.RoleTemplate().Get(customRoleTemplate.Name, metav1.GetOptions{})
+	require.NoError(grw.T(), err)
 	customRoleTemplate.Locked = true
 	lockCustomRoleTemplate, err := rbacapi.UpdateRoleTemplate(grw.client, customRoleTemplate)
 	require.NoError(grw.T(), err)

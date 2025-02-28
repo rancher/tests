@@ -5,10 +5,10 @@ package clusterandprojectroles
 import (
 	"testing"
 
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
@@ -16,6 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type ClusterRoleTestSuite struct {
@@ -46,54 +48,66 @@ func (rb *ClusterRoleTestSuite) SetupSuite() {
 	require.NoError(rb.T(), err)
 }
 
+func (rb *ClusterRoleTestSuite) testSetupUserAndProject() (*rancher.Client, *v3.Project) {
+	rb.T().Log("Set up User with cluster role for additional rbac test cases " + rbac.ClusterOwner)
+	newUser, standardUserClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
+	require.NoError(rb.T(), err)
+
+	log.Info("Adding a standard user to the downstream cluster as cluster owner")
+	_, errUserRole := rbac.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, newUser, rbac.ClusterOwner.String())
+	require.NoError(rb.T(), errUserRole)
+	standardUserClient, err = standardUserClient.ReLogin()
+	require.NoError(rb.T(), err)
+
+	createProjectAsClusterOwner, _, err := projects.CreateProjectAndNamespaceUsingWrangler(standardUserClient, rb.cluster.ID)
+	require.NoError(rb.T(), err)
+
+	_, errProjectOwnerRole := rbac.CreateProjectRoleTemplateBinding(rb.client, newUser, createProjectAsClusterOwner, rbac.CustomManageProjectMember.String())
+	require.NoError(rb.T(), errProjectOwnerRole)
+	standardUserClient, err = standardUserClient.ReLogin()
+	require.NoError(rb.T(), err)
+
+	return standardUserClient, createProjectAsClusterOwner
+}
+
 func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsUserAsProjectOwner() {
 	subSession := rb.session.NewSession()
 	defer subSession.Cleanup()
 
-	clusterAdmin, clusterAdminClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
-	require.NoError(rb.T(), err)
+	standardUserClient, clusterOwnerProject := rb.testSetupUserAndProject()
 
 	additionalUser, additionalUserClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
 	require.NoError(rb.T(), err)
 
-	rb.T().Logf("Adding user as " + rbac.ClusterOwner.String() + " to the downstream cluster.")
-	err = users.AddClusterRoleToUser(rb.client, rb.cluster, clusterAdmin, rbac.ClusterOwner.String(), nil)
+	prtb, err := rbac.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, clusterOwnerProject, rbac.ProjectOwner.String())
 	require.NoError(rb.T(), err)
-	clusterAdminClient, err = clusterAdminClient.ReLogin()
-	require.NoError(rb.T(), err)
-
-	clusterOwnerProject, err := clusterAdminClient.Management.Project.Create(projects.NewProjectConfig(rb.cluster.ID))
-	require.NoError(rb.T(), err)
-	err = users.AddProjectMember(clusterAdminClient, clusterOwnerProject, additionalUser, rbac.ProjectOwner.String(), nil)
+	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
 
-	projectListClusterAdditionalUser, err := projects.ListProjectNames(additionalUserClient, rb.cluster.ID)
+	projectAdditionalUser, err := additionalUserClient.WranglerContext.Mgmt.Project().Get(rb.cluster.ID, clusterOwnerProject.Name, metav1.GetOptions{})
 	require.NoError(rb.T(), err)
-	assert.Equal(rb.T(), 1, len(projectListClusterAdditionalUser))
-	assert.Equal(rb.T(), clusterOwnerProject.Name, projectListClusterAdditionalUser[0])
+	require.Equal(rb.T(), clusterOwnerProject.Name, projectAdditionalUser.Name)
 
-	err = users.RemoveProjectMember(clusterAdminClient, additionalUser)
+	err = standardUserClient.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Delete(clusterOwnerProject.Name, prtb.Name, &metav1.DeleteOptions{})
 	require.NoError(rb.T(), err)
-	projectListClusterAdditionalUser, _ = projects.ListProjectNames(additionalUserClient, rb.cluster.ID)
-	require.Empty(rb.T(), projectListClusterAdditionalUser)
+	additionalUserClient, err = additionalUserClient.ReLogin()
+	require.NoError(rb.T(), err)
+
+	_, err = additionalUserClient.WranglerContext.Mgmt.Project().Get(rb.cluster.ID, clusterOwnerProject.Name, metav1.GetOptions{})
+	require.Error(rb.T(), err)
+	require.True(rb.T(), apierrors.IsForbidden(err))
 }
 
 func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsUserAsClusterOwner() {
 	subSession := rb.session.NewSession()
 	defer subSession.Cleanup()
 
-	clusterAdmin, clusterAdminClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
-	require.NoError(rb.T(), err)
-
-	err = users.AddClusterRoleToUser(rb.client, rb.cluster, clusterAdmin, rbac.ClusterOwner.String(), nil)
-	require.NoError(rb.T(), err)
-	clusterAdminClient, err = clusterAdminClient.ReLogin()
-	require.NoError(rb.T(), err)
+	standardUserClient, _ := rb.testSetupUserAndProject()
 
 	additionalUser, additionalUserClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
 	require.NoError(rb.T(), err)
 
-	err = users.AddClusterRoleToUser(clusterAdminClient, rb.cluster, additionalUser, rbac.ClusterOwner.String(), nil)
+	crtb, err := rbac.CreateClusterRoleTemplateBinding(standardUserClient, rb.cluster.ID, additionalUser, rbac.ClusterOwner.String())
 	require.NoError(rb.T(), err)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -102,28 +116,26 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsUserAsClusterOwner() {
 	require.NoError(rb.T(), err)
 	assert.Equal(rb.T(), 1, len(clusterList.Data))
 
-	err = users.RemoveClusterRoleFromUser(clusterAdminClient, additionalUser)
+	err = standardUserClient.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Delete(crtb.Namespace, crtb.Name, &metav1.DeleteOptions{})
 	require.NoError(rb.T(), err)
-	clusterList, _ = additionalUserClient.Steve.SteveType(clusters.ProvisioningSteveResourceType).ListAll(nil)
-	require.Empty(rb.T(), clusterList.Data)
+	additionalUserClient, err = additionalUserClient.ReLogin()
+	require.NoError(rb.T(), err)
+
+	clusterList, err = additionalUserClient.Steve.SteveType(clusters.ProvisioningSteveResourceType).ListAll(nil)
+	require.Error(rb.T(), err)
+	require.Nil(rb.T(), clusterList, "Cluster list should be nil")
 }
 
 func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsClusterMemberAsProjectOwner() {
 	subSession := rb.session.NewSession()
 	defer subSession.Cleanup()
 
-	clusterAdmin, clusterAdminClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
-	require.NoError(rb.T(), err)
-
-	err = users.AddClusterRoleToUser(rb.client, rb.cluster, clusterAdmin, rbac.ClusterOwner.String(), nil)
-	require.NoError(rb.T(), err)
-	clusterAdminClient, err = clusterAdminClient.ReLogin()
-	require.NoError(rb.T(), err)
+	standardUserClient, clusterOwnerProject := rb.testSetupUserAndProject()
 
 	additionalUser, additionalUserClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
 	require.NoError(rb.T(), err)
 
-	err = users.AddClusterRoleToUser(clusterAdminClient, rb.cluster, additionalUser, rbac.ClusterMember.String(), nil)
+	_, err = rbac.CreateClusterRoleTemplateBinding(standardUserClient, rb.cluster.ID, additionalUser, rbac.ClusterMember.String())
 	require.NoError(rb.T(), err)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -132,16 +144,14 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsClusterMemberAsProjectOwner(
 	require.NoError(rb.T(), err)
 	assert.Equal(rb.T(), 1, len(clusterList.Data))
 
-	clusterOwnerProject, err := clusterAdminClient.Management.Project.Create(projects.NewProjectConfig(rb.cluster.ID))
+	_, err = rbac.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, clusterOwnerProject, rbac.ProjectOwner.String())
+	require.NoError(rb.T(), err)
+	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
 
-	err = users.AddProjectMember(clusterAdminClient, clusterOwnerProject, additionalUser, rbac.ProjectOwner.String(), nil)
+	projectAdditionalUser, err := additionalUserClient.WranglerContext.Mgmt.Project().Get(rb.cluster.ID, clusterOwnerProject.Name, metav1.GetOptions{})
 	require.NoError(rb.T(), err)
-	projectListProjectOwner, err := projects.ListProjectNames(additionalUserClient, rb.cluster.ID)
-	require.NoError(rb.T(), err)
-
-	assert.Equal(rb.T(), 1, len(projectListProjectOwner))
-	assert.Equal(rb.T(), clusterOwnerProject.Name, projectListProjectOwner[0])
+	require.Equal(rb.T(), clusterOwnerProject.Name, projectAdditionalUser.Name)
 }
 
 func TestClusterRoleTestSuite(t *testing.T) {

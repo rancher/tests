@@ -10,11 +10,15 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extauthz "github.com/rancher/shepherd/extensions/kubeapi/authorization"
 	"github.com/rancher/shepherd/extensions/users"
-	rbacv2 "github.com/rancher/tests/actions/kubeapi/rbac"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	"github.com/rancher/shepherd/pkg/wrangler"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -47,32 +51,37 @@ func (r Role) String() string {
 }
 
 // AddUserWithRoleToCluster creates a user based on the global role and then adds the user to cluster with provided permissions.
-func AddUserWithRoleToCluster(adminClient *rancher.Client, globalRole, role string, cluster *management.Cluster, project *management.Project) (*management.User, *rancher.Client, error) {
-	user, userClient, err := SetupUser(adminClient, globalRole)
+func AddUserWithRoleToCluster(client *rancher.Client, globalRole, role string, cluster *management.Cluster, project *v3.Project) (*management.User, *rancher.Client, error) {
+	standardUser, standardUserClient, err := SetupUser(client, globalRole)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	if globalRole == StandardUser.String() {
 		if strings.Contains(role, "project") || role == ReadOnly.String() {
-			err := users.AddProjectMember(adminClient, project, user, role, nil)
+			_, err = CreateProjectRoleTemplateBinding(client, standardUser, project, role)
 			if err != nil {
 				return nil, nil, err
 			}
 		} else {
-			err := users.AddClusterRoleToUser(adminClient, cluster, user, role, nil)
+			_, err = CreateClusterRoleTemplateBinding(client, cluster.ID, standardUser, role)
 			if err != nil {
 				return nil, nil, err
 			}
 		}
 	}
 
-	return user, userClient, nil
+	standardUserClient, err = standardUserClient.ReLogin()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return standardUser, standardUserClient, nil
 }
 
 // SetupUser is a helper to create a user with the specified global role and a client for the user.
-func SetupUser(client *rancher.Client, globalRole string) (user *management.User, userClient *rancher.Client, err error) {
-	user, err = users.CreateUserWithRole(client, users.UserConfig(), globalRole)
+func SetupUser(client *rancher.Client, globalRoles ...string) (user *management.User, userClient *rancher.Client, err error) {
+	user, err = users.CreateUserWithRole(client, users.UserConfig(), globalRoles...)
 	if err != nil {
 		return
 	}
@@ -108,8 +117,8 @@ func VerifyRoleRules(expected, actual map[string][]string) error {
 // GetRoleBindings is a helper function to fetch rolebindings for a user
 func GetRoleBindings(rancherClient *rancher.Client, clusterID string, userID string) ([]rbacv1.RoleBinding, error) {
 	logrus.Infof("Getting role bindings for user %s in cluster %s", userID, clusterID)
-	listOpt := v1.ListOptions{}
-	roleBindings, err := rbacv2.ListRoleBindings(rancherClient, clusterID, "", listOpt)
+	listOpt := metav1.ListOptions{}
+	roleBindings, err := rbacapi.ListRoleBindings(rancherClient, clusterID, "", listOpt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch RoleBindings: %w", err)
 	}
@@ -132,14 +141,14 @@ func GetBindings(rancherClient *rancher.Client, userID string) (map[string]inter
 	logrus.Infof("Getting all bindings for user %s", userID)
 	bindings := make(map[string]interface{})
 
-	roleBindings, err := GetRoleBindings(rancherClient, rbacv2.LocalCluster, userID)
+	roleBindings, err := GetRoleBindings(rancherClient, rbacapi.LocalCluster, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get role bindings: %w", err)
 	}
 	bindings["RoleBindings"] = roleBindings
 
 	logrus.Info("Getting cluster role bindings")
-	clusterRoleBindings, err := rbacv2.ListClusterRoleBindings(rancherClient, rbacv2.LocalCluster, v1.ListOptions{})
+	clusterRoleBindings, err := rbacapi.ListClusterRoleBindings(rancherClient, rbacapi.LocalCluster, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cluster role bindings: %w", err)
 	}
@@ -168,7 +177,7 @@ func GetGlobalRoleBindingByUserAndRole(client *rancher.Client, userID, globalRol
 	var matchingGlobalRoleBinding *v3.GlobalRoleBinding
 
 	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.TenSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
-		grblist, err := client.WranglerContext.Mgmt.GlobalRoleBinding().List(v1.ListOptions{})
+		grblist, err := client.WranglerContext.Mgmt.GlobalRoleBinding().List(metav1.ListOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -195,7 +204,7 @@ func GetGlobalRoleByName(client *rancher.Client, globalRoleName string) (*v3.Glo
 	var matchingGlobalRole *v3.GlobalRole
 
 	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
-		grlist, err := client.WranglerContext.Mgmt.GlobalRole().List(v1.ListOptions{})
+		grlist, err := client.WranglerContext.Mgmt.GlobalRole().List(metav1.ListOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -222,7 +231,7 @@ func GetGlobalRoleBindingByName(client *rancher.Client, globalRoleBindingName st
 	var matchingGlobalRoleBinding *v3.GlobalRoleBinding
 
 	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
-		grblist, err := client.WranglerContext.Mgmt.GlobalRoleBinding().List(v1.ListOptions{})
+		grblist, err := client.WranglerContext.Mgmt.GlobalRoleBinding().List(metav1.ListOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -242,4 +251,209 @@ func GetGlobalRoleBindingByName(client *rancher.Client, globalRoleBindingName st
 	}
 
 	return matchingGlobalRoleBinding, nil
+}
+
+// GetRoleTemplateByName is a helper function to fetch role template by name using wrangler context
+func GetRoleTemplateByName(client *rancher.Client, roleTemplateName string) (*v3.RoleTemplate, error) {
+	var roleTemplate *v3.RoleTemplate
+
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
+		rt, err := client.WranglerContext.Mgmt.RoleTemplate().Get(roleTemplateName, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+
+		roleTemplate = rt
+		return true, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("error while polling for role template: %w", err)
+	}
+
+	return roleTemplate, nil
+}
+
+// GetClusterRoleRules is a helper function to fetch rules for a cluster role
+func GetClusterRoleRules(client *rancher.Client, clusterID string, clusterRoleName string) ([]rbacv1.PolicyRule, error) {
+	var ctx *wrangler.Context
+	var err error
+
+	if clusterID != rbacapi.LocalCluster {
+		ctx, err = client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get downstream context: %w", err)
+		}
+	} else {
+		ctx = client.WranglerContext
+	}
+
+	clusterRole, err := ctx.RBAC.ClusterRole().Get(clusterRoleName, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("ClusterRole %s not found", clusterRoleName)
+		}
+		return nil, fmt.Errorf("failed to get ClusterRole %s: %w", clusterRoleName, err)
+	}
+
+	return clusterRole.Rules, nil
+}
+
+// CreateRoleTemplate creates a cluster or project role template with the provided rules using wrangler context
+func CreateRoleTemplate(client *rancher.Client, context string, rules []rbacv1.PolicyRule, inheritedRoles []*v3.RoleTemplate, external bool, externalRules []rbacv1.PolicyRule) (*v3.RoleTemplate, error) {
+	var roleTemplateNames []string
+	for _, inheritedRole := range inheritedRoles {
+		if inheritedRole != nil {
+			roleTemplateNames = append(roleTemplateNames, inheritedRole.Name)
+		}
+	}
+
+	displayName := namegen.AppendRandomString("role-template")
+
+	roleTemplate := &v3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: displayName,
+		},
+		Context:           context,
+		Rules:             rules,
+		DisplayName:       displayName,
+		RoleTemplateNames: roleTemplateNames,
+		External:          external,
+		ExternalRules:     externalRules,
+	}
+
+	createdRoleTemplate, err := client.WranglerContext.Mgmt.RoleTemplate().Create(roleTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RoleTemplate: %w", err)
+	}
+
+	return GetRoleTemplateByName(client, createdRoleTemplate.Name)
+}
+
+// CreateClusterRoleTemplateBinding creates a cluster role template binding for the user with the provided role template using wrangler context
+func CreateClusterRoleTemplateBinding(client *rancher.Client, clusterID string, user *management.User, roleTemplateID string) (*v3.ClusterRoleTemplateBinding, error) {
+	crtbObj := &v3.ClusterRoleTemplateBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:    clusterID,
+			GenerateName: "crtb-",
+		},
+		ClusterName:      clusterID,
+		UserName:         user.ID,
+		RoleTemplateName: roleTemplateID,
+	}
+
+	crtb, err := client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Create(crtbObj)
+	if err != nil {
+		return nil, err
+	}
+
+	err = WaitForCrtbStatus(client, crtb.Namespace, crtb.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	userClient, err := client.AsUser(user)
+	if err != nil {
+		return nil, fmt.Errorf("client as user %s: %w", user.Name, err)
+	}
+
+	err = extauthz.WaitForAllowed(userClient, clusterID, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return crtb, nil
+}
+
+// WaitForCrtbStatus waits for the CRTB to reach the Completed status or checks for its existence if status field is not supported (older Rancher versions)
+func WaitForCrtbStatus(client *rancher.Client, crtbNamespace, crtbName string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaults.OneMinuteTimeout)
+	defer cancel()
+
+	err := kwait.PollUntilContextTimeout(ctx, defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		crtb, err := client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Get(crtbNamespace, crtbName, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+
+		if crtb.Status.Summary == "Completed" {
+			return true, nil
+		}
+
+		if crtb != nil && crtb.Name == crtbName && crtb.Namespace == crtbNamespace {
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("timed out waiting for CRTB %s/%s to complete or exist: %w", crtbNamespace, crtbName, err)
+	}
+
+	return nil
+}
+
+// CreateProjectRoleTemplateBinding creates a project role template binding for the user with the provided role template using wrangler context
+func CreateProjectRoleTemplateBinding(client *rancher.Client, user *management.User, project *v3.Project, roleTemplateID string) (*v3.ProjectRoleTemplateBinding, error) {
+	projectName := fmt.Sprintf("%s:%s", project.Namespace, project.Name)
+
+	prtbObj := &v3.ProjectRoleTemplateBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:    project.Name,
+			GenerateName: "prtb-",
+		},
+		ProjectName:      projectName,
+		UserName:         user.ID,
+		RoleTemplateName: roleTemplateID,
+	}
+
+	prtbObj, err := client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Create(prtbObj)
+	if err != nil {
+		return nil, err
+	}
+
+	prtb, err := WaitForPrtbExistence(client, project, prtbObj, user)
+
+	if err != nil {
+		return nil, err
+	}
+
+	userClient, err := client.AsUser(user)
+	if err != nil {
+		return nil, fmt.Errorf("client as user %s: %w", user.Name, err)
+	}
+
+	err = extauthz.WaitForAllowed(userClient, project.Namespace, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return prtb, nil
+}
+
+// WaitForPrtbExistence waits for the PRTB to exist with the correct user and project
+func WaitForPrtbExistence(client *rancher.Client, project *v3.Project, prtbObj *v3.ProjectRoleTemplateBinding, user *management.User) (*v3.ProjectRoleTemplateBinding, error) {
+	projectName := fmt.Sprintf("%s:%s", project.Namespace, project.Name)
+
+	var prtb *v3.ProjectRoleTemplateBinding
+	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+		var err error
+		prtb, err = client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Get(project.Name, prtbObj.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		if prtb != nil && prtb.UserName == user.ID && prtb.ProjectName == projectName {
+			return true, nil
+		}
+
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return prtb, nil
 }

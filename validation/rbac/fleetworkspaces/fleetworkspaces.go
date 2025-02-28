@@ -50,48 +50,6 @@ func getClusterFleetWorkspace(client *rancher.Client, clusterID string) (string,
 	return cluster.FleetWorkspaceName, nil
 }
 
-func verifyClusterRoleTemplateBindingForUser(client *rancher.Client, username string, expectedCount int) error {
-	crtbList, err := rbac.ListClusterRoleTemplateBindings(client, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to list ClusterRoleTemplateBindings: %w", err)
-	}
-
-	actualCount := 0
-	for _, crtb := range crtbList.Items {
-		if crtb.UserName == username {
-			actualCount++
-		}
-	}
-
-	if actualCount != expectedCount {
-		return fmt.Errorf("expected %d ClusterRoleTemplateBindings for user %s, but found %d",
-			expectedCount, username, actualCount)
-	}
-
-	return nil
-}
-
-func verifyProjectRoleTemplateBindingForUser(client *rancher.Client, username string, expectedCount int) error {
-	prtbList, err := rbac.ListProjectRoleTemplateBindings(client, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to list ProjectRoleTemplateBindings: %w", err)
-	}
-
-	actualCount := 0
-	for _, prtb := range prtbList.Items {
-		if prtb.UserName == username {
-			actualCount++
-		}
-	}
-
-	if actualCount != expectedCount {
-		return fmt.Errorf("expected %d ProjectRoleTemplateBindings for user %s, but found %d",
-			expectedCount, username, actualCount)
-	}
-
-	return nil
-}
-
 func verifyRoleBindingsForUser(adminClient *rancher.Client, user *management.User, clusterID, fleetWorkspaceName string, expectedCount int) error {
 	rblist, err := rbac.ListRoleBindings(adminClient, localCluster, fleetWorkspaceName, metav1.ListOptions{})
 	if err != nil {

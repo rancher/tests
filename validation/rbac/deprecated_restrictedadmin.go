@@ -24,6 +24,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type Role string
+
 const (
 	restrictedAdmin rbacaction.Role = "restricted-admin"
 )

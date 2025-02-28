@@ -10,7 +10,6 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/etcdsnapshot"
-	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/projects"
 	rbac "github.com/rancher/tests/actions/rbac"
@@ -81,22 +80,21 @@ func (etcd *SnapshotRBACTestSuite) TestRKE2K3SSnapshotRBAC() {
 			clusterUser, clusterClient, err := rbac.SetupUser(etcd.client, tt.member)
 			require.NoError(etcd.T(), err)
 
-			adminProject, err := etcd.client.Management.Project.Create(projects.NewProjectConfig(etcd.cluster.ID))
+			adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(etcd.client, etcd.cluster.ID)
 			require.NoError(etcd.T(), err)
 
 			if tt.member == rbac.StandardUser.String() {
 				if strings.Contains(tt.role, "project") {
-					err := users.AddProjectMember(etcd.client, adminProject, clusterUser, tt.role, nil)
+					_, err = rbac.CreateProjectRoleTemplateBinding(etcd.client, clusterUser, adminProject, tt.role)
 					require.NoError(etcd.T(), err)
 				} else {
-					err := users.AddClusterRoleToUser(etcd.client, etcd.cluster, clusterUser, tt.role, nil)
+					_, err = rbac.CreateClusterRoleTemplateBinding(etcd.client, etcd.cluster.ID, clusterUser, tt.role)
 					require.NoError(etcd.T(), err)
 				}
 			}
 
-			relogin, err := clusterClient.ReLogin()
+			clusterClient, err = clusterClient.ReLogin()
 			require.NoError(etcd.T(), err)
-			clusterClient = relogin
 
 			etcd.testRKE2K3SSnapshotRBAC(tt.role, clusterClient)
 		})

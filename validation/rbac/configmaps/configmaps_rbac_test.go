@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	"github.com/rancher/tests/actions/configmaps"
+	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	deployment "github.com/rancher/tests/actions/workloads/deployment"
@@ -74,7 +75,7 @@ func (cm *ConfigmapsRBACTestSuite) TestCreateConfigmapAsVolume() {
 
 	for _, tt := range tests {
 		cm.Run("Validate config map creation for user with role "+tt.role.String(), func() {
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(cm.client, cm.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
 			require.NoError(cm.T(), err)
 
 			newUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
@@ -114,7 +115,7 @@ func (cm *ConfigmapsRBACTestSuite) TestCreateConfigmapAsEnvVar() {
 	}
 	for _, tt := range tests {
 		cm.Run("Validate config map creation of config map and verify adding it as a an env variable for user with role "+tt.role.String(), func() {
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(cm.client, cm.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
 			require.NoError(cm.T(), err)
 
 			newUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
@@ -155,7 +156,7 @@ func (cm *ConfigmapsRBACTestSuite) TestUpdateConfigmap() {
 
 	for _, tt := range tests {
 		cm.Run("Validate updating config map for user with role "+tt.role.String(), func() {
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(cm.client, cm.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
 			require.NoError(cm.T(), err)
 
 			newUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
@@ -204,7 +205,7 @@ func (cm *ConfigmapsRBACTestSuite) TestListConfigmaps() {
 	}
 	for _, tt := range tests {
 		cm.Run("Validate listing config maps for user with role "+tt.role.String(), func() {
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(cm.client, cm.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
 			require.NoError(cm.T(), err)
 
 			newUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
@@ -248,7 +249,7 @@ func (cm *ConfigmapsRBACTestSuite) TestDeleteConfigmap() {
 
 	for _, tt := range tests {
 		cm.Run("Validate deletion of config map for user with role "+tt.role.String(), func() {
-			adminProject, namespace, err := projects.CreateProjectAndNamespace(cm.client, cm.cluster.ID)
+			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
 			require.NoError(cm.T(), err)
 
 			_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
@@ -283,10 +284,20 @@ func (cm *ConfigmapsRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
 	defer subSession.Cleanup()
 
 	log.Info("Creating a standard user and adding them to cluster as a cluster member.")
-	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, rbac.StandardUser.String(), rbac.ClusterMember.String(), cm.cluster, nil)
+	standardUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, rbac.StandardUser.String(), rbac.ClusterMember.String(), cm.cluster, nil)
 	require.NoError(cm.T(), err)
 
-	_, namespace, err := projects.CreateProjectAndNamespace(standardUserClient, cm.cluster.ID)
+	projectTemplate := projectsapi.NewProjectTemplate(cm.cluster.ID)
+	projectTemplate.Annotations = map[string]string{
+		"field.cattle.io/creatorId": standardUser.ID,
+	}
+	createdProject, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
+	require.NoError(cm.T(), err)
+
+	err = projects.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
+	require.NoError(cm.T(), err)
+
+	namespace, err := projects.CreateNamespaceUsingWrangler(standardUserClient, cm.cluster.ID, createdProject.Name)
 	require.NoError(cm.T(), err)
 
 	configMapCreatedByAdmin, err := configmaps.CreateConfigmap(namespace.Name, cm.client, data, cm.cluster.ID)

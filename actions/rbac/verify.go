@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	apiV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
@@ -13,13 +14,15 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	rbac "github.com/rancher/tests/actions/kubeapi/rbac"
+	namespacesapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/namespaces"
-	"github.com/rancher/tests/actions/projects"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	coreV1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,18 +35,20 @@ func VerifyGlobalRoleBindingsForUser(t *testing.T, user *management.User, adminC
 }
 
 // VerifyRoleBindingsForUser validates that the corresponding role bindings are created for the user
-func VerifyRoleBindingsForUser(t *testing.T, user *management.User, adminClient *rancher.Client, clusterID string, role Role) {
-	rblist, err := rbac.ListRoleBindings(adminClient, LocalCluster, clusterID, metav1.ListOptions{})
+func VerifyRoleBindingsForUser(t *testing.T, user *management.User, adminClient *rancher.Client, clusterID string, role Role, expectedCount int) {
+	rblist, err := rbacapi.ListRoleBindings(adminClient, LocalCluster, clusterID, metav1.ListOptions{})
 	require.NoError(t, err)
 	userID := user.Resource.ID
 	userRoleBindings := []string{}
 
 	for _, rb := range rblist.Items {
 		if rb.Subjects[0].Kind == UserKind && rb.Subjects[0].Name == userID {
-			userRoleBindings = append(userRoleBindings, rb.Name)
+			if rb.RoleRef.Name == role.String() {
+				userRoleBindings = append(userRoleBindings, rb.Name)
+			}
 		}
 	}
-	assert.Equal(t, 1, len(userRoleBindings))
+	assert.Equal(t, expectedCount, len(userRoleBindings))
 }
 
 // VerifyUserCanListCluster validates a user with the required global permissions are able to/not able to list the clusters in rancher server
@@ -58,50 +63,61 @@ func VerifyUserCanListCluster(t *testing.T, client, standardClient *rancher.Clie
 	assert.Equal(t, 1, len(clusterList.Data))
 	actualClusterID := clusterStatus.ClusterName
 	assert.Equal(t, clusterID, actualClusterID)
-
 }
 
 // VerifyUserCanListProject validates a user with the required cluster permissions are able/not able to list projects in the downstream cluster
 func VerifyUserCanListProject(t *testing.T, client, standardClient *rancher.Client, clusterID, adminProjectName string, role Role) {
-	projectListNonAdmin, err := projects.ListProjectNames(standardClient, clusterID)
-	require.NoError(t, err)
-	projectListAdmin, err := projects.ListProjectNames(client, clusterID)
+	projectListAdmin, err := client.WranglerContext.Mgmt.Project().List(clusterID, metav1.ListOptions{})
 	require.NoError(t, err)
 
+	projectListNonAdmin, err := standardClient.WranglerContext.Mgmt.Project().List(clusterID, metav1.ListOptions{})
 	switch role {
 	case ClusterOwner:
-		assert.Equal(t, len(projectListAdmin), len(projectListNonAdmin))
-		assert.Equal(t, projectListAdmin, projectListNonAdmin)
+		assert.NoError(t, err)
+		assert.Equal(t, len(projectListAdmin.Items), len(projectListNonAdmin.Items))
+	case ClusterMember, ProjectOwner, ProjectMember:
+		assert.Error(t, err)
+		assert.True(t, apierrors.IsForbidden(err))
+	}
+}
+
+// VerifyUserCanGetProject validates a user with the required cluster permissions are able/not able to get the specific project in the downstream cluster
+func VerifyUserCanGetProject(t *testing.T, client, standardClient *rancher.Client, clusterID, adminProjectName string, role Role) {
+	projectListAdmin, err := client.WranglerContext.Mgmt.Project().Get(clusterID, adminProjectName, metav1.GetOptions{})
+	require.NoError(t, err)
+
+	projectListNonAdmin, err := standardClient.WranglerContext.Mgmt.Project().Get(clusterID, adminProjectName, metav1.GetOptions{})
+	switch role {
+	case ClusterOwner, ProjectOwner, ProjectMember:
+		assert.NoError(t, err)
+		assert.Equal(t, projectListAdmin.Name, projectListNonAdmin.Name)
 	case ClusterMember:
-		assert.Equal(t, 0, len(projectListNonAdmin))
-	case ProjectOwner, ProjectMember:
-		assert.Equal(t, 1, len(projectListNonAdmin))
-		assert.Equal(t, adminProjectName, projectListNonAdmin[0])
+		assert.Error(t, err)
+		assert.True(t, apierrors.IsForbidden(err))
 	}
 }
 
 // VerifyUserCanCreateProjects validates a user with the required cluster permissions are able/not able to create projects in the downstream cluster
 func VerifyUserCanCreateProjects(t *testing.T, client, standardClient *rancher.Client, clusterID string, role Role) {
-	memberProject, err := standardClient.Management.Project.Create(projects.NewProjectConfig(clusterID))
+	projectTemplate := projectsapi.NewProjectTemplate(clusterID)
+	memberProject, err := standardClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 	switch role {
 	case ClusterOwner, ClusterMember:
 		require.NoError(t, err)
 		log.Info("Created project as a ", role, " is ", memberProject.Name)
-		actualStatus := fmt.Sprintf("%v", memberProject.State)
-		assert.Equal(t, ActiveStatus, strings.ToLower(actualStatus))
 	case ProjectOwner, ProjectMember:
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), ForbiddenError)
+		assert.True(t, apierrors.IsForbidden(err))
 	}
 }
 
 // VerifyUserCanCreateNamespace validates a user with the required cluster permissions are able/not able to create namespaces in the project they do not own
-func VerifyUserCanCreateNamespace(t *testing.T, client, standardClient *rancher.Client, project *management.Project, clusterID string, role Role) {
-	namespaceName := namegen.AppendRandomString("testns-")
+func VerifyUserCanCreateNamespace(t *testing.T, client, standardClient *rancher.Client, project *v3.Project, clusterID string, role Role) {
 	standardClient, err := standardClient.ReLogin()
 	require.NoError(t, err)
 
-	createdNamespace, checkErr := namespaces.CreateNamespace(standardClient, namespaceName, "{}", map[string]string{}, map[string]string{}, project)
+	namespaceName := namegen.AppendRandomString("testns-")
+	createdNamespace, checkErr := namespacesapi.CreateNamespace(standardClient, clusterID, project.Name, namespaceName, "", map[string]string{}, map[string]string{})
 
 	switch role {
 	case ClusterOwner, ProjectOwner, ProjectMember:
@@ -116,12 +132,12 @@ func VerifyUserCanCreateNamespace(t *testing.T, client, standardClient *rancher.
 		assert.Equal(t, ActiveStatus, strings.ToLower(actualStatus))
 	case ClusterMember:
 		require.Error(t, checkErr)
-		assert.Contains(t, checkErr.Error(), ForbiddenError)
+		assert.True(t, apierrors.IsForbidden(checkErr))
 	}
 }
 
 // VerifyUserCanListNamespace validates a user with the required cluster permissions are able/not able to list namespaces in the project they do not own
-func VerifyUserCanListNamespace(t *testing.T, client, standardClient *rancher.Client, project *management.Project, clusterID string, role Role) {
+func VerifyUserCanListNamespace(t *testing.T, client, standardClient *rancher.Client, project *v3.Project, clusterID string, role Role) {
 	log.Info("Validating if ", role, " can lists all namespaces in a cluster.")
 
 	steveAdminClient, err := client.Steve.ProxyDownstream(clusterID)
@@ -153,7 +169,7 @@ func VerifyUserCanListNamespace(t *testing.T, client, standardClient *rancher.Cl
 }
 
 // VerifyUserCanDeleteNamespace validates a user with the required cluster permissions are able/not able to delete namespaces in the project they do not own
-func VerifyUserCanDeleteNamespace(t *testing.T, client, standardClient *rancher.Client, project *management.Project, clusterID string, role Role) {
+func VerifyUserCanDeleteNamespace(t *testing.T, client, standardClient *rancher.Client, project *v3.Project, clusterID string, role Role) {
 
 	log.Info("Validating if ", role, " cannot delete a namespace from a project they own.")
 	steveAdminClient, err := client.Steve.ProxyDownstream(clusterID)
@@ -162,10 +178,10 @@ func VerifyUserCanDeleteNamespace(t *testing.T, client, standardClient *rancher.
 	require.NoError(t, err)
 
 	namespaceName := namegen.AppendRandomString("testns-")
-	adminNamespace, err := namespaces.CreateNamespace(client, namespaceName+"-admin", "{}", map[string]string{}, map[string]string{}, project)
+	adminNamespace, err := namespacesapi.CreateNamespace(client, clusterID, project.Name, namespaceName+"-admin", "", map[string]string{}, map[string]string{})
 	require.NoError(t, err)
 
-	namespaceID, err := steveAdminClient.SteveType(namespaces.NamespaceSteveType).ByID(adminNamespace.ID)
+	namespaceID, err := steveAdminClient.SteveType(namespaces.NamespaceSteveType).ByID(adminNamespace.Name)
 	require.NoError(t, err)
 	err = steveStandardClient.SteveType(namespaces.NamespaceSteveType).Delete(namespaceID)
 
@@ -183,44 +199,35 @@ func VerifyUserCanAddClusterRoles(t *testing.T, client, memberClient *rancher.Cl
 	additionalClusterUser, err := users.CreateUserWithRole(client, users.UserConfig(), StandardUser.String())
 	require.NoError(t, err)
 
-	errUserRole := users.AddClusterRoleToUser(memberClient, cluster, additionalClusterUser, ClusterOwner.String(), nil)
-
+	_, errUserRole := CreateClusterRoleTemplateBinding(memberClient, cluster.ID, additionalClusterUser, ClusterOwner.String())
 	switch role {
 	case ProjectOwner, ProjectMember:
 		require.Error(t, errUserRole)
-		assert.Contains(t, errUserRole.Error(), ForbiddenError)
+		assert.True(t, apierrors.IsForbidden(errUserRole))
 	}
 }
 
 // VerifyUserCanAddProjectRoles validates a user with the required cluster permissions are able/not able to add other users in a project on the downstream cluster
-func VerifyUserCanAddProjectRoles(t *testing.T, client *rancher.Client, project *management.Project, additionalUser *management.User, projectRole, clusterID string, role Role) {
+func VerifyUserCanAddProjectRoles(t *testing.T, client *rancher.Client, project *v3.Project, additionalUser *management.User, projectRole, clusterID string, role Role) {
 
-	errUserRole := users.AddProjectMember(client, project, additionalUser, projectRole, nil)
-	projectList, errProjectList := projects.ListProjectNames(client, clusterID)
-	require.NoError(t, errProjectList)
-
+	_, errUserRole := CreateProjectRoleTemplateBinding(client, additionalUser, project, projectRole)
 	switch role {
 	case ProjectOwner:
 		require.NoError(t, errUserRole)
-		assert.Equal(t, 1, len(projectList))
-		assert.Equal(t, project.Name, projectList[0])
-
 	case ProjectMember:
 		require.Error(t, errUserRole)
 	}
-
 }
 
 // VerifyUserCanDeleteProject validates a user with the required cluster/project permissions are able/not able to delete projects in the downstream cluster
-func VerifyUserCanDeleteProject(t *testing.T, client *rancher.Client, project *management.Project, role Role) {
-	err := client.Management.Project.Delete(project)
-
+func VerifyUserCanDeleteProject(t *testing.T, client *rancher.Client, project *v3.Project, role Role) {
+	err := client.WranglerContext.Mgmt.Project().Delete(project.Namespace, project.Name, &metav1.DeleteOptions{})
 	switch role {
 	case ClusterOwner, ProjectOwner:
 		require.NoError(t, err)
 	case ClusterMember:
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), ForbiddenError)
+		assert.True(t, apierrors.IsForbidden(err))
 	case ProjectMember:
 		require.Error(t, err)
 	}
@@ -230,4 +237,52 @@ func VerifyUserCanDeleteProject(t *testing.T, client *rancher.Client, project *m
 func VerifyUserCanRemoveClusterRoles(t *testing.T, client *rancher.Client, user *management.User) {
 	err := users.RemoveClusterRoleFromUser(client, user)
 	require.NoError(t, err)
+}
+
+// VerifyClusterRoleTemplateBindingForUser is a helper function to verify the number of cluster role template bindings for a user
+func VerifyClusterRoleTemplateBindingForUser(client *rancher.Client, username string, expectedCount int) ([]v3.ClusterRoleTemplateBinding, error) {
+	crtbList, err := rbacapi.ListClusterRoleTemplateBindings(client, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ClusterRoleTemplateBindings: %w", err)
+	}
+
+	userCrtbs := []v3.ClusterRoleTemplateBinding{}
+	actualCount := 0
+	for _, crtb := range crtbList.Items {
+		if crtb.UserName == username {
+			userCrtbs = append(userCrtbs, crtb)
+			actualCount++
+		}
+	}
+
+	if actualCount != expectedCount {
+		return nil, fmt.Errorf("expected %d ClusterRoleTemplateBindings for user %s, but found %d",
+			expectedCount, username, actualCount)
+	}
+
+	return userCrtbs, nil
+}
+
+// VerifyProjectRoleTemplateBindingForUser is a helper function to verify the number of project role template bindings for a user
+func VerifyProjectRoleTemplateBindingForUser(client *rancher.Client, username string, expectedCount int) ([]v3.ProjectRoleTemplateBinding, error) {
+	prtbList, err := rbacapi.ListProjectRoleTemplateBindings(client, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ProjectRoleTemplateBindings: %w", err)
+	}
+
+	userPrtbs := []v3.ProjectRoleTemplateBinding{}
+	actualCount := 0
+	for _, prtb := range prtbList.Items {
+		if prtb.UserName == username {
+			userPrtbs = append(userPrtbs, prtb)
+			actualCount++
+		}
+	}
+
+	if actualCount != expectedCount {
+		return nil, fmt.Errorf("expected %d ProjectRoleTemplateBindings for user %s, but found %d",
+			expectedCount, username, actualCount)
+	}
+
+	return userPrtbs, nil
 }
