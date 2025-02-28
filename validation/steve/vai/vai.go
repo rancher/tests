@@ -2,8 +2,9 @@ package vai
 
 import (
 	"fmt"
-	"github.com/rancher/shepherd/clients/rancher"
 	"strings"
+
+	"github.com/rancher/shepherd/clients/rancher"
 )
 
 const (

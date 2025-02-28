@@ -2,11 +2,12 @@ package vai
 
 import (
 	"fmt"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/url"
 	"sort"
 	"strings"
+
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1 "k8s.io/api/core/v1"
 )
