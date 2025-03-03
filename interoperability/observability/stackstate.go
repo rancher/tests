@@ -18,7 +18,7 @@ const (
 	StackstateName         = "stackstate"
 	ObservabilitySteveType = "configurations.observability.rancher.io"
 	CrdGroup               = "observability.rancher.io"
-	ApiExtenisonsCRD       = "apiextensions.k8s.io.customresourcedefinition"
+	ApiExtensionsCRD       = "apiextensions.k8s.io.customresourcedefinition"
 
 	// Private Constants
 	localURL      = "local://"
@@ -118,19 +118,19 @@ func InstallStackstateCRD(client *rancher.Client) error {
 		},
 	}
 
-	crd, err := client.Steve.SteveType(ApiExtenisonsCRD).Create(stackstateCRDConfig)
+	crd, err := client.Steve.SteveType(ApiExtensionsCRD).Create(stackstateCRDConfig)
 	if err != nil {
 		return err
 	}
 
 	client.Session.RegisterCleanupFunc(func() error {
-		err := client.Steve.SteveType(ApiExtenisonsCRD).Delete(crd)
+		err := client.Steve.SteveType(ApiExtensionsCRD).Delete(crd)
 		if err != nil {
 			return err
 		}
 
 		err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.TenSecondTimeout, true, func(ctx context.Context) (done bool, err error) {
-			_, err = client.Steve.SteveType(ApiExtenisonsCRD).ByID(crd.ID)
+			_, err = client.Steve.SteveType(ApiExtensionsCRD).ByID(crd.ID)
 			if err != nil {
 				return false, nil
 			}
@@ -141,7 +141,7 @@ func InstallStackstateCRD(client *rancher.Client) error {
 	})
 
 	err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		resp, err := client.Steve.SteveType(ApiExtenisonsCRD).ByID(ObservabilitySteveType)
+		resp, err := client.Steve.SteveType(ApiExtensionsCRD).ByID(ObservabilitySteveType)
 		if err != nil {
 			return false, err
 		}

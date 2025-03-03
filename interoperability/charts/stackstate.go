@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
+	rv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/clients/rancher/catalog"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
@@ -14,6 +16,7 @@ import (
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/interoperability/observability"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -46,7 +49,7 @@ var (
 // - systemProjectID: the ID of the system project where the chart is deployed.
 // - additionalValues: additional Helm chart values as a map for custom configurations.
 // Returns an error if the chart installation fails or its status cannot be confirmed.
-func InstallStackStateServerChart(client *rancher.Client, installOptions *InstallOptions, systemProjectID string, additionalValues map[string]interface{}) error {
+func InstallStackStateServerChart(client *rancher.Client, installOptions *charts.InstallOptions, systemProjectID string, additionalValues map[string]interface{}) error {
 
 	serverSetting, err := client.Management.Setting.ByID(serverURLSettingID)
 	if err != nil {
@@ -57,7 +60,7 @@ func InstallStackStateServerChart(client *rancher.Client, installOptions *Instal
 	stackstateChartInstallActionPayload := &charts.PayloadOpts{
 		InstallOptions: *installOptions,
 		Name:           StackStateServerChartRepo,
-		Namespace:      StackStateServerNamespace,
+		Namespace:      StackstateNamespace,
 		Host:           serverSetting.Value,
 	}
 
@@ -75,7 +78,7 @@ func InstallStackStateServerChart(client *rancher.Client, installOptions *Instal
 		return err
 	}
 
-	watchAppInterface, err := catalogClient.Apps(StackStateServerNamespace).Watch(context.TODO(), metav1.ListOptions{
+	watchAppInterface, err := catalogClient.Apps(StackstateNamespace).Watch(context.TODO(), metav1.ListOptions{
 		FieldSelector:  "metadata.name=" + StackStateServerChartRepo,
 		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 	})
@@ -255,10 +258,10 @@ func newStackstateAgentChartInstallAction(p *charts.PayloadOpts, stackstateConfi
 
 func newStackStateServerChartInstallAction(p *charts.PayloadOpts, systemProjectID string, additionalValues map[string]interface{}) *types.ChartInstallAction {
 
-	chartInstall := charts.NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, stackStateChart, systemProjectID, p.DefaultRegistry, additionalValues)
+	chartInstall := charts.NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, StackStateServerChartRepo, systemProjectID, p.DefaultRegistry, additionalValues)
 
 	chartInstalls := []types.ChartInstall{*chartInstall}
-	chartInstallAction := newChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	chartInstallAction := charts.NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
 
 	return chartInstallAction
 }

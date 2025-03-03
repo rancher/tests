@@ -1,4 +1,5 @@
 # Stackstate rancher integration
+
 The purpose of these tests is to ensure that the StackState integration in Rancher functions correctly. Specifically, when the StackState agent chart is installed, Rancher should be able to successfully communicate with the StackState server.
 
 ## Pre-requisites
@@ -10,11 +11,11 @@ The purpose of these tests is to ensure that the StackState integration in Ranch
   - The minimum instance size in AWS is t3a.xlarge and the cluster size needs to be 1 Control Plane, ETCD Node and 3 Worker Nodes
   - The admin password and clusterAPIKey is created when generating the template yaml for installing the Stackstate server
   - The license key has to be obtained from the Observability team
-- Documentation for generating the chart value yaml files is located at https://docs.stackstate.com/self-hosted-setup/install-stackstate/kubernetes_openshift/kubernetes_install
+- Documentation for generating the chart value yaml files is located at <https://docs.stackstate.com/self-hosted-setup/install-stackstate/kubernetes_openshift/kubernetes_install>
+
 ## Test Setup
 
 Your GO suite should be set to `-run ^Test<TestSuite>$`. For example to run the stackstate_test.go, set the GO suite to `-run ^TestStackStateTestSuite$` You can find specific tests by checking the test file you plan to run.
-
 
 In your config file, set the following:
 

@@ -102,7 +102,7 @@ func (rb *StackStateRBACTestSuite) SetupSuite() {
 	}
 	require.NoError(rb.T(), err)
 
-	crdsExists, err := rb.client.Steve.SteveType(observability.ApiExtenisonsCRD).ByID(observability.ObservabilitySteveType)
+	crdsExists, err := rb.client.Steve.SteveType(observability.ApiExtensionsCRD).ByID(observability.ObservabilitySteveType)
 	if crdsExists == nil && strings.Contains(err.Error(), "Not Found") {
 		err = observability.InstallStackstateCRD(rb.client)
 		log.Info("Installed stackstate crd.")
