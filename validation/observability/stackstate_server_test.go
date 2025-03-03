@@ -47,14 +47,6 @@ type StackStateServerTestSuite struct {
 	stackstateConfigs             *observability.StackStateConfig
 }
 
-const (
-	observabilityChartURL   = "https://charts.rancher.com/server-charts/prime/suse-observability"
-	observabilityChartName  = "suse-observability"
-	stackStateConfigFileKey = "stackstateConfigs"
-	systemProject           = "System"
-	project                 = "management.cattle.io.project"
-)
-
 func (sss *StackStateServerTestSuite) TearDownSuite() {
 	sss.session.Cleanup()
 }
@@ -95,7 +87,7 @@ func (sss *StackStateServerTestSuite) SetupSuite() {
 
 	_, err = sss.catalogClient.ClusterRepos().Get(context.TODO(), observabilityChartName, meta.GetOptions{})
 	if k8sErrors.IsNotFound(err) {
-		err = observability.CreateClusterRepo(sss.client, sss.catalogClient, observabilityChartName, observabilityChartURL)
+		err = interoperablecharts.CreateClusterRepo(sss.client, sss.catalogClient, observabilityChartName, observabilityChartURL)
 		log.Info("Created suse-observability repo StackState install.")
 	}
 	require.NoError(sss.T(), err)

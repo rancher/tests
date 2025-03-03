@@ -32,17 +32,6 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	project                 = "management.cattle.io.project"
-	rancherPartnerCharts    = "rancher-partner-charts"
-	systemProject           = "System"
-	localCluster            = "local"
-	stackStateConfigFileKey = "stackstateConfigs"
-	uiExtensionsRepo        = "https://github.com/rancher/ui-plugin-charts"
-	uiGitBranch             = "main"
-	rancherUIPlugins        = "rancher-ui-plugins"
-)
-
 type StackStateTestSuite struct {
 	suite.Suite
 	client                        *rancher.Client

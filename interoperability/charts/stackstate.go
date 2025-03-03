@@ -34,6 +34,7 @@ const (
 	rancherPartnerCharts         = "rancher-partner-charts"
 	serverURLSettingID           = "server-url"
 	StackStateServerChartRepo    = "suse-observability"
+	StackStateServerNamespace    = "suse-observability"
 )
 
 var (
