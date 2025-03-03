@@ -94,6 +94,7 @@ func (sss *StackStateServerTestSuite) SetupSuite() {
 	require.NoError(sss.T(), err)
 
 	latestSSVersion, err := sss.catalogClient.GetLatestChartVersion(interoperablecharts.StackStateServerChartRepo, observabilityChartName)
+	require.NoError(sss.T(), err)
 
 	sss.stackstateChartInstallOptions = &charts.InstallOptions{
 		Cluster:   cluster,
