@@ -89,7 +89,7 @@ func (ss *StackStateTestSuite) SetupSuite() {
 	require.NoError(ss.T(), err)
 	log.Info("Node driver installed with stackstate extensions ui to whitelist stackstate URL")
 
-	crdsExists, err := ss.client.Steve.SteveType(observability.ApiExtenisonsCRD).ByID(observability.ObservabilitySteveType)
+	crdsExists, err := ss.client.Steve.SteveType(observability.ApiExtensionsCRD).ByID(observability.ObservabilitySteveType)
 	if crdsExists == nil && strings.Contains(err.Error(), "Not Found") {
 		err = observability.InstallStackstateCRD(ss.client)
 		log.Info("Installed stackstate CRD")
