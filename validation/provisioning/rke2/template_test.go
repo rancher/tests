@@ -34,11 +34,10 @@ const (
 
 type ClusterTemplateTestSuite struct {
 	suite.Suite
-	client             *rancher.Client
-	standardUserClient *rancher.Client
-	session            *session.Session
-	templateConfig     *provisioninginput.TemplateConfig
-	cloudCredentials   *v1.SteveAPIObject
+	client           *rancher.Client
+	session          *session.Session
+	templateConfig   *provisioninginput.TemplateConfig
+	cloudCredentials *v1.SteveAPIObject
 }
 
 func (r *ClusterTemplateTestSuite) TearDownSuite() {

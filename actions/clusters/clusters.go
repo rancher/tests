@@ -2,7 +2,6 @@ package clusters
 
 import (
 	"fmt"
-	"strings"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -13,7 +12,6 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -21,23 +19,14 @@ import (
 )
 
 const (
-	baseline         = "baseline"
-	externalAws      = "external-aws"
-	etcdRole         = "etcd-role"
-	controlPlaneRole = "control-plane-role"
-	workerRole       = "worker-role"
+	baseline              = "baseline"
+	externalAws           = "external-aws"
+	protectKernelDefaults = "protect-kernel-defaults"
 
-	externalCloudProviderString = "cloud-provider=external"
-	kubeletArgKey               = "kubelet-arg"
-	kubeletAPIServerArgKey      = "kubeapi-server-arg"
-	kubeControllerManagerArgKey = "kube-controller-manager-arg"
-	cloudProviderAnnotationName = "cloud-provider-name"
-	disableCloudController      = "disable-cloud-controller"
-	protectKernelDefaults       = "protect-kernel-defaults"
-	localcluster                = "fleet-local/local"
-	rancherRestricted           = "rancher-restricted"
-	rke1HardenedGID             = 52034
-	rke1HardenedUID             = 52034
+	localcluster      = "fleet-local/local"
+	rancherRestricted = "rancher-restricted"
+	rke1HardenedGID   = 52034
+	rke1HardenedUID   = 52034
 )
 
 // CreateRancherBaselinePSACT creates custom PSACT called rancher-baseline which sets each PSS to baseline.
@@ -364,22 +353,6 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 		registries = clustersConfig.Registries.RKE2Registries
 	}
 
-	if clustersConfig.CloudProvider == provisioninginput.AWSProviderName.String() {
-		machineSelectorConfigs = append(machineSelectorConfigs, OutOfTreeSystemConfig(clustersConfig.CloudProvider)...)
-	} else if strings.Contains(clustersConfig.CloudProvider, "-in-tree") {
-		machineSelectorConfigs = append(machineSelectorConfigs, InTreeSystemConfig(strings.Split(clustersConfig.CloudProvider, "-in-tree")[0])...)
-	}
-
-	if clustersConfig.CloudProvider == provisioninginput.VsphereCloudProviderName.String() {
-		machineSelectorConfigs = append(machineSelectorConfigs,
-			RKESystemConfigTemplate(map[string]interface{}{
-				cloudProviderAnnotationName: provisioninginput.VsphereCloudProviderName.String(),
-				protectKernelDefaults:       false,
-			},
-				nil),
-		)
-	}
-
 	rkeSpecCommon := rkev1.RKEClusterSpecCommon{
 		UpgradeStrategy:       upgradeStrategy,
 		ChartValues:           chartValuesMap,
@@ -507,22 +480,6 @@ func UpdateK3SRKE2ClusterConfig(cluster *v1.SteveAPIObject, clustersConfig *Clus
 
 	if clustersConfig.Registries != nil {
 		clusterSpec.RKEConfig.Registries = clustersConfig.Registries.RKE2Registries
-	}
-
-	if clustersConfig.CloudProvider == provisioninginput.AWSProviderName.String() {
-		clusterSpec.RKEConfig.MachineSelectorConfig = append(clusterSpec.RKEConfig.MachineSelectorConfig, OutOfTreeSystemConfig(clustersConfig.CloudProvider)...)
-	} else if strings.Contains(clustersConfig.CloudProvider, "-in-tree") {
-		clusterSpec.RKEConfig.MachineSelectorConfig = append(clusterSpec.RKEConfig.MachineSelectorConfig, InTreeSystemConfig(strings.Split(clustersConfig.CloudProvider, "-in-tree")[0])...)
-	}
-
-	if clustersConfig.CloudProvider == provisioninginput.VsphereCloudProviderName.String() {
-		clusterSpec.RKEConfig.MachineSelectorConfig = append(clusterSpec.RKEConfig.MachineSelectorConfig,
-			RKESystemConfigTemplate(map[string]interface{}{
-				cloudProviderAnnotationName: provisioninginput.VsphereCloudProviderName.String(),
-				protectKernelDefaults:       false,
-			},
-				nil),
-		)
 	}
 
 	if clustersConfig.AgentEnvVars != nil {
@@ -910,64 +867,4 @@ func CheckServiceAccountTokenSecret(client *rancher.Client, clusterName string) 
 
 	logrus.Infof("serviceAccountTokenSecret in this cluster is: %s", cluster.ServiceAccountTokenSecret)
 	return true, nil
-}
-
-// OutOfTreeSystemConfig constructs the proper rkeSystemConfig slice for enabling the aws cloud provider
-// out-of-tree services
-func OutOfTreeSystemConfig(providerName string) (rkeConfig []rkev1.RKESystemConfig) {
-	roles := []string{etcdRole, controlPlaneRole, workerRole}
-
-	for _, role := range roles {
-		selector := &metav1.LabelSelector{
-			MatchLabels: map[string]string{
-				"rke.cattle.io/" + role: "true",
-			},
-		}
-		configData := map[string]interface{}{}
-
-		configData[kubeletArgKey] = []string{externalCloudProviderString}
-
-		if role == controlPlaneRole {
-			configData[kubeletAPIServerArgKey] = []string{externalCloudProviderString}
-			configData[kubeControllerManagerArgKey] = []string{externalCloudProviderString}
-		}
-
-		if role == workerRole || role == controlPlaneRole {
-			configData[disableCloudController] = true
-		}
-
-		rkeConfig = append(rkeConfig, RKESystemConfigTemplate(configData, selector))
-	}
-
-	configData := map[string]interface{}{
-		cloudProviderAnnotationName: providerName,
-		protectKernelDefaults:       false,
-	}
-
-	rkeConfig = append(rkeConfig, RKESystemConfigTemplate(configData, nil))
-	return
-}
-
-// InTreeSystemConfig constructs the proper rkeSystemConfig slice for enabling cloud provider
-// in-tree services.
-// Vsphere deprecated 1.21+
-// AWS deprecated 1.27+
-// Azure deprecated 1.28+
-func InTreeSystemConfig(providerName string) (rkeConfig []rkev1.RKESystemConfig) {
-	configData := map[string]interface{}{
-		cloudProviderAnnotationName: providerName,
-		protectKernelDefaults:       false,
-	}
-	rkeConfig = append(rkeConfig, RKESystemConfigTemplate(configData, nil))
-	return
-}
-
-// RKESYstemConfigTemplate constructs an RKESystemConfig object given config data and a selector
-func RKESystemConfigTemplate(config map[string]interface{}, selector *metav1.LabelSelector) rkev1.RKESystemConfig {
-	return rkev1.RKESystemConfig{
-		Config: rkev1.GenericMap{
-			Data: config,
-		},
-		MachineLabelSelector: selector,
-	}
 }

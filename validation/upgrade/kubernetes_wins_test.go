@@ -60,6 +60,7 @@ func (u *UpgradeWindowsKubernetesTestSuite) TestUpgradeWindowsKubernetes() {
 					"clusterId": updatedClusterID,
 				},
 			})
+			require.NoError(u.T(), err)
 
 			for _, node := range nodes.Data {
 				if tt.nodeSelector["kubernetes.io/os"] == "windows" {

@@ -12,15 +12,10 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-const (
-	providerLabel = "provider.cattle.io"
-)
-
 type MigrateCloudProviderSuite struct {
 	suite.Suite
-	session  *session.Session
-	client   *rancher.Client
-	clusters []string
+	session *session.Session
+	client  *rancher.Client
 }
 
 func (u *MigrateCloudProviderSuite) TearDownSuite() {

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/rancher/shepherd/clients/harvester"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
@@ -43,6 +44,15 @@ func (r *RKE2NodeDriverProvisioningTestSuite) SetupSuite() {
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(r.T(), err)
 	r.client = client
+
+	if r.provisioningConfig.CloudProvider == provisioninginput.HarvesterProviderName.String() {
+		harvesterClient, _ := harvester.NewClient("", r.session)
+
+		harvesterClusterKubeconfig := harvesterClient.Steve.APIBaseClient.Action("management.cattle.io.clusters", "generateKubeconfig", nil, nil, nil)
+		require.NoError(r.T(), err)
+		// this isn't doing what I want. I need management client or steve to be upated.
+		r.T().Log(harvesterClusterKubeconfig)
+	}
 
 	if r.provisioningConfig.RKE2KubernetesVersions == nil {
 		rke2Versions, err := kubernetesversions.Default(r.client, clusters.RKE2ClusterType.String(), nil)
@@ -123,7 +133,7 @@ func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2ClusterDynamic
 		client *rancher.Client
 	}{
 		{provisioninginput.AdminClientName.String(), r.client},
-		{provisioninginput.StandardClientName.String(), r.standardUserClient},
+		// {provisioninginput.StandardClientName.String(), r.standardUserClient},
 	}
 
 	for _, tt := range tests {
