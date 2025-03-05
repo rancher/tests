@@ -2169,8 +2169,6 @@ github.com/rancher/rancher/pkg/apis v0.0.0-20250212213103-5c3550f55322 h1:r7fOzg
 github.com/rancher/rancher/pkg/apis v0.0.0-20250212213103-5c3550f55322/go.mod h1:IMw27bQDvETom8cpdZTxpmAnuGmeVsST9f6v/qrCvVg=
 github.com/rancher/rke v1.8.0-rc.2 h1:kW6Or5YFanUkz82p1u4up5PenLZrTuUZg8xCzLmjJUk=
 github.com/rancher/rke v1.8.0-rc.2/go.mod h1:x9N1abruzDFMwTpqq2cnaDYpKCptlNoW8VraNWB6Pc4=
-github.com/rancher/shepherd v0.0.0-20250225165610-3b5c95e0e613 h1:Ee5iTRUElIbiUYM36kfXC44I9x4ctpBD5zyM9+X3zaM=
-github.com/rancher/shepherd v0.0.0-20250225165610-3b5c95e0e613/go.mod h1:relMIZBbmYQyZUgVWfomrpHKO0we3AmbrUD0EFYoXyc=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20240301001845-4eacc2dabbde h1:x5VZI/0TUx1MeZirh6e0OMAInhCmq6yRvD6897458Ng=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20240301001845-4eacc2dabbde/go.mod h1:04o7UUy7ZFiMDEtHEjO1yS7IkO8TcsgjBl93Fcjq7Gg=
 github.com/rancher/wrangler v0.6.2-0.20200515155908-1923f3f8ec3f/go.mod h1:NmtmlLkchboIksYJuBemwcP4RBfv8FpeyhVoWXB9Wdc=
@@ -2258,6 +2256,8 @@ github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOf
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69rRypqCw=
 github.com/substrait-io/substrait-go v0.4.2/go.mod h1:qhpnLmrcvAnlZsUyPXZRqldiHapPTXC3t7xFgDi3aQg=
+github.com/susesgartner/shepherd v0.0.0-20250224215242-98fe0b4fc22d h1:muZ670H4uvRXL1Ui0/NqNwQtjfRWN3jNQuFMAT66oRM=
+github.com/susesgartner/shepherd v0.0.0-20250224215242-98fe0b4fc22d/go.mod h1:relMIZBbmYQyZUgVWfomrpHKO0we3AmbrUD0EFYoXyc=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75/go.mod h1:KO6IkyS8Y3j8OdNO85qEYBsRPuteD+YciPomcXdrMnk=
