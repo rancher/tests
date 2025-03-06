@@ -32,9 +32,9 @@ var (
 	}
 )
 
-func createCustomGlobalRole(client *rancher.Client) (*v3.GlobalRole, error) {
-	customGlobalRole.Name = namegen.AppendRandomString("testgr")
-	createdGlobalRole, err := client.WranglerContext.Mgmt.GlobalRole().Create(&customGlobalRole)
+func createCustomGlobalRole(client *rancher.Client, globalRole *v3.GlobalRole) (*v3.GlobalRole, error) {
+	globalRole.Name = namegen.AppendRandomString("testgr")
+	createdGlobalRole, err := client.WranglerContext.Mgmt.GlobalRole().Create(globalRole)
 	if err != nil {
 		return nil, err
 	}
@@ -56,8 +56,8 @@ func createUserWithBuiltinRole(client *rancher.Client, builtinGlobalRole rbac.Ro
 	return createdUser, err
 }
 
-func createCustomGlobalRoleAndUser(client *rancher.Client) (*v3.GlobalRole, *management.User, error) {
-	createdGlobalRole, err := createCustomGlobalRole(client)
+func createCustomGlobalRoleAndUser(client *rancher.Client, globalRole *v3.GlobalRole) (*v3.GlobalRole, *management.User, error) {
+	createdGlobalRole, err := createCustomGlobalRole(client, globalRole)
 	if err != nil {
 		return nil, nil, err
 	}

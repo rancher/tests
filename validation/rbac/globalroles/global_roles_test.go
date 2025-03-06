@@ -54,7 +54,7 @@ func (gr *GlobalRolesTestSuite) TestGlobalRoleCustom() {
 	defer subSession.Cleanup()
 
 	log.Info("Create a user with custom global role.")
-	createdGlobalRole, createdUser, err := createCustomGlobalRoleAndUser(gr.client)
+	createdGlobalRole, createdUser, err := createCustomGlobalRoleAndUser(gr.client, &customGlobalRole)
 	require.NoError(gr.T(), err, "Failed to create custom global role and user")
 
 	log.Info("Verify that the global role binding is created for the user.")
@@ -167,7 +167,7 @@ func (gr *GlobalRolesTestSuite) TestConvertCustomGlobalRoleToBuiltinFails() {
 	defer subSession.Cleanup()
 
 	log.Info("Create a custom global role.")
-	createdGlobalRole, err := createCustomGlobalRole(gr.client)
+	createdGlobalRole, err := createCustomGlobalRole(gr.client, &customGlobalRole)
 	require.NoError(gr.T(), err, "Failed to create custom global role")
 
 	log.Info("Attempt to convert a custom global role to a built-in global role and verify it fails.")

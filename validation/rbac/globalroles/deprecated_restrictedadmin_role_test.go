@@ -1,6 +1,6 @@
 //go:build 2.8 || 2.9 || 2.10
 
-package clusterandprojectroles
+package globalroles
 
 import (
 	"testing"
