@@ -3,6 +3,7 @@ node {
   def homePath = pwd() + "/"
   def rootPath = "/root/go/src/github.com/rancher/tfp-automation/"
   def TERRAFORM_DIR = './root/go/src/github.com/rancher/tfp-automation/modules/airgap'
+  def configYmlPath = "./root/go/src/github.com/rancher/tfp-automation"
   def testsDir = "github.com/rancher/tfp-automation/tests/${env.TEST_PACKAGE}"
   def filename = "config.yml"
   def configPath = ""
@@ -11,6 +12,7 @@ node {
     job_names = job_name.split('/')
     job_name = job_names[job_names.size() - 1] 
   }
+  def configGeneratorContainer = "${job_name}${env.BUILD_NUMBER}_generator"
   def testContainer = "${job_name}${env.BUILD_NUMBER}_test"
   def imageName = "tfp-automation-validation-${job_name}${env.BUILD_NUMBER}"
   def testResultsOut = "results.xml"
@@ -50,50 +52,50 @@ node {
                     string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
                     string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')]){
 
-    stage('Checkout Infrastructure Repo') {
-        deleteDir()
-        checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: "*/${infraBranch}"]],
-                    extensions: scm.extensions + [[$class: 'CleanCheckout']],
-                    userRemoteConfigs: infraRepo
-                ])
-     }
+    // stage('Checkout Infrastructure Repo') {
+    //     deleteDir()
+    //     checkout([
+    //                 $class: 'GitSCM',
+    //                 branches: [[name: "*/${infraBranch}"]],
+    //                 extensions: scm.extensions + [[$class: 'CleanCheckout']],
+    //                 userRemoteConfigs: infraRepo
+    //             ])
+    //  }
 
-    stage('Configure and Build') {
-        config = config.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
-        config = config.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+    // stage('Configure and Build') {
+    //     config = config.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+    //     config = config.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
 
-        writeFile file: filename, text: config
+    //     writeFile file: filename, text: config
 
-        def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
-        writeFile file: 'key.pem', text: decoded
+    //     def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
+    //     writeFile file: 'key.pem', text: decoded
         
-        env.CATTLE_TEST_CONFIG=rootPath+filename
-        configPath = "./rancher/tests/v2/validation/${filename}"
+    //     env.CATTLE_TEST_CONFIG=rootPath+filename
+    //     configPath = "./rancher/tests/validation/${filename}"
 
-        sh "./configure.sh"
-        sh "./build.sh"
-     }
+    //     sh "./configure.sh"
+    //     sh "./build.sh"
+    //  }
 
-    stage('Run Infrastructure Module Test') {
-        try {
-            sh """
-            docker run --name ${testContainer} -t -v ${homePath}key.pem:${rootPath}key.pem --env-file ${envFile} -v ${homePath}/tfp_output.log:/root/tfp_output.log ${imageName} sh -c "
-            /root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -timeout=${timeout} -v ${params.TEST_CASE};
-            if [ -f ${rootPath}reporter ]; then ${rootPath}reporter; fi"
-            """
-            sh "docker cp ${testContainer}:/root/ ./"
+    // stage('Run Infrastructure Module Test') {
+    //     try {
+    //         sh """
+    //         docker run --name ${testContainer} -t -v ${homePath}key.pem:${rootPath}key.pem --env-file ${envFile} -v ${homePath}/tfp_output.log:/root/tfp_output.log ${imageName} sh -c "
+    //         /root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -timeout=${timeout} -v ${params.TEST_CASE};
+    //         if [ -f ${rootPath}reporter ]; then ${rootPath}reporter; fi"
+    //         """
+    //         sh "docker cp ${testContainer}:/root/ ./"
 
-            // rancherPassword = sh(script: "yq '.rancher_url' tfpOutput", returnStdout: true).trim()
-            // rancherUrl = sh(script: "awk -F'URL: ' '/Rancher server URL:/ {print \$2}' tfp_output.log", returnStdout: true).trim()
-            // rancherPassword = sh(script: "awk -F'password: ' '/Booststrap password:/ {print \$2}' tfp_output.log", returnStdout: true).trim()
-            // privateRegistry = sh(script: "awk -F'registry: ' '/Private registry:/ {print \$2}' tfp_output.log", returnStdout: true).trim()
+    //         // rancherPassword = sh(script: "yq '.rancher_url' tfpOutput", returnStdout: true).trim()
+    //         // rancherUrl = sh(script: "awk -F'URL: ' '/Rancher server URL:/ {print \$2}' tfp_output.log", returnStdout: true).trim()
+    //         // rancherPassword = sh(script: "awk -F'password: ' '/Booststrap password:/ {print \$2}' tfp_output.log", returnStdout: true).trim()
+    //         // privateRegistry = sh(script: "awk -F'registry: ' '/Private registry:/ {print \$2}' tfp_output.log", returnStdout: true).trim()
 
-        } catch(err) {
-            echo 'Test run had failures. Collecting results...'
-        }
-     }
+    //     } catch(err) {
+    //         echo 'Test run had failures. Collecting results...'
+    //     }
+    //  }
 
     stage('Checkout Test Repo') {
         checkout([  
@@ -109,13 +111,40 @@ node {
         sh returnStdout:true, script: 'chmod a+x ./yq'
      }
 
+    dir ("./") {
+        try {
+            stage('Configure and Build') {
+                if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
+                  dir("./validation/.ssh") {
+                    def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
+                    writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                  }
+                }
+
+                dir("./validation/.ssh") {
+                  def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
+                  writeFile file: JENKINS_RKE_VALIDATION, text: decodedRsa
+                }
+
+                dir("./validation") {
+                  filename = "config.yaml"
+                  def configContents = env.CONFIG
+
+                  writeFile file: filename, text: configContents
+                  env.CATTLE_TEST_CONFIG = rootPath+filename
+                }
+                sh "./validation/configure.sh"
+                sh "./validation/build.sh"
+            }
+        }catch(err) {
+            echo 'Test run had failures. Collecting results...'
+        }
+    }
     stage('Run Downstream cluster tests'){
-        sh "./configure.sh"
-        sh "./build.sh"
         
-        def configYaml = readFile(file: "${configPath}")
+        def configYaml = readFile(file: "/${configYmlPath}")
         def goValidationParams = [
-            text(name: 'CONFIG', value: configYaml),
+            text(name: 'CONFIG', value: $configYaml),
             string(name: 'BRANCH', value: "main"),
             string(name: 'TEST_RUN_NAME', value: ${testPackage}),
             string(name: 'GOTEST_TESTCASE', value: "${[runFlag]} -p 1"),
@@ -132,3 +161,5 @@ node {
      } //cleanup
   } //credentials
 } // node
+
+    }
