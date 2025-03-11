@@ -142,7 +142,11 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, cluste
 	} else if clustersConfig.CloudProvider == provisioninginput.HarvesterProviderName.String() {
 		additionalData["clusterName"] = clusterName
 	}
-	clustersConfig = cloudprovider.CreateCloudProviderAddOns(client, clustersConfig, credentialSpec, additionalData)
+
+	clustersConfig, err = cloudprovider.CreateCloudProviderAddOns(client, clustersConfig, credentialSpec, additionalData)
+	if err != nil {
+		return nil, err
+	}
 
 	cluster := clusters.NewK3SRKE2ClusterConfig(clusterName, namespace, clustersConfig, machinePools, cloudCredential.Namespace+":"+cloudCredential.Name)
 

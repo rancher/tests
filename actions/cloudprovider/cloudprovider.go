@@ -9,6 +9,7 @@ import (
 
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/vsphere"
+	"github.com/rancher/shepherd/extensions/harvester"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/secrets"
@@ -32,7 +33,7 @@ const (
 	workerRole                        = "worker-role"
 )
 
-func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.ClusterConfig, credentials cloudcredentials.CloudCredential, additionalData map[string]interface{}) *clusters.ClusterConfig {
+func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.ClusterConfig, credentials cloudcredentials.CloudCredential, additionalData map[string]interface{}) (*clusters.ClusterConfig, error) {
 	currentSelectors := []rkev1.RKESystemConfig{}
 	if clustersConfig.Advanced != nil {
 		currentSelectors = *clustersConfig.Advanced.MachineSelectors
@@ -78,8 +79,13 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 		}
 
 	case provisioninginput.HarvesterProviderName.String():
+		kubeconfig, err := harvester.GetHarvesterSAKubeconfig(client, additionalData["clusterName"].(string))
+		if err != nil {
+			return clustersConfig, err
+		}
+
 		data := map[string][]byte{
-			"credential": []byte(credentials.HarvesterCredentialConfig.KubeconfigContent),
+			"credential": kubeconfig,
 		}
 
 		annotations := map[string]string{
@@ -89,11 +95,11 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 
 		kubeSecret, err := secrets.CreateSecretWithAnnotations(client, "local", "fleet-default", data, annotations, "secret")
 		if err != nil {
-			return nil
+			return clustersConfig, err
 		}
 
 		currentSelectors = append(currentSelectors, RKESystemConfigTemplate(map[string]interface{}{
-			cloudProviderConfigAnnotationName: "secret://" + kubeSecret.Namespace + ":" + kubeSecret.Name, // clustersConfig.AddOnConfig.AdditionalManifest,
+			cloudProviderConfigAnnotationName: "secret://" + kubeSecret.Namespace + ":" + kubeSecret.Name,
 			cloudProviderAnnotationName:       provisioninginput.HarvesterProviderName.String(),
 			protectKernelDefaults:             false,
 		},
@@ -116,8 +122,7 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 		}
 	}
 
-	// not able to do 'contains' within switch statement cleanly
-	// overwriting any previous changes is intentional
+	// not able to do 'contains' within switch statement cleanly, overwriting any previous changes is intentional
 	if strings.Contains(clustersConfig.CloudProvider, "-in-tree") {
 		currentSelectors = append(currentSelectors, InTreeSystemConfig(strings.Split(clustersConfig.CloudProvider, "-in-tree")[0])...)
 	}
@@ -127,7 +132,7 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 	}
 	clustersConfig.Advanced.MachineSelectors = &currentSelectors
 
-	return clustersConfig
+	return clustersConfig, nil
 }
 
 // OutOfTreeSystemConfig constructs the proper rkeSystemConfig slice for enabling the aws cloud provider services
@@ -165,8 +170,7 @@ func OutOfTreeSystemConfig(providerName string) (rkeConfig []rkev1.RKESystemConf
 	return
 }
 
-// InTreeSystemConfig constructs the proper rkeSystemConfig slice for enabling cloud provider
-// in-tree services.
+// InTreeSystemConfig constructs the proper rkeSystemConfig slice for enabling cloud provider in-tree services.
 // Vsphere deprecated 1.21+
 // AWS deprecated 1.27+
 // Azure deprecated 1.28+

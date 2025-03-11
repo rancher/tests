@@ -59,8 +59,8 @@ const (
 	systemProject                = "System"
 )
 
-// RunPostClusterCloudProviderChecks does additinal checks on the cluster if there's a cloud provider set
-// on an active cluster.
+// VerifyCloudProvider verifies the cloud provider is working correctly by creating additional workload(s) or
+// service(s) that use the upstream provider to create resources on the cluster's behalf, Namely storage and LBs
 func VerifyCloudProvider(t *testing.T, client *rancher.Client, clusterType string, nodeTemplate *nodetemplates.NodeTemplate, testClusterConfig *clusters.ClusterConfig, clusterObject *steveV1.SteveAPIObject, rke1ClusterObject *management.Cluster) {
 	if strings.Contains(clusterType, extensionscluster.RKE1ClusterType.String()) {
 		adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
@@ -171,7 +171,7 @@ func CreateAWSCloudProviderWorkloadAndServicesLB(t *testing.T, client *rancher.C
 	lbServiceTemplate := services.NewServiceTemplate(lbServiceName, defaultNamespace, corev1.ServiceTypeLoadBalancer, []corev1.ServicePort{{Name: portName, Port: 80}}, nginxSpec.Selector.MatchLabels)
 	lbServiceResp, err := steveclient.SteveType(services.ServiceSteveType).Create(lbServiceTemplate)
 	require.NoError(t, err)
-	logrus.Info("loadbalancer created for nginx workload.")
+	logrus.Info("aws loadbalancer created for nginx workload.")
 
 	return lbServiceResp
 }
@@ -211,7 +211,7 @@ func CreateHarvesterCloudProviderWorkloadAndServicesLB(t *testing.T, client *ran
 	lbServiceTemplate := services.NewServiceTemplateWithAnnotations(lbServiceName, defaultNamespace, corev1.ServiceTypeLoadBalancer, []corev1.ServicePort{{Name: portName, Port: 80}}, nginxSpec.Selector.MatchLabels, annotations)
 	lbServiceResp, err := steveclient.SteveType(services.ServiceSteveType).Create(lbServiceTemplate)
 	require.NoError(t, err)
-	logrus.Info("loadbalancer created for nginx workload.")
+	logrus.Info("harvester loadbalancer created for nginx workload.")
 
 	return lbServiceResp
 }
