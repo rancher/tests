@@ -54,7 +54,7 @@ func (u *UpgradeKubernetesTestSuite) TestUpgradeKubernetes() {
 			if cluster.Name == local {
 				upgradeLocalCluster(&u.Suite, tt.name, tt.client, testConfig, cluster)
 			} else {
-				upgradeDownstreamCluster(&u.Suite, tt.name, tt.client, cluster.Name, testConfig, cluster, nil)
+				upgradeDownstreamCluster(&u.Suite, tt.name, tt.client, cluster.Name, testConfig, cluster)
 			}
 		}
 	}

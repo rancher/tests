@@ -82,7 +82,7 @@ func upgradeLocalCluster(u *suite.Suite, testName string, client *rancher.Client
 }
 
 // upgradeDownstreamCluster is a function to upgrade a downstream cluster.
-func upgradeDownstreamCluster(u *suite.Suite, testName string, client *rancher.Client, clusterName string, testConfig *clusters.ClusterConfig, cluster upgradeinput.Cluster, nodeSelector map[string]string) {
+func upgradeDownstreamCluster(u *suite.Suite, testName string, client *rancher.Client, clusterName string, testConfig *clusters.ClusterConfig, cluster upgradeinput.Cluster) {
 	var isRKE1 = false
 
 	if cluster.VersionToUpgrade == "" {

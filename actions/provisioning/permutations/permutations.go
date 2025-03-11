@@ -148,7 +148,7 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						s.T().Fatalf("Invalid cluster type: %s", clusterType)
 					}
 
-					cloudprovider.RunPostClusterCloudProviderChecks(s.T(), client, clusterType, nodeTemplate, testClusterConfig, clusterObject, rke1ClusterObject)
+					cloudprovider.VerifyCloudProvider(s.T(), client, clusterType, nodeTemplate, testClusterConfig, clusterObject, rke1ClusterObject)
 				})
 			}
 		}

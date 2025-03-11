@@ -129,7 +129,7 @@ func rke1AWSCloudProviderMigration(t *testing.T, client *rancher.Client, cluster
 	_, steveClusterObject, err := extensionscluster.GetProvisioningClusterByName(client, clusterName, fleetNamespace)
 	require.NoError(t, err)
 
-	lbServiceResponse := cloudprovider.CreateCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
+	lbServiceResponse := cloudprovider.CreateAWSCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
 
 	status := &provv1.ClusterStatus{}
 	require.NotNil(t, steveClusterObject)
@@ -202,14 +202,14 @@ func rke1AWSCloudProviderMigration(t *testing.T, client *rancher.Client, cluster
 
 	services.VerifyAWSLoadBalancer(t, client, lbServiceResponse, status.ClusterName)
 
-	lbServiceResponseOOT := cloudprovider.CreateCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
+	lbServiceResponseOOT := cloudprovider.CreateAWSCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
 
 	services.VerifyAWSLoadBalancer(t, client, lbServiceResponseOOT, status.ClusterName)
 }
 
 // rke2AWSCloudProviderMigration is a helper function to migrate from aws in-tree to out-of-tree on rke2 clusters
 func rke2AWSCloudProviderMigration(t *testing.T, client *rancher.Client, steveClusterObject *steveV1.SteveAPIObject) {
-	lbServiceResponse := cloudprovider.CreateCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
+	lbServiceResponse := cloudprovider.CreateAWSCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
 
 	status := &provv1.ClusterStatus{}
 	require.NotNil(t, steveClusterObject)
@@ -287,7 +287,7 @@ func rke2AWSCloudProviderMigration(t *testing.T, client *rancher.Client, steveCl
 
 	services.VerifyAWSLoadBalancer(t, client, lbServiceResponse, status.ClusterName)
 
-	lbServiceResponseOOT := cloudprovider.CreateCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
+	lbServiceResponseOOT := cloudprovider.CreateAWSCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
 
 	services.VerifyAWSLoadBalancer(t, client, lbServiceResponseOOT, status.ClusterName)
 }

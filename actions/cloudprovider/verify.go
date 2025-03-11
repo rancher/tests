@@ -61,7 +61,7 @@ const (
 
 // RunPostClusterCloudProviderChecks does additinal checks on the cluster if there's a cloud provider set
 // on an active cluster.
-func RunPostClusterCloudProviderChecks(t *testing.T, client *rancher.Client, clusterType string, nodeTemplate *nodetemplates.NodeTemplate, testClusterConfig *clusters.ClusterConfig, clusterObject *steveV1.SteveAPIObject, rke1ClusterObject *management.Cluster) {
+func VerifyCloudProvider(t *testing.T, client *rancher.Client, clusterType string, nodeTemplate *nodetemplates.NodeTemplate, testClusterConfig *clusters.ClusterConfig, clusterObject *steveV1.SteveAPIObject, rke1ClusterObject *management.Cluster) {
 	if strings.Contains(clusterType, extensionscluster.RKE1ClusterType.String()) {
 		adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
 		require.NoError(t, err)
@@ -81,7 +81,7 @@ func RunPostClusterCloudProviderChecks(t *testing.T, client *rancher.Client, clu
 			clusterObject, err = adminClient.Steve.SteveType(extensionscluster.ProvisioningSteveResourceType).ByID(provisioninginput.Namespace + "/" + rke1ClusterObject.ID)
 			require.NoError(t, err)
 
-			lbServiceResp := CreateCloudProviderWorkloadAndServicesLB(t, client, clusterObject)
+			lbServiceResp := CreateAWSCloudProviderWorkloadAndServicesLB(t, client, clusterObject)
 
 			status := &provv1.ClusterStatus{}
 			err = steveV1.ConvertToK8sType(clusterObject.Status, status)
@@ -117,24 +117,33 @@ func RunPostClusterCloudProviderChecks(t *testing.T, client *rancher.Client, clu
 			clusterObject, err := adminClient.Steve.SteveType(extensionscluster.ProvisioningSteveResourceType).ByID(clusterObject.ID)
 			require.NoError(t, err)
 
-			lbServiceResp := CreateCloudProviderWorkloadAndServicesLB(t, client, clusterObject)
+			lbServiceResp := CreateAWSCloudProviderWorkloadAndServicesLB(t, client, clusterObject)
 
 			status := &provv1.ClusterStatus{}
 			err = steveV1.ConvertToK8sType(clusterObject.Status, status)
 			require.NoError(t, err)
 
 			services.VerifyAWSLoadBalancer(t, client, lbServiceResp, status.ClusterName)
-		}
+		} else if testClusterConfig.CloudProvider == provisioninginput.HarvesterProviderName.String() {
+			clusterObject, err := adminClient.Steve.SteveType(extensionscluster.ProvisioningSteveResourceType).ByID(clusterObject.ID)
+			require.NoError(t, err)
 
-		if testClusterConfig.CloudProvider == provisioninginput.VsphereCloudProviderName.String() {
+			lbServiceResp := CreateHarvesterCloudProviderWorkloadAndServicesLB(t, client, clusterObject)
+
+			status := &provv1.ClusterStatus{}
+			err = steveV1.ConvertToK8sType(clusterObject.Status, status)
+			require.NoError(t, err)
+
+			services.VerifyHarvesterLoadBalancer(t, client, lbServiceResp, status.ClusterName)
+		} else if testClusterConfig.CloudProvider == provisioninginput.VsphereCloudProviderName.String() {
 			CreatePVCWorkload(t, client, clusterObject)
 		}
 	}
 }
 
-// CreateCloudProviderWorkloadAndServicesLB creates a test workload, clusterIP service and LoadBalancer service.
+// CreateAWSCloudProviderWorkloadAndServicesLB creates a test workload, clusterIP service and LoadBalancer service.
 // This should be used when testing cloud provider with in-tree or out-of-tree set on the cluster.
-func CreateCloudProviderWorkloadAndServicesLB(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) *steveV1.SteveAPIObject {
+func CreateAWSCloudProviderWorkloadAndServicesLB(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) *steveV1.SteveAPIObject {
 	status := &provv1.ClusterStatus{}
 
 	err := steveV1.ConvertToK8sType(cluster.Status, status)
@@ -160,6 +169,46 @@ func CreateCloudProviderWorkloadAndServicesLB(t *testing.T, client *rancher.Clie
 
 	lbServiceName := namegenerator.AppendRandomString(loadBalancerPrefix)
 	lbServiceTemplate := services.NewServiceTemplate(lbServiceName, defaultNamespace, corev1.ServiceTypeLoadBalancer, []corev1.ServicePort{{Name: portName, Port: 80}}, nginxSpec.Selector.MatchLabels)
+	lbServiceResp, err := steveclient.SteveType(services.ServiceSteveType).Create(lbServiceTemplate)
+	require.NoError(t, err)
+	logrus.Info("loadbalancer created for nginx workload.")
+
+	return lbServiceResp
+}
+
+// CreateHarvesterCloudProviderWorkloadAndServicesLB creates a test workload, clusterIP service and LoadBalancer service.
+// This should be used when testing cloud provider with in-tree or out-of-tree set on the cluster.
+func CreateHarvesterCloudProviderWorkloadAndServicesLB(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) *steveV1.SteveAPIObject {
+	status := &provv1.ClusterStatus{}
+
+	err := steveV1.ConvertToK8sType(cluster.Status, status)
+	require.NoError(t, err)
+
+	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
+	require.NoError(t, err)
+
+	steveclient, err := adminClient.Steve.ProxyDownstream(status.ClusterName)
+	require.NoError(t, err)
+
+	nginxWorkload, err := createNginxDeployment(steveclient, status.ClusterName)
+	require.NoError(t, err)
+
+	nginxSpec := &appv1.DeploymentSpec{}
+	err = steveV1.ConvertToK8sType(nginxWorkload.Spec, nginxSpec)
+	require.NoError(t, err)
+
+	clusterIPserviceName := namegenerator.AppendRandomString(clusterIPPrefix)
+
+	annotations := map[string]string{
+		"cloudprovider.harvesterhci.io/ipam": "dhcp",
+	}
+
+	clusterIPserviceTemplate := services.NewServiceTemplateWithAnnotations(clusterIPserviceName, defaultNamespace, corev1.ServiceTypeClusterIP, []corev1.ServicePort{{Name: portName, Port: 80}}, nginxSpec.Selector.MatchLabels, annotations)
+	_, err = steveclient.SteveType(services.ServiceSteveType).Create(clusterIPserviceTemplate)
+	require.NoError(t, err)
+
+	lbServiceName := namegenerator.AppendRandomString(loadBalancerPrefix)
+	lbServiceTemplate := services.NewServiceTemplateWithAnnotations(lbServiceName, defaultNamespace, corev1.ServiceTypeLoadBalancer, []corev1.ServicePort{{Name: portName, Port: 80}}, nginxSpec.Selector.MatchLabels, annotations)
 	lbServiceResp, err := steveclient.SteveType(services.ServiceSteveType).Create(lbServiceTemplate)
 	require.NoError(t, err)
 	logrus.Info("loadbalancer created for nginx workload.")

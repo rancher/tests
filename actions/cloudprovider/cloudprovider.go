@@ -6,10 +6,12 @@ import (
 
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/vsphere"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/secrets"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -38,14 +40,21 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 
 	switch clustersConfig.CloudProvider {
 	case provisioninginput.AWSProviderName.String():
+		currentSelectors = append(currentSelectors, OutOfTreeSystemConfig(clustersConfig.CloudProvider)...)
+
 		byteYaml, _ := os.ReadFile(outOfTreeAWSFilePath)
 		clustersConfig.AddOnConfig = &provisioninginput.AddOnConfig{
 			AdditionalManifest: string(byteYaml),
 		}
 
-		currentSelectors = append(currentSelectors, OutOfTreeSystemConfig(clustersConfig.CloudProvider)...)
-
 	case provisioninginput.VsphereCloudProviderName.String():
+		currentSelectors = append(currentSelectors, RKESystemConfigTemplate(map[string]interface{}{
+			cloudProviderAnnotationName: provisioninginput.VsphereCloudProviderName.String(),
+			protectKernelDefaults:       false,
+		},
+			nil),
+		)
+
 		vcenterCredentials := map[string]interface{}{
 			"datacenters": additionalData["datacenter"],
 			"host":        credentials.VmwareVsphereConfig.Vcenter,
@@ -67,14 +76,30 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 				},
 			},
 		}
+
+	case provisioninginput.HarvesterProviderName.String():
+		data := map[string][]byte{
+			"credential": []byte(credentials.HarvesterCredentialConfig.KubeconfigContent),
+		}
+
+		annotations := map[string]string{
+			"v2prov-secret-authorized-for-cluster":                additionalData["clusterName"].(string),
+			"v2prov-authorized-secret-deletes-on-cluster-removal": "true",
+		}
+
+		kubeSecret, err := secrets.CreateSecretWithAnnotations(client, "local", "fleet-default", data, annotations, "secret")
+		if err != nil {
+			return nil
+		}
+
 		currentSelectors = append(currentSelectors, RKESystemConfigTemplate(map[string]interface{}{
-			cloudProviderAnnotationName: provisioninginput.VsphereCloudProviderName.String(),
-			protectKernelDefaults:       false,
+			cloudProviderConfigAnnotationName: "secret://" + kubeSecret.Namespace + ":" + kubeSecret.Name, // clustersConfig.AddOnConfig.AdditionalManifest,
+			cloudProviderAnnotationName:       provisioninginput.HarvesterProviderName.String(),
+			protectKernelDefaults:             false,
 		},
 			nil),
 		)
 
-	case provisioninginput.HarvesterProviderName.String():
 		clustersConfig.AddOnConfig = &provisioninginput.AddOnConfig{
 			ChartValues: &rkev1.GenericMap{
 				Data: map[string]interface{}{
@@ -89,15 +114,6 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 				},
 			},
 		}
-
-		currentSelectors = append(currentSelectors, RKESystemConfigTemplate(map[string]interface{}{
-			cloudProviderConfigAnnotationName: "secret://fleet-default:harvesterconfigtgkwf",
-			cloudProviderAnnotationName:       provisioninginput.HarvesterProviderName.String(),
-			protectKernelDefaults:             false,
-		},
-			nil),
-		)
-
 	}
 
 	// not able to do 'contains' within switch statement cleanly
@@ -114,8 +130,7 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 	return clustersConfig
 }
 
-// OutOfTreeSystemConfig constructs the proper rkeSystemConfig slice for enabling the aws cloud provider
-// out-of-tree services
+// OutOfTreeSystemConfig constructs the proper rkeSystemConfig slice for enabling the aws cloud provider services
 func OutOfTreeSystemConfig(providerName string) (rkeConfig []rkev1.RKESystemConfig) {
 	roles := []string{etcdRole, controlPlaneRole, workerRole}
 
