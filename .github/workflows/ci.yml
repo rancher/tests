@@ -11,6 +11,19 @@ on:
       - 'main'
 
 jobs:
+  check-forks:
+    name: check-forks
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+
+      - name: Check for Forked Branches
+        run: ./.github/scripts/check-forked-repos.sh
+
   verify-changes:
     name: verify-changes
     runs-on: ubuntu-latest
@@ -31,11 +44,11 @@ jobs:
 
       - name: Go Version
         run: go version
-
+    
       - name: Generate Golang
         run: |
           export PATH=$PATH:/home/runner/go/bin/
-      
+
       - name: Verify Go Mod
         run: ./.github/scripts/check-gomod.sh
 
