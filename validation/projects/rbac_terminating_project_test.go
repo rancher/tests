@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
@@ -81,7 +82,7 @@ func (rtp *RbacTerminatingProjectTestSuite) TestUserAdditionToClusterWithTermina
 	logCaptureStartTime = time.Now()
 	log.Info("Verify that there are no errors in the Rancher logs related to role binding.")
 	errorRegex := `\[ERROR\] error syncing '(.*?)': handler mgmt-auth-crtb-controller: .*? (?:not found|is forbidden), requeuing`
-	err = pod.CheckPodLogsForErrors(rtp.client, rbacapi.LocalCluster, leaderPodName, rbac.RancherDeploymentNamespace, errorRegex, logCaptureStartTime)
+	err = pod.CheckPodLogsForErrors(rtp.client, clusterapi.LocalCluster, leaderPodName, rbac.RancherDeploymentNamespace, errorRegex, logCaptureStartTime)
 	require.NoError(rtp.T(), err)
 
 	logCaptureStartTime = time.Now()
@@ -91,7 +92,7 @@ func (rtp *RbacTerminatingProjectTestSuite) TestUserAdditionToClusterWithTermina
 	require.NoError(rtp.T(), err, "Failed to remove the finalizer.")
 
 	log.Info("Verify that there are no errors in the Rancher logs related to role binding.")
-	err = pod.CheckPodLogsForErrors(rtp.client, rbacapi.LocalCluster, leaderPodName, rbac.RancherDeploymentNamespace, errorRegex, logCaptureStartTime)
+	err = pod.CheckPodLogsForErrors(rtp.client, clusterapi.LocalCluster, leaderPodName, rbac.RancherDeploymentNamespace, errorRegex, logCaptureStartTime)
 	require.NoError(rtp.T(), err)
 }
 
@@ -122,7 +123,7 @@ func (rtp *RbacTerminatingProjectTestSuite) TestUserAdditionToProjectWithTermina
 	require.NoError(rtp.T(), err)
 
 	log.Info("Add the standard user to the project as project owner.")
-	_, err = rbac.CreateProjectRoleTemplateBinding(rtp.client, createdUser, createdProject, rbac.ProjectOwner.String())
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(rtp.client, createdUser, createdProject, rbac.ProjectOwner.String())
 	require.Error(rtp.T(), err)
 
 	log.Info("Remove the finalizer that was previously added to the project.")

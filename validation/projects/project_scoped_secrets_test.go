@@ -87,7 +87,7 @@ func (pss *ProjectScopedSecretTestSuite) TestCreateProjectScopedSecretLocalClust
 	subSession := pss.session.NewSession()
 	defer subSession.Cleanup()
 
-	pss.testProjectScopedSecret(rbac.LocalCluster, corev1.SecretTypeOpaque, opaqueSecretData)
+	pss.testProjectScopedSecret(clusterapi.LocalCluster, corev1.SecretTypeOpaque, opaqueSecretData)
 }
 
 func (pss *ProjectScopedSecretTestSuite) TestCreateProjectScopedOpaqueSecret() {
@@ -176,11 +176,11 @@ func (pss *ProjectScopedSecretTestSuite) TestDeleteProjectScopedSecret() {
 
 	log.Info("Delete the Project scoped secret.")
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-	err := secrets.DeleteSecret(pss.client, rbac.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
+	err := secrets.DeleteSecret(pss.client, clusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
 	require.NoError(pss.T(), err)
 
 	log.Info("Verify that the project scoped secret is deleted.")
-	_, err = secretsapi.GetSecretByName(pss.client, rbac.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, metav1.GetOptions{})
+	_, err = secretsapi.GetSecretByName(pss.client, clusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, metav1.GetOptions{})
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsNotFound(err), "Expected NotFound error, got: %v", err)
 
@@ -208,7 +208,7 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretCleanupOnProject
 
 	log.Info("Verify that the project scoped secret is deleted.")
 	backingNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)}}
-	err = secrets.WaitForSecretInNamespaces(pss.client, rbac.LocalCluster, createdProjectScopedSecret.Name, []*corev1.Namespace{backingNamespace}, false)
+	err = secrets.WaitForSecretInNamespaces(pss.client, clusterapi.LocalCluster, createdProjectScopedSecret.Name, []*corev1.Namespace{backingNamespace}, false)
 	require.NoError(pss.T(), err, "Expected secret to be deleted but it still exists or an unexpected error occurred")
 
 	log.Info("Verify that the secret is removed from all the namespaces in the project.")
@@ -306,11 +306,11 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretByRole() {
 
 			log.Infof("As a %v, delete the project scoped secret %s in project %s", tt.role.String(), createdProjectScopedSecret.Name, createdProject.Name)
 			backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-			err = secrets.DeleteSecret(standardUserClient, rbac.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
+			err = secrets.DeleteSecret(standardUserClient, clusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
 			assert.NoError(pss.T(), err, "Failed to delete project scoped secret")
 
 			log.Info("Verify that the project scoped secret is deleted.")
-			_, err = secretsapi.GetSecretByName(standardUserClient, rbac.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, metav1.GetOptions{})
+			_, err = secretsapi.GetSecretByName(standardUserClient, clusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, metav1.GetOptions{})
 			assert.Error(pss.T(), err)
 			assert.True(pss.T(), apierrors.IsNotFound(err), "Expected NotFound error, got: %v", err)
 
@@ -359,11 +359,11 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretAsClusterMember(
 
 	log.Infof("As a %v, delete the project scoped secret %s in project %s", role, createdProjectScopedSecret.Name, createdProject.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-	err = secrets.DeleteSecret(standardUserClient, rbac.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
+	err = secrets.DeleteSecret(standardUserClient, clusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
 	require.NoError(pss.T(), err, "Failed to delete project scoped secret as cluster member")
 
 	log.Info("Verify that the project scoped secret is deleted.")
-	_, err = secretsapi.GetSecretByName(standardUserClient, rbac.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, metav1.GetOptions{})
+	_, err = secretsapi.GetSecretByName(standardUserClient, clusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, metav1.GetOptions{})
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsNotFound(err), "Expected NotFound error, got: %v", err)
 
@@ -389,7 +389,7 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectMemberCannotAccessOtherProje
 
 	log.Infof("As a %v, try to delete the project scoped secret %s in project %s (unauthorized access).", role, createdProjectSecret.Name, createdProject1.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject1.Name)
-	err = secrets.DeleteSecret(standardUserClient, rbac.LocalCluster, backingNamespace, createdProjectSecret.Name)
+	err = secrets.DeleteSecret(standardUserClient, clusterapi.LocalCluster, backingNamespace, createdProjectSecret.Name)
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsForbidden(err), "Expected Forbidden error, got: %v", err)
 
@@ -412,7 +412,7 @@ func (pss *ProjectScopedSecretTestSuite) TestUserWithProjectsViewAllCannotAccess
 
 	log.Infof("As user with role %v, try to get the project scoped secret %s", projectViewerRole, createdProjectSecret.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-	_, err = secretsapi.GetSecretByName(standardUserClient, rbac.LocalCluster, backingNamespace, createdProjectSecret.Name, metav1.GetOptions{})
+	_, err = secretsapi.GetSecretByName(standardUserClient, clusterapi.LocalCluster, backingNamespace, createdProjectSecret.Name, metav1.GetOptions{})
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsForbidden(err), "Expected Forbidden error when getting project scoped secret, got: %v", err)
 
@@ -429,12 +429,12 @@ func (pss *ProjectScopedSecretTestSuite) TestVerifyProjectScopedSecretRancherRes
 	createdProject, namespaceList, createdProjectScopedSecret := pss.testProjectScopedSecret(pss.cluster.ID, corev1.SecretTypeOpaque, opaqueSecretData)
 
 	log.Info("Restart Rancher")
-	err := deployment.RestartDeployment(pss.client, rbac.LocalCluster, rbac.RancherDeploymentNamespace, rbac.RancherDeploymentName)
+	err := deployment.RestartDeployment(pss.client, clusterapi.LocalCluster, rbac.RancherDeploymentNamespace, rbac.RancherDeploymentName)
 	require.NoError(pss.T(), err, "Failed to restart Rancher deployment")
 
 	log.Info("Verify that the project scoped secret still exists after Rancher restart.")
 	backingNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)}}
-	err = secrets.WaitForSecretInNamespaces(pss.client, rbac.LocalCluster, createdProjectScopedSecret.Name, []*corev1.Namespace{backingNamespace}, true)
+	err = secrets.WaitForSecretInNamespaces(pss.client, clusterapi.LocalCluster, createdProjectScopedSecret.Name, []*corev1.Namespace{backingNamespace}, true)
 	require.NoErrorf(pss.T(), err, "Project scoped secret %q not found in backing namespace %q after Rancher restart: %v", createdProjectScopedSecret.Name, backingNamespace, err)
 
 	log.Info("Verify that the secret propagated to all the namespaces in the project still exists.")
@@ -450,7 +450,7 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretWithSameNameInSa
 
 	log.Infof("Attempt to create another project scoped secret with the same name '%s' in project '%s'", createdProjectScopedSecret.Name, createdProject.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-	ctx, err := clusterapi.GetClusterWranglerContext(pss.client, rbac.LocalCluster)
+	ctx, err := clusterapi.GetClusterWranglerContext(pss.client, clusterapi.LocalCluster)
 	require.NoError(pss.T(), err)
 
 	secretName := createdProjectScopedSecret.Name
@@ -476,7 +476,7 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretWithSameNameInDi
 
 	log.Infof("Create a project scoped secret with the same name '%s' in project '%s'", createdProjectScopedSecret.Name, createdProject2.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject2.Name)
-	ctx, err := clusterapi.GetClusterWranglerContext(pss.client, rbac.LocalCluster)
+	ctx, err := clusterapi.GetClusterWranglerContext(pss.client, clusterapi.LocalCluster)
 	require.NoError(pss.T(), err)
 
 	secretName := createdProjectScopedSecret.Name
@@ -514,7 +514,7 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecrettPropagatedToNam
 
 	log.Infof("Create project scoped secret with the same name as the namespace in project '%s'", createdProject.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-	ctx, err := clusterapi.GetClusterWranglerContext(pss.client, rbac.LocalCluster)
+	ctx, err := clusterapi.GetClusterWranglerContext(pss.client, clusterapi.LocalCluster)
 	require.NoError(pss.T(), err)
 
 	labels := map[string]string{

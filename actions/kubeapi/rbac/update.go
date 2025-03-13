@@ -2,17 +2,19 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/unstructured"
 	"github.com/rancher/shepherd/pkg/api/scheme"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // UpdateGlobalRole is a helper function that uses the dynamic client to update a Global Role
 func UpdateGlobalRole(client *rancher.Client, updatedGlobalRole *v3.GlobalRole) (*v3.GlobalRole, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(LocalCluster)
+	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +47,7 @@ func UpdateGlobalRole(client *rancher.Client, updatedGlobalRole *v3.GlobalRole) 
 
 // UpdateRoleTemplate is a helper function that uses the dynamic client to update an existing cluster role template
 func UpdateRoleTemplate(client *rancher.Client, updatedRoleTemplate *v3.RoleTemplate) (*v3.RoleTemplate, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(LocalCluster)
+	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +81,7 @@ func UpdateRoleTemplate(client *rancher.Client, updatedRoleTemplate *v3.RoleTemp
 
 // UpdateClusterRoleTemplateBindings is a helper function that uses the dynamic client to update an existing cluster role template binding
 func UpdateClusterRoleTemplateBindings(client *rancher.Client, existingCRTB *v3.ClusterRoleTemplateBinding, updatedCRTB *v3.ClusterRoleTemplateBinding) (*v3.ClusterRoleTemplateBinding, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(LocalCluster)
+	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -109,4 +111,28 @@ func UpdateClusterRoleTemplateBindings(client *rancher.Client, existingCRTB *v3.
 	}
 	return newCRTB, nil
 
+}
+
+// UpdateRoleTemplateInheritance updates the inheritance of a role template using wrangler context
+func UpdateRoleTemplateInheritance(client *rancher.Client, roleTemplateName string, inheritedRoles []*v3.RoleTemplate) (*v3.RoleTemplate, error) {
+	var roleTemplateNames []string
+	for _, inheritedRole := range inheritedRoles {
+		if inheritedRole != nil {
+			roleTemplateNames = append(roleTemplateNames, inheritedRole.Name)
+		}
+	}
+
+	existingRoleTemplate, err := GetRoleTemplateByName(client, roleTemplateName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get existing RoleTemplate: %w", err)
+	}
+
+	existingRoleTemplate.RoleTemplateNames = roleTemplateNames
+
+	updatedRoleTemplate, err := client.WranglerContext.Mgmt.RoleTemplate().Update(existingRoleTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update RoleTemplate inheritance: %w", err)
+	}
+
+	return GetRoleTemplateByName(client, updatedRoleTemplate.Name)
 }

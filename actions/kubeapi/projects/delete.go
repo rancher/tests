@@ -5,14 +5,14 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 // DeleteProject is a helper function that uses the dynamic client to delete a Project from a cluster.
 func DeleteProject(client *rancher.Client, projectNamespace string, projectName string) error {
-	dynamicClient, err := client.GetDownStreamClusterClient(rbacapi.LocalCluster)
+	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
 	if err != nil {
 		return err
 	}
