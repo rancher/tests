@@ -14,6 +14,8 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	"github.com/rancher/shepherd/pkg/wrangler"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	namespacesapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
@@ -24,6 +26,7 @@ import (
 	coreV1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // VerifyGlobalRoleBindingsForUser validates that a global role bindings is created for a user when the user is created
@@ -285,4 +288,202 @@ func VerifyProjectRoleTemplateBindingForUser(client *rancher.Client, username st
 	}
 
 	return userPrtbs, nil
+}
+
+// VerifyUserPermission validates that a user has the expected permissions for a given resource
+func VerifyUserPermission(client *rancher.Client, clusterID string, user *management.User, verb, resourceType, namespaceName, resourceName string, expected, isCRDInLocalCluster bool) error {
+	allowed, err := CheckUserAccess(client, clusterID, user, verb, resourceType, namespaceName, resourceName, isCRDInLocalCluster)
+
+	if expected {
+		if err != nil {
+			if apierrors.IsForbidden(err) {
+				return fmt.Errorf("user should have '%s' access to %s/%s/%s, but got forbidden error: %v", verb, resourceType, namespaceName, resourceName, err)
+			}
+			return fmt.Errorf("error verifying user access to %s/%s/%s: %v", resourceType, namespaceName, resourceName, err)
+		}
+		if !allowed {
+			return fmt.Errorf("user should have '%s' access to %s/%s/%s, but access was denied", verb, resourceType, namespaceName, resourceName)
+		}
+	} else {
+		if err == nil && allowed {
+			return fmt.Errorf("expected '%s' access to %s/%s/%s to be denied, but access was granted", verb, resourceType, namespaceName, resourceName)
+		}
+		if err != nil && !apierrors.IsForbidden(err) {
+			return fmt.Errorf("expected forbidden error for %s/%s/%s, but got: %v", resourceType, namespaceName, resourceName, err)
+		}
+	}
+
+	return nil
+}
+
+// CheckUserAccess checks if a user has the specified access to a resource in a cluster. It returns true if the user has access, false otherwise.
+func CheckUserAccess(client *rancher.Client, clusterID string, user *management.User, verb, resourceType, namespaceName, resourceName string, isCRDInLocalCluster bool) (bool, error) {
+	userClient, err := client.AsUser(user)
+	if err != nil {
+		return false, fmt.Errorf("failed to create user client: %w", err)
+	}
+
+	var userContext *wrangler.Context
+	if isCRDInLocalCluster {
+		userContext, err = clusterapi.GetClusterWranglerContext(userClient, rbacapi.LocalCluster)
+	} else {
+		userContext, err = clusterapi.GetClusterWranglerContext(userClient, clusterID)
+	}
+
+	if err != nil {
+		return false, fmt.Errorf("failed to get user context: %w", err)
+	}
+
+	switch resourceType {
+	case "projects":
+		return CheckProjectAccess(userContext, verb, clusterID, resourceName)
+	case "namespaces":
+		return CheckNamespaceAccess(userContext, verb, resourceName)
+	case "deployments":
+		return CheckDeploymentAccess(userContext, verb, namespaceName, resourceName)
+	case "pods":
+		return CheckPodAccess(userContext, verb, namespaceName, resourceName)
+	case "secrets":
+		return CheckSecretAccess(userContext, verb, namespaceName, resourceName)
+	case "projectroletemplatebindings":
+		return CheckPrtbAccess(userContext, verb, namespaceName, resourceName)
+	default:
+		return false, fmt.Errorf("checks for resource type '%s' not added", resourceType)
+	}
+}
+
+// CheckProjectAccess checks if a user has the specified access to a project in a cluster. It returns true if the user has access, false otherwise.
+func CheckProjectAccess(userContext *wrangler.Context, verb, clusterID, projectName string) (bool, error) {
+	switch verb {
+	case "get":
+		_, err := userContext.Mgmt.Project().Get(clusterID, projectName, metav1.GetOptions{})
+		return err == nil, err
+	case "list":
+		_, err := userContext.Mgmt.Project().List(clusterID, metav1.ListOptions{})
+		return err == nil, err
+	case "create":
+		projectTemplate := projectsapi.NewProjectTemplate(clusterID)
+		_, err := userContext.Mgmt.Project().Create(projectTemplate)
+		return err == nil, err
+	case "delete":
+		err := userContext.Mgmt.Project().Delete(clusterID, projectName, &metav1.DeleteOptions{})
+		return err == nil, err
+	case "update":
+		project, err := userContext.Mgmt.Project().Get(clusterID, projectName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		if project.Labels == nil {
+			project.Labels = make(map[string]string)
+		}
+		project.Labels["hello"] = "world"
+		_, err = userContext.Mgmt.Project().Update(project)
+		return err == nil, err
+	case "patch":
+		patchData := []byte(`{"metadata":{"annotations":{"patched":"true"}}}`)
+		_, err := userContext.Mgmt.Project().Patch(clusterID, projectName, types.MergePatchType, patchData)
+		return err == nil, err
+	default:
+		return false, fmt.Errorf("verb '%s' not available in checks for projects", verb)
+	}
+}
+
+// CheckNamespaceAccess checks if a user has the specified access to a namespace in a cluster. It returns true if the user has access, false otherwise.
+func CheckNamespaceAccess(userContext *wrangler.Context, verb, namespaceName string) (bool, error) {
+	switch verb {
+	case "get":
+		_, err := userContext.Core.Namespace().Get(namespaceName, metav1.GetOptions{})
+		return err == nil, err
+	case "list":
+		_, err := userContext.Core.Namespace().List(metav1.ListOptions{})
+		return err == nil, err
+	case "delete":
+		err := userContext.Core.Namespace().Delete(namespaceName, &metav1.DeleteOptions{})
+		return err == nil, err
+	default:
+		return false, fmt.Errorf("verb '%s' not available in checks for resource 'namespaces'", verb)
+	}
+}
+
+// CheckPodAccess checks if a user has the specified access to a pod in a namespace. It returns true if the user has access, false otherwise.
+func CheckPodAccess(userContext *wrangler.Context, verb, namespaceName, podName string) (bool, error) {
+	switch verb {
+	case "get":
+		_, err := userContext.Core.Pod().Get(namespaceName, podName, metav1.GetOptions{})
+		return err == nil, err
+	case "list":
+		_, err := userContext.Core.Pod().List(namespaceName, metav1.ListOptions{})
+		return err == nil, err
+	case "delete":
+		err := userContext.Core.Pod().Delete(namespaceName, podName, &metav1.DeleteOptions{})
+		return err == nil, err
+	default:
+		return false, fmt.Errorf("verb '%s' not available in checks for resource 'pods'", verb)
+	}
+}
+
+// CheckDeploymentAccess checks if a user has the specified access to a deployment in a namespace. It returns true if the user has access, false otherwise.
+func CheckDeploymentAccess(userContext *wrangler.Context, verb, namespaceName, deploymentName string) (bool, error) {
+	switch verb {
+	case "get":
+		_, err := userContext.Apps.Deployment().Get(namespaceName, deploymentName, metav1.GetOptions{})
+		return err == nil, err
+	case "list":
+		_, err := userContext.Apps.Deployment().List(namespaceName, metav1.ListOptions{})
+		return err == nil, err
+	case "delete":
+		err := userContext.Apps.Deployment().Delete(namespaceName, deploymentName, &metav1.DeleteOptions{})
+		return err == nil, err
+	default:
+		return false, fmt.Errorf("verb '%s' not available in checks for resource 'deployments'", verb)
+	}
+}
+
+// CheckSecretAccess checks if a user has the specified access to a secret in a namespace. It returns true if the user has access, false otherwise.
+func CheckSecretAccess(userContext *wrangler.Context, verb, namespaceName, secretName string) (bool, error) {
+	switch verb {
+	case "get":
+		_, err := userContext.Core.Secret().Get(namespaceName, secretName, metav1.GetOptions{})
+		return err == nil, err
+	case "list":
+		_, err := userContext.Core.Secret().List(namespaceName, metav1.ListOptions{})
+		return err == nil, err
+	case "delete":
+		err := userContext.Core.Secret().Delete(namespaceName, secretName, &metav1.DeleteOptions{})
+		return err == nil, err
+	default:
+		return false, fmt.Errorf("verb '%s' not available in checks for resource 'namespaces'", verb)
+	}
+}
+
+// CheckPrtbAccess checks if a user has the specified access to a project role template binding in a namespace. It returns true if the user has access, false otherwise.
+func CheckPrtbAccess(userContext *wrangler.Context, verb, prtbNamespace, prtbName string) (bool, error) {
+	switch verb {
+	case "get":
+		_, err := userContext.Mgmt.ProjectRoleTemplateBinding().Get(prtbNamespace, prtbName, metav1.GetOptions{})
+		return err == nil, err
+	case "list":
+		_, err := userContext.Mgmt.ProjectRoleTemplateBinding().List(prtbNamespace, metav1.ListOptions{})
+		return err == nil, err
+	case "delete":
+		err := userContext.Mgmt.ProjectRoleTemplateBinding().Delete(prtbNamespace, prtbName, &metav1.DeleteOptions{})
+		return err == nil, err
+	case "update":
+		prtb, err := userContext.Mgmt.ProjectRoleTemplateBinding().Get(prtbNamespace, prtbName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		if prtb.Labels == nil {
+			prtb.Labels = make(map[string]string)
+		}
+		prtb.Labels["hello"] = "world"
+		_, err = userContext.Mgmt.ProjectRoleTemplateBinding().Update(prtb)
+		return err == nil, err
+	case "patch":
+		patchData := []byte(`{"metadata":{"annotations":{"patched":"true"}}}`)
+		_, err := userContext.Mgmt.ProjectRoleTemplateBinding().Patch(prtbNamespace, prtbName, types.MergePatchType, patchData)
+		return err == nil, err
+	default:
+		return false, fmt.Errorf("verb '%s' not available in checks for prtbs", verb)
+	}
 }
