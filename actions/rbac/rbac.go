@@ -3,6 +3,9 @@ package rbac
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/rancher/norman/types"
@@ -14,8 +17,10 @@ import (
 	"github.com/rancher/shepherd/extensions/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wrangler"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,56 +32,98 @@ import (
 type Role string
 
 const (
-	Admin                       Role = "admin"
-	BaseUser                    Role = "user-base"
-	StandardUser                Role = "user"
-	ClusterOwner                Role = "cluster-owner"
-	ClusterMember               Role = "cluster-member"
-	ProjectOwner                Role = "project-owner"
-	ProjectMember               Role = "project-member"
-	CreateNS                    Role = "create-ns"
-	ReadOnly                    Role = "read-only"
-	CustomManageProjectMember   Role = "projectroletemplatebindings-manage"
-	CrtbView                    Role = "clusterroletemplatebindings-view"
-	PrtbView                    Role = "projectroletemplatebindings-view"
-	ProjectsCreate              Role = "projects-create"
-	ProjectsView                Role = "projects-view"
-	ManageWorkloads             Role = "workloads-manage"
-	ActiveStatus                     = "active"
-	ForbiddenError                   = "403 Forbidden"
-	RancherDeploymentNamespace       = "cattle-system"
-	DefaultNamespace                 = "fleet-default"
-	RancherDeploymentName            = "rancher"
-	CattleResyncEnvVarName           = "CATTLE_RESYNC_DEFAULT"
-	LocalCluster                     = "local"
-	UserKind                         = "User"
-	ImageName                        = "nginx"
-	ManageUsersVerb                  = "manage-users"
-	UpdatePsaVerb                    = "updatepsa"
-	ManagementAPIGroup               = "management.cattle.io"
-	UsersResource                    = "users"
-	UserAttributeResource            = "userattribute"
-	GroupsResource                   = "groups"
-	GroupMembersResource             = "groupmembers"
-	ProjectResource                  = "projects"
-	PrtbResource                     = "projectroletemplatebindings"
-	SecretsResource                  = "secrets"
-	ClusterContext                   = "cluster"
-	ProjectContext                   = "project"
-	GrbOwnerLabel                    = "authz.management.cattle.io/grb-owner"
-	GlobalDataNS                     = "cattle-global-data"
-	MembershipBindingOwnerLabel      = "membership-binding-owner"
-	PSALabelKey                      = "pod-security.kubernetes.io/"
-	PSAEnforceLabelKey               = "pod-security.kubernetes.io/enforce"
-	PSAWarnLabelKey                  = "pod-security.kubernetes.io/warn"
-	PSAAuditLabelKey                 = "pod-security.kubernetes.io/audit"
-	PSAPrivilegedPolicy              = "privileged"
-	PSABaselinePolicy                = "baseline"
-	PSARestrictedPolicy              = "restricted"
-	PSAEnforceVersionLabelKey        = "pod-security.kubernetes.io/enforce-version"
-	PSAWarnVersionLabelKey           = "pod-security.kubernetes.io/warn-version"
-	PSAAuditVersionLabelKey          = "pod-security.kubernetes.io/audit-version"
-	PSALatestValue                   = "latest"
+	Admin                         Role = "admin"
+	BaseUser                      Role = "user-base"
+	StandardUser                  Role = "user"
+	ClusterOwner                  Role = "cluster-owner"
+	ClusterMember                 Role = "cluster-member"
+	ProjectOwner                  Role = "project-owner"
+	ProjectMember                 Role = "project-member"
+	CreateNS                      Role = "create-ns"
+	ReadOnly                      Role = "read-only"
+	CustomManageProjectMember     Role = "projectroletemplatebindings-manage"
+	CrtbView                      Role = "clusterroletemplatebindings-view"
+	PrtbView                      Role = "projectroletemplatebindings-view"
+	ProjectsCreate                Role = "projects-create"
+	ProjectsView                  Role = "projects-view"
+	ManageWorkloads               Role = "workloads-manage"
+	ActiveStatus                       = "active"
+	ForbiddenError                     = "403 Forbidden"
+	RancherDeploymentNamespace         = "cattle-system"
+	DefaultNamespace                   = "fleet-default"
+	RancherDeploymentName              = "rancher"
+	CattleResyncEnvVarName             = "CATTLE_RESYNC_DEFAULT"
+	LocalCluster                       = "local"
+	UserKind                           = "User"
+	ImageName                          = "nginx"
+	ManageUsersVerb                    = "manage-users"
+	UpdatePsaVerb                      = "updatepsa"
+	ManagementAPIGroup                 = "management.cattle.io"
+	UsersResource                      = "users"
+	UserAttributeResource              = "userattribute"
+	GroupsResource                     = "groups"
+	GroupMembersResource               = "groupmembers"
+	ProjectResource                    = "projects"
+	PrtbResource                       = "projectroletemplatebindings"
+	SecretsResource                    = "secrets"
+	ClusterContext                     = "cluster"
+	ProjectContext                     = "project"
+	GrbOwnerLabel                      = "authz.management.cattle.io/grb-owner"
+	GlobalDataNS                       = "cattle-global-data"
+	MembershipBindingOwnerLabel        = "membership-binding-owner"
+	PSALabelKey                        = "pod-security.kubernetes.io/"
+	PSAEnforceLabelKey                 = "pod-security.kubernetes.io/enforce"
+	PSAWarnLabelKey                    = "pod-security.kubernetes.io/warn"
+	PSAAuditLabelKey                   = "pod-security.kubernetes.io/audit"
+	PSAPrivilegedPolicy                = "privileged"
+	PSABaselinePolicy                  = "baseline"
+	PSARestrictedPolicy                = "restricted"
+	PSAEnforceVersionLabelKey          = "pod-security.kubernetes.io/enforce-version"
+	PSAWarnVersionLabelKey             = "pod-security.kubernetes.io/warn-version"
+	PSAAuditVersionLabelKey            = "pod-security.kubernetes.io/audit-version"
+	PSALatestValue                     = "latest"
+	RkeCattleAPIGroup                  = "rke.cattle.io"
+	ProjectCattleAPIGroup              = "project.cattle.io"
+	AppsAPIGroup                       = "apps"
+	CrtbOwnerLabel                     = "authz.cluster.cattle.io/crtb-owner"
+	PrtbOwnerLabel                     = "authz.cluster.cattle.io/prtb-owner"
+	ClusterNameAnnotationKey           = "cluster.cattle.io/name"
+	RegularResourceAggregator          = "-aggregator"
+	ClusterMgmtResourceAggregator      = "-cluster-mgmt-aggregator"
+	ProjectMgmtResourceAggregator      = "-project-mgmt-aggregator"
+	ClusterMgmtResource                = "-cluster-mgmt"
+	ProjectMgmtResource                = "-project-mgmt"
+)
+
+var (
+	ClusterMgmtResources = map[string]string{
+		"clusterscans":                ManagementAPIGroup,
+		"clusterregistrationtokens":   ManagementAPIGroup,
+		"clusterroletemplatebindings": ManagementAPIGroup,
+		"etcdbackups":                 ManagementAPIGroup,
+		"nodes":                       ManagementAPIGroup,
+		"nodepools":                   ManagementAPIGroup,
+		"projects":                    ManagementAPIGroup,
+		"etcdsnapshots":               RkeCattleAPIGroup,
+	}
+
+	ProjectMgmtResources = map[string]string{
+		"sourcecodeproviderconfigs":   ProjectCattleAPIGroup,
+		"projectroletemplatebindings": ManagementAPIGroup,
+		"secrets":                     "",
+	}
+
+	PolicyRules = map[string][]rbacv1.PolicyRule{
+		"readProjects":    definePolicyRules([]string{"get", "list"}, []string{"projects"}, []string{ManagementAPIGroup}),
+		"editProjects":    definePolicyRules([]string{"create", "update", "patch"}, []string{"projects"}, []string{ManagementAPIGroup}),
+		"manageProjects":  definePolicyRules([]string{"create", "update", "patch", "delete"}, []string{"projects"}, []string{ManagementAPIGroup}),
+		"readPrtbs":       definePolicyRules([]string{"get", "list"}, []string{"projectroletemplatebindings"}, []string{ManagementAPIGroup}),
+		"updatePrtbs":     definePolicyRules([]string{"update", "patch"}, []string{"projectroletemplatebindings"}, []string{ManagementAPIGroup}),
+		"readDeployments": definePolicyRules([]string{"get", "list"}, []string{"deployments"}, []string{AppsAPIGroup}),
+		"readPods":        definePolicyRules([]string{"get", "list"}, []string{"pods"}, []string{""}),
+		"readNamespaces":  definePolicyRules([]string{"get", "list"}, []string{"namespaces"}, []string{""}),
+		"readSecrets":     definePolicyRules([]string{"get", "list"}, []string{"secrets"}, []string{""}),
+	}
 )
 
 func (r Role) String() string {
@@ -760,4 +807,391 @@ func CreateGroupProjectRoleTemplateBinding(client *rancher.Client, projectID str
 	}
 
 	return prtb, nil
+}
+
+// DeleteClusterRoleTemplateBinding deletes the cluster role template binding using wrangler context
+func DeleteClusterRoleTemplateBinding(client *rancher.Client, crtbNamespace, crtbName string) error {
+	err := client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Delete(crtbNamespace, crtbName, &metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete ClusterRoleTemplateBinding %s: %w", crtbName, err)
+	}
+
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveHundredMillisecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		_, err = client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Get(crtbNamespace, crtbName, metav1.GetOptions{})
+
+		if apierrors.IsNotFound(err) {
+			return true, nil
+		}
+
+		if err != nil {
+			return false, fmt.Errorf("error checking CRTB deletion status: %w", err)
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("timed out waiting for ClusterRoleTemplateBinding %s to be deleted: %w", crtbName, err)
+	}
+
+	return nil
+}
+
+// DeleteProjectRoleTemplateBinding deletes the project role template binding using wrangler context
+func DeleteProjectRoleTemplateBinding(client *rancher.Client, prtbNamespace, prtbName string) error {
+	err := client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Delete(prtbNamespace, prtbName, &metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete ProjectRoleTemplateBinding %s: %w", prtbName, err)
+	}
+
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveHundredMillisecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		_, err = client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Get(prtbNamespace, prtbName, metav1.GetOptions{})
+
+		if apierrors.IsNotFound(err) {
+			return true, nil
+		}
+
+		if err != nil {
+			return false, fmt.Errorf("error checking PRTB deletion status: %w", err)
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("timed out waiting for ProjectRoleTemplateBinding %s to be deleted: %w", prtbName, err)
+	}
+
+	return nil
+}
+
+// UpdateRoleTemplateInheritance updates the inheritance of a role template using wrangler context
+func UpdateRoleTemplateInheritance(client *rancher.Client, roleTemplateName string, inheritedRoles []*v3.RoleTemplate) (*v3.RoleTemplate, error) {
+	var roleTemplateNames []string
+	for _, inheritedRole := range inheritedRoles {
+		if inheritedRole != nil {
+			roleTemplateNames = append(roleTemplateNames, inheritedRole.Name)
+		}
+	}
+
+	existingRoleTemplate, err := GetRoleTemplateByName(client, roleTemplateName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get existing RoleTemplate: %w", err)
+	}
+
+	existingRoleTemplate.RoleTemplateNames = roleTemplateNames
+
+	updatedRoleTemplate, err := client.WranglerContext.Mgmt.RoleTemplate().Update(existingRoleTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update RoleTemplate inheritance: %w", err)
+	}
+
+	return GetRoleTemplateByName(client, updatedRoleTemplate.Name)
+}
+
+func definePolicyRules(verbs, resources, apiGroups []string) []rbacv1.PolicyRule {
+	return []rbacv1.PolicyRule{{
+		Verbs:     verbs,
+		Resources: resources,
+		APIGroups: apiGroups,
+	}}
+}
+
+// GetClusterRolesForRoleTemplates gets ClusterRoles associated with the provided role templates
+func GetClusterRolesForRoleTemplates(client *rancher.Client, clusterID string, rtNames ...string) (*rbacv1.ClusterRoleList, error) {
+	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	var clusterRoles rbacv1.ClusterRoleList
+
+	for _, rtName := range rtNames {
+		names := []string{rtName, rtName + RegularResourceAggregator}
+
+		if isMgmtResource(client, rtName, ClusterContext) {
+			names = append(names, rtName+ClusterMgmtResource, rtName+ClusterMgmtResourceAggregator)
+		} else if isMgmtResource(client, rtName, ProjectContext) {
+			names = append(names, rtName+ProjectMgmtResource, rtName+ProjectMgmtResourceAggregator)
+		}
+
+		for _, name := range names {
+			cr, err := ctx.RBAC.ClusterRole().Get(name, metav1.GetOptions{})
+			if err != nil {
+				if !apierrors.IsNotFound(err) {
+					return nil, err
+				}
+				continue
+			}
+			clusterRoles.Items = append(clusterRoles.Items, *cr)
+		}
+	}
+
+	return &clusterRoles, nil
+}
+
+func isMgmtResource(client *rancher.Client, rtName string, resourceContext string) bool {
+	rt, err := client.WranglerContext.Mgmt.RoleTemplate().Get(rtName, metav1.GetOptions{})
+	if err != nil {
+		return false
+	}
+
+	for _, rule := range rt.Rules {
+		if isMgmtRule(rule, resourceContext) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isMgmtRule(rule rbacv1.PolicyRule, resourceContext string) bool {
+	resourceMap := ClusterMgmtResources
+	if resourceContext == ProjectContext {
+		resourceMap = ProjectMgmtResources
+	}
+
+	for _, group := range rule.APIGroups {
+		if (resourceContext == ClusterContext && (group == ManagementAPIGroup || group == RkeCattleAPIGroup)) ||
+			(resourceContext == ProjectContext && (group == ProjectCattleAPIGroup || group == ManagementAPIGroup || group == "")) {
+			for _, resource := range rule.Resources {
+				if _, ok := resourceMap[resource]; ok {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// VerifyMainACRContainsAllRules verifies that the main ACR contains all rules from the main role template and its child role templates
+func VerifyMainACRContainsAllRules(client *rancher.Client, clusterID, mainRTName string, childRTNames []string) error {
+	mainRules, err := GetClusterRoleRules(client, clusterID, mainRTName)
+	if err != nil {
+		return fmt.Errorf("failed to get mainRole rules: %w", err)
+	}
+
+	var allChildRules []rbacv1.PolicyRule
+	for _, childRTName := range childRTNames {
+		childRules, err := GetClusterRoleRules(client, clusterID, childRTName)
+		if err != nil {
+			return fmt.Errorf("failed to get childRole rules %s: %w", childRTName, err)
+		}
+		allChildRules = append(allChildRules, childRules...)
+	}
+
+	expectedRules := append(mainRules, allChildRules...)
+
+	acrNameRegular := mainRTName + RegularResourceAggregator
+	actualRulesRegular, err := GetClusterRoleRules(client, clusterID, acrNameRegular)
+	if err != nil {
+		return fmt.Errorf("failed to get ACR %s: %w", acrNameRegular, err)
+	}
+
+	if !ruleSlicesMatch(actualRulesRegular, expectedRules) {
+		return fmt.Errorf("ACR %s rules do not match expected combined rules", acrNameRegular)
+	}
+
+	return nil
+}
+
+func ruleSlicesMatch(rules1, rules2 []rbacv1.PolicyRule) bool {
+	rules1Copy := slices.Clone(rules1)
+	rules2Copy := slices.Clone(rules2)
+
+	slices.SortFunc(rules1Copy, comparePolicyRules)
+	slices.SortFunc(rules2Copy, comparePolicyRules)
+
+	return reflect.DeepEqual(rules1Copy, rules2Copy)
+}
+
+func comparePolicyRules(a, b rbacv1.PolicyRule) int {
+	if cmp := compareSlices(a.Verbs, b.Verbs); cmp != 0 {
+		return cmp
+	}
+	if cmp := compareSlices(a.APIGroups, b.APIGroups); cmp != 0 {
+		return cmp
+	}
+	if cmp := compareSlices(a.Resources, b.Resources); cmp != 0 {
+		return cmp
+	}
+	if cmp := compareSlices(a.ResourceNames, b.ResourceNames); cmp != 0 {
+		return cmp
+	}
+	return compareSlices(a.NonResourceURLs, b.NonResourceURLs)
+}
+
+func compareSlices(a, b []string) int {
+	minLen := len(a)
+	if len(b) < minLen {
+		minLen = len(b)
+	}
+
+	for i := 0; i < minLen; i++ {
+		if a[i] < b[i] {
+			return -1
+		} else if a[i] > b[i] {
+			return 1
+		}
+	}
+	return len(a) - len(b)
+}
+
+// VerifyClusterMgmtACR verifies that the cluster management ACR contains all rules from the main role template and its child role templates
+func VerifyClusterMgmtACR(client *rancher.Client, clusterID, mainRTName string, childRTNames []string) error {
+	acrName := mainRTName + ClusterMgmtResourceAggregator
+	return verifyMgmtACR(client, clusterID, acrName, mainRTName, childRTNames, ClusterContext)
+}
+
+// VerifyProjectMgmtACR verifies that the project management ACR contains all rules from the main role template and its child role templates
+func VerifyProjectMgmtACR(client *rancher.Client, clusterID, mainRTName string, childRTNames []string) error {
+	acrName := mainRTName + ProjectMgmtResourceAggregator
+	return verifyMgmtACR(client, clusterID, acrName, mainRTName, childRTNames, ProjectContext)
+}
+
+func verifyMgmtACR(client *rancher.Client, clusterID, acrName, mainRTName string, childRTNames []string, managementContext string) error {
+	mainRules, err := GetClusterRoleRules(client, clusterID, mainRTName)
+	if err != nil {
+		return err
+	}
+
+	allChildRules := []rbacv1.PolicyRule{}
+	for _, childRTName := range childRTNames {
+		childRules, err := GetClusterRoleRules(client, clusterID, childRTName)
+		if err != nil {
+			return err
+		}
+		allChildRules = append(allChildRules, childRules...)
+	}
+
+	expectedRules := append(mainRules, allChildRules...)
+	mgmtRules := filterMgmtRules(expectedRules, managementContext)
+
+	acrRules, err := GetClusterRoleRules(client, clusterID, acrName)
+	if err != nil {
+		return fmt.Errorf("failed to get ACR %s: %w", acrName, err)
+	}
+
+	if !ruleSlicesMatch(acrRules, mgmtRules) {
+		return fmt.Errorf("ACR %s rules do not match expected combined rules.\nExpected: %+v\nActual: %+v", acrName, mgmtRules, acrRules)
+	}
+
+	return nil
+}
+
+func filterMgmtRules(rules []rbacv1.PolicyRule, mgmtType string) []rbacv1.PolicyRule {
+	var filteredRules []rbacv1.PolicyRule
+	for _, rule := range rules {
+		if (mgmtType == ClusterContext && isMgmtRule(rule, ClusterContext)) || (mgmtType == ProjectContext && isMgmtRule(rule, ProjectContext)) {
+			filteredRules = append(filteredRules, rule)
+		}
+	}
+	return filteredRules
+}
+
+func verifyBindings(client *rancher.Client, clusterID string, userName string, roleTemplateName string, roleTemplateBindingName string, namespaces []string, expectedRoleBindingCount, expectedClusterRoleBindingCount int) error {
+	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	for _, namespace := range namespaces {
+		roleBindings, err := ctx.RBAC.RoleBinding().List(namespace, metav1.ListOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to list RoleBindings in namespace %s: %w", namespace, err)
+		}
+
+		filteredRBs := filterRoleBindings(roleBindings, userName, roleTemplateName)
+
+		if len(filteredRBs) != expectedRoleBindingCount {
+			return fmt.Errorf("expected %d RoleBindings for user %s in namespace %s, but got %d", expectedRoleBindingCount, userName, namespace, len(filteredRBs))
+		}
+
+		if expectedRoleBindingCount > 0 {
+			expectedRoleName := roleTemplateName + RegularResourceAggregator
+
+			if filteredRBs[0].RoleRef.Name != expectedRoleName {
+				return fmt.Errorf("expected RoleRef.Name %s, but got %s", expectedRoleName, filteredRBs[0].RoleRef.Name)
+			}
+		}
+	}
+
+	clusterRoleBindings, err := ctx.RBAC.ClusterRoleBinding().List(metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list ClusterRoleBindings in the local cluster: %w", err)
+	}
+
+	filteredCRBs := filterClusterRoleBindings(clusterRoleBindings, userName, roleTemplateName)
+
+	if len(filteredCRBs) != expectedClusterRoleBindingCount {
+		return fmt.Errorf("expected %d ClusterRoleBindings, but got %d", expectedClusterRoleBindingCount, len(filteredCRBs))
+	}
+
+	if expectedClusterRoleBindingCount > 0 {
+		var expectedRoleName string
+		if clusterID == rbacapi.LocalCluster {
+			if strings.Contains(roleTemplateBindingName, "prtb") {
+				expectedRoleName = roleTemplateName + ProjectMgmtResourceAggregator
+			} else {
+				expectedRoleName = roleTemplateName + ClusterMgmtResourceAggregator
+			}
+		} else {
+			expectedRoleName = roleTemplateName + RegularResourceAggregator
+		}
+
+		if filteredCRBs[0].RoleRef.Name != expectedRoleName {
+			return fmt.Errorf("expected RoleRef.Name %s, but got %s", expectedRoleName, filteredCRBs[0].RoleRef.Name)
+		}
+	}
+
+	return nil
+}
+
+func filterRoleBindings(roleBindings *rbacv1.RoleBindingList, userName, roleTemplateName string) []rbacv1.RoleBinding {
+	var filteredRBs []rbacv1.RoleBinding
+	re := regexp.MustCompile("^" + regexp.QuoteMeta(roleTemplateName))
+
+	for _, rb := range roleBindings.Items {
+		for _, subject := range rb.Subjects {
+			if subject.Kind == rbacv1.UserKind && subject.Name == userName && re.MatchString(rb.RoleRef.Name) {
+				filteredRBs = append(filteredRBs, rb)
+			}
+		}
+	}
+	return filteredRBs
+}
+
+func filterClusterRoleBindings(clusterRoleBindings *rbacv1.ClusterRoleBindingList, userName, roleTemplateName string) []rbacv1.ClusterRoleBinding {
+	var filteredCRBs []rbacv1.ClusterRoleBinding
+	re := regexp.MustCompile("^" + regexp.QuoteMeta(roleTemplateName))
+
+	for _, rb := range clusterRoleBindings.Items {
+		for _, subject := range rb.Subjects {
+			if subject.Kind == rbacv1.UserKind && subject.Name == userName && re.MatchString(rb.RoleRef.Name) {
+				filteredCRBs = append(filteredCRBs, rb)
+			}
+		}
+	}
+	return filteredCRBs
+}
+
+// VerifyBindingsForCrtb verifies RoleBindings and ClusterRoleBindings for a given CRTB
+func VerifyBindingsForCrtb(client *rancher.Client, clusterID string, crtb *v3.ClusterRoleTemplateBinding, expectedRoleBindingCount, expectedClusterRoleBindingCount int) error {
+	return verifyBindings(client, clusterID, crtb.UserName, crtb.RoleTemplateName, crtb.Name, []string{clusterID}, expectedRoleBindingCount, expectedClusterRoleBindingCount)
+}
+
+// VerifyBindingsForPrtb verifies RoleBindings and ClusterRoleBindings for a given PRTB
+func VerifyBindingsForPrtb(client *rancher.Client, clusterID string, prtb *v3.ProjectRoleTemplateBinding, namespaces []*corev1.Namespace, expectedRoleBindingCount, expectedClusterRoleBindingCount int) error {
+	namespace := strings.SplitN(prtb.ProjectName, ":", 2)[0]
+	namespaceNames := []string{}
+
+	if namespaces == nil {
+		namespaceNames = append(namespaceNames, namespace)
+	} else {
+		for _, ns := range namespaces {
+			namespaceNames = append(namespaceNames, ns.Name)
+		}
+	}
+	return verifyBindings(client, clusterID, prtb.UserName, prtb.RoleTemplateName, prtb.Name, namespaceNames, expectedRoleBindingCount, expectedClusterRoleBindingCount)
 }
