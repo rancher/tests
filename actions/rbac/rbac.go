@@ -3,6 +3,8 @@ package rbac
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/rancher/norman/types"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
@@ -20,46 +22,54 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
-	"strings"
 )
 
 type Role string
 
 const (
-	Admin                       Role = "admin"
-	BaseUser                    Role = "user-base"
-	StandardUser                Role = "user"
-	ClusterOwner                Role = "cluster-owner"
-	ClusterMember               Role = "cluster-member"
-	ProjectOwner                Role = "project-owner"
-	ProjectMember               Role = "project-member"
-	CreateNS                    Role = "create-ns"
-	ReadOnly                    Role = "read-only"
-	CustomManageProjectMember   Role = "projectroletemplatebindings-manage"
-	CrtbView                    Role = "clusterroletemplatebindings-view"
-	PrtbView                    Role = "projectroletemplatebindings-view"
-	ProjectsCreate              Role = "projects-create"
-	ProjectsView                Role = "projects-view"
-	ManageWorkloads             Role = "workloads-manage"
-	ActiveStatus                     = "active"
-	ForbiddenError                   = "403 Forbidden"
-	DefaultNamespace                 = "fleet-default"
-	LocalCluster                     = "local"
-	UserKind                         = "User"
-	ImageName                        = "nginx"
-	ManageUsersVerb                  = "manage-users"
-	ManagementAPIGroup               = "management.cattle.io"
-	UsersResource                    = "users"
-	UserAttributeResource            = "userattribute"
-	GroupsResource                   = "groups"
-	GroupMembersResource             = "groupmembers"
-	PrtbResource                     = "projectroletemplatebindings"
-	SecretsResource                  = "secrets"
-	ClusterContext                   = "cluster"
-	ProjectContext                   = "project"
-	GrbOwnerLabel                    = "authz.management.cattle.io/grb-owner"
-	GlobalDataNS                     = "cattle-global-data"
-	MembershipBindingOwnerLabel      = "membership-binding-owner"
+	Admin                         Role = "admin"
+	BaseUser                      Role = "user-base"
+	StandardUser                  Role = "user"
+	ClusterOwner                  Role = "cluster-owner"
+	ClusterMember                 Role = "cluster-member"
+	ProjectOwner                  Role = "project-owner"
+	ProjectMember                 Role = "project-member"
+	CreateNS                      Role = "create-ns"
+	ReadOnly                      Role = "read-only"
+	CustomManageProjectMember     Role = "projectroletemplatebindings-manage"
+	CrtbView                      Role = "clusterroletemplatebindings-view"
+	PrtbView                      Role = "projectroletemplatebindings-view"
+	ProjectsCreate                Role = "projects-create"
+	ProjectsView                  Role = "projects-view"
+	ManageWorkloads               Role = "workloads-manage"
+	ActiveStatus                       = "active"
+	ForbiddenError                     = "403 Forbidden"
+	DefaultNamespace                   = "fleet-default"
+	LocalCluster                       = "local"
+	UserKind                           = "User"
+	ImageName                          = "nginx"
+	ManageUsersVerb                    = "manage-users"
+	ManagementAPIGroup                 = "management.cattle.io"
+	RkeCattleAPIGroup                  = "rke.cattle.io"
+	ProjectCattleAPIGroup              = "project.cattle.io"
+	AppsAPIGroup                       = "apps"
+	UsersResource                      = "users"
+	UserAttributeResource              = "userattribute"
+	GroupsResource                     = "groups"
+	GroupMembersResource               = "groupmembers"
+	PrtbResource                       = "projectroletemplatebindings"
+	SecretsResource                    = "secrets"
+	ClusterContext                     = "cluster"
+	ProjectContext                     = "project"
+	GrbOwnerLabel                      = "authz.management.cattle.io/grb-owner"
+	GlobalDataNS                       = "cattle-global-data"
+	MembershipBindingOwnerLabel        = "membership-binding-owner"
+	CrtbOwnerLabel                     = "authz.cluster.cattle.io/crtb-owner"
+	PrtbOwnerLabel                     = "authz.cluster.cattle.io/prtb-owner"
+	ClusterNameAnnotationKey           = "cluster.cattle.io/name"
+	RegularResourceAggregator          = "-aggregator"
+	ClusterMgmtResourceAggregator      = "-cluster-mgmt-aggregator"
+	ProjectMgmtResourceAggregator      = "-project-mgmt-aggregator"
 )
 
 func (r Role) String() string {
@@ -695,4 +705,84 @@ func CreateGlobalRoleWithInheritedClusterRolesWrangler(client *rancher.Client, i
 	}
 
 	return createdGlobalRole, nil
+}
+
+// DeleteClusterRoleTemplateBinding deletes the cluster role template binding using wrangler context
+func DeleteClusterRoleTemplateBinding(client *rancher.Client, crtbNamespace, crtbName string) error {
+	err := client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Delete(crtbNamespace, crtbName, &metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete ClusterRoleTemplateBinding %s: %w", crtbName, err)
+	}
+
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveHundredMillisecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		_, err = client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Get(crtbNamespace, crtbName, metav1.GetOptions{})
+
+		if apierrors.IsNotFound(err) {
+			return true, nil
+		}
+
+		if err != nil {
+			return false, fmt.Errorf("error checking CRTB deletion status: %w", err)
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("timed out waiting for ClusterRoleTemplateBinding %s to be deleted: %w", crtbName, err)
+	}
+
+	return nil
+}
+
+// DeleteProjectRoleTemplateBinding deletes the project role template binding using wrangler context
+func DeleteProjectRoleTemplateBinding(client *rancher.Client, prtbNamespace, prtbName string) error {
+	err := client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Delete(prtbNamespace, prtbName, &metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete ProjectRoleTemplateBinding %s: %w", prtbName, err)
+	}
+
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveHundredMillisecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		_, err = client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Get(prtbNamespace, prtbName, metav1.GetOptions{})
+
+		if apierrors.IsNotFound(err) {
+			return true, nil
+		}
+
+		if err != nil {
+			return false, fmt.Errorf("error checking PRTB deletion status: %w", err)
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("timed out waiting for ProjectRoleTemplateBinding %s to be deleted: %w", prtbName, err)
+	}
+
+	return nil
+}
+
+// UpdateRoleTemplateInheritance updates the inheritance of a role template using wrangler context
+func UpdateRoleTemplateInheritance(client *rancher.Client, roleTemplateName string, inheritedRoles []*v3.RoleTemplate) (*v3.RoleTemplate, error) {
+	var roleTemplateNames []string
+	for _, inheritedRole := range inheritedRoles {
+		if inheritedRole != nil {
+			roleTemplateNames = append(roleTemplateNames, inheritedRole.Name)
+		}
+	}
+
+	existingRoleTemplate, err := GetRoleTemplateByName(client, roleTemplateName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get existing RoleTemplate: %w", err)
+	}
+
+	existingRoleTemplate.RoleTemplateNames = roleTemplateNames
+
+	updatedRoleTemplate, err := client.WranglerContext.Mgmt.RoleTemplate().Update(existingRoleTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update RoleTemplate inheritance: %w", err)
+	}
+
+	return GetRoleTemplateByName(client, updatedRoleTemplate.Name)
 }
