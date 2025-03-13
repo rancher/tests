@@ -26,6 +26,7 @@ type Role string
 
 const (
 	Admin                     Role = "admin"
+	BaseUser                  Role = "user-base"
 	StandardUser              Role = "user"
 	ClusterOwner              Role = "cluster-owner"
 	ClusterMember             Role = "cluster-member"
@@ -44,6 +45,12 @@ const (
 	LocalCluster                   = "local"
 	UserKind                       = "User"
 	ImageName                      = "nginx"
+	ManageUsersVerb                = "manage-users"
+	ManagementAPIGroup             = "management.cattle.io"
+	UsersResource                  = "users"
+	UserAttributeResource          = "userattribute"
+	GroupsResource                 = "groups"
+	GroupMembersResource           = "groupmembers"
 )
 
 func (r Role) String() string {
