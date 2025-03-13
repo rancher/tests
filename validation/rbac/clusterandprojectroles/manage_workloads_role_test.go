@@ -15,8 +15,9 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	projectsapi "github.com/rancher/tests/actions/projects"
-	rbac "github.com/rancher/tests/actions/rbac"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
+	"github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/daemonset"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -61,11 +62,11 @@ func (mw *ManageWorkloadsRoleTestSuite) testSetupUserAndProject() (*rancher.Clie
 	require.NoError(mw.T(), err)
 
 	log.Info("Create a project and a namespace")
-	createdProject, createdNamespace, err := projectsapi.CreateProjectAndNamespaceUsingWrangler(mw.client, mw.cluster.ID)
+	createdProject, createdNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(mw.client, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 
 	log.Infof("Add the user %s as Project Owner to the project %s", newUser.Name, createdProject.Name)
-	_, errUserRole := rbac.CreateProjectRoleTemplateBinding(mw.client, newUser, createdProject, rbac.ProjectOwner.String())
+	_, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(mw.client, newUser, createdProject, rbac.ProjectOwner.String())
 	require.NoError(mw.T(), errUserRole)
 	standardUserClient, err = standardUserClient.ReLogin()
 	require.NoError(mw.T(), err)
@@ -79,7 +80,7 @@ func (mw *ManageWorkloadsRoleTestSuite) testSetupWorkloadUserAndAddToProject(adm
 	require.NoError(mw.T(), err, "Failed to create a new standard user.")
 
 	log.Infof("Verify that the project owner is able to add the new user %s to the project %s with 'Manage Workloads' role.", workloadUser.Username, adminProject.Name)
-	_, errUserRole := rbac.CreateProjectRoleTemplateBinding(mw.client, workloadUser, adminProject, rbac.ManageWorkloads.String())
+	_, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(mw.client, workloadUser, adminProject, rbac.ManageWorkloads.String())
 	require.NoError(mw.T(), errUserRole, "Project owner failed to add the new user to the project with 'Manage Workloads' role.")
 	workloadUserClient, err = workloadUserClient.ReLogin()
 	require.NoError(mw.T(), err)
@@ -134,7 +135,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsPermissions() {
 		}
 	}
 
-	err = rbac.VerifyRoleRules(expectedRules, actualRules)
+	err = rbacapi.VerifyRoleRules(expectedRules, actualRules)
 	require.NoError(mw.T(), err, "role rules verification failed")
 }
 

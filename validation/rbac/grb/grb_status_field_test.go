@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
@@ -58,7 +59,7 @@ func (grbs *GlobalRoleBindingStatusFieldTestSuite) TestGlobalRoleBindingStatusFi
 	require.NoError(grbs.T(), err)
 
 	log.Info("Verify that the global role binding is created for the user.")
-	grb, err := rbac.GetGlobalRoleBindingByUserAndRole(grbs.client, createdUser.ID, createdGlobalRole.Name)
+	grb, err := rbacapi.GetGlobalRoleBindingByUserAndRole(grbs.client, createdUser.ID, createdGlobalRole.Name)
 	require.NoError(grbs.T(), err)
 	require.NotEmpty(grbs.T(), grb, "Global Role Binding not found for the user")
 
@@ -76,7 +77,7 @@ func (grbs *GlobalRoleBindingStatusFieldTestSuite) TestGlobalRoleBindingStatusFi
 	require.NoError(grbs.T(), err)
 
 	log.Info("Verify that the global role binding is created for the user.")
-	grb, err := rbac.GetGlobalRoleBindingByUserAndRole(grbs.client, createdUser.ID, rbac.Admin.String())
+	grb, err := rbacapi.GetGlobalRoleBindingByUserAndRole(grbs.client, createdUser.ID, rbac.Admin.String())
 	require.NoError(grbs.T(), err)
 	require.NotEmpty(grbs.T(), grb, "Global Role Binding not found for the user")
 
@@ -94,7 +95,7 @@ func (grbs *GlobalRoleBindingStatusFieldTestSuite) TestGlobalRoleBindingStatusFi
 	require.NoError(grbs.T(), err)
 
 	log.Info("Verify that the global role binding is created for the user.")
-	grb, err := rbac.GetGlobalRoleBindingByUserAndRole(grbs.client, createdUser.ID, createdGlobalRole.Name)
+	grb, err := rbacapi.GetGlobalRoleBindingByUserAndRole(grbs.client, createdUser.ID, createdGlobalRole.Name)
 	require.NoError(grbs.T(), err)
 	require.NotEmpty(grbs.T(), grb, "Global Role Binding not found for the user")
 
@@ -109,7 +110,7 @@ func (grbs *GlobalRoleBindingStatusFieldTestSuite) TestGlobalRoleBindingStatusFi
 	var updatedGrb *v3.GlobalRoleBinding
 	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.TwoMinuteTimeout, defaults.TwoMinuteTimeout, false, func(ctx context.Context) (bool, error) {
 		var err error
-		updatedGrb, err = rbac.GetGlobalRoleBindingByUserAndRole(grbs.client, createdUser.ID, createdGlobalRole.Name)
+		updatedGrb, err = rbacapi.GetGlobalRoleBindingByUserAndRole(grbs.client, createdUser.ID, createdGlobalRole.Name)
 		if err != nil {
 			return false, err
 		}
@@ -145,7 +146,7 @@ func (grbs *GlobalRoleBindingStatusFieldTestSuite) TestGlobalRoleBindingStatusFi
 	require.NoError(grbs.T(), err)
 
 	log.Info("Verify that the global role binding is created for the user.")
-	grb, err := rbac.GetGlobalRoleBindingByUserAndRole(grbs.client, createdUser.ID, rbac.Admin.String())
+	grb, err := rbacapi.GetGlobalRoleBindingByUserAndRole(grbs.client, createdUser.ID, rbac.Admin.String())
 	require.NoError(grbs.T(), err)
 	require.NotEmpty(grbs.T(), grb, "Global Role Binding not found for the user")
 

@@ -13,6 +13,7 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/users"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
@@ -35,7 +36,7 @@ func VerifyGlobalRoleBindingsForUser(t *testing.T, user *management.User, adminC
 
 // VerifyRoleBindingsForUser validates that the corresponding role bindings are created for the user
 func VerifyRoleBindingsForUser(t *testing.T, user *management.User, adminClient *rancher.Client, clusterID string, role Role, expectedCount int) {
-	rblist, err := rbacapi.ListRoleBindings(adminClient, LocalCluster, clusterID, metav1.ListOptions{})
+	rblist, err := rbacapi.ListRoleBindings(adminClient, clusterapi.LocalCluster, clusterID, metav1.ListOptions{})
 	require.NoError(t, err)
 	userID := user.Resource.ID
 	userRoleBindings := []string{}
@@ -194,7 +195,7 @@ func VerifyUserCanAddClusterRoles(t *testing.T, client, memberClient *rancher.Cl
 	additionalClusterUser, err := users.CreateUserWithRole(client, users.UserConfig(), StandardUser.String())
 	require.NoError(t, err)
 
-	_, errUserRole := CreateClusterRoleTemplateBinding(memberClient, cluster.ID, additionalClusterUser, ClusterOwner.String())
+	_, errUserRole := rbacapi.CreateClusterRoleTemplateBinding(memberClient, cluster.ID, additionalClusterUser, ClusterOwner.String())
 	switch role {
 	case ProjectOwner, ProjectMember:
 		require.Error(t, errUserRole)
@@ -205,7 +206,7 @@ func VerifyUserCanAddClusterRoles(t *testing.T, client, memberClient *rancher.Cl
 // VerifyUserCanAddProjectRoles validates a user with the required cluster permissions are able/not able to add other users in a project on the downstream cluster
 func VerifyUserCanAddProjectRoles(t *testing.T, client *rancher.Client, project *v3.Project, additionalUser *management.User, projectRole, clusterID string, role Role) {
 
-	_, errUserRole := CreateProjectRoleTemplateBinding(client, additionalUser, project, projectRole)
+	_, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(client, additionalUser, project, projectRole)
 	switch role {
 	case ProjectOwner:
 		require.NoError(t, errUserRole)
@@ -232,52 +233,4 @@ func VerifyUserCanDeleteProject(t *testing.T, client *rancher.Client, project *v
 func VerifyUserCanRemoveClusterRoles(t *testing.T, client *rancher.Client, user *management.User) {
 	err := users.RemoveClusterRoleFromUser(client, user)
 	require.NoError(t, err)
-}
-
-// VerifyClusterRoleTemplateBindingForUser is a helper function to verify the number of cluster role template bindings for a user
-func VerifyClusterRoleTemplateBindingForUser(client *rancher.Client, username string, expectedCount int) ([]v3.ClusterRoleTemplateBinding, error) {
-	crtbList, err := rbacapi.ListClusterRoleTemplateBindings(client, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list ClusterRoleTemplateBindings: %w", err)
-	}
-
-	userCrtbs := []v3.ClusterRoleTemplateBinding{}
-	actualCount := 0
-	for _, crtb := range crtbList.Items {
-		if crtb.UserName == username {
-			userCrtbs = append(userCrtbs, crtb)
-			actualCount++
-		}
-	}
-
-	if actualCount != expectedCount {
-		return nil, fmt.Errorf("expected %d ClusterRoleTemplateBindings for user %s, but found %d",
-			expectedCount, username, actualCount)
-	}
-
-	return userCrtbs, nil
-}
-
-// VerifyProjectRoleTemplateBindingForUser is a helper function to verify the number of project role template bindings for a user
-func VerifyProjectRoleTemplateBindingForUser(client *rancher.Client, username string, expectedCount int) ([]v3.ProjectRoleTemplateBinding, error) {
-	prtbList, err := rbacapi.ListProjectRoleTemplateBindings(client, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list ProjectRoleTemplateBindings: %w", err)
-	}
-
-	userPrtbs := []v3.ProjectRoleTemplateBinding{}
-	actualCount := 0
-	for _, prtb := range prtbList.Items {
-		if prtb.UserName == username {
-			userPrtbs = append(userPrtbs, prtb)
-			actualCount++
-		}
-	}
-
-	if actualCount != expectedCount {
-		return nil, fmt.Errorf("expected %d ProjectRoleTemplateBindings for user %s, but found %d",
-			expectedCount, username, actualCount)
-	}
-
-	return userPrtbs, nil
 }

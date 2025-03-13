@@ -20,7 +20,7 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
-	"github.com/rancher/tests/actions/rbac"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
@@ -247,7 +247,7 @@ func UpdateOrRemoveEnvVarForDeployment(client *rancher.Client, namespaceName, de
 		}
 	}
 
-	_, err = UpdateDeployment(client, rbac.LocalCluster, namespaceName, modifiedDeployment, true)
+	_, err = UpdateDeployment(client, clusterapi.LocalCluster, namespaceName, modifiedDeployment, true)
 	if err != nil {
 		return fmt.Errorf("error updating deployment %s in namespace %s: %w", deploymentName, namespaceName, err)
 	}

@@ -9,6 +9,7 @@ import (
 	v3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/session"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/rbac"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -218,7 +219,7 @@ func UpdateAccessMode(client *rancher.Client, providerName, accessMode string, a
 // SetupRequiredAccessModePrincipals creates cluster role binding and prepares principal IDs for required access mode tests
 func SetupRequiredAccessModePrincipals(authAdmin *rancher.Client, clusterID string, authConfig *AuthConfig, providerName, userSearchBase, groupSearchBase string) ([]string, error) {
 	groupPrincipalID := GetGroupPrincipalID(providerName, authConfig.Group, userSearchBase, groupSearchBase)
-	_, err := rbac.CreateGroupClusterRoleTemplateBinding(authAdmin, clusterID, groupPrincipalID, rbac.ClusterMember.String())
+	_, err := rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, clusterID, groupPrincipalID, rbac.ClusterMember.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cluster role binding: %w", err)
 	}

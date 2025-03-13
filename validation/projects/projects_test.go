@@ -13,7 +13,6 @@ import (
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
-	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/deployment"
@@ -56,7 +55,7 @@ func (pr *ProjectsTestSuite) TestProjectsCrudLocalCluster() {
 	defer subSession.Cleanup()
 
 	log.Info("Create a project in the local cluster and verify that the project can be listed.")
-	createdProject, err := projectapi.CreateProject(pr.client, rbacapi.LocalCluster)
+	createdProject, err := projectapi.CreateProject(pr.client, clusterapi.LocalCluster)
 	require.NoError(pr.T(), err)
 
 	projectList, err := projectapi.ListProjects(pr.client, createdProject.Namespace, metav1.ListOptions{
@@ -138,14 +137,14 @@ func (pr *ProjectsTestSuite) TestDeleteSystemProject() {
 	defer subSession.Cleanup()
 
 	log.Info("Delete the System Project in the local cluster.")
-	projectList, err := projectapi.ListProjects(pr.client, rbacapi.LocalCluster, metav1.ListOptions{
+	projectList, err := projectapi.ListProjects(pr.client, clusterapi.LocalCluster, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", projectapi.SystemProjectLabel, "true"),
 	})
 	require.NoError(pr.T(), err)
 	require.Equal(pr.T(), 1, len(projectList.Items), "Expected one project in the list")
 
 	systemProjectName := projectList.Items[0].ObjectMeta.Name
-	err = projectapi.DeleteProject(pr.client, rbacapi.LocalCluster, systemProjectName)
+	err = projectapi.DeleteProject(pr.client, clusterapi.LocalCluster, systemProjectName)
 	require.Error(pr.T(), err, "Failed to delete project")
 	expectedErrorMessage := "admission webhook \"rancher.cattle.io.projects.management.cattle.io\" denied the request: System Project cannot be deleted"
 	require.Equal(pr.T(), expectedErrorMessage, err.Error())

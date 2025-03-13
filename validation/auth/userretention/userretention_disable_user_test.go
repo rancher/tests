@@ -11,7 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/auth"
-	"github.com/rancher/tests/actions/rbac"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -100,7 +100,7 @@ func (ur *URDisableTestSuite) TestAdminUserGetDisabled() {
 	require.NoError(ur.T(), err)
 	require.Equal(ur.T(), isActive, *(userReLogin).Enabled)
 
-	bindingsBefore, err := rbac.GetBindings(ur.client, newAdminUser.ID)
+	bindingsBefore, err := rbacapi.GetBindings(ur.client, newAdminUser.ID)
 	require.NoError(ur.T(), err, "Failed to get initial bindings")
 
 	logrus.Info("Polling user status")
@@ -114,7 +114,7 @@ func (ur *URDisableTestSuite) TestAdminUserGetDisabled() {
 	logrus.Info("Attempting login with disabled user")
 	_, err = auth.GetUserAfterLogin(ur.client, *newAdminUser)
 	require.ErrorContains(ur.T(), err, forbiddenError)
-	bindingsAfter, err := rbac.GetBindings(ur.client, newAdminUser.ID)
+	bindingsAfter, err := rbacapi.GetBindings(ur.client, newAdminUser.ID)
 	require.NoError(ur.T(), err, "Failed to get final bindings")
 	ur.assertBindingsEqual(bindingsBefore, bindingsAfter)
 
@@ -135,7 +135,7 @@ func (ur *URDisableTestSuite) TestStandardUserGetDisabled() {
 	require.Equal(ur.T(), isActive, *(userReLogin).Enabled)
 
 	logrus.Info("Getting initial bindings")
-	bindingsBefore, err := rbac.GetBindings(ur.client, newStdUser.ID)
+	bindingsBefore, err := rbacapi.GetBindings(ur.client, newStdUser.ID)
 	require.NoError(ur.T(), err, "Failed to get initial bindings")
 
 	logrus.Info("Polling user status")
@@ -151,7 +151,7 @@ func (ur *URDisableTestSuite) TestStandardUserGetDisabled() {
 	require.ErrorContains(ur.T(), err, forbiddenError)
 
 	logrus.Info("Getting final bindings")
-	bindingsAfter, err := rbac.GetBindings(ur.client, newStdUser.ID)
+	bindingsAfter, err := rbacapi.GetBindings(ur.client, newStdUser.ID)
 	require.NoError(ur.T(), err, "Failed to get final bindings")
 	ur.assertBindingsEqual(bindingsBefore, bindingsAfter)
 }
@@ -171,7 +171,7 @@ func (ur *URDisableTestSuite) TestDisabledUserGetEnabled() {
 	require.Equal(ur.T(), isActive, *(userReLogin).Enabled)
 
 	logrus.Info("Getting initial bindings")
-	bindingsBefore, err := rbac.GetBindings(ur.client, newStdUser.ID)
+	bindingsBefore, err := rbacapi.GetBindings(ur.client, newStdUser.ID)
 	require.NoError(ur.T(), err, "Failed to get initial bindings")
 
 	logrus.Info("Polling user status to disable")
@@ -199,7 +199,7 @@ func (ur *URDisableTestSuite) TestDisabledUserGetEnabled() {
 	require.Equal(ur.T(), isActive, *(activeUserReLogin).Enabled)
 
 	logrus.Info("Getting final bindings")
-	bindingsAfterEnabled, err := rbac.GetBindings(ur.client, newStdUser.ID)
+	bindingsAfterEnabled, err := rbacapi.GetBindings(ur.client, newStdUser.ID)
 	require.NoError(ur.T(), err, "Failed to get final bindings")
 	ur.assertBindingsEqual(bindingsBefore, bindingsAfterEnabled)
 }
@@ -241,7 +241,7 @@ func (ur *URDisableTestSuite) TestUserDisableByUpdatingUserattributes() {
 	require.NoError(ur.T(), err)
 
 	logrus.Info("Getting initial bindings")
-	bindingsBefore, err := rbac.GetBindings(ur.client, newStdUser.ID)
+	bindingsBefore, err := rbacapi.GetBindings(ur.client, newStdUser.ID)
 	require.NoError(ur.T(), err, "Failed to get initial bindings")
 
 	logrus.Info("Updating user attributes")
@@ -269,7 +269,7 @@ func (ur *URDisableTestSuite) TestUserDisableByUpdatingUserattributes() {
 	require.ErrorContains(ur.T(), err, forbiddenError)
 
 	logrus.Info("Getting final bindings")
-	bindingsAfter, err := rbac.GetBindings(ur.client, newStdUser.ID)
+	bindingsAfter, err := rbacapi.GetBindings(ur.client, newStdUser.ID)
 	require.NoError(ur.T(), err, "Failed to get final bindings")
 	ur.assertBindingsEqual(bindingsBefore, bindingsAfter)
 }
@@ -288,7 +288,7 @@ func (ur *URDisableTestSuite) TestUserIsNotDisabledWithDryRun() {
 	require.NoError(ur.T(), err)
 
 	logrus.Info("Getting initial bindings")
-	bindingsBefore, err := rbac.GetBindings(ur.client, newStdUser.ID)
+	bindingsBefore, err := rbacapi.GetBindings(ur.client, newStdUser.ID)
 	require.NoError(ur.T(), err, "Failed to get initial bindings")
 
 	logrus.Info("Updating user attributes")
@@ -312,7 +312,7 @@ func (ur *URDisableTestSuite) TestUserIsNotDisabledWithDryRun() {
 	require.Equal(ur.T(), isActive, *(userReLogin).Enabled)
 
 	logrus.Info("Getting final bindings")
-	bindingsAfter, err := rbac.GetBindings(ur.client, newStdUser.ID)
+	bindingsAfter, err := rbacapi.GetBindings(ur.client, newStdUser.ID)
 	require.NoError(ur.T(), err, "Failed to get final bindings")
 	ur.assertBindingsEqual(bindingsBefore, bindingsAfter)
 

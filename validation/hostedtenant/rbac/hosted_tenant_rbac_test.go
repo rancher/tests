@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/hostedtenant"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -59,7 +60,7 @@ func (h *HostedRancherTestSuite) TestGlobalRoleInheritedClusterRoles() {
 
 	log.Info("Create global role with inheritedClusterRoles")
 	inheritedClusterRoles := []string{rbac.ClusterOwner.String()}
-	createdGlobalRole, err := rbac.CreateGlobalRoleWithInheritedClusterRolesWrangler(h.hostClient, inheritedClusterRoles)
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(h.hostClient, inheritedClusterRoles)
 	require.NoError(h.T(), err)
 
 	log.Info("Verify the global role is created on the hosted Rancher")
@@ -75,32 +76,32 @@ func (h *HostedRancherTestSuite) TestGlobalRoleInheritedClusterRoles() {
 	require.NoError(h.T(), err)
 
 	log.Info("Verify global role bindings on host")
-	hostGrb, err := rbac.GetGlobalRoleBindingByUserAndRole(h.hostClient, createdUser.ID, createdGlobalRole.Name)
+	hostGrb, err := rbacapi.GetGlobalRoleBindingByUserAndRole(h.hostClient, createdUser.ID, createdGlobalRole.Name)
 	require.NoError(h.T(), err)
 	require.Equal(h.T(), hostGrb.GlobalRoleName, createdGlobalRole.Name)
 
 	log.Info("Verify no global role bindings on tenant")
-	_, err = rbac.GetGlobalRoleBindingByUserAndRole(h.tenantClient, createdUser.ID, createdGlobalRole.Name)
+	_, err = rbacapi.GetGlobalRoleBindingByUserAndRole(h.tenantClient, createdUser.ID, createdGlobalRole.Name)
 	require.Error(h.T(), err, "Expected error because global role binding should not exist on tenant")
 	require.Contains(h.T(), err.Error(), "context deadline exceeded", "Expected timeout error when GRB is not found")
 
 	grbName := hostGrb.Name
 
 	log.Info("Verify CRTB on host")
-	crtbs, err := rbac.ListCRTBsByLabel(h.hostClient, rbac.GrbOwnerLabel, grbName, len(inheritedClusterRoles))
+	crtbs, err := rbacapi.ListCRTBsByLabel(h.hostClient, rbac.GrbOwnerLabel, grbName, len(inheritedClusterRoles))
 	require.NoError(h.T(), err)
 	require.GreaterOrEqual(h.T(), len(crtbs.Items), len(inheritedClusterRoles), "Should have CRTBs on host")
 
 	log.Info("Verify role bindings on host")
 	for _, crtb := range crtbs.Items {
 		namespaces := []string{rbac.GlobalDataNS, crtb.ClusterName}
-		userRBs, err := rbac.GetRoleBindingsForUsers(h.hostClient, crtb.UserName, namespaces)
+		userRBs, err := rbacapi.GetRoleBindingsForUsers(h.hostClient, crtb.UserName, namespaces)
 		require.NoError(h.T(), err)
 		require.Greater(h.T(), len(userRBs), 0, "Should have role bindings on host for user %s", crtb.UserName)
 	}
 
 	log.Info("Verify cluster role bindings on host")
-	userCRBs, err := rbac.GetClusterRoleBindingsForUsers(h.hostClient, crtbs)
+	userCRBs, err := rbacapi.GetClusterRoleBindingsForUsers(h.hostClient, crtbs)
 	require.NoError(h.T(), err)
 	require.Greater(h.T(), len(userCRBs), 0, "Should have cluster role bindings on host")
 

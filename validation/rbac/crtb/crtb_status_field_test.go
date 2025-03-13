@@ -13,7 +13,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/kubectl"
-	"github.com/rancher/shepherd/pkg/namegenerator"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
@@ -67,7 +67,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldCreateAndVerify() {
 	require.NoError(crtbs.T(), err)
 
 	log.Info("Verify that the CRTB status field and the sub-fields are correct")
-	userCRTBList, err := rbac.GetClusterRoleTemplateBindingsForUser(crtbs.client, user.ID)
+	userCRTBList, err := rbacapi.GetClusterRoleTemplateBindingsForUser(crtbs.client, user.ID)
 	require.NoError(crtbs.T(), err)
 	userCRTB := userCRTBList
 	err = verifyClusterRoleTemplateBindingStatusField(userCRTB)
@@ -85,7 +85,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldVerifyReconciliation()
 	log.Infof("Create and add a standard user to downstream cluster with role Cluster Owner")
 	user, _, err := rbac.AddUserWithRoleToCluster(crtbs.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), crtbs.cluster, adminProject)
 	require.NoError(crtbs.T(), err)
-	userCRTBList, err := rbac.GetClusterRoleTemplateBindingsForUser(crtbs.client, user.ID)
+	userCRTBList, err := rbacapi.GetClusterRoleTemplateBindingsForUser(crtbs.client, user.ID)
 	require.NoError(crtbs.T(), err)
 
 	log.Info("Add environment variable CATTLE_RESYNC_DEFAULT and set it to 1 minute")
@@ -150,8 +150,8 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldUpdateAndVerify() {
 			},
 		},
 	}
-	customClusterRole.Name = namegenerator.AppendRandomString("test")
-	createdCustomClusterRoleTemplate, err := rbacapi.CreateRoleTemplate(crtbs.client, customClusterRole)
+	customClusterRole.Name = namegen.AppendRandomString("test")
+	createdCustomClusterRoleTemplate, err := crtbs.client.WranglerContext.Mgmt.RoleTemplate().Create(customClusterRole)
 	require.NoError(crtbs.T(), err)
 
 	log.Info("Create a project and a namespace in the project")
@@ -164,7 +164,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldUpdateAndVerify() {
 	userID := user.Resource.ID
 
 	log.Info("Verify that the CRTB status field and the sub-fields are correct")
-	userCRTBList, err := rbac.GetClusterRoleTemplateBindingsForUser(crtbs.client, userID)
+	userCRTBList, err := rbacapi.GetClusterRoleTemplateBindingsForUser(crtbs.client, userID)
 	require.NoError(crtbs.T(), err)
 	userCRTB := userCRTBList
 	err = verifyClusterRoleTemplateBindingStatusField(userCRTB)
@@ -179,12 +179,12 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldUpdateAndVerify() {
 	require.NoError(crtbs.T(), err)
 
 	log.Info("Deleting custom cluster role template")
-	err = rbacapi.DeleteRoletemplate(crtbs.client, customClusterRole.Name)
+	err = rbacapi.DeleteRoletemplate(crtbs.client, createdCustomClusterRoleTemplate.Name)
 	require.NoError(crtbs.T(), err)
 
 	log.Info("Verifying CRTB Status field after deleting custom cluster role template")
 	err = wait.PollUntilContextTimeout(context.TODO(), defaults.OneMinuteTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
-		updatedCRTBList, err := rbac.GetClusterRoleTemplateBindingsForUser(crtbs.client, userID)
+		updatedCRTBList, err := rbacapi.GetClusterRoleTemplateBindingsForUser(crtbs.client, userID)
 		if err != nil {
 			return false, err
 		}
@@ -224,7 +224,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldKubectlDescribe() {
 	require.NoError(crtbs.T(), err)
 	userID := user.Resource.ID
 
-	userCRTBList, err := rbac.GetClusterRoleTemplateBindingsForUser(crtbs.client, userID)
+	userCRTBList, err := rbacapi.GetClusterRoleTemplateBindingsForUser(crtbs.client, userID)
 	require.NoError(crtbs.T(), err)
 	userCRTB := userCRTBList
 
