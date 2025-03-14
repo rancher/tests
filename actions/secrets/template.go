@@ -16,3 +16,16 @@ func NewSecretTemplate(secretName, namespaceName string, data map[string][]byte,
 		Type: secretType,
 	}
 }
+
+// NewSecretTemplateWithAnnotations is a constructor that creates the secret template for secrets and includes provided annotations
+func NewSecretTemplateWithAnnotations(secretName, namespaceName string, data map[string][]byte, annotations map[string]string, secretType corev1.SecretType) corev1.Secret {
+	return corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        secretName,
+			Namespace:   namespaceName,
+			Annotations: annotations,
+		},
+		Data: data,
+		Type: secretType,
+	}
+}

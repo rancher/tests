@@ -14,8 +14,7 @@ import (
 	"github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	"github.com/rancher/tests/actions/clusters"
-	"github.com/rancher/tests/actions/provisioning/permutations"
+	"github.com/rancher/tests/actions/cloudprovider"
 	"github.com/rancher/tests/actions/services"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -30,7 +29,7 @@ const (
 	enableLeaderMigration       = "enable-leader-migration"
 	fleetNamespace              = "fleet-default"
 
-	outOfTreeAWSYamlPath = "../provisioning/resources/out-of-tree/aws.yml"
+	outOfTreeAWSYamlPath = "../../actions/cloudprovider/resources/out-of-tree/aws.yml"
 )
 
 var (
@@ -130,7 +129,7 @@ func rke1AWSCloudProviderMigration(t *testing.T, client *rancher.Client, cluster
 	_, steveClusterObject, err := extensionscluster.GetProvisioningClusterByName(client, clusterName, fleetNamespace)
 	require.NoError(t, err)
 
-	lbServiceResponse := permutations.CreateCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
+	lbServiceResponse := cloudprovider.CreateAWSCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
 
 	status := &provv1.ClusterStatus{}
 	require.NotNil(t, steveClusterObject)
@@ -169,7 +168,7 @@ func rke1AWSCloudProviderMigration(t *testing.T, client *rancher.Client, cluster
 	clusterMeta, err := extensionscluster.NewClusterMeta(client, status.ClusterName)
 	require.NoError(t, err)
 
-	err = permutations.CreateAndInstallAWSExternalCharts(client, clusterMeta, true)
+	err = cloudprovider.CreateAndInstallAWSExternalCharts(client, clusterMeta, true)
 	require.NoError(t, err)
 
 	newRKE1Cluster = rke1Cluster
@@ -203,14 +202,14 @@ func rke1AWSCloudProviderMigration(t *testing.T, client *rancher.Client, cluster
 
 	services.VerifyAWSLoadBalancer(t, client, lbServiceResponse, status.ClusterName)
 
-	lbServiceResponseOOT := permutations.CreateCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
+	lbServiceResponseOOT := cloudprovider.CreateAWSCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
 
 	services.VerifyAWSLoadBalancer(t, client, lbServiceResponseOOT, status.ClusterName)
 }
 
 // rke2AWSCloudProviderMigration is a helper function to migrate from aws in-tree to out-of-tree on rke2 clusters
 func rke2AWSCloudProviderMigration(t *testing.T, client *rancher.Client, steveClusterObject *steveV1.SteveAPIObject) {
-	lbServiceResponse := permutations.CreateCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
+	lbServiceResponse := cloudprovider.CreateAWSCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
 
 	status := &provv1.ClusterStatus{}
 	require.NotNil(t, steveClusterObject)
@@ -253,7 +252,7 @@ func rke2AWSCloudProviderMigration(t *testing.T, client *rancher.Client, steveCl
 	err = steveV1.ConvertToK8sType(steveClusterObject.Spec, spec)
 	require.NoError(t, err)
 
-	outOfTreeSystemConfig := clusters.OutOfTreeSystemConfig("aws")
+	outOfTreeSystemConfig := cloudprovider.OutOfTreeSystemConfig("aws")
 	spec.RKEConfig.MachineSelectorConfig = enableLeaderMigrationInMachineSelector(outOfTreeSystemConfig)
 
 	byteYaml, err := os.ReadFile(outOfTreeAWSYamlPath)
@@ -288,7 +287,7 @@ func rke2AWSCloudProviderMigration(t *testing.T, client *rancher.Client, steveCl
 
 	services.VerifyAWSLoadBalancer(t, client, lbServiceResponse, status.ClusterName)
 
-	lbServiceResponseOOT := permutations.CreateCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
+	lbServiceResponseOOT := cloudprovider.CreateAWSCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
 
 	services.VerifyAWSLoadBalancer(t, client, lbServiceResponseOOT, status.ClusterName)
 }

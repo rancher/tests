@@ -14,9 +14,8 @@ import (
 
 type UpgradeCloudProviderSuite struct {
 	suite.Suite
-	session  *session.Session
-	client   *rancher.Client
-	clusters []string
+	session *session.Session
+	client  *rancher.Client
 }
 
 func (u *UpgradeCloudProviderSuite) TearDownSuite() {

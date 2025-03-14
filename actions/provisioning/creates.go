@@ -14,14 +14,12 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 
 	apiv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
-	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/aws"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/azure"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/google"
-	"github.com/rancher/shepherd/extensions/cloudcredentials/vsphere"
 	shepherdclusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/aks"
 	"github.com/rancher/shepherd/extensions/clusters/eks"
@@ -35,6 +33,7 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/shepherd/pkg/wait"
+	"github.com/rancher/tests/actions/cloudprovider"
 	"github.com/rancher/tests/actions/clusters"
 	k3sHardening "github.com/rancher/tests/actions/hardening/k3s"
 	rke1Hardening "github.com/rancher/tests/actions/hardening/rke1"
@@ -136,29 +135,17 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, cluste
 	machinePools := machinepools.
 		CreateAllMachinePools(machineConfigs, pools, machinePoolResponses, provider.Roles, hostnameTruncation)
 
+	additionalData := make(map[string]interface{})
 	if clustersConfig.CloudProvider == provisioninginput.VsphereCloudProviderName.String() {
+		additionalData["datacenter"] = machinePoolConfigs[0].Object["datacenter"]
+		additionalData["datastoreUrl"] = machinePoolConfigs[0].Object["datastoreUrl"]
+	} else if clustersConfig.CloudProvider == provisioninginput.HarvesterProviderName.String() {
+		additionalData["clusterName"] = clusterName
+	}
 
-		vcenterCredentials := map[string]interface{}{
-			"datacenters": machinePoolConfigs[0].Object["datacenter"],
-			"host":        credentialSpec.VmwareVsphereConfig.Vcenter,
-			"password":    vsphere.GetVspherePassword(),
-			"username":    credentialSpec.VmwareVsphereConfig.Username,
-		}
-		clustersConfig.AddOnConfig = &provisioninginput.AddOnConfig{
-			ChartValues: &rkev1.GenericMap{
-				Data: map[string]interface{}{
-					"rancher-vsphere-cpi": map[string]interface{}{
-						"vCenter": vcenterCredentials,
-					},
-					"rancher-vsphere-csi": map[string]interface{}{
-						"storageClass": map[string]interface{}{
-							"datastoreURL": machinePoolConfigs[0].Object["datastoreUrl"],
-						},
-						"vCenter": vcenterCredentials,
-					},
-				},
-			},
-		}
+	clustersConfig, err = cloudprovider.CreateCloudProviderAddOns(client, clustersConfig, credentialSpec, additionalData)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster := clusters.NewK3SRKE2ClusterConfig(clusterName, namespace, clustersConfig, machinePools, cloudCredential.Namespace+":"+cloudCredential.Name)

@@ -57,7 +57,10 @@ replace (
 	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.8.3
 )
 
-require github.com/rancher/rancher/pkg/apis v0.0.0
+require (
+	github.com/rancher/rancher/pkg/apis v0.0.0
+	github.com/rancher/shepherd v0.0.0-20250314164437-2d4a7f28d9d4
+)
 
 require (
 	github.com/aws/aws-sdk-go v1.55.5
@@ -65,7 +68,6 @@ require (
 	github.com/rancher/machine v0.15.0-rancher126
 	github.com/rancher/norman v0.5.2
 	github.com/rancher/rancher v0.0.0-20250228094653-6e82729d08cf
-	github.com/rancher/shepherd v0.0.0-20250313161034-078bebe708e3
 	github.com/rancher/wrangler v1.1.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0

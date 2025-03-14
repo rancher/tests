@@ -60,6 +60,7 @@ func (u *UpgradeWindowsKubernetesTestSuite) TestUpgradeWindowsKubernetes() {
 					"clusterId": updatedClusterID,
 				},
 			})
+			require.NoError(u.T(), err)
 
 			for _, node := range nodes.Data {
 				if tt.nodeSelector["kubernetes.io/os"] == "windows" {
@@ -68,7 +69,7 @@ func (u *UpgradeWindowsKubernetesTestSuite) TestUpgradeWindowsKubernetes() {
 			}
 
 			testConfig := clusters.ConvertConfigToClusterConfig(&cluster.ProvisioningInput)
-			upgradeDownstreamCluster(&u.Suite, tt.name, tt.client, cluster.Name, testConfig, cluster, tt.nodeSelector)
+			upgradeDownstreamCluster(&u.Suite, tt.name, tt.client, cluster.Name, testConfig, cluster)
 		}
 	}
 }

@@ -15,9 +15,11 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extensionClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extdefault "github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/ingresses"
 	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/extensions/sshkeys"
+	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/sirupsen/logrus"
@@ -61,7 +63,7 @@ func VerifyAWSLoadBalancer(t *testing.T, client *rancher.Client, serviceLB *v1.S
 	require.NoError(t, err)
 
 	lbHostname := ""
-	err = kwait.Poll(5*time.Second, 1*time.Minute, func() (done bool, err error) {
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, extdefault.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		updateService, err := steveclient.SteveType("service").ByID(serviceLB.ID)
 		if err != nil {
 			return false, nil
@@ -81,7 +83,7 @@ func VerifyAWSLoadBalancer(t *testing.T, client *rancher.Client, serviceLB *v1.S
 	})
 	require.NoError(t, err)
 
-	err = kwait.Poll(5*time.Second, 3*time.Minute, func() (done bool, err error) {
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, extdefault.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		isIngressAccessible, err := ingresses.IsIngressExternallyAccessible(client, lbHostname, "", false)
 		if err != nil {
 			if strings.Contains(err.Error(), noSuchHostSubString) {
@@ -93,6 +95,56 @@ func VerifyAWSLoadBalancer(t *testing.T, client *rancher.Client, serviceLB *v1.S
 		return isIngressAccessible, nil
 	})
 	require.NoError(t, err)
+
+	podErrors := pods.StatusPods(client, clusterName)
+	require.Empty(t, podErrors)
+}
+
+// VerifyHarvesterLoadBalancer validates that an AWS loadbalancer service is created and working properly
+func VerifyHarvesterLoadBalancer(t *testing.T, client *rancher.Client, serviceLB *v1.SteveAPIObject, clusterName string) {
+	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
+	require.NoError(t, err)
+
+	steveclient, err := adminClient.Steve.ProxyDownstream(clusterName)
+	require.NoError(t, err)
+
+	lbHostname := ""
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, extdefault.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		updateService, err := steveclient.SteveType("service").ByID(serviceLB.ID)
+		if err != nil {
+			return false, nil
+		}
+
+		serviceStatus := &corev1.ServiceStatus{}
+		err = v1.ConvertToK8sType(updateService.Status, serviceStatus)
+		if err != nil {
+			return false, err
+		}
+		if len(serviceStatus.LoadBalancer.Ingress) == 0 {
+			return false, nil
+		}
+
+		lbHostname = serviceStatus.LoadBalancer.Ingress[0].IP
+		return true, nil
+	})
+	require.NoError(t, err)
+
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, extdefault.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		isIngressAccessible, err := ingresses.IsIngressExternallyAccessible(client, lbHostname, "", false)
+		if err != nil {
+			if strings.Contains(err.Error(), noSuchHostSubString) {
+				return false, nil
+			}
+			return false, err
+		}
+
+		return isIngressAccessible, nil
+	})
+	require.NoError(t, err)
+
+	podErrors := pods.StatusPods(client, clusterName)
+	require.Empty(t, podErrors)
+
 }
 
 // VerifyClusterIP is a helper function that verifies the cluster is able to connect to the cluster ip service by ssh shell

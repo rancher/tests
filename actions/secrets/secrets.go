@@ -40,6 +40,31 @@ func CreateSecret(client *rancher.Client, clusterID, namespaceName string, data 
 	return createdSecret, nil
 }
 
+// CreateSecretWithAnnotations is a helper to create a secret and includes provided annotations using wrangler client
+func CreateSecretWithAnnotations(client *rancher.Client, clusterID, namespaceName string, data map[string][]byte, annotations map[string]string, secretType corev1.SecretType) (*corev1.Secret, error) {
+	var ctx *wrangler.Context
+	var err error
+
+	if clusterID != "local" {
+		ctx, err = client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get downstream context: %w", err)
+		}
+	} else {
+		ctx = client.WranglerContext
+	}
+
+	secretName := namegen.AppendRandomString("testsecret")
+	secretTemplate := NewSecretTemplateWithAnnotations(secretName, namespaceName, data, annotations, secretType)
+
+	createdSecret, err := ctx.Core.Secret().Create(&secretTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create secret: %w", err)
+	}
+
+	return createdSecret, nil
+}
+
 // UpdateSecretData is a helper to update the existing secret data with new  data
 func UpdateSecretData(secret *corev1.Secret, newData map[string][]byte) *corev1.Secret {
 	updatedSecretObj := secret.DeepCopy()

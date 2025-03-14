@@ -69,8 +69,8 @@ require (
 require (
 	github.com/harvester/harvester v1.4.1
 	github.com/rancher/rancher v0.0.0-20250228094653-6e82729d08cf
-	github.com/rancher/shepherd v0.0.0-20250313161034-078bebe708e3
-	github.com/rancher/tests/actions v0.0.0-00010101000000-000000000000
+	github.com/rancher/shepherd v0.0.0-20250314164437-2d4a7f28d9d4
+	github.com/rancher/tests/actions v0.0.0
 
 )
 

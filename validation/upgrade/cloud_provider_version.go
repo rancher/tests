@@ -8,8 +8,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/tests/actions/charts"
-	"github.com/rancher/tests/actions/provisioning/permutations"
-	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/cloudprovider"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -25,11 +24,5 @@ func upgradeVsphereCloudProviderCharts(t *testing.T, client *rancher.Client, clu
 	podErrors := pods.StatusPods(client, clusterID)
 	require.Empty(t, podErrors)
 
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	require.NoError(t, err)
-
-	clusterObject, err := adminClient.Steve.SteveType(clusters.ProvisioningSteveResourceType).ByID(provisioninginput.Namespace + "/" + clusterID)
-	require.NoError(t, err)
-
-	permutations.CreatePVCWorkload(t, client, clusterObject)
+	cloudprovider.CreatePVCWorkload(t, client, clusterID)
 }
