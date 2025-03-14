@@ -1,11 +1,15 @@
 package cloudprovider
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/sirupsen/logrus"
 
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/vsphere"
@@ -18,7 +22,7 @@ import (
 
 const (
 	harvesterRKE2CloudProviderConfigPath = "/var/lib/rancher/rke2/etc/config-files/cloud-provider-config"
-	outOfTreeAWSFilePath                 = "resources/out-of-tree/aws.yml"
+	outOfTreeAWSFilePath                 = "/../resources/out-of-tree/aws.yml"
 
 	kubeletArgKey                     = "kubelet-arg"
 	kubeletAPIServerArgKey            = "kubeapi-server-arg"
@@ -43,10 +47,33 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 	case provisioninginput.AWSProviderName.String():
 		currentSelectors = append(currentSelectors, OutOfTreeSystemConfig(clustersConfig.CloudProvider)...)
 
-		byteYaml, _ := os.ReadFile(outOfTreeAWSFilePath)
+		_, filePath, _, ok := runtime.Caller(0)
+		if !ok {
+			return nil, errors.New("Error retrieving file path")
+		}
+
+		filePath, err := filepath.Abs(filePath + outOfTreeAWSFilePath)
+		if err != nil {
+			return nil, err
+		}
+
+		logrus.Info(filePath)
+		byteYaml, _ := os.ReadFile(filePath)
 		clustersConfig.AddOnConfig = &provisioninginput.AddOnConfig{
 			AdditionalManifest: string(byteYaml),
 		}
+
+		if clustersConfig.Advanced == nil {
+			clustersConfig.Advanced = &provisioninginput.Advanced{}
+		}
+
+		if clustersConfig.Advanced.MachineGlobalConfig == nil {
+			clustersConfig.Advanced.MachineGlobalConfig = &rkev1.GenericMap{
+				Data: map[string]interface{}{},
+			}
+		}
+
+		clustersConfig.Advanced.MachineGlobalConfig.Data["cloud-provider-name"] = "aws"
 
 	case provisioninginput.VsphereCloudProviderName.String():
 		currentSelectors = append(currentSelectors, RKESystemConfigTemplate(map[string]interface{}{

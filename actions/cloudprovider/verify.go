@@ -88,6 +88,7 @@ func VerifyCloudProvider(t *testing.T, client *rancher.Client, clusterType strin
 			require.NoError(t, err)
 
 			services.VerifyAWSLoadBalancer(t, client, lbServiceResp, status.ClusterName)
+
 		} else if strings.Contains(testClusterConfig.CloudProvider, "external") {
 			rke1ClusterObject, err := adminClient.Management.Cluster.ByID(rke1ClusterObject.ID)
 			require.NoError(t, err)
@@ -103,14 +104,15 @@ func VerifyCloudProvider(t *testing.T, client *rancher.Client, clusterType strin
 				podErrors := pods.StatusPods(client, rke1ClusterObject.ID)
 				require.Empty(t, podErrors)
 
-				clusterObject, err := adminClient.Steve.SteveType(extensionscluster.ProvisioningSteveResourceType).ByID(provisioninginput.Namespace + "/" + rke1ClusterObject.ID)
-				require.NoError(t, err)
-
-				CreatePVCWorkload(t, client, clusterObject)
+				CreatePVCWorkload(t, client, rke1ClusterObject.ID)
 			}
 		}
 	} else if strings.Contains(clusterType, extensionscluster.RKE2ClusterType.String()) {
 		adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
+		require.NoError(t, err)
+
+		status := &provv1.ClusterStatus{}
+		err = steveV1.ConvertToK8sType(clusterObject.Status, status)
 		require.NoError(t, err)
 
 		if testClusterConfig.CloudProvider == provisioninginput.AWSProviderName.String() {
@@ -119,24 +121,21 @@ func VerifyCloudProvider(t *testing.T, client *rancher.Client, clusterType strin
 
 			lbServiceResp := CreateAWSCloudProviderWorkloadAndServicesLB(t, client, clusterObject)
 
-			status := &provv1.ClusterStatus{}
-			err = steveV1.ConvertToK8sType(clusterObject.Status, status)
-			require.NoError(t, err)
-
 			services.VerifyAWSLoadBalancer(t, client, lbServiceResp, status.ClusterName)
+
 		} else if testClusterConfig.CloudProvider == provisioninginput.HarvesterProviderName.String() {
 			clusterObject, err := adminClient.Steve.SteveType(extensionscluster.ProvisioningSteveResourceType).ByID(clusterObject.ID)
 			require.NoError(t, err)
 
 			lbServiceResp := CreateHarvesterCloudProviderWorkloadAndServicesLB(t, client, clusterObject)
 
-			status := &provv1.ClusterStatus{}
-			err = steveV1.ConvertToK8sType(clusterObject.Status, status)
-			require.NoError(t, err)
-
 			services.VerifyHarvesterLoadBalancer(t, client, lbServiceResp, status.ClusterName)
+
 		} else if testClusterConfig.CloudProvider == provisioninginput.VsphereCloudProviderName.String() {
-			CreatePVCWorkload(t, client, clusterObject)
+			CreatePVCWorkload(t, client, status.ClusterName)
+
+			podErrors := pods.StatusPods(client, status.ClusterName)
+			require.Empty(t, podErrors)
 		}
 	}
 }
@@ -218,18 +217,15 @@ func CreateHarvesterCloudProviderWorkloadAndServicesLB(t *testing.T, client *ran
 
 // CreatePVCWorkload creates a workload with a PVC for storage. This helper should be used to test
 // storage class functionality, i.e. for an in-tree / out-of-tree cloud provider
-func CreatePVCWorkload(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) *steveV1.SteveAPIObject {
-	status := &provv1.ClusterStatus{}
-	err := steveV1.ConvertToK8sType(cluster.Status, status)
-	require.NoError(t, err)
+func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string) *steveV1.SteveAPIObject {
 
 	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
 	require.NoError(t, err)
 
-	steveclient, err := adminClient.Steve.ProxyDownstream(status.ClusterName)
+	steveclient, err := adminClient.Steve.ProxyDownstream(clusterID)
 	require.NoError(t, err)
 
-	dynamicClient, err := client.GetDownStreamClusterClient(status.ClusterName)
+	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
 	require.NoError(t, err)
 
 	storageClassVolumesResource := dynamicClient.Resource(storageclasses.StorageClassGroupVersionResource).Namespace("")
@@ -253,7 +249,7 @@ func CreatePVCWorkload(t *testing.T, client *rancher.Client, cluster *steveV1.St
 
 	persistentVolumeClaim, err := persistentvolumeclaims.CreatePersistentVolumeClaim(
 		client,
-		status.ClusterName,
+		clusterID,
 		namegenerator.AppendRandomString("pvc"),
 		"test-pvc-volume",
 		defaultNamespace,

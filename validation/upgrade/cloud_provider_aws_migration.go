@@ -29,7 +29,7 @@ const (
 	enableLeaderMigration       = "enable-leader-migration"
 	fleetNamespace              = "fleet-default"
 
-	outOfTreeAWSYamlPath = "../provisioning/resources/out-of-tree/aws.yml"
+	outOfTreeAWSYamlPath = "../../actions/cloudprovider/resources/out-of-tree/aws.yml"
 )
 
 var (

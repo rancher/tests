@@ -138,7 +138,7 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, cluste
 	additionalData := make(map[string]interface{})
 	if clustersConfig.CloudProvider == provisioninginput.VsphereCloudProviderName.String() {
 		additionalData["datacenter"] = machinePoolConfigs[0].Object["datacenter"]
-		additionalData["datastoreURL"] = machinePoolConfigs[0].Object["datastoreUrl"]
+		additionalData["datastoreUrl"] = machinePoolConfigs[0].Object["datastoreUrl"]
 	} else if clustersConfig.CloudProvider == provisioninginput.HarvesterProviderName.String() {
 		additionalData["clusterName"] = clusterName
 	}

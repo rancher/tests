@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/shepherd/extensions/ingresses"
 	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/extensions/sshkeys"
+	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/sirupsen/logrus"
@@ -94,6 +95,9 @@ func VerifyAWSLoadBalancer(t *testing.T, client *rancher.Client, serviceLB *v1.S
 		return isIngressAccessible, nil
 	})
 	require.NoError(t, err)
+
+	podErrors := pods.StatusPods(client, clusterName)
+	require.Empty(t, podErrors)
 }
 
 // VerifyHarvesterLoadBalancer validates that an AWS loadbalancer service is created and working properly
@@ -137,6 +141,10 @@ func VerifyHarvesterLoadBalancer(t *testing.T, client *rancher.Client, serviceLB
 		return isIngressAccessible, nil
 	})
 	require.NoError(t, err)
+
+	podErrors := pods.StatusPods(client, clusterName)
+	require.Empty(t, podErrors)
+
 }
 
 // VerifyClusterIP is a helper function that verifies the cluster is able to connect to the cluster ip service by ssh shell
