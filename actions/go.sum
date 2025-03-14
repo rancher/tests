@@ -258,8 +258,8 @@ github.com/rancher/rancher/pkg/apis v0.0.0-20250212213103-5c3550f55322 h1:r7fOzg
 github.com/rancher/rancher/pkg/apis v0.0.0-20250212213103-5c3550f55322/go.mod h1:IMw27bQDvETom8cpdZTxpmAnuGmeVsST9f6v/qrCvVg=
 github.com/rancher/rke v1.8.0-rc.2 h1:kW6Or5YFanUkz82p1u4up5PenLZrTuUZg8xCzLmjJUk=
 github.com/rancher/rke v1.8.0-rc.2/go.mod h1:x9N1abruzDFMwTpqq2cnaDYpKCptlNoW8VraNWB6Pc4=
-github.com/rancher/shepherd v0.0.0-20250313161034-078bebe708e3 h1:GP4GpIPP+GzUsGH0rjXaMwv+ccZ19JbhcVAwUBOtacE=
-github.com/rancher/shepherd v0.0.0-20250313161034-078bebe708e3/go.mod h1:relMIZBbmYQyZUgVWfomrpHKO0we3AmbrUD0EFYoXyc=
+github.com/rancher/shepherd v0.0.0-20250314164437-2d4a7f28d9d4 h1:B2DPtyJNU7+KaEo1qwx2UZ5svGdwhoJmwaG5NrdIxrM=
+github.com/rancher/shepherd v0.0.0-20250314164437-2d4a7f28d9d4/go.mod h1:relMIZBbmYQyZUgVWfomrpHKO0we3AmbrUD0EFYoXyc=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20240301001845-4eacc2dabbde h1:x5VZI/0TUx1MeZirh6e0OMAInhCmq6yRvD6897458Ng=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20240301001845-4eacc2dabbde/go.mod h1:04o7UUy7ZFiMDEtHEjO1yS7IkO8TcsgjBl93Fcjq7Gg=
 github.com/rancher/wrangler v1.1.2 h1:oXbXo9k7y/H4drUpb4RM1c++vT9O3rpoNEfyusGykiU=
@@ -276,8 +276,6 @@ github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp
 github.com/shopspring/decimal v1.4.0/go.mod h1:gawqmDU56v4yIKSwfBSFip1HdCCXN8/+DMd9qYNcwME=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
 github.com/sirupsen/logrus v1.9.3/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVsIT4qYEQ=
-github.com/slickwarren/shepherd v0.0.0-20250311213324-40f961cc94c2 h1:xSQnazcfiZ4bNWyhrEcCxTWYbFYPf0OX+knqyMOTDFQ=
-github.com/slickwarren/shepherd v0.0.0-20250311213324-40f961cc94c2/go.mod h1:relMIZBbmYQyZUgVWfomrpHKO0we3AmbrUD0EFYoXyc=
 github.com/spf13/cast v1.7.0 h1:ntdiHjuueXFgm5nzDRdOS4yfT43P5Fnud6DH50rz/7w=
 github.com/spf13/cast v1.7.0/go.mod h1:ancEpBxwJDODSW/UG4rDrAqiKolqNNh2DX3mk86cAdo=
 github.com/spf13/cobra v1.8.1 h1:e5/vxKd/rZsfSJMUX1agtjeTDf+qv1/JdBF8gg5k9ZM=

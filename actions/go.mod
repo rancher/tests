@@ -59,7 +59,7 @@ replace (
 
 require (
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20250313161034-078bebe708e3
+	github.com/rancher/shepherd v0.0.0-20250314164437-2d4a7f28d9d4
 )
 
 require (
@@ -220,5 +220,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.3 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
-
-replace github.com/rancher/shepherd => github.com/slickwarren/shepherd v0.0.0-20250311213324-40f961cc94c2
