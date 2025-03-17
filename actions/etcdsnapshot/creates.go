@@ -691,7 +691,7 @@ func createAndVerifyResources(steveclient *steveV1.Client, containerImage string
 		return nil, nil, nil, nil, nil, errors.New("service name doesn't match spec")
 	}
 
-	path := extensionsingress.NewIngressPathTemplate(networking.PathTypeExact, ingressPath, serviceAppendName+initialWorkloadName, 80)
+	path := extensionsingress.NewIngressPathTemplate(networking.PathTypeImplementationSpecific, ingressPath, serviceAppendName+initialWorkloadName, 80)
 	ingressTemplate := extensionsingress.NewIngressTemplate(initialIngressName, defaultNamespace, "", []networking.HTTPIngressPath{path})
 
 	ingressResp, err := extensionsingress.CreateIngress(steveclient, initialIngressName, ingressTemplate)
