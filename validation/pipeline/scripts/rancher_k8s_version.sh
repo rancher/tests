@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
-cd $(dirname $0)/../../../../../
+cd $(dirname $0)/../../../../../rancher/tests
+pwd
+ls -lR 
 
 echo "Getting go rancher version "
 env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o tests/v2/validation/rancherversion ./validation/pipeline/rancherversion

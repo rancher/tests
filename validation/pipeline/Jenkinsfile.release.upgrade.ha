@@ -125,7 +125,7 @@ node {
                 }
                 
                 try{
-                  sh "./tests/v2/validation/build.sh"
+                  sh "./validation/build.sh"
                   
                   sh "docker volume create --name ${validationVolume}"
 
