@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-cd $(dirname $0)/../../../../../
+cd $(dirname $0)/../../../
 if [[ -z "${QASE_TEST_RUN_ID}" ]]; then
   echo "no test run ID is provided"
 else
