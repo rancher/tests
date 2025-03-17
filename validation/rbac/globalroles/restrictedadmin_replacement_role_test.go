@@ -55,7 +55,7 @@ func (ra *RestrictedAdminReplacementTestSuite) SetupSuite() {
 	require.NoError(ra.T(), err)
 }
 
-func (ra *RestrictedAdminReplacementTestSuite) createRestrictedAdminRoleAndUser(addManageUsersRule bool) (*v3.GlobalRole, *management.User, *rancher.Client) {
+func (ra *RestrictedAdminReplacementTestSuite) createRestrictedAdminReplacementRoleAndUser(addManageUsersRule bool) (*v3.GlobalRole, *management.User, *rancher.Client) {
 	restrictedAdminReplacementRoleName := namegen.AppendRandomString("restricted-admin-replacement")
 	restrictedAdminReplacementRole := newRestrictedAdminReplacementTemplate(restrictedAdminReplacementRoleName)
 
@@ -77,7 +77,7 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementCre
 	defer subSession.Cleanup()
 
 	log.Info("Creating the replacement restricted admin global role")
-	createdRaReplacementRole, createdRaReplacementUser, createdRaReplacementUserClient := ra.createRestrictedAdminRoleAndUser(false)
+	createdRaReplacementRole, createdRaReplacementUser, createdRaReplacementUserClient := ra.createRestrictedAdminReplacementRoleAndUser(false)
 
 	ra.T().Logf("Verifying user %s with role %s can create a downstream cluster", createdRaReplacementUser.Name, createdRaReplacementRole.Name)
 	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
@@ -99,7 +99,7 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementLis
 	defer subSession.Cleanup()
 
 	log.Info("Creating the replacement restricted admin global role")
-	createdRaReplacementRole, createdRaReplacementUser, createdRaReplacementUserClient := ra.createRestrictedAdminRoleAndUser(false)
+	createdRaReplacementRole, createdRaReplacementUser, createdRaReplacementUserClient := ra.createRestrictedAdminReplacementRoleAndUser(false)
 
 	log.Infof("Verifying user %s with role %s can list global settings", createdRaReplacementUser.Name, createdRaReplacementRole.Name)
 	raReplacementUserSettingsList, err := settings.GetGlobalSettingNames(createdRaReplacementUserClient, ra.cluster.ID)
@@ -116,7 +116,7 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementCan
 	defer subSession.Cleanup()
 
 	log.Info("Creating the replacement restricted admin global role")
-	_, createdRaReplacementUser, createdRaReplacementUserClient := ra.createRestrictedAdminRoleAndUser(false)
+	_, createdRaReplacementUser, createdRaReplacementUserClient := ra.createRestrictedAdminReplacementRoleAndUser(false)
 
 	steveRAReplacementClient := createdRaReplacementUserClient.Steve
 	steveAdminClient := ra.client.Steve
@@ -136,7 +136,7 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementCan
 	defer subSession.Cleanup()
 
 	log.Info("Creating the replacement restricted admin global role")
-	_, _, createdRaReplacementUserClient := ra.createRestrictedAdminRoleAndUser(false)
+	_, _, createdRaReplacementUserClient := ra.createRestrictedAdminReplacementRoleAndUser(false)
 
 	adminUser, err := createUserWithBuiltinRole(ra.client, rbac.Admin)
 	require.NoError(ra.T(), err)
@@ -153,7 +153,7 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementCan
 	defer subSession.Cleanup()
 
 	log.Info("Creating the replacement restricted admin global role")
-	_, _, createdRaReplacementUserClient := ra.createRestrictedAdminRoleAndUser(false)
+	_, _, createdRaReplacementUserClient := ra.createRestrictedAdminReplacementRoleAndUser(false)
 
 	adminUser, err := createUserWithBuiltinRole(ra.client, rbac.Admin)
 	require.NoError(ra.T(), err)
@@ -169,7 +169,7 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementWit
 	defer subSession.Cleanup()
 
 	log.Info("Creating the replacement restricted admin global role with the manage-users verb")
-	_, _, createdRaReplacementUserClient := ra.createRestrictedAdminRoleAndUser(true)
+	_, _, createdRaReplacementUserClient := ra.createRestrictedAdminReplacementRoleAndUser(true)
 
 	adminUser, err := createUserWithBuiltinRole(ra.client, rbac.Admin)
 	require.NoError(ra.T(), err)
@@ -185,7 +185,7 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementWit
 	defer subSession.Cleanup()
 
 	log.Info("Creating the replacement restricted admin global role with the manage-users verb")
-	_, _, createdRaReplacementUserClient := ra.createRestrictedAdminRoleAndUser(true)
+	_, _, createdRaReplacementUserClient := ra.createRestrictedAdminReplacementRoleAndUser(true)
 
 	adminUser, err := createUserWithBuiltinRole(ra.client, rbac.Admin)
 	require.NoError(ra.T(), err)
