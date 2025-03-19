@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	"github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/kubeapi/projects"
 	project "github.com/rancher/tests/actions/projects"
@@ -198,7 +199,7 @@ func (pr *ProjectsTestSuite) TestMoveNamespaceOutOfProject() {
 	delete(updatedNamespace.Labels, projects.ProjectIDAnnotation)
 	delete(updatedNamespace.Annotations, projects.ProjectIDAnnotation)
 
-	downstreamContext, err := pr.client.WranglerContext.DownStreamClusterWranglerContext(pr.cluster.ID)
+	downstreamContext, err := clusterapi.GetClusterWranglerContext(pr.client, pr.cluster.ID)
 	require.NoError(pr.T(), err)
 
 	currentNamespace, err := namespaces.GetNamespaceByName(standardUserClient, pr.cluster.ID, updatedNamespace.Name)

@@ -15,6 +15,7 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	"github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/kubeapi/projects"
 	quotas "github.com/rancher/tests/actions/kubeapi/resourcequotas"
@@ -65,7 +66,7 @@ func (prq *ProjectsResourceQuotaTestSuite) setupUserForProject() (*rancher.Clien
 	err = users.AddClusterRoleToUser(prq.client, prq.cluster, standardUser, rbac.ClusterOwner.String(), nil)
 	require.NoError(prq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
-	standardUserContext, err := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(prq.cluster.ID)
+	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, prq.cluster.ID)
 	require.NoError(prq.T(), err)
 
 	return standardUserClient, standardUserContext
@@ -363,7 +364,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestOverrideQuotaInNamespace() {
 
 	log.Info("Override the pod limit for the namespace and increase it from 2 to 3.")
 	namespacePodLimit = "3"
-	downstreamContext, err := prq.client.WranglerContext.DownStreamClusterWranglerContext(prq.cluster.ID)
+	downstreamContext, err := clusterapi.GetClusterWranglerContext(prq.client, prq.cluster.ID)
 	require.NoError(prq.T(), err)
 	currentNamespace, err := namespaces.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
 	require.NoError(prq.T(), err)
@@ -441,7 +442,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromNoQuotaToQuotaPr
 	require.Equal(prq.T(), projectPodLimit, createdProject2.Spec.ResourceQuota.Limit.Pods, "Project pod limit mismatch")
 
 	log.Info("Move the namespace to the project with resource quota set.")
-	downstreamContext, err := prq.client.WranglerContext.DownStreamClusterWranglerContext(prq.cluster.ID)
+	downstreamContext, err := clusterapi.GetClusterWranglerContext(prq.client, prq.cluster.ID)
 	require.NoError(prq.T(), err)
 
 	updatedNamespace, err := namespaces.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
@@ -526,7 +527,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromQuotaToNoQuotaPr
 	require.NoError(prq.T(), err, "Failed to create project")
 
 	log.Info("Move the namespace to the project that has no resource quota set.")
-	downstreamContext, err := prq.client.WranglerContext.DownStreamClusterWranglerContext(prq.cluster.ID)
+	downstreamContext, err := clusterapi.GetClusterWranglerContext(prq.client, prq.cluster.ID)
 	require.NoError(prq.T(), err)
 
 	updatedNamespace, err := namespaces.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
@@ -608,7 +609,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceWithDeploymentTransi
 	require.NoError(prq.T(), err, "Failed to create project")
 
 	log.Info("Move the namespace to the project that has no resource quota set.")
-	downstreamContext, err := prq.client.WranglerContext.DownStreamClusterWranglerContext(prq.cluster.ID)
+	downstreamContext, err := clusterapi.GetClusterWranglerContext(prq.client, prq.cluster.ID)
 	require.NoError(prq.T(), err)
 
 	updatedNamespace, err := namespaces.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
@@ -675,7 +676,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceBetweenProjectsWithN
 	log.Info("Move the namespace from the first project to the second project.")
 	currentNamespace, err := namespaces.GetNamespaceByName(standardUserClient, prq.cluster.ID, updatedNamespace.Name)
 	require.NoError(prq.T(), err)
-	downstreamContext, err := prq.client.WranglerContext.DownStreamClusterWranglerContext(prq.cluster.ID)
+	downstreamContext, err := clusterapi.GetClusterWranglerContext(prq.client, prq.cluster.ID)
 	require.NoError(prq.T(), err)
 
 	updatedNamespace.Annotations[projects.ProjectIDAnnotation] = createdProject2.Namespace + ":" + createdProject2.Name

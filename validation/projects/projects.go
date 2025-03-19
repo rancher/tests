@@ -13,7 +13,7 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	"github.com/rancher/shepherd/pkg/wrangler"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	"github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
@@ -359,16 +359,9 @@ func checkContainerResources(client *rancher.Client, clusterID, namespaceName, d
 }
 
 func checkLimitRange(client *rancher.Client, clusterID, namespaceName string, expectedCPULimit, expectedCPURequest, expectedMemoryLimit, expectedMemoryRequest string) error {
-	var ctx *wrangler.Context
-	var err error
-
-	if clusterID != "local" {
-		ctx, err = client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
-		if err != nil {
-			return fmt.Errorf("failed to get downstream context: %w", err)
-		}
-	} else {
-		ctx = client.WranglerContext
+	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
 	}
 
 	limitRanges, err := ctx.Core.LimitRange().List(namespaceName, metav1.ListOptions{})

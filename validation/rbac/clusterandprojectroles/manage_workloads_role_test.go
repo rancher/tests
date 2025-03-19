@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	projectsapi "github.com/rancher/tests/actions/projects"
 	rbac "github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/daemonset"
@@ -183,7 +184,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForPods() {
 		Spec: podTemplate.Spec,
 	}
 
-	downstreamContext, err := workloadUserClient.WranglerContext.DownStreamClusterWranglerContext(mw.cluster.ID)
+	downstreamContext, err := clusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 	createdPod, err := downstreamContext.Core.Pod().Create(pod)
 	require.NoError(mw.T(), err, "Failed to create the pod.")
@@ -229,7 +230,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForDeployments() 
 	require.NoError(mw.T(), err, "Failed to create the deployment.")
 
 	log.Infof("As user %s, list the deployment %s.", workloadUser.Username, createdDeployment.Name)
-	downstreamContext, err := workloadUserClient.WranglerContext.DownStreamClusterWranglerContext(mw.cluster.ID)
+	downstreamContext, err := clusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 	listDeployment, err := downstreamContext.Apps.Deployment().List(adminNamespace.Name, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdDeployment.Name,
@@ -265,15 +266,11 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForDaemonSets() {
 	workloadUser, workloadUserClient := mw.testSetupWorkloadUserAndAddToProject(adminProject)
 
 	log.Infof("As user %s, create a new DaemonSet in the namespace within the project %s.", workloadUser.Name, adminProject.Name)
-	createdDaemonSet, err := daemonset.CreateDaemonset(workloadUserClient, mw.cluster.ID, adminNamespace.Name, 1, "", "", false, false)
+	createdDaemonSet, err := daemonset.CreateDaemonset(workloadUserClient, mw.cluster.ID, adminNamespace.Name, 1, "", "", false, false, true)
 	require.NoError(mw.T(), err, "Failed to create the DaemonSet.")
-	err = charts.WatchAndWaitDaemonSets(workloadUserClient, mw.cluster.ID, adminNamespace.Name, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + createdDaemonSet.Name,
-	})
-	require.NoError(mw.T(), err)
 
 	log.Infof("As user %s, list the DaemonSet %s.", workloadUser.Username, createdDaemonSet.Name)
-	downstreamContext, err := workloadUserClient.WranglerContext.DownStreamClusterWranglerContext(mw.cluster.ID)
+	downstreamContext, err := clusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 	listDaemonSet, err := downstreamContext.Apps.DaemonSet().List(adminNamespace.Name, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdDaemonSet.Name,
@@ -290,11 +287,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForDaemonSets() {
 		getDaemonSet.Labels = make(map[string]string)
 	}
 	getDaemonSet.Labels["updated"] = "true"
-	updatedDaemonSet, err := daemonset.UpdateDaemonset(workloadUserClient, mw.cluster.ID, adminNamespace.Name, getDaemonSet)
-	require.NoError(mw.T(), err)
-	err = charts.WatchAndWaitDaemonSets(workloadUserClient, mw.cluster.ID, adminNamespace.Name, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + updatedDaemonSet.Name,
-	})
+	updatedDaemonSet, err := daemonset.UpdateDaemonset(workloadUserClient, mw.cluster.ID, adminNamespace.Name, getDaemonSet, true)
 	require.NoError(mw.T(), err)
 
 	updatedDaemonSet, err = downstreamContext.Apps.DaemonSet().Get(adminNamespace.Name, updatedDaemonSet.Name, metav1.GetOptions{})
@@ -363,7 +356,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForStatefulSets()
 		},
 	}
 
-	downstreamContext, err := workloadUserClient.WranglerContext.DownStreamClusterWranglerContext(mw.cluster.ID)
+	downstreamContext, err := clusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 	createdStatefulset, err := downstreamContext.Apps.StatefulSet().Create(statefulset)
 	require.NoError(mw.T(), err, "Failed to create the StatefulSet.")
