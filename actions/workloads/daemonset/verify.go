@@ -7,7 +7,7 @@ import (
 )
 
 func VerifyCreateDaemonSet(client *rancher.Client, clusterID string) error {
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(client, clusterID)
+	_, namespace, err := projectsapi.CreateProjectAndNamespaceUsingWrangler(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -18,5 +18,5 @@ func VerifyCreateDaemonSet(client *rancher.Client, clusterID string) error {
 		return err
 	}
 
-	return err
+	return nil
 }
