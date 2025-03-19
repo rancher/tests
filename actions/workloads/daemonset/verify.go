@@ -2,10 +2,8 @@ package daemonset
 
 import (
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/charts"
 	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func VerifyCreateDaemonSet(client *rancher.Client, clusterID string) error {
@@ -15,15 +13,10 @@ func VerifyCreateDaemonSet(client *rancher.Client, clusterID string) error {
 	}
 
 	logrus.Info("Creating new daemonset")
-	createdDaemonset, err := CreateDaemonset(client, clusterID, namespace.Name, 1, "", "", false, false)
+	_, err = CreateDaemonset(client, clusterID, namespace.Name, 1, "", "", false, false, true)
 	if err != nil {
 		return err
 	}
-
-	logrus.Infof("Waiting for daemonset %s to become active", createdDaemonset.Name)
-	err = charts.WatchAndWaitDaemonSets(client, clusterID, namespace.Name, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + createdDaemonset.Name,
-	})
 
 	return err
 }
