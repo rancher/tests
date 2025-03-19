@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-cd $(dirname $0)/../../../../../
+cd $(dirname $0)/../../../../../rancher/tests
 
 configPath=$CATTLE_TEST_CONFIG
 

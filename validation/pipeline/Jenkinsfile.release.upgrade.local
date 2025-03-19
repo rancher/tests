@@ -253,6 +253,10 @@ node {
                   sh "docker volume rm -f ${validationVolume}"
                   sh "docker rmi ${imageName}"
                 }
+                sh "docker stop ${buildTestContainer}"
+                sh "docker rm -v ${buildTestContainer}"
+                sh "docker volume rm -f ${validationVolume}"
+                sh "docker rmi ${imageName}"
                 
                 dir("./tests/validation") {
                   writeFile file: filename, text: config
@@ -262,7 +266,7 @@ node {
 
                 dir ("./") {
                   sh "./tests/validation/configure.sh"
-                  sh "docker build . -f ./validation/Dockerfile.e2e --build-arg CORRAL_VERSION=${env.CORRAL_VERSION} --build-arg RKE_VERSION=${env.RKE_VERSION} -t ${imageName}"
+                  sh "docker build . -f ./tests/validation/Dockerfile.e2e --build-arg CORRAL_VERSION=${env.CORRAL_VERSION} --build-arg RKE_VERSION=${env.RKE_VERSION} -t ${imageName}"
                   sh "docker volume create --name ${validationVolume}"
                 }
               }

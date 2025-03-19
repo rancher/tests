@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-cd $(dirname $0)/../../../../../
+cd $(dirname $0)/../../../../../rancher/tests
 
 echo "building rancher HA corral bin"
 env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o validation/registries/bin/rancherha ./validation/pipeline/rancherha
