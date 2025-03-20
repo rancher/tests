@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/job"
+	"github.com/rancher/tests/actions/workloads/pods"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -75,7 +76,7 @@ func (rj *RbacJobTestSuite) TestCreateJob() {
 			assert.NoError(rj.T(), err)
 
 			log.Infof("As a %v, creating a job", tt.role.String())
-			podTemplate := job.CreateContainerAndPodTemplate()
+			podTemplate := pods.CreateContainerAndPodTemplate()
 			_, err = job.CreateJob(userClient, rj.cluster.ID, namespace.Name, podTemplate, false)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
@@ -114,7 +115,7 @@ func (rj *RbacJobTestSuite) TestListJob() {
 			assert.NoError(rj.T(), err)
 
 			log.Infof("As a %v, creating a job in the namespace %v", rbac.Admin, namespace.Name)
-			podTemplate := job.CreateContainerAndPodTemplate()
+			podTemplate := pods.CreateContainerAndPodTemplate()
 			createdJob, err := job.CreateJob(rj.client, rj.cluster.ID, namespace.Name, podTemplate, true)
 			assert.NoError(rj.T(), err, "failed to create job")
 
@@ -161,7 +162,7 @@ func (rj *RbacJobTestSuite) TestUpdateJob() {
 			assert.NoError(rj.T(), err)
 
 			log.Infof("As a %v, creating a job in the namespace %v", rbac.Admin, namespace.Name)
-			podTemplate := job.CreateContainerAndPodTemplate()
+			podTemplate := pods.CreateContainerAndPodTemplate()
 			createdJob, err := job.CreateJob(rj.client, rj.cluster.ID, namespace.Name, podTemplate, true)
 			assert.NoError(rj.T(), err, "failed to create job")
 
@@ -220,7 +221,7 @@ func (rj *RbacJobTestSuite) TestDeleteJob() {
 			assert.NoError(rj.T(), err)
 
 			log.Infof("As a %v, creating a job in the namespace %v", rbac.Admin, namespace.Name)
-			podTemplate := job.CreateContainerAndPodTemplate()
+			podTemplate := pods.CreateContainerAndPodTemplate()
 			createdJob, err := job.CreateJob(rj.client, rj.cluster.ID, namespace.Name, podTemplate, true)
 			assert.NoError(rj.T(), err, "failed to create job")
 
@@ -262,7 +263,7 @@ func (rj *RbacJobTestSuite) TestCrudJobAsClusterMember() {
 	require.NoError(rj.T(), err)
 
 	log.Infof("As a %v, creating a job in the namespace %v", role, namespace.Name)
-	podTemplate := job.CreateContainerAndPodTemplate()
+	podTemplate := pods.CreateContainerAndPodTemplate()
 	createdJob, err := job.CreateJob(userClient, rj.cluster.ID, namespace.Name, podTemplate, true)
 	require.NoError(rj.T(), err, "failed to create job")
 

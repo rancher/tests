@@ -15,10 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-const (
-	nginxImageName = "public.ecr.aws/docker/library/nginx"
-)
-
 // CreateJob is a helper to create a job in a namespace using wrangler context
 func CreateJob(client *rancher.Client, clusterID, namespaceName string, podTemplate corev1.PodTemplateSpec, watchJob bool) (*batchv1.Job, error) {
 	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)

@@ -2,108 +2,117 @@ package cronjob
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/rancher/rancher/pkg/api/scheme"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	unstruc "github.com/rancher/shepherd/extensions/unstructured"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wait"
-	v1 "k8s.io/api/batch/v1"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-const (
-	nginxImageName = "public.ecr.aws/docker/library/nginx"
-)
-
-var CronJobGroupVersionResource = schema.GroupVersionResource{
-	Group:    "batch",
-	Version:  "v1",
-	Resource: "cronjobs",
-}
-
-// CreateCronjob is a helper to create a cronjob
-func CreateCronjob(client *rancher.Client, clusterID, namespaceName string, schedule string, template corev1.PodTemplateSpec) (*v1.CronJob, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
+// CreateCronJob is a helper to create a cronjob in a namespace using wrangler context
+func CreateCronJob(client *rancher.Client, clusterID, namespaceName, schedule string, podTemplate corev1.PodTemplateSpec, watchCronJob bool) (*batchv1.CronJob, error) {
+	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	cronjobName := namegen.AppendRandomString("testcronjob")
-	var limit int32 = 10
+	cronJobTemplate := NewCronJobTemplate(namespaceName, schedule, podTemplate)
+	createdCronJob, err := ctx.Batch.CronJob().Create(cronJobTemplate)
 
-	template.Spec.RestartPolicy = corev1.RestartPolicyNever
-	cronJobTemplate := &v1.CronJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cronjobName,
-			Namespace: namespaceName,
-		},
-		Spec: v1.CronJobSpec{
-			JobTemplate: v1.JobTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: namespaceName,
-				},
-				Spec: v1.JobSpec{
-					Template: template,
-				},
-			},
-			Schedule:                   schedule,
-			ConcurrencyPolicy:          v1.ForbidConcurrent,
-			FailedJobsHistoryLimit:     &limit,
-			SuccessfulJobsHistoryLimit: &limit,
-		},
-	}
-
-	cronJobResource := dynamicClient.Resource(CronJobGroupVersionResource).Namespace(namespaceName)
-
-	unstructuredResp, err := cronJobResource.Create(context.TODO(), unstruc.MustToUnstructured(cronJobTemplate), metav1.CreateOptions{})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create job: %w", err)
 	}
 
-	newCronjob := &v1.CronJob{}
-	err = scheme.Scheme.Convert(unstructuredResp, newCronjob, unstructuredResp.GroupVersionKind())
-	if err != nil {
-		return nil, err
-	}
-
-	return newCronjob, err
-}
-
-// WatchAndWaitCronjob is a helper to watch and wait cronjob
-func WatchAndWaitCronjob(client *rancher.Client, clusterID, namespaceName string, cronJobTemplate *v1.CronJob) error {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
-	if err != nil {
-		return err
-	}
-
-	cronJobResource := dynamicClient.Resource(CronJobGroupVersionResource).Namespace(namespaceName)
-
-	watchCronjobInterface, err := cronJobResource.Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + cronJobTemplate.Name,
-		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-	})
-	if err != nil {
-		return err
-	}
-
-	return wait.WatchWait(watchCronjobInterface, func(event watch.Event) (ready bool, err error) {
-		cronjobUnstructured := event.Object.(*unstructured.Unstructured)
-		cronjob := &v1.CronJob{}
-
-		err = scheme.Scheme.Convert(cronjobUnstructured, cronjob, cronjobUnstructured.GroupVersionKind())
+	if watchCronJob {
+		err = WatchAndWaitCronJobWrangler(client, clusterID, namespaceName, createdCronJob)
 		if err != nil {
-			return false, err
+			return nil, err
+		}
+	}
+
+	return createdCronJob, nil
+}
+
+// WatchAndWaitCronJobWrangler is a helper to watch and wait for cronjob to be active using wrangler context
+func WatchAndWaitCronJobWrangler(client *rancher.Client, clusterID, namespaceName string, cronJob *batchv1.CronJob) error {
+	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	listOptions := metav1.ListOptions{
+		FieldSelector:  "metadata.name=" + cronJob.Name,
+		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
+	}
+
+	watchInterface, err := ctx.Batch.CronJob().Watch(namespaceName, listOptions)
+	if err != nil {
+		return err
+	}
+
+	return wait.WatchWait(watchInterface, func(event watch.Event) (bool, error) {
+		cronJob, ok := event.Object.(*batchv1.CronJob)
+		if !ok {
+			return false, fmt.Errorf("failed to cast to batchv1.CronJob")
 		}
 
-		if len(cronjob.Status.Active) > 0 {
+		if len(cronJob.Status.Active) > 0 {
 			return true, nil
 		}
 		return false, nil
 	})
+}
+
+// DeleteCronJob is a helper to delete a cronjob in a namespace using wrangler context
+func DeleteCronJob(client *rancher.Client, clusterID string, cronjob *batchv1.CronJob, waitForDelete bool) error {
+	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	err = wranglerContext.Batch.CronJob().Delete(cronjob.Namespace, cronjob.Name, &metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete cronjob: %w", err)
+	}
+
+	if waitForDelete {
+		err = WaitForDeleteCronJob(client, clusterID, cronjob)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// WaitForDeleteCronJob is a helper to wait for cronjob to delete
+func WaitForDeleteCronJob(client *rancher.Client, clusterID string, cronjob *batchv1.CronJob) error {
+	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
+		updatedCronJobList, pollErr := wranglerContext.Batch.CronJob().List(cronjob.Namespace, metav1.ListOptions{})
+		if pollErr != nil {
+			return false, fmt.Errorf("failed to list cronjobs: %w", pollErr)
+		}
+
+		if len(updatedCronJobList.Items) == 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to wait for cronjob to delete: %w", err)
+	}
+
+	return nil
 }

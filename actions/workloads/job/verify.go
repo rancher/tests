@@ -3,6 +3,7 @@ package job
 import (
 	"github.com/rancher/shepherd/clients/rancher"
 	projects "github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/workloads/pods"
 )
 
 func VerifyCreateJob(client *rancher.Client, clusterID string) error {
@@ -11,7 +12,7 @@ func VerifyCreateJob(client *rancher.Client, clusterID string) error {
 		return err
 	}
 
-	podTemplate := CreateContainerAndPodTemplate()
+	podTemplate := pods.CreateContainerAndPodTemplate()
 
 	_, err = CreateJob(client, clusterID, namespace.Name, podTemplate, true)
 	if err != nil {
