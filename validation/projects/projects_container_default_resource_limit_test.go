@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	"github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/kubeapi/projects"
 	project "github.com/rancher/tests/actions/projects"
@@ -63,7 +64,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) setupUserForProject() (*ran
 	err = users.AddClusterRoleToUser(pcrl.client, pcrl.cluster, standardUser, rbac.ClusterOwner.String(), nil)
 	require.NoError(pcrl.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
-	standardUserContext, err := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(pcrl.cluster.ID)
+	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, pcrl.cluster.ID)
 	require.NoError(pcrl.T(), err)
 
 	return standardUserClient, standardUserContext
@@ -376,7 +377,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestLimitDeletionPropagatio
 	require.Equal(pcrl.T(), memoryReservation, projectSpec.RequestsMemory, "Memory reservation mismatch")
 
 	log.Info("Verify that the limit range in the existing namespace is deleted.")
-	ctx, err := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(pcrl.cluster.ID)
+	ctx, err := clusterapi.GetClusterWranglerContext(standardUserClient, pcrl.cluster.ID)
 	require.NoError(pcrl.T(), err)
 	err = kwait.Poll(defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, func() (done bool, pollErr error) {
 		limitRanges, err := ctx.Core.LimitRange().List(createdNamespace.Name, metav1.ListOptions{})

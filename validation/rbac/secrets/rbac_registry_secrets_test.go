@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/secrets"
@@ -139,7 +140,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestListRegistrySecret() {
 			assert.NoError(rbrs.T(), err, "failed to create a registry secret")
 
 			log.Infof("As a %v, list the registry secrets.", tt.role.String())
-			standardUserContext, err := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(rbrs.cluster.ID)
+			standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 			secretList, err := standardUserContext.Core.Secret().List(namespace.Name, metav1.ListOptions{})
 			switch tt.role.String() {
@@ -192,7 +193,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestUpdateRegistrySecret() {
 			assert.NoError(rbrs.T(), err, "failed to create a registry secret")
 
 			log.Infof("As a %v, update the registry secret with a new label.", tt.role.String())
-			standardUserContext, err := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(rbrs.cluster.ID)
+			standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 
 			if createdRegistrySecret.Labels == nil {
@@ -250,7 +251,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestDeleteRegistrySecret() {
 			assert.NoError(rbrs.T(), err, "failed to create a registry secret")
 
 			log.Infof("As a %v, delete the registry secrets.", tt.role.String())
-			standardUserContext, err := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(rbrs.cluster.ID)
+			standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 
 			err = standardUserContext.Core.Secret().Delete(namespace.Name, createdRegistrySecret.Name, &metav1.DeleteOptions{})

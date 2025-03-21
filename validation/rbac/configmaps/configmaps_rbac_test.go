@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	"github.com/rancher/tests/actions/configmaps"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
@@ -54,7 +55,7 @@ func (cm *ConfigmapsRBACTestSuite) SetupSuite() {
 	cm.cluster, err = cm.client.Management.Cluster.ByID(clusterID)
 	require.NoError(cm.T(), err)
 
-	cm.ctxAsAdmin, err = cm.client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
+	cm.ctxAsAdmin, err = clusterapi.GetClusterWranglerContext(cm.client, clusterID)
 	require.NoError(cm.T(), err)
 }
 
@@ -167,9 +168,7 @@ func (cm *ConfigmapsRBACTestSuite) TestUpdateConfigmap() {
 			require.NoError(cm.T(), err)
 
 			configmapCreate.Data["foo1"] = "bar1"
-			userDownstreamWranglerContext, err := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(cm.cluster.ID)
-			require.NoError(cm.T(), err)
-			adminDownstreamWranglerContext, err := cm.client.WranglerContext.DownStreamClusterWranglerContext(cm.cluster.ID)
+			userDownstreamWranglerContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
 			require.NoError(cm.T(), err)
 			configMapUpdatedByUser, userErr := userDownstreamWranglerContext.Core.ConfigMap().Update(configmapCreate)
 
@@ -178,7 +177,7 @@ func (cm *ConfigmapsRBACTestSuite) TestUpdateConfigmap() {
 				require.NoError(cm.T(), userErr)
 				_, err = deployment.CreateDeployment(cm.client, cm.cluster.ID, namespace.Name, 1, "", configmapCreate.Name, true, false, false, true)
 				require.NoError(cm.T(), err)
-				getCMAsAdmin, err := adminDownstreamWranglerContext.Core.ConfigMap().Get(namespace.Name, configMapUpdatedByUser.Name, metav1.GetOptions{})
+				getCMAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().Get(namespace.Name, configMapUpdatedByUser.Name, metav1.GetOptions{})
 				require.NoError(cm.T(), err)
 				assert.Equal(cm.T(), configMapUpdatedByUser.Data, getCMAsAdmin.Data)
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
@@ -215,7 +214,8 @@ func (cm *ConfigmapsRBACTestSuite) TestListConfigmaps() {
 			configMapCreatedByAdmin, err := configmaps.CreateConfigmap(namespace.Name, cm.client, data, cm.cluster.ID)
 			require.NoError(cm.T(), err)
 
-			downstreamWranglerContext, _ := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(cm.cluster.ID)
+			downstreamWranglerContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
+			require.NoError(cm.T(), err)
 			configMapListAsUser, err := downstreamWranglerContext.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{
 				FieldSelector: "metadata.name=" + configMapCreatedByAdmin.Name,
 			})
@@ -258,7 +258,7 @@ func (cm *ConfigmapsRBACTestSuite) TestDeleteConfigmap() {
 			configMapCreatedByAdmin, err := configmaps.CreateConfigmap(namespace.Name, cm.client, data, cm.cluster.ID)
 			require.NoError(cm.T(), err)
 
-			userDownstreamWranglerContext, err := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(cm.cluster.ID)
+			userDownstreamWranglerContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
 			require.NoError(cm.T(), err)
 			err = userDownstreamWranglerContext.Core.ConfigMap().Delete(namespace.Name, configMapCreatedByAdmin.Name, &metav1.DeleteOptions{})
 			configMapListAsAdmin, errList := cm.ctxAsAdmin.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{
@@ -303,7 +303,7 @@ func (cm *ConfigmapsRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
 	configMapCreatedByAdmin, err := configmaps.CreateConfigmap(namespace.Name, cm.client, data, cm.cluster.ID)
 	require.NoError(cm.T(), err)
 
-	downstreamWranglerContextAsClusterMember, err := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(cm.cluster.ID)
+	downstreamWranglerContextAsClusterMember, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
 	require.NoError(cm.T(), err)
 
 	cm.Run("Validate config map creation in the project created by "+rbac.ClusterMember.String(), func() {
