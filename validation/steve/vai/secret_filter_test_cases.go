@@ -29,7 +29,7 @@ var secretFilterTestCases = []secretFilterTestCase{
 
 			name1 := fmt.Sprintf("secret1-%s", namegen.RandStringLower(randomStringLength))
 			name2 := fmt.Sprintf("secret2-%s", namegen.RandStringLower(randomStringLength))
-			name3 := fmt.Sprintf("config3-%s", namegen.RandStringLower(randomStringLength))
+			name3 := fmt.Sprintf("config3")
 
 			secrets := []v1.Secret{
 				{
@@ -54,7 +54,7 @@ var secretFilterTestCases = []secretFilterTestCase{
 		},
 		filter: func(namespaces []string) url.Values {
 			return url.Values{
-				"filter":               []string{"metadata.name!=config"},
+				"filter":               []string{"metadata.name!=config3"},
 				"projectsornamespaces": namespaces,
 			}
 		},
@@ -98,7 +98,7 @@ var secretFilterTestCases = []secretFilterTestCase{
 		createSecrets: func() ([]v1.Secret, []string, []string, []string) {
 			suffix := namegen.RandStringLower(randomStringLength)
 			ns := fmt.Sprintf("namespace-%s", suffix)
-			name1 := fmt.Sprintf("secret1-%s", namegen.RandStringLower(randomStringLength))
+			name1 := fmt.Sprintf("secret1")
 			name2 := fmt.Sprintf("config2-%s", namegen.RandStringLower(randomStringLength))
 
 			secrets := []v1.Secret{
@@ -165,7 +165,7 @@ var secretFilterTestCases = []secretFilterTestCase{
 				"projectsornamespaces": namespaces,
 			}
 		},
-		supportedWithVai: false,
+		supportedWithVai: true,
 	},
 	{
 		name: "Filter by multiple labels",
@@ -215,6 +215,6 @@ var secretFilterTestCases = []secretFilterTestCase{
 				"projectsornamespaces": namespaces,
 			}
 		},
-		supportedWithVai: false,
+		supportedWithVai: true,
 	},
 }
