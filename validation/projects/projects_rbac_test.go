@@ -116,11 +116,11 @@ func (rbp *RbacProjectTestSuite) TestListProject() {
 			createdProject, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 			assert.NoError(rbp.T(), err, "failed to create project")
 
-			log.Infof("As a %v, list the project in the downstream cluster.", tt.role.String())
+			log.Infof("As a %v, get the project in the downstream cluster.", tt.role.String())
 			err = project.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 			assert.NoError(rbp.T(), err)
 			projectObj, err := standardUserClient.WranglerContext.Mgmt.Project().Get(rbp.cluster.ID, createdProject.Name, metav1.GetOptions{})
-			assert.NoError(rbp.T(), err, "Failed to list project.")
+			assert.NoError(rbp.T(), err, "Failed to get project.")
 			assert.NotNil(rbp.T(), projectObj, "Expected project to be not nil.")
 		})
 	}
@@ -158,11 +158,11 @@ func (rbp *RbacProjectTestSuite) TestUpdateProject() {
 			createdProject, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 			assert.NoError(rbp.T(), err, "failed to create project")
 
-			log.Infof("As a %v, list the project in the downstream cluster.", tt.role.String())
+			log.Infof("As a %v, get the project in the downstream cluster.", tt.role.String())
 			err = project.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 			assert.NoError(rbp.T(), err)
 			currentProject, err := standardUserClient.WranglerContext.Mgmt.Project().Get(rbp.cluster.ID, createdProject.Name, metav1.GetOptions{})
-			assert.NoError(rbp.T(), err, "Failed to list project.")
+			assert.NoError(rbp.T(), err, "Failed to get project.")
 			assert.NotNil(rbp.T(), currentProject, "Expected project to be not nil.")
 
 			log.Infof("As a %v, verify that the project can be updated by adding a label.", tt.role.String())
@@ -212,11 +212,11 @@ func (rbp *RbacProjectTestSuite) TestDeleteProject() {
 			createdProject, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 			assert.NoError(rbp.T(), err, "failed to create project")
 
-			log.Infof("As a %v, list the project in the downstream cluster.", tt.role.String())
+			log.Infof("As a %v, get the project in the downstream cluster.", tt.role.String())
 			err = project.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 			assert.NoError(rbp.T(), err)
 			currentProject, err := standardUserClient.WranglerContext.Mgmt.Project().Get(rbp.cluster.ID, createdProject.Name, metav1.GetOptions{})
-			assert.NoError(rbp.T(), err, "Failed to list project.")
+			assert.NoError(rbp.T(), err, "Failed to get project.")
 			assert.NotNil(rbp.T(), currentProject, "Expected project to be not nil.")
 
 			log.Infof("As a %v, delete the project.", tt.role.String())

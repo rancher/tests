@@ -1,7 +1,7 @@
 package projects
 
 import (
-	"fmt"
+	"context"
 	"sort"
 	"strings"
 
@@ -11,10 +11,9 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	"github.com/rancher/shepherd/pkg/wrangler"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	"github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
-	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -134,22 +133,16 @@ func CreateProjectUsingWrangler(client *rancher.Client, clusterID string) (*v3.P
 	return createdProject, nil
 }
 
-// CreateNamespaceUsingWrangler is a helper to create a namespace (wrangler context) in the project
+// CreateNamespaceUsingWrangler is a helper to create a namespace in the project using wrangler context
 func CreateNamespaceUsingWrangler(client *rancher.Client, clusterID string, projectName string) (*corev1.Namespace, error) {
 	namespaceName := namegen.AppendRandomString("testns")
 	annotations := map[string]string{
 		"field.cattle.io/projectId": clusterID + ":" + projectName,
 	}
 
-	var ctx *wrangler.Context
-	var err error
-	if clusterID != rbacapi.LocalCluster {
-		ctx, err = client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get downstream context: %w", err)
-		}
-	} else {
-		ctx = client.WranglerContext
+	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, err
 	}
 
 	createdNamespace, err := ctx.Core.Namespace().Create(&corev1.Namespace{
@@ -172,15 +165,13 @@ func CreateNamespaceUsingWrangler(client *rancher.Client, clusterID string, proj
 
 // WaitForProjectFinalizerToUpdate is a helper to wait for project finalizer to update to match the expected finalizer count
 func WaitForProjectFinalizerToUpdate(client *rancher.Client, projectName string, projectNamespace string, finalizerCount int) error {
-	err := kwait.Poll(defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, func() (done bool, pollErr error) {
-		project, pollErr := projectsapi.ListProjects(client, projectNamespace, metav1.ListOptions{
-			FieldSelector: "metadata.name=" + projectName,
-		})
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
+		project, pollErr := client.WranglerContext.Mgmt.Project().Get(projectNamespace, projectName, metav1.GetOptions{})
 		if pollErr != nil {
 			return false, pollErr
 		}
 
-		if len(project.Items[0].Finalizers) == finalizerCount {
+		if len(project.Finalizers) == finalizerCount {
 			return true, nil
 		}
 		return false, pollErr
@@ -203,7 +194,7 @@ func WaitForProjectIDUpdate(client *rancher.Client, clusterID, projectName, name
 		projectsapi.ProjectIDAnnotation: projectName,
 	}
 
-	err := kwait.Poll(defaults.FiveHundredMillisecondTimeout, defaults.OneMinuteTimeout, func() (done bool, pollErr error) {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveHundredMillisecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
 		namespace, pollErr := namespaces.GetNamespaceByName(client, clusterID, namespaceName)
 		if pollErr != nil {
 			return false, pollErr
