@@ -380,6 +380,16 @@ func CreateClusterRoleTemplateBinding(client *rancher.Client, clusterID string, 
 	return crtb, nil
 }
 
+// GetClusterRoleTemplateBindings fetches clusterroletemplatebindings for a specific user
+func GetClusterRoleTemplateBindings(client *rancher.Client, namespace, name string) (*v3.ClusterRoleTemplateBinding, error) {
+	userCRTB, err := client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Get(namespace, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return userCRTB, nil
+}
+
 // WaitForCrtbStatus waits for the CRTB to reach the Completed status or checks for its existence if status field is not supported (older Rancher versions)
 func WaitForCrtbStatus(client *rancher.Client, crtbNamespace, crtbName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaults.OneMinuteTimeout)
