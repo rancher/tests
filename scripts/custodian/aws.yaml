@@ -266,3 +266,88 @@ policies:
         op: delete
   actions:
     - type: delete
+
+# key-pairs
+
+- name: mark-unknown-unused-keypairs-for-deletion
+  resource: aws.key-pair
+  description: |
+    Mark unknown user key-pairs for deletion in 1 day
+  filters:
+    # only show unused keys. note that aws won't let you delete used keys.
+    - unused
+    # instance name not in accepted user keys
+    - type: value
+      key: KeyName
+      op: regex
+      #doesNOTcontain
+      value:  "^((?!USERKEYS).)*$"
+    # instance is not doNotDelete
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - 'tag:ec2_known_user': absent
+    - "tag:DeletesOnFriday": absent
+    - "tag:ec2_unknown_user": absent
+    - not: 
+      - type: value
+        key: KeyName
+        op: regex
+        value:  "^.*DONOTDELETEKEYS.*$"
+    - not: 
+      - type: value
+        key: KeyName
+        op: regex
+        value:  "^.*-validation.*$"
+  actions:
+    - type: mark-for-op
+      tag: ec2_unknown_user
+      op: terminate
+      days: 1
+
+- name: mark-known-unused-keypairs-for-deletion
+  resource: aws.key-pair
+  description: |
+    Mark unknown user key-pairs for deletion in 1 day
+  filters:
+    - unused
+    - type: value
+      key: KeyName
+      op: regex
+      value:  "^.*USERKEYS.*$"
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - 'tag:ec2_unknown_user': absent
+    - "tag:DeletesOnFriday": absent
+    - "tag:ec2_known_user": absent
+    - not: 
+      - type: value
+        key: KeyName
+        op: regex
+        value:  "^.*DONOTDELETEKEYS.*$"
+    - not: 
+      - type: value
+        key: KeyName
+        op: regex
+        value:  "^.*-validation.*$"
+  actions:
+    - type: mark-for-op
+      tag: ec2_known_user
+      op: terminate
+      days: 2
+
+- name: ec2-terminate-instances
+  resource: aws.key-pair
+  description: |
+    Delete any marked keypairs which have been 
+    marked for deletion for more than 1 day.
+  filters:
+    - unused
+    - or:
+      - type: marked-for-op
+        tag: ec2_unknown_user
+        op: terminate
+      - type: marked-for-op
+        tag: ec2_known_user
+        op: terminate
+  actions:
+    - type: terminate
