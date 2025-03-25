@@ -14,14 +14,14 @@ trap error_handler ERR
 TARGET_BRANCH="main"
 TEMP_DIR=$(mktemp -d)
 
-touch $TEMP_DIR/diff.used-anywhere
-touch $TEMP_DIR/diff.test-functions
+touch "$TEMP_DIR/diff.used-anywhere"
+touch "$TEMP_DIR/diff.test-functions"
 
 # returns the name of a function, supplied as an argument
 grep-for-function-name() {
     echo "$1" | grep func | \
     sed -E 's/.*func[[:space:]]+([a-zA-Z0-9_]+).*/\1/' | \
-    grep -v "(" | \ 
+    grep -v "(" | \
     grep -v "//" # omit comments and functions that are part of a suite ()
 }
 
@@ -29,7 +29,7 @@ grep-for-function-name() {
 find-all-functions-anywhere() {
     for function_name in $1 ; do
         contained_files=$(grep -n -r "$function_name" --exclude-dir=".git" --exclude-dir=".github" . | grep -v "//" | grep ".go" | grep -v "main.go" )
-        echo "$contained_files" >> $TEMP_DIR/diff.test-functions
+        echo "$contained_files" >> "$TEMP_DIR/diff.test-functions"
     done
 }
 
@@ -47,23 +47,23 @@ grep-for-suite-and-test-name() {
 git fetch --all -q
 git config user.name "github-actions"
 git config user.email "github-actions@github.com"
-git checkout $1 -q
-git rebase origin/$TARGET_BRANCH --strategy-option=theirs -q
+git checkout "$1" -q
+git rebase "origin/$TARGET_BRANCH" --strategy-option=theirs -q
 
 # get all the modified test suites
-git diff origin/$TARGET_BRANCH -- . ':(exclude)*.sh' ':(exclude)*.yml' | while read line; do
-    grep-for-suite-and-test-name "$line" >> $TEMP_DIR/diff.used-anywhere
+git diff "origin/$TARGET_BRANCH" -- . ':(exclude)*.sh' ':(exclude)*.yml' | while read -r line; do
+    grep-for-suite-and-test-name "$line" >> "$TEMP_DIR/diff.used-anywhere"
 done
 
-echo "\nTestSuites above were modified. TestSuites below use modified code from this PR.\n" >> $TEMP_DIR/diff.used-anywhere
+echo "\nTestSuites above were modified. TestSuites below use modified code from this PR.\n" >> "$TEMP_DIR/diff.used-anywhere"
 
 # get all functions that changed (that aren't suites)
-git diff origin/$TARGET_BRANCH -- . ':(exclude)*.sh' ':(exclude)*.yml' | while read line; do
+git diff "origin/$TARGET_BRANCH" -- . ':(exclude)*.sh' ':(exclude)*.yml' | while read -r line; do
     next=$(grep-for-function-name "$line")
-    if [[ $next == *"Test"* ]]; then
-        echo $next >> $TEMP_DIR/diff.used-anywhere
+    if [[ "$next" == *"Test"* ]]; then
+        echo "$next" >> "$TEMP_DIR/diff.used-anywhere"
     else
-        find-all-functions-anywhere $next 
+        find-all-functions-anywhere "$next" 
     fi
 done
 
@@ -88,12 +88,12 @@ while IFS= read -r lines_not_tests; do
             fi
 
             test_name=$(grep-for-suite-and-test-name "$function_line")
-            if ! grep -q "$test_name" $TEMP_DIR/diff.used-anywhere; then
-                echo $test_name >> $TEMP_DIR/diff.used-anywhere
+            if ! grep -q "$test_name" "$TEMP_DIR/diff.used-anywhere"; then
+                echo "$test_name" >> "$TEMP_DIR/diff.used-anywhere"
             fi
         fi
     fi
-done < $TEMP_DIR/diff.test-functions
+done < "$TEMP_DIR/diff.test-functions"
 
 wait
 
@@ -101,9 +101,9 @@ wait
 curl_digestable_string=""
 while IFS= read -r official_tests; do
     curl_digestable_string+=$"\n$official_tests"
-done < $TEMP_DIR/diff.used-anywhere
+done < "$TEMP_DIR/diff.used-anywhere"
 
 echo "$curl_digestable_string"
 
 # Clean up
-rm -rf $TEMP_DIR
+rm -rf "$TEMP_DIR"
