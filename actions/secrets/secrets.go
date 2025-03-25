@@ -7,7 +7,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	"github.com/rancher/shepherd/pkg/wrangler"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -17,16 +17,9 @@ const (
 
 // CreateSecret is a helper to create a secret using wrangler client
 func CreateSecret(client *rancher.Client, clusterID, namespaceName string, data map[string][]byte, secretType corev1.SecretType) (*corev1.Secret, error) {
-	var ctx *wrangler.Context
-	var err error
-
-	if clusterID != "local" {
-		ctx, err = client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get downstream context: %w", err)
-		}
-	} else {
-		ctx = client.WranglerContext
+	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster context: %w", err)
 	}
 
 	secretName := namegen.AppendRandomString("testsecret")
@@ -42,16 +35,9 @@ func CreateSecret(client *rancher.Client, clusterID, namespaceName string, data 
 
 // CreateSecretWithAnnotations is a helper to create a secret and includes provided annotations using wrangler client
 func CreateSecretWithAnnotations(client *rancher.Client, clusterID, namespaceName string, data map[string][]byte, annotations map[string]string, secretType corev1.SecretType) (*corev1.Secret, error) {
-	var ctx *wrangler.Context
-	var err error
-
-	if clusterID != "local" {
-		ctx, err = client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get downstream context: %w", err)
-		}
-	} else {
-		ctx = client.WranglerContext
+	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster context: %w", err)
 	}
 
 	secretName := namegen.AppendRandomString("testsecret")

@@ -36,6 +36,7 @@ const (
 	ReadOnly                  Role = "read-only"
 	CustomManageProjectMember Role = "projectroletemplatebindings-manage"
 	CrtbView                  Role = "clusterroletemplatebindings-view"
+	PrtbView                  Role = "projectroletemplatebindings-view"
 	ProjectsCreate            Role = "projects-create"
 	ProjectsView              Role = "projects-view"
 	ManageWorkloads           Role = "workloads-manage"
@@ -51,6 +52,10 @@ const (
 	UserAttributeResource          = "userattribute"
 	GroupsResource                 = "groups"
 	GroupMembersResource           = "groupmembers"
+	PrtbResource                   = "projectroletemplatebindings"
+	SecretsResource                = "secrets"
+	ClusterContext                 = "cluster"
+	ProjectContext                 = "project"
 )
 
 func (r Role) String() string {
