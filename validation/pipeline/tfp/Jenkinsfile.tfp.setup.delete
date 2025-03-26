@@ -1,6 +1,6 @@
 #!groovy
 node {
-  def TERRAFORM_DIR = './root/go/src/github.com/rancher/tfp-automation/modules/airgap'
+  def TERRAFORM_DIR = "./root/go/src/github.com/rancher/tfp-automation/modules/${env.MODULE}"
   def job_name = "${JOB_NAME}"
   if (job_name.contains('/')) { 
     job_names = job_name.split('/')
