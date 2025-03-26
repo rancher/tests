@@ -61,7 +61,7 @@ func InstallStackStateServerChart(client *rancher.Client, installOptions *charts
 	stackstateChartInstallActionPayload := &charts.PayloadOpts{
 		InstallOptions: *installOptions,
 		Name:           StackStateServerChartRepo,
-		Namespace:      StackstateNamespace,
+		Namespace:      StackStateServerNamespace,
 		Host:           serverSetting.Value,
 	}
 
@@ -79,7 +79,7 @@ func InstallStackStateServerChart(client *rancher.Client, installOptions *charts
 		return err
 	}
 
-	watchAppInterface, err := catalogClient.Apps(StackstateNamespace).Watch(context.TODO(), metav1.ListOptions{
+	watchAppInterface, err := catalogClient.Apps(StackStateServerNamespace).Watch(context.TODO(), metav1.ListOptions{
 		FieldSelector:  "metadata.name=" + StackStateServerChartRepo,
 		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 	})

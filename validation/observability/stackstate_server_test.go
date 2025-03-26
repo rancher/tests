@@ -103,7 +103,7 @@ func (sss *StackStateServerTestSuite) SetupSuite() {
 	}
 }
 
-func (sss *StackStateServerTestSuite) TestInstallStackStateServerNonHAValues() {
+func (sss *StackStateServerTestSuite) TestInstall() {
 	subsession := sss.session.NewSession()
 	defer subsession.Cleanup()
 
@@ -202,7 +202,7 @@ func (sss *StackStateServerTestSuite) TestInstallStackStateServerNonHAValues() {
 	})
 }
 
-func (sss *StackStateServerTestSuite) TestInstallStackStateServerHAValues() {
+func (sss *StackStateServerTestSuite) TestInstallHAValues() {
 	subsession := sss.session.NewSession()
 	defer subsession.Cleanup()
 
