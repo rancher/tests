@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	// Third-party library imports
 	log "github.com/sirupsen/logrus"
@@ -93,6 +94,7 @@ func (sss *StackStateServerTestSuite) SetupSuite() {
 	}
 	require.NoError(sss.T(), err)
 
+	time.Sleep(10 * time.Second)
 	latestSSVersion, err := sss.catalogClient.GetLatestChartVersion(interoperablecharts.StackStateServerChartRepo, observabilityChartName)
 	require.NoError(sss.T(), err)
 
@@ -103,7 +105,7 @@ func (sss *StackStateServerTestSuite) SetupSuite() {
 	}
 }
 
-func (sss *StackStateServerTestSuite) TestInstall() {
+func (sss *StackStateServerTestSuite) TestInstallNonHA() {
 	subsession := sss.session.NewSession()
 	defer subsession.Cleanup()
 
@@ -153,7 +155,7 @@ func (sss *StackStateServerTestSuite) TestInstall() {
 	sizingConfigData, err := os.ReadFile("resources/10-nonha_sizing_values.yaml")
 	require.NoError(sss.T(), err)
 
-	var sizingConfig observability.SizingConfig
+	var sizingConfig observability.SizingConfigNonHA
 	err = yaml.Unmarshal(sizingConfigData, &sizingConfig)
 	require.NoError(sss.T(), err)
 
@@ -252,7 +254,7 @@ func (sss *StackStateServerTestSuite) TestInstallHAValues() {
 	sizingConfigData, err := os.ReadFile("resources/150-ha_sizing_values.yaml")
 	require.NoError(sss.T(), err)
 
-	var sizingConfig observability.SizingConfig
+	var sizingConfig observability.SizingConfigHA
 	err = yaml.Unmarshal(sizingConfigData, &sizingConfig)
 	require.NoError(sss.T(), err)
 

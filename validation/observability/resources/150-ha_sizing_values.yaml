@@ -1,4 +1,3 @@
----
 # Source: suse-observability-values/templates/sizing_values.yaml
 # profile 150-ha
 clickhouse:
