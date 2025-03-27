@@ -8,8 +8,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
-
 	// Third-party library imports
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -94,7 +92,6 @@ func (sss *StackStateServerTestSuite) SetupSuite() {
 	}
 	require.NoError(sss.T(), err)
 
-	time.Sleep(10 * time.Second)
 	latestSSVersion, err := sss.catalogClient.GetLatestChartVersion(interoperablecharts.StackStateServerChartRepo, observabilityChartName)
 	require.NoError(sss.T(), err)
 
