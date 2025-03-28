@@ -377,6 +377,32 @@ func CreateClusterRoleTemplateBinding(client *rancher.Client, clusterID string, 
 	return crtb, nil
 }
 
+// GetClusterRoleTemplateBindingsForUser fetches clusterroletemplatebindings for a specific user
+func GetClusterRoleTemplateBindingsForUser(rancherClient *rancher.Client, userID string) (*v3.ClusterRoleTemplateBinding, error) {
+	var matchingCRTB *v3.ClusterRoleTemplateBinding
+	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
+		crtbList, err := rbacapi.ListClusterRoleTemplateBindings(rancherClient, metav1.ListOptions{})
+		if err != nil {
+			return false, err
+		}
+
+		for _, crtb := range crtbList.Items {
+			if crtb.UserName == userID {
+				matchingCRTB = &crtb
+				return true, nil
+			}
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("error while polling for crtb: %w", err)
+	}
+
+	return matchingCRTB, nil
+}
+
 // WaitForCrtbStatus waits for the CRTB to reach the Completed status or checks for its existence if status field is not supported (older Rancher versions)
 func WaitForCrtbStatus(client *rancher.Client, crtbNamespace, crtbName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaults.OneMinuteTimeout)
