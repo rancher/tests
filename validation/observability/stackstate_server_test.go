@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
 	// Third-party library imports
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -103,7 +102,7 @@ func (sss *StackStateServerTestSuite) SetupSuite() {
 	}
 }
 
-func (sss *StackStateServerTestSuite) TestInstallStackState() {
+func (sss *StackStateServerTestSuite) TestInstallNonHA() {
 	subsession := sss.session.NewSession()
 	defer subsession.Cleanup()
 
@@ -153,7 +152,7 @@ func (sss *StackStateServerTestSuite) TestInstallStackState() {
 	sizingConfigData, err := os.ReadFile("resources/10-nonha_sizing_values.yaml")
 	require.NoError(sss.T(), err)
 
-	var sizingConfig observability.SizingConfig
+	var sizingConfig observability.SizingConfigNonHA
 	err = yaml.Unmarshal(sizingConfigData, &sizingConfig)
 	require.NoError(sss.T(), err)
 
@@ -174,6 +173,105 @@ func (sss *StackStateServerTestSuite) TestInstallStackState() {
 	systemProjectID := strings.Split(systemProject.ID, ":")[1]
 
 	sss.Run("Install SUSE Observability Server Chart with non HA values", func() {
+		err = interoperablecharts.InstallStackStateServerChart(sss.client, sss.stackstateChartInstallOptions, systemProjectID, mergedValues)
+		require.NoError(sss.T(), err)
+		log.Info("Stackstate server chart installed successfully")
+
+		sss.T().Log("Verifying the deployments of stackstate server chart to have expected number of available replicas")
+		err = extencharts.WatchAndWaitDeployments(sss.client, sss.cluster.ID, interoperablecharts.StackStateServerNamespace, meta.ListOptions{})
+		require.NoError(sss.T(), err)
+
+		sss.T().Log("Verifying the daemonsets of stackstate server chart to have expected number of available replicas nodes")
+		err = extencharts.WatchAndWaitDaemonSets(sss.client, sss.cluster.ID, interoperablecharts.StackStateServerNamespace, meta.ListOptions{})
+		require.NoError(sss.T(), err)
+
+		clusterObject, _, _ := extensionscluster.GetProvisioningClusterByName(sss.client, sss.client.RancherConfig.ClusterName, fleet.Namespace)
+		var clusterName string
+		if clusterObject != nil {
+			status := &provv1.ClusterStatus{}
+			err := steveV1.ConvertToK8sType(clusterObject.Status, status)
+			require.NoError(sss.T(), err)
+			clusterName = status.ClusterName
+		} else {
+			clusterName, err = extensionscluster.GetClusterIDByName(sss.client, sss.client.RancherConfig.ClusterName)
+			require.NoError(sss.T(), err)
+		}
+		podErrors := pods.StatusPods(sss.client, clusterName)
+		require.Empty(sss.T(), podErrors)
+	})
+}
+
+func (sss *StackStateServerTestSuite) TestInstallHAValues() {
+	subsession := sss.session.NewSession()
+	defer subsession.Cleanup()
+
+	var stackstateConfigs observability.StackStateConfig
+	config.LoadConfig(stackStateConfigFileKey, &stackstateConfigs)
+
+	baseConfig := observability.BaseConfig{
+		Global: struct {
+			ImageRegistry string `json:"imageRegistry" yaml:"imageRegistry"`
+		}{
+			ImageRegistry: "registry.rancher.com",
+		},
+		Stackstate: observability.StackstateServerConfig{
+			BaseUrl: stackstateConfigs.Url,
+			Authentication: observability.AuthenticationConfig{
+				AdminPassword: stackstateConfigs.AdminPassword,
+			},
+			ApiKey: observability.ApiKeyConfig{
+				Key: stackstateConfigs.ClusterApiKey,
+			},
+			License: observability.LicenseConfig{
+				Key: stackstateConfigs.License,
+			},
+		},
+	}
+
+	ingressConfig := observability.IngressConfig{
+		Ingress: observability.Ingress{
+			Enabled: true,
+			Annotations: map[string]string{
+				"nginx.ingress.kubernetes.io/proxy-body-size": "50m",
+			},
+			Hosts: []observability.Host{
+				{
+					Host: stackstateConfigs.Url,
+				},
+			},
+			TLS: []observability.TLSConfig{
+				{
+					Hosts:      []string{stackstateConfigs.Url},
+					SecretName: "tls-secret",
+				},
+			},
+		},
+	}
+
+	sizingConfigData, err := os.ReadFile("resources/150-ha_sizing_values.yaml")
+	require.NoError(sss.T(), err)
+
+	var sizingConfig observability.SizingConfigHA
+	err = yaml.Unmarshal(sizingConfigData, &sizingConfig)
+	require.NoError(sss.T(), err)
+
+	ingressConfigMap, err := interoperablecharts.StructToMap(ingressConfig)
+	require.NoError(sss.T(), err)
+
+	baseConfigMap, err := interoperablecharts.StructToMap(baseConfig)
+	require.NoError(sss.T(), err)
+
+	sizingConfigMap, err := interoperablecharts.StructToMap(sizingConfig)
+	require.NoError(sss.T(), err)
+
+	mergedValues := interoperablecharts.MergeValues(ingressConfigMap, baseConfigMap, sizingConfigMap)
+
+	systemProject, err := rancherProjects.GetProjectByName(sss.client, sss.cluster.ID, systemProject)
+	require.NoError(sss.T(), err)
+	require.NotNil(sss.T(), systemProject.ID, "System project is nil.")
+	systemProjectID := strings.Split(systemProject.ID, ":")[1]
+
+	sss.Run("Install SUSE Observability Server Chart with HA values", func() {
 		err = interoperablecharts.InstallStackStateServerChart(sss.client, sss.stackstateChartInstallOptions, systemProjectID, mergedValues)
 		require.NoError(sss.T(), err)
 		log.Info("Stackstate server chart installed successfully")
