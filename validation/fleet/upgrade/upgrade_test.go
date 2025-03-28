@@ -163,7 +163,7 @@ func (u *UpgradeTestSuite) TestGitRepoForceUpdate() {
 	lastUpdateTime, err := time.Parse(time.RFC3339, gitRepo.Status.Conditions[0].LastUpdateTime)
 	require.NoError(u.T(), err)
 
-	require.True(u.T(), previousUpdateTime.Before(lastUpdateTime))
+	require.Equal(u.T(), previousUpdateTime, lastUpdateTime)
 	require.Equal(u.T(), previousCommit, gitRepo.Status.Commit)
 
 	u.T().Log("Verifying the Fleet GitRepo")

@@ -2,7 +2,7 @@
 node {
   def homePath = pwd() + "/"
   def rootPath = "/root/go/src/github.com/rancher/tfp-automation/"
-  def TERRAFORM_DIR = './root/go/src/github.com/rancher/tfp-automation/modules/airgap'
+  def TERRAFORM_DIR = "./root/go/src/github.com/rancher/tfp-automation/modules/${env.MODULE}"
   def testsDir = "github.com/rancher/tfp-automation/tests/${env.TEST_PACKAGE}"
   def job_name = "${JOB_NAME}"
   if (job_name.contains('/')) { 
