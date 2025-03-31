@@ -15,16 +15,16 @@ jobs:
       pull-requests: write
       issues: write
 
-    if: $(git rev-parse origin/main) != ${{ github.event.workflow_run.head_commit.id }}
+    if: ${{github.repository != github.event.workflow_run.head_repository.full_name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
- 
+        
       - name: Get Recommended Tests
         run: |
             {
                 echo 'tests_from_script<<EOF'
-                ./.github/scripts/check-changed-tests.sh "${{ github.event.workflow_run.head_commit.id }}" "${{ github.event.workflow_run.head_repository.url }}"
+                ./.github/scripts/check-changed-tests.sh "${{ github.event.workflow_run.head_commit.id }}" "${{ github.event.workflow_run.head_repository.full_name }}"
                 echo EOF
             } >> "$GITHUB_ENV"
             
