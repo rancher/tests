@@ -42,7 +42,6 @@ grep-for-suite-and-test-name() {
     fi
 }
 
-
 # prepare for git diff to compare with latest main branch from origin. 
 git fetch --all -q
 git config user.name "github-actions"
