@@ -24,11 +24,10 @@ jobs:
         run: |
             {
                 echo 'tests_from_script<<EOF'
-                ./.github/scripts/check-changed-tests.sh "${{ github.event.workflow_run.head_commit.id }}"
+                ./.github/scripts/check-changed-tests.sh "${{ github.event.workflow_run.head_commit.id }}" "${{ github.event.workflow_run.head_repository.url }}"
                 echo EOF
             } >> "$GITHUB_ENV"
             
-            echo "rec_tests=Hi, I am a friendly algorithm to help determine which tests you brok.. erm, modified. I suggest you run these! \n" >> $GITHUB_ENV
       - name: Add comment to PR
         run: |
             PR_NUMBER=$(curl -s \
@@ -40,7 +39,7 @@ jobs:
               response=$(curl -s -o response.json -w "%{http_code}" -X POST \
                   -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }} " \
                   -H "Accept: application/vnd.github.v3+json" \
-                  --data-binary '{"body": "'"$rec_tests $tests_from_script"'"}' \
+                  --data-binary '{"body": "'"$tests_from_script"'"}' \
                   "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments")
 
               if [[ "$response" -lt 200 || "$response" -gt 300 ]]; then

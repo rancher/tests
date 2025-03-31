@@ -46,6 +46,10 @@ grep-for-suite-and-test-name() {
 git fetch --all -q
 git config user.name "github-actions"
 git config user.email "github-actions@github.com"
+
+git remote add forked-upstream "$2"
+git fetch forked-upstream
+
 git checkout "$1" -q
 git rebase "origin/$TARGET_BRANCH" --strategy-option=theirs -q
 
