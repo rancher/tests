@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e
-
 error_handler() {
   local lineno=${BASH_LINENO[0]}
   local funcname=${FUNCNAME[1]} 
@@ -110,7 +108,7 @@ while IFS= read -r official_tests; do
     ((count++))
 done < "$TEMP_DIR/diff.used-anywhere"
 
-if [$count -gt 1 ]; then
+if [ $count -gt 1 ]; then
     echo "$curl_digestable_string"
 fi
 
