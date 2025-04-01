@@ -110,7 +110,7 @@ while IFS= read -r official_tests; do
     ((count++))
 done < "$TEMP_DIR/diff.used-anywhere"
 
-if [$count -gt 1 ]; then
+if [ $count -gt 1 ]; then
     echo "$curl_digestable_string"
 fi
 
