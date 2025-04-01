@@ -51,7 +51,7 @@ git remote add forked-upstream https://github.com/"$2".git
 git fetch forked-upstream -q
 
 git checkout "$1" -q
-git rebase "upstream/$TARGET_BRANCH" --strategy-option=theirs -q
+git rebase "origin/$TARGET_BRANCH" --strategy-option=theirs -q
 
 # get all the modified test suites
 git diff "origin/$TARGET_BRANCH" -- . ':(exclude)*.sh' ':(exclude)*.yml' | while read -r line; do
