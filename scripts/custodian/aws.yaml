@@ -335,7 +335,7 @@ policies:
       op: terminate
       days: 2
 
-- name: ec2-terminate-instances
+- name: ec2-terminate-keypairs
   resource: aws.key-pair
   description: |
     Delete any marked keypairs which have been 
@@ -350,4 +350,4 @@ policies:
         tag: ec2_known_user
         op: terminate
   actions:
-    - type: terminate
+    - type: delete
