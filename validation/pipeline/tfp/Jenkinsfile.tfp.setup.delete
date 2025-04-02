@@ -90,7 +90,7 @@ node {
                 s3 rm s3://$AWS_S3_BUCKET/terraform/ --recursive
                 """   
             }
-          }catch{
+          }catch(err){
             sh "docker rm $s3Container"
             sh  "docker volume rm $terraformVolume"            
           }
