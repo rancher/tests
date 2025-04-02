@@ -55,14 +55,14 @@ git checkout "$1" -q
 git rebase "origin/$TARGET_BRANCH" --strategy-option=theirs -q
 
 # get all the modified test suites
-git diff "origin/$TARGET_BRANCH" --ignore-space-change --unified=0 -- . ':(exclude)*.sh' ':(exclude)*.yml' | while read -r line; do
+git diff "origin/$TARGET_BRANCH" --ignore-space-change --unified=0 -- . ':(exclude)*.sh' ':(exclude)*.yml' ':(exclude)*Jenkinsfile*' | while read -r line; do
     grep-for-suite-and-test-name "$line" >> "$TEMP_DIR/diff.used-anywhere"
 done
 
 echo "\nTestSuites above were modified. TestSuites below use modified code from this PR.\n" >> "$TEMP_DIR/diff.used-anywhere"
 
 # get all functions that changed (that aren't suites)
-git diff "origin/$TARGET_BRANCH" --ignore-space-change --unified=0 -- . ':(exclude)*.sh' ':(exclude)*.yml' | while read -r line; do
+git diff "origin/$TARGET_BRANCH" --ignore-space-change --unified=0 -- . ':(exclude)*.sh' ':(exclude)*.yml' ':(exclude)*Jenkinsfile*' | while read -r line; do
     next=$(grep-for-function-name "$line")
     if [[ "$next" == *"Test"* ]]; then
         echo "$next" >> "$TEMP_DIR/diff.used-anywhere"
