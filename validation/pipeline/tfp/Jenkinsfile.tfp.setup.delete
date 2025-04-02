@@ -27,6 +27,7 @@ node {
                     string(credentialsId: 'RANCHER_LINODE_ACCESSKEY', variable: 'RANCHER_LINODE_ACCESSKEY'),
                     string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
                     string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
+                    string(credentialsId: 'AWS_SSH_RSA_KEY', variable: 'AWS_SSH_RSA_KEY'),
                     string(credentialsId: 'QASE_AUTOMATION_TOKEN', variable: 'QASE_AUTOMATION_TOKEN')]) {
       stage('Checkout') {
               deleteDir()
@@ -38,7 +39,13 @@ node {
                       ])
             }
         stage('Configure and Build') {
-          sh "docker build . -f Dockerfile --build-arg TERRAFORM_VERSION=${env.TERRAFORM_VERSION} -t ${imageName}"
+          dir(".ssh") {
+              def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
+              writeFile file: AWS_SSH_KEY_NAME, text: decoded
+
+          }
+          
+          sh "docker build . -f Dockerfile --build-arg PEM_FILE=key.pem  --build-arg TERRAFORM_VERSION=${env.TERRAFORM_VERSION} -t ${imageName}"
         }
         stage('Setup'){
             sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
