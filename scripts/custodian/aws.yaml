@@ -301,7 +301,7 @@ policies:
   actions:
     - type: mark-for-op
       tag: ec2_unknown_user
-      op: terminate
+      op: delete
       days: 1
 
 - name: mark-known-unused-keypairs-for-deletion
@@ -332,10 +332,10 @@ policies:
   actions:
     - type: mark-for-op
       tag: ec2_known_user
-      op: terminate
+      op: delete
       days: 2
 
-- name: ec2-terminate-keypairs
+- name: ec2-delete-keypairs
   resource: aws.key-pair
   description: |
     Delete any marked keypairs which have been 
@@ -345,9 +345,9 @@ policies:
     - or:
       - type: marked-for-op
         tag: ec2_unknown_user
-        op: terminate
+        op: delete
       - type: marked-for-op
         tag: ec2_known_user
-        op: terminate
+        op: delete
   actions:
     - type: delete
