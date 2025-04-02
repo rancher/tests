@@ -19,10 +19,11 @@ touch "$TEMP_DIR/diff.test-functions"
 
 # returns the name of a function, supplied as an argument
 grep-for-function-name() {
-    echo "$1" | grep func | \
+    echo "$1" | grep 'func' | \
+    grep -v ',0' | \
     sed -E 's/.*func[[:space:]]+([a-zA-Z0-9_]+).*/\1/' | \
     grep -v "(" | \
-    grep -v "//" # omit comments and functions that are part of a suite ()
+    grep -v "//" # omit comments and functions that are part of a suite (). Only search added or removed lines +/-
 }
 
 # modifies diff.test-functions, adding a line-by-line list of where each supplied function is used, if it is used anywhere in go files.
@@ -54,19 +55,20 @@ git checkout "$1" -q
 git rebase "origin/$TARGET_BRANCH" --strategy-option=theirs -q
 
 # get all the modified test suites
-git diff "origin/$TARGET_BRANCH" -- . ':(exclude)*.sh' ':(exclude)*.yml' | while read -r line; do
+git diff "origin/$TARGET_BRANCH" --ignore-space-change --unified=0 -- . ':(exclude)*.sh' ':(exclude)*.yml' | while read -r line; do
     grep-for-suite-and-test-name "$line" >> "$TEMP_DIR/diff.used-anywhere"
 done
 
 echo "\nTestSuites above were modified. TestSuites below use modified code from this PR.\n" >> "$TEMP_DIR/diff.used-anywhere"
 
 # get all functions that changed (that aren't suites)
-git diff "origin/$TARGET_BRANCH" -- . ':(exclude)*.sh' ':(exclude)*.yml' | while read -r line; do
+git diff "origin/$TARGET_BRANCH" --ignore-space-change --unified=0 -- . ':(exclude)*.sh' ':(exclude)*.yml' | while read -r line; do
     next=$(grep-for-function-name "$line")
     if [[ "$next" == *"Test"* ]]; then
         echo "$next" >> "$TEMP_DIR/diff.used-anywhere"
-    else
-        find-all-functions-anywhere "$next" 
+    else if [[ -n "$next" ]]; then
+            find-all-functions-anywhere "$next"
+        fi
     fi
 done
 
