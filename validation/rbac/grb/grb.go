@@ -19,16 +19,16 @@ const (
 	deploymentName                                            = "rancher"
 	deploymentEnvVarName                                      = "CATTLE_RESYNC_DEFAULT"
 	dummyFinalizer                                            = "dummy.example.com"
-	FalseConditionStatus               metav1.ConditionStatus = "False"
-	TrueConditionStatus                metav1.ConditionStatus = "True"
-	ErrorConditionStatus                                      = "Error"
+	falseConditionStatus               metav1.ConditionStatus = "False"
+	trueConditionStatus                metav1.ConditionStatus = "True"
+	errorConditionStatus                                      = "Error"
 	failedToGetGlobalRoleReason                               = "FailedToGetGlobalRole"
-	CompletedSummary                                          = "Completed"
-	ClusterPermissionsReconciled                              = "ClusterPermissionsReconciled"
-	GlobalRoleBindingReconciled                               = "GlobalRoleBindingReconciled"
-	NamespacedRoleBindingReconciled                           = "NamespacedRoleBindingReconciled"
-	FleetWorkspacePermissionReconciled                        = "FleetWorkspacePermissionReconciled"
-	ClusterAdminRoleExists                                    = "ClusterAdminRoleExists"
+	completedSummary                                          = "Completed"
+	clusterPermissionsReconciled                              = "ClusterPermissionsReconciled"
+	globalRoleBindingReconciled                               = "GlobalRoleBindingReconciled"
+	namespacedRoleBindingReconciled                           = "NamespacedRoleBindingReconciled"
+	fleetWorkspacePermissionReconciled                        = "FleetWorkspacePermissionReconciled"
+	clusterAdminRoleExists                                    = "ClusterAdminRoleExists"
 )
 
 var (
@@ -75,14 +75,14 @@ func verifyGlobalRoleBindingStatusField(grb *v3.GlobalRoleBinding, isAdminGlobal
 	}
 
 	requiredLocalConditions := []string{
-		ClusterPermissionsReconciled,
-		GlobalRoleBindingReconciled,
-		NamespacedRoleBindingReconciled,
+		clusterPermissionsReconciled,
+		globalRoleBindingReconciled,
+		namespacedRoleBindingReconciled,
 	}
 	for _, condition := range status.LocalConditions {
 		for _, reqType := range requiredLocalConditions {
 			if condition.Type == reqType {
-				if condition.Status != TrueConditionStatus {
+				if condition.Status != trueConditionStatus {
 					return fmt.Errorf("%s condition is not True. Actual status: %s", reqType, condition.Status)
 				}
 
@@ -105,23 +105,23 @@ func verifyGlobalRoleBindingStatusField(grb *v3.GlobalRoleBinding, isAdminGlobal
 		return fmt.Errorf("observedGenerationLocal is not 1, found: %d", status.ObservedGenerationLocal)
 	}
 
-	if status.Summary != CompletedSummary || status.SummaryLocal != CompletedSummary {
+	if status.Summary != completedSummary || status.SummaryLocal != completedSummary {
 		return fmt.Errorf("summary or summaryLocal is not 'Completed'")
 	}
 
 	if isAdminGlobalRole {
 		if status.RemoteConditions != nil {
 			for _, condition := range status.RemoteConditions {
-				if condition.Type == ClusterAdminRoleExists && condition.Status != TrueConditionStatus {
-					return fmt.Errorf("ClusterAdminRoleExists condition is not True. Actual status: %s", condition.Status)
+				if condition.Type == clusterAdminRoleExists && condition.Status != trueConditionStatus {
+					return fmt.Errorf("clusterAdminRoleExists condition is not True. Actual status: %s", condition.Status)
 				}
 
 				if condition.LastTransitionTime.IsZero() {
-					return fmt.Errorf("%s lastTransitionTime is not set or invalid", ClusterAdminRoleExists)
+					return fmt.Errorf("%s lastTransitionTime is not set or invalid", clusterAdminRoleExists)
 				}
 
 				if condition.Message != "" {
-					return fmt.Errorf("%s message should be empty. Actual message: %s", ClusterAdminRoleExists, condition.Message)
+					return fmt.Errorf("%s message should be empty. Actual message: %s", clusterAdminRoleExists, condition.Message)
 				}
 
 				if condition.Reason != condition.Type {
@@ -134,7 +134,7 @@ func verifyGlobalRoleBindingStatusField(grb *v3.GlobalRoleBinding, isAdminGlobal
 			return fmt.Errorf("observedGenerationRemote is not 1, found: %d", status.ObservedGenerationRemote)
 		}
 
-		if status.SummaryRemote != CompletedSummary {
+		if status.SummaryRemote != completedSummary {
 			return fmt.Errorf("summaryRemote is not 'Completed'")
 		}
 	}
