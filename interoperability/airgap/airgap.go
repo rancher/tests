@@ -85,16 +85,21 @@ func TfpSetupSuite(t *testing.T) (map[string]any, *rancher.Config, *terraform.Op
 	client.RancherConfig.AdminPassword = rancherConfig.AdminPassword
 	client.RancherConfig.Host = terraformConfig.Standalone.AirgapInternalFQDN
 
-	operations.ReplaceValue([]string{"rancher", "adminToken"}, rancherConfig.AdminToken, configMap[0])
-	operations.ReplaceValue([]string{"rancher", "adminPassword"}, rancherConfig.AdminPassword, configMap[0])
-	operations.ReplaceValue([]string{"rancher", "host"}, rancherConfig.Host, configMap[0])
+	_, err = operations.ReplaceValue([]string{"rancher", "adminToken"}, rancherConfig.AdminToken, configMap[0])
+	require.NoError(t, err)
+
+	_, err = operations.ReplaceValue([]string{"rancher", "adminPassword"}, rancherConfig.AdminPassword, configMap[0])
+	require.NoError(t, err)
+	_, err = operations.ReplaceValue([]string{"rancher", "host"}, rancherConfig.Host, configMap[0])
+	require.NoError(t, err)
 
 	err = pipeline.PostRancherInstall(client, client.RancherConfig.AdminPassword)
 	require.NoError(t, err)
 
 	client.RancherConfig.Host = rancherConfig.Host
 
-	operations.ReplaceValue([]string{"rancher", "host"}, rancherConfig.Host, configMap[0])
+	_, err = operations.ReplaceValue([]string{"rancher", "host"}, rancherConfig.Host, configMap[0])
+	require.NoError(t, err)
 
 	keyPath := rancher2.SetKeyPath(keypath.RancherKeyPath)
 	terraformOptions := framework.Setup(t, terraformConfig, terratestConfig, keyPath)
