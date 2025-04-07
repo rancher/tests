@@ -3,6 +3,7 @@
 package airgap
 
 import (
+	airgap2 "github.com/rancher/tests/interoperability/airgap"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/corral"
@@ -17,7 +18,6 @@ import (
 	"github.com/rancher/shepherd/pkg/config/operations"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/airgap"
 	"github.com/rancher/tests/actions/clusters"
 	provisioning "github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioning/permutations"
@@ -79,7 +79,7 @@ func (a *AirGapRKE1CustomClusterTestSuite) SetupSuite() {
 	corralRancherHA := new(corralha.CorralRancherHA)
 	config.LoadConfig(corralha.CorralRancherHAConfigConfigurationFileKey, corralRancherHA)
 	if corralRancherHA.Name != "" {
-		a.registryFQDN = airgap.AirgapCorral(a.T(), corralRancherHA)
+		a.registryFQDN = airgap2.AirgapCorral(a.T(), corralRancherHA)
 		corralConfig := corral.Configurations()
 
 		err = corral.SetupCorralConfig(corralConfig.CorralConfigVars, corralConfig.CorralConfigUser, corralConfig.CorralSSHPath)
@@ -87,8 +87,8 @@ func (a *AirGapRKE1CustomClusterTestSuite) SetupSuite() {
 
 		a.corralPackage = corral.PackagesConfig()
 	} else {
-		tfRancherHA := new(airgap.TerraformConfig)
-		config.LoadConfig(airgap.TerraformConfigurationFileKey, tfRancherHA)
+		tfRancherHA := new(airgap2.TerraformConfig)
+		config.LoadConfig(airgap2.TerraformConfigurationFileKey, tfRancherHA)
 		a.registryFQDN = tfRancherHA.StandaloneAirgapConfig.PrivateRegistry
 	}
 }
@@ -119,7 +119,7 @@ func (a *AirGapRKE1CustomClusterTestSuite) TestProvisioningAirGapRKE1CustomClust
 		if a.corralPackage != nil {
 			permutations.RunTestPermutations(&a.Suite, tt.name, tt.client, a.clustersConfig, permutations.RKE1AirgapCluster, nil, a.corralPackage)
 		} else {
-			cattleConfig, rancherConfig, terraformOptions, terraformConfig, terratestConfig := airgap.TfpSetupSuite(a.T())
+			cattleConfig, rancherConfig, terraformOptions, terraformConfig, terratestConfig := airgap2.TfpSetupSuite(a.T())
 
 			testUser, testPassword := configs.CreateTestCredentials()
 			configMap := []map[string]any{cattleConfig}
@@ -181,7 +181,7 @@ func (a *AirGapRKE1CustomClusterTestSuite) TestProvisioningUpgradeAirGapRKE1Cust
 				reports.TimeoutRKEReport(clusterObject, err)
 				require.NoError(a.T(), err)
 			} else {
-				cattleConfig, rancherConfig, terraformOptions, terraformConfig, terratestConfig := airgap.TfpSetupSuite(a.T())
+				cattleConfig, rancherConfig, terraformOptions, terraformConfig, terratestConfig := airgap2.TfpSetupSuite(a.T())
 
 				testUser, testPassword := configs.CreateTestCredentials()
 				configMap := []map[string]any{cattleConfig}
