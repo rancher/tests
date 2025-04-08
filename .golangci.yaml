@@ -31,7 +31,7 @@ linters-settings:
 run:
   tests: true
   relative-path-mode: wd
-  build-tags: [validation,"2.10"]
+  build-tags: [validation,"2.11"]
   timeout: 8m
 issues:
   max-issues-per-linter: 0

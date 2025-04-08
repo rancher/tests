@@ -1,4 +1,4 @@
-# Global Role Binding Status Field
+# GlobalRoleBinding
 
 ## Pre-requisites
 
@@ -6,7 +6,9 @@
 
 ## Test Setup
 
-Your GO suite should be set to `-run ^TestGlobalRoleBindingStatusFieldTestSuite$`.
+Your GO suite should be set to -run ^Test<TestSuite>$
+- To run the grb_status_field_test.go, set the GO suite to -run ^TestGlobalRoleBindingStatusFieldTestSuite$
+- To run the grb_upn_test.go, set the GO suite to -run ^TestGlobalRolesUserPrincipalNameTestSuite$
 
 In your config file, set the following:
 

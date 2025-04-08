@@ -29,6 +29,10 @@ const (
 	namespacedRoleBindingReconciled                           = "NamespacedRoleBindingReconciled"
 	fleetWorkspacePermissionReconciled                        = "FleetWorkspacePermissionReconciled"
 	clusterAdminRoleExists                                    = "ClusterAdminRoleExists"
+	upnString                                                 = "testuser1"
+	principalDisplayNameAnnotation                            = "auth.cattle.io/principal-display-name"
+	testPrincipalDisplayName                                  = "testPrincipalDisplayName"
+	testGroupPrincipalName                                    = "testGroupPrincipalName"
 )
 
 var (
@@ -43,6 +47,15 @@ var (
 				Verbs:     []string{"*"},
 			},
 		},
+	}
+
+	customGlobalRoleBinding = v3.GlobalRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "",
+			Annotations: map[string]string{},
+		},
+		GlobalRoleName:    "",
+		UserPrincipalName: upnString,
 	}
 )
 
@@ -139,5 +152,21 @@ func verifyGlobalRoleBindingStatusField(grb *v3.GlobalRoleBinding, isAdminGlobal
 		}
 	}
 
+	return nil
+}
+
+func verifyUserByPrincipalIDExists(client *rancher.Client, principalID string) error {
+	userList, err := client.WranglerContext.Mgmt.User().List(metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("Failed to list users %w", err)
+	}
+
+	for _, user := range userList.Items {
+		for _, principalId := range user.PrincipalIDs {
+			if principalId == principalID {
+				return nil
+			}
+		}
+	}
 	return nil
 }
