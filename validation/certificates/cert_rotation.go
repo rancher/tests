@@ -1,4 +1,4 @@
-package certrotation
+package certificates
 
 import (
 	"context"

@@ -1,6 +1,6 @@
 //go:build (validation || infra.rke2k3s || cluster.any || stress) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke1 && !sanity && !extended
 
-package certrotation
+package certificates
 
 import (
 	"strings"
