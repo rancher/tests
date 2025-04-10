@@ -84,7 +84,7 @@ node {
                 -e AWS_DEFAULT_REGION=$AWS_S3_REGION \
                 -v $terraformVolume:/terraform-files  \
                 amazon/aws-cli \
-                s3 cp s3://$AWS_S3_BUCKET/terraform/ /terraform-files --recursive
+                s3 cp s3://$AWS_S3_BUCKET/terraform/aws/ /terraform-files --recursive
 
                 docker run --rm -t -v $terraformVolume:/terraform-files --name $testContainer ${imageName} \
                 sh -c "chmod +x -R /terraform-files && terraform -chdir=/terraform-files init && terraform -chdir=/terraform-files destroy -auto-approve"
