@@ -194,7 +194,7 @@ func areContainersReady(pod *steveV1.SteveAPIObject) (bool, error) {
 	}
 
 	if errorMessage != "" {
-		return true, fmt.Errorf(errorMessage)
+		return true, fmt.Errorf("%s", errorMessage)
 	}
 
 	return true, nil

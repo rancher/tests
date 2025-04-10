@@ -98,7 +98,7 @@ func (f *FleetPublicRepoTestSuite) TestGitRepoDeployment() {
 				Paths:           []string{fleet.GitRepoPathLinux},
 				TargetNamespace: namespace.Name,
 				CorrectDrift:    &v1alpha1.CorrectDrift{},
-				ImageScanCommit: v1alpha1.CommitSpec{AuthorName: "", AuthorEmail: ""},
+				ImageScanCommit: &v1alpha1.CommitSpec{AuthorName: "", AuthorEmail: ""},
 				Targets:         []v1alpha1.GitTarget{{ClusterName: f.client.RancherConfig.ClusterName}},
 			},
 		}

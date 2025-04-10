@@ -1,8 +1,8 @@
 module github.com/rancher/tests/actions
 
-go 1.23.4
+go 1.24.0
 
-toolchain go1.23.6
+toolchain go1.24.2
 
 replace (
 	github.com/containerd/containerd => github.com/containerd/containerd v1.6.27 // for compatibilty with docker 20.10.x
@@ -10,7 +10,7 @@ replace (
 	github.com/docker/distribution => github.com/docker/distribution v2.8.2+incompatible // rancher-machine requires a replace is set
 	github.com/docker/docker => github.com/docker/docker v20.10.27+incompatible // rancher-machine requires a replace is set
 
-	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20250212213103-5c3550f55322
+	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20250410003522-2a1bf3d05723
 	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20250212213103-5c3550f55322
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
@@ -22,16 +22,16 @@ replace (
 	go.qase.io/client => github.com/rancher/qase-go/client v0.0.0-20231114201952-65195ec001fa
 
 	helm.sh/helm/v3 => github.com/rancher/helm/v3 v3.16.1-rancher1
-	k8s.io/api => k8s.io/api v0.32.1
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.32.1
-	k8s.io/apimachinery => k8s.io/apimachinery v0.32.1
-	k8s.io/apiserver => k8s.io/apiserver v0.32.1
-	k8s.io/cli-runtime => k8s.io/cli-runtime v0.32.1
-	k8s.io/client-go => k8s.io/client-go v0.32.1
+	k8s.io/api => k8s.io/api v0.32.2
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.32.2
+	k8s.io/apimachinery => k8s.io/apimachinery v0.32.2
+	k8s.io/apiserver => k8s.io/apiserver v0.32.2
+	k8s.io/cli-runtime => k8s.io/cli-runtime v0.32.2
+	k8s.io/client-go => k8s.io/client-go v0.32.2
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.32.1
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.32.1
-	k8s.io/code-generator => k8s.io/code-generator v0.32.1
-	k8s.io/component-base => k8s.io/component-base v0.32.1
+	k8s.io/code-generator => k8s.io/code-generator v0.32.2
+	k8s.io/component-base => k8s.io/component-base v0.32.2
 	k8s.io/component-helpers => k8s.io/component-helpers v0.32.1
 	k8s.io/controller-manager => k8s.io/controller-manager v0.32.1
 	k8s.io/cri-api => k8s.io/cri-api v0.32.1
@@ -40,12 +40,12 @@ replace (
 	k8s.io/dynamic-resource-allocation => k8s.io/dynamic-resource-allocation v0.32.1
 	k8s.io/endpointslice => k8s.io/endpointslice v0.32.1
 	k8s.io/kms => k8s.io/kms v0.32.1
-	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.32.1
+	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.32.2
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.32.1
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20240411171206-dc4e619f62f3
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.32.1
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.32.1
-	k8s.io/kubectl => k8s.io/kubectl v0.32.1
+	k8s.io/kubectl => k8s.io/kubectl v0.32.2
 	k8s.io/kubelet => k8s.io/kubelet v0.32.1
 	k8s.io/kubernetes => k8s.io/kubernetes v1.31.1
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.32.1
@@ -59,19 +59,19 @@ replace (
 
 require (
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20250314164437-2d4a7f28d9d4
+	github.com/rancher/shepherd v0.0.0-20250410162748-9d50a3d8c82c
 )
 
 require (
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/pkg/errors v0.9.1
 	github.com/rancher/machine v0.15.0-rancher126
-	github.com/rancher/norman v0.5.2
+	github.com/rancher/norman v0.6.0
 	github.com/rancher/rancher v0.0.0-20250228094653-6e82729d08cf
 	github.com/rancher/wrangler v1.1.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.35.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.32.2
 	k8s.io/apimachinery v0.32.2
@@ -164,15 +164,15 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rancher/aks-operator v1.11.0-rc.4 // indirect
+	github.com/rancher/aks-operator v1.11.0 // indirect
 	github.com/rancher/apiserver v0.5.2 // indirect
-	github.com/rancher/eks-operator v1.11.0-rc.3 // indirect
-	github.com/rancher/fleet/pkg/apis v0.12.0-alpha.2 // indirect
-	github.com/rancher/gke-operator v1.11.0-rc.2 // indirect
+	github.com/rancher/eks-operator v1.11.0 // indirect
+	github.com/rancher/fleet/pkg/apis v0.12.0 // indirect
+	github.com/rancher/gke-operator v1.11.0 // indirect
 	github.com/rancher/lasso v0.2.1 // indirect
-	github.com/rancher/rke v1.8.0-rc.2 // indirect
+	github.com/rancher/rke v1.8.0-rc.4 // indirect
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20240301001845-4eacc2dabbde // indirect
-	github.com/rancher/wrangler/v3 v3.2.0-rc.3 // indirect
+	github.com/rancher/wrangler/v3 v3.2.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
@@ -189,7 +189,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/net v0.36.0 // indirect
 	golang.org/x/oauth2 v0.26.0 // indirect
 	golang.org/x/sync v0.11.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect

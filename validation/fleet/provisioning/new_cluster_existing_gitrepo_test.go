@@ -61,7 +61,7 @@ func (f *FleetWithProvisioningTestSuite) SetupSuite() {
 			Branch:          fleet.BranchName,
 			Paths:           []string{"hardened"},
 			CorrectDrift:    &v1alpha1.CorrectDrift{},
-			ImageScanCommit: v1alpha1.CommitSpec{AuthorName: "", AuthorEmail: ""},
+			ImageScanCommit: &v1alpha1.CommitSpec{AuthorName: "", AuthorEmail: ""},
 			Targets: []v1alpha1.GitTarget{
 				{
 					ClusterSelector: &metav1.LabelSelector{
