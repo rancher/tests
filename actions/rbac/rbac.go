@@ -3,7 +3,6 @@ package rbac
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/rancher/norman/types"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -69,17 +68,15 @@ func AddUserWithRoleToCluster(client *rancher.Client, globalRole, role string, c
 		return nil, nil, err
 	}
 
-	if globalRole == StandardUser.String() {
-		if strings.Contains(role, "project") || role == ReadOnly.String() {
-			_, err = CreateProjectRoleTemplateBinding(client, standardUser, project, role)
-			if err != nil {
-				return nil, nil, err
-			}
-		} else {
-			_, err = CreateClusterRoleTemplateBinding(client, cluster.ID, standardUser, role)
-			if err != nil {
-				return nil, nil, err
-			}
+	if project != nil {
+		_, err = CreateProjectRoleTemplateBinding(client, standardUser, project, role)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		_, err = CreateClusterRoleTemplateBinding(client, cluster.ID, standardUser, role)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 
@@ -413,9 +410,14 @@ func WaitForCrtbStatus(client *rancher.Client, crtbNamespace, crtbName string) e
 func CreateProjectRoleTemplateBinding(client *rancher.Client, user *management.User, project *v3.Project, roleTemplateID string) (*v3.ProjectRoleTemplateBinding, error) {
 	projectName := fmt.Sprintf("%s:%s", project.Namespace, project.Name)
 
+	prtbNamespace := project.Name
+	if project.Status.BackingNamespace != "" {
+		prtbNamespace = fmt.Sprintf("%s-%s", project.Spec.ClusterName, project.Name)
+	}
+
 	prtbObj := &v3.ProjectRoleTemplateBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:    project.Name,
+			Namespace:    prtbNamespace,
 			GenerateName: "prtb-",
 		},
 		ProjectName:      projectName,
@@ -454,7 +456,7 @@ func WaitForPrtbExistence(client *rancher.Client, project *v3.Project, prtbObj *
 	var prtb *v3.ProjectRoleTemplateBinding
 	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, false, func(ctx context.Context) (bool, error) {
 		var err error
-		prtb, err = client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Get(project.Name, prtbObj.Name, metav1.GetOptions{})
+		prtb, err = client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Get(prtbObj.Namespace, prtbObj.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}

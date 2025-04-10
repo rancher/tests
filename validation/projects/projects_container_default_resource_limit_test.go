@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress
+//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress && !2.8
 
 package projects
 
@@ -11,15 +11,13 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
-	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	"github.com/rancher/tests/actions/kubeapi/namespaces"
-	"github.com/rancher/tests/actions/kubeapi/projects"
-	project "github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
-	deployment "github.com/rancher/tests/actions/workloads/deployment"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -57,12 +55,8 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) SetupSuite() {
 
 func (pcrl *ProjectsContainerResourceLimitTestSuite) setupUserForProject() (*rancher.Client, *wrangler.Context) {
 	log.Info("Create a standard user and add the user to the downstream cluster as cluster owner.")
-	standardUser, err := users.CreateUserWithRole(pcrl.client, users.UserConfig(), projects.StandardUser)
-	require.NoError(pcrl.T(), err, "Failed to create standard user")
-	standardUserClient, err := pcrl.client.AsUser(standardUser)
-	require.NoError(pcrl.T(), err)
-	err = users.AddClusterRoleToUser(pcrl.client, pcrl.cluster, standardUser, rbac.ClusterOwner.String(), nil)
-	require.NoError(pcrl.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(pcrl.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), pcrl.cluster, nil)
+	require.NoError(pcrl.T(), err, "failed to add the user as a cluster owner to the downstream cluster")
 
 	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, pcrl.cluster.ID)
 	require.NoError(pcrl.T(), err)
@@ -165,7 +159,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestCpuAndMemoryLimitEqualT
 	require.Equal(pcrl.T(), memoryReservation, projectSpec.RequestsMemory, "Memory reservation mismatch")
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = project.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = projects.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(pcrl.T(), err)
 
 	log.Info("Verify that the limit range object is created for the namespace and the resource limit in the limit range is accurate.")
@@ -204,7 +198,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestCpuAndMemoryLimitGreate
 	require.Equal(pcrl.T(), memoryReservation, projectSpec.RequestsMemory, "Memory reservation mismatch")
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = project.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = projects.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(pcrl.T(), err)
 
 	log.Info("Verify that the limit range object is created for the namespace and the resource limit in the limit range is accurate.")
@@ -354,7 +348,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestLimitDeletionPropagatio
 	require.Equal(pcrl.T(), memoryReservation, projectSpec.RequestsMemory, "Memory reservation mismatch")
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = project.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = projects.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(pcrl.T(), err)
 
 	log.Info("Verify that the limit range object is created for the namespace and the resource limit in the limit range is accurate.")
@@ -425,7 +419,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestOverrideDefaultLimitInN
 	require.Equal(pcrl.T(), memoryReservation, projectSpec.RequestsMemory, "Memory reservation mismatch")
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = project.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = projects.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(pcrl.T(), err)
 
 	log.Info("Verify that the limit range object is created for the namespace and the resource limit in the limit range is accurate.")

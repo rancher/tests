@@ -13,9 +13,10 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	rbac "github.com/rancher/tests/actions/kubeapi/rbac"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/rbac"
 	rbacaction "github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -40,7 +41,7 @@ func verifyRAGlobalRoleBindingsForUser(t *testing.T, user *management.User, admi
 
 // verifyRARoleBindingsForUser validates that the corresponding role bindings are created for the user
 func verifyRARoleBindingsForUser(t *testing.T, user *management.User, adminClient *rancher.Client, clusterID string) {
-	rblist, err := rbac.ListRoleBindings(adminClient, rbacaction.LocalCluster, clusterID, metav1.ListOptions{})
+	rblist, err := rbacapi.ListRoleBindings(adminClient, rbacaction.LocalCluster, clusterID, metav1.ListOptions{})
 	require.NoError(t, err)
 	userID := user.Resource.ID
 	userRoleBindings := []string{}
@@ -159,12 +160,8 @@ func verifyRAUserCanDeleteNamespace(t *testing.T, client, standardClient *ranche
 
 // verifyRAUserCanAddClusterRoles validates a user with the required cluster permissions are able/not able to add other users in the cluster
 func verifyRAUserCanAddClusterRoles(t *testing.T, client, memberClient *rancher.Client, cluster *management.Cluster) {
-	additionalClusterUser, err := users.CreateUserWithRole(client, users.UserConfig(), rbacaction.StandardUser.String())
+	_, _, err := rbac.AddUserWithRoleToCluster(memberClient, rbac.StandardUser.String(), rbac.ClusterOwner.String(), cluster, nil)
 	require.NoError(t, err)
-
-	errUserRole := users.AddClusterRoleToUser(memberClient, cluster, additionalClusterUser, rbacaction.ClusterOwner.String(), nil)
-	require.NoError(t, errUserRole)
-
 }
 
 // verifyRAUserCanAddProjectRoles validates a user with the required cluster permissions are able/not able to add other users in a project on the downstream cluster

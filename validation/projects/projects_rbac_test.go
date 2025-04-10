@@ -9,11 +9,10 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
-	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/kubeapi/projects"
-	project "github.com/rancher/tests/actions/projects"
-	rbac "github.com/rancher/tests/actions/rbac"
+	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	"github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -64,15 +63,11 @@ func (rbp *RbacProjectTestSuite) TestCreateProject() {
 	for _, tt := range tests {
 		rbp.Run("Validate project creation for user with role "+tt.role.String(), func() {
 			log.Infof("Create a standard user and add the user to the downstream cluster as %v", tt.role.String())
-			standardUser, err := users.CreateUserWithRole(rbp.client, users.UserConfig(), projects.StandardUser)
-			assert.NoError(rbp.T(), err, "Failed to create standard user")
-			standardUserClient, err := rbp.client.AsUser(standardUser)
-			assert.NoError(rbp.T(), err)
-			err = users.AddClusterRoleToUser(rbp.client, rbp.cluster, standardUser, tt.role.String(), nil)
+			standardUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(rbp.client, tt.member, tt.role.String(), rbp.cluster, nil)
 			assert.NoError(rbp.T(), err)
 
 			log.Infof("As a %v, create a project in the downstream cluster.", tt.role.String())
-			projectTemplate := projects.NewProjectTemplate(rbp.cluster.ID)
+			projectTemplate := projectsapi.NewProjectTemplate(rbp.cluster.ID)
 			if tt.role.String() == rbac.ClusterMember.String() {
 				projectTemplate.Annotations = map[string]string{
 					"field.cattle.io/creatorId": standardUser.ID,
@@ -99,15 +94,11 @@ func (rbp *RbacProjectTestSuite) TestListProject() {
 	for _, tt := range tests {
 		rbp.Run("Validate listing projects for user with role "+tt.role.String(), func() {
 			log.Infof("Create a standard user and add the user to the downstream cluster as %v", tt.role.String())
-			standardUser, err := users.CreateUserWithRole(rbp.client, users.UserConfig(), projects.StandardUser)
-			assert.NoError(rbp.T(), err, "Failed to create standard user")
-			standardUserClient, err := rbp.client.AsUser(standardUser)
-			assert.NoError(rbp.T(), err)
-			err = users.AddClusterRoleToUser(rbp.client, rbp.cluster, standardUser, tt.role.String(), nil)
+			standardUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(rbp.client, tt.member, tt.role.String(), rbp.cluster, nil)
 			assert.NoError(rbp.T(), err)
 
 			log.Infof("As a %v, create a project in the downstream cluster.", tt.role.String())
-			projectTemplate := projects.NewProjectTemplate(rbp.cluster.ID)
+			projectTemplate := projectsapi.NewProjectTemplate(rbp.cluster.ID)
 			if tt.role.String() == rbac.ClusterMember.String() {
 				projectTemplate.Annotations = map[string]string{
 					"field.cattle.io/creatorId": standardUser.ID,
@@ -117,7 +108,7 @@ func (rbp *RbacProjectTestSuite) TestListProject() {
 			assert.NoError(rbp.T(), err, "failed to create project")
 
 			log.Infof("As a %v, get the project in the downstream cluster.", tt.role.String())
-			err = project.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
+			err = projects.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 			assert.NoError(rbp.T(), err)
 			projectObj, err := standardUserClient.WranglerContext.Mgmt.Project().Get(rbp.cluster.ID, createdProject.Name, metav1.GetOptions{})
 			assert.NoError(rbp.T(), err, "Failed to get project.")
@@ -141,15 +132,11 @@ func (rbp *RbacProjectTestSuite) TestUpdateProject() {
 	for _, tt := range tests {
 		rbp.Run("Validate updating project by user with role "+tt.role.String(), func() {
 			log.Infof("Create a standard user and add the user to the downstream cluster as %v", tt.role.String())
-			standardUser, err := users.CreateUserWithRole(rbp.client, users.UserConfig(), projects.StandardUser)
-			assert.NoError(rbp.T(), err, "Failed to create standard user")
-			standardUserClient, err := rbp.client.AsUser(standardUser)
-			assert.NoError(rbp.T(), err)
-			err = users.AddClusterRoleToUser(rbp.client, rbp.cluster, standardUser, tt.role.String(), nil)
+			standardUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(rbp.client, tt.member, tt.role.String(), rbp.cluster, nil)
 			assert.NoError(rbp.T(), err)
 
 			log.Infof("As a %v, create a project in the downstream cluster.", tt.role.String())
-			projectTemplate := projects.NewProjectTemplate(rbp.cluster.ID)
+			projectTemplate := projectsapi.NewProjectTemplate(rbp.cluster.ID)
 			if tt.role.String() == rbac.ClusterMember.String() {
 				projectTemplate.Annotations = map[string]string{
 					"field.cattle.io/creatorId": standardUser.ID,
@@ -159,7 +146,7 @@ func (rbp *RbacProjectTestSuite) TestUpdateProject() {
 			assert.NoError(rbp.T(), err, "failed to create project")
 
 			log.Infof("As a %v, get the project in the downstream cluster.", tt.role.String())
-			err = project.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
+			err = projects.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 			assert.NoError(rbp.T(), err)
 			currentProject, err := standardUserClient.WranglerContext.Mgmt.Project().Get(rbp.cluster.ID, createdProject.Name, metav1.GetOptions{})
 			assert.NoError(rbp.T(), err, "Failed to get project.")
@@ -195,15 +182,11 @@ func (rbp *RbacProjectTestSuite) TestDeleteProject() {
 	for _, tt := range tests {
 		rbp.Run("Validate project deletion by user with role "+tt.role.String(), func() {
 			log.Infof("Create a standard user and add the user to the downstream cluster as %v", tt.role.String())
-			standardUser, err := users.CreateUserWithRole(rbp.client, users.UserConfig(), projects.StandardUser)
-			assert.NoError(rbp.T(), err, "Failed to create standard user")
-			standardUserClient, err := rbp.client.AsUser(standardUser)
-			assert.NoError(rbp.T(), err)
-			err = users.AddClusterRoleToUser(rbp.client, rbp.cluster, standardUser, tt.role.String(), nil)
+			standardUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(rbp.client, tt.member, tt.role.String(), rbp.cluster, nil)
 			assert.NoError(rbp.T(), err)
 
 			log.Infof("As a %v, create a project in the downstream cluster.", tt.role.String())
-			projectTemplate := projects.NewProjectTemplate(rbp.cluster.ID)
+			projectTemplate := projectsapi.NewProjectTemplate(rbp.cluster.ID)
 			if tt.role.String() == rbac.ClusterMember.String() {
 				projectTemplate.Annotations = map[string]string{
 					"field.cattle.io/creatorId": standardUser.ID,
@@ -213,7 +196,7 @@ func (rbp *RbacProjectTestSuite) TestDeleteProject() {
 			assert.NoError(rbp.T(), err, "failed to create project")
 
 			log.Infof("As a %v, get the project in the downstream cluster.", tt.role.String())
-			err = project.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
+			err = projects.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 			assert.NoError(rbp.T(), err)
 			currentProject, err := standardUserClient.WranglerContext.Mgmt.Project().Get(rbp.cluster.ID, createdProject.Name, metav1.GetOptions{})
 			assert.NoError(rbp.T(), err, "Failed to get project.")
