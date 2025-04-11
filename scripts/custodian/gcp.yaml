@@ -20,6 +20,7 @@ policies:
         key: name
         op: regex
         value:  "^.*DONOTDELETEKEYS.*$"
+      - type: marked-for-op
   actions:
     - type: set-labels
       labels:
@@ -45,6 +46,7 @@ policies:
         key: name
         op: regex
         value:  "^.*DONOTDELETEKEYS.*$"
+      - type: marked-for-op
   actions:
     - type: set-labels
       labels:
@@ -87,6 +89,7 @@ policies:
         key: name
         op: regex
         value:  "^.*DONOTDELETEKEYS.*$"
+      - type: marked-for-op
   actions:
     - type: set-labels
       labels:
@@ -112,6 +115,7 @@ policies:
         key: name
         op: regex
         value:  "^.*DONOTDELETEKEYS.*$"
+      - type: marked-for-op
   actions:
     - type: set-labels
       labels:
