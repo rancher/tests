@@ -31,7 +31,7 @@ const (
 	Namespace          = "fleet-default"
 )
 
-func AirgapCorral(t *testing.T, corralRancherHA *corralha.CorralRancherHA) (registryFQDN string) {
+func Corral(t *testing.T, corralRancherHA *corralha.CorralRancherHA) (registryFQDN string) {
 
 	listOfCorrals, err := corral.ListCorral()
 	require.NoError(t, err)
