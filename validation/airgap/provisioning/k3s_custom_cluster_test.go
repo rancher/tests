@@ -3,7 +3,7 @@
 package airgap
 
 import (
-	airgap2 "github.com/rancher/tests/interoperability/airgap"
+	"github.com/rancher/tests/interoperability/airgap"
 	"testing"
 
 	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -81,7 +81,7 @@ func (a *AirGapK3SCustomClusterTestSuite) SetupSuite() {
 	corralRancherHA := new(corralha.CorralRancherHA)
 	config.LoadConfig(corralha.CorralRancherHAConfigConfigurationFileKey, corralRancherHA)
 	if corralRancherHA.Name != "" {
-		a.registryFQDN = airgap2.AirgapCorral(a.T(), corralRancherHA)
+		a.registryFQDN = airgap.AirgapCorral(a.T(), corralRancherHA)
 		corralConfig := corral.Configurations()
 
 		err = corral.SetupCorralConfig(corralConfig.CorralConfigVars, corralConfig.CorralConfigUser, corralConfig.CorralSSHPath)
@@ -89,8 +89,8 @@ func (a *AirGapK3SCustomClusterTestSuite) SetupSuite() {
 
 		a.corralPackage = corral.PackagesConfig()
 	} else {
-		tfRancherHA := new(airgap2.TerraformConfig)
-		config.LoadConfig(airgap2.TerraformConfigurationFileKey, tfRancherHA)
+		tfRancherHA := new(airgap.TerraformConfig)
+		config.LoadConfig(airgap.TerraformConfigurationFileKey, tfRancherHA)
 		a.registryFQDN = tfRancherHA.StandaloneAirgapConfig.PrivateRegistry
 	}
 }
@@ -121,7 +121,7 @@ func (a *AirGapK3SCustomClusterTestSuite) TestProvisioningAirGapK3SCustomCluster
 		if a.corralPackage != nil {
 			permutations.RunTestPermutations(&a.Suite, tt.name, tt.client, a.clustersConfig, permutations.K3SAirgapCluster, nil, a.corralPackage)
 		} else {
-			cattleConfig, rancherConfig, terraformOptions, terraformConfig, terratestConfig := airgap2.TfpSetupSuite(a.T())
+			cattleConfig, rancherConfig, terraformOptions, terraformConfig, terratestConfig := airgap.TfpSetupSuite(a.T())
 
 			testUser, testPassword := configs.CreateTestCredentials()
 			configMap := []map[string]any{cattleConfig}
@@ -186,7 +186,7 @@ func (a *AirGapK3SCustomClusterTestSuite) TestProvisioningUpgradeAirGapK3SCustom
 
 				provisioning.VerifyCluster(a.T(), a.client, testConfig, clusterObject)
 			} else {
-				cattleConfig, rancherConfig, terraformOptions, terraformConfig, terratestConfig := airgap2.TfpSetupSuite(a.T())
+				cattleConfig, rancherConfig, terraformOptions, terraformConfig, terratestConfig := airgap.TfpSetupSuite(a.T())
 
 				testUser, testPassword := configs.CreateTestCredentials()
 				configMap := []map[string]any{cattleConfig}
@@ -200,7 +200,7 @@ func (a *AirGapK3SCustomClusterTestSuite) TestProvisioningUpgradeAirGapK3SCustom
 
 				tfProvision.VerifyClustersState(a.T(), a.client, clusterIDs)
 				tfProvision.VerifyRegistry(a.T(), a.client, clusterIDs[0], terraformConfig)
-				clusterObject, err = a.client.Steve.SteveType(stevetypes.Provisioning).ByID(airgap2.Namespace + "/" + clusterIDs[0])
+				clusterObject, err = a.client.Steve.SteveType(stevetypes.Provisioning).ByID(airgap.Namespace + "/" + clusterIDs[0])
 				require.NoError(a.T(), err)
 			}
 			updatedClusterObject := new(apisV1.Cluster)
