@@ -81,7 +81,7 @@ func (a *AirGapK3SCustomClusterTestSuite) SetupSuite() {
 	corralRancherHA := new(corralha.CorralRancherHA)
 	config.LoadConfig(corralha.CorralRancherHAConfigConfigurationFileKey, corralRancherHA)
 	if corralRancherHA.Name != "" {
-		a.registryFQDN = airgap.AirgapCorral(a.T(), corralRancherHA)
+		a.registryFQDN = airgap.Corral(a.T(), corralRancherHA)
 		corralConfig := corral.Configurations()
 
 		err = corral.SetupCorralConfig(corralConfig.CorralConfigVars, corralConfig.CorralConfigUser, corralConfig.CorralSSHPath)
