@@ -68,16 +68,30 @@ func AddUserWithRoleToCluster(client *rancher.Client, globalRole, role string, c
 		return nil, nil, err
 	}
 
-	if project != nil {
+	roleContext, err := GetRoleTemplateContext(client, role)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get context for role %s: %w", role, err)
+	}
+
+	switch roleContext {
+	case ProjectContext:
+		if project == nil {
+			return nil, nil, fmt.Errorf("project is required for project-scoped role: %s", role)
+		}
 		_, err = CreateProjectRoleTemplateBinding(client, standardUser, project, role)
 		if err != nil {
 			return nil, nil, err
 		}
-	} else {
+	case ClusterContext:
+		if cluster == nil {
+			return nil, nil, fmt.Errorf("cluster is required for cluster-scoped role: %s", role)
+		}
 		_, err = CreateClusterRoleTemplateBinding(client, cluster.ID, standardUser, role)
 		if err != nil {
 			return nil, nil, err
 		}
+	default:
+		return nil, nil, fmt.Errorf("unknown context %s for role %s", roleContext, role)
 	}
 
 	standardUserClient, err = standardUserClient.ReLogin()
@@ -496,4 +510,18 @@ func WaitForPrtbExistence(client *rancher.Client, project *v3.Project, prtbObj *
 		return nil, err
 	}
 	return prtb, nil
+}
+
+// GetRoleTemplateContext is a helper function to fetch the context of a role template
+func GetRoleTemplateContext(client *rancher.Client, roleTemplateName string) (string, error) {
+	roleTemplate, err := GetRoleTemplateByName(client, roleTemplateName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get RoleTemplate %s: %w", roleTemplateName, err)
+	}
+
+	if roleTemplate == nil {
+		return "", fmt.Errorf("RoleTemplate %s not found", roleTemplateName)
+	}
+
+	return roleTemplate.Context, nil
 }
