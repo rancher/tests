@@ -235,3 +235,74 @@ policies:
         op: delete
   actions:
     - type: delete
+
+- name: az-mark-unknown-ni-for-deletion
+  resource: azure.networkinterface
+  description: |
+    Mark unknown network interface for deletion in 1 day
+  filters:
+    # instance name not in accepted user keys
+    - type: value
+      key: name
+      op: regex
+      #doesNOTcontain
+      value:  "^((?!USERKEYS).)*$"
+    # instance is not doNotDelete
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - 'tag:known_user': absent
+    - 'tag:unknown_user': absent
+    - "tag:DeletesOnFriday": absent
+    - not: 
+      - type: value
+        key: name
+        op: regex
+        value:  "^.*DONOTDELETEKEYS.*$"
+  actions:
+    - type: mark-for-op
+      tag: unknown_user
+      op: delete
+      days: 1
+
+- name: az-mark-known-ni-for-deletion
+  resource: azure.networkinterface
+  description: |
+    Mark known network interface for deletion in 2 days
+  filters:
+    # instance is named with accepted user key
+    - type: value
+      key: name
+      op: regex
+      value:  "^.*USERKEYS.*$"
+    # instance is not doNotDelete
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - 'tag:unknown_user': absent
+    - 'tag:known_user': absent
+    - "tag:DeletesOnFriday": absent
+    - not: 
+      - type: value
+        key: name
+        op: regex
+        value:  "^.*DONOTDELETEKEYS.*$"
+  actions:
+    - type: mark-for-op
+      tag: known_user
+      op: delete
+      days: 2
+
+- name: azure-terminate-ni
+  resource: azure.networkinterface
+  description: |
+    Delete any marked network interface which have been 
+    marked for deletion for more than 1 day.
+  filters:
+    - or:
+      - type: marked-for-op
+        tag: unknown_user
+        op: delete
+      - type: marked-for-op
+        tag: known_user
+        op: delete
+  actions:
+    - type: delete
