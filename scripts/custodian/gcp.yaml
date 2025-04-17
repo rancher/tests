@@ -21,6 +21,8 @@ policies:
         op: regex
         value:  "^.*DONOTDELETEKEYS.*$"
       - type: marked-for-op
+        label: unknown_user
+        op: delete
   actions:
     - type: set-labels
       labels:
@@ -47,6 +49,8 @@ policies:
         op: regex
         value:  "^.*DONOTDELETEKEYS.*$"
       - type: marked-for-op
+        label: known_user
+        op: delete
   actions:
     - type: set-labels
       labels:
@@ -90,6 +94,8 @@ policies:
         op: regex
         value:  "^.*DONOTDELETEKEYS.*$"
       - type: marked-for-op
+        label: unknown_user
+        op: delete
   actions:
     - type: set-labels
       labels:
@@ -116,6 +122,8 @@ policies:
         op: regex
         value:  "^.*DONOTDELETEKEYS.*$"
       - type: marked-for-op
+        label: known_user
+        op: delete
   actions:
     - type: set-labels
       labels:
