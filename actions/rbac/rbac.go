@@ -452,7 +452,7 @@ func CreateProjectRoleTemplateBinding(client *rancher.Client, user *management.U
 
 	prtbNamespace := project.Name
 	if project.Status.BackingNamespace != "" {
-		prtbNamespace = fmt.Sprintf("%s-%s", project.Spec.ClusterName, project.Name)
+		prtbNamespace = fmt.Sprintf("%s:%s", project.Spec.ClusterName, project.Name)
 	}
 
 	prtbObj := &v3.ProjectRoleTemplateBinding{

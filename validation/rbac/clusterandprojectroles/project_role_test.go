@@ -72,7 +72,7 @@ func (pr *ProjectRolesTestSuite) TestProjectOwnerAddsAndRemovesOtherProjectOwner
 	additionalUser, additionalUserClient, err := rbac.SetupUser(pr.client, rbac.StandardUser.String())
 	require.NoError(pr.T(), err)
 
-	prtb, errUserRole := rbac.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, adminProject, rbac.ProjectOwner.String())
+	createdPrtb, errUserRole := rbac.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, adminProject, rbac.ProjectOwner.String())
 	require.NoError(pr.T(), errUserRole)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(pr.T(), err)
@@ -81,7 +81,7 @@ func (pr *ProjectRolesTestSuite) TestProjectOwnerAddsAndRemovesOtherProjectOwner
 	require.NoError(pr.T(), err)
 	require.Equal(pr.T(), userGetProject.Name, adminProject.Name)
 
-	errRemoveMember := standardUserClient.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Delete(adminProject.Name, prtb.Name, &metav1.DeleteOptions{})
+	errRemoveMember := standardUserClient.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Delete(createdPrtb.Namespace, createdPrtb.Name, &metav1.DeleteOptions{})
 	require.NoError(pr.T(), errRemoveMember)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(pr.T(), err)

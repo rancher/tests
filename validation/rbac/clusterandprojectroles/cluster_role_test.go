@@ -89,7 +89,7 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsUserAsProjectOwner() {
 	additionalUser, additionalUserClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
 	require.NoError(rb.T(), err)
 
-	prtb, err := rbac.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, clusterOwnerProject, rbac.ProjectOwner.String())
+	createdPrtb, err := rbac.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, clusterOwnerProject, rbac.ProjectOwner.String())
 	require.NoError(rb.T(), err)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -98,7 +98,7 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsUserAsProjectOwner() {
 	require.NoError(rb.T(), err)
 	require.Equal(rb.T(), clusterOwnerProject.Name, projectAdditionalUser.Name)
 
-	err = standardUserClient.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Delete(clusterOwnerProject.Name, prtb.Name, &metav1.DeleteOptions{})
+	err = standardUserClient.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Delete(createdPrtb.Namespace, createdPrtb.Name, &metav1.DeleteOptions{})
 	require.NoError(rb.T(), err)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -194,7 +194,7 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithPrtbAccess() {
 
 	userContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbac.LocalCluster)
 	require.NoError(rb.T(), err)
-	prtb, err = userContext.Mgmt.ProjectRoleTemplateBinding().Get(adminProject.Name, prtb.Name, metav1.GetOptions{})
+	prtb, err = userContext.Mgmt.ProjectRoleTemplateBinding().Get(prtb.Namespace, prtb.Name, metav1.GetOptions{})
 	require.NoError(rb.T(), err)
 
 	if prtb.Labels == nil {
@@ -204,7 +204,7 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithPrtbAccess() {
 	updatedPrtb, err := userContext.Mgmt.ProjectRoleTemplateBinding().Update(prtb)
 	require.NoError(rb.T(), err)
 
-	err = userContext.Mgmt.ProjectRoleTemplateBinding().Delete(adminProject.Name, updatedPrtb.Name, &metav1.DeleteOptions{})
+	err = userContext.Mgmt.ProjectRoleTemplateBinding().Delete(updatedPrtb.Namespace, updatedPrtb.Name, &metav1.DeleteOptions{})
 	require.NoError(rb.T(), err)
 }
 
