@@ -2,11 +2,11 @@ FROM registry.suse.com/bci/golang:1.24
 
 # Configure Go
 ENV GOFLAGS=-buildvcs=false
-ENV GOPATH /root/go
-ENV PATH ${PATH}:/root/go/bin
+ENV GOPATH=/root/go
+ENV PATH=${PATH}:/root/go/bin
 
-ENV WORKSPACE ${GOPATH}/src/github.com/rancher/tests
-ENV WORKSPACE2 ${GOPATH}/src/github.com/rancherlabs/corral-packages
+ENV WORKSPACE=${GOPATH}/src/github.com/rancher/tests
+ENV WORKSPACE2=${GOPATH}/src/github.com/rancherlabs/corral-packages
 
 WORKDIR $WORKSPACE
 

@@ -6,9 +6,8 @@ node {
     def jobName = "${JOB_NAME}"
     def config = env.CONFIG
     def filename = "config.yaml"
-    def hostnameSuffix = ["v2.8-head":"v28", "v2.9-head":"v29", "v2.10-head":"v210", "head":"main"]
-    def releaseBranchTagMap = ["v2.8-head":"release/v2.8", "v2.9-head":"release/v2.9", "v2.10-head":"release/v2.10", "head":"main"]
-    def tagChartMap = ["v2.8-head":"2.8.11", "v2.9-head":"2.9.5", "v2.10-head":"2.10.1", "head":"2.10.1"]
+    def hostnameSuffix = ["v2.8-head":"v28", "v2.9-head":"v29", "v2.10-head":"v210", "head":"main"] // TODO: update with new versions supported by rancher
+    def tagChartMap = ["v2.8-head":"2.8.11", "v2.9-head":"2.9.5", "v2.10-head":"2.10.1", "head":"2.11.0"] // TODO: update with new versions supported by rancher for image tags
     def primeChartList = ["v2.8-head", "v2.9-head"]
     def rancherChartRepo = "prime"
     def configPath = ""
@@ -26,7 +25,6 @@ node {
       branch = "${env.BRANCH}"
     }
 
-    def rancherRepo = scm.getUserRemoteConfigs()[0].getUrl()
     if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
       rancherRepo = "${env.REPO}"
     }
@@ -116,7 +114,7 @@ node {
                     def configYaml = readFile(file: "${configPath}")
                     def goValidationParams = [
                         text(name: 'CONFIG', value: configYaml),
-                        string(name: 'BRANCH', value: "${releaseBranchTagMap[testTag]}"),
+                        string(name: 'BRANCH', value: "${branch}"),
                         string(name: 'TEST_RUN_NAME', value: "${testTag}-${env.TEST_RUN_NAME}"),
                       ]
 

@@ -308,6 +308,7 @@ func NewRancherClusterConfiguration(cluster pipeline.RancherCluster, newConfigNa
 		testCases.ProvisioningTestPackage = provTestPackage
 		testCases.ProvisioningTestCase = runCommand
 		testCases.Tags = tags
+		testCases.RunFlag = runFlag
 	})
 
 	pipeline.UpdateRancherDownstreamClusterFields(&cluster, isCustom, isRKE1)

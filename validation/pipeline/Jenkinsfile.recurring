@@ -37,12 +37,10 @@ node {
       corralBranch = "${env.RANCHER_CORRAL_PACKAGES_REPO_BRANCH}"
     }
 
-    def rancherRepo = scm.getUserRemoteConfigs()[0].getUrl()
     if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
       rancherRepo = "${env.REPO}"
     }
 
-    def corralRepo = scm.getUserRemoteConfigs()[1].getUrl()
     if ("${env.RANCHER_CORRAL_PACKAGES_REPO_URL}" != "null" && "${env.RANCHER_CORRAL_PACKAGES_REPO_URL}" != "") {
       corralRepo = "${env.RANCHER_CORRAL_PACKAGES_REPO_URL}"
     }
@@ -82,6 +80,7 @@ node {
           stage('Checkout') {
             deleteDir()
             dir("./tests") {
+              echo "cloning rancher tests"
               checkout([
                       $class: 'GitSCM',
                       branches: [[name: "*/${branch}"]],
@@ -89,17 +88,14 @@ node {
                       userRemoteConfigs: [[url: rancherRepo]]
                     ])
             }
-            dir('./') {
+            dir('./corral-packages') {
               echo "cloning corral-packages repo"
-
-              dir('./corral-packages') {
-                checkout([
-                      $class: 'GitSCM',
-                      branches: [[name: "*/${corralBranch}"]],
-                      extensions: scm.extensions + [[$class: 'CleanCheckout']],
-                      userRemoteConfigs: [[url: corralRepo]]
-                    ])
-              }
+              checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${corralBranch}"]],
+                    extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                    userRemoteConfigs: [[url: corralRepo]]
+                  ])
             }
           }
           dir ("./") {
@@ -122,6 +118,7 @@ node {
                 writeFile file: filename, text: config
                 env.CATTLE_TEST_CONFIG = "${workPath}${filename}"
               }
+              
               dir ("./") {
                 sh "./tests/validation/configure.sh"
                 sh "docker build . -f ./tests/validation/Dockerfile.e2e -t ${imageName}"
