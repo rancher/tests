@@ -126,7 +126,7 @@ node {
                     }
 
                     dir ("./") {
-                        stage('Configure and Build') {
+                        stage('Run Validation Tests') {
                           if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
                             dir("./validation/.ssh") {
                               def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
@@ -169,7 +169,7 @@ node {
                             sh """
                             docker run --rm -v ./root/go/src/github.com/rancher/tfp-automation/modules/airgap:/terraform-files \
                                 -w /terraform-files hashicorp/terraform:latest \
-                                terraform init && terraform destroy -auto-approve
+                                 destroy -auto-approve
                             """
                          } //cleanup
                     }//dir
