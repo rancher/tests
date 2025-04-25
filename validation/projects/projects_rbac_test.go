@@ -3,14 +3,17 @@
 package projects
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
@@ -216,6 +219,50 @@ func (rbp *RbacProjectTestSuite) TestDeleteProject() {
 			assert.Error(rbp.T(), err)
 		})
 	}
+}
+
+func (rbp *RbacProjectTestSuite) TestCrossClusterResourceIsolation() {
+	subSession := rbp.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Creating a project and associated namespace in the local cluster")
+	firstProject, firstNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbp.client, rbac.LocalCluster)
+	require.NoError(rbp.T(), err)
+
+	log.Info("Creating a standard user and assigning the cluster-member role in the downstream cluster")
+	standardUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(rbp.client, rbac.StandardUser.String(), rbac.ClusterMember.String(), rbp.cluster, nil)
+	require.NoError(rbp.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
+
+	log.Infof("As %s, creating a project with the same name in the downstream cluster", rbac.ClusterMember.String())
+	projectTemplate := projectsapi.NewProjectTemplate(rbp.cluster.ID)
+	projectTemplate.Name = firstProject.Name
+	projectTemplate.Annotations = map[string]string{
+		"field.cattle.io/creatorId": standardUser.ID,
+	}
+	_, secondNamespace, err := createProjectAndNamespace(standardUserClient, rbp.cluster.ID, projectTemplate)
+	require.NoError(rbp.T(), err, "Failed to create project in downstream cluster")
+
+	log.Infof("As %s, attempting to create a PRTB referencing the project in the local cluster", rbac.ClusterMember.String())
+	prtb.ProjectName = fmt.Sprintf("%s:%s", rbac.LocalCluster, firstProject.Name)
+	prtb.Name = namegen.AppendRandomString("prtb-")
+	prtb.RoleTemplateName = rbac.ProjectOwner.String()
+	prtb.UserPrincipalName = "local://" + standardUser.ID
+	prtb.Namespace = firstProject.Name
+	if firstProject.Status.BackingNamespace != "" {
+		prtb.Namespace = firstProject.Status.BackingNamespace
+	}
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, &prtb)
+	require.Error(rbp.T(), err, "Expected failure: user should not be able to create PRTB referencing the project in the local cluster")
+
+	log.Infof("As %s, verifying that the user cannot access the namespace in the local cluster", rbac.ClusterMember.String())
+	_, err = standardUserClient.WranglerContext.Core.Namespace().Get(firstNamespace.Name, metav1.GetOptions{})
+	require.Error(rbp.T(), err, "User should not have access to the namespace in the local cluster")
+
+	log.Infof("As %s, verifying that the user can access the namespace in the downstream cluster", rbac.ClusterMember.String())
+	userContext, err := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(rbp.cluster.ID)
+	require.NoError(rbp.T(), err)
+	_, err = userContext.Core.Namespace().Get(secondNamespace.Name, metav1.GetOptions{})
+	require.NoError(rbp.T(), err, "User should be able to access the namespace in the downstream cluster")
 }
 
 func TestRbacProjectTestSuite(t *testing.T) {
