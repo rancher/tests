@@ -5,25 +5,32 @@ package charts
 import (
 	"fmt"
 	"math/rand"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/rancher/norman/types"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
+	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extencharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/ingresses"
+	kubeapinodes "github.com/rancher/shepherd/extensions/kubeapi/nodes"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/namespaces"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	corev1 "k8s.io/api/core/v1"
 )
 
 type IstioTestSuite struct {
@@ -33,6 +40,7 @@ type IstioTestSuite struct {
 	project             *management.Project
 	chartInstallOptions *chartInstallOptions
 	chartFeatureOptions *chartFeatureOptions
+	steveClient         *v1.Client
 }
 
 func (i *IstioTestSuite) TearDownSuite() {
@@ -80,10 +88,12 @@ func (i *IstioTestSuite) SetupSuite() {
 
 	i.chartInstallOptions = &chartInstallOptions{
 		monitoring: &charts.InstallOptions{
+			Cluster:   cluster,
 			Version:   latestMonitoringVersion,
 			ProjectID: createdProject.ID,
 		},
 		istio: &charts.InstallOptions{
+			Cluster:   cluster,
 			Version:   latestIstioVersion,
 			ProjectID: createdProject.ID,
 		},
@@ -107,6 +117,9 @@ func (i *IstioTestSuite) SetupSuite() {
 			CNI:             false,
 		},
 	}
+
+	i.steveClient, err = i.client.Steve.ProxyDownstream(i.project.ClusterID)
+	require.NoError(i.T(), err)
 }
 
 func (i *IstioTestSuite) TestIstioChart() {
@@ -156,16 +169,17 @@ func (i *IstioTestSuite) TestIstioChart() {
 		require.NoError(i.T(), err)
 	}
 
+	appNamespaceName := namegen.AppendRandomString(exampleAppNamespaceName)
 	i.T().Log("Creating namespace with istio injection enabled option for the example app")
-	createdNamespace, err := namespaces.CreateNamespace(client, exampleAppNamespaceName, "{}", map[string]string{"istio-injection": "enabled"}, map[string]string{}, i.project)
+	createdNamespace, err := namespaces.CreateNamespace(client, appNamespaceName, "{}", map[string]string{"istio-injection": "enabled"}, map[string]string{}, i.project)
 	require.NoError(i.T(), err)
-	require.Equal(i.T(), exampleAppNamespaceName, createdNamespace.Name)
+	require.Equal(i.T(), appNamespaceName, createdNamespace.Name)
 
 	i.T().Log("Importing example app objects to the namespace")
 	readYamlFile, err := os.ReadFile("./resources/istio-demobookapp.yaml")
 	require.NoError(i.T(), err)
 	yamlInput := &management.ImportClusterYamlInput{
-		DefaultNamespace: exampleAppNamespaceName,
+		DefaultNamespace: appNamespaceName,
 		YAML:             string(readYamlFile),
 	}
 	cluster, err := client.Management.Cluster.ByID(i.project.ClusterID)
@@ -174,7 +188,7 @@ func (i *IstioTestSuite) TestIstioChart() {
 	require.NoError(i.T(), err)
 
 	i.T().Log("Waiting example app deployments to have expected number of available replicas")
-	err = extencharts.WatchAndWaitDeployments(client, i.project.ClusterID, exampleAppNamespaceName, metav1.ListOptions{})
+	err = extencharts.WatchAndWaitDeployments(client, i.project.ClusterID, appNamespaceName, metav1.ListOptions{})
 	require.NoError(i.T(), err)
 
 	i.T().Log("Validating kiali and jaeger endpoints are accessible")
@@ -186,16 +200,30 @@ func (i *IstioTestSuite) TestIstioChart() {
 	require.NoError(i.T(), err)
 	assert.True(i.T(), tracingResult)
 
-	// Get a random worker node' public external IP of a specific cluster
-	nodeCollection, err := client.Management.Node.List(&types.ListOpts{Filters: map[string]interface{}{
-		"clusterId": i.project.ClusterID,
-	}})
+	query, err := url.ParseQuery(actionsClusters.LabelWorker)
 	require.NoError(i.T(), err)
+
+	nodeList, err := i.steveClient.SteveType("node").List(query)
+	require.NoError(i.T(), err)
+
 	workerNodePublicIPs := []string{}
-	for _, node := range nodeCollection.Data {
-		workerNodePublicIPs = append(workerNodePublicIPs, node.Annotations["rke.cattle.io/external-ip"])
+	for _, machine := range nodeList.Data {
+		logrus.Info("Getting the node IP")
+		newNode := &corev1.Node{}
+
+		err = steveV1.ConvertToK8sType(machine.JSONResp, newNode)
+		require.NoError(i.T(), err)
+
+		nodeIP := kubeapinodes.GetNodeIP(newNode, corev1.NodeExternalIP)
+		workerNodePublicIPs = append(workerNodePublicIPs, nodeIP)
 	}
+
 	randWorkerNodePublicIP := workerNodePublicIPs[rand.Intn(len(workerNodePublicIPs))]
+
+	if randWorkerNodePublicIP == "" {
+		i.T().Skip("Skipping example app accessibility tests for nodes witout public IPs")
+	}
+
 	istioGatewayHost := randWorkerNodePublicIP + ":" + exampleAppPort
 
 	i.T().Log("Validating example app is accessible")
