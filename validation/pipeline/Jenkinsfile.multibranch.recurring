@@ -5,12 +5,18 @@ node {
     def rancherImageTags = "${env.RANCHER_IMAGE_TAGS}".split(',')
     def jobName = "${JOB_NAME}"
     def config = env.CONFIG
+    def ansibleConfig = env.ANSIBLE_CONFIG
+    def terraformConfig = env.TERRAFORM_CONFIG
     def filename = "config.yaml"
+    def ansibleVarsFilename = "vars.yaml"
+    def terraformVarsfilename = "cluster.tfvars"
     def hostnameSuffix = ["v2.8-head":"v28", "v2.9-head":"v29", "v2.10-head":"v210", "head":"main"] // TODO: update with new versions supported by rancher
     def tagChartMap = ["v2.8-head":"2.8.11", "v2.9-head":"2.9.5", "v2.10-head":"2.10.1", "head":"2.11.0"] // TODO: update with new versions supported by rancher for image tags
     def primeChartList = ["v2.8-head", "v2.9-head"]
     def rancherChartRepo = "prime"
     def configPath = ""
+    def ansibleConfigPath = ""
+    def terraformConfigPath = ""
 
     if (jobName.contains('/')) { 
       jobNames = jobName.split('/')
@@ -77,8 +83,12 @@ node {
             stage('Setup') {
                 dir("./tests/validation") {
                   writeFile file: filename, text: config
-                  env.CATTLE_TEST_CONFIG = "${workPath}${filename}"
+                  writeFile file: ansibleVarsFilename, text: ansibleConfig
+                  writeFile file: terraformVarsfilename, text: terraformConfig
+                  // env.CATTLE_TEST_CONFIG = "${workPath}${filename}"
                   configPath = "./tests/validation/${filename}"
+                  ansibleConfigPath = "./tests/validation/${ansibleVarsFilename}"
+                  terraformConfigPath = "./tests/validation/${terraformVarsfilename}"
                 }
                 sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
                 sh returnStdout:true, script: 'chmod a+x ./yq'
@@ -87,7 +97,7 @@ node {
               try {
                   jobs = [:]
                   def hostnamePrefix = sh (
-                    script: "./yq '.corralConfigs.corralConfigVars.aws_hostname_prefix '  ${configPath}",
+                    script: "./yq '.aws_hostname_prefix '  ${configPath}",
                     returnStdout: true
                   ).trim()
                   for( String testTag : rancherImageTags ) {
@@ -98,22 +108,27 @@ node {
                     def hostname = "${hostnamePrefix}${hostnameSuffix[testTag]}"
                     def rancherHostName = "${hostname}.qa.rancher.space"
 
-                    sh "./yq e '.corralConfigs.corralConfigVars.rancher_image_tag = \"${testTag}\"' -i ${configPath}"
-                    sh "./yq e '.corralConfigs.corralConfigVars.rancher_version = \"${tagChartMap[testTag]}\"' -i ${configPath}"
-                    sh "./yq e '.corralConfigs.corralConfigVars.aws_hostname_prefix = \"${hostname}\"' -i ${configPath}"
+                    sh "./yq e '.rancher_version = \"${tagChartMap[testTag]}\"' -i ${ansibleConfigPath}"
+                    sh "./yq e '.rancher_image_tag = \"${tagChartMap[testTag]}\"' -i ${ansibleConfigPath}"
+                    sh "./yq e '.aws_hostname_prefix = \"${hostname}\"' -i ${terraformConfigPath}"
+
                     sh "./yq e '.rancher.host = \"${rancherHostName}\"' -i ${configPath}"
                     
                     if ( primeChartList.contains(testTag) ) {
                       def cattleImageEnvVar = "[\\\"CATTLE_AGENT_IMAGE|${env.PRIME_STAGING_REGISTRY}/rancher/rancher-agent:${testTag}\\\"]"
                       def rancherImage = "${env.PRIME_STAGING_REGISTRY}/rancher/rancher"
-                      sh "./yq e '.corralConfigs.corralConfigVars.rancher_chart_url = \"${env.PRIME_REPO}\"' -i ${configPath}"
-                      sh "./yq e '.corralConfigs.corralConfigVars.rancher_chart_repo = \"${rancherChartRepo}\"' -i ${configPath}"
-                      sh "./yq e '.corralConfigs.corralConfigVars.rancher_image = \"${rancherImage}\"' -i ${configPath}"
-                      sh "./yq e '.corralConfigs.corralConfigVars.env_var_map = \"${cattleImageEnvVar}\"' -i ${configPath}"
+                      sh "./yq e '.rancher_chart_url = \"${env.PRIME_REPO}\"' -i ${ansibleConfigPath}"
+                      sh "./yq e '.rancher_chart_repo = \"${rancherChartRepo}\"' -i ${ansibleConfigPath}"
+                      sh "./yq e '.rancher_image = \"${rancherImage}\"' -i ${ansibleConfigPath}"
+                      sh "./yq e '.env_var_map = \"${cattleImageEnvVar}\"' -i ${ansibleConfigPath}" // TODO: this will update when support multiple rancher version heads are added
                     }
                     def configYaml = readFile(file: "${configPath}")
+                    def ansibleConfigYaml = readFile(file: "${ansibleConfigPath}")
+                    def terraformConfigYaml = readFile(file: "${terraformConfigPath}")
                     def goValidationParams = [
                         text(name: 'CONFIG', value: configYaml),
+                        text(name: 'ANSIBLE_CONFIG', value: ansibleConfigYaml),
+                        text(name: 'TERRAFORM_CONFIG', value: terraformConfigYaml)
                         string(name: 'BRANCH', value: "${branch}"),
                         string(name: 'TEST_RUN_NAME', value: "${testTag}-${env.TEST_RUN_NAME}"),
                       ]

@@ -47,7 +47,7 @@ func gitPushCommit(client *rancher.Client, sshNode *nodes.Node, repoName string)
 
 func createLocalFleetGitRepo(client *rancher.Client, sshNode *nodes.Node, repoName string, namespaceName string, clusterName string, clusterID string, secretName string) (*v1.SteveAPIObject, error) {
 
-	gitSSHRepo := fmt.Sprintf(fmt.Sprintf("%s@%s:/home/%s/%s", sshNode.SSHUser, sshNode.PublicIPAddress, sshNode.SSHUser, repoName))
+	gitSSHRepo := fmt.Sprintf("%s@%s:/home/%s/%s", sshNode.SSHUser, sshNode.PublicIPAddress, sshNode.SSHUser, repoName)
 
 	fleetGitRepo := &v1alpha1.GitRepo{
 		ObjectMeta: metav1.ObjectMeta{
