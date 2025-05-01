@@ -2,6 +2,8 @@ package globalrolesv2
 
 import (
 	"fmt"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	corev1 "k8s.io/api/core/v1"
 	"testing"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -13,6 +15,7 @@ import (
 	"github.com/rancher/tests/actions/kubeapi/secrets"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
+	actionssecrets "github.com/rancher/tests/actions/secrets"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -40,9 +43,9 @@ func (ns *NamespacedRulesTestSuite) SetupSuite() {
 	ns.client = client
 }
 
-func (ns *NamespacedRulesTestSuite) validateNSRulesRBACResources(user *management.User, namespacedRules map[string][]rbacv1.PolicyRule) {
+func (ns *NamespacedRulesTestSuite) validateNSRulesRBACResources(user *management.User, globalR *v3.GlobalRole, namespacedRules map[string][]rbacv1.PolicyRule) {
 	log.Info("Verify that the global role binding is created for the user.")
-	grbOwner, err := getGlobalRoleBindingForUserWrangler(ns.client, user.ID)
+	grbOwner, err := getGlobalRoleBindingForUserWrangler(ns.client, globalR.Name, user.ID)
 	require.NoError(ns.T(), err)
 	require.NotEmpty(ns.T(), grbOwner, "Global Role Binding not found for the user")
 
@@ -86,7 +89,7 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithNamespacedRules() {
 	createdUser, err := users.CreateUserWithRole(ns.client, users.UserConfig(), rbac.StandardUser.String(), createdGlobalRole.Name)
 	require.NoError(ns.T(), err)
 
-	ns.validateNSRulesRBACResources(createdUser, namespacedRules)
+	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
 
 	log.Info("Verify user can list secrets in the namespace from the namespaced rules")
 	userClient, err := ns.client.AsUser(createdUser)
@@ -100,7 +103,10 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithNamespacedRules() {
 	require.Equal(ns.T(), len(listSecretsAsAdmin.Items), len(listSecretsAsUser.Items))
 
 	log.Info("Verify user cannot create secrets in the namespace from the namespaced rules")
-	_, err = secrets.CreateSecretForCluster(userClient, &secret, localcluster, namespace.Name)
+	secretData := map[string][]byte{
+		"key": []byte(namegen.RandStringLower(5)),
+	}
+	_, err = actionssecrets.CreateSecret(userClient, localcluster, namespace.Name, secretData, corev1.SecretTypeOpaque)
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 
@@ -128,7 +134,7 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarAsKeyInNamespacedRules
 	createdUser, err := users.CreateUserWithRole(ns.client, users.UserConfig(), rbac.StandardUser.String(), createdGlobalRole.Name)
 	require.NoError(ns.T(), err)
 
-	ns.validateNSRulesRBACResources(createdUser, namespacedRules)
+	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
 
 	log.Info("Verify user cannot list secrets in any namespace from the namespaced rules")
 	userClient, err := ns.client.AsUser(createdUser)
@@ -139,7 +145,10 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarAsKeyInNamespacedRules
 	require.True(ns.T(), k8sError.IsForbidden(err))
 
 	log.Info("Verify user cannot create secrets in other namespaces as well")
-	_, err = secrets.CreateSecretForCluster(userClient, &secret, localcluster, "default")
+	secretData := map[string][]byte{
+		"key": []byte(namegen.RandStringLower(5)),
+	}
+	_, err = actionssecrets.CreateSecret(userClient, localcluster, "default", secretData, corev1.SecretTypeOpaque)
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 }
@@ -165,14 +174,18 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarForResourcesAndGroups(
 	createdUser, err := users.CreateUserWithRole(ns.client, users.UserConfig(), rbac.StandardUser.String(), createdGlobalRole.Name)
 	require.NoError(ns.T(), err)
 
-	ns.validateNSRulesRBACResources(createdUser, namespacedRules)
+	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
 
 	log.Info("Verify user can list secrets in the defined namespaced rules")
 	userClient, err := ns.client.AsUser(createdUser)
 	require.NoError(ns.T(), err)
 
 	log.Info("Create secrets as an admin in the customNS and verify user can list the secret.")
-	createAdminSecret, err := secrets.CreateSecretForCluster(ns.client, &secret, localcluster, customNS)
+
+	secretData := map[string][]byte{
+		"key": []byte(namegen.RandStringLower(5)),
+	}
+	createAdminSecret, err := actionssecrets.CreateSecret(ns.client, localcluster, customNS, secretData, corev1.SecretTypeOpaque)
 	require.NoError(ns.T(), err)
 	listSecretsCustomNS, err := secrets.ListSecrets(userClient, localcluster, customNS, metav1.ListOptions{})
 	require.NoError(ns.T(), err)
@@ -185,7 +198,10 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarForResourcesAndGroups(
 	require.True(ns.T(), k8sError.IsForbidden(err))
 
 	log.Info("Verify user cannot create secrets in other namespaces as well")
-	_, err = secrets.CreateSecretForCluster(userClient, &secret, localcluster, "default")
+	nonCreatedSecretData := map[string][]byte{
+		"key": []byte(namegen.RandStringLower(5)),
+	}
+	_, err = actionssecrets.CreateSecret(userClient, localcluster, "default", nonCreatedSecretData, corev1.SecretTypeOpaque)
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 }
@@ -214,7 +230,7 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithMultipleNSInNamespacedRule
 	createdUser, err := users.CreateUserWithRole(ns.client, users.UserConfig(), rbac.StandardUser.String(), createdGlobalRole.Name)
 	require.NoError(ns.T(), err)
 
-	ns.validateNSRulesRBACResources(createdUser, namespacedRules)
+	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
 
 	log.Info("Verify user can list secrets in the provided namespace from the namespaced rules for secrets. ")
 	userClient, err := ns.client.AsUser(createdUser)
@@ -274,7 +290,7 @@ func (ns *NamespacedRulesTestSuite) TestUpdateGlobalRoleWithNamespacedRules() {
 	log.Info("Updating global role with namespaced rules.")
 	_, err = rbacapi.UpdateGlobalRole(ns.client, &updatedGlobalRole)
 	require.NoError(ns.T(), err)
-	ns.validateNSRulesRBACResources(createdUser, namespacedRules)
+	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
 
 	log.Info("Verify user can list secrets in the namespace from the namespaced rules")
 	userClient, err := ns.client.AsUser(createdUser)
@@ -302,7 +318,7 @@ func (ns *NamespacedRulesTestSuite) TestUpdateGlobalRoleWithNamespacedRules() {
 	_, err = rbacapi.UpdateGlobalRole(ns.client, &updatedGlobalRoleWithMultiNamespacedRules)
 	require.NoError(ns.T(), err)
 
-	ns.validateNSRulesRBACResources(createdUser, namespacedRules)
+	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
 
 	log.Info("Verify user cannot list secrets in the custom namespace from the namespaced rules for secrets. ")
 	_, err = secrets.ListSecrets(userClient, localcluster, customNS, metav1.ListOptions{})
@@ -338,9 +354,9 @@ func (ns *NamespacedRulesTestSuite) TestDeleteNamespacedRulesFromGlobalRole() {
 	createdUser, err := users.CreateUserWithRole(ns.client, users.UserConfig(), rbac.StandardUser.String(), createdGlobalRole.Name)
 	require.NoError(ns.T(), err)
 
-	ns.validateNSRulesRBACResources(createdUser, namespacedRules)
+	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
 
-	grbOwner, err := getGlobalRoleBindingForUserWrangler(ns.client, createdUser.ID)
+	grbOwner, err := getGlobalRoleBindingForUserWrangler(ns.client, createdGlobalRole.Name, createdUser.ID)
 	require.NoError(ns.T(), err)
 	nameSelector := fmt.Sprintf("metadata.name=%s-%s", grbOwner, namespace)
 
@@ -386,7 +402,7 @@ func (ns *NamespacedRulesTestSuite) TestDeleteANamespaceFromNamespacedRules() {
 	createdUser, err := users.CreateUserWithRole(ns.client, users.UserConfig(), rbac.StandardUser.String(), createdGlobalRole.Name)
 	require.NoError(ns.T(), err)
 
-	ns.validateNSRulesRBACResources(createdUser, namespacedRules)
+	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
 
 	log.Info("Update the global role and remove a namespace.")
 	namespacedRules = map[string][]rbacv1.PolicyRule{
@@ -405,7 +421,7 @@ func (ns *NamespacedRulesTestSuite) TestDeleteANamespaceFromNamespacedRules() {
 	_, err = rbacapi.UpdateGlobalRole(ns.client, &deleteANamespace)
 	require.NoError(ns.T(), err)
 
-	ns.validateNSRulesRBACResources(createdUser, namespacedRules)
+	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
 
 	log.Info("Verify user can list pods in the namespace from the namespaced rules")
 	userClient, err := ns.client.AsUser(createdUser)
@@ -445,8 +461,8 @@ func (ns *NamespacedRulesTestSuite) TestDeleteUserDeletesRolebindingsForNamespac
 	createdUser, err := users.CreateUserWithRole(ns.client, users.UserConfig(), rbac.StandardUser.String(), createdGlobalRole.Name)
 	require.NoError(ns.T(), err)
 
-	ns.validateNSRulesRBACResources(createdUser, namespacedRules)
-	grbOwner, err := getGlobalRoleBindingForUserWrangler(ns.client, createdUser.ID)
+	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
+	grbOwner, err := getGlobalRoleBindingForUserWrangler(ns.client, createdGlobalRole.Name, createdUser.ID)
 	require.NoError(ns.T(), err)
 	nameSelector := fmt.Sprintf("metadata.name=%s-%s", grbOwner, namespace)
 
@@ -499,7 +515,7 @@ func (ns *NamespacedRulesTestSuite) TestWebhookIncorrectVerbsNotRejected() {
 	createdUser, err := users.CreateUserWithRole(ns.client, users.UserConfig(), rbac.StandardUser.String(), globalRole.Name)
 	require.NoError(ns.T(), err)
 
-	ns.validateNSRulesRBACResources(createdUser, namespacedRules)
+	ns.validateNSRulesRBACResources(createdUser, globalRole, namespacedRules)
 
 	log.Info("Verify user cannot list secrets in the defined namespaced rules")
 	userClient, err := ns.client.AsUser(createdUser)
@@ -530,7 +546,7 @@ func (ns *NamespacedRulesTestSuite) TestWebhookIncorrectResourcesNotRejected() {
 	createdUser, err := users.CreateUserWithRole(ns.client, users.UserConfig(), rbac.StandardUser.String(), globalRole.Name)
 	require.NoError(ns.T(), err)
 
-	ns.validateNSRulesRBACResources(createdUser, namespacedRules)
+	ns.validateNSRulesRBACResources(createdUser, globalRole, namespacedRules)
 
 	log.Info("Verify user cannot list secrets in the defined namespaced rules")
 	userClient, err := ns.client.AsUser(createdUser)
