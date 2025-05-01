@@ -1,6 +1,7 @@
 #!groovy
 node("harvester-vpn-1") {
   def rootPath = "/root/go/src/github.com/rancher/tfp-automation/"
+  def homePath = "/home/ubuntu/jenkins/workspace/rancher_qa/caleb-harvester-e2e2"
   def modulesPath = "modules/sanity/harvester"
   def testRootPath = "/root/go/src/github.com/rancher/tests/validation/"
   def testsDir = "github.com/rancher/tfp-automation/tests/${env.TEST_PACKAGE}"
@@ -63,21 +64,141 @@ node("harvester-vpn-1") {
           
                 withEnv(paramsMap) {
 
+                    stage('Setup Harvester Environment') {
+                        sh returnStdout: true, script: 'wget -qO ./jq https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64'
+                        sh returnStdout:true, script: 'chmod a+x ./jq'
 
+                        sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
+                        sh returnStdout:true, script: 'chmod a+x ./yq'
+
+                        sh returnStdout: true, script:  'wget -qO ./kubectl "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
+                        sh returnStdout: true, script:  'chmod a+x ./kubectl'
+
+                        dir(".ssh") {
+                            def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
+                            writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                    
+                            def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
+                            writeFile file: AWS_RSA_KEY_NAME, text: decodedRsa
+                        }
+
+                        writeFile file: 'seeder.yaml', text: SEEDER_KUBECONFIG
+                        // need to inject sshKey into clusterConfig object of nodeManifest so that passwordless SSH works
+                        writeFile file: 'node_manifest.yaml', text: NODE_MANIFEST
+                        // will only work for single node clusters unless we write a loop
+                        sh "./yq e '.spec.nodes.[0].inventoryReference.name = \"${HARVESTER_INVENTORY_NODE}\"' -i node_manifest.yaml"
+                        
+                        sh "./yq e '.metadata.name = \"${HARVESTER_CLUSTER_NAME}\"' -i node_manifest.yaml"
+
+                        sh "./yq e '.spec.version = \"${HARVESTER_VERSION}\"' -i node_manifest.yaml"
+                        sh "chmod 600 .ssh/${AWS_SSH_KEY_NAME}"
+                        def publicSSHKey = sh(script: "ssh-keygen -f .ssh/${AWS_SSH_KEY_NAME} -y", returnStdout: true).trim()
+                        sh "./yq e '.spec.clusterConfig.sshKeys.[0] = \"${publicSSHKey}\"' -i node_manifest.yaml"
+                        
+
+                        sh '''#!/bin/bash
+                        
+                        export KUBECONFIG=seeder.yaml
+                        ./kubectl delete clusters.metal/$HARVESTER_CLUSTER_NAME -n tink-system || true
+                        sleep 30
+
+                        ./kubectl apply -f node_manifest.yaml
+
+                        export inode=""
+                        while [[ -z "$inode" ]]; do
+                            export inode=$(./kubectl get -n tink-system inventories/$HARVESTER_INVENTORY_NODE -o jsonpath='{.status.pxeBootConfig.address}')
+                            sleep 2
+                        done
+                        echo "harvester IP address"
+                        echo $inode
+
+                        sleep 240
+
+                        until ping -c1 -W1 $inode; do sleep 2; done
+                        echo "able to ping node, moving on to get harvester kubeconfig"
+
+                        sleep 660
+
+                        until timeout 60 ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i .ssh/$AWS_SSH_KEY_NAME rancher@$inode 'sudo cat /etc/rancher/rke2/rke2.yaml'; do sleep 5; done
+                        echo "ssh shows rke2.yaml is up, downloading now.."
+
+                        ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i .ssh/$AWS_SSH_KEY_NAME rancher@$inode 'sudo cat /etc/rancher/rke2/rke2.yaml' > harvester.yaml
+                        sed -i "s#server: https://127.0.0.1:6443#server: https://$inode:6443#g" harvester.yaml
+
+                        export KUBECONFIG=harvester.yaml
+
+                        sleep 300
+
+                        ./kubectl get pods -A
+                        ./kubectl rollout status deployment -n harvester-system harvester
+                        ./kubectl rollout status deployment -n cattle-system rancher
+
+                        '''
+
+                        config = config.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+                        config = config.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+                        
+
+                        writeFile file: filename, text: config
+
+                        def RANCHER_PASSWORD = sh (
+                          script: "./yq '.rancher.adminPassword' ${filename}",
+                          returnStdout: true
+                        ).trim()
+
+                        sh '''#!/bin/bash
+                        export KUBECONFIG=seeder.yaml
+                        export inode=$(./kubectl get clusters.metal/$HARVESTER_CLUSTER_NAME -n tink-system -o jsonpath='{.status.clusterAddress}')
+
+                        until [[ "$(curl -s -L --insecure -o /dev/null -w "%{http_code}\n" "https://$inode")" == "200" ]]; do sleep 5; done; echo "https://$inode is healthy"
+                        
+                        jsonOutput=$(curl --insecure -d '{"username" : "admin", "password" : "admin", "responseType" : "json"}'  https://$inode/v3-public/localproviders/local?action=login)
+                        
+                        token=$(echo $jsonOutput | jq -cr .token)
+                        userID=$(echo $jsonOutput | jq -cr .userId)
+
+
+                        jsonData=$( jq -n --arg password "password1234" '{"newPassword" : $password}')
+                        curl --insecure --user "$token" -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d "$jsonData" https://$inode/v3/users/$userID?action=setpassword
+
+                        echo "$token" > login.token
+                        echo "$inode" > host.txt
+
+                        '''
+
+                        def TOKEN = sh (
+                          script: "cat login.token",
+                          returnStdout: true
+                        ).trim()
+
+                        sh "./yq e '.harvester.adminToken = \"${TOKEN}\"' -i ${filename}"
+
+                        def HOST = sh (
+                          script: "cat host.txt",
+                          returnStdout: true
+                        ).trim()
+
+
+                        sh "./yq e '.harvester.host = \"${HOST}\"' -i ${filename}"
+
+
+                        sh "./yq e '.terraform.harvesterCredentials.kubeconfigContent = load_str(\"harvester.yaml\")' -i ${filename}"
+
+                        config = sh(script: "cat ${filename}", returnStdout: true).trim()
+
+                        
+                    }
                     stage('Checkout Infrastructure Repo') {
-                        deleteDir()
-                        checkout([
-                                    $class: 'GitSCM',
-                                    branches: [[name: "*/${infraBranch}"]],
-                                    extensions: scm.extensions + [[$class: 'CleanCheckout']],
-                                    userRemoteConfigs: infraRepo
-                                ])
+                      checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${infraBranch}"]],
+                                extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                                userRemoteConfigs: infraRepo
+                              ])
                      }
 
                     stage('Configure and Build') {
-                        config = config.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
-                        config = config.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
-                
+
                         writeFile file: filename, text: config
                 
                         dir(".ssh") {
@@ -87,13 +208,33 @@ node("harvester-vpn-1") {
                             def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
                             writeFile file: AWS_RSA_KEY_NAME, text: decodedRsa
                         }
-                        
+
                         env.CATTLE_TEST_CONFIG=rootPath+filename
-                
+
                         sh "./configure.sh"
                         sh "./build.sh"
 
                         sh "docker volume create --name ${validationVolume}"
+                        
+                        sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
+                        sh returnStdout:true, script: 'chmod a+x ./yq'
+
+                        sh returnStdout: true, script:  'wget -qO ./kubectl "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
+                        sh returnStdout: true, script:  'chmod a+x ./kubectl'
+                        
+                        def harvesterKubeconfig = sh (
+                          script: "./yq '.terraform.harvesterCredentials.kubeconfigContent' ${filename}",
+                          returnStdout: true
+                        ).trim()
+                        
+                        writeFile file: "harvester.yaml", text: harvesterKubeconfig
+                        writeFile file: 'harvester_config.yaml', text: HARVESTER_CONFIG
+
+                        sh '''#!/bin/bash
+                        export KUBECONFIG=harvester.yaml
+
+                        ./kubectl apply -f harvester_config.yaml
+                        '''
                      }
 
                     stage('Run Infrastructure TFP Test') {
@@ -162,8 +303,6 @@ node("harvester-vpn-1") {
                             ls -la harvester/ ;
                             docker run -v tests${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "/root/go/bin/gotestsum --format standard-verbose --packages=${golangTestDir} --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
                             """
-                            // ${testRootPath}pipeline/scripts/build_qase_reporter.sh;
-                            // ${testRootPath}reporter;
                               
                           } catch(err) {
                             echo "${err} Validation tests had failures. Aborting"
