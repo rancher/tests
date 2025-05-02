@@ -336,6 +336,17 @@ node("harvester-vpn-1") {
                               -w /terraform-files hashicorp/terraform:latest \
                               destroy --auto-approve
                           """
+
+                          writeFile file: 'seeder.yaml', text: SEEDER_KUBECONFIG
+
+                          sh returnStdout: true, script:  'wget -qO ./kubectl "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
+                          sh returnStdout: true, script:  'chmod a+x ./kubectl'
+                          sh '''#!/bin/bash
+
+                            export KUBECONFIG=seeder.yaml
+                            ./kubectl delete clusters.metal/$HARVESTER_CLUSTER_NAME -n tink-system || true
+                          '''
+                          
                         }
                       }
                       catch(err) {
