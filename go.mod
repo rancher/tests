@@ -43,6 +43,7 @@ replace (
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.32.2
 	k8s.io/dynamic-resource-allocation => k8s.io/dynamic-resource-allocation v0.32.2
 	k8s.io/endpointslice => k8s.io/endpointslice v0.32.2
+	k8s.io/externaljwt => k8s.io/externaljwt v0.32.2
 	k8s.io/kms => k8s.io/kms v0.32.2
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.32.2
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.32.2
@@ -68,10 +69,12 @@ require (
 )
 
 require (
+	github.com/gruntwork-io/terratest v0.48.2
 	github.com/harvester/harvester v1.4.2
-	github.com/rancher/rancher v0.0.0-20250228094653-6e82729d08cf
+	github.com/rancher/rancher v0.0.0-20250328200651-bdbb4ea81874
 	github.com/rancher/shepherd v0.0.0-20250410162748-9d50a3d8c82c
-	github.com/rancher/tests/actions v0.0.0-00010101000000-000000000000
+	github.com/rancher/tests/actions v0.0.0-20250320195836-4f66d3d9c503
+	github.com/rancher/tfp-automation v0.0.0-20250414160020-50b9937145c1
 
 )
 
@@ -81,7 +84,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/aws/aws-sdk-go-v2 v1.36.3 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.29.8
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.61.2
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.69.0
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/creasty/defaults v1.5.2 // indirect
@@ -102,7 +105,7 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0
 	github.com/rancher/aks-operator v1.11.0 // indirect
-	github.com/rancher/apiserver v0.5.2 // indirect
+	github.com/rancher/apiserver v0.6.0 // indirect
 	github.com/rancher/backup-restore-operator v1.2.1
 	github.com/rancher/eks-operator v1.11.0 // indirect
 	github.com/rancher/fleet/pkg/apis v0.12.0
@@ -111,7 +114,7 @@ require (
 	github.com/rancher/machine v0.15.0-rancher126 // indirect
 	github.com/rancher/norman v0.6.0
 	github.com/rancher/rke v1.8.0-rc.4 // indirect
-	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20240301001845-4eacc2dabbde // indirect
+	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250306000150-b1a9781accab // indirect
 	github.com/rancher/wrangler v1.1.2 // indirect
 	github.com/rancher/wrangler/v3 v3.2.0 // indirect
 	github.com/sirupsen/logrus v1.9.3
@@ -141,31 +144,50 @@ require (
 
 require (
 	dario.cat/mergo v1.0.1 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.4 // indirect
+	github.com/agext/levenshtein v1.2.3 // indirect
+	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.7 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.61 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.30 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.34 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.34 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.17 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.24 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.3.19 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.4.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.15 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.17.17 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.18.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.25.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.29.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.16 // indirect
 	github.com/aws/smithy-go v1.22.2 // indirect
+	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/containerd/cgroups/v3 v3.0.2 // indirect
 	github.com/containerd/errdefs v0.3.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
+	github.com/hashicorp/go-getter/v2 v2.2.3 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/hashicorp/go-safetemp v1.0.0 // indirect
+	github.com/hashicorp/hcl/v2 v2.22.0 // indirect
+	github.com/hashicorp/terraform-json v0.23.0 // indirect
+	github.com/imdario/mergo v0.3.16 // indirect
+	github.com/jinzhu/copier v0.3.5 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/kr/fs v0.1.0 // indirect
+	github.com/kubereboot/kured v1.13.1 // indirect
+	github.com/mattn/go-zglob v0.0.2-0.20190814121620-e3c945676326 // indirect
+	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/moby/sys/user v0.3.0 // indirect
 	github.com/openshift/api v0.0.0 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
+	github.com/tmccombs/hcl2json v0.6.4 // indirect
+	github.com/ulikunitz/xz v0.5.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	github.com/zclconf/go-cty v1.15.0 // indirect
+	golang.org/x/mod v0.23.0 // indirect
+	golang.org/x/tools v0.30.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250207221924-e9438ea467c6 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
