@@ -465,5 +465,6 @@ func (rt *RegistryTestSuite) configureRKE2K3SRegistry(registryName string, testC
 }
 
 func TestRegistryTestSuite(t *testing.T) {
+	t.Skip("This test has been deprecated; check https://github.com/rancher/tfp-automation for updated tests")
 	suite.Run(t, new(RegistryTestSuite))
 }

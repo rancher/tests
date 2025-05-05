@@ -78,11 +78,11 @@ func (r *RKE2PSACTTestSuite) SetupSuite() {
 }
 
 func (r *RKE2PSACTTestSuite) TestRKE2PSACTNodeDriverCluster() {
-	nodeRolesDedicated := []provisioninginput.MachinePools{
-		provisioninginput.EtcdMachinePool,
-		provisioninginput.ControlPlaneMachinePool,
-		provisioninginput.WorkerMachinePool,
-	}
+	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
+
+	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
+	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
+	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	tests := []struct {
 		name         string
@@ -90,32 +90,17 @@ func (r *RKE2PSACTTestSuite) TestRKE2PSACTNodeDriverCluster() {
 		psact        provisioninginput.PSACT
 		client       *rancher.Client
 	}{
-		{
-			name:         "Rancher Privileged " + provisioninginput.StandardClientName.String(),
-			machinePools: nodeRolesDedicated,
-			psact:        "rancher-privileged",
-			client:       r.standardUserClient,
-		},
-		{
-			name:         "Rancher Restricted " + provisioninginput.StandardClientName.String(),
-			machinePools: nodeRolesDedicated,
-			psact:        "rancher-restricted",
-			client:       r.standardUserClient,
-		},
-		{
-			name:         "Rancher Baseline " + provisioninginput.AdminClientName.String(),
-			machinePools: nodeRolesDedicated,
-			psact:        "rancher-baseline",
-			client:       r.client,
-		},
+		{"Rancher Privileged " + provisioninginput.AdminClientName.String(), nodeRolesStandard, "rancher-privileged", r.client},
+		{"Rancher Restricted " + provisioninginput.AdminClientName.String(), nodeRolesStandard, "rancher-restricted", r.client},
+		{"Rancher Baseline " + provisioninginput.AdminClientName.String(), nodeRolesStandard, "rancher-baseline", r.client},
 	}
 
 	for _, tt := range tests {
 		provisioningConfig := *r.provisioningConfig
 		provisioningConfig.MachinePools = tt.machinePools
 		provisioningConfig.PSACT = string(tt.psact)
-		permutations.RunTestPermutations(&r.Suite, tt.name, tt.client, &provisioningConfig,
-			permutations.RKE2ProvisionCluster, nil, nil)
+
+		permutations.RunTestPermutations(&r.Suite, tt.name, tt.client, &provisioningConfig, permutations.RKE2ProvisionCluster, nil, nil)
 	}
 }
 

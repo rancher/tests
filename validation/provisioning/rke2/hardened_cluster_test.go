@@ -86,7 +86,11 @@ func (c *HardenedRKE2ClusterProvisioningTestSuite) SetupSuite() {
 }
 
 func (c *HardenedRKE2ClusterProvisioningTestSuite) TestProvisioningRKE2HardenedCluster() {
-	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
+	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
+
+	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
+	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
+	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	tests := []struct {
 		name            string
@@ -94,8 +98,7 @@ func (c *HardenedRKE2ClusterProvisioningTestSuite) TestProvisioningRKE2HardenedC
 		machinePools    []provisioninginput.MachinePools
 		scanProfileName string
 	}{
-		{"RKE2 CIS 1.8 Profile Hardened " + provisioninginput.StandardClientName.String(), c.standardUserClient, nodeRolesDedicated, "rke2-cis-1.8-profile-hardened"},
-		{"RKE2 CIS 1.8 Profile Permissive " + provisioninginput.StandardClientName.String(), c.standardUserClient, nodeRolesDedicated, "rke2-cis-1.8-profile-permissive"},
+		{"CIS 1.9 Profile " + provisioninginput.StandardClientName.String(), c.standardUserClient, nodeRolesStandard, "rke2-cis-1.9-profile"},
 	}
 	for _, tt := range tests {
 		c.Run(tt.name, func() {

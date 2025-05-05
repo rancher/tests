@@ -88,6 +88,7 @@ func upgradeDownstreamCluster(u *suite.Suite, testName string, client *rancher.C
 	if cluster.VersionToUpgrade == "" {
 		u.T().Skip(u.T(), cluster.VersionToUpgrade, "Kubernetes version to upgrade is not provided, skipping the test")
 	}
+
 	testConfig.KubernetesVersion = cluster.VersionToUpgrade
 
 	clusterObject, _, _ := extensionscluster.GetProvisioningClusterByName(client, clusterName, namespace)

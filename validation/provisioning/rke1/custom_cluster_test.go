@@ -82,6 +82,11 @@ func (c *CustomClusterProvisioningTestSuite) TestProvisioningRKE1CustomCluster()
 	nodeRolesAll := []provisioninginput.NodePools{provisioninginput.AllRolesNodePool}
 	nodeRolesShared := []provisioninginput.NodePools{provisioninginput.EtcdControlPlaneNodePool, provisioninginput.WorkerNodePool}
 	nodeRolesDedicated := []provisioninginput.NodePools{provisioninginput.EtcdNodePool, provisioninginput.ControlPlaneNodePool, provisioninginput.WorkerNodePool}
+	nodeRolesStandard := []provisioninginput.NodePools{provisioninginput.EtcdNodePool, provisioninginput.ControlPlaneNodePool, provisioninginput.WorkerNodePool}
+
+	nodeRolesStandard[0].NodeRoles.Quantity = 3
+	nodeRolesStandard[1].NodeRoles.Quantity = 2
+	nodeRolesStandard[2].NodeRoles.Quantity = 3
 
 	require.GreaterOrEqual(c.T(), len(c.provisioningConfig.CNIs), 1)
 
@@ -94,6 +99,7 @@ func (c *CustomClusterProvisioningTestSuite) TestProvisioningRKE1CustomCluster()
 		{"1 Node all roles " + provisioninginput.StandardClientName.String(), nodeRolesAll, c.standardUserClient, c.client.Flags.GetValue(environmentflag.Short) || c.client.Flags.GetValue(environmentflag.Long)},
 		{"2 nodes - etcd|cp roles per 1 node " + provisioninginput.StandardClientName.String(), nodeRolesShared, c.standardUserClient, c.client.Flags.GetValue(environmentflag.Short) || c.client.Flags.GetValue(environmentflag.Long)},
 		{"3 nodes - 1 role per node " + provisioninginput.StandardClientName.String(), nodeRolesDedicated, c.standardUserClient, c.client.Flags.GetValue(environmentflag.Long)},
+		{"8 nodes - 3 etcd, 2 cp, 3 worker " + provisioninginput.StandardClientName.String(), nodeRolesStandard, c.standardUserClient, c.client.Flags.GetValue(environmentflag.Long)},
 	}
 	for _, tt := range tests {
 		if !tt.runFlag {
@@ -104,6 +110,7 @@ func (c *CustomClusterProvisioningTestSuite) TestProvisioningRKE1CustomCluster()
 		provisioningConfig := *c.provisioningConfig
 		provisioningConfig.NodePools = tt.nodePools
 		provisioningConfig.NodePools[0].SpecifyCustomPublicIP = true
+
 		permutations.RunTestPermutations(&c.Suite, tt.name, tt.client, &provisioningConfig, permutations.RKE1CustomCluster, nil, nil)
 	}
 }

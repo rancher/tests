@@ -34,7 +34,6 @@ type HardenedRKE1ClusterProvisioningTestSuite struct {
 	provisioningConfig  *provisioninginput.Config
 	project             *management.Project
 	chartInstallOptions *charts.InstallOptions
-	chartFeatureOptions *charts.RancherMonitoringOpts
 }
 
 func (c *HardenedRKE1ClusterProvisioningTestSuite) TearDownSuite() {

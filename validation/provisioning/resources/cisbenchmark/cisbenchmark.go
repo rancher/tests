@@ -94,7 +94,5 @@ func RunCISScan(client *rancher.Client, projectClusterID, scanProfileName string
 		return err
 	}
 
-	logrus.Infof("CIS Benchmark scan passed!")
-
 	return nil
 }

@@ -378,7 +378,7 @@ func createPostUpgradeWorkloads(t *testing.T, client *rancher.Client, clusterNam
 }
 
 func getSteveID(namespaceName, resourceName string) string {
-	return fmt.Sprintf(namespaceName + "/" + resourceName)
+	return fmt.Sprintf("%s/%s", namespaceName, resourceName)
 }
 
 func getProject(client *rancher.Client, clusterName, projectName string) (project *management.Project, err error) {

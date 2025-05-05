@@ -78,11 +78,11 @@ func (k *K3SPSACTTestSuite) SetupSuite() {
 }
 
 func (k *K3SPSACTTestSuite) TestK3SPSACTNodeDriverCluster() {
-	nodeRolesDedicated := []provisioninginput.MachinePools{
-		provisioninginput.EtcdMachinePool,
-		provisioninginput.ControlPlaneMachinePool,
-		provisioninginput.WorkerMachinePool,
-	}
+	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
+
+	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
+	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
+	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	tests := []struct {
 		name         string
@@ -90,32 +90,17 @@ func (k *K3SPSACTTestSuite) TestK3SPSACTNodeDriverCluster() {
 		psact        provisioninginput.PSACT
 		client       *rancher.Client
 	}{
-		{
-			name:         "Rancher Privileged " + provisioninginput.StandardClientName.String(),
-			machinePools: nodeRolesDedicated,
-			psact:        "rancher-privileged",
-			client:       k.standardUserClient,
-		},
-		{
-			name:         "Rancher Restricted " + provisioninginput.StandardClientName.String(),
-			machinePools: nodeRolesDedicated,
-			psact:        "rancher-restricted",
-			client:       k.standardUserClient,
-		},
-		{
-			name:         "Rancher Baseline " + provisioninginput.AdminClientName.String(),
-			machinePools: nodeRolesDedicated,
-			psact:        "rancher-baseline",
-			client:       k.client,
-		},
+		{"Rancher Privileged " + provisioninginput.AdminClientName.String(), nodeRolesStandard, "rancher-privileged", k.client},
+		{"Rancher Restricted " + provisioninginput.AdminClientName.String(), nodeRolesStandard, "rancher-restricted", k.client},
+		{"Rancher Baseline " + provisioninginput.AdminClientName.String(), nodeRolesStandard, "rancher-baseline", k.client},
 	}
 
 	for _, tt := range tests {
 		provisioningConfig := *k.provisioningConfig
 		provisioningConfig.MachinePools = tt.machinePools
 		provisioningConfig.PSACT = string(tt.psact)
-		permutations.RunTestPermutations(&k.Suite, tt.name, tt.client, &provisioningConfig,
-			permutations.K3SProvisionCluster, nil, nil)
+
+		permutations.RunTestPermutations(&k.Suite, tt.name, tt.client, &provisioningConfig, permutations.K3SProvisionCluster, nil, nil)
 	}
 }
 

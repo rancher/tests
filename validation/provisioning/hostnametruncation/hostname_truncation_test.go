@@ -44,9 +44,6 @@ func (r *HostnameTruncationTestSuite) SetupSuite() {
 	r.client = client
 }
 
-// TestProvisioningRKE2ClusterTruncation consist of several test that loop through three limits
-// for hostnames. The test starts at a minimum length limit of 10 characters, then a maximum length
-// limit of 63 characters and finally a middle length limit of 31 characters
 func (r *HostnameTruncationTestSuite) TestProvisioningRKE2ClusterTruncation() {
 	tests := []struct {
 		name                        string
@@ -54,50 +51,30 @@ func (r *HostnameTruncationTestSuite) TestProvisioningRKE2ClusterTruncation() {
 		hostnameLengthLimits        []int
 		defaultHostnameLengthLimits []int
 	}{
-		{
-			name:                        "Cluster level truncation",
-			machinePoolNameLengths:      []int{10, 31, 63},
-			defaultHostnameLengthLimits: []int{10, 31, 63},
-		},
-		{
-			name:                        "Machine pool level truncation - 10 characters",
-			machinePoolNameLengths:      []int{10, 10, 10},
-			hostnameLengthLimits:        []int{10, 31, 63},
-			defaultHostnameLengthLimits: []int{10, 16, 63},
-		},
-		{
-			name:                        "Machine pool level truncation - 31 characters",
-			machinePoolNameLengths:      []int{10, 31, 63},
-			hostnameLengthLimits:        []int{31, 31, 31},
-			defaultHostnameLengthLimits: []int{10, 31, 63},
-		},
-		{
-			name:                        "Machine pool level truncation - 63 characters",
-			machinePoolNameLengths:      []int{10, 31, 63},
-			hostnameLengthLimits:        []int{63, 63, 63},
-			defaultHostnameLengthLimits: []int{10, 31, 63},
-		},
-		{
-			name:                        "Cluster and machine pool level truncation - 31 characters",
-			machinePoolNameLengths:      []int{10, 31, 63},
-			hostnameLengthLimits:        []int{31, 31, 31},
-			defaultHostnameLengthLimits: []int{10, 63, 31},
-		},
+		{"Cluster level truncation", []int{10, 31, 63}, []int{10, 31, 63}, []int{10, 31, 63}},
+		{"Machine pool level truncation - 10 characters", []int{10, 10, 10}, []int{10, 31, 63}, []int{10, 16, 63}},
+		{"Machine pool level truncation - 31 characters", []int{10, 31, 63}, []int{31, 31, 31}, []int{10, 31, 63}},
+		{"Machine pool level truncation - 63 characters", []int{10, 31, 63}, []int{63, 63, 63}, []int{10, 31, 63}},
+		{"Cluster and machine pool level truncation - 31 characters", []int{10, 31, 63}, []int{31, 31, 31}, []int{10, 63, 31}},
 	}
 	for _, tt := range tests {
 		for _, defaultLength := range tt.defaultHostnameLengthLimits {
 			r.Run(tt.name+fmt.Sprintf("_defaultHostnameLimit:%d", defaultLength), func() {
 				var hostnamePools []machinepools.HostnameTruncation
+
 				for i, nameLength := range tt.machinePoolNameLengths {
 					currentTruncationPool := machinepools.HostnameTruncation{
 						Name:                   namegen.RandStringLower(nameLength),
 						ClusterNameLengthLimit: defaultLength,
 					}
+
 					if len(tt.hostnameLengthLimits) >= i && len(tt.hostnameLengthLimits) > 0 {
 						currentTruncationPool.PoolNameLengthLimit = tt.hostnameLengthLimits[i]
 					}
+
 					hostnamePools = append(hostnamePools, currentTruncationPool)
 				}
+
 				testConfig := clusters.ConvertConfigToClusterConfig(r.clustersConfig)
 				testConfig.KubernetesVersion = r.clustersConfig.RKE2KubernetesVersions[0]
 				testConfig.CNI = r.clustersConfig.CNIs[0]

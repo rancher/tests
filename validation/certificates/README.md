@@ -18,8 +18,7 @@ The certificate functional tests validate core certificate functionality in Kube
 Note: RBAC tests for certificates are covered in `rbac/certificates`
 
 ## Certificate Rotation Tests
-
-For certificate rotation, the test has only been tested on RKE2. That does not mean RKE1 or K3S are unsupported, they just have not been tested. These tests are designed to accept an existing cluster that the user has access to. If you do not have a downstream cluster in Rancher, you should create one first before running these tests.
+These tests are designed to accept an existing cluster that the user has access to. If you do not have a downstream cluster in Rancher, you should create one first before running these tests.
 
 Please see below for more details for your config. Please note that the config can be in either JSON or YAML (all examples are illustrated in YAML).
 

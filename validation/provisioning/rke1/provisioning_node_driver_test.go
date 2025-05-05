@@ -82,6 +82,11 @@ func (r *RKE1NodeDriverProvisioningTestSuite) TestProvisioningRKE1Cluster() {
 	nodeRolesAll := []provisioninginput.NodePools{provisioninginput.AllRolesNodePool}
 	nodeRolesShared := []provisioninginput.NodePools{provisioninginput.EtcdControlPlaneNodePool, provisioninginput.WorkerNodePool}
 	nodeRolesDedicated := []provisioninginput.NodePools{provisioninginput.EtcdNodePool, provisioninginput.ControlPlaneNodePool, provisioninginput.WorkerNodePool}
+	nodeRolesStandard := []provisioninginput.NodePools{provisioninginput.EtcdNodePool, provisioninginput.ControlPlaneNodePool, provisioninginput.WorkerNodePool}
+
+	nodeRolesStandard[0].NodeRoles.Quantity = 3
+	nodeRolesStandard[1].NodeRoles.Quantity = 2
+	nodeRolesStandard[2].NodeRoles.Quantity = 3
 
 	tests := []struct {
 		name      string
@@ -92,14 +97,17 @@ func (r *RKE1NodeDriverProvisioningTestSuite) TestProvisioningRKE1Cluster() {
 		{"1 Node all roles " + provisioninginput.StandardClientName.String(), nodeRolesAll, r.standardUserClient, r.client.Flags.GetValue(environmentflag.Short) || r.client.Flags.GetValue(environmentflag.Long)},
 		{"2 nodes - etcd|cp roles per 1 node " + provisioninginput.StandardClientName.String(), nodeRolesShared, r.standardUserClient, r.client.Flags.GetValue(environmentflag.Short) || r.client.Flags.GetValue(environmentflag.Long)},
 		{"3 nodes - 1 role per node " + provisioninginput.StandardClientName.String(), nodeRolesDedicated, r.standardUserClient, r.client.Flags.GetValue(environmentflag.Long)},
+		{"8 nodes - 3 etcd, 2 cp, 3 worker " + provisioninginput.StandardClientName.String(), nodeRolesStandard, r.standardUserClient, r.client.Flags.GetValue(environmentflag.Long)},
 	}
 	for _, tt := range tests {
 		if !tt.runFlag {
 			r.T().Logf("SKIPPED")
 			continue
 		}
+
 		provisioningConfig := *r.provisioningConfig
 		provisioningConfig.NodePools = tt.nodePools
+
 		permutations.RunTestPermutations(&r.Suite, tt.name, tt.client, &provisioningConfig, permutations.RKE1ProvisionCluster, nil, nil)
 	}
 }

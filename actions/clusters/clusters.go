@@ -837,7 +837,7 @@ func HardenRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 	v1Cluster.Spec.RKEConfig.MachineSelectorConfig = []rkev1.RKESystemConfig{
 		{
 			Config: rkev1.GenericMap{
-				Data: map[string]interface{}{
+				Data: map[string]any{
 					"profile":             "cis",
 					protectKernelDefaults: true,
 				},

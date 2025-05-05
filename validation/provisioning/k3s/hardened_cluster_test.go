@@ -1,5 +1,3 @@
-//go:build (validation || sanity) && !infra.any && !infra.aks && !infra.eks && !infra.rke2k3s && !infra.gke && !infra.rke1 && !cluster.any && !cluster.custom && !cluster.nodedriver && !extended && !stress
-
 package k3s
 
 import (
@@ -87,7 +85,11 @@ func (c *HardenedK3SClusterProvisioningTestSuite) SetupSuite() {
 }
 
 func (c *HardenedK3SClusterProvisioningTestSuite) TestProvisioningK3SHardenedCluster() {
-	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
+	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
+
+	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
+	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
+	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	tests := []struct {
 		name            string
@@ -95,8 +97,7 @@ func (c *HardenedK3SClusterProvisioningTestSuite) TestProvisioningK3SHardenedClu
 		machinePools    []provisioninginput.MachinePools
 		scanProfileName string
 	}{
-		{"K3S CIS 1.8 Profile Hardened " + provisioninginput.StandardClientName.String(), c.standardUserClient, nodeRolesDedicated, "k3s-cis-1.8-profile-hardened"},
-		{"K3S CIS 1.8 Profile Permissive " + provisioninginput.StandardClientName.String(), c.standardUserClient, nodeRolesDedicated, "k3s-cis-1.8-profile-permissive"},
+		{"CIS 1.9 Profile " + provisioninginput.StandardClientName.String(), c.standardUserClient, nodeRolesStandard, "k3s-cis-1.9-profile"},
 	}
 	for _, tt := range tests {
 		c.Run(tt.name, func() {

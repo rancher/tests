@@ -17,47 +17,47 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type V2ProvCertRotationTestSuite struct {
+type CertRotationTestSuite struct {
 	suite.Suite
 	session        *session.Session
 	client         *rancher.Client
 	clustersConfig *provisioninginput.Config
 }
 
-func (r *V2ProvCertRotationTestSuite) TearDownSuite() {
-	r.session.Cleanup()
+func (c *CertRotationTestSuite) TearDownSuite() {
+	c.session.Cleanup()
 }
 
-func (r *V2ProvCertRotationTestSuite) SetupSuite() {
+func (c *CertRotationTestSuite) SetupSuite() {
 	testSession := session.NewSession()
-	r.session = testSession
+	c.session = testSession
 
-	r.clustersConfig = new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, r.clustersConfig)
+	c.clustersConfig = new(provisioninginput.Config)
+	config.LoadConfig(provisioninginput.ConfigurationFileKey, c.clustersConfig)
 
 	client, err := rancher.NewClient("", testSession)
-	require.NoError(r.T(), err)
+	require.NoError(c.T(), err)
 
-	r.client = client
+	c.client = client
 }
 
-func (r *V2ProvCertRotationTestSuite) TestCertRotation() {
-	id, err := clusters.GetV1ProvisioningClusterByName(r.client, r.client.RancherConfig.ClusterName)
-	require.NoError(r.T(), err)
+func (c *CertRotationTestSuite) TestCertRotation() {
+	clusterID, err := clusters.GetV1ProvisioningClusterByName(c.client, c.client.RancherConfig.ClusterName)
+	require.NoError(c.T(), err)
 
-	cluster, err := r.client.Steve.SteveType(provisioningSteveResourceType).ByID(id)
-	require.NoError(r.T(), err)
+	cluster, err := c.client.Steve.SteveType(provisioningSteveResourceType).ByID(clusterID)
+	require.NoError(c.T(), err)
 
 	spec := &provv1.ClusterSpec{}
 	err = steveV1.ConvertToK8sType(cluster.Spec, spec)
-	require.NoError(r.T(), err)
+	require.NoError(c.T(), err)
 
 	clusterType := "RKE1"
 
 	if strings.Contains(spec.KubernetesVersion, "-rancher") || len(spec.KubernetesVersion) == 0 {
-		r.Run("test-cert-rotation "+clusterType, func() {
-			require.NoError(r.T(), rotateRKE1Certs(r.client, r.client.RancherConfig.ClusterName))
-			require.NoError(r.T(), rotateRKE1Certs(r.client, r.client.RancherConfig.ClusterName))
+		c.Run(clusterType+" cert rotation", func() {
+			require.NoError(c.T(), rotateRKE1Certs(c.client, c.client.RancherConfig.ClusterName))
+			require.NoError(c.T(), rotateRKE1Certs(c.client, c.client.RancherConfig.ClusterName))
 		})
 	} else {
 		if strings.Contains(spec.KubernetesVersion, "k3s") {
@@ -66,13 +66,13 @@ func (r *V2ProvCertRotationTestSuite) TestCertRotation() {
 			clusterType = "RKE2"
 		}
 
-		r.Run("test-cert-rotation "+clusterType, func() {
-			require.NoError(r.T(), rotateCerts(r.client, r.client.RancherConfig.ClusterName))
-			require.NoError(r.T(), rotateCerts(r.client, r.client.RancherConfig.ClusterName))
+		c.Run(clusterType+" cert rotation", func() {
+			require.NoError(c.T(), rotateCerts(c.client, c.client.RancherConfig.ClusterName))
+			require.NoError(c.T(), rotateCerts(c.client, c.client.RancherConfig.ClusterName))
 		})
 	}
 }
 
 func TestCertRotationTestSuite(t *testing.T) {
-	suite.Run(t, new(V2ProvCertRotationTestSuite))
+	suite.Run(t, new(CertRotationTestSuite))
 }
