@@ -1,3 +1,5 @@
+//go:build (validation || sanity) && !infra.any && !infra.aks && !infra.eks && !infra.rke2k3s && !infra.gke && !infra.rke1 && !cluster.any && !cluster.custom && !cluster.nodedriver && !extended && !stress
+
 package k3s
 
 import (
@@ -32,7 +34,6 @@ type HardenedK3SClusterProvisioningTestSuite struct {
 	provisioningConfig  *provisioninginput.Config
 	project             *management.Project
 	chartInstallOptions *charts.InstallOptions
-	chartFeatureOptions *charts.RancherMonitoringOpts
 }
 
 func (c *HardenedK3SClusterProvisioningTestSuite) TearDownSuite() {
