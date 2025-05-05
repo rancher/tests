@@ -307,3 +307,41 @@ policies:
         op: delete
   actions:
     - type: delete
+
+# Public IP Address
+
+
+- name: az-mark-ip-for-deletion
+  resource: azure.publicip
+  description: |
+    Mark IP Addresses for deletion in 2 days
+  filters:
+    - type: resource-lock
+      lock-type: Absent
+    - not: 
+      - type: value
+        key: "tags.known_user"
+        op: regex
+        value: ".*delete.*"
+    - not: 
+      - type: value
+        key: name
+        op: regex
+        value:  "^.*DONOTDELETEKEYS.*$"
+  actions:
+    - type: mark-for-op
+      tag: known_user
+      op: delete
+      days: 2
+
+- name: azure-terminate-ip
+  resource: azure.publicip
+  description: |
+    Delete any marked IP address which have been 
+    marked for deletion for more than 1 day.
+  filters:
+    - type: marked-for-op
+      tag: known_user
+      op: delete
+  actions:
+    - type: delete
