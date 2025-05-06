@@ -22,3 +22,16 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   git status --porcelain
   exit 1
 fi
+
+
+cd ../interoperability
+
+go mod tidy
+go mod verify
+
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  echo "interoperability Go mod isn't up to date. Please run `cd interoperability && go mod tidy`"
+  echo "The following go files did differ after tidying them:"
+  git status --porcelain
+  exit 1
+fi

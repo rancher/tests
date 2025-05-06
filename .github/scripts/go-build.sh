@@ -3,7 +3,7 @@ set -e
 
 oldPWD="$(pwd)"
 
-dirs=("./actions" "./")
+dirs=("./actions" "./" "./interoperability")
 
 for dir in "${dirs[@]}"; do
     echo "Building $dir"
