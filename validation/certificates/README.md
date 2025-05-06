@@ -33,6 +33,20 @@ rancher:
   cleanup: false/optional
 ```
 
+If you running the `cert_rotation_wins_test.go`, ensure your config looks like the following:
+
+```yaml
+rancher:
+  host: "rancher_server_address"
+  adminToken: "rancher_admin_token"
+  clusterName: "cluster_to_run_tests_on"
+  insecure: true/optional
+  cleanup: false/optional
+
+provisioningInput:
+  providers: ["vsphere"]
+```
+
 Typically, a cluster with the following 3 pools is used for testing:
 ```yaml
 {
@@ -62,12 +76,8 @@ Example:
 gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates --junitfile results.xml -- -timeout=60m -tags=validation -v -run ^TestCertificateTestSuite$
 ```
 
-### Run Certificate Rotation Tests
-Your GO suite should be set to `-run ^TestCertRotationTestSuite$`
-
-Example:
-```bash
-gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certrotation --junitfile results.xml -- -timeout=60m -tags=validation -v -run ^TestCertRotationTestSuite$
-```
+### Certificate rotation
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationTestSuite/TestCertRotation"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationWindowsTestSuite/TestCertRotationWindows"`
 
 If the specified test passes immediately without warning, try adding the `-count=1` flag to get around this issue. This will avoid previous results from interfering with the new test run.

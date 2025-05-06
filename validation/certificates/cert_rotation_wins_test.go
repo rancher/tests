@@ -3,7 +3,7 @@
 package certificates
 
 import (
-	"strings"
+	"slices"
 	"testing"
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -17,18 +17,18 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type CertRotationTestSuite struct {
+type CertRotationWindowsTestSuite struct {
 	suite.Suite
 	session        *session.Session
 	client         *rancher.Client
 	clustersConfig *provisioninginput.Config
 }
 
-func (c *CertRotationTestSuite) TearDownSuite() {
+func (c *CertRotationWindowsTestSuite) TearDownSuite() {
 	c.session.Cleanup()
 }
 
-func (c *CertRotationTestSuite) SetupSuite() {
+func (c *CertRotationWindowsTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	c.session = testSession
 
@@ -41,15 +41,19 @@ func (c *CertRotationTestSuite) SetupSuite() {
 	c.client = client
 }
 
-func (c *CertRotationTestSuite) TestCertRotation() {
+func (c *CertRotationWindowsTestSuite) TestCertRotationWindows() {
 	tests := []struct {
 		name   string
 		client *rancher.Client
 	}{
-		{" cert rotation", c.client},
+		{"RKE2 Windows cert rotation", c.client},
 	}
 
 	for _, tt := range tests {
+		if !slices.Contains(c.clustersConfig.Providers, "vsphere") {
+			c.T().Skip("Test requires vSphere provider")
+		}
+
 		clusterID, err := clusters.GetV1ProvisioningClusterByName(c.client, c.client.RancherConfig.ClusterName)
 		require.NoError(c.T(), err)
 
@@ -60,28 +64,25 @@ func (c *CertRotationTestSuite) TestCertRotation() {
 		err = steveV1.ConvertToK8sType(cluster.Spec, spec)
 		require.NoError(c.T(), err)
 
-		clusterType := "RKE1"
-
-		if strings.Contains(spec.KubernetesVersion, "-rancher") || len(spec.KubernetesVersion) == 0 {
-			c.Run(clusterType+tt.name, func() {
-				require.NoError(c.T(), rotateRKE1Certs(c.client, c.client.RancherConfig.ClusterName))
-				require.NoError(c.T(), rotateRKE1Certs(c.client, c.client.RancherConfig.ClusterName))
-			})
-		} else {
-			if strings.Contains(spec.KubernetesVersion, "k3s") {
-				clusterType = "K3s"
-			} else {
-				clusterType = "RKE2"
+		windowsMachinePool := false
+		for _, machinePool := range spec.RKEConfig.MachinePools {
+			if machinePool.Labels["cattle.io/os"] == "windows" {
+				windowsMachinePool = true
+				break
 			}
-
-			c.Run(clusterType+tt.name, func() {
-				require.NoError(c.T(), rotateCerts(c.client, c.client.RancherConfig.ClusterName))
-				require.NoError(c.T(), rotateCerts(c.client, c.client.RancherConfig.ClusterName))
-			})
 		}
+
+		if !windowsMachinePool {
+			c.T().Skip("Skipping test - no Windows machine pool found")
+		}
+
+		c.Run(tt.name, func() {
+			require.NoError(c.T(), rotateCerts(c.client, c.client.RancherConfig.ClusterName))
+			require.NoError(c.T(), rotateCerts(c.client, c.client.RancherConfig.ClusterName))
+		})
 	}
 }
 
-func TestCertRotationTestSuite(t *testing.T) {
-	suite.Run(t, new(CertRotationTestSuite))
+func TestCertRotationWindowsTestSuite(t *testing.T) {
+	suite.Run(t, new(CertRotationWindowsTestSuite))
 }

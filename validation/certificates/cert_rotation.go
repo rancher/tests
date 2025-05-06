@@ -81,8 +81,9 @@ func rotateCerts(client *rancher.Client, clusterName string) error {
 	if err != nil {
 		return err
 	}
+
 	if sshUser == "" {
-		return errors.New("sshUser does not exist")
+		return errors.New("SSH user not found")
 	}
 
 	for _, node := range nodeList.Data {
@@ -96,6 +97,7 @@ func rotateCerts(client *rancher.Client, clusterName string) error {
 
 	updatedCluster := *cluster
 	generation := int64(1)
+
 	if clusterSpec.RKEConfig.RotateCertificates != nil {
 		generation = clusterSpec.RKEConfig.RotateCertificates.Generation + 1
 	}
@@ -106,12 +108,12 @@ func rotateCerts(client *rancher.Client, clusterName string) error {
 
 	updatedCluster.Spec = *clusterSpec
 
+	logrus.Infof("Rotating certs...")
 	_, err = client.Steve.SteveType(provisioningSteveResourceType).Update(cluster, updatedCluster)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("updated cluster, certs are rotating...")
 	kubeRKEClient, err := client.GetKubeAPIRKEClient()
 	if err != nil {
 		return err
@@ -126,7 +128,6 @@ func rotateCerts(client *rancher.Client, clusterName string) error {
 	}
 
 	checkFunc := provisioning.CertRotationCompleteCheckFunc(generation)
-	logrus.Infof("waiting for certs to rotate, checking status now...")
 	err = wait.WatchWait(result, checkFunc)
 	if err != nil {
 		return err
@@ -146,7 +147,6 @@ func rotateCerts(client *rancher.Client, clusterName string) error {
 	}
 
 	clusterCheckFunc := clusters.IsProvisioningClusterReady
-	logrus.Infof("waiting for cluster to become active again, checking status now...")
 	err = wait.WatchWait(clusterWait, clusterCheckFunc)
 	if err != nil {
 		return err
@@ -165,10 +165,11 @@ func rotateCerts(client *rancher.Client, clusterName string) error {
 
 	isAllCertRotated := compareCertificatesFromMachines(nodeCertificates, postRotatedCertificates)
 	if !isAllCertRotated {
-		return errors.New("certs weren't properly rotated")
+		return errors.New("Certificates weren't properly rotated")
 	}
 
 	logrus.Infof("Cert Rotation Complete.")
+
 	return nil
 }
 
@@ -202,15 +203,11 @@ func rotateRKE1Certs(client *rancher.Client, clusterName string) error {
 		return err
 	}
 
-	_, err = client.Management.Cluster.ActionRotateCertificates(
-		cluster,
-		&management.RotateCertificateInput{CACertificates: false, Services: ""},
-	)
+	logrus.Infof("Rotating certs...")
+	_, err = client.Management.Cluster.ActionRotateCertificates(cluster, &management.RotateCertificateInput{CACertificates: false, Services: ""})
 	if err != nil {
 		return err
 	}
-
-	logrus.Infof("updated cluster, certs are rotating...")
 
 	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
 	if err != nil {
@@ -235,7 +232,7 @@ func rotateRKE1Certs(client *rancher.Client, clusterName string) error {
 
 	isAllCertRotated := compareCertificatesFromMachines(nodeCertificates, postRotatedCertificates)
 	if !isAllCertRotated {
-		return errors.New("certs weren't properly rotated")
+		return errors.New("Certificates weren't properly rotated")
 	}
 
 	return nil
@@ -247,7 +244,6 @@ func compareCertificatesFromMachines(certObject1, certObject2 map[string]map[str
 		for certType := range certObject1[nodeID] {
 
 			if certObject1[nodeID][certType] == certObject2[nodeID][certType] {
-				logrus.Infof("non-rotated cert info:")
 				logrus.Infof("%s %s was not updated: %s", nodeID, certType, certObject1[nodeID][certType])
 
 				isRotated = false
