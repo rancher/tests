@@ -52,8 +52,12 @@ node {
             }
             withCredentials([ string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
                               string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+                              string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
                               string(credentialsId: 'AWS_SSH_RSA_KEY', variable: 'AWS_SSH_RSA_KEY'),
-                              string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')]) {
+                              string(credentialsId: 'AWS_RSA_KEY_NAME', variable: 'AWS_RSA_KEY_NAME'),
+                              string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
+                              string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
+                              string(credentialsId: 'ADMIN_PASSWORD', variable: 'ADMIN_PASSWORD')]){
                 withEnv(paramsMap) {
 
 
@@ -102,6 +106,7 @@ node {
 
                         } catch(err) {
                             echo 'Test run had failures. Collecting results...'
+                            error err
                         }
                      }
 
@@ -147,20 +152,29 @@ node {
                             echo 'Validation tests had failures. Aborting'
                           }
                           sh """
-                          docker rm ${golangTestContainer}
-                          docker volume rm ${validationVolume}
-                          docker rmi ${imageName}
+                          docker stop ${golangTestContainer} || true
+                          docker rm ${golangTestContainer} || true
+                          docker volume rm ${validationVolume} || true
+                          docker rmi ${imageName} || true
                           
                           """
                         }
             
                         stage('Cleanup terraform resources'){
+                        try {
                             sh """
                             docker run --rm -v ./root/go/src/github.com/rancher/tfp-automation/modules/airgap:/terraform-files \
                                 -w /terraform-files hashicorp/terraform:latest \
                                  destroy -auto-approve
                             """
-                         } //cleanup
+                         }
+                         catch(err) {
+                            echo "${err} captured"
+                         }
+                         sh "docker stop ${testContainer}"
+                         sh "docker volume rm ${validationVolume} || true"
+                         sh "docker rm ${testContainer} || true"
+                        }//cleanup
                     }//dir
                 } //params
             } //credentials
