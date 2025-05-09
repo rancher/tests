@@ -97,7 +97,7 @@ node {
                             docker run --name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
                             /root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -timeout=${timeout} -v ${params.TEST_CASE} | tee /root/test_logs.txt"
                             """
-                            sh "docker cp ${testContainer}:/root/ ./"
+                            sh "docker cp ${testContainer}:${rootPath}${filename} ${filename}"
               
                             adminToken = sh(script: "grep 'Admin bearer token:' ./root/test_logs.txt | awk -F 'Admin bearer token: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
                             echo "Admin token: ${adminToken}"
@@ -105,7 +105,7 @@ node {
                             echo "Private registry:  ${privateRegistry}"
 
                         } catch(err) {
-                            echo 'Test run had failures. Collecting results...'
+                            echo 'Test run had failures. Collecting results... ${err}'
                             error err
                         }
                      }
@@ -127,7 +127,8 @@ node {
                               writeFile file: AWS_SSH_KEY_NAME, text: decoded
                             }
                           }
-                          dir("./validation") {                            
+                          dir("./validation") {
+                            sh "docker cp ${testContainer}:${rootPath}${filename} ${filename}"
                             config = config.replace('${PRIVATE_REGISTRY}', privateRegistry)
                             config = config.replace('${RANCHER_ADMIN_TOKEN}', adminToken)
             
@@ -137,36 +138,38 @@ node {
                           dir ("./") {
                             sh "./validation/configure.sh"
                             sh "docker build . -f ./validation/Dockerfile.validation -t ${imageName}"
-                            sh "docker volume create --name ${validationVolume}"
+                            sh "docker volume create --name tests${validationVolume}"
+
+                            sh "docker cp ${testContainer}:${rootPath}${filename} ${filename}"
                           }
                         }
                         stage('Run Validation Tests') {
                           try {
                             sh """
-                            docker run -v ${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "
-                            gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE}-timeout=${timeout}"
+                            docker cp ${testContainer}:${rootPath}modules/airgap/aws/ .;
+                            pwd;
+                            docker run -v tests${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c  gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v;"
                             """
-
-                              
                           } catch(err) {
                             echo 'Validation tests had failures. Aborting'
                           }
                           sh """
                           docker stop ${golangTestContainer} || true
                           docker rm ${golangTestContainer} || true
-                          docker volume rm ${validationVolume} || true
                           docker rmi ${imageName} || true
-                          
                           """
                         }
             
                         stage('Cleanup terraform resources'){
                         try {
-                            sh """
-                            docker run --rm -v ./root/go/src/github.com/rancher/tfp-automation/modules/airgap:/terraform-files \
-                                -w /terraform-files hashicorp/terraform:latest \
-                                 destroy -auto-approve
-                            """
+                            dir ("./") {
+
+                                sh """
+                                docker run --rm -v \$(pwd)/airgap:/terraform-files \
+                                    -w /terraform-files hashicorp/terraform:latest \
+                                     destroy -auto-approve
+                                """
+                             }
                          }
                          catch(err) {
                             echo "${err} captured"
