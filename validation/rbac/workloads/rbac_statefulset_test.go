@@ -256,7 +256,7 @@ func (rs *RbacStatefulsetTestSuite) TestCrudStatefulsetAsClusterMember() {
 	err = projects.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rs.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rs.cluster.ID, createdProject.Name)
+	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rs.cluster.ID, createdProject.Name, nil)
 	require.NoError(rs.T(), err)
 
 	log.Infof("As a %v, create a statefulset in the namespace %v", role, namespace.Name)

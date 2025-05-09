@@ -322,7 +322,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCrudSecretAsClusterMember() {
 	err = projects.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rbos.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(standardUserClient, rbos.cluster.ID, createdProject.Name)
+	namespace, err := projects.CreateNamespaceUsingWrangler(standardUserClient, rbos.cluster.ID, createdProject.Name, nil)
 	require.NoError(rbos.T(), err)
 
 	log.Infof("As a %v, create a secret in the project %v", role, createdProject.Name)

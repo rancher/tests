@@ -3,6 +3,8 @@ package rbac
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/rancher/norman/types"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
@@ -20,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
-	"strings"
 )
 
 type Role string
@@ -48,11 +49,13 @@ const (
 	UserKind                         = "User"
 	ImageName                        = "nginx"
 	ManageUsersVerb                  = "manage-users"
+	UpdatePsaVerb                    = "updatepsa"
 	ManagementAPIGroup               = "management.cattle.io"
 	UsersResource                    = "users"
 	UserAttributeResource            = "userattribute"
 	GroupsResource                   = "groups"
 	GroupMembersResource             = "groupmembers"
+	ProjectResource                  = "projects"
 	PrtbResource                     = "projectroletemplatebindings"
 	SecretsResource                  = "secrets"
 	ClusterContext                   = "cluster"
@@ -60,6 +63,17 @@ const (
 	GrbOwnerLabel                    = "authz.management.cattle.io/grb-owner"
 	GlobalDataNS                     = "cattle-global-data"
 	MembershipBindingOwnerLabel      = "membership-binding-owner"
+	PSALabelKey                      = "pod-security.kubernetes.io/"
+	PSAEnforceLabelKey               = "pod-security.kubernetes.io/enforce"
+	PSAWarnLabelKey                  = "pod-security.kubernetes.io/warn"
+	PSAAuditLabelKey                 = "pod-security.kubernetes.io/audit"
+	PSAPrivilegedPolicy              = "privileged"
+	PSABaselinePolicy                = "baseline"
+	PSARestrictedPolicy              = "restricted"
+	PSAEnforceVersionLabelKey        = "pod-security.kubernetes.io/enforce-version"
+	PSAWarnVersionLabelKey           = "pod-security.kubernetes.io/warn-version"
+	PSAAuditVersionLabelKey          = "pod-security.kubernetes.io/audit-version"
+	PSALatestValue                   = "latest"
 )
 
 func (r Role) String() string {

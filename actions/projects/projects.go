@@ -104,7 +104,7 @@ func CreateProjectAndNamespaceUsingWrangler(client *rancher.Client, clusterID st
 		return nil, nil, err
 	}
 
-	createdNamespace, err := CreateNamespaceUsingWrangler(client, clusterID, createdProject.Name)
+	createdNamespace, err := CreateNamespaceUsingWrangler(client, clusterID, createdProject.Name, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -134,7 +134,7 @@ func CreateProjectUsingWrangler(client *rancher.Client, clusterID string) (*v3.P
 }
 
 // CreateNamespaceUsingWrangler is a helper to create a namespace in the project using wrangler context
-func CreateNamespaceUsingWrangler(client *rancher.Client, clusterID string, projectName string) (*corev1.Namespace, error) {
+func CreateNamespaceUsingWrangler(client *rancher.Client, clusterID, projectName string, labels map[string]string) (*corev1.Namespace, error) {
 	namespaceName := namegen.AppendRandomString("testns")
 	annotations := map[string]string{
 		"field.cattle.io/projectId": clusterID + ":" + projectName,
@@ -149,6 +149,7 @@ func CreateNamespaceUsingWrangler(client *rancher.Client, clusterID string, proj
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        namespaceName,
 			Annotations: annotations,
+			Labels:      labels,
 		},
 	})
 	if err != nil {
@@ -194,7 +195,7 @@ func WaitForProjectIDUpdate(client *rancher.Client, clusterID, projectName, name
 		projectsapi.ProjectIDAnnotation: projectName,
 	}
 
-	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveHundredMillisecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
 		namespace, pollErr := namespaces.GetNamespaceByName(client, clusterID, namespaceName)
 		if pollErr != nil {
 			return false, pollErr

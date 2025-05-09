@@ -259,7 +259,7 @@ func (rj *RbacJobTestSuite) TestCrudJobAsClusterMember() {
 	err = projects.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rj.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rj.cluster.ID, createdProject.Name)
+	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rj.cluster.ID, createdProject.Name, nil)
 	require.NoError(rj.T(), err)
 
 	log.Infof("As a %v, creating a job in the namespace %v", role, namespace.Name)
