@@ -221,7 +221,7 @@ func (i *IstioTestSuite) TestIstioChart() {
 	randWorkerNodePublicIP := workerNodePublicIPs[rand.Intn(len(workerNodePublicIPs))]
 
 	if randWorkerNodePublicIP == "" {
-		i.T().Skip("Skipping example app accessibility tests for nodes witout public IPs")
+		i.T().Skip("Skipping example app accessibility tests for nodes without public IPs")
 	}
 
 	istioGatewayHost := randWorkerNodePublicIP + ":" + exampleAppPort
