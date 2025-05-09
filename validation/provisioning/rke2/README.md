@@ -34,13 +34,13 @@ provisioningInput is needed to the run the RKE2 tests.
 
 **nodeProviders is only needed for custom cluster tests; the framework only supports custom clusters through aws/ec2 instances.**
 ```yaml
-provisioningInput:
+clusterConfig:
   machinePools:
-  - machinePoolConfig:                        #required(dynamic only) (at least 1)
-      etcd: true                              #required(dynamic only) (at least 1 controlplane & etcd & worker)
-      controlplane: true
-      worker: true
-      quantity: 5
+  - machinePoolConfig:
+      etcd: true
+      controlplane: false
+      worker: false
+      quantity: 1
       drainBeforeDelete: true
       hostnameLengthLimit: 29
       nodeStartupTimeout: "600s"
@@ -48,19 +48,21 @@ provisioningInput:
       maxUnhealthy: "2"
       unhealthyRange: "2-4"
   - machinePoolConfig:
-      worker: true
-      quantity: 2
-  - machinePoolConfig:
-      windows: true
+      etcd: false
+      controlplane: true
+      worker: false
       quantity: 1
-  rke2KubernetesVersion: ["v1.27.10+rke2r1"]
-  cni: ["calico"]
-  providers: ["linode", "aws", "do", "harvester", "vsphere", "azure"]
-  cloudProvider: "" # either: aws|rancher-vsphere
-  nodeProviders: ["ec2"]
+  - machinePoolConfig:
+      etcd: false
+      controlplane: false
+      worker: true
+      quantity: 1
+  kubernetesVersion: "v1.32.3+rke2r1" #permutable in provisioning and custom cluster tests ["v1.30.3+rke2r1", "v1.32.3+rke2r1"] || ["all"]
+  cni: "calico"                       #permutable in provisioning and custom cluster tests ["calico", "cilium"]
+  provider: "aws"                     #permutable in provisioning and custom cluster tests ["aws", "azure", "vsphere"]
+  nodeProvider: "ec2"
   hardened: false
-  psact: ""                                   #either rancher-privileged|rancher-restricted|rancher-baseline
-  clusterSSHTests: ["CheckCPU", "NodeReboot", "AuditLog"]
+  psact: ""                           #either rancher-privileged|rancher-restricted|rancher-baseline
   etcd:
     disableSnapshot: false
     snapshotScheduleCron: "0 */5 * * *"
@@ -358,11 +360,19 @@ rancher:
   cleanup: false
   clusterName: "<provided cluster name>"
   insecure: true
-provisioningInput:
-  rke2KubernetesVersion: ["v1.27.10+rke2r1"]
-  cni: ["calico"]
-  providers: ["linode"]
-  nodeProviders: ["ec2"]
+clusterConfig:
+  machinePools:
+  - machinePoolConfig:
+      etcd: true
+      controlplane: true
+      worker: true
+      quantity: 1
+  kubernetesVersion: ""
+  cni: "calico"
+  provider: "linode"
+  nodeProvider: "ec2"
+  hardened: false
+  psact: ""
 linodeCredentials:
    token: ""
 linodeMachineConfigs:

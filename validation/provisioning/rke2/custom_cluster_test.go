@@ -3,20 +3,24 @@
 package rke2
 
 import (
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/extensions/users"
 	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
 	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
+	"github.com/rancher/shepherd/pkg/config/operations/permutations"
 	"github.com/rancher/shepherd/pkg/environmentflag"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/provisioning/permutations"
+	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/config/permutationdata"
+	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/reports"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -26,7 +30,7 @@ type CustomClusterProvisioningTestSuite struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
-	provisioningConfig *provisioninginput.Config
+	cattleConfigs      []map[string]any
 	isWindows          bool
 }
 
@@ -38,33 +42,25 @@ func (c *CustomClusterProvisioningTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	c.session = testSession
 
-	c.provisioningConfig = new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, c.provisioningConfig)
-
-	c.isWindows = false
-	for _, pool := range c.provisioningConfig.MachinePools {
-		if pool.MachinePoolConfig.Windows {
-			c.isWindows = true
-			break
-		}
-	}
-
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(c.T(), err)
-
 	c.client = client
 
-	if c.provisioningConfig.RKE2KubernetesVersions == nil {
-		rke2Versions, err := kubernetesversions.Default(c.client, extensionscluster.RKE2ClusterType.String(), nil)
-		require.NoError(c.T(), err)
+	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-		c.provisioningConfig.RKE2KubernetesVersions = rke2Versions
-	} else if c.provisioningConfig.RKE2KubernetesVersions[0] == "all" {
-		rke2Versions, err := kubernetesversions.ListRKE2AllVersions(c.client)
-		require.NoError(c.T(), err)
+	providerPermutation, err := permutationdata.CreateProviderPermutation(cattleConfig)
+	require.NoError(c.T(), err)
 
-		c.provisioningConfig.RKE2KubernetesVersions = rke2Versions
-	}
+	k8sPermutation, err := permutationdata.CreateK8sPermutation(c.client, "rke2", cattleConfig)
+	require.NoError(c.T(), err)
+
+	cniPermutation, err := permutationdata.CreateCNIPermutation(cattleConfig)
+	require.NoError(c.T(), err)
+
+	permutedConfigs, err := permutations.Permute([]permutations.Permutation{*k8sPermutation, *providerPermutation, *cniPermutation}, cattleConfig)
+	require.NoError(c.T(), err)
+
+	c.cattleConfigs = append(c.cattleConfigs, permutedConfigs...)
 
 	enabled := true
 	var testuser = namegen.AppendRandomString("testuser-")
@@ -116,25 +112,25 @@ func (c *CustomClusterProvisioningTestSuite) TestProvisioningRKE2CustomCluster()
 			c.T().Logf("SKIPPED")
 			continue
 		}
+		for _, cattleConfig := range c.cattleConfigs {
+			clusterConfig := new(clusters.ClusterConfig)
+			operations.LoadObjectFromMap(permutationdata.ClusterConfigKey, cattleConfig, clusterConfig)
+			clusterConfig.MachinePools = tt.machinePools
+			name := tt.name + " Node Provider: " + clusterConfig.NodeProvider + " Kubernetes version: " + clusterConfig.KubernetesVersion + " cni: " + clusterConfig.CNI
+			c.Run(name, func() {
+				externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
-		testSession := session.NewSession()
-		defer testSession.Cleanup()
+				clusterObject, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig)
+				reports.TimeoutClusterReport(clusterObject, err)
+				require.NoError(c.T(), err)
 
-		if (c.isWindows == tt.isWindows) || (c.isWindows && !tt.isWindows) {
-			provisioningConfig := *c.provisioningConfig
-			provisioningConfig.MachinePools = tt.machinePools
-			permutations.RunTestPermutations(&c.Suite, tt.name, tt.client, &provisioningConfig, permutations.RKE2CustomCluster, nil, nil)
-		} else {
-			c.T().Skip("Skipping Windows tests")
+				provisioning.VerifyCluster(c.T(), tt.client, clusterConfig, clusterObject)
+			})
 		}
 	}
 }
 
 func (c *CustomClusterProvisioningTestSuite) TestProvisioningRKE2CustomClusterDynamicInput() {
-	if len(c.provisioningConfig.MachinePools) == 0 {
-		c.T().Skip()
-	}
-
 	tests := []struct {
 		name   string
 		client *rancher.Client
@@ -142,14 +138,25 @@ func (c *CustomClusterProvisioningTestSuite) TestProvisioningRKE2CustomClusterDy
 		{provisioninginput.AdminClientName.String(), c.client},
 		{provisioninginput.StandardClientName.String(), c.standardUserClient},
 	}
+
 	for _, tt := range tests {
-		testSession := session.NewSession()
-		defer testSession.Cleanup()
+		c.Run(tt.name, func() {
+			for _, cattleConfig := range c.cattleConfigs {
+				clusterConfig := new(clusters.ClusterConfig)
+				operations.LoadObjectFromMap(permutationdata.ClusterConfigKey, cattleConfig, clusterConfig)
+				if len(clusterConfig.MachinePools) == 0 {
+					c.T().Skip()
+				}
 
-		_, err := tt.client.WithSession(testSession)
-		require.NoError(c.T(), err)
+				externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
-		permutations.RunTestPermutations(&c.Suite, tt.name, tt.client, c.provisioningConfig, permutations.RKE2CustomCluster, nil, nil)
+				clusterObject, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig)
+				reports.TimeoutClusterReport(clusterObject, err)
+				require.NoError(c.T(), err)
+
+				provisioning.VerifyCluster(c.T(), tt.client, clusterConfig, clusterObject)
+			}
+		})
 	}
 }
 

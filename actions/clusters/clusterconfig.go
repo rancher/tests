@@ -16,7 +16,9 @@ type ClusterConfig struct {
 	CloudProvider                  string                                            `json:"cloudProvider" yaml:"cloudProvider"`
 	EnableNetworkPolicy            bool                                              `json:"enableNetworkPolicy" yaml:"enableNetworkPolicy" default:"false"`
 	Providers                      *[]string                                         `json:"providers" yaml:"providers"`
+	Provider                       string                                            `json:"provider" yaml:"provider"`
 	NodeProviders                  *[]string                                         `json:"nodeProviders" yaml:"nodeProviders"`
+	NodeProvider                   string                                            `json:"nodeProvider" yaml:"nodeProvider"`
 	Hardened                       bool                                              `json:"hardened" yaml:"hardened"`
 	AddOnConfig                    *provisioningInput.AddOnConfig                    `json:"addonConfig" yaml:"addonConfig"`
 	AgentEnvVars                   []rkev1.EnvVar                                    `json:"agentEnvVars" yaml:"agentEnvVars"`

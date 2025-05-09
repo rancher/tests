@@ -6,6 +6,7 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	extensionsettings "github.com/rancher/shepherd/extensions/settings"
 	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
@@ -13,8 +14,9 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/config/permutationdata"
+	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioning/permutations"
 	"github.com/rancher/tests/actions/provisioninginput"
 	rbac "github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/settings"
@@ -26,10 +28,10 @@ import (
 
 type RestrictedAdminReplacementTestSuite struct {
 	suite.Suite
-	client             *rancher.Client
-	session            *session.Session
-	cluster            *management.Cluster
-	provisioningConfig *provisioninginput.Config
+	client        *rancher.Client
+	session       *session.Session
+	cluster       *management.Cluster
+	clusterConfig *clusters.ClusterConfig
 }
 
 func (ra *RestrictedAdminReplacementTestSuite) TearDownSuite() {
@@ -39,8 +41,8 @@ func (ra *RestrictedAdminReplacementTestSuite) TearDownSuite() {
 func (ra *RestrictedAdminReplacementTestSuite) SetupSuite() {
 	ra.session = session.NewSession()
 
-	ra.provisioningConfig = new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, ra.provisioningConfig)
+	ra.clusterConfig = new(clusters.ClusterConfig)
+	config.LoadConfig(permutationdata.ClusterConfigKey, ra.clusterConfig)
 
 	client, err := rancher.NewClient("", ra.session)
 	require.NoError(ra.T(), err)
@@ -81,17 +83,17 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementCre
 
 	ra.T().Logf("Verifying user %s with role %s can create a downstream cluster", createdRaReplacementUser.Name, createdRaReplacementRole.Name)
 	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
-	provisioningConfig := *ra.provisioningConfig
-	provisioningConfig.MachinePools = nodeRolesAll
+	ra.clusterConfig.MachinePools = nodeRolesAll
 
 	log.Info("Setting up cluster config and provider for downstream k3s cluster")
-	clusterConfig := clusters.ConvertConfigToClusterConfig(&provisioningConfig)
-	clusterConfig.KubernetesVersion = ra.provisioningConfig.K3SKubernetesVersions[0]
-	k3sprovider, _, _, _ := permutations.GetClusterProvider(permutations.K3SProvisionCluster, (*clusterConfig.Providers)[0], &provisioningConfig)
-	clusterObject, err := provisioning.CreateProvisioningCluster(createdRaReplacementUserClient, *k3sprovider, clusterConfig, nil)
+	provider := provisioning.CreateProvider(ra.clusterConfig.Provider)
+	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+
+	clusterObject, err := provisioning.CreateProvisioningCluster(createdRaReplacementUserClient, provider, credentialSpec, ra.clusterConfig, machineConfigSpec, nil)
 	require.NoError(ra.T(), err)
 
-	provisioning.VerifyCluster(ra.T(), ra.client, clusterConfig, clusterObject)
+	provisioning.VerifyCluster(ra.T(), ra.client, ra.clusterConfig, clusterObject)
 }
 
 func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementListGlobalSettings() {

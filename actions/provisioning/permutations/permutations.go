@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/cloudprovider"
 	"github.com/rancher/tests/actions/clusters"
@@ -73,7 +74,11 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 					switch clusterType {
 					case RKE2ProvisionCluster, K3SProvisionCluster:
 						testClusterConfig.KubernetesVersion = kubeVersion
-						clusterObject, err = provisioning.CreateProvisioningCluster(client, *nodeProvider, testClusterConfig, hostnameTruncation)
+
+						credentialSpec := cloudcredentials.LoadCloudCredential(string(nodeProviderName))
+						machineConfigSpec := machinepools.LoadMachineConfigs(string(nodeProviderName))
+
+						clusterObject, err = provisioning.CreateProvisioningCluster(client, *nodeProvider, credentialSpec, testClusterConfig, machineConfigSpec, hostnameTruncation)
 						reports.TimeoutClusterReport(clusterObject, err)
 						require.NoError(s.T(), err)
 

@@ -66,8 +66,7 @@ const (
 )
 
 // CreateProvisioningCluster provisions a non-rke1 cluster, then runs verify checks
-func CreateProvisioningCluster(client *rancher.Client, provider Provider, clustersConfig *clusters.ClusterConfig, hostnameTruncation []machinepools.HostnameTruncation) (*v1.SteveAPIObject, error) {
-	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+func CreateProvisioningCluster(client *rancher.Client, provider Provider, credentialSpec cloudcredentials.CloudCredential, clustersConfig *clusters.ClusterConfig, machineConfigSpec machinepools.MachineConfigs, hostnameTruncation []machinepools.HostnameTruncation) (*v1.SteveAPIObject, error) {
 	cloudCredential, err := provider.CloudCredFunc(client, credentialSpec)
 	if err != nil {
 		return nil, err
@@ -82,7 +81,7 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, cluste
 
 	clusterName := namegen.AppendRandomString(provider.Name.String())
 	generatedPoolName := fmt.Sprintf("nc-%s-pool1-", clusterName)
-	machinePoolConfigs := provider.MachinePoolFunc(generatedPoolName, namespace)
+	machinePoolConfigs := provider.MachinePoolFunc(machineConfigSpec, generatedPoolName, namespace)
 
 	var machinePoolResponses []v1.SteveAPIObject
 
@@ -133,7 +132,7 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, cluste
 	}
 
 	machinePools := machinepools.
-		CreateAllMachinePools(machineConfigs, pools, machinePoolResponses, provider.Roles, hostnameTruncation)
+		CreateAllMachinePools(machineConfigs, pools, machinePoolResponses, provider.GetMachineRolesFunc(machineConfigSpec), hostnameTruncation)
 
 	additionalData := make(map[string]interface{})
 	if clustersConfig.CloudProvider == provisioninginput.VsphereCloudProviderName.String() {
@@ -306,7 +305,7 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 			if err != nil {
 				return nil, err
 			}
-			logrus.Infof(output)
+			logrus.Info(output)
 		}
 		totalNodesObserved += int(quantityPerPool[poolIndex])
 	}
@@ -334,7 +333,7 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 				if err != nil {
 					return nil, err
 				}
-				logrus.Infof(output)
+				logrus.Info(output)
 			}
 		}
 		totalNodesObserved += int(quantityPerPool[poolIndex])
@@ -519,7 +518,7 @@ func CreateProvisioningRKE1CustomCluster(client *rancher.Client, externalNodePro
 			if err != nil {
 				return nil, nil, err
 			}
-			logrus.Infof(output)
+			logrus.Info(output)
 		}
 		totalNodesObserved += int(quantityPerPool[poolIndex])
 	}
@@ -888,7 +887,7 @@ func AddRKE2K3SCustomClusterNodes(client *rancher.Client, cluster *v1.SteveAPIOb
 			return err
 		}
 
-		logrus.Infof(output)
+		logrus.Info(output)
 	}
 
 	err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
@@ -973,7 +972,7 @@ func AddRKE1CustomClusterNodes(client *rancher.Client, cluster *management.Clust
 			return err
 		}
 
-		logrus.Infof(output)
+		logrus.Info(output)
 	}
 
 	err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {

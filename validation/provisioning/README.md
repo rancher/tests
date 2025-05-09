@@ -24,3 +24,14 @@ From there, your config should contain the tests you want to run (provisioningIn
 2. [RKE2 Provisioning](rke2/README.md)
 3. [K3s Provisioning](k3s/README.md)
 4. [Hosted Provider Provisioning](hosted/README.md)
+
+
+## Permutations
+
+Currently permutations is undergoing a migration from the old permutations to the new ones. During this migration both old and new permutations will be supported. Later there will be a PR introduced to depricate old permutations once all tests are converted to new permutations.
+
+Configuration differences:
+Both old and new permutations allow you to add a list of values for a given field and run a given test case over every item in that list. Here are the notible differences between the 2:
+1. New permutations uses the cluster config directly while old permutations utilizes provisioning input. 
+2. New permutations does not run test code. Instead it generates a list of config files of type map[string]any. These can then be safely unmarshalled into the cluster config object and subsequently consumed by test cases.
+3. New permutations does not require the any of the fields of the struct being utilized to be lists. All permuting is handled before unmarshalling so no changes are needed to the struct.

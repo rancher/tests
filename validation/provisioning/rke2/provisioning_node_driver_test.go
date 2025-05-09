@@ -3,20 +3,24 @@
 package rke2
 
 import (
-	"slices"
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/users"
 	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
 	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
+	"github.com/rancher/shepherd/pkg/config/operations/permutations"
 	"github.com/rancher/shepherd/pkg/environmentflag"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/provisioning/permutations"
+	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/config/permutationdata"
+	"github.com/rancher/tests/actions/machinepools"
+	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -27,7 +31,7 @@ type RKE2NodeDriverProvisioningTestSuite struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
-	provisioningConfig *provisioninginput.Config
+	cattleConfigs      []map[string]any
 }
 
 func (r *RKE2NodeDriverProvisioningTestSuite) TearDownSuite() {
@@ -37,24 +41,26 @@ func (r *RKE2NodeDriverProvisioningTestSuite) TearDownSuite() {
 func (r *RKE2NodeDriverProvisioningTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	r.session = testSession
-	r.provisioningConfig = new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, r.provisioningConfig)
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(r.T(), err)
 	r.client = client
 
-	if r.provisioningConfig.RKE2KubernetesVersions == nil {
-		rke2Versions, err := kubernetesversions.Default(r.client, clusters.RKE2ClusterType.String(), nil)
-		require.NoError(r.T(), err)
+	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-		r.provisioningConfig.RKE2KubernetesVersions = rke2Versions
-	} else if r.provisioningConfig.RKE2KubernetesVersions[0] == "all" {
-		rke2Versions, err := kubernetesversions.ListRKE2AllVersions(r.client)
-		require.NoError(r.T(), err)
+	providerPermutation, err := permutationdata.CreateProviderPermutation(cattleConfig)
+	require.NoError(r.T(), err)
 
-		r.provisioningConfig.RKE2KubernetesVersions = rke2Versions
-	}
+	k8sPermutation, err := permutationdata.CreateK8sPermutation(r.client, "rke2", cattleConfig)
+	require.NoError(r.T(), err)
+
+	cniPermutation, err := permutationdata.CreateCNIPermutation(cattleConfig)
+	require.NoError(r.T(), err)
+
+	permutedConfigs, err := permutations.Permute([]permutations.Permutation{*k8sPermutation, *providerPermutation, *cniPermutation}, cattleConfig)
+	require.NoError(r.T(), err)
+
+	r.cattleConfigs = append(r.cattleConfigs, permutedConfigs...)
 
 	enabled := true
 	var testuser = namegen.AppendRandomString("testuser-")
@@ -108,22 +114,33 @@ func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2Cluster() {
 			continue
 		}
 
-		provisioningConfig := *r.provisioningConfig
-		provisioningConfig.MachinePools = tt.machinePools
+		for _, cattleConfig := range r.cattleConfigs {
+			clusterConfig := new(clusters.ClusterConfig)
+			operations.LoadObjectFromMap(permutationdata.ClusterConfigKey, cattleConfig, clusterConfig)
+			require.NotNil(r.T(), clusterConfig.Provider)
 
-		if !slices.Contains(provisioningConfig.Providers, "vsphere") && tt.isWindows {
-			r.T().Skip("Windows test requires access to vsphere")
+			clusterConfig.MachinePools = tt.machinePools
+
+			name := tt.name + " Node Provider: " + clusterConfig.NodeProvider + " Kubernetes version: " + clusterConfig.KubernetesVersion + " cni: " + clusterConfig.CNI
+			r.Run(name, func() {
+				if clusterConfig.Provider != "vsphere" && tt.isWindows {
+					r.T().Skip("Windows test requires access to vsphere")
+				}
+
+				provider := provisioning.CreateProvider(clusterConfig.Provider)
+				credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+				machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+
+				clusterObject, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+				require.NoError(r.T(), err)
+
+				provisioning.VerifyCluster(r.T(), tt.client, clusterConfig, clusterObject)
+			})
 		}
-
-		permutations.RunTestPermutations(&r.Suite, tt.name, tt.client, &provisioningConfig, permutations.RKE2ProvisionCluster, nil, nil)
 	}
 }
 
 func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2ClusterDynamicInput() {
-	if len(r.provisioningConfig.MachinePools) == 0 {
-		r.T().Skip()
-	}
-
 	tests := []struct {
 		name   string
 		client *rancher.Client
@@ -133,7 +150,25 @@ func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2ClusterDynamic
 	}
 
 	for _, tt := range tests {
-		permutations.RunTestPermutations(&r.Suite, tt.name, tt.client, r.provisioningConfig, permutations.RKE2ProvisionCluster, nil, nil)
+		r.Run(tt.name, func() {
+			for _, cattleConfig := range r.cattleConfigs {
+				clusterConfig := new(clusters.ClusterConfig)
+				operations.LoadObjectFromMap(permutationdata.ClusterConfigKey, cattleConfig, clusterConfig)
+				if len(clusterConfig.MachinePools) == 0 {
+					r.T().Skip()
+				}
+
+				provider := provisioning.CreateProvider(clusterConfig.Provider)
+				credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+				machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+
+				clusterObject, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+				require.NoError(r.T(), err)
+
+				provisioning.VerifyCluster(r.T(), tt.client, clusterConfig, clusterObject)
+
+			}
+		})
 	}
 }
 

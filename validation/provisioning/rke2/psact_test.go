@@ -3,18 +3,23 @@
 package rke2
 
 import (
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/users"
 	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
 	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/provisioning/permutations"
+	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/config/permutationdata"
+	"github.com/rancher/tests/actions/machinepools"
+	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -25,7 +30,7 @@ type RKE2PSACTTestSuite struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
-	provisioningConfig *provisioninginput.Config
+	cattleConfig       map[string]any
 }
 
 func (r *RKE2PSACTTestSuite) TearDownSuite() {
@@ -36,25 +41,15 @@ func (r *RKE2PSACTTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	r.session = testSession
 
-	r.provisioningConfig = new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, r.provisioningConfig)
+	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(r.T(), err)
 
 	r.client = client
 
-	if r.provisioningConfig.RKE2KubernetesVersions == nil {
-		rke2Versions, err := kubernetesversions.Default(r.client, clusters.RKE2ClusterType.String(), nil)
-		require.NoError(r.T(), err)
-
-		r.provisioningConfig.RKE2KubernetesVersions = rke2Versions
-	} else if r.provisioningConfig.RKE2KubernetesVersions[0] == "all" {
-		rke2Versions, err := kubernetesversions.ListRKE2AllVersions(r.client)
-		require.NoError(r.T(), err)
-
-		r.provisioningConfig.RKE2KubernetesVersions = rke2Versions
-	}
+	r.cattleConfig, err = defaults.SetK8sDefault(client, "rke2", r.cattleConfig)
+	require.NoError(r.T(), err)
 
 	enabled := true
 	var testuser = namegen.AppendRandomString("testuser-")
@@ -96,11 +91,19 @@ func (r *RKE2PSACTTestSuite) TestRKE2PSACTNodeDriverCluster() {
 	}
 
 	for _, tt := range tests {
-		provisioningConfig := *r.provisioningConfig
-		provisioningConfig.MachinePools = tt.machinePools
-		provisioningConfig.PSACT = string(tt.psact)
+		clusterConfig := new(clusters.ClusterConfig)
+		operations.LoadObjectFromMap(permutationdata.ClusterConfigKey, r.cattleConfig, clusterConfig)
+		clusterConfig.MachinePools = tt.machinePools
+		clusterConfig.PSACT = string(tt.psact)
 
-		permutations.RunTestPermutations(&r.Suite, tt.name, tt.client, &provisioningConfig, permutations.RKE2ProvisionCluster, nil, nil)
+		provider := provisioning.CreateProvider(clusterConfig.Provider)
+		credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+		machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+
+		clusterObject, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+		require.NoError(r.T(), err)
+
+		provisioning.VerifyCluster(r.T(), tt.client, clusterConfig, clusterObject)
 	}
 }
 

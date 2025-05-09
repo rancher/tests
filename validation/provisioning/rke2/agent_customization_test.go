@@ -3,20 +3,23 @@
 package rke2
 
 import (
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	shepherdclusters "github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/users"
 	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
 	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/config/permutationdata"
+	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioning/permutations"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -27,7 +30,7 @@ type RKE2AgentCustomizationTestSuite struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
-	provisioningConfig *provisioninginput.Config
+	cattleConfig       map[string]any
 }
 
 func (r *RKE2AgentCustomizationTestSuite) TearDownSuite() {
@@ -37,15 +40,15 @@ func (r *RKE2AgentCustomizationTestSuite) TearDownSuite() {
 func (r *RKE2AgentCustomizationTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	r.session = testSession
-	r.provisioningConfig = new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, r.provisioningConfig)
+
+	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(r.T(), err)
 
 	r.client = client
 
-	r.provisioningConfig.RKE2KubernetesVersions, err = kubernetesversions.Default(r.client, shepherdclusters.RKE2ClusterType.String(), r.provisioningConfig.RKE2KubernetesVersions)
+	r.cattleConfig, err = defaults.SetK8sDefault(client, "rke2", r.cattleConfig)
 	require.NoError(r.T(), err)
 
 	enabled := true
@@ -128,19 +131,27 @@ func (r *RKE2AgentCustomizationTestSuite) TestProvisioningRKE2ClusterAgentCustom
 
 		client, err := tt.client.WithSession(subSession)
 		require.NoError(r.T(), err)
-		r.provisioningConfig.MachinePools = tt.machinePools
+
+		clusterConfig := new(clusters.ClusterConfig)
+		operations.LoadObjectFromMap(permutationdata.ClusterConfigKey, r.cattleConfig, clusterConfig)
+		clusterConfig.MachinePools = tt.machinePools
 
 		if tt.agent == "fleet-agent" {
-			r.provisioningConfig.FleetAgent = &agentCustomization
-			r.provisioningConfig.ClusterAgent = nil
+			clusterConfig.FleetAgent = &agentCustomization
+			clusterConfig.ClusterAgent = nil
 		}
 
 		if tt.agent == "cluster-agent" {
-			r.provisioningConfig.ClusterAgent = &agentCustomization
-			r.provisioningConfig.FleetAgent = nil
+			clusterConfig.ClusterAgent = &agentCustomization
+			clusterConfig.FleetAgent = nil
 		}
 
-		permutations.RunTestPermutations(&r.Suite, tt.name, client, r.provisioningConfig, permutations.RKE2ProvisionCluster, nil, nil)
+		provider := provisioning.CreateProvider(clusterConfig.Provider)
+		credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+		machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+
+		_, err = provisioning.CreateProvisioningCluster(client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+		require.NoError(r.T(), err)
 	}
 }
 
@@ -178,23 +189,26 @@ func (r *RKE2AgentCustomizationTestSuite) TestFailureProvisioningRKE2ClusterAgen
 
 		client, err := tt.client.WithSession(subSession)
 		require.NoError(r.T(), err)
-		r.provisioningConfig.MachinePools = tt.machinePools
+
+		clusterConfig := new(clusters.ClusterConfig)
+		operations.LoadObjectFromMap(permutationdata.ClusterConfigKey, r.cattleConfig, clusterConfig)
+		clusterConfig.MachinePools = tt.machinePools
 
 		if tt.agent == "fleet-agent" {
-			r.provisioningConfig.FleetAgent = &agentCustomization
-			r.provisioningConfig.ClusterAgent = nil
+			clusterConfig.FleetAgent = &agentCustomization
+			clusterConfig.ClusterAgent = nil
 		}
 
 		if tt.agent == "cluster-agent" {
-			r.provisioningConfig.ClusterAgent = &agentCustomization
-			r.provisioningConfig.FleetAgent = nil
+			clusterConfig.ClusterAgent = &agentCustomization
+			clusterConfig.FleetAgent = nil
 		}
 
-		rke2Provider, _, _, kubeVersions := permutations.GetClusterProvider(permutations.RKE2ProvisionCluster, r.provisioningConfig.Providers[0], r.provisioningConfig)
-		testClusterConfig := clusters.ConvertConfigToClusterConfig(r.provisioningConfig)
-		testClusterConfig.KubernetesVersion = kubeVersions[0]
+		provider := provisioning.CreateProvider(clusterConfig.Provider)
+		credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+		machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
-		_, err = provisioning.CreateProvisioningCluster(client, *rke2Provider, testClusterConfig, nil)
+		_, err = provisioning.CreateProvisioningCluster(client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 		require.Error(r.T(), err)
 	}
 }
