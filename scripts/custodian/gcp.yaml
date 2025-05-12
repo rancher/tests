@@ -15,14 +15,20 @@ policies:
       #doesNOTcontain
       value:  "^((?!USERKEYS).)*$"
     # tagging not supported through cloud custodian at this time
-    - not: 
+    - not:
       - type: value
         key: name
         op: regex
         value:  "^.*DONOTDELETEKEYS.*$"
+    - not:
       - type: marked-for-op
-        label: unknown_user
+        label: custodian_status
         op: delete
+    - not:
+      - type: value
+        key: labels
+        op: contains
+        value: "custodian_status"
   actions:
     - type: set-labels
       labels:
@@ -51,6 +57,11 @@ policies:
       - type: marked-for-op
         label: known_user
         op: delete
+    - not:
+      - type: value
+        key: labels
+        op: contains
+        value: "custodian_status"
   actions:
     - type: set-labels
       labels:
@@ -96,6 +107,11 @@ policies:
       - type: marked-for-op
         label: unknown_user
         op: delete
+    - not:
+      - type: value
+        key: labels
+        op: contains
+        value: "custodian_status"
   actions:
     - type: set-labels
       labels:
@@ -124,6 +140,11 @@ policies:
       - type: marked-for-op
         label: known_user
         op: delete
+    - not:
+      - type: value
+        key: labels
+        op: contains
+        value: "custodian_status"
   actions:
     - type: set-labels
       labels:
