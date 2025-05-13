@@ -1,6 +1,14 @@
+## Getting Started
+This test suite uses Corral or Terraform to set up the airgap server. If a user provides a Corral configuration, the server will use it to create the airgap environment. If the Corral configuration is empty, the test suite will default to using Terraform to create the airgap server.
+
+For more details, refer to validation/pipeline/tfp/Jenkinsfile.airgap.tests and the jenkins job tfp-airgap-qa-recurring-job for config details.
+
+## Using Terraform Configuration
+To utilize the Terraform configuration, users must run Jenkinsfile.airgap.tests, as this test itself is not configured to create the airgap server.
+
+
 # Standalone Configs - Corral
 
-## Getting Started
 You should have a basic understanding of Corral before running these tests. In order to run the entire airgap package set the package to `airgap/...` Your GO suite should be set to blank. 
 In your config file, set the following:
 ```yaml
@@ -46,3 +54,4 @@ corralConfigs:
 ```
 Note: `corralConfigUser` will be the prefix for all resources created in your provider. 
 From there, your `corralConfigVars` should contain the parameters necessary to run the test. You can see what variables need to be set by navigating to your corral package folder and checking the `manifest.yaml` variables.
+
