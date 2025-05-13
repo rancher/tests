@@ -68,9 +68,7 @@ require (
 )
 
 require (
-	github.com/gruntwork-io/terratest v0.48.2
-	github.com/harvester/harvester v1.4.2
-	github.com/rancher/rancher v0.0.0-20250228094653-6e82729d08cf
+	github.com/rancher/rancher v0.0.0-20250328200651-bdbb4ea81874
 	github.com/rancher/shepherd v0.0.0-20250411212007-f3f2fd268849
 	github.com/rancher/tests/actions v0.0.0-20250505204226-5b136337f7c5
 	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
@@ -164,6 +162,7 @@ require (
 	github.com/containerd/cgroups/v3 v3.0.2 // indirect
 	github.com/containerd/errdefs v0.3.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
+	github.com/gruntwork-io/terratest v0.48.2 // indirect
 	github.com/harvester/harvester v1.5.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-getter/v2 v2.2.3 // indirect
@@ -172,7 +171,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.22.0 // indirect
 	github.com/hashicorp/terraform-json v0.23.0 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
-	github.com/jinzhu/copier v0.3.5 // indirect
+	github.com/jinzhu/copier v0.4.0 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/kubereboot/kured v1.13.1 // indirect
