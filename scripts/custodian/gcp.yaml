@@ -78,10 +78,8 @@ policies:
   filters:
     - or:
       - type: marked-for-op
-        label: unknown_user
         op: delete
       - type: marked-for-op
-        label: known_user
         op: delete
   actions:
     - type: delete
@@ -161,10 +159,8 @@ policies:
   filters:
     - or:
       - type: marked-for-op
-        label: unknown_user
         op: delete
       - type: marked-for-op
-        label: known_user
         op: delete
   actions:
     - type: delete
