@@ -226,6 +226,8 @@ node("harvester-vpn-1") {
                           script: "./yq '.terraform.harvesterCredentials.kubeconfigContent' ${filename}",
                           returnStdout: true
                         ).trim()
+
+                        sh "./yq e '.terraform.standalone.rancherTagVersion = \"${RANCHER_VERSION}\"' -i ${filename}"
                         
                         writeFile file: "harvester.yaml", text: harvesterKubeconfig
                         writeFile file: 'harvester_config.yaml', text: HARVESTER_CONFIG
@@ -321,32 +323,33 @@ node("harvester-vpn-1") {
                     }//dir
                     stage('Cleanup terraform resources'){
                       try {
-
-                        dir ("./") {
-                          if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
-                            dir("./harvester/.ssh") {
-                              def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
-                              writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                        if (env.CLEANUP == "true") {
+                          dir ("./") {
+                            if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
+                              dir("./harvester/.ssh") {
+                                def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
+                                writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                              }
                             }
+                            
+                            sh """
+                            docker run --rm -v \$(pwd)/harvester:/terraform-files \
+                                -v \$(pwd)/harvester/.ssh:/root/go/src/github.com/rancher/tfp-automation/.ssh \
+                                -w /terraform-files hashicorp/terraform:latest \
+                                destroy --auto-approve
+                            """
+
+                            writeFile file: 'seeder.yaml', text: SEEDER_KUBECONFIG
+
+                            sh returnStdout: true, script:  'wget -qO ./kubectl "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
+                            sh returnStdout: true, script:  'chmod a+x ./kubectl'
+                            sh '''#!/bin/bash
+
+                              export KUBECONFIG=seeder.yaml
+                              ./kubectl delete clusters.metal/$HARVESTER_CLUSTER_NAME -n tink-system || true
+                            '''
+                            
                           }
-                          
-                          sh """
-                          docker run --rm -v \$(pwd)/harvester:/terraform-files \
-                              -v \$(pwd)/harvester/.ssh:/root/go/src/github.com/rancher/tfp-automation/.ssh \
-                              -w /terraform-files hashicorp/terraform:latest \
-                              destroy --auto-approve
-                          """
-
-                          writeFile file: 'seeder.yaml', text: SEEDER_KUBECONFIG
-
-                          sh returnStdout: true, script:  'wget -qO ./kubectl "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
-                          sh returnStdout: true, script:  'chmod a+x ./kubectl'
-                          sh '''#!/bin/bash
-
-                            export KUBECONFIG=seeder.yaml
-                            ./kubectl delete clusters.metal/$HARVESTER_CLUSTER_NAME -n tink-system || true
-                          '''
-                          
                         }
                       }
                       catch(err) {
