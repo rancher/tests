@@ -2158,8 +2158,8 @@ github.com/rancher/machine v0.15.0-rancher126 h1:bILP7WRWHO4Dl4u+MSiEy0xr6LU52BU
 github.com/rancher/machine v0.15.0-rancher126/go.mod h1:9D7LZbLqfNNbHsregTNpjC4oKi4zI6qA54KMzWPeVB4=
 github.com/rancher/norman v0.6.0 h1:8CyY9cVcw0L+YYZRGvXHPMENefLaDkmi6vpscrVjXew=
 github.com/rancher/norman v0.6.0/go.mod h1:CQ0/1CoEqbeJXvOXuRQvsmiBd7QIgxZG5IvQFOPAHOg=
-github.com/rancher/qase-go/client v0.0.0-20231114201952-65195ec001fa h1:/qeYlQVfyvsO5yY0dZmm7mRTAsDm54jACiRDx3LAwsA=
-github.com/rancher/qase-go/client v0.0.0-20231114201952-65195ec001fa/go.mod h1:NP3xboG+t2p+XMnrcrJ/L384Ki0Cp3Pww/X+vm5Jcy0=
+github.com/rancher/qase-go/client v0.0.0-20250512221624-5882395f8abc h1:AduH1eFqgtFJbVHoQN9b5y5wNQImWKwH5vuRrfgRSdI=
+github.com/rancher/qase-go/client v0.0.0-20250512221624-5882395f8abc/go.mod h1:NP3xboG+t2p+XMnrcrJ/L384Ki0Cp3Pww/X+vm5Jcy0=
 github.com/rancher/rancher v0.0.0-20250228094653-6e82729d08cf h1:39Q+/QI0HS+QTN8C/NxEIZzU5AcW5ohcN1NvYBpvamM=
 github.com/rancher/rancher v0.0.0-20250228094653-6e82729d08cf/go.mod h1:v1aTXutrt68WFuNPG9CsiXT8eJTTi76D2Sy8cC0DTJg=
 github.com/rancher/rancher/pkg/apis v0.0.0-20250410003522-2a1bf3d05723 h1:IVPo5J/hfpMVXRnUemX21wbBWDkvE9gXC/WWZENVw10=
