@@ -23,9 +23,9 @@ import (
 const (
 	istioSecret = "application-collection"
 	//Get it from env var
-	username = "lscalabrini@suse.com"
+	username = ""
 	//Get it from env var
-	accessToken = "cXFxdHhjZ3BmaXdkYXh0c3J3ZXN1d2l0a2t4Z3FrZ2JncXp0bHp3YWlvZ25mZXVid3Nja2VwZGhrZHJuZ29haw=="
+	accessToken = ""
 	pilotImage  = "dp.apps.rancher.io/containers/pilot:1.25.3"
 )
 
@@ -272,11 +272,133 @@ func (i *IstioTestSuite) TestIstioGatewayDifferentNamespaceInstallation() {
 }
 
 func (i *IstioTestSuite) TestIstioCanaryUpgrade() {
+	subSession := i.session.NewSession()
+	defer subSession.Cleanup()
+
+	client, err := i.client.WithSession(subSession)
+	require.NoError(i.T(), err)
+
+	i.T().Log("Building SideCar AppCo command")
+	appCoCommand := []string{
+		"sh", "-c",
+		fmt.Sprintf(`helm registry login dp.apps.rancher.io -u %s -p %s && helm install %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s}`, username, accessToken, charts.RancherIstioName, charts.RancherIstioNamespace, istioSecret),
+	}
+
+	i.T().Log("Running SideCar AppCo command")
+	logCmd, err := kubectl.Command(client, nil, i.cluster.ID, appCoCommand, "1MB")
+	require.NoError(i.T(), err)
+	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+
+	i.T().Log("Checking if the istio chart is installed")
+	istioChart, err := extencharts.GetChartStatus(client, i.cluster.ID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	require.NoError(i.T(), err)
+	require.True(i.T(), istioChart.IsAlreadyInstalled)
+
+	i.T().Log("Building Canary upgrade command")
+	canaryUpgradeCommand := []string{
+		"sh", "-c",
+		fmt.Sprintf(`helm registry login dp.apps.rancher.io -u %s -p %s && helm upgrade %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s} --set istiod.revision=canary,base.defaultRevision=canary`, username, accessToken, charts.RancherIstioName, charts.RancherIstioNamespace, istioSecret),
+	}
+
+	i.T().Log("Running Canary upgrade command")
+	logCmd, err = kubectl.Command(client, nil, i.cluster.ID, canaryUpgradeCommand, "2MB")
+	require.NoError(i.T(), err)
+	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+
+	i.T().Log("Checking if the istio chart is installed")
+	istioChart, err = extencharts.GetChartStatus(client, i.cluster.ID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	require.NoError(i.T(), err)
+	require.True(i.T(), istioChart.IsAlreadyInstalled)
+
+	i.T().Log("Verifying if istio-ingress gateway is using the canary revision")
+	getCanaryCommand := []string{
+		"sh", "-c",
+		fmt.Sprintf(`kubectl -n %s get pod -o jsonpath='{.items..metadata.name}'`, charts.RancherIstioNamespace),
+	}
+
+	appName := "istiod-canary"
+	logCmd, err = kubectl.Command(client, nil, i.cluster.ID, getCanaryCommand, "2MB")
+	require.NoError(i.T(), err)
+	require.True(i.T(), strings.Contains(logCmd, appName))
+
+	helmUninstallCommand := fmt.Sprintf(`helm uninstall %s -n %s`, charts.RancherIstioName, charts.RancherIstioNamespace)
+	deleteConfigurationCommand := `kubectl delete mutatingwebhookconfiguration istio-sidecar-injector`
+	deleteCustomDefinationCommand := `kubectl delete $(kubectl get CustomResourceDefinition -l='app.kubernetes.io/part-of=istio' -o name -A)`
+
+	i.T().Log("Building uninstall command")
+	uninstallCommand := []string{
+		"sh", "-c",
+		fmt.Sprintf(`%s && %s && %s`, helmUninstallCommand, deleteConfigurationCommand, deleteCustomDefinationCommand),
+	}
+
+	i.T().Log("Running uninstall command")
+	_, err = kubectl.Command(client, nil, i.cluster.ID, uninstallCommand, "2MB")
+	require.NoError(i.T(), err)
+
+	i.T().Log("Checking if the istio chart is uninstalled")
+	istioChart, err = extencharts.GetChartStatus(client, i.cluster.ID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	require.NoError(i.T(), err)
+	require.False(i.T(), istioChart.IsAlreadyInstalled)
 
 }
 
 func (i *IstioTestSuite) TestIstioInPlaceUpgrade() {
+	subSession := i.session.NewSession()
+	defer subSession.Cleanup()
 
+	client, err := i.client.WithSession(subSession)
+	require.NoError(i.T(), err)
+
+	i.T().Log("Building SideCar AppCo command")
+	appCoCommand := []string{
+		"sh", "-c",
+		fmt.Sprintf(`helm registry login dp.apps.rancher.io -u %s -p %s && helm install %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s}`, username, accessToken, charts.RancherIstioName, charts.RancherIstioNamespace, istioSecret),
+	}
+
+	i.T().Log("Running SideCar AppCo command")
+	logCmd, err := kubectl.Command(client, nil, i.cluster.ID, appCoCommand, "1MB")
+	require.NoError(i.T(), err)
+	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+
+	i.T().Log("Checking if the istio chart is installed")
+	istioChart, err := extencharts.GetChartStatus(client, i.cluster.ID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	require.NoError(i.T(), err)
+	require.True(i.T(), istioChart.IsAlreadyInstalled)
+
+	i.T().Log("Building In Place upgrade command")
+	canaryUpgradeCommand := []string{
+		"sh", "-c",
+		fmt.Sprintf(`helm registry login dp.apps.rancher.io -u %s -p %s && helm upgrade %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s}`, username, accessToken, charts.RancherIstioName, charts.RancherIstioNamespace, istioSecret),
+	}
+
+	i.T().Log("Running In Place upgrade command")
+	logCmd, err = kubectl.Command(client, nil, i.cluster.ID, canaryUpgradeCommand, "2MB")
+	require.NoError(i.T(), err)
+	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+
+	i.T().Log("Checking if the istio chart is installed")
+	istioChart, err = extencharts.GetChartStatus(client, i.cluster.ID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	require.NoError(i.T(), err)
+	require.True(i.T(), istioChart.IsAlreadyInstalled)
+
+	helmUninstallCommand := fmt.Sprintf(`helm uninstall %s -n %s`, charts.RancherIstioName, charts.RancherIstioNamespace)
+	deleteConfigurationCommand := `kubectl delete mutatingwebhookconfiguration istio-sidecar-injector`
+	deleteCustomDefinationCommand := `kubectl delete $(kubectl get CustomResourceDefinition -l='app.kubernetes.io/part-of=istio' -o name -A)`
+
+	i.T().Log("Building uninstall command")
+	uninstallCommand := []string{
+		"sh", "-c",
+		fmt.Sprintf(`%s && %s && %s`, helmUninstallCommand, deleteConfigurationCommand, deleteCustomDefinationCommand),
+	}
+
+	i.T().Log("Running uninstall command")
+	_, err = kubectl.Command(client, nil, i.cluster.ID, uninstallCommand, "2MB")
+	require.NoError(i.T(), err)
+
+	i.T().Log("Checking if the istio chart is uninstalled")
+	istioChart, err = extencharts.GetChartStatus(client, i.cluster.ID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	require.NoError(i.T(), err)
+	require.False(i.T(), istioChart.IsAlreadyInstalled)
 }
 
 func TestIstioTestSuite(t *testing.T) {
