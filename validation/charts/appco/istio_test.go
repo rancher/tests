@@ -228,7 +228,47 @@ func (i *IstioTestSuite) TestIstioGatewayStandaloneInstallation() {
 }
 
 func (i *IstioTestSuite) TestIstioGatewayDifferentNamespaceInstallation() {
+	subSession := i.session.NewSession()
+	defer subSession.Cleanup()
 
+	client, err := i.client.WithSession(subSession)
+	require.NoError(i.T(), err)
+
+	gatewayCommand := `--set gateway.enabled=true,gateway.namespaceOverride=default`
+	i.T().Log("Building Gateway AppCo command")
+	appCoCommand := []string{
+		"sh", "-c",
+		fmt.Sprintf(`helm registry login dp.apps.rancher.io -u %s -p %s && helm install %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s} %s`, username, accessToken, charts.RancherIstioName, charts.RancherIstioNamespace, istioSecret, gatewayCommand),
+	}
+
+	i.T().Log("Running Gateway AppCo command")
+	logCmd, err := kubectl.Command(client, nil, i.cluster.ID, appCoCommand, "1MB")
+	require.NoError(i.T(), err)
+	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+
+	i.T().Log("Checking if the istio chart is installed")
+	istioChart, err := extencharts.GetChartStatus(client, i.cluster.ID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	require.NoError(i.T(), err)
+	require.True(i.T(), istioChart.IsAlreadyInstalled)
+
+	helmUninstallCommand := fmt.Sprintf(`helm uninstall %s -n %s`, charts.RancherIstioName, charts.RancherIstioNamespace)
+	deleteConfigurationCommand := `kubectl delete mutatingwebhookconfiguration istio-sidecar-injector`
+	deleteCustomDefinationCommand := `kubectl delete $(kubectl get CustomResourceDefinition -l='app.kubernetes.io/part-of=istio' -o name -A)`
+
+	i.T().Log("Building uninstall command")
+	uninstallCommand := []string{
+		"sh", "-c",
+		fmt.Sprintf(`%s && %s && %s`, helmUninstallCommand, deleteConfigurationCommand, deleteCustomDefinationCommand),
+	}
+
+	i.T().Log("Running uninstall command")
+	_, err = kubectl.Command(client, nil, i.cluster.ID, uninstallCommand, "2MB")
+	require.NoError(i.T(), err)
+
+	i.T().Log("Checking if the istio chart is uninstalled")
+	istioChart, err = extencharts.GetChartStatus(client, i.cluster.ID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	require.NoError(i.T(), err)
+	require.False(i.T(), istioChart.IsAlreadyInstalled)
 }
 
 func (i *IstioTestSuite) TestIstioCanaryUpgrade() {
