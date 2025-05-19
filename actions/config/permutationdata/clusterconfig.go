@@ -57,6 +57,10 @@ func CreateK8sPermutation(client *rancher.Client, k8sType string, config map[str
 				return nil, err
 			}
 		}
+	} else {
+		k8sPermutation := permutations.CreatePermutation(k8sKeyPath, k8sKeyValue.([]any), nil)
+
+		return &k8sPermutation, nil
 	}
 
 	var versions []any
