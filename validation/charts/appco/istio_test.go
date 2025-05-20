@@ -15,11 +15,8 @@ import (
 )
 
 const (
-	//Get it from env var
-	username = ""
-	//Get it from env var
-	accessToken = ""
-	pilotImage  = "dp.apps.rancher.io/containers/pilot:1.25.3"
+	expectedDeployLog = "deployed"
+	canaryRevisionApp = "istiod-canary"
 )
 
 type IstioTestSuite struct {
@@ -51,20 +48,20 @@ func (i *IstioTestSuite) SetupSuite() {
 	i.cluster = cluster
 
 	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
-	err = CreateIstioNamespace(i.client, i.cluster.ID)
+	err = createIstioNamespace(i.client, i.cluster.ID)
 	require.NoError(i.T(), err)
 
 	i.T().Logf("Creating %s secret", RancherIstioSecret)
-	logCmd, err := CreateIstioSecret(i.client, i.cluster.ID, username, accessToken)
+	logCmd, err := createIstioSecret(i.client, i.cluster.ID, AppCoUsername, AppCoAccessToken)
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
 
 	i.T().Log("Creating pilot job")
-	err = CreatePilotJob(i.client, i.cluster.ID)
+	err = createPilotJob(i.client, i.cluster.ID)
 	require.NoError(i.T(), err)
 }
 
-func (i *IstioTestSuite) TestIstioSideCarInstallation() {
+func (i *IstioTestSuite) TestSideCarInstallation() {
 	subSession := i.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -72,39 +69,39 @@ func (i *IstioTestSuite) TestIstioSideCarInstallation() {
 	require.NoError(i.T(), err)
 
 	i.T().Log("Installing SideCar Istio AppCo")
-	istioChart, logCmd, err := InstallIstioAppCo(client, i.cluster.ID, username, accessToken, "")
+	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, "")
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Uninstalling Istio AppCo")
-	istioChart, err = UninstallIstioAppCo(client, i.cluster.ID)
+	istioChart, err = uninstallIstioAppCo(client, i.cluster.ID)
 	require.NoError(i.T(), err)
 	require.False(i.T(), istioChart.IsAlreadyInstalled)
 }
 
-func (i *IstioTestSuite) TestIstioAmbientInstallation() {
+func (i *IstioTestSuite) TestAmbientInstallation() {
 	subSession := i.session.NewSession()
 	defer subSession.Cleanup()
 
 	client, err := i.client.WithSession(subSession)
 	require.NoError(i.T(), err)
 
-	ambientSets := `--set cni.enabled=true,ztunnel.enabled=true --set istiod.cni.enabled=true --set cni.profile=ambient,istiod.profile=ambient,ztunnel.profile=ambient`
+	ambientSets := `--set cni.enabled=true,ztunnel.enabled=true --set istiod.cni.enabled=false --set cni.profile=ambient,istiod.profile=ambient,ztunnel.profile=ambient`
 
 	i.T().Log("Installing Ambient Istio AppCo")
-	istioChart, logCmd, err := InstallIstioAppCo(client, i.cluster.ID, username, accessToken, ambientSets)
+	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, ambientSets)
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, "deployed"))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Uninstalling Istio AppCo")
-	istioChart, err = UninstallIstioAppCo(i.client, i.cluster.ID)
+	istioChart, err = uninstallIstioAppCo(i.client, i.cluster.ID)
 	require.NoError(i.T(), err)
 	require.False(i.T(), istioChart.IsAlreadyInstalled)
 }
 
-func (i *IstioTestSuite) TestIstioGatewayStandaloneInstallation() {
+func (i *IstioTestSuite) TestGatewayStandaloneInstallation() {
 	subSession := i.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -114,18 +111,18 @@ func (i *IstioTestSuite) TestIstioGatewayStandaloneInstallation() {
 	gatewaySets := `--set base.enabled=false,istiod.enabled=false --set gateway.enabled=true`
 
 	i.T().Log("Installing Gateway Standalone Istio AppCo")
-	istioChart, logCmd, err := InstallIstioAppCo(client, i.cluster.ID, username, accessToken, gatewaySets)
+	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, gatewaySets)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Uninstalling Istio AppCo")
-	istioChart, err = UninstallIstioAppCo(i.client, i.cluster.ID)
+	istioChart, err = uninstallIstioAppCo(i.client, i.cluster.ID)
 	require.NoError(i.T(), err)
 	require.False(i.T(), istioChart.IsAlreadyInstalled)
 }
 
-func (i *IstioTestSuite) TestIstioGatewayDiffNamespaceInstallation() {
+func (i *IstioTestSuite) TestGatewayDiffNamespaceInstallation() {
 	subSession := i.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -135,18 +132,18 @@ func (i *IstioTestSuite) TestIstioGatewayDiffNamespaceInstallation() {
 	gatewayNamespaceSets := `--set gateway.enabled=true,gateway.namespaceOverride=default`
 
 	i.T().Log("Installing Gateway Namespace Istio AppCo")
-	istioChart, logCmd, err := InstallIstioAppCo(client, i.cluster.ID, username, accessToken, gatewayNamespaceSets)
+	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, gatewayNamespaceSets)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Uninstalling Istio AppCo")
-	istioChart, err = UninstallIstioAppCo(i.client, i.cluster.ID)
+	istioChart, err = uninstallIstioAppCo(i.client, i.cluster.ID)
 	require.NoError(i.T(), err)
 	require.False(i.T(), istioChart.IsAlreadyInstalled)
 }
 
-func (i *IstioTestSuite) TestIstioCanaryUpgrade() {
+func (i *IstioTestSuite) TestCanaryUpgrade() {
 	subSession := i.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -154,15 +151,15 @@ func (i *IstioTestSuite) TestIstioCanaryUpgrade() {
 	require.NoError(i.T(), err)
 
 	i.T().Log("Installing SideCar Istio AppCo")
-	istioChart, logCmd, err := InstallIstioAppCo(client, i.cluster.ID, username, accessToken, "")
+	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, "")
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Running Canary Istio AppCo Upgrade")
-	istioChart, logCmd, err = UpgradeIstioAppCo(client, i.cluster.ID, username, accessToken, "--set istiod.revision=canary,base.defaultRevision=canary")
+	istioChart, logCmd, err = upgradeIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, "--set istiod.revision=canary,base.defaultRevision=canary")
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Verifying if istio-ingress gateway is using the canary revision")
@@ -171,19 +168,19 @@ func (i *IstioTestSuite) TestIstioCanaryUpgrade() {
 		fmt.Sprintf(`kubectl -n %s get pod -o jsonpath='{.items..metadata.name}'`, charts.RancherIstioNamespace),
 	}
 
-	appName := "istiod-canary"
+	appName := canaryRevisionApp
 	logCmd, err = kubectl.Command(client, nil, i.cluster.ID, getCanaryCommand, "2MB")
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, appName))
 
 	i.T().Log("Uninstalling Istio AppCo")
-	istioChart, err = UninstallIstioAppCo(i.client, i.cluster.ID)
+	istioChart, err = uninstallIstioAppCo(i.client, i.cluster.ID)
 	require.NoError(i.T(), err)
 	require.False(i.T(), istioChart.IsAlreadyInstalled)
 
 }
 
-func (i *IstioTestSuite) TestIstioInPlaceUpgrade() {
+func (i *IstioTestSuite) TestInPlaceUpgrade() {
 	subSession := i.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -191,19 +188,19 @@ func (i *IstioTestSuite) TestIstioInPlaceUpgrade() {
 	require.NoError(i.T(), err)
 
 	i.T().Log("Installing SideCar Istio AppCo")
-	istioChart, logCmd, err := InstallIstioAppCo(client, i.cluster.ID, username, accessToken, "")
+	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, "")
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Running In Place Istio AppCo Upgrade")
-	istioChart, logCmd, err = UpgradeIstioAppCo(client, i.cluster.ID, username, accessToken, "")
+	istioChart, logCmd, err = upgradeIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, "")
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Uninstalling Istio AppCo")
-	istioChart, err = UninstallIstioAppCo(i.client, i.cluster.ID)
+	istioChart, err = uninstallIstioAppCo(i.client, i.cluster.ID)
 	require.NoError(i.T(), err)
 	require.False(i.T(), istioChart.IsAlreadyInstalled)
 }

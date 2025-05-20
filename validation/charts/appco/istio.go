@@ -17,10 +17,10 @@ import (
 
 const (
 	RancherIstioSecret string = "application-collection"
-	RancherPilotImage  string = "dp.apps.rancher.io/containers/pilot:1.25.3"
+	RancherPilotImage  string = "dp.apps.rancher.io/containers/pilot:latest"
 )
 
-func CreateIstioNamespace(client *rancher.Client, clusterID string) error {
+func createIstioNamespace(client *rancher.Client, clusterID string) error {
 	namespace, err := namespaces.GetNamespaceByName(client, clusterID, charts.RancherIstioNamespace)
 	if err != nil && !strings.Contains(err.Error(), "not found") {
 		return err
@@ -33,13 +33,13 @@ func CreateIstioNamespace(client *rancher.Client, clusterID string) error {
 	return err
 }
 
-func CreateIstioSecret(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string) (string, error) {
+func createIstioSecret(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string) (string, error) {
 	secretCommand := strings.Split(fmt.Sprintf("kubectl create secret docker-registry %s --docker-server=dp.apps.rancher.io --docker-username=%s --docker-password=%s -n %s", RancherIstioSecret, appCoUsername, appCoToken, charts.RancherIstioNamespace), " ")
 	logCmd, err := kubectl.Command(client, nil, clusterID, secretCommand, "")
 	return logCmd, err
 }
 
-func CreatePilotJob(client *rancher.Client, clusterID string) error {
+func createPilotJob(client *rancher.Client, clusterID string) error {
 	container := corev1.Container{
 		Name:            namegen.AppendRandomString("pilot"),
 		Image:           RancherPilotImage,
@@ -68,39 +68,56 @@ func CreatePilotJob(client *rancher.Client, clusterID string) error {
 	return err
 }
 
-func InstallIstioAppCo(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string, sets string) (*extencharts.ChartStatus, string, error) {
+func installIstioAppCo(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string, sets string) (*extencharts.ChartStatus, string, error) {
 	istioAppCoCommand := []string{
 		"sh", "-c",
 		fmt.Sprintf(`helm registry login dp.apps.rancher.io -u %s -p %s && helm install %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s} %s`, appCoUsername, appCoToken, charts.RancherIstioName, charts.RancherIstioNamespace, RancherIstioSecret, sets),
 	}
 
-	logCmd, err := kubectl.Command(client, nil, clusterID, istioAppCoCommand, "1MB")
+	logCmd, err := kubectl.Command(client, nil, clusterID, istioAppCoCommand, "2MB")
 
 	if err != nil {
 		return nil, logCmd, err
 	}
 
+	err = extencharts.WatchAndWaitDeployments(client, clusterID, charts.RancherIstioNamespace, metav1.ListOptions{})
+	if err != nil {
+		return nil, logCmd, err
+	}
+
 	istioChart, err := extencharts.GetChartStatus(client, clusterID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	if err != nil {
+		return nil, logCmd, err
+	}
+
 	return istioChart, logCmd, err
 }
 
-func UpgradeIstioAppCo(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string, sets string) (*extencharts.ChartStatus, string, error) {
+func upgradeIstioAppCo(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string, sets string) (*extencharts.ChartStatus, string, error) {
 	istioAppCoCommand := []string{
 		"sh", "-c",
 		fmt.Sprintf(`helm registry login dp.apps.rancher.io -u %s -p %s && helm upgrade %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s} %s`, appCoUsername, appCoToken, charts.RancherIstioName, charts.RancherIstioNamespace, RancherIstioSecret, sets),
 	}
 
-	logCmd, err := kubectl.Command(client, nil, clusterID, istioAppCoCommand, "1MB")
+	logCmd, err := kubectl.Command(client, nil, clusterID, istioAppCoCommand, "2MB")
+	if err != nil {
+		return nil, logCmd, err
+	}
 
+	err = extencharts.WatchAndWaitDeployments(client, clusterID, charts.RancherIstioNamespace, metav1.ListOptions{})
 	if err != nil {
 		return nil, logCmd, err
 	}
 
 	istioChart, err := extencharts.GetChartStatus(client, clusterID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	if err != nil {
+		return nil, logCmd, err
+	}
+
 	return istioChart, logCmd, err
 }
 
-func UninstallIstioAppCo(client *rancher.Client, clusterID string) (*extencharts.ChartStatus, error) {
+func uninstallIstioAppCo(client *rancher.Client, clusterID string) (*extencharts.ChartStatus, error) {
 	helmUninstallCommand := fmt.Sprintf(`helm uninstall %s -n %s`, charts.RancherIstioName, charts.RancherIstioNamespace)
 	deleteConfigurationCommand := `kubectl delete mutatingwebhookconfiguration istio-sidecar-injector`
 	deleteCustomDefinationCommand := `kubectl delete $(kubectl get CustomResourceDefinition -l='app.kubernetes.io/part-of=istio' -o name -A)`
