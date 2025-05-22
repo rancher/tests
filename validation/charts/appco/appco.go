@@ -1,8 +1,10 @@
 package appco
 
-import "os"
+import (
+	"os"
+)
 
 var (
-	AppCoUsername    = os.Getenv("APPCO_USERNAME")
-	AppCoAccessToken = os.Getenv("APPCO_ACCESS_TOKEN")
+	AppCoUsername    string = os.Getenv("APPCO_USERNAME")
+	AppCoAccessToken string = os.Getenv("APPCO_ACCESS_TOKEN")
 )

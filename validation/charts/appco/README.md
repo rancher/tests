@@ -15,6 +15,12 @@ In your config file, set the following:
 In your env vars, set the following:
 
 ```bash
-set APPCO_USERNAME="<appco-username>"
-set APPCO_ACCESS_TOKEN="<appco-access-token>"
+APPCO_USERNAME="<appco-username>"
+APPCO_ACCESS_TOKEN="<appco-access-token>"
 ```
+
+# Local command example
+
+```bash
+ APPCO_USERNAME='appco-username' APPCO_ACCESS_TOKEN='appco-access-token'; go test -tags=validation -timeout 30m  -run ^TestIstioTestSuite/TestSideCarInstallation$  github.com/rancher/tests/validation/charts/appco
+ ```
