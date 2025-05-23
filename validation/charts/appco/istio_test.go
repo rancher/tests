@@ -52,7 +52,7 @@ func (i *IstioTestSuite) SetupSuite() {
 	require.NoError(i.T(), err)
 
 	i.T().Logf("Creating %s secret", RancherIstioSecret)
-	logCmd, err := createIstioSecret(i.client, i.cluster.ID, AppCoUsername, AppCoAccessToken)
+	logCmd, err := createIstioSecret(i.client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
 
@@ -69,7 +69,7 @@ func (i *IstioTestSuite) TestSideCarInstallation() {
 	require.NoError(i.T(), err)
 
 	i.T().Log("Installing SideCar Istio AppCo")
-	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, "")
+	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
@@ -90,7 +90,7 @@ func (i *IstioTestSuite) TestAmbientInstallation() {
 	ambientSets := `--set cni.enabled=true,ztunnel.enabled=true --set istiod.cni.enabled=false --set cni.profile=ambient,istiod.profile=ambient,ztunnel.profile=ambient`
 
 	i.T().Log("Installing Ambient Istio AppCo")
-	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, ambientSets)
+	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, ambientSets)
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, "deployed"))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
@@ -111,7 +111,7 @@ func (i *IstioTestSuite) TestGatewayStandaloneInstallation() {
 	gatewaySets := `--set base.enabled=false,istiod.enabled=false --set gateway.enabled=true`
 
 	i.T().Log("Installing Gateway Standalone Istio AppCo")
-	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, gatewaySets)
+	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, gatewaySets)
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
@@ -132,7 +132,7 @@ func (i *IstioTestSuite) TestGatewayDiffNamespaceInstallation() {
 	gatewayNamespaceSets := `--set gateway.enabled=true,gateway.namespaceOverride=default`
 
 	i.T().Log("Installing Gateway Namespace Istio AppCo")
-	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, gatewayNamespaceSets)
+	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, gatewayNamespaceSets)
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
@@ -151,13 +151,13 @@ func (i *IstioTestSuite) TestCanaryUpgrade() {
 	require.NoError(i.T(), err)
 
 	i.T().Log("Installing SideCar Istio AppCo")
-	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, "")
+	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Running Canary Istio AppCo Upgrade")
-	istioChart, logCmd, err = upgradeIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, "--set istiod.revision=canary,base.defaultRevision=canary")
+	istioChart, logCmd, err = upgradeIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "--set istiod.revision=canary,base.defaultRevision=canary")
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
@@ -188,13 +188,13 @@ func (i *IstioTestSuite) TestInPlaceUpgrade() {
 	require.NoError(i.T(), err)
 
 	i.T().Log("Installing SideCar Istio AppCo")
-	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, "")
+	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Running In Place Istio AppCo Upgrade")
-	istioChart, logCmd, err = upgradeIstioAppCo(client, i.cluster.ID, AppCoUsername, AppCoAccessToken, "")
+	istioChart, logCmd, err = upgradeIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
