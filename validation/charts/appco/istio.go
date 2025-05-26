@@ -9,19 +9,18 @@ import (
 	"github.com/rancher/shepherd/extensions/kubectl"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/charts"
-	"github.com/rancher/tests/actions/kubeapi/namespaces"
-	"github.com/rancher/tests/actions/workloads/job"
-	corev1 "k8s.io/api/core/v1"
+	kubeapiNamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
+	"github.com/rancher/tests/actions/namespaces"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
 	RancherIstioSecret string = "application-collection"
-	RancherPilotImage  string = "dp.apps.rancher.io/containers/pilot:latest"
 )
 
 func createIstioNamespace(client *rancher.Client, clusterID string) error {
-	namespace, err := namespaces.GetNamespaceByName(client, clusterID, charts.RancherIstioNamespace)
+	namespace, err := kubeapiNamespaces.GetNamespaceByName(client, clusterID, charts.RancherIstioNamespace)
 	if err != nil && !strings.Contains(err.Error(), "not found") {
 		return err
 	}
@@ -29,7 +28,7 @@ func createIstioNamespace(client *rancher.Client, clusterID string) error {
 		return nil
 	}
 
-	_, err = namespaces.CreateNamespace(client, clusterID, namegen.AppendRandomString("testns"), charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{})
+	_, err = kubeapiNamespaces.CreateNamespace(client, clusterID, namegen.AppendRandomString("testns"), charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{})
 	return err
 }
 
@@ -39,36 +38,20 @@ func createIstioSecret(client *rancher.Client, clusterID string, appCoUsername s
 	return logCmd, err
 }
 
-func createPilotJob(client *rancher.Client, clusterID string) error {
-	container := corev1.Container{
-		Name:            namegen.AppendRandomString("pilot"),
-		Image:           RancherPilotImage,
-		ImagePullPolicy: corev1.PullIfNotPresent,
-		VolumeMounts:    nil,
-	}
-
-	podTemplate := corev1.PodTemplateSpec{
-		ObjectMeta: metav1.ObjectMeta{
-			Labels:    make(map[string]string),
-			Namespace: charts.RancherIstioNamespace,
-		},
-		Spec: corev1.PodSpec{
-			Containers:    []corev1.Container{container},
-			RestartPolicy: corev1.RestartPolicyNever,
-			Volumes:       nil,
-			ImagePullSecrets: []corev1.LocalObjectReference{
-				corev1.LocalObjectReference{
-					Name: RancherIstioSecret,
-				}},
-			NodeSelector: nil,
-		},
-	}
-
-	_, err := job.CreateJob(client, clusterID, charts.RancherIstioNamespace, podTemplate, false)
-	return err
-}
-
 func installIstioAppCo(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string, sets string) (*extencharts.ChartStatus, string, error) {
+
+	client.Session.RegisterCleanupFunc(func() error {
+		logrus.Infof("Uninstalling Istio AppCo")
+		istioChart, err := uninstallIstioAppCo(client, clusterID)
+		if err != nil {
+			return err
+		}
+		if istioChart == nil || !istioChart.IsAlreadyInstalled {
+			return fmt.Errorf("Istio is still installed")
+		}
+		return nil
+	})
+
 	istioAppCoCommand := []string{
 		"sh", "-c",
 		fmt.Sprintf(`helm registry login dp.apps.rancher.io -u %s -p %s && helm install %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s} %s`, appCoUsername, appCoToken, charts.RancherIstioName, charts.RancherIstioNamespace, RancherIstioSecret, sets),
@@ -118,17 +101,19 @@ func upgradeIstioAppCo(client *rancher.Client, clusterID string, appCoUsername s
 }
 
 func uninstallIstioAppCo(client *rancher.Client, clusterID string) (*extencharts.ChartStatus, error) {
-	helmUninstallCommand := fmt.Sprintf(`helm uninstall %s -n %s`, charts.RancherIstioName, charts.RancherIstioNamespace)
-	deleteConfigurationCommand := `kubectl delete mutatingwebhookconfiguration istio-sidecar-injector`
-	deleteCustomDefinationCommand := `kubectl delete $(kubectl get CustomResourceDefinition -l='app.kubernetes.io/part-of=istio' -o name -A)`
-
-	uninstallCommand := []string{
-		"sh", "-c",
-		fmt.Sprintf(`%s && %s && %s`, helmUninstallCommand, deleteConfigurationCommand, deleteCustomDefinationCommand),
+	steveclient, err := client.Steve.ProxyDownstream(clusterID)
+	if err != nil {
+		return nil, err
 	}
 
-	_, err := kubectl.Command(client, nil, clusterID, uninstallCommand, "2MB")
+	namespaceClient := steveclient.SteveType(namespaces.NamespaceSteveType)
 
+	namespace, err := namespaceClient.ByID(charts.RancherIstioNamespace)
+	if err != nil {
+		return nil, err
+	}
+
+	err = namespaceClient.Delete(namespace)
 	if err != nil {
 		return nil, err
 	}
