@@ -1,18 +1,23 @@
 package appco
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	extencharts "github.com/rancher/shepherd/extensions/charts"
+	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/kubectl"
+	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/rancher/tests/actions/charts"
 	kubeapiNamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 const (
@@ -100,7 +105,47 @@ func upgradeIstioAppCo(client *rancher.Client, clusterID string, appCoUsername s
 	return istioChart, logCmd, err
 }
 
+func newChartUninstallAction() *types.ChartUninstallAction {
+	return &types.ChartUninstallAction{
+		DisableHooks: false,
+		DryRun:       false,
+		KeepHistory:  false,
+		Timeout:      nil,
+		Description:  "",
+	}
+}
+
 func uninstallIstioAppCo(client *rancher.Client, clusterID string) (*extencharts.ChartStatus, error) {
+
+	catalogClient, err := client.GetClusterCatalogClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	defaultChartUninstallAction := newChartUninstallAction()
+
+	err = catalogClient.UninstallChart(charts.RancherIstioName, charts.RancherIstioNamespace, defaultChartUninstallAction)
+	if err != nil {
+		return nil, err
+	}
+
+	watchAppInterface, err := catalogClient.Apps(charts.RancherIstioNamespace).Watch(context.TODO(), metav1.ListOptions{
+		FieldSelector:  "metadata.name=" + charts.RancherIstioName,
+		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
+		if event.Type == watch.Error {
+			return false, fmt.Errorf("there was an error uninstalling rancher istio chart")
+		} else if event.Type == watch.Deleted {
+			return true, nil
+		}
+		return false, nil
+	})
+
 	steveclient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return nil, err
