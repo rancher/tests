@@ -118,7 +118,8 @@ node {
                 sh "./validation/configure.sh"
                 sh "./validation/build.sh"
                 if ("${ENV_VARIABLE}" != "null" && "${ENV_VARIABLE}" != "") {
-                  sh "echo -e ${ENV_VARIABLE} >> ${envFile}"
+                  def envText = readFile("${envFile}")
+                  writeFile file: "${envFile}", text: "${envText}${ENV_VARIABLE}"
                 }
               }
               stage('Run Validation Tests') {
