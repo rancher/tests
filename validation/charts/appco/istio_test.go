@@ -30,6 +30,12 @@ func (i *IstioTestSuite) TearDownSuite() {
 	i.session.Cleanup()
 }
 
+func (i *IstioTestSuite) SetupTest() {
+	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
+	err := createIstioNamespace(i.client, i.cluster.ID)
+	require.NoError(i.T(), err)
+}
+
 func (i *IstioTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	i.session = testSession
