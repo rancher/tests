@@ -14,7 +14,6 @@ import (
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/rancher/tests/actions/charts"
 	kubeapiNamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
-	"github.com/rancher/tests/actions/namespaces"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -145,23 +144,6 @@ func uninstallIstioAppCo(client *rancher.Client, clusterID string) (*extencharts
 		}
 		return false, nil
 	})
-
-	steveclient, err := client.Steve.ProxyDownstream(clusterID)
-	if err != nil {
-		return nil, err
-	}
-
-	namespaceClient := steveclient.SteveType(namespaces.NamespaceSteveType)
-
-	namespace, err := namespaceClient.ByID(charts.RancherIstioNamespace)
-	if err != nil {
-		return nil, err
-	}
-
-	err = namespaceClient.Delete(namespace)
-	if err != nil {
-		return nil, err
-	}
 
 	istioChart, err := extencharts.GetChartStatus(client, clusterID, charts.RancherIstioNamespace, charts.RancherIstioName)
 	return istioChart, err
