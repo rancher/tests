@@ -7,7 +7,7 @@ import (
 
 	"github.com/antihax/optional"
 	"github.com/sirupsen/logrus"
-	qase "go.qase.io/client"
+	upstream "go.qase.io/client"
 )
 
 type TestCaseSteps struct {
@@ -19,91 +19,53 @@ type TestCaseSteps struct {
 
 type TestCase struct {
 	Description string          `json:"description,omitempty"`
-	Title       string          `json:"title"`
+	Title       string          `json:"title,omitempty"`
 	SuiteId     int64           `json:"suite_id,omitempty"`
 	Automation  int32           `json:"automation,omitempty"`
 	Steps       []TestCaseSteps `json:"steps,omitempty"`
 }
 
-var (
-	qaseToken = os.Getenv(QaseTokenEnvVar)
-	Client    *qase.APIClient
-)
+type QaseService struct {
+	client *upstream.APIClient
+}
+
+var qaseToken = os.Getenv(QaseTokenEnvVar)
 
 // SetupQaseClient creates a new Qase client from the api token environment variable QASE_AUTOMATION_TOKEN
-func SetupQaseClient() {
-	cfg := qase.NewConfiguration()
+func SetupQaseClient() *QaseService {
+	cfg := upstream.NewConfiguration()
 	cfg.AddDefaultHeader("Token", qaseToken)
-	Client = qase.NewAPIClient(cfg)
-}
-
-// GetTestCase retrieves a Test Case by name within a specified Qase Project if it exists
-func GetTestCase(project, test string) (qase.TestCase, error) {
-	logrus.Debugf("Getting test case \"%s\" in project %s\n", test, project)
-	localVarOptionals := &qase.CasesApiGetCasesOpts{
-		FiltersSearch: optional.NewString(test),
+	return &QaseService{
+		client: upstream.NewAPIClient(cfg),
 	}
-	qaseTestCases, _, err := Client.CasesApi.GetCases(context.TODO(), project, localVarOptionals)
-	if err != nil {
-		return qase.TestCase{}, err
-	}
-
-	for _, qaseTestCase := range qaseTestCases.Result.Entities {
-		if qaseTestCase.Title == test {
-			return qaseTestCase, nil
-		}
-	}
-	return qase.TestCase{}, fmt.Errorf("test case \"%s\" not found in project %s", test, project)
-}
-
-// GetAllTestCases retrieves all Test Cases within a specified Qase Project and returns a slice of them
-func GetAllTestCases(project string) ([]qase.TestCase, error) {
-	logrus.Debugln("Retrieving test cases from Qase for project id: ", project)
-	testCases := []qase.TestCase{}
-	var numOfTestCases int32 = 1
-	offSetCount := 0
-	for numOfTestCases > 0 {
-		offset := optional.NewInt32(int32(offSetCount))
-		localVarOptionals := &qase.CasesApiGetCasesOpts{
-			Offset: offset,
-		}
-		tempResult, _, err := Client.CasesApi.GetCases(context.TODO(), project, localVarOptionals)
-		if err != nil {
-			return nil, err
-		}
-
-		testCases = append(testCases, tempResult.Result.Entities...)
-		numOfTestCases = tempResult.Result.Count
-		offSetCount += 10
-	}
-
-	return testCases, nil
 }
 
 // GetTestSuite retrieves a Test Suite by name within a specified Qase Project if it exists
-func GetTestSuite(project, suite string) (qase.Suite, error) {
+func (q *QaseService) GetTestSuite(project, suite string) (*upstream.Suite, error) {
 	logrus.Debugf("Getting test suite \"%s\" in project %s\n", suite, project)
-	localVarOptionals := &qase.SuitesApiGetSuitesOpts{
+	localVarOptionals := &upstream.SuitesApiGetSuitesOpts{
 		FiltersSearch: optional.NewString(suite),
 	}
-	qaseSuites, _, err := Client.SuitesApi.GetSuites(context.TODO(), project, localVarOptionals)
+	qaseSuites, _, err := q.client.SuitesApi.GetSuites(context.TODO(), project, localVarOptionals)
 	if err != nil {
-		return qase.Suite{}, err
+		return nil, err
 	}
 
-	for _, qaseSuite := range qaseSuites.Result.Entities {
-		if qaseSuite.Title == suite {
-			return qaseSuite, nil
-		}
+	resultLength := len(qaseSuites.Result.Entities)
+	if resultLength == 1 {
+		return &qaseSuites.Result.Entities[0], nil
+	} else if resultLength > 1 {
+		return &qaseSuites.Result.Entities[0], fmt.Errorf("test suite \"%s\" found multiple times in project %s, but should only exist once", suite, project)
 	}
-	return qase.Suite{}, fmt.Errorf("test suite \"%s\" not found in project %s", suite, project)
+
+	return nil, fmt.Errorf("test suite \"%s\" not found in project %s", suite, project)
 }
 
-// CreateTestSuite retrieves a Test Suite by name within a specified Qase Project if it exists
-func CreateTestSuite(project, suite string) (int64, error) {
+// CreateTestSuite creates a new Test Suite within a specified Qase Project
+func (q *QaseService) CreateTestSuite(project, suite string) (int64, error) {
 	logrus.Debugf("Creating test suite \"%s\" in project %s\n", suite, project)
-	suiteBody := qase.SuiteCreate{Title: suite}
-	resp, _, err := Client.SuitesApi.CreateSuite(context.TODO(), suiteBody, project)
+	suiteBody := upstream.SuiteCreate{Title: suite}
+	resp, _, err := q.client.SuitesApi.CreateSuite(context.TODO(), suiteBody, project)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create test suite: \"%s\". Error: %v", suite, err)
 	}
@@ -111,44 +73,46 @@ func CreateTestSuite(project, suite string) (int64, error) {
 }
 
 // UploadTests either creates new Test Cases and their associated Suite or updates them if they already exist
-func UploadTests(project string, testCases []TestCase) error {
+func (q *QaseService) UploadTests(project string, testCases []TestCase) error {
 	for _, tc := range testCases {
 		logrus.Info("Uploading test case:\n\tProject: ", project, "\n\tTitle: ", tc.Title, "\n\tDescription: ", tc.Description, "\n\tSuiteId: ", tc.SuiteId, "\n\tAutomation: ", tc.Automation, "\n\tSteps: ", tc.Steps)
 
-		existingCase, err := GetTestCase(project, tc.Title)
+		existingCase, err := q.getTestCase(project, tc.Title)
 		if err == nil {
-			var qaseTest qase.TestCaseUpdate
+			var qaseTest upstream.TestCaseUpdate
 			qaseTest.Title = tc.Title
 			qaseTest.Description = tc.Description
 			qaseTest.SuiteId = tc.SuiteId
 			qaseTest.Automation = tc.Automation
 			for _, step := range tc.Steps {
-				var qaseSteps qase.TestCaseUpdateSteps
+				var qaseSteps upstream.TestCaseUpdateSteps
 				qaseSteps.Action = step.Action
 				qaseSteps.ExpectedResult = step.ExpectedResult
 				qaseSteps.Data = step.InputData
 				qaseSteps.Position = step.Position
 				qaseTest.Steps = append(qaseTest.Steps, qaseSteps)
 			}
-			err = updateTestCases(project, qaseTest, int32(existingCase.Id))
+			err = q.updateTestCase(project, qaseTest, int32(existingCase.Id))
 			if err != nil {
 				return err
 			}
+		} else if existingCase != nil {
+			return err
 		} else {
-			var qaseTest qase.TestCaseCreate
+			var qaseTest upstream.TestCaseCreate
 			qaseTest.Title = tc.Title
 			qaseTest.Description = tc.Description
 			qaseTest.SuiteId = tc.SuiteId
 			qaseTest.Automation = tc.Automation
 			for _, step := range tc.Steps {
-				var qaseSteps qase.TestCaseCreateSteps
+				var qaseSteps upstream.TestCaseCreateSteps
 				qaseSteps.Action = step.Action
 				qaseSteps.ExpectedResult = step.ExpectedResult
 				qaseSteps.Data = step.InputData
 				qaseSteps.Position = step.Position
 				qaseTest.Steps = append(qaseTest.Steps, qaseSteps)
 			}
-			err = createTestCases(project, qaseTest)
+			err = q.createTestCase(project, qaseTest)
 			if err != nil {
 				return err
 			}
@@ -157,16 +121,37 @@ func UploadTests(project string, testCases []TestCase) error {
 	return nil
 }
 
-func createTestCases(project string, testCase qase.TestCaseCreate) error {
-	_, _, err := Client.CasesApi.CreateCase(context.TODO(), testCase, project)
+// getTestCase retrieves a Test Case by name within a specified Qase Project if it exists
+func (q *QaseService) getTestCase(project, test string) (*upstream.TestCase, error) {
+	logrus.Debugf("Getting test case \"%s\" in project %s\n", test, project)
+	localVarOptionals := &upstream.CasesApiGetCasesOpts{
+		FiltersSearch: optional.NewString(test),
+	}
+	qaseTestCases, _, err := q.client.CasesApi.GetCases(context.TODO(), project, localVarOptionals)
+	if err != nil {
+		return nil, err
+	}
+
+	resultLength := len(qaseTestCases.Result.Entities)
+	if resultLength == 1 {
+		return &qaseTestCases.Result.Entities[0], nil
+	} else if resultLength > 1 {
+		return &qaseTestCases.Result.Entities[0], fmt.Errorf("test case \"%s\" found multiple times in project %s, but should only exist once", test, project)
+	}
+
+	return nil, fmt.Errorf("test case \"%s\" not found in project %s", test, project)
+}
+
+func (q *QaseService) createTestCase(project string, testCase upstream.TestCaseCreate) error {
+	_, _, err := q.client.CasesApi.CreateCase(context.TODO(), testCase, project)
 	if err != nil {
 		return fmt.Errorf("failed to create test case: \"%s\". Error: %v", testCase.Title, err)
 	}
 	return nil
 }
 
-func updateTestCases(project string, testCase qase.TestCaseUpdate, id int32) error {
-	_, _, err := Client.CasesApi.UpdateCase(context.TODO(), testCase, project, id)
+func (q *QaseService) updateTestCase(project string, testCase upstream.TestCaseUpdate, id int32) error {
+	_, _, err := q.client.CasesApi.UpdateCase(context.TODO(), testCase, project, id)
 	if err != nil {
 		return fmt.Errorf("failed to update test case: \"%s\". Error: %v", testCase.Title, err)
 	}

@@ -12,13 +12,23 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	schemas          string = "schemas.md"
+	testSuiteRegex   string = `## Test Suite: (.+)\n`
+	qaseProjectRegex string = `# (.+) Schemas\n`
+	testCaseRegex    string = `\n### (.+)\n\n(.+)`
+	testStepsRegex   string = `\| (\d+) +\| (.+) +\| (.+) +\| (.+) +\|`
+	projectSeperator string = "\n---\n"
+	fileSyntaxRegex  string = `^\S*\/\S*\.\S*$`
+)
+
 var (
 	_, callerFilePath, _, _ = runtime.Caller(0)
 	basepath                = filepath.Join(filepath.Dir(callerFilePath), "..", "..", "..", "..")
 )
 
 func main() {
-	qase.SetupQaseClient()
+	client := qase.SetupQaseClient()
 
 	schemaMap, err := getRawSchemaData()
 	if err != nil {
@@ -29,11 +39,18 @@ func main() {
 	for project, schemas := range schemaMap {
 		var cases []qase.TestCase
 		for _, schema := range schemas {
-			suite := extractSubstrings(schema, `## Test Suite: (.+)\n`)[0][1]
-			testSuite, suiteErr := qase.GetTestSuite(project, suite)
-			testSuiteId := testSuite.Id
-			if suiteErr != nil {
-				testSuiteId, _ = qase.CreateTestSuite(project, suite)
+			suite := extractSubstrings(schema, testSuiteRegex)[0][1]
+			testSuite, suiteErr := client.GetTestSuite(project, suite)
+			var testSuiteId int64
+			if testSuite != nil {
+				testSuiteId = testSuite.Id
+			}
+			if suiteErr != nil && testSuite != nil {
+				logrus.Error("Could not determine test suite:", suiteErr)
+				return
+			} else if suiteErr != nil {
+				logrus.Debug("Error obtaining test suite:", suiteErr)
+				testSuiteId, _ = client.CreateTestSuite(project, suite)
 			}
 			parsedCases, err := parseSchema(schema, testSuiteId)
 			if err != nil {
@@ -43,14 +60,16 @@ func main() {
 			cases = append(cases, parsedCases...)
 		}
 
-		err = qase.UploadTests(project, cases)
+		err = client.UploadTests(project, cases)
 		if err != nil {
-			logrus.Errorln("Error uploading tests:", err)
+			logrus.Error("Error uploading tests:", err)
 		}
 	}
 }
 
-// getRawSchemaData retrieves the tests from schemas.md files defined within each Go package and returns a map of the string content within each suite
+// getRawSchemaData retrieves the tests from schemas.md files defined within each Go package.
+// returns a map of the string content within each suite: Key: [Qase Project] Value: []{TestSuitesAndCases}
+// where each project is separated in the schemas file by the common yaml separator of: \n---\n
 func getRawSchemaData() (map[string][]string, error) {
 	schemaMap := make(map[string][]string)
 	var content []byte
@@ -58,17 +77,17 @@ func getRawSchemaData() (map[string][]string, error) {
 		if err != nil {
 			return err
 		}
-		if strings.Contains(info.Name(), "schemas.md") {
+		if strings.Contains(info.Name(), schemas) {
 			content, err = os.ReadFile(path)
 			if err != nil {
 				return err
 			}
 			c := string(content)
-			project := extractSubstrings(c, `# (.+) Schemas\n`)[0][1]
+			project := extractSubstrings(c, qaseProjectRegex)[0][1]
 			if _, ok := schemaMap[project]; ok {
-				schemaMap[project] = append(schemaMap[project], strings.Split(c, "\n---\n")...)
+				schemaMap[project] = append(schemaMap[project], strings.Split(c, projectSeperator)...)
 			} else {
-				schemaMap[project] = strings.Split(c, "\n---\n")
+				schemaMap[project] = strings.Split(c, projectSeperator)
 			}
 		}
 		return nil
@@ -80,8 +99,8 @@ func getRawSchemaData() (map[string][]string, error) {
 }
 
 func parseSchema(schema string, suiteId int64) ([]qase.TestCase, error) {
-	tests := extractSubstrings(schema, `\n### (.+)\n\n(.+)`)
-	steps := extractSubstrings(schema, `\| (\d+) +\| (.+) +\| (.+) +\| (.+) +\|`)
+	tests := extractSubstrings(schema, testCaseRegex)
+	steps := extractSubstrings(schema, testStepsRegex)
 	var testCases []qase.TestCase
 	var testCase qase.TestCase
 	for _, test := range tests {
@@ -132,7 +151,7 @@ func extractSubstrings(text, pattern string) [][]string {
 
 // isFile takes any string and determines if it is pointing to a file or not
 func isFile(str string) bool {
-	potentialFile := extractSubstrings(str, `^\S*\/\S*\.\S*$`)
+	potentialFile := extractSubstrings(str, fileSyntaxRegex)
 	if len(potentialFile) > 0 {
 		fp := filepath.Join(basepath, str)
 		if _, err := os.Stat(fp); err == nil {
