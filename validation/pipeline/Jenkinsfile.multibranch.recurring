@@ -128,7 +128,7 @@ node {
                     def goValidationParams = [
                         text(name: 'CONFIG', value: configYaml),
                         text(name: 'ANSIBLE_CONFIG', value: ansibleConfigYaml),
-                        text(name: 'TERRAFORM_CONFIG', value: terraformConfigYaml)
+                        text(name: 'TERRAFORM_CONFIG', value: terraformConfigYaml),
                         string(name: 'BRANCH', value: "${branch}"),
                         string(name: 'TEST_RUN_NAME', value: "${testTag}-${env.TEST_RUN_NAME}"),
                       ]
