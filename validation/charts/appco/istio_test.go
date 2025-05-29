@@ -30,12 +30,6 @@ func (i *IstioTestSuite) TearDownSuite() {
 	i.session.Cleanup()
 }
 
-func (i *IstioTestSuite) SetupTest() {
-	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
-	err := createIstioNamespace(i.client, i.cluster.ID)
-	require.NoError(i.T(), err)
-}
-
 func (i *IstioTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	i.session = testSession
@@ -52,15 +46,6 @@ func (i *IstioTestSuite) SetupSuite() {
 	require.NoError(i.T(), err)
 
 	i.cluster = cluster
-
-	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
-	err = createIstioNamespace(i.client, i.cluster.ID)
-	require.NoError(i.T(), err)
-
-	i.T().Logf("Creating %s secret", RancherIstioSecret)
-	logCmd, err := createIstioSecret(i.client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
-	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
 }
 
 func (i *IstioTestSuite) TestSideCarInstallation() {
@@ -69,6 +54,15 @@ func (i *IstioTestSuite) TestSideCarInstallation() {
 
 	client, err := i.client.WithSession(subSession)
 	require.NoError(i.T(), err)
+
+	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
+	err = createIstioNamespace(client, i.cluster.ID)
+	require.NoError(i.T(), err)
+
+	i.T().Logf("Creating %s secret", RancherIstioSecret)
+	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
+	require.NoError(i.T(), err)
+	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
 
 	i.T().Log("Installing SideCar Istio AppCo")
 	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
@@ -83,6 +77,15 @@ func (i *IstioTestSuite) TestAmbientInstallation() {
 
 	client, err := i.client.WithSession(subSession)
 	require.NoError(i.T(), err)
+
+	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
+	err = createIstioNamespace(client, i.cluster.ID)
+	require.NoError(i.T(), err)
+
+	i.T().Logf("Creating %s secret", RancherIstioSecret)
+	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
+	require.NoError(i.T(), err)
+	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
 
 	ambientSets := `--set cni.enabled=true,ztunnel.enabled=true --set istiod.cni.enabled=false --set cni.profile=ambient,istiod.profile=ambient,ztunnel.profile=ambient`
 
@@ -100,6 +103,15 @@ func (i *IstioTestSuite) TestGatewayStandaloneInstallation() {
 	client, err := i.client.WithSession(subSession)
 	require.NoError(i.T(), err)
 
+	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
+	err = createIstioNamespace(client, i.cluster.ID)
+	require.NoError(i.T(), err)
+
+	i.T().Logf("Creating %s secret", RancherIstioSecret)
+	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
+	require.NoError(i.T(), err)
+	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
+
 	gatewaySets := `--set base.enabled=false,istiod.enabled=false --set gateway.enabled=true,gateway.namespaceOverride=default`
 
 	i.T().Log("Installing Gateway Standalone Istio AppCo")
@@ -116,6 +128,15 @@ func (i *IstioTestSuite) TestGatewayDiffNamespaceInstallation() {
 	client, err := i.client.WithSession(subSession)
 	require.NoError(i.T(), err)
 
+	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
+	err = createIstioNamespace(client, i.cluster.ID)
+	require.NoError(i.T(), err)
+
+	i.T().Logf("Creating %s secret", RancherIstioSecret)
+	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
+	require.NoError(i.T(), err)
+	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
+
 	gatewayNamespaceSets := `--set gateway.enabled=true,gateway.namespaceOverride=default`
 
 	i.T().Log("Installing Gateway Namespace Istio AppCo")
@@ -131,6 +152,15 @@ func (i *IstioTestSuite) TestCanaryUpgrade() {
 
 	client, err := i.client.WithSession(subSession)
 	require.NoError(i.T(), err)
+
+	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
+	err = createIstioNamespace(client, i.cluster.ID)
+	require.NoError(i.T(), err)
+
+	i.T().Logf("Creating %s secret", RancherIstioSecret)
+	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
+	require.NoError(i.T(), err)
+	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
 
 	i.T().Log("Installing SideCar Istio AppCo")
 	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
@@ -162,6 +192,15 @@ func (i *IstioTestSuite) TestInPlaceUpgrade() {
 
 	client, err := i.client.WithSession(subSession)
 	require.NoError(i.T(), err)
+
+	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
+	err = createIstioNamespace(client, i.cluster.ID)
+	require.NoError(i.T(), err)
+
+	i.T().Logf("Creating %s secret", RancherIstioSecret)
+	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
+	require.NoError(i.T(), err)
+	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
 
 	i.T().Log("Installing SideCar Istio AppCo")
 	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
