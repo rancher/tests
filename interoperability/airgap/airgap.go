@@ -102,7 +102,7 @@ func TfpSetupSuite(t *testing.T) (map[string]any, *rancher.Config, *terraform.Op
 	require.NoError(t, err)
 
 	// TODO: Add variable for dynamic provider assignment
-	keyPath := rancher2.SetKeyPath(keypath.RancherKeyPath, "aws")
+	keyPath, _ := rancher2.SetKeyPath(keypath.RancherKeyPath, "aws")
 	terraformOptions := framework.Setup(t, terraformConfig, terratestConfig, keyPath)
 
 	return cattleConfig, rancherConfig, terraformOptions, terraformConfig, terratestConfig
