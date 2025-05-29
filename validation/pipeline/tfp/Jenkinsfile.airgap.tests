@@ -166,12 +166,26 @@ node {
                         }
             
                         stage('Cleanup terraform resources'){
-                            sh """
-                            docker run --rm -v ./root/go/src/github.com/rancher/tfp-automation/modules/airgap:/terraform-files \
-                                -w /terraform-files hashicorp/terraform:latest \
-                                 destroy -auto-approve
-                            """
-                         } //cleanup
+                        try {
+                            dir ("./") {
+                                sh """
+                                docker run --rm \
+                                    -v \$(pwd)/airgap:/terraform-files \
+                                    -e AWS_ACCESS_KEY_ID='${AWS_ACCESS_KEY_ID}' \
+                                    -e AWS_SECRET_ACCESS_KEY='${AWS_SECRET_ACCESS_KEY}' \
+                                    -w /terraform-files \
+                                    hashicorp/terraform:latest \
+                                    destroy -auto-approve
+                                """
+                             }
+                         }
+                         catch(err) {
+                            echo "${err} captured"
+                         }
+                         sh "docker stop ${testContainer}"
+                         sh "docker volume rm ${validationVolume} || true"
+                         sh "docker rm ${testContainer} || true"
+                        }//cleanup
                     }//dir
                 } //params
             } //credentials
