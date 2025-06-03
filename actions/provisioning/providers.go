@@ -27,6 +27,7 @@ import (
 type CloudCredFunc func(rancherClient *rancher.Client, credentials cloudcredentials.CloudCredential) (*v1.SteveAPIObject, error)
 type MachinePoolFunc func(machineConfig machinepools.MachineConfigs, generatedPoolName, namespace string) []unstructured.Unstructured
 type MachineRolesFunc func(machineConfig machinepools.MachineConfigs) []machinepools.Roles
+type OSNameFunc func(client *rancher.Client, cloudCredential cloudcredentials.CloudCredential, machineConfigs machinepools.MachineConfigs) (string, error)
 
 type Provider struct {
 	Name                               provisioninginput.ProviderName
@@ -34,6 +35,7 @@ type Provider struct {
 	MachinePoolFunc                    MachinePoolFunc
 	CloudCredFunc                      CloudCredFunc
 	GetMachineRolesFunc                MachineRolesFunc
+	GetOSNameFunc                      OSNameFunc
 }
 
 // CreateProvider returns all machine and cloud credential
@@ -48,6 +50,7 @@ func CreateProvider(name string) Provider {
 			MachinePoolFunc:                    machinepools.NewAWSMachineConfig,
 			CloudCredFunc:                      aws.CreateAWSCloudCredentials,
 			GetMachineRolesFunc:                machinepools.GetAWSMachineRoles,
+			GetOSNameFunc:                      machinepools.GetAWSOSName,
 		}
 		return provider
 	case name == provisioninginput.AzureProviderName.String():

@@ -2158,8 +2158,6 @@ github.com/rancher/machine v0.15.0-rancher126 h1:bILP7WRWHO4Dl4u+MSiEy0xr6LU52BU
 github.com/rancher/machine v0.15.0-rancher126/go.mod h1:9D7LZbLqfNNbHsregTNpjC4oKi4zI6qA54KMzWPeVB4=
 github.com/rancher/norman v0.6.0 h1:8CyY9cVcw0L+YYZRGvXHPMENefLaDkmi6vpscrVjXew=
 github.com/rancher/norman v0.6.0/go.mod h1:CQ0/1CoEqbeJXvOXuRQvsmiBd7QIgxZG5IvQFOPAHOg=
-github.com/rancher/qase-go/client v0.0.0-20250512221624-5882395f8abc h1:AduH1eFqgtFJbVHoQN9b5y5wNQImWKwH5vuRrfgRSdI=
-github.com/rancher/qase-go/client v0.0.0-20250512221624-5882395f8abc/go.mod h1:NP3xboG+t2p+XMnrcrJ/L384Ki0Cp3Pww/X+vm5Jcy0=
 github.com/rancher/rancher v0.0.0-20250228094653-6e82729d08cf h1:39Q+/QI0HS+QTN8C/NxEIZzU5AcW5ohcN1NvYBpvamM=
 github.com/rancher/rancher v0.0.0-20250228094653-6e82729d08cf/go.mod h1:v1aTXutrt68WFuNPG9CsiXT8eJTTi76D2Sy8cC0DTJg=
 github.com/rancher/rancher/pkg/apis v0.0.0-20250410003522-2a1bf3d05723 h1:IVPo5J/hfpMVXRnUemX21wbBWDkvE9gXC/WWZENVw10=
@@ -2256,6 +2254,8 @@ github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOf
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69rRypqCw=
 github.com/substrait-io/substrait-go v0.4.2/go.mod h1:qhpnLmrcvAnlZsUyPXZRqldiHapPTXC3t7xFgDi3aQg=
+github.com/susesgartner/qase-go/client v0.0.0-20250616204327-816fc5f30af0 h1:qj2UqtEO2IiagerBOZT/SXcLHyp/ilRiOoUk7uAhwas=
+github.com/susesgartner/qase-go/client v0.0.0-20250616204327-816fc5f30af0/go.mod h1:NP3xboG+t2p+XMnrcrJ/L384Ki0Cp3Pww/X+vm5Jcy0=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75/go.mod h1:KO6IkyS8Y3j8OdNO85qEYBsRPuteD+YciPomcXdrMnk=

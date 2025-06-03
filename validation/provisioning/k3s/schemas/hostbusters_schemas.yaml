@@ -1,0 +1,157 @@
+project: RRT
+schemaFile: /Users/sgartner/go/src/github.com/susesgartner/tests/validation/provisioning/k3s/schemas/hostbusters_schemas.yaml
+suites:
+- suite: Provisioning/K3S
+  cases:
+  - description: Provisions a 1 node all roles k3s node driver cluster
+    title: 1_node_|_etcd_cp_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+    - title: K8sVersion
+      values:
+      - v1.32.5+k3s1
+    - title: CNI
+      values:
+      - calico
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision k3s cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 1 node all roles k3s node driver cluster
+    title: 2_nodes_|_etcd_cp_|_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+    - title: K8sVersion
+      values:
+      - v1.32.5+k3s1
+    - title: CNI
+      values:
+      - calico
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision k3s cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 1 node all roles k3s node driver cluster
+    title: 3_nodes_|_etcd_|_cp_|_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+    - title: K8sVersion
+      values:
+      - v1.32.5+k3s1
+    - title: CNI
+      values:
+      - calico
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision k3s cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 1 node all roles k3s node driver cluster
+    title: 8_nodes_|_3_etcd_|_2_cp_|_3_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+    - title: K8sVersion
+      values:
+      - v1.32.5+k3s1
+    - title: CNI
+      values:
+      - calico
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision k3s cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

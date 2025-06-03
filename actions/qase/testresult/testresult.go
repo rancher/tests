@@ -1,4 +1,4 @@
-package testcase
+package testresult
 
 // GoTestOutput is the JSON output from gotestsum, this what is used to parse go test results.
 type GoTestOutput struct {
@@ -10,9 +10,10 @@ type GoTestOutput struct {
 	Elapsed string `json:"Elapsed" yaml:"Elapsed"`
 }
 
-// GoTestCase is the struct used for sending the appropriate API call to Qase
-type GoTestCase struct {
+// GoTestResult is the struct for holding test results
+type GoTestResult struct {
 	Name       string
+	Package    string
 	TestSuite  []string
 	Status     string
 	StackTrace string

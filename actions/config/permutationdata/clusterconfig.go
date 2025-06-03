@@ -6,20 +6,13 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/config/operations/permutations"
+	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/sirupsen/logrus"
-)
-
-const (
-	clusterConfigKey = "clusterConfig"
-	nodeProvidersKey = "nodeProvider"
-	providerKey      = "provider"
-	k8sVersionKey    = "kubernetesVersion"
-	cniKey           = "cni"
 )
 
 // CreateK8sPermutation creates a permutation for k8s version and sets defaults
 func CreateK8sPermutation(client *rancher.Client, k8sType string, config map[string]any) (*permutations.Permutation, error) {
-	k8sKeyPath := []string{clusterConfigKey, k8sVersionKey}
+	k8sKeyPath := []string{defaults.ClusterConfigKey, defaults.K8SVersionKey}
 	k8sKeyValue, err := operations.GetValue(k8sKeyPath, config)
 	if err != nil {
 		return nil, err
@@ -71,7 +64,7 @@ func CreateK8sPermutation(client *rancher.Client, k8sType string, config map[str
 
 // CreateProviderPermutation creates a permutation for the provider
 func CreateProviderPermutation(config map[string]any) (*permutations.Permutation, error) {
-	providerKeyPath := []string{clusterConfigKey, providerKey}
+	providerKeyPath := []string{defaults.ClusterConfigKey, defaults.ProviderKey}
 	providerKeyValue, err := operations.GetValue(providerKeyPath, config)
 	if err != nil {
 		return nil, err
@@ -88,7 +81,7 @@ func CreateProviderPermutation(config map[string]any) (*permutations.Permutation
 
 // CreateCNIPermutation creates a permutation for the CNI
 func CreateCNIPermutation(config map[string]any) (*permutations.Permutation, error) {
-	cniKeyPath := []string{clusterConfigKey, cniKey}
+	cniKeyPath := []string{defaults.ClusterConfigKey, defaults.CNIKey}
 	cniKeyValue, err := operations.GetValue(cniKeyPath, config)
 	if err != nil {
 		return nil, err

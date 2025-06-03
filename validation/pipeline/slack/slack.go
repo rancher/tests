@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/rancher/norman/httperror"
-	"github.com/rancher/tests/validation/pipeline/qase/testcase"
+	"github.com/rancher/tests/actions/qase/testresult"
 )
 
 var (
@@ -29,7 +29,7 @@ type Block struct {
 	BlockID string `json:"block_id"`
 }
 
-func setupTestSlackBlocks(testCaseSlice []*testcase.GoTestCase, runID int64, testRunName string) []Block {
+func setupTestSlackBlocks(testCaseSlice []*testresult.GoTestResult, runID int64, testRunName string) []Block {
 	var testSuite string
 	var blockSlice []Block
 
@@ -70,7 +70,7 @@ func setupTestSlackBlocks(testCaseSlice []*testcase.GoTestCase, runID int64, tes
 }
 
 // PostSlackMesasge is a function that posts the end to end validation results to our specified slack channel
-func PostSlackMessage(testCaseSlice []*testcase.GoTestCase, runID int64, testRunName string) error {
+func PostSlackMessage(testCaseSlice []*testresult.GoTestResult, runID int64, testRunName string) error {
 	slackBlocks := setupTestSlackBlocks(testCaseSlice, runID, testRunName)
 
 	bodyContent, err := json.Marshal(struct {

@@ -1,6 +1,9 @@
 package machinepools
 
 import (
+	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	"github.com/rancher/tests/actions/nodes/ec2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -70,4 +73,15 @@ func GetAWSMachineRoles(machineConfigs MachineConfigs) []Roles {
 	}
 
 	return allRoles
+}
+
+func GetAWSOSName(client *rancher.Client, cloudCredential cloudcredentials.CloudCredential, machineConfigs MachineConfigs) (string, error) {
+	amiInfo, err := ec2.GetAMI(client, cloudCredential.AmazonEC2CredentialConfig, machineConfigs.AmazonEC2MachineConfigs.AWSMachineConfig[0].AMI)
+	if err != nil {
+		return "", err
+	}
+
+	osName := *amiInfo.Images[0].Name
+
+	return osName, nil
 }
