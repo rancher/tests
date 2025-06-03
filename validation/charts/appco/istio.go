@@ -7,34 +7,37 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	extencharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/kubectl"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/charts"
-	kubeapiNamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	RancherIstioSecret string = "application-collection"
+	ExpectedDeployLog                                  = "deployed"
+	IstioCanaryRevisionApp                             = "istiod-canary"
+	RancherIstioSecretName                      string = `application-collection`
+	IstioAmbientModeSet                         string = `--set cni.enabled=true,ztunnel.enabled=true --set istiod.cni.enabled=false --set cni.profile=ambient,istiod.profile=ambient,ztunnel.profile=ambient`
+	IstioGatewayModeSet                         string = `--set base.enabled=false,istiod.enabled=false --set gateway.enabled=true,gateway.namespaceOverride=default`
+	IstioGatewayDiffNamespaceModeSet            string = `--set gateway.enabled=true,gateway.namespaceOverride=default`
+	IstioCanaryUpgradeSet                       string = `--set istiod.revision=canary,base.defaultRevision=canary,gateway.namespaceOverride=default`
+	createIstioSecretCommand                    string = `kubectl create secret docker-registry %s --docker-server=dp.apps.rancher.io --docker-username=%s --docker-password=%s -n %s`
+	watchAndwaitInstallIstioAppCoCommand        string = `helm registry login dp.apps.rancher.io -u %s -p %s && helm install %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s} %s`
+	watchAndwaitUpgradeIstioAppCoUpgradeCommand string = `helm registry login dp.apps.rancher.io -u %s -p %s && helm upgrade %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s} %s`
+	getPodsMetadataNameCommand                  string = `kubectl -n %s get pod -o jsonpath='{.items..metadata.name}'`
+	logBufferSize                               string = `2MB`
 )
 
-func createIstioNamespace(client *rancher.Client, clusterID string) error {
-	_, err := kubeapiNamespaces.CreateNamespace(client, clusterID, namegen.AppendRandomString("testns"), charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{})
-	return err
-}
-
 func createIstioSecret(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string) (string, error) {
-	secretCommand := strings.Split(fmt.Sprintf("kubectl create secret docker-registry %s --docker-server=dp.apps.rancher.io --docker-username=%s --docker-password=%s -n %s", RancherIstioSecret, appCoUsername, appCoToken, charts.RancherIstioNamespace), " ")
-	logCmd, err := kubectl.Command(client, nil, clusterID, secretCommand, "")
-	return logCmd, err
+	secretCommand := strings.Split(fmt.Sprintf(createIstioSecretCommand, RancherIstioSecretName, appCoUsername, appCoToken, charts.RancherIstioNamespace), " ")
+	return kubectl.Command(client, nil, clusterID, secretCommand, "")
 }
 
-func installIstioAppCo(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string, sets string) (*extencharts.ChartStatus, string, error) {
+func watchAndwaitInstallIstioAppCo(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string, sets string) (*extencharts.ChartStatus, string, error) {
 	istioAppCoCommand := []string{
 		"sh", "-c",
-		fmt.Sprintf(`helm registry login dp.apps.rancher.io -u %s -p %s && helm install %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s} %s`, appCoUsername, appCoToken, charts.RancherIstioName, charts.RancherIstioNamespace, RancherIstioSecret, sets),
+		fmt.Sprintf(watchAndwaitInstallIstioAppCoCommand, appCoUsername, appCoToken, charts.RancherIstioName, charts.RancherIstioNamespace, RancherIstioSecretName, sets),
 	}
 
-	logCmd, err := kubectl.Command(client, nil, clusterID, istioAppCoCommand, "2MB")
+	logCmd, err := kubectl.Command(client, nil, clusterID, istioAppCoCommand, logBufferSize)
 
 	if err != nil {
 		return nil, logCmd, err
@@ -53,13 +56,13 @@ func installIstioAppCo(client *rancher.Client, clusterID string, appCoUsername s
 	return istioChart, logCmd, err
 }
 
-func upgradeIstioAppCo(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string, sets string) (*extencharts.ChartStatus, string, error) {
+func watchAndwaitUpgradeIstioAppCo(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string, sets string) (*extencharts.ChartStatus, string, error) {
 	istioAppCoCommand := []string{
 		"sh", "-c",
-		fmt.Sprintf(`helm registry login dp.apps.rancher.io -u %s -p %s && helm upgrade %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s} %s`, appCoUsername, appCoToken, charts.RancherIstioName, charts.RancherIstioNamespace, RancherIstioSecret, sets),
+		fmt.Sprintf(watchAndwaitUpgradeIstioAppCoUpgradeCommand, appCoUsername, appCoToken, charts.RancherIstioName, charts.RancherIstioNamespace, RancherIstioSecretName, sets),
 	}
 
-	logCmd, err := kubectl.Command(client, nil, clusterID, istioAppCoCommand, "2MB")
+	logCmd, err := kubectl.Command(client, nil, clusterID, istioAppCoCommand, logBufferSize)
 	if err != nil {
 		return nil, logCmd, err
 	}
@@ -75,4 +78,13 @@ func upgradeIstioAppCo(client *rancher.Client, clusterID string, appCoUsername s
 	}
 
 	return istioChart, logCmd, err
+}
+
+func verifyCanaryRevision(client *rancher.Client, clusterID string) (string, error) {
+	getCanaryCommand := []string{
+		"sh", "-c",
+		fmt.Sprintf(getPodsMetadataNameCommand, charts.RancherIstioNamespace),
+	}
+
+	return kubectl.Command(client, nil, clusterID, getCanaryCommand, logBufferSize)
 }

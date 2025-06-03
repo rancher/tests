@@ -1,22 +1,17 @@
 package appco
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/kubectl"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
+	kubeapinamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-)
-
-const (
-	expectedDeployLog = "deployed"
-	canaryRevisionApp = "istiod-canary"
 )
 
 type IstioTestSuite struct {
@@ -56,18 +51,18 @@ func (i *IstioTestSuite) TestSideCarInstallation() {
 	require.NoError(i.T(), err)
 
 	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
-	err = createIstioNamespace(client, i.cluster.ID)
+	_, err = kubeapinamespaces.CreateNamespace(client, i.cluster.ID, namegen.AppendRandomString("testns"), charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{})
 	require.NoError(i.T(), err)
 
-	i.T().Logf("Creating %s secret", RancherIstioSecret)
+	i.T().Logf("Creating %s secret", RancherIstioSecretName)
 	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
+	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecretName))
 
 	i.T().Log("Installing SideCar Istio AppCo")
-	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
+	istioChart, logCmd, err := watchAndwaitInstallIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
+	require.True(i.T(), strings.Contains(logCmd, ExpectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 }
 
@@ -79,18 +74,16 @@ func (i *IstioTestSuite) TestAmbientInstallation() {
 	require.NoError(i.T(), err)
 
 	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
-	err = createIstioNamespace(client, i.cluster.ID)
+	_, err = kubeapinamespaces.CreateNamespace(client, i.cluster.ID, namegen.AppendRandomString("testns"), charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{})
 	require.NoError(i.T(), err)
 
-	i.T().Logf("Creating %s secret", RancherIstioSecret)
+	i.T().Logf("Creating %s secret", RancherIstioSecretName)
 	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
-
-	ambientSets := `--set cni.enabled=true,ztunnel.enabled=true --set istiod.cni.enabled=false --set cni.profile=ambient,istiod.profile=ambient,ztunnel.profile=ambient`
+	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecretName))
 
 	i.T().Log("Installing Ambient Istio AppCo")
-	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, ambientSets)
+	istioChart, logCmd, err := watchAndwaitInstallIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, IstioAmbientModeSet)
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, "deployed"))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
@@ -104,20 +97,18 @@ func (i *IstioTestSuite) TestGatewayStandaloneInstallation() {
 	require.NoError(i.T(), err)
 
 	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
-	err = createIstioNamespace(client, i.cluster.ID)
+	_, err = kubeapinamespaces.CreateNamespace(client, i.cluster.ID, namegen.AppendRandomString("testns"), charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{})
 	require.NoError(i.T(), err)
 
-	i.T().Logf("Creating %s secret", RancherIstioSecret)
+	i.T().Logf("Creating %s secret", RancherIstioSecretName)
 	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
-
-	gatewaySets := `--set base.enabled=false,istiod.enabled=false --set gateway.enabled=true,gateway.namespaceOverride=default`
+	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecretName))
 
 	i.T().Log("Installing Gateway Standalone Istio AppCo")
-	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, gatewaySets)
+	istioChart, logCmd, err := watchAndwaitInstallIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, IstioGatewayModeSet)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
+	require.True(i.T(), strings.Contains(logCmd, ExpectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 }
 
@@ -129,24 +120,22 @@ func (i *IstioTestSuite) TestGatewayDiffNamespaceInstallation() {
 	require.NoError(i.T(), err)
 
 	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
-	err = createIstioNamespace(client, i.cluster.ID)
+	_, err = kubeapinamespaces.CreateNamespace(client, i.cluster.ID, namegen.AppendRandomString("testns"), charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{})
 	require.NoError(i.T(), err)
 
-	i.T().Logf("Creating %s secret", RancherIstioSecret)
+	i.T().Logf("Creating %s secret", RancherIstioSecretName)
 	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
-
-	gatewayNamespaceSets := `--set gateway.enabled=true,gateway.namespaceOverride=default`
+	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecretName))
 
 	i.T().Log("Installing Gateway Namespace Istio AppCo")
-	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, gatewayNamespaceSets)
+	istioChart, logCmd, err := watchAndwaitInstallIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, IstioGatewayDiffNamespaceModeSet)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
+	require.True(i.T(), strings.Contains(logCmd, ExpectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 }
 
-func (i *IstioTestSuite) TestCanaryUpgrade() {
+func (i *IstioTestSuite) TestInstallWithCanaryUpgrade() {
 	subSession := i.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -154,36 +143,30 @@ func (i *IstioTestSuite) TestCanaryUpgrade() {
 	require.NoError(i.T(), err)
 
 	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
-	err = createIstioNamespace(client, i.cluster.ID)
+	_, err = kubeapinamespaces.CreateNamespace(client, i.cluster.ID, namegen.AppendRandomString("testns"), charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{})
 	require.NoError(i.T(), err)
 
-	i.T().Logf("Creating %s secret", RancherIstioSecret)
+	i.T().Logf("Creating %s secret", RancherIstioSecretName)
 	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
+	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecretName))
 
 	i.T().Log("Installing SideCar Istio AppCo")
-	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
+	istioChart, logCmd, err := watchAndwaitInstallIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
+	require.True(i.T(), strings.Contains(logCmd, ExpectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Running Canary Istio AppCo Upgrade")
-	istioChart, logCmd, err = upgradeIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "--set istiod.revision=canary,base.defaultRevision=canary")
+	istioChart, logCmd, err = watchAndwaitUpgradeIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, IstioCanaryUpgradeSet)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
+	require.True(i.T(), strings.Contains(logCmd, ExpectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Verifying if istio-ingress gateway is using the canary revision")
-	getCanaryCommand := []string{
-		"sh", "-c",
-		fmt.Sprintf(`kubectl -n %s get pod -o jsonpath='{.items..metadata.name}'`, charts.RancherIstioNamespace),
-	}
-
-	appName := canaryRevisionApp
-	logCmd, err = kubectl.Command(client, nil, i.cluster.ID, getCanaryCommand, "2MB")
+	logCmd, err = verifyCanaryRevision(client, i.cluster.ID)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, appName))
+	require.True(i.T(), strings.Contains(logCmd, IstioCanaryRevisionApp))
 }
 
 func (i *IstioTestSuite) TestInPlaceUpgrade() {
@@ -194,24 +177,24 @@ func (i *IstioTestSuite) TestInPlaceUpgrade() {
 	require.NoError(i.T(), err)
 
 	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
-	err = createIstioNamespace(client, i.cluster.ID)
+	_, err = kubeapinamespaces.CreateNamespace(client, i.cluster.ID, namegen.AppendRandomString("testns"), charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{})
 	require.NoError(i.T(), err)
 
-	i.T().Logf("Creating %s secret", RancherIstioSecret)
+	i.T().Logf("Creating %s secret", RancherIstioSecretName)
 	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecret))
+	require.True(i.T(), strings.Contains(logCmd, RancherIstioSecretName))
 
 	i.T().Log("Installing SideCar Istio AppCo")
-	istioChart, logCmd, err := installIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
+	istioChart, logCmd, err := watchAndwaitInstallIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
+	require.True(i.T(), strings.Contains(logCmd, ExpectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 
 	i.T().Log("Running In Place Istio AppCo Upgrade")
-	istioChart, logCmd, err = upgradeIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
+	istioChart, logCmd, err = watchAndwaitUpgradeIstioAppCo(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
+	require.True(i.T(), strings.Contains(logCmd, ExpectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 }
 
