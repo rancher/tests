@@ -8,12 +8,15 @@ import (
 
 const (
 	ClusterConfigKey = "clusterConfig"
-	k8sVersionKey    = "kubernetesVersion"
+	AWSEC2Configs    = "awsEC2Configs"
+	K8SVersionKey    = "kubernetesVersion"
+	CNIKey           = "cni"
+	ProviderKey      = "provider"
 )
 
 // SetK8sDefault sets the k8s version to the latest version in the cattleConfig
 func SetK8sDefault(client *rancher.Client, k8sType string, cattleConfig map[string]any) (map[string]any, error) {
-	k8sKeyPath := []string{ClusterConfigKey, k8sVersionKey}
+	k8sKeyPath := []string{ClusterConfigKey, K8SVersionKey}
 	k8sKeyValue, err := operations.GetValue(k8sKeyPath, cattleConfig)
 	if err != nil {
 		return nil, err

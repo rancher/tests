@@ -60,9 +60,9 @@ func (s *RKE1NodeScalingTestSuite) TestScalingRKE1NodePools() {
 		nodeRoles nodepools.NodeRoles
 		client    *rancher.Client
 	}{
-		{"Scaling control plane by 1", nodeRolesControlPlane, s.client},
-		{"Scaling etcd node by 1", nodeRolesEtcd, s.client},
-		{"Scaling worker by 1", nodeRolesWorker, s.client},
+		{"RKE1_Node_Driver_Scale_Control_Plane", nodeRolesControlPlane, s.client},
+		{"RKE1_Node_Driver_Scale_ETCD", nodeRolesEtcd, s.client},
+		{"RKE1_Node_Driver_Scale_Worker", nodeRolesWorker, s.client},
 	}
 
 	for _, tt := range tests {

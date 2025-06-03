@@ -20,6 +20,7 @@ import (
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/qase"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -110,7 +111,7 @@ func (r *RKE2ACETestSuite) TestProvisioningRKE2ClusterACE() {
 		machinePools []provisioninginput.MachinePools
 		client       *rancher.Client
 	}{
-		{"Multiple Control Planes - Standard", nodeRoles0, r.standardUserClient},
+		{"ACE|etcd|3_cp|worker", nodeRoles0, r.standardUserClient},
 	}
 	// Test is obsolete when ACE is not set.
 	for _, tt := range tests {
@@ -133,6 +134,12 @@ func (r *RKE2ACETestSuite) TestProvisioningRKE2ClusterACE() {
 		require.NoError(r.T(), err)
 
 		provisioning.VerifyCluster(r.T(), client, clusterConfig, clusterObject)
+
+		params, err := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
+		require.NoError(r.T(), err)
+
+		err = qase.UpdateSchemaParameters(tt.name, params)
+		require.NoError(r.T(), err)
 	}
 }
 

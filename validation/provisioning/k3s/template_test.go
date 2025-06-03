@@ -64,20 +64,31 @@ func (r *ClusterTemplateTestSuite) SetupSuite() {
 }
 
 func (r *ClusterTemplateTestSuite) TestProvisionK3STemplateCluster() {
-	_, err := steve.CreateAndWaitForResource(r.client, namespaces.FleetLocal+"/"+localCluster, stevetypes.ClusterRepo, r.templateConfig.Repo, stevestates.Active, 5*time.Second, defaults.FiveMinuteTimeout)
-	require.NoError(r.T(), err)
+	tests := []struct {
+		name   string
+		client *rancher.Client
+	}{
+		{"K3S_Template|etcd|cp|worker", r.standardUserClient},
+	}
 
-	k8sversions, err := kubernetesversions.Default(r.client, providerName, nil)
-	require.NoError(r.T(), err)
+	for _, tt := range tests {
+		r.Run(tt.name, func() {
+			_, err := steve.CreateAndWaitForResource(r.client, namespaces.FleetLocal+"/"+localCluster, stevetypes.ClusterRepo, r.templateConfig.Repo, stevestates.Active, 5*time.Second, defaults.FiveMinuteTimeout)
+			require.NoError(r.T(), err)
 
-	clusterName := namegenerator.AppendRandomString(providerName + "-template")
-	err = charts.InstallTemplateChart(r.client, r.templateConfig.Repo.ObjectMeta.Name, r.templateConfig.TemplateName, clusterName, k8sversions[0], r.cloudCredentials)
-	require.NoError(r.T(), err)
+			k8sversions, err := kubernetesversions.Default(r.client, providerName, nil)
+			require.NoError(r.T(), err)
 
-	_, cluster, err := clusters.GetProvisioningClusterByName(r.client, clusterName, fleetNamespace)
-	require.NoError(r.T(), err)
+			clusterName := namegenerator.AppendRandomString(providerName + "-template")
+			err = charts.InstallTemplateChart(r.client, r.templateConfig.Repo.ObjectMeta.Name, r.templateConfig.TemplateName, clusterName, k8sversions[0], r.cloudCredentials)
+			require.NoError(r.T(), err)
 
-	provisioning.VerifyCluster(r.T(), r.client, nil, cluster)
+			_, cluster, err := clusters.GetProvisioningClusterByName(r.client, clusterName, fleetNamespace)
+			require.NoError(r.T(), err)
+
+			provisioning.VerifyCluster(r.T(), r.client, nil, cluster)
+		})
+	}
 }
 
 // In order for 'go test' to run this suite, we need to create

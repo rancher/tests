@@ -3,15 +3,14 @@
 package deleting
 
 import (
-	"strings"
 	"testing"
 
-	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
-	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioning"
+
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -38,45 +37,36 @@ func (c *ClusterDeleteTestSuite) SetupSuite() {
 
 func (c *ClusterDeleteTestSuite) TestDeletingCluster() {
 	tests := []struct {
-		name   string
-		client *rancher.Client
+		name        string
+		clusterType string
+		client      *rancher.Client
 	}{
-		{"cluster", c.client},
+		{"RKE1_Delete_Cluster", "rke1", c.client},
+		{"RKE2_Delete_Cluster", "rke2", c.client},
+		{"K3S_Delete_Cluster", "k3s", c.client},
 	}
 
 	for _, tt := range tests {
-		clusterID, err := clusters.GetV1ProvisioningClusterByName(c.client, c.client.RancherConfig.ClusterName)
+		clusterID, err := clusters.GetV1ProvisioningClusterByName(tt.client, tt.client.RancherConfig.ClusterName)
 		require.NoError(c.T(), err)
 
-		cluster, err := c.client.Steve.SteveType(clusters.ProvisioningSteveResourceType).ByID(clusterID)
+		existingClusterType, err := actionsClusters.GetClusterType(tt.client, tt.client.RancherConfig.ClusterName)
 		require.NoError(c.T(), err)
 
-		spec := &apisV1.ClusterSpec{}
-		err = steveV1.ConvertToK8sType(cluster.Spec, spec)
-		require.NoError(c.T(), err)
-
-		if strings.Contains(spec.KubernetesVersion, "-rancher") || len(spec.KubernetesVersion) == 0 {
-			tt.name = "Deleting RKE1 " + tt.name
-
-			clusterID, err = clusters.GetClusterIDByName(c.client, c.client.RancherConfig.ClusterName)
-			require.NoError(c.T(), err)
-
-			c.Run(tt.name, func() {
-				clusters.DeleteRKE1Cluster(tt.client, clusterID)
-				provisioning.VerifyDeleteRKE1Cluster(c.T(), tt.client, clusterID)
-			})
-		} else {
-			if strings.Contains(spec.KubernetesVersion, "k3s") {
-				tt.name = "Deleting K3S " + tt.name
-			} else {
-				tt.name = "Deleting RKE2 " + tt.name
+		c.Run(tt.name, func() {
+			if tt.clusterType != existingClusterType {
+				c.T().Skipf("Cluster type is not %s", tt.clusterType)
 			}
 
-			c.Run(tt.name, func() {
+			if tt.clusterType == "rke1" {
+				clusters.DeleteRKE1Cluster(tt.client, clusterID)
+				provisioning.VerifyDeleteRKE1Cluster(c.T(), tt.client, clusterID)
+			} else {
 				clusters.DeleteK3SRKE2Cluster(tt.client, clusterID)
 				provisioning.VerifyDeleteRKE2K3SCluster(c.T(), tt.client, clusterID)
-			})
-		}
+			}
+
+		})
 	}
 }
 

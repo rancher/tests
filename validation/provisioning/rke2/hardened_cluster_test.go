@@ -22,6 +22,7 @@ import (
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/reports"
 	cis "github.com/rancher/tests/validation/provisioning/resources/cisbenchmark"
 	"github.com/stretchr/testify/require"
@@ -90,8 +91,9 @@ func (c *HardenedRKE2ClusterProvisioningTestSuite) TestProvisioningRKE2HardenedC
 		machinePools    []provisioninginput.MachinePools
 		scanProfileName string
 	}{
-		{"CIS 1.9 Profile " + provisioninginput.StandardClientName.String(), c.client, nodeRolesStandard, "rke2-cis-1.9-profile"},
+		{"RKE2_CIS_1.9_Profile|3_etcd|2_cp|3_worker", c.client, nodeRolesStandard, "rke2-cis-1.9-profile"},
 	}
+
 	for _, tt := range tests {
 		c.Run(tt.name, func() {
 
@@ -131,6 +133,12 @@ func (c *HardenedRKE2ClusterProvisioningTestSuite) TestProvisioningRKE2HardenedC
 			cis.SetupCISBenchmarkChart(tt.client, c.project.ClusterID, c.chartInstallOptions, charts.CISBenchmarkNamespace)
 			cis.RunCISScan(tt.client, c.project.ClusterID, tt.scanProfileName)
 		})
+
+		params, err := provisioning.GetCustomSchemaParams(tt.client, c.cattleConfig)
+		require.NoError(c.T(), err)
+
+		err = qase.UpdateSchemaParameters(tt.name, params)
+		require.NoError(c.T(), err)
 	}
 }
 

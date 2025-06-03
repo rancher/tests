@@ -1,6 +1,11 @@
 package machinepools
 
 import (
+	"slices"
+
+	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	"github.com/rancher/tests/actions/nodes/ec2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -70,4 +75,22 @@ func GetAWSMachineRoles(machineConfigs MachineConfigs) []Roles {
 	}
 
 	return allRoles
+}
+
+// GetAWSOSNames connects to aws and converts each ami in the machineConfigs into the associated aws name
+func GetAWSOSNames(client *rancher.Client, cloudCredential cloudcredentials.CloudCredential, machineConfigs MachineConfigs) ([]string, error) {
+	var osNames []string
+	for _, machineConfig := range machineConfigs.AmazonEC2MachineConfigs.AWSMachineConfig {
+		amiInfo, err := ec2.GetAMI(client, cloudCredential.AmazonEC2CredentialConfig, machineConfig.AMI)
+		if err != nil {
+			return nil, err
+		}
+
+		osName := *amiInfo.Images[0].Name
+		if !slices.Contains(osNames, osName) {
+			osNames = append(osNames, osName)
+		}
+	}
+
+	return osNames, nil
 }

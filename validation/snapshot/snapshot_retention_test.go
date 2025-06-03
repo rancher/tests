@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/etcdsnapshot"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -91,18 +92,28 @@ func (s *SnapshotRetentionTestSuite) SetupSuite() {
 func (s *SnapshotRetentionTestSuite) TestAutomaticSnapshotRetention() {
 	tests := []struct {
 		testName                 string
+		clusterType              string
 		client                   *rancher.Client
 		clusterName              string
 		retentionLimit           int
 		intervalBetweenSnapshots int
 	}{
-		{"Retention limit test", s.client, s.snapshotConfig.ClusterName, 2, 1},
+		{"RKE1_Retention_Limit", "rke1", s.client, s.snapshotConfig.ClusterName, 2, 1},
+		{"RKE2_Retention_Limit", "rke2", s.client, s.snapshotConfig.ClusterName, 2, 1},
+		{"K3s_Retention_Limit", "k3s", s.client, s.snapshotConfig.ClusterName, 2, 1},
 	}
+
+	existingClusterType, err := actionsClusters.GetClusterType(s.client, s.client.RancherConfig.ClusterName)
+	require.NoError(s.T(), err)
 
 	for _, tt := range tests {
 		s.Run(tt.testName, func() {
+			if tt.clusterType != existingClusterType {
+				s.T().Skipf("Cluster type is not %s", tt.clusterType)
+			}
+
 			config := s.snapshotConfig
-			err := etcdsnapshot.CreateSnapshotsUntilRetentionLimit(s.client, config.ClusterName, config.SnapshotRetention, config.SnapshotInterval)
+			err := etcdsnapshot.CreateSnapshotsUntilRetentionLimit(tt.client, config.ClusterName, tt.retentionLimit, tt.intervalBetweenSnapshots)
 			require.NoError(s.T(), err)
 		})
 	}
