@@ -53,8 +53,8 @@ func (s *EKSNodeScalingTestSuite) TestScalingEKSNodePools() {
 		eksNodes eks.NodeGroupConfig
 		client   *rancher.Client
 	}{
-		{"Scaling EKS node group by 1", scaleOneNode, s.client},
-		{"Scaling EKS node group by 2", scaleTwoNodes, s.client},
+		{"EKS_Scale_Node_Group_By_1", scaleOneNode, s.client},
+		{"EKS_Scale_Node_Group_By_2", scaleTwoNodes, s.client},
 	}
 
 	for _, tt := range tests {

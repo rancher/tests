@@ -19,7 +19,7 @@ replace (
 	go.opentelemetry.io/otel/sdk => go.opentelemetry.io/otel/sdk v1.28.0
 	go.opentelemetry.io/otel/trace => go.opentelemetry.io/otel/trace v1.28.0
 	go.opentelemetry.io/proto/otlp => go.opentelemetry.io/proto/otlp v1.3.1
-	go.qase.io/client => github.com/rancher/qase-go/client v0.0.0-20231114201952-65195ec001fa
+	go.qase.io/client => github.com/rancher/qase-go/client v0.0.0-20250627195016-142ff3dfec16
 
 	helm.sh/helm/v3 => github.com/rancher/helm/v3 v3.16.1-rancher1
 	k8s.io/api => k8s.io/api v0.32.2
@@ -64,6 +64,7 @@ require (
 )
 
 require (
+	github.com/antihax/optional v1.0.0
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/pkg/errors v0.9.1
 	github.com/rancher/machine v0.15.0-rancher126
@@ -72,6 +73,7 @@ require (
 	github.com/rancher/wrangler v1.1.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
+	go.qase.io/client v0.0.0-20231114201952-65195ec001fa
 	golang.org/x/crypto v0.35.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.32.2

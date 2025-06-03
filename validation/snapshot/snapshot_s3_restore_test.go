@@ -3,13 +3,10 @@
 package snapshot
 
 import (
-	"strings"
 	"testing"
 
-	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
-	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
-	"github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/etcdsnapshot"
 
 	"github.com/rancher/shepherd/pkg/config"
@@ -52,34 +49,24 @@ func (s *S3SnapshotRestoreTestSuite) TestS3SnapshotRestore() {
 
 	tests := []struct {
 		name         string
+		clusterType  string
 		etcdSnapshot *etcdsnapshot.Config
 		client       *rancher.Client
 	}{
-		{"S3 Restore", snapshotRestoreNone, s.client},
+		{"RKE1_S3_Restore", "rke1", snapshotRestoreNone, s.client},
+		{"RKE2_S3_Restore", "rke2", snapshotRestoreNone, s.client},
+		{"K3S_S3_Restore", "k3s", snapshotRestoreNone, s.client},
 	}
 
+	existingClusterType, err := clusters.GetClusterType(s.client, s.client.RancherConfig.ClusterName)
+	require.NoError(s.T(), err)
+
 	for _, tt := range tests {
-		clusterID, err := clusters.GetV1ProvisioningClusterByName(s.client, s.client.RancherConfig.ClusterName)
-		require.NoError(s.T(), err)
-
-		cluster, err := s.client.Steve.SteveType(clusters.ProvisioningSteveResourceType).ByID(clusterID)
-		require.NoError(s.T(), err)
-
-		spec := &apisV1.ClusterSpec{}
-		err = steveV1.ConvertToK8sType(cluster.Spec, spec)
-		require.NoError(s.T(), err)
-
-		if strings.Contains(spec.KubernetesVersion, "-rancher") || len(spec.KubernetesVersion) == 0 {
-			tt.name = "RKE1 " + tt.name
-		} else {
-			if strings.Contains(spec.KubernetesVersion, "k3s") {
-				tt.name = "K3S " + tt.name
-			} else {
-				tt.name = "RKE2 " + tt.name
-			}
-		}
-
 		s.Run(tt.name, func() {
+			if tt.clusterType != existingClusterType {
+				s.T().Skipf("Cluster type is not %s", tt.clusterType)
+			}
+
 			err := etcdsnapshot.CreateAndValidateSnapshotRestore(s.client, s.client.RancherConfig.ClusterName, tt.etcdSnapshot, containerImage)
 			require.NoError(s.T(), err)
 		})

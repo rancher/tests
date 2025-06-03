@@ -66,9 +66,9 @@ func (s *RKE1NodeReplacingTestSuite) TestReplacingRKE1Nodes() {
 		nodeRoles nodepools.NodeRoles
 		client    *rancher.Client
 	}{
-		{"Replacing control plane nodes", nodeRolesControlPlane, s.client},
-		{"Replacing etcd nodes", nodeRolesEtcd, s.client},
-		{"Replacing worker nodes", nodeRolesWorker, s.client},
+		{"RKE1_Node_Driver_Replace_Control_Plane", nodeRolesControlPlane, s.client},
+		{"RKE1_Node_Driver_Replace_ETCD", nodeRolesEtcd, s.client},
+		{"RKE1_Node_Driver_Replace_Worker", nodeRolesWorker, s.client},
 	}
 
 	for _, tt := range tests {

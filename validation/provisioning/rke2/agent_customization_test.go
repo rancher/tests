@@ -20,6 +20,7 @@ import (
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/qase"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -120,8 +121,8 @@ func (r *RKE2AgentCustomizationTestSuite) TestProvisioningRKE2ClusterAgentCustom
 		client       *rancher.Client
 		agent        string
 	}{
-		{"Custom Fleet Agent - Standard User", productionPool, r.standardUserClient, customAgents[0]},
-		{"Custom Cluster Agent - Standard User", productionPool, r.standardUserClient, customAgents[1]},
+		{"Custom_Fleet_Agent", productionPool, r.standardUserClient, customAgents[0]},
+		{"Custom_Cluster_Agent", productionPool, r.standardUserClient, customAgents[1]},
 	}
 
 	for _, tt := range tests {
@@ -151,6 +152,12 @@ func (r *RKE2AgentCustomizationTestSuite) TestProvisioningRKE2ClusterAgentCustom
 
 		_, err = provisioning.CreateProvisioningCluster(client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 		require.NoError(r.T(), err)
+
+		params, err := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
+		require.NoError(r.T(), err)
+
+		err = qase.UpdateSchemaParameters(tt.name, params)
+		require.NoError(r.T(), err)
 	}
 }
 
@@ -178,8 +185,8 @@ func (r *RKE2AgentCustomizationTestSuite) TestFailureProvisioningRKE2ClusterAgen
 		client       *rancher.Client
 		agent        string
 	}{
-		{"Invalid Custom Fleet Agent - Standard User", productionPool, r.standardUserClient, customAgents[0]},
-		{"Invalid Custom Cluster Agent - Standard User", productionPool, r.standardUserClient, customAgents[1]},
+		{"Invalid_Custom_Fleet_Agent", productionPool, r.standardUserClient, customAgents[0]},
+		{"Invalid_Custom_Cluster_Agent", productionPool, r.standardUserClient, customAgents[1]},
 	}
 
 	for _, tt := range tests {
@@ -209,6 +216,12 @@ func (r *RKE2AgentCustomizationTestSuite) TestFailureProvisioningRKE2ClusterAgen
 
 		_, err = provisioning.CreateProvisioningCluster(client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 		require.Error(r.T(), err)
+
+		params, err := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
+		require.NoError(r.T(), err)
+
+		err = qase.UpdateSchemaParameters(tt.name, params)
+		require.NoError(r.T(), err)
 	}
 }
 

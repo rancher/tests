@@ -3,15 +3,13 @@
 package nodescaling
 
 import (
-	"strings"
 	"testing"
 
-	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
-	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/scalinginput"
 	"github.com/stretchr/testify/require"
@@ -70,40 +68,35 @@ func (s *CustomClusterNodeScalingTestSuite) TestScalingCustomClusterNodes() {
 	}
 
 	tests := []struct {
-		name      string
-		nodeRoles machinepools.NodeRoles
-		client    *rancher.Client
-		isWindows bool
+		name        string
+		clusterType string
+		nodeRoles   machinepools.NodeRoles
+		client      *rancher.Client
+		isWindows   bool
 	}{
-		{"control plane by 1", nodeRolesControlPlane, s.client, false},
-		{"etcd by 1", nodeRolesEtcd, s.client, false},
-		{"etcd and control plane by 1", nodeRolesEtcdControlPlane, s.client, false},
-		{"worker by 1", nodeRolesWorker, s.client, false},
-		{"Windows by 1", nodeRolesWindows, s.client, true},
+		{"RKE2_Custom_Scale_Control_Plane", "rke2", nodeRolesControlPlane, s.client, false},
+		{"RKE2_Custom_Scale_ETCD", "rke2", nodeRolesEtcd, s.client, false},
+		{"RKE2_Custom_Scale_Control_Plane_ETCD", "rke2", nodeRolesEtcdControlPlane, s.client, false},
+		{"RKE2_Custom_Scale_Worker", "rke2", nodeRolesWorker, s.client, false},
+		{"RKE2_Custom_Scale_Windows", "rke2", nodeRolesWindows, s.client, true},
+		{"K3S_Custom_Scale_Control_Plane", "k3s", nodeRolesControlPlane, s.client, false},
+		{"K3S_Custom_Scale_ETCD", "k3s", nodeRolesEtcd, s.client, false},
+		{"K3S_Custom_Scale_Control_Plane_ETCD", "k3s", nodeRolesEtcdControlPlane, s.client, false},
+		{"K3S_Custom_Scale_Worker", "k3s", nodeRolesWorker, s.client, false},
 	}
 
 	for _, tt := range tests {
 		clusterID, err := clusters.GetV1ProvisioningClusterByName(s.client, s.client.RancherConfig.ClusterName)
 		require.NoError(s.T(), err)
 
-		cluster, err := tt.client.Steve.SteveType(ProvisioningSteveResourceType).ByID(clusterID)
+		existingClusterType, err := actionsClusters.GetClusterType(tt.client, s.client.RancherConfig.ClusterName)
 		require.NoError(s.T(), err)
-
-		updatedCluster := new(apisV1.Cluster)
-		err = v1.ConvertToK8sType(cluster, &updatedCluster)
-		require.NoError(s.T(), err)
-
-		if strings.Contains(updatedCluster.Spec.KubernetesVersion, "rke2") {
-			tt.name = "Scaling custom RKE2 " + tt.name
-		} else if strings.Contains(updatedCluster.Spec.KubernetesVersion, "k3s") {
-			tt.name = "Scaling custom K3S " + tt.name
-
-			if tt.isWindows {
-				s.T().Skip("Skipping Windows tests")
-			}
-		}
 
 		s.Run(tt.name, func() {
+			if tt.clusterType != existingClusterType {
+				s.T().Skipf("Cluster type is not %s", tt.clusterType)
+			}
+
 			scalingRKE2K3SCustomClusterPools(s.T(), s.client, clusterID, s.scalingConfig.NodeProvider, tt.nodeRoles)
 		})
 	}

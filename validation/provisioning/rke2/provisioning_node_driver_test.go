@@ -24,6 +24,7 @@ import (
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/qase"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -103,11 +104,11 @@ func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2Cluster() {
 		isWindows    bool
 		runFlag      bool
 	}{
-		{"1 Node all roles " + provisioninginput.StandardClientName.String(), nodeRolesAll, r.standardUserClient, false, r.client.Flags.GetValue(environmentflag.Short) || r.client.Flags.GetValue(environmentflag.Long)},
-		{"2 nodes - etcd|cp roles per 1 node " + provisioninginput.StandardClientName.String(), nodeRolesShared, r.standardUserClient, false, r.client.Flags.GetValue(environmentflag.Short) || r.client.Flags.GetValue(environmentflag.Long)},
-		{"3 nodes - 1 role per node " + provisioninginput.StandardClientName.String(), nodeRolesDedicated, r.standardUserClient, false, r.client.Flags.GetValue(environmentflag.Long)},
-		{"4 nodes - 1 role per node + 1 Windows worker " + provisioninginput.StandardClientName.String(), nodeRolesWindows, r.standardUserClient, true, r.client.Flags.GetValue(environmentflag.Long)},
-		{"8 nodes - 3 etcd, 2 cp, 3 worker " + provisioninginput.StandardClientName.String(), nodeRolesStandard, r.standardUserClient, false, r.client.Flags.GetValue(environmentflag.Long)},
+		{"RKE2_Node_Driver|etcd_cp_worker", nodeRolesAll, r.standardUserClient, false, r.client.Flags.GetValue(environmentflag.Short) || r.client.Flags.GetValue(environmentflag.Long)},
+		{"RKE2_Node_Driver|etcd_cp|worker", nodeRolesShared, r.standardUserClient, false, r.client.Flags.GetValue(environmentflag.Short) || r.client.Flags.GetValue(environmentflag.Long)},
+		{"RKE2_Node_Driver|etcd|cp|worker", nodeRolesDedicated, r.standardUserClient, false, r.client.Flags.GetValue(environmentflag.Long)},
+		{"RKE2_Node_Driver|etcd|cp|worker|windows", nodeRolesWindows, r.standardUserClient, true, r.client.Flags.GetValue(environmentflag.Long)},
+		{"RKE2_Node_Driver|3_etcd|2_cp|3_worker", nodeRolesStandard, r.standardUserClient, false, r.client.Flags.GetValue(environmentflag.Long)},
 	}
 
 	for _, tt := range tests {
@@ -123,8 +124,7 @@ func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2Cluster() {
 
 			clusterConfig.MachinePools = tt.machinePools
 
-			name := tt.name + " Node Provider: " + clusterConfig.NodeProvider + " Kubernetes version: " + clusterConfig.KubernetesVersion + " cni: " + clusterConfig.CNI
-			r.Run(name, func() {
+			r.Run(tt.name, func() {
 				if clusterConfig.Provider != "vsphere" && tt.isWindows {
 					r.T().Skip("Windows test requires access to vsphere")
 				}
@@ -139,6 +139,12 @@ func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2Cluster() {
 				provisioning.VerifyCluster(r.T(), tt.client, clusterConfig, clusterObject)
 			})
 		}
+
+		params, err := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfigs[0])
+		require.NoError(r.T(), err)
+
+		err = qase.UpdateSchemaParameters(tt.name, params)
+		require.NoError(r.T(), err)
 	}
 }
 

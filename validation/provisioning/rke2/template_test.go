@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/rancher/tests/v2/actions/provisioninginput"
 	"github.com/rancher/rancher/tests/v2/actions/reports"
 	"github.com/rancher/shepherd/clients/rancher"
+	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/clusters"
@@ -18,8 +19,11 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults/stevestates"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/steve"
+	"github.com/rancher/shepherd/extensions/users"
+	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/namegenerator"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -34,10 +38,11 @@ const (
 
 type ClusterTemplateTestSuite struct {
 	suite.Suite
-	client           *rancher.Client
-	session          *session.Session
-	templateConfig   *provisioninginput.TemplateConfig
-	cloudCredentials *v1.SteveAPIObject
+	client             *rancher.Client
+	standardUserClient *rancher.Client
+	session            *session.Session
+	templateConfig     *provisioninginput.TemplateConfig
+	cloudCredentials   *v1.SteveAPIObject
 }
 
 func (r *ClusterTemplateTestSuite) TearDownSuite() {
@@ -59,24 +64,55 @@ func (r *ClusterTemplateTestSuite) SetupSuite() {
 	cloudCredentialConfig := cloudcredentials.LoadCloudCredential(r.templateConfig.TemplateProvider)
 	r.cloudCredentials, err = provider.CloudCredFunc(client, cloudCredentialConfig)
 	require.NoError(r.T(), err)
+
+	enabled := true
+	var testuser = namegen.AppendRandomString("testuser-")
+	var testpassword = password.GenerateUserPassword("testpass-")
+	user := &management.User{
+		Username: testuser,
+		Password: testpassword,
+		Name:     testuser,
+		Enabled:  &enabled,
+	}
+
+	newUser, err := users.CreateUserWithRole(client, user, "user")
+	require.NoError(r.T(), err)
+
+	newUser.Password = user.Password
+
+	standardUserClient, err := client.AsUser(newUser)
+	require.NoError(r.T(), err)
+
+	r.standardUserClient = standardUserClient
 }
 
 func (r *ClusterTemplateTestSuite) TestProvisionRKE2TemplateCluster() {
-	_, err := steve.CreateAndWaitForResource(r.client, namespaces.FleetLocal+"/"+localCluster, stevetypes.ClusterRepo, r.templateConfig.Repo, stevestates.Active, 5*time.Second, defaults.FiveMinuteTimeout)
-	require.NoError(r.T(), err)
+	tests := []struct {
+		name   string
+		client *rancher.Client
+	}{
+		{"RKE2_Template|etcd|cp|worker", r.standardUserClient},
+	}
 
-	k8sversions, err := kubernetesversions.Default(r.client, providerName, nil)
-	require.NoError(r.T(), err)
+	for _, tt := range tests {
+		r.Run(tt.name, func() {
+			_, err := steve.CreateAndWaitForResource(r.client, namespaces.FleetLocal+"/"+localCluster, stevetypes.ClusterRepo, r.templateConfig.Repo, stevestates.Active, 5*time.Second, defaults.FiveMinuteTimeout)
+			require.NoError(r.T(), err)
 
-	clusterName := namegenerator.AppendRandomString(providerName + "-template")
-	err = charts.InstallTemplateChart(r.client, r.templateConfig.Repo.ObjectMeta.Name, r.templateConfig.TemplateName, clusterName, k8sversions[0], r.cloudCredentials)
-	require.NoError(r.T(), err)
+			k8sversions, err := kubernetesversions.Default(r.client, providerName, nil)
+			require.NoError(r.T(), err)
 
-	_, cluster, err := clusters.GetProvisioningClusterByName(r.client, clusterName, fleetNamespace)
-	reports.TimeoutClusterReport(cluster, err)
-	require.NoError(r.T(), err)
+			clusterName := namegenerator.AppendRandomString(providerName + "-template")
+			err = charts.InstallTemplateChart(r.client, r.templateConfig.Repo.ObjectMeta.Name, r.templateConfig.TemplateName, clusterName, k8sversions[0], r.cloudCredentials)
+			require.NoError(r.T(), err)
 
-	provisioning.VerifyCluster(r.T(), r.client, nil, cluster)
+			_, cluster, err := clusters.GetProvisioningClusterByName(r.client, clusterName, fleetNamespace)
+			reports.TimeoutClusterReport(cluster, err)
+			require.NoError(r.T(), err)
+
+			provisioning.VerifyCluster(r.T(), r.client, nil, cluster)
+		})
+	}
 }
 
 // In order for 'go test' to run this suite, we need to create

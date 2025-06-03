@@ -3,15 +3,12 @@
 package certificates
 
 import (
-	"strings"
 	"testing"
 
-	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
-	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
-	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -43,42 +40,35 @@ func (c *CertRotationTestSuite) SetupSuite() {
 
 func (c *CertRotationTestSuite) TestCertRotation() {
 	tests := []struct {
-		name   string
-		client *rancher.Client
+		name        string
+		clusterType string
+		rotations   int
+		client      *rancher.Client
 	}{
-		{" cert rotation", c.client},
+		{"RKE1_Certificate_Rotation", "rke1", 2, c.client},
+		{"RKE2_Certificate_Rotation", "rke2", 2, c.client},
+		{"K3S_Certificate_Rotation", "k3s", 2, c.client},
 	}
 
 	for _, tt := range tests {
-		clusterID, err := clusters.GetV1ProvisioningClusterByName(c.client, c.client.RancherConfig.ClusterName)
+		existingClusterType, err := clusters.GetClusterType(tt.client, c.client.RancherConfig.ClusterName)
 		require.NoError(c.T(), err)
 
-		cluster, err := c.client.Steve.SteveType(provisioningSteveResourceType).ByID(clusterID)
-		require.NoError(c.T(), err)
-
-		spec := &provv1.ClusterSpec{}
-		err = steveV1.ConvertToK8sType(cluster.Spec, spec)
-		require.NoError(c.T(), err)
-
-		clusterType := "RKE1"
-
-		if strings.Contains(spec.KubernetesVersion, "-rancher") || len(spec.KubernetesVersion) == 0 {
-			c.Run(clusterType+tt.name, func() {
-				require.NoError(c.T(), rotateRKE1Certs(c.client, c.client.RancherConfig.ClusterName))
-				require.NoError(c.T(), rotateRKE1Certs(c.client, c.client.RancherConfig.ClusterName))
-			})
-		} else {
-			if strings.Contains(spec.KubernetesVersion, "k3s") {
-				clusterType = "K3s"
-			} else {
-				clusterType = "RKE2"
+		c.Run(tt.name, func() {
+			if tt.clusterType != existingClusterType {
+				c.T().Skipf("Cluster type is not %s", tt.clusterType)
 			}
 
-			c.Run(clusterType+tt.name, func() {
-				require.NoError(c.T(), rotateCerts(c.client, c.client.RancherConfig.ClusterName))
-				require.NoError(c.T(), rotateCerts(c.client, c.client.RancherConfig.ClusterName))
-			})
-		}
+			for i := 0; i < tt.rotations; i++ {
+				if tt.clusterType == "rke1" {
+					err := rotateRKE1Certs(c.client, c.client.RancherConfig.ClusterName)
+					require.NoError(c.T(), err)
+				} else {
+					err := rotateCerts(c.client, c.client.RancherConfig.ClusterName)
+					require.NoError(c.T(), err)
+				}
+			}
+		})
 	}
 }
 

@@ -53,8 +53,8 @@ func (s *GKENodeScalingTestSuite) TestScalingGKENodePools() {
 		gkeNodes gke.NodePool
 		client   *rancher.Client
 	}{
-		{"Scaling GKE node group by 1", scaleOneNode, s.client},
-		{"Scaling GKE node group by 2", scaleTwoNodes, s.client},
+		{"GKE_Scale_Node_Group_By_1", scaleOneNode, s.client},
+		{"GKE_Scale_Node_Group_By_2", scaleTwoNodes, s.client},
 	}
 
 	for _, tt := range tests {

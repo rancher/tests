@@ -59,12 +59,12 @@ func (s *SnapshotRestoreWindowsTestSuite) TestSnapshotRestoreWindows() {
 		etcdSnapshot *etcdsnapshot.Config
 		client       *rancher.Client
 	}{
-		{"Restore Windows cluster config, Kubernetes version and etcd", snapshotRestoreAll, s.client},
+		{"RKE2_Windows_Restore", snapshotRestoreAll, s.client},
 	}
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			err := etcdsnapshot.CreateAndValidateSnapshotRestore(s.client, s.client.RancherConfig.ClusterName, tt.etcdSnapshot, windowsContainerImage)
+			err := etcdsnapshot.CreateAndValidateSnapshotRestore(tt.client, tt.client.RancherConfig.ClusterName, tt.etcdSnapshot, windowsContainerImage)
 			require.NoError(s.T(), err)
 		})
 	}

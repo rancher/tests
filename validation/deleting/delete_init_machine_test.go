@@ -3,14 +3,12 @@
 package deleting
 
 import (
-	"strings"
 	"testing"
 
-	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
-	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -40,28 +38,29 @@ func (d *DeleteInitMachineTestSuite) SetupSuite() {
 }
 
 func (d *DeleteInitMachineTestSuite) TestDeleteInitMachine() {
-	clusterID, err := clusters.GetV1ProvisioningClusterByName(d.client, d.client.RancherConfig.ClusterName)
-	require.NoError(d.T(), err)
-
-	cluster, err := d.client.Steve.SteveType(ProvisioningSteveResourceType).ByID(clusterID)
-	require.NoError(d.T(), err)
-
-	updatedCluster := new(apisV1.Cluster)
-	err = v1.ConvertToK8sType(cluster, &updatedCluster)
-	require.NoError(d.T(), err)
-
-	name := "K3S"
-
-	if strings.Contains(updatedCluster.Spec.KubernetesVersion, "rke2") {
-		name = "RKE2"
+	tests := []struct {
+		name        string
+		clusterType string
+		client      *rancher.Client
+	}{
+		{"RKE2_Delete_Init_Machine", "rke2", d.client},
+		{"K3S_Delete_Init_Machine", "k3s", d.client},
 	}
+	for _, tt := range tests {
+		clusterID, err := clusters.GetV1ProvisioningClusterByName(tt.client, tt.client.RancherConfig.ClusterName)
+		require.NoError(d.T(), err)
 
-	require.NotContains(d.T(), updatedCluster.Spec.KubernetesVersion, "-rancher")
-	require.NotEmpty(d.T(), updatedCluster.Spec.KubernetesVersion)
+		existingClusterType, err := actionsClusters.GetClusterType(tt.client, tt.client.RancherConfig.ClusterName)
+		require.NoError(d.T(), err)
 
-	d.Run(name, func() {
-		deleteInitMachine(d.T(), d.client, clusterID)
-	})
+		d.Run(tt.name, func() {
+			if tt.clusterType != existingClusterType {
+				d.T().Skipf("Cluster type is not %s", tt.clusterType)
+			}
+
+			deleteInitMachine(d.T(), tt.client, clusterID)
+		})
+	}
 }
 
 // In order for 'go test' to run this suite, we need to create

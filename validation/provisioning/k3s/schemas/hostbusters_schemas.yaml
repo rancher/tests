@@ -1,0 +1,343 @@
+project: RRT
+suites:
+- suite: Provisioning/K3S/NodeDriver
+  cases:
+  - description: Provisions a 1 node all roles node driver cluster
+    title: K3S_Node_Driver|etcd_cp_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision K3S node driver cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 2 node stacked roles node driver cluster
+    title: K3S_Node_Driver|etcd_cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision K3S node driver cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3 node split roles node driver cluster
+    title: K3S_Node_Driver|etcd|cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision K3S node driver cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 8 node 3etcd/2cp/3worker node driver cluster
+    title: K3S_Node_Driver|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision K3S node driver cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+- suite: Provisioning/K3S/Custom
+  cases:
+  - description: Provisions a 1 node all roles custom cluster
+    title: K3S_Custom|etcd_cp_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a K3S custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 2 node stacked roles custom cluster
+    title: K3S_Custom|etcd_cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a K3S custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3 node split roles custom cluster
+    title: K3S_Custom|etcd|cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a K3S custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 8 node 3etcd/2cp/3worker custom cluster
+    title: K3S_Custom|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a K3S custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+- suite: Provisioning/K3S/PSACT
+  cases:
+  - description: Provisions a cluster with psact set to rancher privilaged
+    title: K3S_Rancher_Privileged|3_etcd|2_cp|3_worker
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a psact K3S cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a cluster with psact set to rancher restricted
+    title: K3S_Rancher_Restricted|3_etcd|2_cp|3_worker
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a psact K3S cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a cluster with psact set to rancher baseline
+    title: K3S_Rancher_Baseline|3_etcd|2_cp|3_worker
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a psact k3s cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+- suite: Provisioning/K3S/Hardened
+  cases:
+  - description: Provisions a hardened 3etcd/2cp/3worker custom cluster
+    title: K3S_CIS_1.9_Profile|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a k3s custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Harden the k3s custom cluster
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+- suite: Provisioning/K3S/Template
+  cases:
+  - description: Provisions a 3 node split roles cluster using an K3S template
+    title: K3S_Template|etcd|cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a K3S template cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

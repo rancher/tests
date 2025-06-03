@@ -3,13 +3,10 @@
 package snapshot
 
 import (
-	"strings"
 	"testing"
 
-	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
-	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
-	"github.com/rancher/shepherd/extensions/clusters"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/etcdsnapshot"
 
 	"github.com/rancher/shepherd/pkg/config"
@@ -73,37 +70,31 @@ func (s *SnapshotAdditionalTestsTestSuite) TestSnapshotReplaceNodes() {
 
 	tests := []struct {
 		name         string
+		clusterType  string
 		etcdSnapshot *etcdsnapshot.Config
 		client       *rancher.Client
 	}{
-		{"Replace control plane nodes", controlPlaneSnapshotRestore, s.client},
-		{"Replace etcd nodes", etcdSnapshotRestore, s.client},
-		{"Replace worker nodes", workerSnapshotRestore, s.client},
+		{"RKE1_Replace_Control_Plane_Nodes", "rke1", controlPlaneSnapshotRestore, s.client},
+		{"RKE1_Replace_ETCD_Nodes", "rke1", etcdSnapshotRestore, s.client},
+		{"RKE1_Replace_Worker_Nodes", "rke1", workerSnapshotRestore, s.client},
+		{"RKE2_Replace_Control_Plane_Nodes", "rke2", controlPlaneSnapshotRestore, s.client},
+		{"RKE2_Replace_ETCD_Nodes", "rke2", etcdSnapshotRestore, s.client},
+		{"RKE2_Replace_Worker_Nodes", "rke2", workerSnapshotRestore, s.client},
+		{"K3S_Replace_Control_Plane_Nodes", "k3s", controlPlaneSnapshotRestore, s.client},
+		{"K3S_Replace_ETCD_Nodes", "k3s", etcdSnapshotRestore, s.client},
+		{"K3S_Replace_Worker_Nodes", "k3s", workerSnapshotRestore, s.client},
 	}
 
+	existingClusterType, err := actionsClusters.GetClusterType(s.client, s.client.RancherConfig.ClusterName)
+	require.NoError(s.T(), err)
+
 	for _, tt := range tests {
-		clusterID, err := clusters.GetV1ProvisioningClusterByName(s.client, s.client.RancherConfig.ClusterName)
-		require.NoError(s.T(), err)
-
-		cluster, err := s.client.Steve.SteveType(clusters.ProvisioningSteveResourceType).ByID(clusterID)
-		require.NoError(s.T(), err)
-
-		spec := &apisV1.ClusterSpec{}
-		err = steveV1.ConvertToK8sType(cluster.Spec, spec)
-		require.NoError(s.T(), err)
-
-		if strings.Contains(spec.KubernetesVersion, "-rancher") || len(spec.KubernetesVersion) == 0 {
-			tt.name = "RKE1 " + tt.name
-		} else {
-			if strings.Contains(spec.KubernetesVersion, "k3s") {
-				tt.name = "K3S " + tt.name
-			} else {
-				tt.name = "RKE2 " + tt.name
-			}
-		}
-
 		s.Run(tt.name, func() {
-			err := etcdsnapshot.CreateAndValidateSnapshotRestore(s.client, s.client.RancherConfig.ClusterName, tt.etcdSnapshot, containerImage)
+			if tt.clusterType != existingClusterType {
+				s.T().Skipf("Cluster type is not %s", tt.clusterType)
+			}
+
+			err := etcdsnapshot.CreateAndValidateSnapshotRestore(tt.client, tt.client.RancherConfig.ClusterName, tt.etcdSnapshot, containerImage)
 			require.NoError(s.T(), err)
 		})
 	}
@@ -118,34 +109,24 @@ func (s *SnapshotAdditionalTestsTestSuite) TestSnapshotRecurringRestores() {
 
 	tests := []struct {
 		name         string
+		clusterType  string
 		etcdSnapshot *etcdsnapshot.Config
 		client       *rancher.Client
 	}{
-		{"Restore snapshot 5 times", snapshotRestoreFiveTimes, s.client},
+		{"RKE1_Recurring_Restores", "rke1", snapshotRestoreFiveTimes, s.client},
+		{"RKE2_Recurring_Restores", "rke2", snapshotRestoreFiveTimes, s.client},
+		{"K3S_Recurring_Restores", "k3s", snapshotRestoreFiveTimes, s.client},
 	}
 
+	existingClusterType, err := actionsClusters.GetClusterType(s.client, s.client.RancherConfig.ClusterName)
+	require.NoError(s.T(), err)
+
 	for _, tt := range tests {
-		clusterID, err := clusters.GetV1ProvisioningClusterByName(s.client, s.client.RancherConfig.ClusterName)
-		require.NoError(s.T(), err)
-
-		cluster, err := s.client.Steve.SteveType(clusters.ProvisioningSteveResourceType).ByID(clusterID)
-		require.NoError(s.T(), err)
-
-		spec := &apisV1.ClusterSpec{}
-		err = steveV1.ConvertToK8sType(cluster.Spec, spec)
-		require.NoError(s.T(), err)
-
-		if strings.Contains(spec.KubernetesVersion, "-rancher") || len(spec.KubernetesVersion) == 0 {
-			tt.name = "RKE1 " + tt.name
-		} else {
-			if strings.Contains(spec.KubernetesVersion, "k3s") {
-				tt.name = "K3S " + tt.name
-			} else {
-				tt.name = "RKE2 " + tt.name
-			}
-		}
-
 		s.Run(tt.name, func() {
+			if tt.clusterType != existingClusterType {
+				s.T().Skipf("Cluster type is not %s", tt.clusterType)
+			}
+
 			err := etcdsnapshot.CreateAndValidateSnapshotRestore(s.client, s.client.RancherConfig.ClusterName, tt.etcdSnapshot, containerImage)
 			require.NoError(s.T(), err)
 		})

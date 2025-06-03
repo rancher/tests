@@ -1,7 +1,9 @@
 package clusters
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -12,6 +14,7 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -867,4 +870,36 @@ func CheckServiceAccountTokenSecret(client *rancher.Client, clusterName string) 
 
 	logrus.Infof("serviceAccountTokenSecret in this cluster is: %s", cluster.ServiceAccountTokenSecret)
 	return true, nil
+}
+
+func GetClusterType(client *rancher.Client, clusterName string) (string, error) {
+	clusterID, err := clusters.GetV1ProvisioningClusterByName(client, clusterName)
+	if err != nil {
+		return "", err
+	}
+
+	cluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(clusterID)
+	if err != nil {
+		return "", err
+	}
+
+	spec := &provv1.ClusterSpec{}
+	err = steveV1.ConvertToK8sType(cluster.Spec, spec)
+	if err != nil {
+		return "", err
+	}
+
+	var clusterType string
+	if strings.Contains(spec.KubernetesVersion, "-rancher") || len(spec.KubernetesVersion) == 0 {
+		clusterType = "rke1"
+	} else if strings.Contains(spec.KubernetesVersion, "rke2") {
+		clusterType = "rke2"
+	} else if strings.Contains(spec.KubernetesVersion, "k3s") {
+		clusterType = "k3s"
+	} else {
+		return "", errors.New("Unable to determine cluster type")
+	}
+
+	return clusterType, nil
+
 }
