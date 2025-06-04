@@ -110,7 +110,7 @@ func createPreUpgradeWorkloads(t *testing.T, client *rancher.Client, clusterName
 	err = extensionscharts.WatchAndWaitDaemonSets(client, project.ClusterID, namespace.Name, metav1.ListOptions{})
 	require.NoError(t, err)
 
-	secretTemplate := secrets.NewSecretTemplate(names.random[secretName], namespace.Name, map[string][]byte{"test": []byte("test")}, corev1.SecretTypeOpaque)
+	secretTemplate := secrets.NewSecretTemplate(names.random[secretName], namespace.Name, map[string][]byte{"test": []byte("test")}, corev1.SecretTypeOpaque, nil, nil)
 
 	logrus.Infof("Creating secret: %v", names.random[secretName])
 	createdSecret, err := steveClient.SteveType(secrets.SecretSteveType).Create(secretTemplate)

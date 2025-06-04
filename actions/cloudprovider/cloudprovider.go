@@ -120,7 +120,7 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 			"v2prov-authorized-secret-deletes-on-cluster-removal": "true",
 		}
 
-		kubeSecret, err := secrets.CreateSecretWithAnnotations(client, "local", "fleet-default", data, annotations, "secret")
+		kubeSecret, err := secrets.CreateSecret(client, "local", "fleet-default", data, "secret", nil, annotations)
 		if err != nil {
 			return clustersConfig, err
 		}

@@ -109,6 +109,8 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 					"username": []byte(clustersConfig.Registries.RKE2Username),
 				},
 					corev1.SecretTypeBasicAuth,
+					nil,
+					nil,
 				)
 
 				registrySecret, err := steveClient.SteveType(secrets.SecretSteveType).Create(secretTemplate)

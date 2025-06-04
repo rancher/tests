@@ -30,6 +30,7 @@ const (
 	ubuntuImageName     = "ubuntu"
 	redisImageName      = "public.ecr.aws/docker/library/redis"
 	podSteveType        = "pod"
+	restartAnnotation   = "kubectl.kubernetes.io/restartedAt"
 )
 
 // CreateDeployment is a helper to create a deployment with or without a secret/configmap
@@ -256,6 +257,27 @@ func UpdateOrRemoveEnvVarForDeployment(client *rancher.Client, namespaceName, de
 		if envVarValue != "" && !envVarFound {
 			return fmt.Errorf("environment variable %s should have been added or updated but was not found", envVarName)
 		}
+	}
+
+	return nil
+}
+
+// RestartDeployment triggers a rollout restart of a deployment by updating an annotation
+func RestartDeployment(client *rancher.Client, clusterID, namespaceName, deploymentName string) error {
+	deploymentObj, err := client.WranglerContext.Apps.Deployment().Get(namespaceName, deploymentName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error fetching deployment %s in namespace %s: %w", deploymentName, namespaceName, err)
+	}
+
+	if deploymentObj.Spec.Template.Annotations == nil {
+		deploymentObj.Spec.Template.Annotations = map[string]string{}
+	}
+
+	deploymentObj.Spec.Template.Annotations[restartAnnotation] = time.Now().Format(time.RFC3339)
+
+	_, err = UpdateDeployment(client, clusterID, namespaceName, deploymentObj, true)
+	if err != nil {
+		return fmt.Errorf("error waiting for deployment %s in namespace %s to restart: %w", deploymentName, namespaceName, err)
 	}
 
 	return nil

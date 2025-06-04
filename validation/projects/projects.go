@@ -1,6 +1,7 @@
 package projects
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,17 +12,20 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/defaults"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	"github.com/rancher/tests/actions/kubeapi/namespaces"
-	"github.com/rancher/tests/actions/kubeapi/projects"
+	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
 	quotas "github.com/rancher/tests/actions/kubeapi/resourcequotas"
 	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
+	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/workloads"
-	pod "github.com/rancher/tests/actions/workloads/pods"
+	"github.com/rancher/tests/actions/workloads/pods"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -42,6 +46,10 @@ var prtb = v3.ProjectRoleTemplateBinding{
 	UserPrincipalName: "",
 }
 
+var opaqueSecretData = map[string][]byte{
+	"hello": []byte("world"),
+}
+
 func createProjectAndNamespace(client *rancher.Client, clusterID string, project *v3.Project) (*v3.Project, *corev1.Namespace, error) {
 	createdProject, err := client.WranglerContext.Mgmt.Project().Create(project)
 	if err != nil {
@@ -58,7 +66,7 @@ func createProjectAndNamespace(client *rancher.Client, clusterID string, project
 }
 
 func createProjectAndNamespaceWithQuotas(client *rancher.Client, clusterID string, namespacePodLimit, projectPodLimit string) (*v3.Project, *corev1.Namespace, error) {
-	projectTemplate := projects.NewProjectTemplate(clusterID)
+	projectTemplate := projectsapi.NewProjectTemplate(clusterID)
 	projectTemplate.Spec.NamespaceDefaultResourceQuota.Limit.Pods = namespacePodLimit
 	projectTemplate.Spec.ResourceQuota.Limit.Pods = projectPodLimit
 	createdProject, createdNamespace, err := createProjectAndNamespace(client, clusterID, projectTemplate)
@@ -70,7 +78,7 @@ func createProjectAndNamespaceWithQuotas(client *rancher.Client, clusterID strin
 }
 
 func createProjectAndNamespaceWithLimits(client *rancher.Client, clusterID string, cpuLimit, cpuReservation, memoryLimit, memoryReservation string) (*v3.Project, *corev1.Namespace, error) {
-	projectTemplate := projects.NewProjectTemplate(clusterID)
+	projectTemplate := projectsapi.NewProjectTemplate(clusterID)
 	projectTemplate.Spec.ContainerDefaultResourceLimit.LimitsCPU = cpuLimit
 	projectTemplate.Spec.ContainerDefaultResourceLimit.RequestsCPU = cpuReservation
 	projectTemplate.Spec.ContainerDefaultResourceLimit.LimitsMemory = memoryLimit
@@ -275,7 +283,7 @@ func updateProjectContainerResourceLimit(client *rancher.Client, existingProject
 	updatedProject.Spec.ContainerDefaultResourceLimit.LimitsMemory = memoryLimit
 	updatedProject.Spec.ContainerDefaultResourceLimit.RequestsMemory = memoryReservation
 
-	updatedProject, err := projects.UpdateProject(client, existingProject, updatedProject)
+	updatedProject, err := projectsapi.UpdateProject(client, existingProject, updatedProject)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +294,7 @@ func updateProjectContainerResourceLimit(client *rancher.Client, existingProject
 func checkContainerResources(client *rancher.Client, clusterID, namespaceName, deploymentName, cpuLimit, cpuReservation, memoryLimit, memoryReservation string) error {
 	var errs []string
 
-	podNames, err := pod.GetPodNamesFromDeployment(client, clusterID, namespaceName, deploymentName)
+	podNames, err := pods.GetPodNamesFromDeployment(client, clusterID, namespaceName, deploymentName)
 	if err != nil {
 		return fmt.Errorf("error fetching pod by deployment name: %w", err)
 	}
@@ -294,7 +302,7 @@ func checkContainerResources(client *rancher.Client, clusterID, namespaceName, d
 		return errors.New("expected at least one pod, but got " + strconv.Itoa(len(podNames)))
 	}
 
-	pod, err := pod.GetPodByName(client, clusterID, namespaceName, podNames[0])
+	pod, err := pods.GetPodByName(client, clusterID, namespaceName, podNames[0])
 	if err != nil {
 		return err
 	}
@@ -392,4 +400,28 @@ func checkLimitRange(client *rancher.Client, clusterID, namespaceName string, ex
 	}
 
 	return nil
+}
+
+func createNamespacesInProject(client *rancher.Client, clusterID, projectID string, count int) ([]*corev1.Namespace, error) {
+	var namespaces []*corev1.Namespace
+
+	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, true, func(ctx context.Context) (bool, error) {
+		namespaces = []*corev1.Namespace{}
+
+		for i := 0; i < count; i++ {
+			ns, err := projects.CreateNamespaceUsingWrangler(client, clusterID, projectID, nil)
+			if err != nil {
+				return false, err
+			}
+			namespaces = append(namespaces, ns)
+		}
+
+		return true, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create %d namespaces: %w", count, err)
+	}
+
+	return namespaces, nil
 }

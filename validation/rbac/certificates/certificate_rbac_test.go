@@ -90,7 +90,7 @@ func (cert *CertificateRBACTestSuite) TestCreateCertificateSecret() {
 				corev1.TLSPrivateKeyKey: []byte(cert.keyData),
 			}
 
-			createdCert, err := secrets.CreateSecret(userClient, cert.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS)
+			createdCert, err := secrets.CreateSecret(userClient, cert.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS, nil, nil)
 
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
@@ -139,7 +139,7 @@ func (cert *CertificateRBACTestSuite) TestListCertificateSecret() {
 				corev1.TLSPrivateKeyKey: []byte(cert.keyData),
 			}
 
-			createdCert, err := secrets.CreateSecret(cert.client, cert.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS)
+			createdCert, err := secrets.CreateSecret(cert.client, cert.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS, nil, nil)
 			assert.NoError(cert.T(), err, "failed to create a TLS secret")
 
 			log.Infof("As a %v, list the TLS secrets.", tt.role.String())
@@ -195,7 +195,7 @@ func (cert *CertificateRBACTestSuite) TestUpdateCertificateSecret() {
 				corev1.TLSPrivateKeyKey: []byte(cert.keyData),
 			}
 
-			createdCert, err := secrets.CreateSecret(cert.client, cert.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS)
+			createdCert, err := secrets.CreateSecret(cert.client, cert.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS, nil, nil)
 			assert.NoError(cert.T(), err, "failed to create a TLS secret")
 
 			log.Infof("As a %v, update the TLS secret.", tt.role.String())
@@ -208,7 +208,7 @@ func (cert *CertificateRBACTestSuite) TestUpdateCertificateSecret() {
 				"updated-key":           []byte("updated-value"),
 			}
 
-			updatedSecretObj := secrets.UpdateSecretData(createdCert, newSecretData)
+			updatedSecretObj := secrets.SecretCopyWithNewData(createdCert, newSecretData)
 			updatedSecret, err := userContext.Core.Secret().Update(updatedSecretObj)
 
 			switch tt.role.String() {
@@ -259,7 +259,7 @@ func (cert *CertificateRBACTestSuite) TestDeleteCertificateSecret() {
 				corev1.TLSPrivateKeyKey: []byte(cert.keyData),
 			}
 
-			createdCert, err := secrets.CreateSecret(cert.client, cert.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS)
+			createdCert, err := secrets.CreateSecret(cert.client, cert.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS, nil, nil)
 			assert.NoError(cert.T(), err, "failed to create a TLS secret")
 
 			log.Infof("As a %v, delete the TLS secret.", tt.role.String())
