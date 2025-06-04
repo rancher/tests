@@ -81,7 +81,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCreateSecretAsEnvVar() {
 			secretData := map[string][]byte{
 				"hello": []byte("world"),
 			}
-			createdSecret, err := secrets.CreateSecret(standardUserClient, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque)
+			createdSecret, err := secrets.CreateSecret(standardUserClient, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rbos.T(), err, "failed to create secret")
@@ -126,7 +126,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCreateSecretAsVolume() {
 			secretData := map[string][]byte{
 				"hello": []byte("world"),
 			}
-			createdSecret, err := secrets.CreateSecret(standardUserClient, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque)
+			createdSecret, err := secrets.CreateSecret(standardUserClient, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rbos.T(), err, "failed to create secret")
@@ -171,7 +171,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestListSecret() {
 			secretData := map[string][]byte{
 				"hello": []byte("world"),
 			}
-			createdSecret, err := secrets.CreateSecret(rbos.client, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque)
+			createdSecret, err := secrets.CreateSecret(rbos.client, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 			assert.NoError(rbos.T(), err, "failed to create secret")
 
 			log.Infof("As a %v, list the secrets.", tt.role.String())
@@ -221,7 +221,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestUpdateSecret() {
 			secretData := map[string][]byte{
 				"hello": []byte("world"),
 			}
-			createdSecret, err := secrets.CreateSecret(rbos.client, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque)
+			createdSecret, err := secrets.CreateSecret(rbos.client, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 			assert.NoError(rbos.T(), err, "failed to create secret")
 
 			log.Infof("As a %v, update the secrets.", tt.role.String())
@@ -231,7 +231,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestUpdateSecret() {
 			newData := map[string][]byte{
 				"foo": []byte("bar"),
 			}
-			updatedSecretObj := secrets.UpdateSecretData(createdSecret, newData)
+			updatedSecretObj := secrets.SecretCopyWithNewData(createdSecret, newData)
 			updatedSecret, err := standardUserContext.Core.Secret().Update(updatedSecretObj)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
@@ -281,7 +281,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestDeleteSecret() {
 			secretData := map[string][]byte{
 				"hello": []byte("world"),
 			}
-			createdSecret, err := secrets.CreateSecret(rbos.client, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque)
+			createdSecret, err := secrets.CreateSecret(rbos.client, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 			assert.NoError(rbos.T(), err, "failed to create secret")
 
 			log.Infof("As a %v, delete the secrets.", tt.role.String())
@@ -329,7 +329,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCrudSecretAsClusterMember() {
 	secretData := map[string][]byte{
 		"hello": []byte("world"),
 	}
-	createdSecret, err := secrets.CreateSecret(standardUserClient, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque)
+	createdSecret, err := secrets.CreateSecret(standardUserClient, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.NoError(rbos.T(), err, "failed to create secret")
 
 	log.Infof("As a %v, create a deployment using the secret as an environment variable.", role)
@@ -348,7 +348,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCrudSecretAsClusterMember() {
 	newData := map[string][]byte{
 		"foo": []byte("bar"),
 	}
-	updatedSecretObj := secrets.UpdateSecretData(&secretList.Items[0], newData)
+	updatedSecretObj := secrets.SecretCopyWithNewData(&secretList.Items[0], newData)
 	updatedSecret, err := standardUserContext.Core.Secret().Update(updatedSecretObj)
 	require.NoError(rbos.T(), err, "failed to update secret")
 	assert.NotNil(rbos.T(), updatedSecret)

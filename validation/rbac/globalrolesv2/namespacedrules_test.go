@@ -106,7 +106,7 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithNamespacedRules() {
 	secretData := map[string][]byte{
 		"key": []byte(namegen.RandStringLower(5)),
 	}
-	_, err = actionssecrets.CreateSecret(userClient, localcluster, namespace.Name, secretData, corev1.SecretTypeOpaque)
+	_, err = actionssecrets.CreateSecret(userClient, localcluster, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 
@@ -148,7 +148,7 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarAsKeyInNamespacedRules
 	secretData := map[string][]byte{
 		"key": []byte(namegen.RandStringLower(5)),
 	}
-	_, err = actionssecrets.CreateSecret(userClient, localcluster, "default", secretData, corev1.SecretTypeOpaque)
+	_, err = actionssecrets.CreateSecret(userClient, localcluster, "default", secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 }
@@ -185,7 +185,7 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarForResourcesAndGroups(
 	secretData := map[string][]byte{
 		"key": []byte(namegen.RandStringLower(5)),
 	}
-	createAdminSecret, err := actionssecrets.CreateSecret(ns.client, localcluster, customNS, secretData, corev1.SecretTypeOpaque)
+	createAdminSecret, err := actionssecrets.CreateSecret(ns.client, localcluster, customNS, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.NoError(ns.T(), err)
 	listSecretsCustomNS, err := secrets.ListSecrets(userClient, localcluster, customNS, metav1.ListOptions{})
 	require.NoError(ns.T(), err)
@@ -201,7 +201,7 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarForResourcesAndGroups(
 	nonCreatedSecretData := map[string][]byte{
 		"key": []byte(namegen.RandStringLower(5)),
 	}
-	_, err = actionssecrets.CreateSecret(userClient, localcluster, "default", nonCreatedSecretData, corev1.SecretTypeOpaque)
+	_, err = actionssecrets.CreateSecret(userClient, localcluster, "default", nonCreatedSecretData, corev1.SecretTypeOpaque, nil, nil)
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 }

@@ -233,7 +233,7 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithSecretAccess() {
 	secretData := map[string][]byte{
 		"hello": []byte("world"),
 	}
-	createdSecret, err := secrets.CreateSecret(standardUserClient, rb.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque)
+	createdSecret, err := secrets.CreateSecret(standardUserClient, rb.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.NoError(rb.T(), err, "failed to create secret")
 
 	userContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rb.cluster.ID)
@@ -244,7 +244,7 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithSecretAccess() {
 	newData := map[string][]byte{
 		"foo": []byte("bar"),
 	}
-	updatedSecretObj := secrets.UpdateSecretData(createdSecret, newData)
+	updatedSecretObj := secrets.SecretCopyWithNewData(createdSecret, newData)
 	updatedSecret, err := userContext.Core.Secret().Update(updatedSecretObj)
 	require.NoError(rb.T(), err)
 
