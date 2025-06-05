@@ -53,6 +53,7 @@ node {
         stage('Configure and Build') {
           config = config.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
           config = config.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+          config = config.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
 
           writeFile file: 'config.yml', text: config
 
