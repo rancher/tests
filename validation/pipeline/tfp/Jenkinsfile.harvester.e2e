@@ -112,7 +112,7 @@ node("harvester-vpn-1") {
                         echo "harvester IP address"
                         echo $inode
 
-                        sleep 240
+                        sleep 230
 
                         until ping -c1 -W1 $inode; do sleep 2; done
                         echo "able to ping node, moving on to get harvester kubeconfig"
@@ -150,16 +150,20 @@ node("harvester-vpn-1") {
                         export KUBECONFIG=seeder.yaml
                         export inode=$(./kubectl get clusters.metal/$HARVESTER_CLUSTER_NAME -n tink-system -o jsonpath='{.status.clusterAddress}')
 
-                        until [[ "$(curl -s -L --insecure -o /dev/null -w "%{http_code}\n" "https://$inode")" == "200" ]]; do sleep 5; done; echo "https://$inode is healthy"
+                        until [[ "$(curl -s -L --insecure -o /dev/null -w "%{http_code}\n" "https://$inode/v3-public/localproviders/local")" == "200" ]]; do sleep 5; done; echo "https://$inode is healthy"
                         
-                        jsonOutput=$(curl --insecure -d '{"username" : "admin", "password" : "admin", "responseType" : "json"}'  https://$inode/v3-public/localproviders/local?action=login)
+                        sleep 60
+
+                        jsonOutput=$(curl --insecure -d '{"username" : "admin", "password" : "admin", "responseType" : "json"}'  "https://$inode/v3-public/localproviders/local?action=login")
                         
+                        echo $jsonOutput
+
                         token=$(echo $jsonOutput | jq -cr .token)
                         userID=$(echo $jsonOutput | jq -cr .userId)
 
 
                         jsonData=$( jq -n --arg password "password1234" '{"newPassword" : $password}')
-                        curl --insecure --user "$token" -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d "$jsonData" https://$inode/v3/users/$userID?action=setpassword
+                        curl --insecure --user "$token" -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d "$jsonData" "https://$inode/v3/users/$userID?action=setpassword"
 
                         echo "$token" > login.token
                         echo "$inode" > host.txt
@@ -184,6 +188,14 @@ node("harvester-vpn-1") {
 
                         sh "./yq e '.terraform.harvesterCredentials.kubeconfigContent = load_str(\"harvester.yaml\")' -i ${filename}"
 
+
+                        // this is really setup for the next stage...
+                        env.CATTLE_TEST_CONFIG=rootPath+filename
+
+                        sh returnStdout: true, script: "./yq e '.terraform.standalone.rancherTagVersion = \"${RANCHER_VERSION}\"' -i ${filename}"
+
+                        sh returnStdout: true, script: "./yq e '.terraform.standalone.rke2Version = \"${RANCHER_KUBERNETES_VERSION}\"' -i ${filename}"
+
                         config = sh(script: "cat ${filename}", returnStdout: true).trim()
 
                         
@@ -198,8 +210,6 @@ node("harvester-vpn-1") {
                      }
 
                     stage('Configure and Build') {
-
-                        writeFile file: filename, text: config
                 
                         dir(".ssh") {
                             def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
@@ -208,13 +218,6 @@ node("harvester-vpn-1") {
                             def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
                             writeFile file: AWS_RSA_KEY_NAME, text: decodedRsa
                         }
-
-                        env.CATTLE_TEST_CONFIG=rootPath+filename
-
-                        sh "./configure.sh"
-                        sh "./build.sh"
-
-                        sh "docker volume create --name ${validationVolume}"
                         
                         sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
                         sh returnStdout:true, script: 'chmod a+x ./yq'
@@ -222,12 +225,20 @@ node("harvester-vpn-1") {
                         sh returnStdout: true, script:  'wget -qO ./kubectl "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
                         sh returnStdout: true, script:  'chmod a+x ./kubectl'
                         
+
+                        writeFile file: filename, text: config
+
+
+                        sh "./configure.sh"
+                        sh "./build.sh"
+
+                        sh "docker volume create --name ${validationVolume}"
+
                         def harvesterKubeconfig = sh (
                           script: "./yq '.terraform.harvesterCredentials.kubeconfigContent' ${filename}",
                           returnStdout: true
                         ).trim()
 
-                        sh "./yq e '.terraform.standalone.rancherTagVersion = \"${RANCHER_VERSION}\"' -i ${filename}"
                         
                         writeFile file: "harvester.yaml", text: harvesterKubeconfig
                         writeFile file: 'harvester_config.yaml', text: HARVESTER_CONFIG
@@ -281,6 +292,7 @@ node("harvester-vpn-1") {
                             sh "docker volume create --name tests${validationVolume}"
 
                             sh "docker cp ${testContainer}:${rootPath}${filename} ${filename}"
+                            sh "cat ${filename}"
                           }
                         }
                         stage('Connect Rancher -> Harvester') {
