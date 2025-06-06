@@ -297,7 +297,7 @@ func (cm *ConfigmapsRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
 	err = projects.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(cm.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(standardUserClient, cm.cluster.ID, createdProject.Name)
+	namespace, err := projects.CreateNamespaceUsingWrangler(standardUserClient, cm.cluster.ID, createdProject.Name, nil)
 	require.NoError(cm.T(), err)
 
 	configMapCreatedByAdmin, err := configmaps.CreateConfigmap(namespace.Name, cm.client, data, cm.cluster.ID)

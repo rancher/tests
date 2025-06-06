@@ -1,0 +1,13 @@
+apiVersion: fleet.cattle.io/v1alpha1
+kind: GitRepo
+metadata:
+  name: test-gitrepo
+  namespace: fleet-default
+spec:
+  repo: "https://github.com/rancher/fleet-examples"
+  branch: "master"
+  paths:
+  - simple
+  targetNamespace: "fleet-testns"
+  targets:
+  - clusterName: "testcluster1"

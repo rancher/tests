@@ -250,7 +250,7 @@ func (rds *RbacDaemonsetTestSuite) TestCrudDaemonsetAsClusterMember() {
 	err = projects.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rds.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rds.cluster.ID, createdProject.Name)
+	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rds.cluster.ID, createdProject.Name, nil)
 	require.NoError(rds.T(), err)
 
 	log.Infof("As a %v, create a daemonset in the namespace %v", role, namespace.Name)

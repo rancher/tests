@@ -259,7 +259,7 @@ func (rcj *RbacCronJobTestSuite) TestCrudCronJobAsClusterMember() {
 	err = projects.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rcj.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rcj.cluster.ID, createdProject.Name)
+	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rcj.cluster.ID, createdProject.Name, nil)
 	require.NoError(rcj.T(), err)
 
 	log.Infof("As a %v, creating a cronjob in the namespace %v", role, namespace.Name)

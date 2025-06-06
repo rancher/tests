@@ -250,7 +250,7 @@ func (rd *RbacDeploymentTestSuite) TestCrudDeploymentAsClusterMember() {
 	err = projects.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rd.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rd.cluster.ID, createdProject.Name)
+	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rd.cluster.ID, createdProject.Name, nil)
 	require.NoError(rd.T(), err)
 
 	log.Infof("As a %v, create a deployment in the namespace %v", role, namespace.Name)

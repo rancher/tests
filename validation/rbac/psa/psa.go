@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
@@ -13,9 +14,11 @@ import (
 	wloads "github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/namespaces"
+	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads"
 	appv1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -79,7 +82,7 @@ func createDeploymentAndWait(steveclient *v1.Client, containerName string, image
 
 func deletePSALabels(labels map[string]string) {
 	for label := range labels {
-		if strings.Contains(label, psaWarn) || strings.Contains(label, psaAudit) || strings.Contains(label, psaEnforce) {
+		if strings.Contains(label, rbac.PSAWarnLabelKey) || strings.Contains(label, rbac.PSAAuditLabelKey) || strings.Contains(label, rbac.PSAEnforceLabelKey) {
 			delete(labels, label)
 		}
 	}
@@ -185,4 +188,40 @@ func createProject(client *rancher.Client, clusterID string) (*management.Projec
 		return nil, err
 	}
 	return createProject, nil
+}
+
+func getPSALabelsFromNamespace(namespace *coreV1.Namespace) map[string]string {
+	psaLabels := map[string]string{}
+	for key, value := range namespace.Labels {
+		if strings.Contains(key, rbac.PSALabelKey) {
+			psaLabels[key] = value
+		}
+	}
+	return psaLabels
+}
+
+func generatePSALabels() map[string]string {
+	return map[string]string{
+		rbac.PSAEnforceLabelKey:        rbac.PSAPrivilegedPolicy,
+		rbac.PSAEnforceVersionLabelKey: rbac.PSALatestValue,
+		rbac.PSAWarnLabelKey:           rbac.PSAPrivilegedPolicy,
+		rbac.PSAWarnVersionLabelKey:    rbac.PSALatestValue,
+		rbac.PSAAuditLabelKey:          rbac.PSAPrivilegedPolicy,
+		rbac.PSAAuditVersionLabelKey:   rbac.PSALatestValue,
+	}
+}
+
+func createUpdatePSARoleTemplate(client *rancher.Client) (*v3.RoleTemplate, error) {
+	updatePsaRules := []rbacv1.PolicyRule{
+		{
+			Verbs:     []string{rbac.UpdatePsaVerb},
+			APIGroups: []string{rbac.ManagementAPIGroup},
+			Resources: []string{rbac.ProjectResource},
+		},
+	}
+	roleTemplate, err := rbac.CreateRoleTemplate(client, rbac.ProjectContext, updatePsaRules, nil, false, nil)
+	if err != nil {
+		return nil, err
+	}
+	return roleTemplate, nil
 }

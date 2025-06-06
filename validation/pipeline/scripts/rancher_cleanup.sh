@@ -2,11 +2,13 @@
 set -ex
 cd $(dirname $0)/../../../../../rancher/tests
 
-echo | corral config
+# echo | corral config
 
-corral list
+# corral list
 
 ls -al
 pwd
 echo "cleanup rancher"
-validation/registries/bin/ranchercleanup
+sh ./validation/pipeline/scripts/destroy_qa_infra.sh
+# validation/registries/bin/ranchercleanup
+
