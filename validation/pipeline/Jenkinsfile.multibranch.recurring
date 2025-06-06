@@ -85,7 +85,6 @@ node {
                   writeFile file: filename, text: config
                   writeFile file: ansibleVarsFilename, text: ansibleConfig
                   writeFile file: terraformVarsfilename, text: terraformConfig
-                  // env.CATTLE_TEST_CONFIG = "${workPath}${filename}"
                   configPath = "./tests/validation/${filename}"
                   ansibleConfigPath = "./tests/validation/${ansibleVarsFilename}"
                   terraformConfigPath = "./tests/validation/${terraformVarsfilename}"
@@ -96,21 +95,17 @@ node {
             stage('Run Different Release Branches Testing') {
               try {
                   jobs = [:]
-                  def hostnamePrefix = sh (
-                    script: "./yq '.aws_hostname_prefix '  ${configPath}",
+                  def hostnamePrefix = sh ( // Read from the correct terraform config file
+                    script: "sed -n 's|^aws_hostname_prefix = \\\"\\(.*\\)\\\"|\\1|p' ${terraformConfigPath}",
                     returnStdout: true
                   ).trim()
                   for( String testTag : rancherImageTags ) {
-                    dir("./tests/validation") {
-                      writeFile file: filename, text: config
-                    }
-
                     def hostname = "${hostnamePrefix}${hostnameSuffix[testTag]}"
                     def rancherHostName = "${hostname}.qa.rancher.space"
 
                     sh "./yq e '.rancher_version = \"${tagChartMap[testTag]}\"' -i ${ansibleConfigPath}"
-                    sh "./yq e '.rancher_image_tag = \"${tagChartMap[testTag]}\"' -i ${ansibleConfigPath}"
-                    sh "./yq e '.aws_hostname_prefix = \"${hostname}\"' -i ${terraformConfigPath}"
+                    sh "./yq e '.rancher_image_tag = \"${testTag}\"' -i ${ansibleConfigPath}"
+                    sh "sed -i 's|^aws_hostname_prefix = \".*\"|aws_hostname_prefix = \"${hostname}\"|' ${terraformConfigPath}"
 
                     sh "./yq e '.rancher.host = \"${rancherHostName}\"' -i ${configPath}"
                     
