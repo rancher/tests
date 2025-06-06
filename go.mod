@@ -67,6 +67,7 @@ require (
 )
 
 require (
+	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/rancher/rancher v0.0.0-20250228094653-6e82729d08cf
 	github.com/rancher/shepherd v0.0.0-20250411212007-f3f2fd268849
 	github.com/rancher/tests/actions v0.0.0-20250505204226-5b136337f7c5

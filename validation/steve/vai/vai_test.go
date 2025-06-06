@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || extended) && !stress && !2.8
+//go:build (validation || infra.any || cluster.any || extended) && !stress && !2.8 && !2.9 && !2.10
 
 package vai
 
@@ -7,32 +7,38 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
-	"github.com/rancher/shepherd/extensions/kubectl"
-	"github.com/rancher/shepherd/extensions/vai"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/interoperability/vai/database"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	coreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
-const (
-	scriptURL     = "https://raw.githubusercontent.com/rancher/tests/refs/heads/main/validation/steve/vai/scripts/script.sh"
-	logBufferSize = "256MB"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 type VaiTestSuite struct {
 	suite.Suite
-	client      *rancher.Client
-	steveClient *steveV1.Client
-	session     *session.Session
-	vaiEnabled  bool
+	client       *rancher.Client
+	steveClient  *steveV1.Client
+	session      *session.Session
+	vaiEnabled   bool
+	testData     *TestData
+	dbCollection *database.SnapshotCollection
+	dbExtractor  *database.Extractor
+	dbQuery      *database.Query
+}
+
+type TestData struct {
+	SecretName    string
+	NamespaceName string
 }
 
 func (v *VaiTestSuite) SetupSuite() {
@@ -45,42 +51,235 @@ func (v *VaiTestSuite) SetupSuite() {
 	v.client = client
 	v.steveClient = client.Steve
 
-	// Check initial VAI state
 	enabled, err := isVaiEnabled(v.client)
 	require.NoError(v.T(), err)
 	v.vaiEnabled = enabled
+	v.dbExtractor = database.NewExtractor(v.client)
+	v.dbQuery = database.NewQuery()
 }
 
 func (v *VaiTestSuite) TearDownSuite() {
+	if v.dbCollection != nil {
+		v.dbCollection.Cleanup()
+	}
+
 	v.session.Cleanup()
 }
 
 func (v *VaiTestSuite) ensureVaiEnabled() {
 	if !v.vaiEnabled {
-		logrus.Info("VAI is disabled, enabling it for test...")
-		err := vai.EnableVaiCaching(v.client)
+		err := ensureVAIState(v.client, true)
 		require.NoError(v.T(), err)
-
-		// Verify VAI is now enabled
-		enabled, err := isVaiEnabled(v.client)
-		require.NoError(v.T(), err)
-		require.True(v.T(), enabled, "VAI should be enabled")
 		v.vaiEnabled = true
 	}
 }
 
 func (v *VaiTestSuite) ensureVaiDisabled() {
 	if v.vaiEnabled {
-		logrus.Info("VAI is enabled, disabling it for test...")
-		err := vai.DisableVaiCaching(v.client)
+		err := ensureVAIState(v.client, false)
 		require.NoError(v.T(), err)
-
-		// Verify VAI is now disabled
-		enabled, err := isVaiEnabled(v.client)
-		require.NoError(v.T(), err)
-		require.False(v.T(), enabled, "VAI should be disabled")
 		v.vaiEnabled = false
 	}
+}
+
+func (v *VaiTestSuite) setupTestResources() {
+	v.T().Log("Setting up test resources...")
+
+	v.testData = &TestData{
+		SecretName:    fmt.Sprintf("db-secret-%s", namegen.RandStringLower(randomStringLength)),
+		NamespaceName: fmt.Sprintf("db-namespace-%s", namegen.RandStringLower(randomStringLength)),
+	}
+
+	v.T().Logf("Creating namespace: %s", v.testData.NamespaceName)
+	namespace := &coreV1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: v.testData.NamespaceName},
+	}
+	namespaceClient := v.steveClient.SteveType("namespace")
+	_, err := namespaceClient.Create(namespace)
+	require.NoError(v.T(), err)
+
+	v.T().Logf("Creating secret: %s", v.testData.SecretName)
+	secret := &coreV1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      v.testData.SecretName,
+			Namespace: "default",
+		},
+		Type: coreV1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"test": []byte("data"),
+		},
+	}
+	secretClient := v.steveClient.SteveType("secret")
+	_, err = secretClient.Create(secret)
+	require.NoError(v.T(), err)
+
+	v.T().Log("Accessing metrics endpoint to ensure tables are created")
+	metricsClient := v.client.Steve.SteveType("metrics.k8s.io.nodemetrics")
+	_, err = metricsClient.List(nil)
+	if err != nil {
+		v.T().Logf("Warning: Failed to access metrics endpoint: %v", err)
+	}
+
+	v.T().Log("Listing resources to hydrate VAI cache...")
+	_, err = v.client.Steve.SteveType("namespace").List(nil)
+	require.NoError(v.T(), err)
+	_, err = v.client.Steve.SteveType("secret").List(nil)
+	require.NoError(v.T(), err)
+	v.T().Log("Waiting 15s to ensure resources are cached...")
+	_ = kwait.PollImmediate(time.Second, 15*time.Second, func() (bool, error) {
+		return false, nil
+	})
+
+	v.T().Log("Test resources setup completed")
+}
+
+func (v *VaiTestSuite) extractAllVAIDatabases() {
+	collection, err := v.dbExtractor.ExtractAll()
+	require.NoError(v.T(), err)
+	v.dbCollection = collection
+}
+
+func (v *VaiTestSuite) checkDBFilesExist() {
+	v.T().Log("Checking if VAI database files exist in pods...")
+	for podName, snapshot := range v.dbCollection.Snapshots {
+		v.T().Run(fmt.Sprintf("Pod %s", podName), func(t *testing.T) {
+			count, err := v.dbQuery.ExecuteCount(snapshot,
+				"SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
+			require.NoError(t, err, "Should be able to query database")
+			require.True(t, count > 0, "Database should contain tables")
+
+			t.Logf("Database file for pod %s is valid with %d tables", podName, count)
+		})
+	}
+}
+
+func (v *VaiTestSuite) checkSecretInVAIDatabase() {
+	v.T().Log("Checking if secret exists in VAI databases...")
+	require.NotNil(v.T(), v.testData, "Test data should be set up")
+
+	secretFoundCount := 0
+	for podName, snapshot := range v.dbCollection.Snapshots {
+		v.T().Run(fmt.Sprintf("Pod %s", podName), func(t *testing.T) {
+			tableCount, err := v.dbQuery.ExecuteCount(snapshot,
+				`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?`,
+				"_v1_Secret_fields")
+			if err != nil {
+				t.Logf("Error checking table: %v", err)
+				return
+			}
+			if tableCount == 0 {
+				t.Log("Secret table does not exist")
+				return
+			}
+
+			count, err := v.dbQuery.ExecuteCount(snapshot,
+				`SELECT COUNT(*) FROM "_v1_Secret_fields" WHERE "metadata.name" = ?`,
+				v.testData.SecretName)
+
+			if err != nil {
+				t.Logf("Error querying secret: %v", err)
+				return
+			}
+
+			if count > 0 {
+				t.Logf("Secret %s found in pod %s", v.testData.SecretName, podName)
+				secretFoundCount++
+			} else {
+				t.Logf("Secret %s not found in pod %s", v.testData.SecretName, podName)
+			}
+		})
+	}
+
+	v.T().Logf("Secret found in %d out of %d pods", secretFoundCount, len(v.dbCollection.Snapshots))
+	assert.Greater(v.T(), secretFoundCount, 0, "Secret should be found in at least one pod")
+}
+
+func (v *VaiTestSuite) checkNamespaceInAllVAIDatabases() {
+	v.T().Log("Checking if namespace exists in all VAI databases...")
+	require.NotNil(v.T(), v.testData, "Test data should be set up")
+
+	namespaceFoundCount := 0
+	totalPods := len(v.dbCollection.Snapshots)
+
+	for podName, snapshot := range v.dbCollection.Snapshots {
+		v.T().Run(fmt.Sprintf("Pod %s", podName), func(t *testing.T) {
+			tableCount, err := v.dbQuery.ExecuteCount(snapshot,
+				`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?`,
+				"_v1_Namespace_fields")
+			if err != nil || tableCount == 0 {
+				t.Logf("Namespace table does not exist or error: %v", err)
+				return
+			}
+
+			count, err := v.dbQuery.ExecuteCount(snapshot,
+				`SELECT COUNT(*) FROM "_v1_Namespace_fields" WHERE "metadata.name" = ?`,
+				v.testData.NamespaceName)
+
+			if err != nil {
+				t.Logf("Error querying namespace: %v", err)
+				return
+			}
+
+			if count > 0 {
+				t.Logf("Namespace %s found in pod %s", v.testData.NamespaceName, podName)
+				namespaceFoundCount++
+			} else {
+				t.Logf("Namespace %s not found in pod %s", v.testData.NamespaceName, podName)
+			}
+		})
+	}
+
+	v.T().Logf("Namespace found in %d out of %d pods", namespaceFoundCount, totalPods)
+	assert.Equal(v.T(), totalPods, namespaceFoundCount,
+		"Namespace should be found in all pods' databases")
+}
+
+func (v *VaiTestSuite) checkMetricTablesInVAIDatabase() {
+	v.T().Log("Checking if metric tables exist in VAI databases...")
+
+	expectedTables := []string{
+		"metrics.k8s.io_v1beta1_NodeMetrics",
+		"metrics.k8s.io_v1beta1_NodeMetrics_fields",
+		"metrics.k8s.io_v1beta1_NodeMetrics_indices",
+	}
+
+	podsWithAllTables := 0
+
+	for podName, snapshot := range v.dbCollection.Snapshots {
+		v.T().Run(fmt.Sprintf("Pod %s", podName), func(t *testing.T) {
+			result, err := v.dbQuery.Execute(snapshot,
+				`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
+			require.NoError(t, err)
+
+			tableMap := make(map[string]bool)
+			for _, row := range result.Rows {
+				if name, ok := row["name"].(string); ok {
+					tableMap[name] = true
+				}
+			}
+
+			foundCount := 0
+			for _, expectedTable := range expectedTables {
+				if tableMap[expectedTable] {
+					foundCount++
+					t.Logf("Found table %s", expectedTable)
+				}
+			}
+
+			if foundCount == 0 {
+				t.Log("No metric tables found (this is acceptable)")
+			} else if foundCount == len(expectedTables) {
+				t.Logf("All %d metric tables present", foundCount)
+				podsWithAllTables++
+			} else {
+				t.Errorf("Found only %d/%d metric tables", foundCount, len(expectedTables))
+			}
+		})
+	}
+
+	v.T().Logf("Summary: %d pods have all metric tables", podsWithAllTables)
+	require.Greater(v.T(), podsWithAllTables, 0,
+		"At least one pod must have all metric tables")
 }
 
 func (v *VaiTestSuite) runSecretFilterTestCases(testCases []secretFilterTestCase) {
@@ -104,12 +303,22 @@ func (v *VaiTestSuite) runSecretFilterTestCases(testCases []secretFilterTestCase
 				require.NoError(v.T(), err)
 			}
 
+			for _, ns := range allNamespaces {
+				err := waitForNamespaceActive(namespaceClient, ns)
+				require.NoError(v.T(), err, "Namespace %s did not become active", ns)
+			}
+
+			resourceIDs := make([]string, 0, len(secrets))
 			createdSecrets := make([]steveV1.SteveAPIObject, len(secrets))
 			for i, secret := range secrets {
 				created, err := secretClient.Create(&secret)
 				require.NoError(v.T(), err)
 				createdSecrets[i] = *created
+				resourceIDs = append(resourceIDs, fmt.Sprintf("%s:%s", secret.Namespace, secret.Name))
 			}
+
+			err := waitForResourcesCreated(secretClient, resourceIDs)
+			require.NoError(v.T(), err, "Not all secrets were created successfully")
 
 			filterValues := tc.filter(expectedNamespaces)
 
@@ -150,12 +359,22 @@ func (v *VaiTestSuite) runPodFilterTestCases(testCases []podFilterTestCase) {
 				require.NoError(v.T(), err)
 			}
 
+			for _, ns := range allNamespaces {
+				err := waitForNamespaceActive(namespaceClient, ns)
+				require.NoError(v.T(), err, "Namespace %s did not become active", ns)
+			}
+
+			resourceIDs := make([]string, 0, len(pods))
 			createdPods := make([]steveV1.SteveAPIObject, len(pods))
 			for i, pod := range pods {
 				created, err := podClient.Create(&pod)
 				require.NoError(v.T(), err)
 				createdPods[i] = *created
+				resourceIDs = append(resourceIDs, fmt.Sprintf("%s:%s", pod.Namespace, pod.Name))
 			}
+
+			err := waitForResourcesCreated(podClient, resourceIDs)
+			require.NoError(v.T(), err, "Not all pods were created successfully")
 
 			filterValues := tc.filter(expectedNamespaces)
 
@@ -199,16 +418,27 @@ func (v *VaiTestSuite) runSecretSortTestCases(testCases []secretSortTestCase) {
 				require.NoError(v.T(), err)
 			}
 
+			for _, ns := range namespaces {
+				err := waitForNamespaceActive(namespaceClient, ns)
+				require.NoError(v.T(), err, "Namespace %s did not become active", ns)
+			}
+
+			resourceIDs := make([]string, 0, len(secrets))
+
 			for _, secret := range secrets {
 				_, err := secretClient.Create(&secret)
 				require.NoError(v.T(), err)
+				resourceIDs = append(resourceIDs, fmt.Sprintf("%s:%s", secret.Namespace, secret.Name))
 			}
+
+			err := waitForResourcesCreated(secretClient, resourceIDs)
+			require.NoError(v.T(), err, "Not all secrets were created successfully")
 
 			sortValues := tc.sort()
 			sortValues.Add("projectsornamespaces", strings.Join(namespaces, ","))
 
-			secretCollection, err := secretClient.List(sortValues)
-			require.NoError(v.T(), err)
+			secretCollection, err := waitForResourceCount(secretClient, sortValues, len(secrets))
+			require.NoError(v.T(), err, "Failed to retrieve all secrets")
 
 			var actualNames []string
 			for _, item := range secretCollection.Data {
@@ -239,11 +469,20 @@ func (v *VaiTestSuite) runSecretLimitTestCases(testCases []secretLimitTestCase) 
 			})
 			require.NoError(v.T(), err)
 
+			err = waitForNamespaceActive(namespaceClient, ns)
+			require.NoError(v.T(), err, "Namespace %s did not become active", ns)
+
 			secretClient := v.steveClient.SteveType("secret").NamespacedSteveClient(ns)
+
+			resourceIDs := make([]string, 0, len(secrets))
 			for _, secret := range secrets {
 				_, err := secretClient.Create(&secret)
 				require.NoError(v.T(), err)
+				resourceIDs = append(resourceIDs, secret.Name)
 			}
+
+			err = waitForResourcesCreated(secretClient, resourceIDs)
+			require.NoError(v.T(), err, "Not all secrets were created successfully")
 
 			var retrievedSecrets []coreV1.Secret
 			var continueToken string
@@ -292,331 +531,6 @@ func (v *VaiTestSuite) runSecretLimitTestCases(testCases []secretLimitTestCase) 
 	}
 }
 
-func (v *VaiTestSuite) checkDBFilesInPods() {
-	expectedDBFiles := []string{"informer_object_cache.db", "informer_object_cache.db-wal", "informer_object_cache.db-shm"}
-
-	rancherPods, err := listRancherPods(v.client)
-	require.NoError(v.T(), err)
-
-	for _, pod := range rancherPods {
-		v.T().Run(fmt.Sprintf("Checking pod %s", pod), func(t *testing.T) {
-			lsCmd := []string{"kubectl", "exec", pod, "-n", "cattle-system", "--", "ls"}
-			output, err := kubectl.Command(v.client, nil, "local", lsCmd, logBufferSize)
-			if err != nil {
-				t.Errorf("Error executing command in pod %s: %v", pod, err)
-				return
-			}
-
-			files := strings.Fields(output)
-			var dbFiles []string
-			for _, file := range files {
-				if strings.HasSuffix(file, ".db") {
-					dbFiles = append(dbFiles, file)
-				}
-				if strings.HasSuffix(file, ".db-wal") {
-					dbFiles = append(dbFiles, file)
-				}
-				if strings.HasSuffix(file, ".db-shm") {
-					dbFiles = append(dbFiles, file)
-				}
-			}
-
-			for _, expectedFile := range expectedDBFiles {
-				found := false
-				for _, dbFile := range dbFiles {
-					if dbFile == expectedFile {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Expected file %s not found in pod %s", expectedFile, pod)
-				}
-			}
-		})
-	}
-}
-
-func (v *VaiTestSuite) checkSecretInVAIDatabase() {
-	v.T().Log("Starting checkSecretInVAIDatabase test")
-
-	secretName := fmt.Sprintf("db-secret-%s", namegen.RandStringLower(randomStringLength))
-	v.T().Logf("Generated secret name: %s", secretName)
-
-	secret := &coreV1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "default"},
-		Type:       coreV1.SecretTypeOpaque,
-	}
-
-	secretClient := v.steveClient.SteveType("secret")
-	v.T().Log("Creating secret...")
-	_, err := secretClient.Create(secret)
-	require.NoError(v.T(), err)
-	v.T().Log("Secret created successfully")
-
-	v.T().Log("Listing Rancher pods...")
-	rancherPods, err := listRancherPods(v.client)
-	require.NoError(v.T(), err)
-	v.T().Logf("Found %d Rancher pods", len(rancherPods))
-
-	v.T().Logf("Using script URL: %s", scriptURL)
-
-	secretFound := false
-	var outputs []string
-
-	v.T().Log("List all secrets to hydrate database...")
-	_, err = v.client.Steve.SteveType("secret").List(nil)
-	require.NoError(v.T(), err)
-
-	for i, pod := range rancherPods {
-		v.T().Logf("Processing pod %d: %s", i+1, pod)
-		cmd := []string{
-			"kubectl", "exec", pod, "-n", "cattle-system", "--",
-			"sh", "-c",
-			fmt.Sprintf("curl -k -sSL %s | TABLE_NAME='_v1_Secret_fields' RESOURCE_NAME='%s' sh", scriptURL, secretName),
-		}
-
-		v.T().Logf("Executing command on pod %s", pod)
-		output, err := kubectl.Command(v.client, nil, "local", cmd, logBufferSize)
-		if err != nil {
-			v.T().Logf("Error executing script on pod %s: %v", pod, err)
-			continue
-		}
-		v.T().Logf("Command executed successfully on pod %s", pod)
-
-		outputs = append(outputs, fmt.Sprintf("Output from pod %s:\n%s", pod, output))
-
-		if strings.Contains(output, secretName) {
-			v.T().Logf("Secret found in pod %s", pod)
-			secretFound = true
-			break
-		} else {
-			v.T().Logf("Secret not found in pod %s", pod)
-		}
-	}
-
-	v.T().Log("Logging all outputs:")
-	for i, output := range outputs {
-		v.T().Logf("Output %d:\n%s", i+1, output)
-	}
-
-	v.T().Logf("Secret found status: %v", secretFound)
-	assert.True(v.T(), secretFound, fmt.Sprintf("Secret %s not found in any of the Rancher pods' databases", secretName))
-	v.T().Log("checkSecretInVAIDatabase test completed")
-}
-
-func (v *VaiTestSuite) buildVAIQueryOnPods() error {
-	v.T().Log("Building VAI query program on all pods...")
-
-	rancherPods, err := listRancherPods(v.client)
-	if err != nil {
-		return fmt.Errorf("failed to list Rancher pods: %v", err)
-	}
-
-	for _, pod := range rancherPods {
-		v.T().Logf("Building VAI query on pod %s", pod)
-
-		cmd := []string{
-			"kubectl", "exec", pod, "-n", "cattle-system", "--",
-			"/bin/sh", "-c",
-			fmt.Sprintf("curl -k -sSL %s | sh", scriptURL),
-		}
-
-		v.T().Logf("Executing command: %s", strings.Join(cmd, " "))
-
-		output, err := kubectl.Command(v.client, nil, "local", cmd, "")
-		if err != nil {
-			v.T().Logf("Error building VAI query on pod %s: %v", pod, err)
-			v.T().Logf("Command output: %s", output)
-			return fmt.Errorf("failed to build vai-query on pod %s: %v", pod, err)
-		}
-
-		v.T().Logf("Successfully built VAI query on pod %s", pod)
-	}
-
-	return nil
-}
-
-// checkNamespaceInPod checks if a namespace exists in a specific pod's VAI database
-func (v *VaiTestSuite) checkNamespaceInPod(pod, namespaceName string) (bool, string, error) {
-	v.T().Logf("Checking namespace %s in pod %s", namespaceName, pod)
-	cmd := []string{
-		"kubectl", "exec", pod, "-n", "cattle-system", "--",
-		"sh", "-c",
-		fmt.Sprintf("TABLE_NAME='_v1_Namespace_fields' RESOURCE_NAME='%s' /usr/local/bin/vai-query", namespaceName),
-	}
-
-	output, err := kubectl.Command(v.client, nil, "local", cmd, logBufferSize)
-	if err != nil {
-		return false, output, fmt.Errorf("failed to execute command on pod %s: %v", pod, err)
-	}
-
-	return strings.Contains(output, namespaceName), output, nil
-}
-
-// checkNamespaceInAllVAIDatabases checks if a namespace exists in all Rancher pods' VAI databases
-func (v *VaiTestSuite) checkNamespaceInAllVAIDatabases() {
-	v.T().Log("Starting TestCheckNamespaceInAllVAIDatabases test")
-
-	// Create namespace to test
-	namespaceName := fmt.Sprintf("db-namespace-%s", namegen.RandStringLower(randomStringLength))
-	v.T().Logf("Generated namespace name: %s", namespaceName)
-
-	namespace := &coreV1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
-	}
-
-	namespaceClient := v.steveClient.SteveType("namespace")
-	v.T().Log("Creating namespace...")
-	_, err := namespaceClient.Create(namespace)
-	require.NoError(v.T(), err)
-	v.T().Log("Namespace created successfully")
-
-	// Ensure namespace is in the list
-	_, err = v.client.Steve.SteveType("namespace").List(nil)
-	require.NoError(v.T(), err)
-
-	// Get list of pods
-	rancherPods, err := listRancherPods(v.client)
-	require.NoError(v.T(), err)
-	podCount := len(rancherPods)
-	v.T().Logf("Found %d Rancher pods", podCount)
-	require.NotEmpty(v.T(), rancherPods, "No Rancher pods found")
-
-	// Check each pod
-	var outputs []string
-	namespaceFoundCount := 0
-
-	for i, pod := range rancherPods {
-		v.T().Logf("Processing pod %d: %s", i+1, pod)
-
-		found, output, err := v.checkNamespaceInPod(pod, namespaceName)
-		require.NoError(v.T(), err)
-
-		outputs = append(outputs, fmt.Sprintf("Output from pod %s:\n%s", pod, output))
-
-		if found {
-			v.T().Logf("Namespace found in pod %s", pod)
-			namespaceFoundCount++
-		} else {
-			v.T().Logf("Namespace not found in pod %s", pod)
-		}
-	}
-
-	// Log all outputs
-	v.T().Log("Logging all outputs:")
-	for i, output := range outputs {
-		v.T().Logf("Output %d:\n%s", i+1, output)
-	}
-
-	v.T().Logf("Namespace found count: %d", namespaceFoundCount)
-	assert.Equal(v.T(), podCount, namespaceFoundCount,
-		fmt.Sprintf("Namespace %s not found in all Rancher pods' databases. Found in %d out of %d pods.",
-			namespaceName, namespaceFoundCount, podCount))
-	v.T().Log("TestCheckNamespaceInAllVAIDatabases test completed")
-}
-
-// checkMetricTablesInVAIDatabase checks if the required metric tables exist in the VAI database
-func (v *VaiTestSuite) checkMetricTablesInVAIDatabase() {
-	v.T().Log("Starting checkMetricTablesInVAIDatabase test")
-
-	// First, access the metrics endpoint to ensure tables are created
-	err := v.accessMetricsToCreateTables()
-	if err != nil {
-		v.T().Logf("Warning: Failed to access metrics endpoint: %v", err)
-		// Continue with the test even if this fails
-	}
-
-	// List Rancher pods
-	v.T().Log("Listing Rancher pods...")
-	rancherPods, err := listRancherPods(v.client)
-	require.NoError(v.T(), err)
-	v.T().Logf("Found %d Rancher pods", len(rancherPods))
-
-	v.T().Logf("Using script URL: %s", scriptURL)
-
-	foundTables := make(map[string]bool)
-	expectedTables := []string{
-		"metrics.k8s.io_v1beta1_NodeMetrics",
-		"metrics.k8s.io_v1beta1_NodeMetrics_fields",
-		"metrics.k8s.io_v1beta1_NodeMetrics_indices",
-	}
-	var outputs []string
-
-	for i, pod := range rancherPods {
-		v.T().Logf("Processing pod %d: %s", i+1, pod)
-
-		cmd := []string{
-			"kubectl", "exec", pod, "-n", "cattle-system", "--",
-			"sh", "-c",
-			fmt.Sprintf(`curl -k -sSL %s | SQL_QUERY='SELECT name FROM sqlite_master WHERE type="table" AND name IN ("metrics.k8s.io_v1beta1_NodeMetrics", "metrics.k8s.io_v1beta1_NodeMetrics_fields", "metrics.k8s.io_v1beta1_NodeMetrics_indices")' OUTPUT_FORMAT=text sh`, scriptURL),
-		}
-
-		v.T().Logf("Executing command on pod %s", pod)
-		output, err := kubectl.Command(v.client, nil, "local", cmd, logBufferSize)
-		if err != nil {
-			v.T().Logf("Error executing script on pod %s: %v", pod, err)
-			v.T().Logf("Error output: %s", output)
-			continue
-		}
-		v.T().Logf("Command executed successfully on pod %s", pod)
-
-		outputs = append(outputs, fmt.Sprintf("Output from pod %s:\n%s", pod, output))
-
-		// Parse output to find tables
-		lines := strings.Split(output, "\n")
-
-		// Check if output has at least header and separator line
-		if len(lines) >= 2 {
-			// Skip the header and separator rows (first two lines)
-			for i := 2; i < len(lines); i++ {
-				line := strings.TrimSpace(lines[i])
-				if line != "" && !strings.Contains(line, "row(s) returned") {
-					// Check if this is a table name and not log output
-					if !strings.Contains(line, "[") && !strings.Contains(line, "INFO") && !strings.Contains(line, "ERROR") {
-						foundTables[line] = true
-						v.T().Logf("Found table: %s in pod %s", line, pod)
-					}
-				}
-			}
-		}
-	}
-
-	v.T().Log("Logging all outputs:")
-	for i, output := range outputs {
-		v.T().Logf("Output %d:\n%s", i+1, output)
-	}
-
-	// Check if all required tables were found
-	allTablesFound := true
-	for _, tableName := range expectedTables {
-		if !foundTables[tableName] {
-			allTablesFound = false
-			v.T().Logf("Required table not found: %s", tableName)
-		}
-	}
-
-	assert.True(v.T(), allTablesFound, "Not all required metric tables were found in the VAI database")
-	v.T().Log("checkMetricTablesInVAIDatabase test completed")
-}
-
-func (v *VaiTestSuite) accessMetricsToCreateTables() error {
-	v.T().Log("Accessing metrics endpoint to ensure tables are created")
-
-	metricsClient := v.client.Steve.SteveType("metrics.k8s.io.nodemetrics")
-
-	// List the metrics resources
-	v.T().Log("Listing metrics.k8s.io.nodemetrics resources")
-	_, err := metricsClient.List(nil)
-	if err != nil {
-		return fmt.Errorf("failed to list metrics.k8s.io.nodemetrics: %v", err)
-	}
-
-	v.T().Log("Successfully accessed metrics endpoint")
-	return nil
-}
-
-// TestVaiDisabled runs all tests with VAI disabled
 func (v *VaiTestSuite) TestVaiDisabled() {
 	v.ensureVaiDisabled()
 
@@ -647,17 +561,19 @@ func (v *VaiTestSuite) TestVaiDisabled() {
 	})
 }
 
-// TestVaiEnabled runs all VAI-enabled tests
 func (v *VaiTestSuite) TestVaiEnabled() {
 	v.ensureVaiEnabled()
 
-	// First ensure VAI query program is built on each pod
-	v.Run("SetupVAIQuery", func() {
-		err := v.buildVAIQueryOnPods()
-		require.NoError(v.T(), err, "Failed to build VAI query program on pods")
+	v.Run("SetupTestResources", v.setupTestResources)
+	v.Run("ExtractAllDatabases", v.extractAllVAIDatabases)
+
+	v.Run("DatabaseTests", func() {
+		v.Run("CheckDBFilesExist", v.checkDBFilesExist)
+		v.Run("CheckSecretInDB", v.checkSecretInVAIDatabase)
+		v.Run("CheckNamespaceInAllVAIDatabases", v.checkNamespaceInAllVAIDatabases)
+		v.Run("CheckMetricTablesInVAIDatabase", v.checkMetricTablesInVAIDatabase)
 	})
 
-	// Run all VAI-dependent tests
 	v.Run("SecretFilters", func() {
 		supportedWithVai := filterTestCases(secretFilterTestCases, true)
 		v.runSecretFilterTestCases(supportedWithVai)
@@ -677,11 +593,6 @@ func (v *VaiTestSuite) TestVaiEnabled() {
 		supportedWithVai := filterTestCases(secretLimitTestCases, true)
 		v.runSecretLimitTestCases(supportedWithVai)
 	})
-
-	v.Run("CheckDBFilesInPods", v.checkDBFilesInPods)
-	v.Run("CheckSecretInDB", v.checkSecretInVAIDatabase)
-	v.Run("CheckNamespaceInAllVAIDatabases", v.checkNamespaceInAllVAIDatabases)
-	v.Run("checkMetricTablesInVAIDatabase", v.checkMetricTablesInVAIDatabase)
 }
 
 func TestVaiTestSuite(t *testing.T) {
