@@ -62,12 +62,11 @@ func (q *service) GetTestSuite(project, suite string) (*upstream.Suite, error) {
 }
 
 // CreateTestSuite creates a new Test Suite within a specified Qase Project
-func (q *service) CreateTestSuite(project, suite string) (int64, error) {
-	logrus.Debugf("Creating test suite \"%s\" in project %s\n", suite, project)
-	suiteBody := upstream.SuiteCreate{Title: suite}
-	resp, _, err := q.client.SuitesApi.CreateSuite(context.TODO(), suiteBody, project)
+func (q *service) CreateTestSuite(project string, suite upstream.SuiteCreate) (int64, error) {
+	logrus.Debugf("Creating test suite \"%s\" in project %s\n", suite.Title, project)
+	resp, _, err := q.client.SuitesApi.CreateSuite(context.TODO(), suite, project)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create test suite: \"%s\". Error: %v", suite, err)
+		return 0, fmt.Errorf("failed to create test suite: \"%s\". Error: %v", suite.Title, err)
 	}
 	return resp.Result.Id, nil
 }
