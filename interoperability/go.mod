@@ -57,7 +57,7 @@ replace (
 
 require (
 	github.com/gruntwork-io/terratest v0.49.0
-	github.com/mattn/go-sqlite3 v1.14.16
+	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/rancher/backup-restore-operator v1.2.1
 	github.com/rancher/fleet/pkg/apis v0.12.0
 	github.com/rancher/norman v0.6.0
@@ -116,6 +116,7 @@ require (
 	github.com/hashicorp/go-version v1.7.0 // indirect
 	github.com/hashicorp/hcl/v2 v2.22.0 // indirect
 	github.com/hashicorp/terraform-json v0.23.0 // indirect
+	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jinzhu/copier v0.4.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
