@@ -73,7 +73,6 @@ require (
 	github.com/rancher/shepherd v0.0.0-20250411212007-f3f2fd268849
 	github.com/rancher/tests/actions v0.0.0-20250505204226-5b136337f7c5
 	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
-
 )
 
 require (
@@ -103,7 +102,7 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.61.0
 	github.com/rancher/aks-operator v1.11.0 // indirect
-	github.com/rancher/apiserver v0.5.2 // indirect
+	github.com/rancher/apiserver v0.6.0 // indirect
 	github.com/rancher/backup-restore-operator v1.2.1
 	github.com/rancher/eks-operator v1.11.0 // indirect
 	github.com/rancher/fleet/pkg/apis v0.12.0
@@ -112,16 +111,16 @@ require (
 	github.com/rancher/machine v0.15.0-rancher126 // indirect
 	github.com/rancher/norman v0.6.0
 	github.com/rancher/rke v1.8.0-rc.4 // indirect
-	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20240301001845-4eacc2dabbde // indirect
+	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250306000150-b1a9781accab // indirect
 	github.com/rancher/wrangler v1.1.2 // indirect
 	github.com/rancher/wrangler/v3 v3.2.0 // indirect
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/crypto v0.35.0
-	golang.org/x/net v0.36.0
+	golang.org/x/crypto v0.36.0
+	golang.org/x/net v0.38.0
 	golang.org/x/oauth2 v0.26.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	google.golang.org/grpc v1.70.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -164,6 +163,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/kr/fs v0.1.0 // indirect
+	github.com/kubereboot/kured v1.13.1 // indirect
 	github.com/moby/sys/user v0.3.0 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
@@ -250,8 +250,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/term v0.29.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/time v0.10.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
