@@ -1,8 +1,8 @@
 #!groovy
 node {
-  def rootPath = "/root/go/src/github.com/rancher/tfp-automation/"
+  def rootPath = "/root/go/src/github.com/slickwarren/tfp-automation/"
   def testRootPath = "/root/go/src/github.com/rancher/tests/validation/"
-  def testsDir = "github.com/rancher/tfp-automation/tests/${env.TEST_PACKAGE}"
+  def testsDir = "github.com/slickwarren/tfp-automation/tests/${env.TEST_PACKAGE}"
   def golangTestDir = "/root/go/src/github.com/rancher/tests/validation/${env.GO_TEST_PACKAGE}"
   def filename = "config.yml"
   def job_name = "${JOB_NAME}"
