@@ -63,8 +63,9 @@ require (
 	github.com/rancher/norman v0.6.0
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20250411212007-f3f2fd268849
+	github.com/rancher/tests v0.0.0-20250609184855-a12cc81e512c
 	github.com/rancher/tests/actions v0.0.0-20250505204226-5b136337f7c5
-	github.com/rancher/tfp-automation v0.0.0-20250529185848-29c006a9adae
+	github.com/rancher/tfp-automation v0.0.0-20250609213743-a9b547770fc5
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -137,7 +138,6 @@ require (
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
-	github.com/openshift/api v0.0.0-20240830023148-b7d0481c9094 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
