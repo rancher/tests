@@ -162,7 +162,7 @@ require (
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/kubereboot/kured v1.13.1 // indirect
 	github.com/moby/sys/user v0.3.0 // indirect
-	github.com/openshift/api v0.0.0-20240830023148-b7d0481c9094 // indirect
+	github.com/openshift/api v0.0.0-20250609165542-c8c30d5b3acc // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
