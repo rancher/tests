@@ -7,11 +7,11 @@ replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.4.14-rancher3
 	github.com/docker/distribution => github.com/docker/distribution v2.8.2+incompatible // rancher-machine requires a replace is set
 	github.com/docker/docker => github.com/docker/docker v20.10.27+incompatible // rancher-machine requires a replace is set
-
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20191219222812-2987a591a72c
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20191219222812-2987a591a72c
 	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20250410003522-2a1bf3d05723
 	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20250212213103-5c3550f55322
+	github.com/rancher/tf-automation => github.com/slickwarren/tfp-automation v0.0.0-20250506204935-af3e58920632
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
 	go.opentelemetry.io/otel => go.opentelemetry.io/otel v1.28.0
@@ -66,7 +66,6 @@ require (
 	github.com/rancher/norman v0.6.0
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20250411212007-f3f2fd268849
-	github.com/rancher/tests v0.0.0-20250609184855-a12cc81e512c
 	github.com/rancher/tests/actions v0.0.0-20250505204226-5b136337f7c5
 	github.com/rancher/tfp-automation v0.0.0-20250609213743-a9b547770fc5
 	github.com/sirupsen/logrus v1.9.3
@@ -187,6 +186,7 @@ require (
 	k8s.io/cli-runtime v0.32.2 // indirect
 	k8s.io/client-go v12.0.0+incompatible // indirect
 	k8s.io/component-base v0.32.2 // indirect
+	k8s.io/externaljwt v0.32.2 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-aggregator v0.32.2 // indirect
 	k8s.io/kube-openapi v0.31.5 // indirect
