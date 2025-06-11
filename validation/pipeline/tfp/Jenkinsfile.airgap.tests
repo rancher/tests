@@ -3,7 +3,7 @@ node {
   def rootPath = "/root/go/src/github.com/slickwarren/tfp-automation/"
   def testRootPath = "/root/go/src/github.com/rancher/tests/validation/"
   def testsDir = "github.com/slickwarren/tfp-automation/tests/${env.TEST_PACKAGE}"
-  def golangTestDir = "/root/go/src/github.com/rancher/tests/validation/${env.GO_TEST_PACKAGE}"
+  def golangTestDir = "github.com/rancher/tests/validation/${env.GO_TEST_PACKAGE}"
   def filename = "config.yml"
   def job_name = "${JOB_NAME}"
   if (job_name.contains('/')) { 
@@ -52,24 +52,16 @@ node {
             }
             withCredentials([ string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
                               string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-                              string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'RANCHER_EKS_ACCESS_KEY'),
-                              string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'RANCHER_EKS_SECRET_KEY'),
                               string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
-                              string(credentialsId: 'RANCHER_SSH_KEY', variable: 'RANCHER_SSH_KEY'),
                               string(credentialsId: 'AWS_SSH_RSA_KEY', variable: 'AWS_SSH_RSA_KEY'),
                               string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
                               string(credentialsId: 'RANCHER_REGISTRY_USER_NAME', variable: 'RANCHER_REGISTRY_USER_NAME'),
                               string(credentialsId: 'RANCHER_REGISTRY_PASSWORD', variable: 'RANCHER_REGISTRY_PASSWORD'),
-                              string(credentialsId: 'ADMIN_PASSWORD', variable: 'ADMIN_PASSWORD'),
-                              string(credentialsId: 'USER_PASSWORD', variable: 'USER_PASSWORD'),
-                              string(credentialsId: 'RANCHER_VALID_TLS_CERT', variable: 'RANCHER_VALID_TLS_CERT'),
-                              string(credentialsId: 'RANCHER_VALID_TLS_KEY', variable: 'RANCHER_VALID_TLS_KEY')]) {
+                              string(credentialsId: 'ADMIN_PASSWORD', variable: 'ADMIN_PASSWORD')]) {
           
                 withEnv(paramsMap) {
 
-
                     stage('Checkout Infrastructure Repo') {
-                        deleteDir()
                         checkout([
                                     $class: 'GitSCM',
                                     branches: [[name: "*/${infraBranch}"]],
@@ -79,40 +71,46 @@ node {
                      }
 
                     stage('Configure and Build') {
-                        config = config.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
-                        config = config.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
-                
-                        writeFile file: filename, text: config
-                
                         dir(".ssh") {
                             def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
                             writeFile file: AWS_SSH_KEY_NAME, text: decoded
-                    
+
                             def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
-                            writeFile file: JENKINS_RKE_VALIDATION, text: decodedRsa
+                            writeFile file: AWS_RSA_KEY_NAME, text: decodedRsa
                         }
-                        
-                        env.CATTLE_TEST_CONFIG=rootPath+filename
                 
+                        writeFile file: filename, text: config
+
                         sh "./configure.sh"
                         sh "./build.sh"
+
+                        sh "docker volume create --name ${validationVolume}"
                      }
 
-                    stage('Run Infrastructure Module Test') {
+                    stage('Run Infrastructure TFP Test') {
                         try {
                             sh """
-                            docker run --name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
+                            docker run -v ${validationVolume}:/root --name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
                             /root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -timeout=${timeout} -v ${params.TEST_CASE} | tee /root/test_logs.txt"
                             """
-                            sh "docker cp ${testContainer}:/root/ ./"
+                            sh "docker cp ${testContainer}:${rootPath}${filename} ${filename}"
               
                             adminToken = sh(script: "grep 'Admin bearer token:' ./root/test_logs.txt | awk -F 'Admin bearer token: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
-                            echo "Admin token: ${adminToken}"
+                            if (!adminToken) {
+                                echo "WARNING: Admin token not found in ./root/test_logs.txt!"
+                            } else {
+                                echo "Admin token: ${adminToken}"
+                            }
                             privateRegistry = sh(script: "grep 'Private registry:' ./root/test_logs.txt | awk -F 'Private registry: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
-                            echo "Private registry:  ${privateRegistry}"
+                            if (!privateRegistry) {
+                                echo "WARNING: Private registry not found in ./root/test_logs.txt!"
+                            } else {
+                                echo "Private registry:  ${privateRegistry}"
+                            }
 
                         } catch(err) {
-                            echo 'Test run had failures. Collecting results...'
+                            echo "Test run had failures. Collecting results... ${err}"
+                            error err
                         }
                      }
 
@@ -144,23 +142,25 @@ node {
                             sh "./validation/configure.sh"
                             sh "docker build . -f ./validation/Dockerfile.validation -t ${imageName}"
                             sh "docker volume create --name ${validationVolume}"
+
+                            sh "docker cp ${testContainer}:${rootPath}${filename} ${filename}"
+                            sh "cat ${filename}"
                           }
                         }
                         stage('Run Validation Tests') {
                           try {
                             sh """
-                            docker run -v ${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "
-                            gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
+                            docker run -v ${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "/root/go/bin/gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
                             """
 
                               
                           } catch(err) {
-                            echo 'Validation tests had failures. Aborting'
+                            echo '${err} Validation tests had failures. Aborting'
                           }
                           sh """
-                          docker rm ${golangTestContainer}
-                          docker volume rm ${validationVolume}
-                          docker rmi ${imageName}
+                          docker stop ${golangTestContainer} || true
+                          docker rm ${golangTestContainer} || true
+                          docker rmi ${imageName} || true
                           
                           """
                         }
@@ -168,13 +168,17 @@ node {
                         stage('Cleanup terraform resources'){
                         try {
                             dir ("./") {
+                                if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
+                                  dir(".ssh") {
+                                    def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
+                                    writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                                  }
+                                }
+
                                 sh """
-                                docker run --rm \
-                                    -v \$(pwd)/airgap:/terraform-files \
-                                    -e AWS_ACCESS_KEY_ID='${AWS_ACCESS_KEY_ID}' \
-                                    -e AWS_SECRET_ACCESS_KEY='${AWS_SECRET_ACCESS_KEY}' \
-                                    -w /terraform-files \
-                                    hashicorp/terraform:latest \
+                                docker run --rm -v \$(pwd)/airgap:/terraform-files \
+                                    -v \$(pwd)/airgap/.ssh:/root/go/src/github.com/rancher/tfp-automation/.ssh \
+                                    -w /terraform-files hashicorp/terraform:latest \
                                     destroy -auto-approve
                                 """
                              }
