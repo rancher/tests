@@ -7,15 +7,17 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/settings"
 	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioning/permutations"
 	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/machinepools"
 	rbac "github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/users"
 	log "github.com/sirupsen/logrus"
@@ -29,7 +31,7 @@ type RestrictedAdminTestSuite struct {
 	client             *rancher.Client
 	session            *session.Session
 	cluster            *management.Cluster
-	provisioningConfig *provisioninginput.Config
+	clusterConfig      *clusters.ClusterConfig
 }
 
 const (
@@ -49,8 +51,8 @@ func (ra *RestrictedAdminTestSuite) SetupSuite() {
 
 	ra.client = client
 
-	ra.provisioningConfig = new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, ra.provisioningConfig)
+	ra.clusterConfig = new(clusters.ClusterConfig)
+	config.LoadConfig(defaults.ClusterConfigKey, ra.clusterConfig)
 
 	log.Info("Getting cluster name from the config file and append cluster details in the struct.")
 	clusterName := client.RancherConfig.ClusterName
@@ -92,17 +94,16 @@ func (ra *RestrictedAdminTestSuite) TestRestrictedAdminCreateK3sCluster() {
 
 	ra.T().Logf("Verifying restricted admin can create a downstream cluster")
 	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
-	provisioningConfig := *ra.provisioningConfig
-	provisioningConfig.MachinePools = nodeRolesAll
+	ra.clusterConfig.MachinePools = nodeRolesAll
 
 	log.Info("Setting up cluster config and provider for downstream k3s cluster")
-	clusterConfig := clusters.ConvertConfigToClusterConfig(&provisioningConfig)
-	clusterConfig.KubernetesVersion = ra.provisioningConfig.K3SKubernetesVersions[0]
-	k3sprovider, _, _, _ := permutations.GetClusterProvider(permutations.K3SProvisionCluster, (*clusterConfig.Providers)[0], &provisioningConfig)
-	clusterObject, err := provisioning.CreateProvisioningCluster(restrictedAdminClient, *k3sprovider, clusterConfig, nil)
+	provider := provisioning.CreateProvider(ra.clusterConfig.Provider)
+	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+	clusterObject, err := provisioning.CreateProvisioningCluster(restrictedAdminClient, provider, credentialSpec, ra.clusterConfig, machineConfigSpec, nil)
 	require.NoError(ra.T(), err)
 
-	provisioning.VerifyCluster(ra.T(), ra.client, clusterConfig, clusterObject)
+	provisioning.VerifyCluster(ra.T(), ra.client, ra.clusterConfig, clusterObject)
 }
 
 func (ra *RestrictedAdminTestSuite) TestRestrictedAdminGlobalSettings() {

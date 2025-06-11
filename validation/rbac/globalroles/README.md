@@ -24,7 +24,7 @@ rancher:
 For the restrictedadmin_replacement_role_test.go run, we need the following additional parameters to be passed in the config file as we create a downstream k3s cluster:
 
 ```yaml
-provisioningInput:
+clusterConfig:
   machinePools:
   - machinePoolConfig:
       etcd: true
@@ -43,12 +43,11 @@ provisioningInput:
   - machinePoolConfig:
       windows: true
       quantity: 1
-  k3sKubernetesVersion: [""]
-  providers: ["aws"]
-  cni: ["calico"]
-  nodeProviders: ["ec2"]
+  kubernetesVersion: ""
+  provider: "aws"
+  cni: "calico"
+  nodeProvider: "ec2"
   hardened: false
-  psact: ""
 
 awsCredentials:
  accessKey: ""
