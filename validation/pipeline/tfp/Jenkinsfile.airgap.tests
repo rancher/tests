@@ -54,6 +54,7 @@ node {
                               string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
                               string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
                               string(credentialsId: 'AWS_SSH_RSA_KEY', variable: 'AWS_SSH_RSA_KEY'),
+                              string(credentialsId: 'AWS_RSA_KEY_NAME', variable: 'AWS_RSA_KEY_NAME'),
                               string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
                               string(credentialsId: 'RANCHER_REGISTRY_USER_NAME', variable: 'RANCHER_REGISTRY_USER_NAME'),
                               string(credentialsId: 'RANCHER_REGISTRY_PASSWORD', variable: 'RANCHER_REGISTRY_PASSWORD'),
