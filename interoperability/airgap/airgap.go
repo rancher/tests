@@ -62,7 +62,7 @@ func TfpSetupSuite(t *testing.T) (map[string]any, *rancher.Config, *terraform.Op
 	_, err = operations.ReplaceValue([]string{"rancher", "host"}, rancherConfig.Host, configMap[0])
 	require.NoError(t, err)
 
-	_, keyPath := rancher2.SetKeyPath(keypath.RancherKeyPath, terratestConfig.PathToRepo, terraformConfig.Provider)
+	_, keyPath := rancher2.SetKeyPath(keypath.RancherKeyPath, terratestConfig.PathToRepo, "aws")
 	terraformOptions := framework.Setup(t, terraformConfig, terratestConfig, keyPath)
 
 	return cattleConfig, rancherConfig, terraformOptions, terraformConfig, terratestConfig
