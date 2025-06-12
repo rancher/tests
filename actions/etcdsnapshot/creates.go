@@ -335,18 +335,18 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 		return nil, "", nil, nil, err
 	}
 
-	snapshotToRestore := createdSnapshots[0].ID
 	createdSnapshotIDs := []string{}
-	// prioritize s3 snapshots over local.
+	var snapshotToRestore string
 	s3Found := false
 
 	for _, snapshot := range createdSnapshots {
+		createdSnapshotIDs = append(createdSnapshotIDs, snapshot.ID)
 		store, ok := snapshot.Annotations["etcdsnapshot.rke.io/storage"]
 		if ok && store == "s3" {
 			snapshotToRestore = snapshot.ID
 			s3Found = true
+			break
 		}
-		createdSnapshotIDs = append(createdSnapshotIDs, snapshot.ID)
 	}
 
 	cluster, _, err := clusters.GetProvisioningClusterByName(client, clusterName, namespace)
@@ -355,7 +355,11 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 	}
 
 	if cluster.Spec.RKEConfig.ETCD.S3 != nil && !s3Found {
-		return nil, "", nil, nil, fmt.Errorf("s3 is enabled for the cluster, but selected snapshot is not from s3")
+		return nil, "", nil, nil, fmt.Errorf("s3 is enabled for the cluster, but no snapshot from s3 was found")
+	}
+
+	if !s3Found {
+		snapshotToRestore = createdSnapshots[0].ID
 	}
 
 	if etcdRestore.ReplaceRoles != nil && cluster.Spec.RKEConfig.ETCD.S3 != nil {
