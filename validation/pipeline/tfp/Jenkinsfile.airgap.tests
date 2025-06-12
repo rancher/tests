@@ -151,8 +151,9 @@ node {
                         stage('Run Validation Tests') {
                           try {
                             sh """
-
-                            docker cp ${testContainer}:${rootPath}${filename} ${filename}
+                            docker cp ${testContainer}:${rootPath}modules/airgap/aws/ .;
+                            // TODO: Remove if this works
+                            //docker cp ${testContainer}:${rootPath}${filename} ${filename}
                             docker run -v tests${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "/root/go/bin/gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
                             """
 
