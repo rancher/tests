@@ -108,16 +108,15 @@ node {
                             } else {
                                 echo "Private registry:  ${privateRegistry}"
                             }
+                            
+                            // Copy the generated terraform files from the container to the Jenkins workspace
+                            sh "docker cp ${testContainer}:${rootPath}modules/airgap/aws ./terraform-files"
+                            echo "Terraform files copied from container to workspace at ./terraform-files"
 
                         } catch(err) {
                             echo "Test run had failures. Collecting results... ${err}"
                             error err
                         }
-                        
-                        // Copy terraform files from container to Jenkins workspace
-                        sh "mkdir -p airgap/aws"
-                        sh "docker cp ${testContainer}:${rootPath}modules/airgap/aws/ airgap/"
-                        sh "ls -la airgap/aws"
                      }
 
                     stage('Checkout Test Repo') {
@@ -156,7 +155,9 @@ node {
                         stage('Run Validation Tests') {
                           try {
                             sh """
-                            // Using the terraform files already copied to airgap/aws
+                            docker cp ${testContainer}:${rootPath}modules/airgap/aws/ .;
+                            // TODO: Remove if this works
+                            //docker cp ${testContainer}:${rootPath}${filename} ${filename}
                             docker run -v tests${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "/root/go/bin/gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
                             """
 
@@ -183,11 +184,8 @@ node {
                                 }
 
                                 sh """
-                                // Ensure the terraform files are accessible
-                                ls -la airgap/aws
-                                
-                                docker run --rm -v \$(pwd)/airgap:/terraform-files \
-                                    -v \$(pwd)/airgap/.ssh:/root/go/src/github.com/rancher/tfp-automation/.ssh \
+                                docker run --rm -v \$(pwd)/terraform-files:/terraform-files \
+                                    -v \$(pwd)/.ssh:/root/go/src/github.com/rancher/tfp-automation/.ssh \
                                     -w /terraform-files hashicorp/terraform:latest \
                                     destroy -auto-approve
                                 """
