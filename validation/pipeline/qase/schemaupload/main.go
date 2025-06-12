@@ -20,6 +20,7 @@ const (
 	testStepsRegex   string = `\| (\d+) +\| (.+) +\| (.+) +\| (.+) +\|`
 	projectSeperator string = "\n---\n"
 	fileSyntaxRegex  string = `^\S*\/\S*\.\S*$`
+	tbd              string = "TBD"
 )
 
 var (
@@ -108,6 +109,10 @@ func parseSchema(schema string, suiteId int64) ([]qase.TestCase, error) {
 		testCase.Title = test[1]
 		testCase.Description = test[2]
 		testCase.Automation = 2
+		if test[2] == tbd {
+			testCase.Automation = 1
+		}
+
 		testCases = append(testCases, testCase)
 	}
 
