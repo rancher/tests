@@ -1,8 +1,8 @@
 #!groovy
 node {
-  def rootPath = "/root/go/src/github.com/rancher/tfp-automation/"
+  def rootPath = "/root/go/src/github.com/slickwarren/tfp-automation/"
   def testRootPath = "/root/go/src/github.com/rancher/tests/validation/"
-  def testsDir = "github.com/rancher/tfp-automation/tests/${env.TEST_PACKAGE}"
+  def testsDir = "github.com/slickwarren/tfp-automation/tests/${env.TEST_PACKAGE}"
   def golangTestDir = "/root/go/src/github.com/rancher/tests/validation/${env.GO_TEST_PACKAGE}"
   def filename = "config.yml"
   def job_name = "${JOB_NAME}"
@@ -96,15 +96,15 @@ node {
                             """
                             sh "docker cp ${testContainer}:${rootPath}${filename} ${filename}"
               
-                            adminToken = sh(script: "grep 'Admin bearer token:' ./root/test_logs.txt | awk -F 'Admin bearer token: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
+                            adminToken = sh(script: "grep 'Admin bearer token:' /root/test_logs.txt | awk -F 'Admin bearer token: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
                             if (!adminToken) {
-                                echo "WARNING: Admin token not found in ./root/test_logs.txt!"
+                                echo "WARNING: Admin token not found in /root/test_logs.txt!"
                             } else {
                                 echo "Admin token: ${adminToken}"
                             }
-                            privateRegistry = sh(script: "grep 'Private registry:' ./root/test_logs.txt | awk -F 'Private registry: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
+                            privateRegistry = sh(script: "grep 'Private registry:' /root/test_logs.txt | awk -F 'Private registry: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
                             if (!privateRegistry) {
-                                echo "WARNING: Private registry not found in ./root/test_logs.txt!"
+                                echo "WARNING: Private registry not found in /root/test_logs.txt!"
                             } else {
                                 echo "Private registry:  ${privateRegistry}"
                             }
