@@ -3,7 +3,7 @@ node {
   def rootPath = "/root/go/src/github.com/rancher/tfp-automation/"
   def testRootPath = "/root/go/src/github.com/rancher/tests/validation/"
   def testsDir = "github.com/rancher/tfp-automation/tests/${env.TEST_PACKAGE}"
-  def golangTestDir = "github.com/rancher/tests/validation/${env.GO_TEST_PACKAGE}"
+  def golangTestDir = "/root/go/src/github.com/rancher/tests/validation/${env.GO_TEST_PACKAGE}"
   def filename = "config.yml"
   def job_name = "${JOB_NAME}"
   if (job_name.contains('/')) { 
@@ -63,12 +63,12 @@ node {
                 withEnv(paramsMap) {
 
                     stage('Checkout Infrastructure Repo') {
-                        checkout([
-                                    $class: 'GitSCM',
-                                    branches: [[name: "*/${infraBranch}"]],
-                                    extensions: scm.extensions + [[$class: 'CleanCheckout']],
-                                    userRemoteConfigs: infraRepo
-                                ])
+                      checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${infraBranch}"]],
+                                extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                                userRemoteConfigs: infraRepo
+                              ])
                      }
 
                     stage('Configure and Build') {
@@ -81,7 +81,7 @@ node {
                         }
                 
                         writeFile file: filename, text: config
-
+                        env.CATTLE_TEST_CONFIG=rootPath+filename
                         sh "./configure.sh"
                         sh "./build.sh"
 
@@ -142,7 +142,7 @@ node {
                           dir ("./") {
                             sh "./validation/configure.sh"
                             sh "docker build . -f ./validation/Dockerfile.validation -t ${imageName}"
-                            sh "docker volume create --name ${validationVolume}"
+                            sh "docker volume create --name tests${validationVolume}"
 
                             sh "docker cp ${testContainer}:${rootPath}${filename} ${filename}"
                             sh "cat ${filename}"
@@ -151,7 +151,9 @@ node {
                         stage('Run Validation Tests') {
                           try {
                             sh """
-                            docker run -v ${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "/root/go/bin/gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
+
+                            docker cp ${testContainer}:${rootPath}${filename} ${filename}
+                            docker run -v tests${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "/root/go/bin/gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
                             """
 
                               
