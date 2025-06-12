@@ -62,7 +62,6 @@ func TfpSetupSuite(t *testing.T) (map[string]any, *rancher.Config, *terraform.Op
 	_, err = operations.ReplaceValue([]string{"rancher", "host"}, rancherConfig.Host, configMap[0])
 	require.NoError(t, err)
 
-	// TODO: Add variable for dynamic provider assignment
 	_, keyPath := rancher2.SetKeyPath(keypath.RancherKeyPath, terratestConfig.PathToRepo, terraformConfig.Provider)
 	terraformOptions := framework.Setup(t, terraformConfig, terratestConfig, keyPath)
 
