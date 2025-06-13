@@ -129,7 +129,7 @@ node {
                     }
 
                     dir ("./") {
-                        stage('Run Validation Tests') {
+                        stage('Setup Validation Environment') {
                           if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
                             dir("./validation/.ssh") {
                               def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
@@ -152,7 +152,7 @@ node {
                             sh "cat ${filename}"
                           }
                         }
-                        stage('Run Validation Tests') {
+                        stage('Execute Validation Tests') {
                           try {
                             sh """
                             // Copy to the same location as in the previous stage (./terraform-files)
