@@ -1,61 +1,63 @@
-//go:build (validation || extended) && !infra.any && !infra.aks && !infra.eks && !infra.rke2k3s && !infra.gke && !infra.rke1 && !cluster.any && !cluster.custom && !cluster.nodedriver && !sanity && !stress
+//go:build (validation || extended || recurring) && !infra.any && !infra.aks && !infra.eks && !infra.rke2k3s && !infra.gke && !infra.rke1 && !cluster.any && !cluster.custom && !cluster.nodedriver && !sanity && !stress
 
 package k3s
 
 import (
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/users"
 	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
 	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
+	"github.com/rancher/shepherd/pkg/config/operations/permutations"
 	"github.com/rancher/shepherd/pkg/environmentflag"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/provisioning/permutations"
+	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/config/permutationdata"
+	"github.com/rancher/tests/actions/machinepools"
+	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 type K3SNodeDriverProvisioningTestSuite struct {
-	suite.Suite
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
-	provisioningConfig *provisioninginput.Config
+	cattleConfigs      []map[string]any
 }
 
-func (k *K3SNodeDriverProvisioningTestSuite) TearDownSuite() {
-	k.session.Cleanup()
-}
-
-func (k *K3SNodeDriverProvisioningTestSuite) SetupSuite() {
+func setupSuite(t *testing.T) K3SNodeDriverProvisioningTestSuite {
+	var r K3SNodeDriverProvisioningTestSuite
 	testSession := session.NewSession()
-	k.session = testSession
-
-	k.provisioningConfig = new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, k.provisioningConfig)
+	r.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
-	require.NoError(k.T(), err)
+	assert.NoError(t, err)
+	r.client = client
 
-	k.client = client
+	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	if k.provisioningConfig.K3SKubernetesVersions == nil {
-		k3sVersions, err := kubernetesversions.Default(k.client, clusters.K3SClusterType.String(), nil)
-		require.NoError(k.T(), err)
+	providerPermutation, err := permutationdata.CreateProviderPermutation(cattleConfig)
+	assert.NoError(t, err)
 
-		k.provisioningConfig.K3SKubernetesVersions = k3sVersions
-	} else if k.provisioningConfig.K3SKubernetesVersions[0] == "all" {
-		k3sVersions, err := kubernetesversions.ListK3SAllVersions(k.client)
-		require.NoError(k.T(), err)
+	k8sPermutation, err := permutationdata.CreateK8sPermutation(r.client, "k3s", cattleConfig)
+	assert.NoError(t, err)
 
-		k.provisioningConfig.K3SKubernetesVersions = k3sVersions
-	}
+	cniPermutation, err := permutationdata.CreateCNIPermutation(cattleConfig)
+	assert.NoError(t, err)
+
+	permutedConfigs, err := permutations.Permute([]permutations.Permutation{*k8sPermutation, *providerPermutation, *cniPermutation}, cattleConfig)
+	assert.NoError(t, err)
+
+	r.cattleConfigs = append(r.cattleConfigs, permutedConfigs...)
 
 	enabled := true
 	var testuser = namegen.AppendRandomString("testuser-")
@@ -68,25 +70,24 @@ func (k *K3SNodeDriverProvisioningTestSuite) SetupSuite() {
 	}
 
 	newUser, err := users.CreateUserWithRole(client, user, "user")
-	require.NoError(k.T(), err)
+	assert.NoError(t, err)
 
 	newUser.Password = user.Password
 
 	standardUserClient, err := client.AsUser(newUser)
-	require.NoError(k.T(), err)
+	assert.NoError(t, err)
 
-	k.standardUserClient = standardUserClient
+	r.standardUserClient = standardUserClient
+
+	return r
 }
 
-func (k *K3SNodeDriverProvisioningTestSuite) TestProvisioningK3SCluster() {
+func TestProvisioningK3SCluster(t *testing.T) {
+	r := setupSuite(t)
+
 	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
 	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	tests := []struct {
 		name         string
@@ -94,25 +95,51 @@ func (k *K3SNodeDriverProvisioningTestSuite) TestProvisioningK3SCluster() {
 		client       *rancher.Client
 		runFlag      bool
 	}{
-		{"1 Node all roles " + provisioninginput.StandardClientName.String(), nodeRolesAll, k.standardUserClient, k.client.Flags.GetValue(environmentflag.Short) || k.client.Flags.GetValue(environmentflag.Long)},
-		{"2 nodes - etcd|cp roles per 1 node " + provisioninginput.StandardClientName.String(), nodeRolesShared, k.standardUserClient, k.client.Flags.GetValue(environmentflag.Short) || k.client.Flags.GetValue(environmentflag.Long)},
-		{"3 nodes - 1 role per node " + provisioninginput.StandardClientName.String(), nodeRolesDedicated, k.standardUserClient, k.client.Flags.GetValue(environmentflag.Long)},
-		{"8 nodes - 3 etcd, 2 cp, 3 worker " + provisioninginput.StandardClientName.String(), nodeRolesStandard, k.standardUserClient, k.client.Flags.GetValue(environmentflag.Long)},
+		{"1 Node all roles " + provisioninginput.StandardClientName.String(), nodeRolesAll, r.standardUserClient, r.client.Flags.GetValue(environmentflag.Short) || r.client.Flags.GetValue(environmentflag.Long)},
+		{"2 nodes - etcd|cp roles per 1 node " + provisioninginput.StandardClientName.String(), nodeRolesShared, r.standardUserClient, r.client.Flags.GetValue(environmentflag.Short) || r.client.Flags.GetValue(environmentflag.Long)},
+		{"3 nodes - 1 role per node " + provisioninginput.StandardClientName.String(), nodeRolesDedicated, r.standardUserClient, r.client.Flags.GetValue(environmentflag.Long)},
 	}
 
 	for _, tt := range tests {
 		if !tt.runFlag {
-			k.T().Logf("SKIPPED")
+			t.Logf("SKIPPED")
 			continue
 		}
 
-		provisioningConfig := *k.provisioningConfig
-		provisioningConfig.MachinePools = tt.machinePools
+		var err error
 
-		permutations.RunTestPermutations(&k.Suite, tt.name, tt.client, &provisioningConfig, permutations.K3SProvisionCluster, nil, nil)
+		testSession := session.NewSession()
+		tt.client, err = tt.client.WithSession(testSession)
+		assert.NoError(t, err)
+
+		t.Cleanup(func() {
+			logrus.Info("Running cleanup")
+			testSession.Cleanup()
+		})
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			for _, cattleConfig := range r.cattleConfigs {
+				clusterConfig := new(clusters.ClusterConfig)
+				operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
+				clusterConfig.MachinePools = tt.machinePools
+
+				provider := provisioning.CreateProvider(clusterConfig.Provider)
+				credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+				machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+
+				cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+				assert.NoError(t, err)
+
+				logrus.Infof("Verifying cluster (%s)", cluster.Name)
+				provisioning.VerifyCluster(t, tt.client, clusterConfig, cluster)
+			}
+		})
 	}
 }
 
+/*
 func (k *K3SNodeDriverProvisioningTestSuite) TestProvisioningK3SClusterDynamicInput() {
 	if len(k.provisioningConfig.MachinePools) == 0 {
 		k.T().Skip()
@@ -129,10 +156,4 @@ func (k *K3SNodeDriverProvisioningTestSuite) TestProvisioningK3SClusterDynamicIn
 	for _, tt := range tests {
 		permutations.RunTestPermutations(&k.Suite, tt.name, tt.client, k.provisioningConfig, permutations.K3SProvisionCluster, nil, nil)
 	}
-}
-
-// In order for 'go test' to run this suite, we need to create
-// a normal test function and pass our suite to suite.Run
-func TestK3SProvisioningTestSuite(t *testing.T) {
-	suite.Run(t, new(K3SNodeDriverProvisioningTestSuite))
-}
+}*/

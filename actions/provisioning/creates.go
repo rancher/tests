@@ -86,9 +86,7 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 	var machinePoolResponses []v1.SteveAPIObject
 
 	for _, machinePoolConfig := range machinePoolConfigs {
-		machinePoolConfigResp, err := client.Steve.
-			SteveType(provider.MachineConfigPoolResourceSteveType).
-			Create(&machinePoolConfig)
+		machinePoolConfigResp, err := client.Steve.SteveType(provider.MachineConfigPoolResourceSteveType).Create(&machinePoolConfig)
 		if err != nil {
 			return nil, err
 		}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/rancher/tests/validation/pipeline/qase"
 	"github.com/sirupsen/logrus"
+	upstream "go.qase.io/client"
 )
 
 const (
@@ -39,19 +40,29 @@ func main() {
 	for project, schemas := range schemaMap {
 		var cases []qase.TestCase
 		for _, schema := range schemas {
-			suite := extractSubstrings(schema, testSuiteRegex)[0][1]
-			testSuite, suiteErr := client.GetTestSuite(project, suite)
-			var testSuiteId int64
-			if testSuite != nil {
-				testSuiteId = testSuite.Id
+			fullSuitePath := extractSubstrings(schema, testSuiteRegex)[0][1]
+
+			suites := strings.Split(fullSuitePath, "/")
+			testSuiteId := int64(0)
+			for _, suite := range suites {
+				testSuite, suiteErr := client.GetTestSuite(project, suite)
+				if testSuite != nil {
+					testSuiteId = testSuite.Id
+				}
+
+				if suiteErr != nil && testSuite != nil {
+					logrus.Error("Could not determine test suite:", suiteErr)
+					return
+				} else if suiteErr != nil {
+					logrus.Debug("Error obtaining test suite:", suiteErr)
+					suiteBody := upstream.SuiteCreate{Title: suite}
+					if testSuiteId != 0 {
+						suiteBody.ParentId = testSuiteId
+					}
+					testSuiteId, _ = client.CreateTestSuite(project, suiteBody)
+				}
 			}
-			if suiteErr != nil && testSuite != nil {
-				logrus.Error("Could not determine test suite:", suiteErr)
-				return
-			} else if suiteErr != nil {
-				logrus.Debug("Error obtaining test suite:", suiteErr)
-				testSuiteId, _ = client.CreateTestSuite(project, suite)
-			}
+
 			parsedCases, err := parseSchema(schema, testSuiteId)
 			if err != nil {
 				logrus.Error("Error parsing schemas: ", err)
