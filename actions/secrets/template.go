@@ -6,26 +6,15 @@ import (
 )
 
 // NewSecretTemplate is a constructor that creates the secret template for secrets
-func NewSecretTemplate(secretName, namespaceName string, data map[string][]byte, secretType corev1.SecretType) corev1.Secret {
-	return corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: namespaceName,
-		},
-		Data: data,
-		Type: secretType,
-	}
-}
-
-// NewSecretTemplateWithAnnotations is a constructor that creates the secret template for secrets and includes provided annotations
-func NewSecretTemplateWithAnnotations(secretName, namespaceName string, data map[string][]byte, annotations map[string]string, secretType corev1.SecretType) corev1.Secret {
+func NewSecretTemplate(secretName, namespace string, data map[string][]byte, secretType corev1.SecretType, labels, annotations map[string]string) corev1.Secret {
 	return corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        secretName,
-			Namespace:   namespaceName,
+			Namespace:   namespace,
+			Labels:      labels,
 			Annotations: annotations,
 		},
-		Data: data,
 		Type: secretType,
+		Data: data,
 	}
 }

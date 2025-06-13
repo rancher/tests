@@ -88,7 +88,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestCreateRegistrySecret() {
 			rbrs.T().Logf("Created user: %v", newUser.Username)
 
 			log.Infof("As a %v, create a registry secret in the namespace %v", tt.role.String(), namespace.Name)
-			createdRegistrySecret, err := secrets.CreateSecret(standardUserClient, rbrs.cluster.ID, namespace.Name, secretData, corev1.SecretTypeDockerConfigJson)
+			createdRegistrySecret, err := secrets.CreateSecret(standardUserClient, rbrs.cluster.ID, namespace.Name, secretData, corev1.SecretTypeDockerConfigJson, nil, nil)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rbrs.T(), err, "failed to create a registry secret")
@@ -136,7 +136,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestListRegistrySecret() {
 			rbrs.T().Logf("Created user: %v", newUser.Username)
 
 			log.Infof("As a %v, create a registry secret in the namespace %v", rbac.Admin, namespace.Name)
-			createdRegistrySecret, err := secrets.CreateSecret(rbrs.client, rbrs.cluster.ID, namespace.Name, secretData, corev1.SecretTypeDockerConfigJson)
+			createdRegistrySecret, err := secrets.CreateSecret(rbrs.client, rbrs.cluster.ID, namespace.Name, secretData, corev1.SecretTypeDockerConfigJson, nil, nil)
 			assert.NoError(rbrs.T(), err, "failed to create a registry secret")
 
 			log.Infof("As a %v, list the registry secrets.", tt.role.String())
@@ -189,7 +189,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestUpdateRegistrySecret() {
 			rbrs.T().Logf("Created user: %v", newUser.Username)
 
 			log.Infof("As a %v, create a registry secret in the namespace %v", rbac.Admin, namespace.Name)
-			createdRegistrySecret, err := secrets.CreateSecret(rbrs.client, rbrs.cluster.ID, namespace.Name, secretData, corev1.SecretTypeDockerConfigJson)
+			createdRegistrySecret, err := secrets.CreateSecret(rbrs.client, rbrs.cluster.ID, namespace.Name, secretData, corev1.SecretTypeDockerConfigJson, nil, nil)
 			assert.NoError(rbrs.T(), err, "failed to create a registry secret")
 
 			log.Infof("As a %v, update the registry secret with a new label.", tt.role.String())
@@ -247,7 +247,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestDeleteRegistrySecret() {
 			rbrs.T().Logf("Created user: %v", newUser.Username)
 
 			log.Infof("As a %v, create a registry secret in the namespace %v", rbac.Admin, namespace.Name)
-			createdRegistrySecret, err := secrets.CreateSecret(rbrs.client, rbrs.cluster.ID, namespace.Name, secretData, corev1.SecretTypeDockerConfigJson)
+			createdRegistrySecret, err := secrets.CreateSecret(rbrs.client, rbrs.cluster.ID, namespace.Name, secretData, corev1.SecretTypeDockerConfigJson, nil, nil)
 			assert.NoError(rbrs.T(), err, "failed to create a registry secret")
 
 			log.Infof("As a %v, delete the registry secrets.", tt.role.String())

@@ -90,7 +90,7 @@ func (c *CertificateTestSuite) createCertWithData(namespace *corev1.Namespace, c
 		corev1.TLSCertKey:       []byte(certData),
 		corev1.TLSPrivateKeyKey: []byte(keyData),
 	}
-	return secrets.CreateSecret(c.client, c.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS)
+	return secrets.CreateSecret(c.client, c.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS, nil, nil)
 }
 
 func (c *CertificateTestSuite) setupIngressWithCert(namespace *corev1.Namespace, tlsSecret *corev1.Secret, hosts []string, deploymentName string) (*netv1.Ingress, error) {

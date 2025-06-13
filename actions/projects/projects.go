@@ -2,6 +2,7 @@ package projects
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -137,7 +138,7 @@ func CreateProjectUsingWrangler(client *rancher.Client, clusterID string) (*v3.P
 func CreateNamespaceUsingWrangler(client *rancher.Client, clusterID, projectName string, labels map[string]string) (*corev1.Namespace, error) {
 	namespaceName := namegen.AppendRandomString("testns")
 	annotations := map[string]string{
-		"field.cattle.io/projectId": clusterID + ":" + projectName,
+		projectsapi.ProjectIDAnnotation: clusterID + ":" + projectName,
 	}
 
 	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
@@ -234,4 +235,64 @@ func UpdateProjectNamespaceFinalizer(client *rancher.Client, existingProject *v3
 	}
 
 	return updatedProject, nil
+}
+
+// MoveNamespaceToProject updates the project annotation/label to move the namespace into a different project
+func MoveNamespaceToProject(client *rancher.Client, clusterID, namespaceName, newProjectName string) error {
+	ns, err := namespaces.GetNamespaceByName(client, clusterID, namespaceName)
+	if err != nil {
+		return fmt.Errorf("failed to get namespace %s: %w", namespaceName, err)
+	}
+
+	if ns.Annotations == nil {
+		ns.Annotations = make(map[string]string)
+	}
+	if ns.Labels == nil {
+		ns.Labels = make(map[string]string)
+	}
+
+	ns.Annotations[projectsapi.ProjectIDAnnotation] = fmt.Sprintf("%s:%s", clusterID, newProjectName)
+	ns.Labels[projectsapi.ProjectIDAnnotation] = newProjectName
+
+	clusterContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return fmt.Errorf("failed to get wrangler context for cluster %s: %w", clusterID, err)
+	}
+	latestNS, err := namespaces.GetNamespaceByName(client, clusterID, namespaceName)
+	if err != nil {
+		return fmt.Errorf("failed to fetch namespace %s: %w", namespaceName, err)
+	}
+	ns.ResourceVersion = latestNS.ResourceVersion
+
+	if _, err := clusterContext.Core.Namespace().Update(ns); err != nil {
+		return fmt.Errorf("failed to update namespace %s with new project annotation: %w", namespaceName, err)
+	}
+
+	if err := WaitForProjectIDUpdate(client, clusterID, newProjectName, namespaceName); err != nil {
+		return fmt.Errorf("project ID annotation/label not updated for namespace %s: %w", namespaceName, err)
+	}
+
+	return nil
+}
+
+// GetNamespacesInProject retrieves all namespaces in a specific project within a cluster
+func GetNamespacesInProject(client *rancher.Client, clusterID, projectName string) ([]*corev1.Namespace, error) {
+	clusterContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get wrangler context for cluster %s: %w", clusterID, err)
+	}
+
+	nsList, err := clusterContext.Core.Namespace().List(metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", projectsapi.ProjectIDAnnotation, projectName),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list namespaces for project %s: %w", projectName, err)
+	}
+
+	namespaces := make([]*corev1.Namespace, 0, len(nsList.Items))
+	for i := range nsList.Items {
+		namespaces = append(namespaces, &nsList.Items[i])
+	}
+
+	return namespaces, nil
 }
