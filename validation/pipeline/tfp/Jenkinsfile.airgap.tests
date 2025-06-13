@@ -63,15 +63,21 @@ node {
                 withEnv(paramsMap) {
 
                     stage('Checkout Infrastructure Repo') {
-                      checkout([
-                                $class: 'GitSCM',
-                                branches: [[name: "*/${infraBranch}"]],
-                                extensions: scm.extensions + [[$class: 'CleanCheckout']],
-                                userRemoteConfigs: infraRepo
-                              ])
+                        deleteDir()
+                        checkout([
+                                    $class: 'GitSCM',
+                                    branches: [[name: "*/${infraBranch}"]],
+                                    extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                                    userRemoteConfigs: infraRepo
+                                ])
                      }
 
                     stage('Configure and Build') {
+                        config = config.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+                        config = config.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+
+                        writeFile file: filename, text: config
+
                         dir(".ssh") {
                             def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
                             writeFile file: AWS_SSH_KEY_NAME, text: decoded
@@ -79,8 +85,7 @@ node {
                             def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
                             writeFile file: AWS_RSA_KEY_NAME, text: decodedRsa
                         }
-                
-                        writeFile file: filename, text: config
+
                         env.CATTLE_TEST_CONFIG=rootPath+filename
                         sh "./configure.sh"
                         sh "./build.sh"
@@ -91,27 +96,15 @@ node {
                     stage('Run Infrastructure TFP Test') {
                         try {
                             sh """
-                            docker run -v ${validationVolume}:/root --name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
+                            docker run --name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
                             /root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -timeout=${timeout} -v ${params.TEST_CASE} | tee /root/test_logs.txt"
                             """
                             sh "docker cp ${testContainer}:/root/ ./"
               
                             adminToken = sh(script: "grep 'Admin bearer token:' ./root/test_logs.txt | awk -F 'Admin bearer token: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
-                            if (!adminToken) {
-                                echo "WARNING: Admin token not found in ./root/test_logs.txt!"
-                            } else {
-                                echo "Admin token: ${adminToken}"
-                            }
+                            echo "Admin token: ${adminToken}"
                             privateRegistry = sh(script: "grep 'Private registry:' ./root/test_logs.txt | awk -F 'Private registry: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
-                            if (!privateRegistry) {
-                                echo "WARNING: Private registry not found in ./root/test_logs.txt!"
-                            } else {
-                                echo "Private registry:  ${privateRegistry}"
-                            }
-                            
-                            // Copy the generated terraform files from the container to the Jenkins workspace
-                            sh "docker cp ${testContainer}:${rootPath}modules/airgap/aws ./terraform-files"
-                            echo "Terraform files copied from container to workspace at ./terraform-files"
+                            echo "Private registry:  ${privateRegistry}"
 
                         } catch(err) {
                             echo "Test run had failures. Collecting results... ${err}"
@@ -146,19 +139,14 @@ node {
                           dir ("./") {
                             sh "./validation/configure.sh"
                             sh "docker build . -f ./validation/Dockerfile.validation -t ${imageName}"
-                            sh "docker volume create --name tests${validationVolume}"
-
-                            sh "docker cp ${testContainer}:${rootPath}${filename} ${filename}"
-                            sh "cat ${filename}"
+                            sh "docker volume create --name ${validationVolume}"
                           }
                         }
                         stage('Execute Validation Tests') {
                           try {
                             sh """
-                            // Copy to the same location as in the previous stage (./terraform-files)
-                            docker cp ${testContainer}:${rootPath}modules/airgap/aws/ ./terraform-files/
-                            docker cp ${testContainer}:${rootPath}${filename} ${filename}
-                            docker run -v tests${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "/root/go/bin/gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
+                            docker run -v ${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "
+                            gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=\"airgap\" -timeout=${timeout}"
                             """
 
                               
@@ -166,51 +154,31 @@ node {
                             echo '${err} Validation tests had failures. Aborting'
                           }
                           sh """
-                          docker stop ${golangTestContainer} || true
-                          docker rm ${golangTestContainer} || true
-                          docker rmi ${imageName} || true
+                          docker rm ${golangTestContainer}
+                          docker volume rm ${validationVolume}
+                          docker rmi ${imageName}
                           
                           """
                         }
             
                         stage('Cleanup terraform resources'){
                         try {
-                            dir ("./") {
-                                if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
-                                  dir(".ssh") {
-                                    def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
-                                    writeFile file: AWS_SSH_KEY_NAME, text: decoded
-                                  }
-                                }
-
                                 // Debug: List files to verify terraform state exists
                                 sh "ls -la ./terraform-files"
                                 
                                 sh """
-                                docker run --rm -v \$(pwd)/terraform-files:/terraform-files \
-                                    -v \$(pwd)/.ssh:/root/go/src/github.com/rancher/tfp-automation/.ssh \
+                                docker run --rm -v ./root/go/src/github.com/rancher/tfp-automation/modules/airgap:/terraform-files \
                                     -w /terraform-files hashicorp/terraform:latest \
-                                    init
+                                    init && destroy -auto-approve
                                 """
-                                
-                                sh """
-                                docker run --rm -v \$(pwd)/terraform-files:/terraform-files \
-                                    -v \$(pwd)/.ssh:/root/go/src/github.com/rancher/tfp-automation/.ssh \
-                                    -w /terraform-files hashicorp/terraform:latest \
-                                    destroy -auto-approve
-                                """
-                             }
                          }
                          catch(err) {
                             echo "${err} captured"
                          }
-                         sh "docker stop ${testContainer}"
-                         sh "docker volume rm ${validationVolume} || true"
-                         sh "docker rm ${testContainer} || true"
                         }//cleanup
-                    }//dir
-                } //params
-            } //credentials
-        } //folder properties
+            } //dir
+          } //params
+        } //credentials
+      } //file properties
     } //wrap
 } // node
