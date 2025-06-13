@@ -146,8 +146,7 @@ node {
                           try {
                             sh """
                             docker run -v ${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "
-                            gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=\"airgap\" -timeout=${timeout}"
-                            """
+                            gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE}
 
                               
                           } catch(err) {
