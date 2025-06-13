@@ -94,17 +94,17 @@ node {
                             docker run -v ${validationVolume}:/root --name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
                             /root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -timeout=${timeout} -v ${params.TEST_CASE} | tee /root/test_logs.txt"
                             """
-                            sh "docker cp ${testContainer}:${rootPath}${filename} ${filename}"
+                            sh "docker cp ${testContainer}:/root/ ./"
               
-                            adminToken = sh(script: "grep 'Admin bearer token:' /root/test_logs.txt | awk -F 'Admin bearer token: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
+                            adminToken = sh(script: "grep 'Admin bearer token:' ./root/test_logs.txt | awk -F 'Admin bearer token: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
                             if (!adminToken) {
-                                echo "WARNING: Admin token not found in /root/test_logs.txt!"
+                                echo "WARNING: Admin token not found in ./root/test_logs.txt!"
                             } else {
                                 echo "Admin token: ${adminToken}"
                             }
-                            privateRegistry = sh(script: "grep 'Private registry:' /root/test_logs.txt | awk -F 'Private registry: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
+                            privateRegistry = sh(script: "grep 'Private registry:' ./root/test_logs.txt | awk -F 'Private registry: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
                             if (!privateRegistry) {
-                                echo "WARNING: Private registry not found in /root/test_logs.txt!"
+                                echo "WARNING: Private registry not found in ./root/test_logs.txt!"
                             } else {
                                 echo "Private registry:  ${privateRegistry}"
                             }
