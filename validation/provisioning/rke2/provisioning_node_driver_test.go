@@ -24,6 +24,7 @@ import (
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -167,8 +168,15 @@ func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2ClusterDynamic
 				clusterObject, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 				require.NoError(r.T(), err)
 
+				logrus.Info("ClusterID:", clusterObject.ID)
+				cattleConfig["rancher"].(map[string]any)["clusterName"] = clusterObject.ID
+
+				rancherConfig := cattleConfig["rancher"]
+				config.UpdateConfig("rancher", rancherConfig)
+
 				provisioning.VerifyCluster(r.T(), tt.client, clusterConfig, clusterObject)
 				cloudprovider.VerifyCloudProvider(r.T(), tt.client, "rke2", nil, clusterConfig, clusterObject, nil)
+
 			}
 		})
 	}
