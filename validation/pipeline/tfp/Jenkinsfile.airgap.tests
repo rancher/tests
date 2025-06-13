@@ -147,8 +147,8 @@ node {
                             sh """
                             docker run -v ${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "
                             gotestsum --format standard-verbose --packages=\"${golangTestDir}\" --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE}
-
-                              
+                            "
+                            """  
                           } catch(err) {
                             echo '${err} Validation tests had failures. Aborting'
                           }
@@ -159,25 +159,24 @@ node {
                           
                           """
                         }
-            
                         stage('Cleanup terraform resources'){
-                        try {
-                                // Debug: List files to verify terraform state exists
-                                sh "ls -la ./terraform-files"
-                                
-                                sh """
-                                docker run --rm -v ./root/go/src/github.com/rancher/tfp-automation/modules/airgap:/terraform-files \
-                                    -w /terraform-files hashicorp/terraform:latest \
-                                    init && destroy -auto-approve
-                                """
-                         }
-                         catch(err) {
-                            echo "${err} captured"
-                         }
-                        }//cleanup
-            } //dir
-          } //params
-        } //credentials
-      } //file properties
+                            try {
+                                    // Debug: List files to verify terraform state exists
+                                    sh "ls -la ./terraform-files"
+
+                                    sh """
+                                    docker run --rm -v ./root/go/src/github.com/rancher/tfp-automation/modules/airgap:/terraform-files \
+                                        -w /terraform-files hashicorp/terraform:latest \
+                                        init && destroy -auto-approve
+                                    """
+                             }
+                             catch(err) {
+                                echo "${err} captured"
+                             }
+                        } //cleanup
+                    } //dir
+                } //params
+            } //credentials
+        } //file properties
     } //wrap
 } // node
