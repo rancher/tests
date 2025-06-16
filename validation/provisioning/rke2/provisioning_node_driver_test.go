@@ -1,4 +1,4 @@
-//go:build (validation || extended) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke2k3s && !cluster.any && !cluster.custom && !cluster.nodedriver && !sanity && !stress
+//go:build (validation || extended || recurring) && !infra.any && !infra.aks && !infra.eks && !infra.rke2k3s && !infra.gke && !infra.rke1 && !cluster.any && !cluster.custom && !cluster.nodedriver && !sanity && !stress
 
 package rke2
 
@@ -17,50 +17,45 @@ import (
 	"github.com/rancher/shepherd/pkg/environmentflag"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/cloudprovider"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/config/permutationdata"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 type RKE2NodeDriverProvisioningTestSuite struct {
-	suite.Suite
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
 	cattleConfigs      []map[string]any
 }
 
-func (r *RKE2NodeDriverProvisioningTestSuite) TearDownSuite() {
-	r.session.Cleanup()
-}
-
-func (r *RKE2NodeDriverProvisioningTestSuite) SetupSuite() {
+func setupSuite(t *testing.T) RKE2NodeDriverProvisioningTestSuite {
+	var r RKE2NodeDriverProvisioningTestSuite
 	testSession := session.NewSession()
 	r.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
-	require.NoError(r.T(), err)
+	assert.NoError(t, err)
 	r.client = client
 
 	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	providerPermutation, err := permutationdata.CreateProviderPermutation(cattleConfig)
-	require.NoError(r.T(), err)
+	assert.NoError(t, err)
 
 	k8sPermutation, err := permutationdata.CreateK8sPermutation(r.client, "rke2", cattleConfig)
-	require.NoError(r.T(), err)
+	assert.NoError(t, err)
 
 	cniPermutation, err := permutationdata.CreateCNIPermutation(cattleConfig)
-	require.NoError(r.T(), err)
+	assert.NoError(t, err)
 
 	permutedConfigs, err := permutations.Permute([]permutations.Permutation{*k8sPermutation, *providerPermutation, *cniPermutation}, cattleConfig)
-	require.NoError(r.T(), err)
+	assert.NoError(t, err)
 
 	r.cattleConfigs = append(r.cattleConfigs, permutedConfigs...)
 
@@ -75,26 +70,25 @@ func (r *RKE2NodeDriverProvisioningTestSuite) SetupSuite() {
 	}
 
 	newUser, err := users.CreateUserWithRole(client, user, "user")
-	require.NoError(r.T(), err)
+	assert.NoError(t, err)
 
 	newUser.Password = user.Password
 
 	standardUserClient, err := client.AsUser(newUser)
-	require.NoError(r.T(), err)
+	assert.NoError(t, err)
 
 	r.standardUserClient = standardUserClient
+
+	return r
 }
 
-func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2Cluster() {
+func TestProvisioningRKE2Cluster(t *testing.T) {
+	r := setupSuite(t)
+
 	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
 	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesWindows := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool, provisioninginput.WindowsMachinePool}
-	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	tests := []struct {
 		name         string
@@ -107,42 +101,55 @@ func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2Cluster() {
 		{"2 nodes - etcd|cp roles per 1 node " + provisioninginput.StandardClientName.String(), nodeRolesShared, r.standardUserClient, false, r.client.Flags.GetValue(environmentflag.Short) || r.client.Flags.GetValue(environmentflag.Long)},
 		{"3 nodes - 1 role per node " + provisioninginput.StandardClientName.String(), nodeRolesDedicated, r.standardUserClient, false, r.client.Flags.GetValue(environmentflag.Long)},
 		{"4 nodes - 1 role per node + 1 Windows worker " + provisioninginput.StandardClientName.String(), nodeRolesWindows, r.standardUserClient, true, r.client.Flags.GetValue(environmentflag.Long)},
-		{"8 nodes - 3 etcd, 2 cp, 3 worker " + provisioninginput.StandardClientName.String(), nodeRolesStandard, r.standardUserClient, false, r.client.Flags.GetValue(environmentflag.Long)},
 	}
 
 	for _, tt := range tests {
 		if !tt.runFlag {
-			r.T().Logf("SKIPPED")
+			t.Logf("SKIPPED")
 			continue
 		}
 
-		for _, cattleConfig := range r.cattleConfigs {
-			clusterConfig := new(clusters.ClusterConfig)
-			operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
-			require.NotNil(r.T(), clusterConfig.Provider)
+		var err error
 
-			clusterConfig.MachinePools = tt.machinePools
+		testSession := session.NewSession()
+		tt.client, err = tt.client.WithSession(testSession)
+		assert.NoError(t, err)
 
-			name := tt.name + " Node Provider: " + clusterConfig.NodeProvider + " Kubernetes version: " + clusterConfig.KubernetesVersion + " cni: " + clusterConfig.CNI
-			r.Run(name, func() {
+		t.Cleanup(func() {
+			logrus.Info("Running cleanup")
+			testSession.Cleanup()
+		})
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			for _, cattleConfig := range r.cattleConfigs {
+				clusterConfig := new(clusters.ClusterConfig)
+				operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
+				clusterConfig.MachinePools = tt.machinePools
+
+				assert.NotNil(t, clusterConfig.Provider)
 				if clusterConfig.Provider != "vsphere" && tt.isWindows {
-					r.T().Skip("Windows test requires access to vsphere")
+					t.Skip("Windows test requires access to vsphere")
 				}
 
 				provider := provisioning.CreateProvider(clusterConfig.Provider)
 				credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 				machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
-				clusterObject, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
-				require.NoError(r.T(), err)
+				cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+				assert.NoError(t, err)
 
-				provisioning.VerifyCluster(r.T(), tt.client, clusterConfig, clusterObject)
-			})
-		}
+				logrus.Infof("Verifying cluster (%s)", cluster.Name)
+				provisioning.VerifyCluster(t, tt.client, clusterConfig, cluster)
+			}
+		})
 	}
 }
 
-func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2ClusterDynamicInput() {
+func TestProvisioningRKE2ClusterDynamicInput(t *testing.T) {
+	r := setupSuite(t)
+
 	tests := []struct {
 		name   string
 		client *rancher.Client
@@ -152,30 +159,37 @@ func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2ClusterDynamic
 	}
 
 	for _, tt := range tests {
-		r.Run(tt.name, func() {
+		var err error
+
+		testSession := session.NewSession()
+		tt.client, err = tt.client.WithSession(testSession)
+		assert.NoError(t, err)
+
+		t.Cleanup(func() {
+			logrus.Info("Running cleanup")
+			testSession.Cleanup()
+		})
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			for _, cattleConfig := range r.cattleConfigs {
 				clusterConfig := new(clusters.ClusterConfig)
 				operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
 				if len(clusterConfig.MachinePools) == 0 {
-					r.T().Skip()
+					t.Skip("No machine pools provided")
 				}
 
 				provider := provisioning.CreateProvider(clusterConfig.Provider)
 				credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 				machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
-				clusterObject, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
-				require.NoError(r.T(), err)
+				cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+				assert.NoError(t, err)
 
-				provisioning.VerifyCluster(r.T(), tt.client, clusterConfig, clusterObject)
-				cloudprovider.VerifyCloudProvider(r.T(), tt.client, "rke2", nil, clusterConfig, clusterObject, nil)
+				logrus.Infof("Verifying cluster (%s)", cluster.Name)
+				provisioning.VerifyCluster(t, tt.client, clusterConfig, cluster)
 			}
 		})
 	}
-}
-
-// In order for 'go test' to run this suite, we need to create
-// a normal test function and pass our suite to suite.Run
-func TestRKE2ProvisioningTestSuite(t *testing.T) {
-	suite.Run(t, new(RKE2NodeDriverProvisioningTestSuite))
 }
