@@ -3,20 +3,22 @@
 package rke2
 
 import (
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/extensions/users"
 	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
 	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
@@ -31,7 +33,7 @@ type HardenedRKE2ClusterProvisioningTestSuite struct {
 	client              *rancher.Client
 	session             *session.Session
 	standardUserClient  *rancher.Client
-	provisioningConfig  *provisioninginput.Config
+	cattleConfig        map[string]any
 	project             *management.Project
 	chartInstallOptions *charts.InstallOptions
 }
@@ -44,25 +46,15 @@ func (c *HardenedRKE2ClusterProvisioningTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	c.session = testSession
 
-	c.provisioningConfig = new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, c.provisioningConfig)
+	c.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(c.T(), err)
 
 	c.client = client
 
-	if c.provisioningConfig.RKE2KubernetesVersions == nil {
-		rke2Versions, err := kubernetesversions.Default(c.client, extensionscluster.RKE2ClusterType.String(), nil)
-		require.NoError(c.T(), err)
-
-		c.provisioningConfig.RKE2KubernetesVersions = rke2Versions
-	} else if c.provisioningConfig.RKE2KubernetesVersions[0] == "all" {
-		rke2Versions, err := kubernetesversions.ListRKE2AllVersions(c.client)
-		require.NoError(c.T(), err)
-
-		c.provisioningConfig.RKE2KubernetesVersions = rke2Versions
-	}
+	c.cattleConfig, err = defaults.SetK8sDefault(client, "rke2", c.cattleConfig)
+	require.NoError(c.T(), err)
 
 	enabled := true
 	var testuser = namegen.AppendRandomString("testuser-")
@@ -98,25 +90,23 @@ func (c *HardenedRKE2ClusterProvisioningTestSuite) TestProvisioningRKE2HardenedC
 		machinePools    []provisioninginput.MachinePools
 		scanProfileName string
 	}{
-		{"CIS 1.9 Profile " + provisioninginput.StandardClientName.String(), c.standardUserClient, nodeRolesStandard, "rke2-cis-1.9-profile"},
+		{"CIS 1.9 Profile " + provisioninginput.StandardClientName.String(), c.client, nodeRolesStandard, "rke2-cis-1.9-profile"},
 	}
 	for _, tt := range tests {
 		c.Run(tt.name, func() {
-			provisioningConfig := *c.provisioningConfig
-			provisioningConfig.MachinePools = tt.machinePools
-			provisioningConfig.Hardened = true
 
-			nodeProviders := provisioningConfig.NodeProviders[0]
-			externalNodeProvider := provisioning.ExternalNodeProviderSetup(nodeProviders)
+			clusterConfig := new(clusters.ClusterConfig)
+			operations.LoadObjectFromMap(defaults.ClusterConfigKey, c.cattleConfig, clusterConfig)
+			clusterConfig.MachinePools = tt.machinePools
+			clusterConfig.Hardened = true
 
-			testConfig := clusters.ConvertConfigToClusterConfig(&provisioningConfig)
-			testConfig.KubernetesVersion = c.provisioningConfig.RKE2KubernetesVersions[0]
+			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
-			clusterObject, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, testConfig)
+			clusterObject, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig)
 			reports.TimeoutClusterReport(clusterObject, err)
 			require.NoError(c.T(), err)
 
-			provisioning.VerifyCluster(c.T(), tt.client, testConfig, clusterObject)
+			provisioning.VerifyCluster(c.T(), tt.client, clusterConfig, clusterObject)
 
 			cluster, err := extensionscluster.NewClusterMeta(tt.client, clusterObject.Name)
 			reports.TimeoutClusterReport(clusterObject, err)
