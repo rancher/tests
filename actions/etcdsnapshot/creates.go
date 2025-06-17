@@ -335,30 +335,33 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 		return nil, "", nil, nil, err
 	}
 
+	cluster, _, err := clusters.GetProvisioningClusterByName(client, clusterName, namespace)
+	if err != nil {
+		return nil, "", nil, nil, err
+	}
+
 	createdSnapshotIDs := []string{}
 	var snapshotToRestore string
 	s3Found := false
 
 	for _, snapshot := range createdSnapshots {
 		createdSnapshotIDs = append(createdSnapshotIDs, snapshot.ID)
-		store, ok := snapshot.Annotations["etcdsnapshot.rke.io/storage"]
-		if ok && store == "s3" {
-			snapshotToRestore = snapshot.ID
-			s3Found = true
-			break
+		if snapshot.Annotations != nil {
+			if store, ok := snapshot.Annotations["etcdsnapshot.rke.io/storage"]; ok && strings.ToLower(store) == "s3" {
+				snapshotToRestore = snapshot.ID
+				s3Found = true
+			}
 		}
 	}
 
-	cluster, _, err := clusters.GetProvisioningClusterByName(client, clusterName, namespace)
-	if err != nil {
-		return nil, "", nil, nil, err
-	}
-
 	if cluster.Spec.RKEConfig.ETCD.S3 != nil && !s3Found {
+		for _, snapshot := range createdSnapshots {
+			logrus.Warnf("Snapshot ID %s has annotations: %v", snapshot.ID, snapshot.Annotations)
+		}
 		return nil, "", nil, nil, fmt.Errorf("s3 is enabled for the cluster, but no snapshot from s3 was found")
 	}
 
-	if !s3Found {
+	if !s3Found && len(createdSnapshots) > 0 {
 		snapshotToRestore = createdSnapshots[0].ID
 	}
 
@@ -395,16 +398,16 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 		if etcdRestore.UpgradeKubernetesVersion == "" {
 			if strings.Contains(initialKubernetesVersion, RKE2) {
 				defaultVersion, err := kubernetesversions.Default(client, clusters.RKE2ClusterType.String(), nil)
-				etcdRestore.UpgradeKubernetesVersion = defaultVersion[0]
 				if err != nil {
 					return nil, "", nil, nil, err
 				}
+				etcdRestore.UpgradeKubernetesVersion = defaultVersion[0]
 			} else if strings.Contains(initialKubernetesVersion, K3S) {
 				defaultVersion, err := kubernetesversions.Default(client, clusters.K3SClusterType.String(), nil)
-				etcdRestore.UpgradeKubernetesVersion = defaultVersion[0]
 				if err != nil {
 					return nil, "", nil, nil, err
 				}
+				etcdRestore.UpgradeKubernetesVersion = defaultVersion[0]
 			}
 		}
 
@@ -427,7 +430,7 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 
 		logrus.Infof("Cluster version is upgraded to: %s", clusterObject.Spec.KubernetesVersion)
 
-		podErrors := pods.StatusPods(client, clusterID)
+		podErrors = pods.StatusPods(client, clusterID)
 		if len(podErrors) != 0 {
 			return nil, "", nil, nil, errors.New("cluster's pods not in good health post upgrade")
 		}
@@ -445,10 +448,10 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 			}
 
 			if etcdRestore.WorkerConcurrencyValue != clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency {
-				return nil, "", nil, nil, fmt.Errorf("wokerConcurrency after upgrade %s does not match expected version %s", clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency, etcdRestore.WorkerUnavailableValue)
+				return nil, "", nil, nil, fmt.Errorf("workerConcurrency after upgrade %s does not match expected version %s", clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency, etcdRestore.WorkerConcurrencyValue)
 			}
 		}
-		// sometimes we get a false positive on the cluster's state where it briefly goes 'active'. This is a way to mitigate that.
+
 		clusterSteveObject, err := client.Steve.SteveType(ProvisioningSteveResouceType).ByID(clusterID)
 		if err != nil {
 			return nil, "", nil, nil, err
@@ -460,14 +463,14 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 				return nil, "", nil, nil, err
 			}
 
-			podErrors := pods.StatusPods(client, clusterID)
+			podErrors = pods.StatusPods(client, clusterID)
 			if len(podErrors) != 0 {
 				return nil, "", nil, nil, errors.New("cluster's pods not in good health post upgrade")
 			}
 		}
 	}
 
-	return cluster, snapshotToRestore, postDeploymentResp, postServiceResp, err
+	return cluster, snapshotToRestore, postDeploymentResp, postServiceResp, nil
 }
 
 // RestoreAndValidateSnapshotV2Prov restores a given snapshot for a v2prov cluster and validates its resources
