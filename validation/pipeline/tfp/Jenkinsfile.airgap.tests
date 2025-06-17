@@ -96,7 +96,7 @@ node {
                     stage('Run Infrastructure TFP Test') {
                         try {
                             sh """
-                            docker run -v ${validationVolume}:/root--name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
+                            docker run -v ${validationVolume}:/root --name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
                             /root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -timeout=${timeout} -v ${params.TEST_CASE} | tee /root/test_logs.txt"
                             """
                             sh "docker cp ${testContainer}:${rootPath}${filename} ${filename}"
