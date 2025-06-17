@@ -2,7 +2,7 @@
 
 ## Test Suite: AppCo
 
-### Tested AppCo Istio SideCar Mode installation on a provisioned downstream cluster
+### Install in SideCar Mode
 
 TestSideCarInstallation
 
@@ -18,7 +18,7 @@ TestSideCarInstallation
 
 ## Test Suite: AppCo
 
-### Tested AppCo Istio Ambient Mode installation on a provisioned downstream cluster
+### Install in Ambient Mode
 
 TestAmbientInstallation
 
@@ -34,7 +34,7 @@ TestAmbientInstallation
 
 ## Test Suite: AppCo
 
-### Tested AppCo Istio Standalone Mode installation on a provisioned downstream cluster
+### Install in Standalone Mode
 
 TestGatewayStandaloneInstallation
 
@@ -50,7 +50,7 @@ TestGatewayStandaloneInstallation
 
 ## Test Suite: AppCo
 
-### Tested AppCo Istio installation with a different namespace on a provisioned downstream cluster
+### Install with a different namespace
 
 TestGatewayDiffNamespaceInstallation
 
@@ -66,7 +66,7 @@ TestGatewayDiffNamespaceInstallation
 
 ## Test Suite: AppCo
 
-### Tested AppCo Istio upgrade on a provisioned downstream cluster
+### Upgrade in InPlace Mode
 
 TestInPlaceUpgrade
 
@@ -84,7 +84,7 @@ TestInPlaceUpgrade
 
 ## Test Suite: AppCo
 
-### Tested AppCo Istio installation with Canary upgrade on a provisioned downstream cluster
+### Upgrade with Canary
 
 TestInstallWithCanaryUpgrade
 
