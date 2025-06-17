@@ -53,11 +53,14 @@ RUN curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -
     chmod +x kubectl && \
     mv ./kubectl /usr/local/bin/kubectl
 
-# Install Helm
-RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 && \
-chmod +x get_helm.sh && \
-./get_helm.sh && \
-rm get_helm.sh
+# Install Helm from local tarball
+# Ensure "helm-v3.18.3-linux-amd64.tar.gz" is in the Docker build context.
+COPY tests/validation/bin/helm-v3.18.3-linux-amd64.tar.gz /tmp/helm-v3.18.3-linux-amd64.tar.gz
+RUN tar -zxvf /tmp/helm-v3.18.3-linux-amd64.tar.gz -C /tmp && \
+    mv /tmp/linux-amd64/helm /usr/local/bin/helm && \
+    chmod +x /usr/local/bin/helm && \
+    rm /tmp/helm-v3.18.3-linux-amd64.tar.gz && \
+    rm -rf /tmp/linux-amd64
 
 # necessary to run if statements using [[ ]]
 SHELL ["/bin/bash", "-c"] 
