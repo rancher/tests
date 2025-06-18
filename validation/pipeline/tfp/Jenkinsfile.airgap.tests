@@ -144,7 +144,7 @@ node {
                             sh """
                             docker cp ${testContainer}:${rootPath}modules/airgap/aws/ .;
                             pwd;
-                            ls -la airgap/aws/ ;
+                            ls -la aws/ ;
                             docker run -v tests${validationVolume}:/root --name ${golangTestContainer} -t --env-file ${envFile} ${imageName} sh -c "
                             gotestsum --format standard-verbose --packages=${golangTestDir} --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
                             """
