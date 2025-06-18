@@ -164,14 +164,10 @@ node {
 
                         }
                         stage('Cleanup terraform resources'){
-                            sleep(999999)
                             try {
-                                    // Debug: List files to verify terraform state exists
-                                    sh "ls -la ./terraform-files"
-
                                     sh """
-                                    docker run --rm -v .\$(pwd)/aws:/terraform-files \
-                                        -v \$(pwd)/aws/.ssh:/root/go/src/github.com/rancher/tfp-automation/.ssh \
+                                    docker run --rm -v \$(pwd)/aws:/terraform-files \
+                                        -v \$(pwd)/validation/.ssh:/root/go/src/github.com/rancher/tfp-automation/.ssh \
                                         -w /terraform-files hashicorp/terraform:latest \
                                         destroy --auto-approve
                                     """
