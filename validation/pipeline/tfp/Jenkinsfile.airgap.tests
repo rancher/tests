@@ -164,13 +164,17 @@ node {
 
                         }
                         stage('Cleanup terraform resources'){
+                          sleep(86400)
                             try {
-                                    sh """
-                                    docker run --rm -v \$(pwd)/aws:/terraform-files \
-                                        -v \$(pwd)/validation/.ssh:/root/go/src/github.com/rancher/tfp-automation/.ssh \
-                                        -w /terraform-files hashicorp/terraform:latest \
-                                        destroy --auto-approve
-                                    """
+                              if (env.CLEANUP == "true") {
+
+                                      sh """
+                                      docker run --rm -v \$(pwd)/aws:/terraform-files \
+                                          -v \$(pwd)/validation/.ssh:/root/go/src/github.com/rancher/tfp-automation/.ssh \
+                                          -w /terraform-files hashicorp/terraform:latest \
+                                          destroy --auto-approve
+                                      """
+                               }
                              }
                              catch(err) {
                                 echo "${err} captured"
