@@ -159,7 +159,6 @@ node {
 
                         }
                         stage('Cleanup terraform resources'){
-                          sleep(86400)
                             try {
                               if (env.CLEANUP == "true") {
 
