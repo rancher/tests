@@ -97,16 +97,11 @@ node {
                         try {
                             sh """
                             docker run -v ${validationVolume}:/root --name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
-                            /root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -timeout=${timeout} -v ${params.TEST_CASE} | tee /root/test_logs.txt"
+                            /root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -timeout=${timeout} -v ${params.TEST_CASE}"
                             """
                             sh "docker cp ${testContainer}:${rootPath}${filename} ${filename}"
-
-                            adminToken = sh(script: "grep 'Admin bearer token:' ./root/test_logs.txt | awk -F 'Admin bearer token: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
-                            echo "Admin token: ${adminToken}"
-                            privateRegistry = sh(script: "grep 'Private registry:' ./root/test_logs.txt | awk -F 'Private registry: ' '{print \$2}' | tr -d '\"'", returnStdout: true).trim()
-                            echo "Private registry:  ${privateRegistry}"
-
-                        } catch(err) {
+                        }
+                        catch(err) {
                             echo "Test run had failures. Collecting results... ${err}"
                             error err
                         }
