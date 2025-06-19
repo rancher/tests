@@ -2,9 +2,9 @@
 node {
   def TERRAFORM_DIR = "./root/go/src/github.com/rancher/tfp-automation/modules/${env.MODULE}"
   def job_name = "${JOB_NAME}"
-  if (job_name.contains('/')) { 
+  if (job_name.contains('/')) {
     job_names = job_name.split('/')
-    job_name = job_names[job_names.size() - 1] 
+    job_name = job_names[job_names.size() - 1]
   }
   def testContainer = "${job_name}${env.BUILD_NUMBER}_test"
   def imageName = "tfp-automation-cleanup-${job_name}${env.BUILD_NUMBER}"
@@ -44,13 +44,13 @@ node {
               writeFile file: AWS_SSH_KEY_NAME, text: decoded
 
           }
-          
+
           sh "docker build . -f Dockerfile --build-arg PEM_FILE=key.pem  --build-arg TERRAFORM_VERSION=${env.TERRAFORM_VERSION} -t ${imageName}"
         }
         stage('Setup'){
             sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
             sh returnStdout:true, script: 'chmod a+x ./yq'
-            
+
             AWS_ACCESS_KEY_ID = sh (
                   script: "echo '${s3Config}' | ./yq '.accessKey'",
                   returnStdout: true
@@ -60,11 +60,11 @@ node {
                   script: "echo '${s3Config}' | ./yq '.secretKey'",
                   returnStdout: true
                 ).trim()
-                      
+
             AWS_S3_BUCKET = sh (
                   script: "echo '${s3Config}' | ./yq '.s3Bucket'",
                   returnStdout: true
-                ).trim()     
+                ).trim()
 
             AWS_S3_REGION =    sh (
                   script: "echo '${s3Config}' | ./yq '.s3BucketRegion'",
@@ -95,11 +95,11 @@ node {
                 -e AWS_DEFAULT_REGION=$AWS_S3_REGION \
                 amazon/aws-cli \
                 s3 rm s3://$AWS_S3_BUCKET/terraform/ --recursive
-                """   
+                """
             }
           }catch(err){
             sh "docker rm $s3Container"
-            sh  "docker volume rm $terraformVolume"            
+            sh  "docker volume rm $terraformVolume"
           }
             sh "docker rm $s3Container"
             sh  "docker volume rm $terraformVolume"

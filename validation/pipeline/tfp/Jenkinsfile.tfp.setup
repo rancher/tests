@@ -5,9 +5,9 @@ node {
   def TERRAFORM_DIR = "./root/go/src/github.com/rancher/tfp-automation/modules/${env.MODULE}"
   def testsDir = "github.com/rancher/tfp-automation/tests/${env.TEST_PACKAGE}"
   def job_name = "${JOB_NAME}"
-  if (job_name.contains('/')) { 
+  if (job_name.contains('/')) {
     job_names = job_name.split('/')
-    job_name = job_names[job_names.size() - 1] 
+    job_name = job_names[job_names.size() - 1]
   }
   def testContainer = "${job_name}${env.BUILD_NUMBER}_test"
   def imageName = "tfp-automation-validation-${job_name}${env.BUILD_NUMBER}"
@@ -29,7 +29,7 @@ node {
   }
   def timeout = "${env.TIMEOUT}"
   if ("${env.TIMEOUT}" != "null" && "${env.TIMEOUT}" != "") {
-        timeout = "${env.TIMEOUT}" 
+        timeout = "${env.TIMEOUT}"
   }
   def s3Config = env.AWS_S3_BUCKET_CONFIG
 
@@ -61,11 +61,11 @@ node {
           dir(".ssh") {
               def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
               writeFile file: AWS_SSH_KEY_NAME, text: decoded
-      
+
               def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
               writeFile file: JENKINS_RKE_VALIDATION, text: decodedRsa
           }
-          
+
           env.CATTLE_TEST_CONFIG=rootPath+'config.yml'
 
           sh "./configure.sh"
@@ -74,7 +74,7 @@ node {
         stage('Setup'){
             sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
             sh returnStdout:true, script: 'chmod a+x ./yq'
-            
+
             AWS_S3_BUCKET = sh (
                   script: "echo '${s3Config}' | ./yq '.s3Bucket'",
                   returnStdout: true
@@ -120,7 +120,7 @@ node {
                 echo "Unable to get the output: ${err}"
                 sh "docker rm ${testContainer}"
               }
-              sh "docker rm ${testContainer}"         
+              sh "docker rm ${testContainer}"
           }
     }
 }
