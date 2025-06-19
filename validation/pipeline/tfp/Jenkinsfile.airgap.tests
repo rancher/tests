@@ -168,14 +168,14 @@ node {
                                           -w /terraform-files hashicorp/terraform:latest \
                                           destroy --auto-approve
                                       """
+                                      sh "docker stop ${testContainer}"
+                                      sh "docker volume rm ${validationVolume} || true"
+                                      sh "docker rm ${testContainer} || true"
                                }
                              }
                              catch(err) {
                                 echo "${err} captured"
                              }
-                             sh "docker stop ${testContainer}"
-                             sh "docker volume rm ${validationVolume} || true"
-                             sh "docker rm ${testContainer} || true"
                         } //cleanup
                     } //dir
                 } //params
