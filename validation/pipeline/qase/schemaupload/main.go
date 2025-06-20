@@ -83,6 +83,7 @@ func getRawSchemaData() (map[string][]string, error) {
 				return err
 			}
 			c := string(content)
+			c = strings.ReplaceAll(c, "\r\n", "\n")
 			project := extractSubstrings(c, qaseProjectRegex)[0][1]
 			if _, ok := schemaMap[project]; ok {
 				schemaMap[project] = append(schemaMap[project], strings.Split(c, projectSeperator)...)
