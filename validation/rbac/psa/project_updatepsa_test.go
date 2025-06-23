@@ -235,6 +235,76 @@ func (pu *ProjectUpdatePsaTestSuite) TestUpdateNamespaceWithPsaLabelsWithUpdateP
 	}
 }
 
+func (pu *ProjectUpdatePsaTestSuite) TestCreateNamespaceWithPsaLabelsAsStandardUser() {
+	subSession := pu.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Creating a project as admin.")
+	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(pu.client, pu.cluster.ID)
+	require.NoError(pu.T(), err)
+
+	customRoleTemplate2, err := createUpdatePSARoleTemplate(pu.client)
+	require.NoError(pu.T(), err)
+
+	log.Infof("Creating user")
+	newUser, userClient, err := rbac.SetupUser(pu.client, rbac.StandardUser.String())
+	require.NoError(pu.T(), err)
+	log.Infof("Created user: %v", newUser.Username)
+
+	log.Infof("Granting 'updatepsa' permission to user %v", newUser.Username)
+	_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate2.Name)
+	require.NoError(pu.T(), err)
+
+	log.Infof("Granting 'create namespaces' permission to user %v", newUser.Username)
+	_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, rbac.CreateNS.String())
+	require.NoError(pu.T(), err)
+
+	log.Infof("As user %v, create a namespace with PSA labels in project %v", newUser.Username, adminProject.Name)
+	psaLabels := generatePSALabels()
+	createdNamespace, err := projects.CreateNamespaceUsingWrangler(userClient, pu.cluster.ID, adminProject.Name, psaLabels)
+	require.NoError(pu.T(), err)
+
+	actualLabels := getPSALabelsFromNamespace(createdNamespace)
+	require.Equal(pu.T(), actualLabels, psaLabels)
+}
+
+func (pu *ProjectUpdatePsaTestSuite) TestVerifyCreateNamespaceWithPsaLabelsWithMultipleUsers() {
+	subSession := pu.session.NewSession()
+	defer subSession.Cleanup()
+
+	const userCount = 5
+
+	log.Info("Creating a project as admin.")
+	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(pu.client, pu.cluster.ID)
+	require.NoError(pu.T(), err)
+
+	customRoleTemplate2, err := createUpdatePSARoleTemplate(pu.client)
+	require.NoError(pu.T(), err)
+
+	for i := 0; i < userCount; i++ {
+		log.Infof("Creating user")
+		newUser, userClient, err := rbac.SetupUser(pu.client, rbac.StandardUser.String())
+		require.NoError(pu.T(), err)
+		log.Infof("Created user: %v", newUser.Username)
+
+		log.Infof("Granting 'updatepsa' permission to user %v", newUser.Username)
+		_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate2.Name)
+		require.NoError(pu.T(), err)
+
+		log.Infof("Granting 'create namespaces' permission to user %v", newUser.Username)
+		_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, rbac.CreateNS.String())
+		require.NoError(pu.T(), err)
+
+		log.Infof("As user %v, create a namespace with PSA labels in project %v", newUser.Username, adminProject.Name)
+		psaLabels := generatePSALabels()
+		createdNamespace, err := projects.CreateNamespaceUsingWrangler(userClient, pu.cluster.ID, adminProject.Name, psaLabels)
+		require.NoError(pu.T(), err)
+
+		actualLabels := getPSALabelsFromNamespace(createdNamespace)
+		require.Equal(pu.T(), actualLabels, psaLabels)
+	}
+}
+
 func TestProjectUpdatePsaTestSuite(t *testing.T) {
 	suite.Run(t, new(ProjectUpdatePsaTestSuite))
 }

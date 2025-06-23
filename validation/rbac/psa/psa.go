@@ -1,7 +1,9 @@
 package psa
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults"
 	extensionsworkloads "github.com/rancher/shepherd/extensions/workloads"
 	wloads "github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
@@ -19,6 +22,8 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -219,9 +224,55 @@ func createUpdatePSARoleTemplate(client *rancher.Client) (*v3.RoleTemplate, erro
 			Resources: []string{rbac.ProjectResource},
 		},
 	}
-	roleTemplate, err := rbac.CreateRoleTemplate(client, rbac.ProjectContext, updatePsaRules, nil, false, nil)
+
+	roleTemplateName := "namespaces-psa"
+	displayName := "Manage PSA Labels"
+
+	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
+		_, err := client.WranglerContext.Mgmt.RoleTemplate().Get(roleTemplateName, metav1.GetOptions{})
+		if err != nil && apierrors.IsNotFound(err) {
+			return true, nil
+		}
+
+		err = client.WranglerContext.Mgmt.RoleTemplate().Delete(roleTemplateName, &metav1.DeleteOptions{})
+		if err != nil {
+			return false, fmt.Errorf("failed to delete existing RoleTemplate: %w", err)
+		}
+		return false, nil
+	})
+
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to wait for RoleTemplate deletion: %w", err)
 	}
-	return roleTemplate, nil
+
+	roleTemplate := &v3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: roleTemplateName,
+		},
+		Context:       rbac.ProjectContext,
+		Rules:         updatePsaRules,
+		DisplayName:   displayName,
+		External:      false,
+		ExternalRules: nil,
+	}
+
+	createdRoleTemplate, err := client.WranglerContext.Mgmt.RoleTemplate().Create(roleTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create update-psa RoleTemplate: %w", err)
+	}
+
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
+		_, err := client.WranglerContext.Mgmt.RoleTemplate().Get(roleTemplateName, metav1.GetOptions{})
+		if err != nil {
+			return false, fmt.Errorf("failed to get RoleTemplate after creation: %w", err)
+		}
+
+		return true, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed waiting for RoleTemplate creation: %w", err)
+	}
+
+	return createdRoleTemplate, nil
 }
