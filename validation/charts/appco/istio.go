@@ -4,10 +4,16 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	"github.com/rancher/shepherd/clients/rancher"
+	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extencharts "github.com/rancher/shepherd/extensions/charts"
+	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
 	"github.com/rancher/shepherd/extensions/kubectl"
+	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/charts"
+	"github.com/rancher/tests/interoperability/fleet"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -43,12 +49,7 @@ func watchAndwaitInstallIstioAppCo(client *rancher.Client, clusterID string, app
 		return nil, logCmd, err
 	}
 
-	err = extencharts.WatchAndWaitDeployments(client, clusterID, charts.RancherIstioNamespace, metav1.ListOptions{})
-	if err != nil {
-		return nil, logCmd, err
-	}
-
-	istioChart, err := extencharts.GetChartStatus(client, clusterID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	istioChart, err := watchAndwaitIstioAppCo(client, clusterID)
 	if err != nil {
 		return nil, logCmd, err
 	}
@@ -67,12 +68,7 @@ func watchAndwaitUpgradeIstioAppCo(client *rancher.Client, clusterID string, app
 		return nil, logCmd, err
 	}
 
-	err = extencharts.WatchAndWaitDeployments(client, clusterID, charts.RancherIstioNamespace, metav1.ListOptions{})
-	if err != nil {
-		return nil, logCmd, err
-	}
-
-	istioChart, err := extencharts.GetChartStatus(client, clusterID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	istioChart, err := watchAndwaitIstioAppCo(client, clusterID)
 	if err != nil {
 		return nil, logCmd, err
 	}
@@ -87,4 +83,55 @@ func verifyCanaryRevision(client *rancher.Client, clusterID string) (string, err
 	}
 
 	return kubectl.Command(client, nil, clusterID, getCanaryCommand, logBufferSize)
+}
+
+func createFleetGitRepo(client *rancher.Client, clusterName string, clusterID string) (*v1.SteveAPIObject, error) {
+
+	fleetGitRepo := &v1alpha1.GitRepo{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fleet.FleetMetaName + namegenerator.RandStringLower(5),
+			Namespace: fleet.Namespace,
+		},
+		Spec: v1alpha1.GitRepoSpec{
+			Repo:            fleet.ExampleRepo,
+			Branch:          fleet.BranchName,
+			TargetNamespace: charts.RancherIstioNamespace,
+			Paths:           []string{"appco"},
+			Targets: []v1alpha1.GitTarget{
+				{
+					ClusterName: clusterName,
+				},
+			},
+			HelmSecretName:   rancherIstioSecretName,
+			HelmRepoURLRegex: "dp.apps.rancher.io",
+		},
+	}
+
+	logrus.Info("Creating a fleet git repo")
+	repoObject, err := extensionsfleet.CreateFleetGitRepo(client, fleetGitRepo)
+	if err != nil {
+		return nil, err
+	}
+
+	logrus.Info("Verifying the Git repository")
+	err = fleet.VerifyGitRepo(client, repoObject.ID, clusterID, fmt.Sprintf("%s/%s", fleet.Namespace, clusterName))
+	if err != nil {
+		return nil, err
+	}
+
+	return repoObject, nil
+}
+
+func watchAndwaitIstioAppCo(client *rancher.Client, clusterID string) (*extencharts.ChartStatus, error) {
+	err := extencharts.WatchAndWaitDeployments(client, clusterID, charts.RancherIstioNamespace, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	istioChart, err := extencharts.GetChartStatus(client, clusterID, charts.RancherIstioNamespace, charts.RancherIstioName)
+	if err != nil {
+		return nil, err
+	}
+
+	return istioChart, err
 }
