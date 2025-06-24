@@ -96,6 +96,9 @@ func (u *FleetTestSuite) SetupTest() {
 	logCmd, err := createIstioSecret(client, u.cluster.ID, *AppCoUsername, *AppCoAccessToken)
 	require.NoError(u.T(), err)
 	require.True(u.T(), strings.Contains(logCmd, rancherIstioSecretName))
+
+	err = pullPilotImage(client, u.cluster.ID)
+	require.NoError(u.T(), err)
 }
 
 func (u *FleetTestSuite) TestIstioInstallation() {

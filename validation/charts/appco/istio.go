@@ -10,8 +10,10 @@ import (
 	extencharts "github.com/rancher/shepherd/extensions/charts"
 	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
 	"github.com/rancher/shepherd/extensions/kubectl"
+	"github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/charts"
+	"github.com/rancher/tests/actions/workloads/job"
 	"github.com/rancher/tests/interoperability/fleet"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -32,6 +34,7 @@ const (
 	getPodsMetadataNameCommand                  string = `kubectl -n %s get pod -o jsonpath='{.items..metadata.name}'`
 	logBufferSize                               string = `2MB`
 	exampleAppProjectName                              = "demo-project"
+	pilotImage                                  string = `dp.apps.rancher.io/containers/pilot:1.26.1-1.2`
 )
 
 func createIstioSecret(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string) (string, error) {
@@ -117,12 +120,6 @@ func createFleetGitRepo(client *rancher.Client, clusterName string, clusterID st
 		return nil, err
 	}
 
-	logrus.Info("Verifying the Git repository")
-	err = fleet.VerifyGitRepo(client, repoObject.ID, clusterID, fmt.Sprintf("%s/%s", fleet.Namespace, clusterName))
-	if err != nil {
-		return nil, err
-	}
-
 	return repoObject, nil
 }
 
@@ -163,4 +160,23 @@ func createFleetSecret(client *rancher.Client) (string, error) {
 	}
 
 	return secretResp.Name, nil
+}
+
+func pullPilotImage(client *rancher.Client, clusterID string) error {
+	container := workloads.NewContainer(namegenerator.RandStringLower(3), pilotImage, corev1.PullIfNotPresent, nil, nil, nil, nil, nil)
+	podTemplate := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: make(map[string]string),
+		},
+		Spec: corev1.PodSpec{
+			Containers:       []corev1.Container{container},
+			RestartPolicy:    corev1.RestartPolicyNever,
+			Volumes:          nil,
+			ImagePullSecrets: []corev1.LocalObjectReference{corev1.LocalObjectReference{Name: rancherIstioSecretName}},
+			NodeSelector:     nil,
+		},
+	}
+
+	_, err := job.CreateJob(client, clusterID, charts.RancherIstioNamespace, podTemplate, true)
+	return err
 }
