@@ -11,10 +11,9 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extensionClusters "github.com/rancher/shepherd/extensions/clusters"
 	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
-	kubeapinamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
+	namespaces "github.com/rancher/tests/actions/namespaces"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -26,9 +25,14 @@ type FleetTestSuite struct {
 	session     *session.Session
 	cluster     *management.Cluster
 	clusterName string
+	project     *management.Project
 }
 
 func (u *FleetTestSuite) TearDownSuite() {
+	u.session.Cleanup()
+}
+
+func (u *FleetTestSuite) TearDownTest() {
 	u.session.Cleanup()
 }
 
@@ -65,8 +69,27 @@ func (u *FleetTestSuite) SetupSuite() {
 		u.clusterName = u.cluster.ID
 	}
 
+	projectConfig := &management.Project{
+		ClusterID: clusterID,
+		Name:      exampleAppProjectName,
+	}
+	createdProject, err := client.Management.Project.Create(projectConfig)
+	require.NoError(u.T(), err)
+	require.Equal(u.T(), createdProject.Name, exampleAppProjectName)
+	u.project = createdProject
+}
+
+func (u *FleetTestSuite) SetupTest() {
+	testSession := session.NewSession()
+	u.session = testSession
+
+	client, err := rancher.NewClient("", testSession)
+	require.NoError(u.T(), err)
+
+	u.client = client
+
 	u.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
-	_, err = kubeapinamespaces.CreateNamespace(client, u.cluster.ID, namegen.AppendRandomString("testns"), charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{})
+	_, err = namespaces.CreateNamespace(client, charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{}, u.project)
 	require.NoError(u.T(), err)
 
 	u.T().Logf("Creating %s secret", rancherIstioSecretName)
@@ -76,8 +99,6 @@ func (u *FleetTestSuite) SetupSuite() {
 }
 
 func (u *FleetTestSuite) TestIstioInstallation() {
-	u.session = session.NewSession()
-
 	log.Info("Creating Fleet repo")
 	repoObject, err := createFleetGitRepo(u.client, u.clusterName, u.cluster.ID)
 	require.NoError(u.T(), err)

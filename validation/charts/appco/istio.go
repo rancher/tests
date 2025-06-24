@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/interoperability/fleet"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -30,6 +31,7 @@ const (
 	watchAndwaitUpgradeIstioAppCoUpgradeCommand string = `helm registry login dp.apps.rancher.io -u %s -p %s && helm upgrade %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s} %s`
 	getPodsMetadataNameCommand                  string = `kubectl -n %s get pod -o jsonpath='{.items..metadata.name}'`
 	logBufferSize                               string = `2MB`
+	exampleAppProjectName                              = "demo-project"
 )
 
 func createIstioSecret(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string) (string, error) {
@@ -86,6 +88,10 @@ func verifyCanaryRevision(client *rancher.Client, clusterID string) (string, err
 }
 
 func createFleetGitRepo(client *rancher.Client, clusterName string, clusterID string) (*v1.SteveAPIObject, error) {
+	secretName, err := createFleetSecret(client)
+	if err != nil {
+		return nil, err
+	}
 
 	fleetGitRepo := &v1alpha1.GitRepo{
 		ObjectMeta: metav1.ObjectMeta{
@@ -93,17 +99,15 @@ func createFleetGitRepo(client *rancher.Client, clusterName string, clusterID st
 			Namespace: fleet.Namespace,
 		},
 		Spec: v1alpha1.GitRepoSpec{
-			Repo:            fleet.ExampleRepo,
-			Branch:          fleet.BranchName,
-			TargetNamespace: charts.RancherIstioNamespace,
-			Paths:           []string{"appco"},
+			Repo:   "https://github.com/lscalabrini01/mytests.git",
+			Branch: "main",
+			Paths:  []string{"appco"},
 			Targets: []v1alpha1.GitTarget{
 				{
 					ClusterName: clusterName,
 				},
 			},
-			HelmSecretName:   rancherIstioSecretName,
-			HelmRepoURLRegex: "dp.apps.rancher.io",
+			HelmSecretName: secretName,
 		},
 	}
 
@@ -134,4 +138,29 @@ func watchAndwaitIstioAppCo(client *rancher.Client, clusterID string) (*extencha
 	}
 
 	return istioChart, err
+}
+
+func createFleetSecret(client *rancher.Client) (string, error) {
+	keyData := map[string][]byte{
+		corev1.BasicAuthUsernameKey: []byte(*AppCoUsername),
+		corev1.BasicAuthPasswordKey: []byte(*AppCoAccessToken),
+	}
+
+	secretName := namegenerator.AppendRandomString("fleet-appco-secret")
+	secretTemplate := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: fleet.Namespace,
+		},
+		Data: keyData,
+		Type: corev1.SecretTypeBasicAuth,
+	}
+
+	secretResp, err := client.WranglerContext.Core.Secret().Create(&secretTemplate)
+
+	if err != nil {
+		return "", err
+	}
+
+	return secretResp.Name, nil
 }
