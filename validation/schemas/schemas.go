@@ -47,6 +47,7 @@ var exceptionMap = map[string]bool{
 	"schemaDefinition":         true,
 	"subscribe":                true,
 	"userpreference":           true,
+	"gateway.networking.k8s.io.referencegrant": true,
 }
 
 func getSchemaByID(client *rancher.Client, clusterID, existingSchemaID string) (map[string]interface{}, error) {
