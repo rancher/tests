@@ -3,9 +3,11 @@ package appco
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	"github.com/rancher/shepherd/clients/rancher"
+	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extencharts "github.com/rancher/shepherd/extensions/charts"
 	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
@@ -18,6 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -90,7 +93,7 @@ func verifyCanaryRevision(client *rancher.Client, clusterID string) (string, err
 	return kubectl.Command(client, nil, clusterID, getCanaryCommand, logBufferSize)
 }
 
-func createFleetGitRepo(client *rancher.Client, clusterName string, clusterID string) (*v1.SteveAPIObject, error) {
+func watchAndwaitCreateFleetGitRepo(client *rancher.Client, clusterName string, clusterID string) (*v1.SteveAPIObject, error) {
 	secretName, err := createFleetSecret(client)
 	if err != nil {
 		return nil, err
@@ -121,7 +124,35 @@ func createFleetGitRepo(client *rancher.Client, clusterName string, clusterID st
 	}
 
 	logrus.Info("Verify git repo")
-	err = fleet.VerifyGitRepo(client, repoObject.ID, clusterID, fmt.Sprintf("%s/%s", fleet.Namespace, clusterName))
+	backoff := kwait.Backoff{
+		Duration: 1 * time.Second,
+		Factor:   1.1,
+		Jitter:   0.1,
+		Steps:    20,
+	}
+
+	err = kwait.ExponentialBackoff(backoff, func() (finished bool, err error) {
+		client, err = client.ReLogin()
+		if err != nil {
+			return false, err
+		}
+
+		gitRepo, err := client.Steve.SteveType(extensionsfleet.FleetGitRepoResourceType).ByID(repoObject.ID)
+		if err != nil {
+			return false, err
+		}
+		gitStatus := &v1alpha1.GitRepoStatus{}
+		err = steveV1.ConvertToK8sType(gitRepo.Status, gitStatus)
+		if err != nil {
+			return false, err
+		}
+
+		if gitStatus.Summary.Modified > 0 {
+			return true, nil
+		}
+
+		return false, nil
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -167,7 +167,7 @@ func (i *IstioTestSuite) TestFleetInstallation() {
 	require.NoError(i.T(), err)
 
 	i.T().Log("Creating Fleet repo")
-	repoObject, err := createFleetGitRepo(i.client, i.clusterName, i.cluster.ID)
+	repoObject, err := watchAndwaitCreateFleetGitRepo(i.client, i.clusterName, i.cluster.ID)
 	require.NoError(i.T(), err)
 
 	log.Info("Getting GitRepoStatus")
