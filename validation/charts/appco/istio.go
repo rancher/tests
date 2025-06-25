@@ -120,6 +120,12 @@ func createFleetGitRepo(client *rancher.Client, clusterName string, clusterID st
 		return nil, err
 	}
 
+	logrus.Info("Verify git repo")
+	err = fleet.VerifyGitRepo(client, repoObject.ID, clusterID, fmt.Sprintf("%s/%s", fleet.Namespace, clusterName))
+	if err != nil {
+		return nil, err
+	}
+
 	return repoObject, nil
 }
 
