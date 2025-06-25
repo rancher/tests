@@ -102,8 +102,8 @@ func createFleetGitRepo(client *rancher.Client, clusterName string, clusterID st
 			Namespace: fleet.Namespace,
 		},
 		Spec: v1alpha1.GitRepoSpec{
-			Repo:   "https://github.com/lscalabrini01/mytests.git",
-			Branch: "main",
+			Repo:   fleet.ExampleRepo,
+			Branch: fleet.BranchName,
 			Paths:  []string{"appco"},
 			Targets: []v1alpha1.GitTarget{
 				{

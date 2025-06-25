@@ -4,21 +4,28 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
+	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	extensionClusters "github.com/rancher/shepherd/extensions/clusters"
+	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
-	kubeapinamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
+	namespaces "github.com/rancher/tests/actions/namespaces"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
 type IstioTestSuite struct {
 	suite.Suite
-	client  *rancher.Client
-	session *session.Session
-	cluster *clusters.ClusterMeta
+	client      *rancher.Client
+	session     *session.Session
+	cluster     *clusters.ClusterMeta
+	clusterName string
 }
 
 func (i *IstioTestSuite) TearDownSuite() {
@@ -41,6 +48,21 @@ func (i *IstioTestSuite) SetupSuite() {
 	require.NoError(i.T(), err)
 
 	i.cluster = cluster
+
+	provisioningClusterID, err := extensionClusters.GetV1ProvisioningClusterByName(client, clusterName)
+	require.NoError(i.T(), err)
+
+	steveCluster, err := client.Steve.SteveType(extensionClusters.ProvisioningSteveResourceType).ByID(provisioningClusterID)
+	require.NoError(i.T(), err)
+
+	newCluster := &provv1.Cluster{}
+	err = steveV1.ConvertToK8sType(steveCluster, newCluster)
+	require.NoError(i.T(), err)
+
+	i.clusterName = client.RancherConfig.ClusterName
+	if !strings.Contains(newCluster.Spec.KubernetesVersion, "k3s") && !strings.Contains(newCluster.Spec.KubernetesVersion, "rke2") {
+		i.clusterName = i.cluster.ID
+	}
 }
 
 func (i *IstioTestSuite) TearDownTest() {
@@ -56,8 +78,16 @@ func (i *IstioTestSuite) SetupTest() {
 
 	i.client = client
 
+	projectConfig := &management.Project{
+		ClusterID: i.cluster.ID,
+		Name:      exampleAppProjectName,
+	}
+	project, err := client.Management.Project.Create(projectConfig)
+	require.NoError(i.T(), err)
+	require.Equal(i.T(), project.Name, exampleAppProjectName)
+
 	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
-	_, err = kubeapinamespaces.CreateNamespace(client, i.cluster.ID, namegen.AppendRandomString("testns"), charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{})
+	_, err = namespaces.CreateNamespace(client, charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{}, project)
 	require.NoError(i.T(), err)
 
 	i.T().Logf("Creating %s secret", rancherIstioSecretName)
@@ -128,6 +158,28 @@ func (i *IstioTestSuite) TestInPlaceUpgrade() {
 	istioChart, logCmd, err = watchAndwaitUpgradeIstioAppCo(i.client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, "")
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
+	require.True(i.T(), istioChart.IsAlreadyInstalled)
+}
+
+func (i *IstioTestSuite) TestFleetInstallation() {
+	i.T().Log("Pulling Pilot Image")
+	err := pullPilotImage(i.client, i.cluster.ID)
+	require.NoError(i.T(), err)
+
+	i.T().Log("Creating Fleet repo")
+	repoObject, err := createFleetGitRepo(i.client, i.clusterName, i.cluster.ID)
+	require.NoError(i.T(), err)
+
+	log.Info("Getting GitRepoStatus")
+	gitRepo, err := i.client.Steve.SteveType(extensionsfleet.FleetGitRepoResourceType).ByID(repoObject.ID)
+	require.NoError(i.T(), err)
+
+	gitStatus := &v1alpha1.GitRepoStatus{}
+	err = steveV1.ConvertToK8sType(gitRepo.Status, gitStatus)
+	require.NoError(i.T(), err)
+
+	istioChart, err := watchAndwaitIstioAppCo(i.client, i.cluster.ID)
+	require.NoError(i.T(), err)
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 }
 

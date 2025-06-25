@@ -77,3 +77,15 @@ TestInstallWithCanaryUpgrade
 | 5           | Wait for Istio Deployments be running | kubectl get pods | All the pods should be running |
 | 6           | Upgrate the Istio AppCo with Canary mode | helm install <release-name> oci://dp.apps.rancher.io charts/istio -n istio-system --set global.imagePullSecrets={application-collection} |   |
 | 7           | Wait for Istio Deployments be running | kubectl get pods | All the pods should be running |
+
+### Install using Fleet
+
+TestFleetInstallation
+
+| Step Number | Action               | Data         | Expected Result                |
+| ----------- | -------------------- | ------------ | ------------------------------ |
+| 1           | Config a downstream cluster running in rancher |   |   |
+| 2           | Create Namespace | Namespace name: istio-system |   |
+| 3           | Create Secret     | Secret name: application-collection |   |
+| 4           | Install Istio AppCo using Fleet |  https://github.com/rancher/fleet-examples/blob/master/appco/fleet.yaml |   |
+| 5           | Wait for Istio Deployments be running | kubectl get pods | All the pods should be running |
