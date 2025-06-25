@@ -147,7 +147,7 @@ func watchAndwaitCreateFleetGitRepo(client *rancher.Client, clusterName string, 
 			return false, err
 		}
 
-		if gitStatus.Summary.Modified > 0 {
+		if gitStatus.Summary.Modified > 0 || gitStatus.Summary.NotReady > 0 {
 			return true, nil
 		}
 
