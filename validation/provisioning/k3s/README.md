@@ -1,6 +1,6 @@
 # K3S Provisioning Configs
 
-For your config, you will need everything in the Prerequisites section on the previous readme, [Define your test](#provisioning-input), and at least one [Cloud Credential](#cloud-credentials) and [Node Driver Machine Config](#machine-k3s-config) or [Custom Cluster Template](#custom-cluster), which should match what you have specified in `provisioningInput`. 
+For your config, you will need everything in the Prerequisites section on the previous readme, [Define your test](#provisioning-input), and at least one [Cloud Credential](#cloud-credentials) and [Node Driver Machine Config](#machine-k3s-config) or [Custom Cluster Template](#custom-cluster), which should match what you have specified in `clusterConfig`. 
 
 Your GO test_package should be set to `provisioning/k3s`.
 Your GO suite should be set to `-run ^TestK3SProvisioningTestSuite$`.
@@ -9,7 +9,7 @@ Please see below for more details for your config. Please see below for more det
 ## Table of Contents
 1. [Prerequisites](../README.md)
 2. [Configuring test flags](#Flags)
-3. [Define your test](#provisioning-input)
+3. [Define your test](#cluster-config)
 4. [Cloud Credential](#cloud-credentials)
 5. [Configure providers to use for Node Driver Clusters](#machine-k3s-config)
 6. [Configuring Custom Clusters](#custom-cluster)
@@ -28,15 +28,15 @@ flags:
   desiredflags: "Long"   #required (static tests only)
 ```
 
-## Provisioning Input
-provisioningInput is needed to the run the K3S tests.
+## Cluster Config
+clusterConfig is needed to the run the K3S tests.
 
 **nodeProviders is only needed for custom cluster tests; the framework only supports custom clusters through aws/ec2 instances.**
 ```yaml
-provisioningInput:
+clusterConfig:
   machinePools:                                              
-  - machinePoolConfig:                       #required(dynamic only) (at least 1 of each role must be true accross all machinePoolConfigs)
-      etcd: true                             #required(dynamic only) (at least 1 role etcd, controlplane, worker must be true)
+  - machinePoolConfig:                        #required(dynamic only) (at least 1 of each role must be true accross all machinePoolConfigs)
+      etcd: true                              #required(dynamic only) (at least 1 role etcd, controlplane, worker must be true)
       controlplane: true
       worker: true
       quantity: 1
@@ -53,13 +53,11 @@ provisioningInput:
   - machinePoolConfig:
       worker: true
       quantity: 1
-  k3sKubernetesVersion: ["v1.27.6+k3s1"]     #required (at least 1)
-  providers: ["aws"]                         #required (at least 1) linode,aws,do,harvester,vsphere,azure,google
-  cni: ["calico"]                            #required (at least 1)
-  nodeProviders: ["ec2"]                     #required(custom clusters only)
+  kubernetesVersion: ""                       #required
+  provider: "aws"                             #permutable in provisioning and custom cluster tests ["aws", "azure", "vsphere"]
+  nodeProvider: "ec2"
   hardened: false
-  psact: ""                                  #either rancher-privileged|rancher-restricted|rancher-baseline
-  clusterSSHTests: ["CheckCPU", "NodeReboot", "AuditLog"]
+  psact: ""                                   #either rancher-privileged|rancher-restricted|rancher-baseline
   etcd:
     disableSnapshot: false
     snapshotScheduleCron: "0 */5 * * *"
@@ -254,7 +252,7 @@ If the specified test passes immediately without warning, try adding the `-count
 For custom clusters, no machineConfig or credentials are needed. Currently only supported for ec2.
 
 Dependencies:
-* **Ensure you have nodeProviders in provisioningInput**
+* **Ensure you have nodeProviders in clusterConfig**
 * make sure that all roles are entered at least once
 * windows pool(s) should always be last in the config
 ```yaml
@@ -338,11 +336,10 @@ rancher:
   cleanup: false
   clusterName: "<provided cluster name>"
   insecure: true
-provisioningInput:
-  k3sKubernetesVersion: ["v1.27.10+k3s2"]
-  cni: ["calico"]
-  providers: ["linode"]
-  nodeProviders: ["ec2"]
+clusterConfig:
+  kubernetesVersion: ""
+  provider: "aws"                       #permutable in provisioning and custom cluster tests ["aws", "azure", "vsphere"]
+  nodeProvider: "ec2"
 linodeCredentials:
    token: ""
 linodeMachineConfigs:

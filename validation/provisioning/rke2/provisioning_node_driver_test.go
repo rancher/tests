@@ -156,6 +156,7 @@ func (r *RKE2NodeDriverProvisioningTestSuite) TestProvisioningRKE2ClusterDynamic
 			for _, cattleConfig := range r.cattleConfigs {
 				clusterConfig := new(clusters.ClusterConfig)
 				operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
+
 				if len(clusterConfig.MachinePools) == 0 {
 					r.T().Skip()
 				}

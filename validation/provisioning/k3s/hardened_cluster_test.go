@@ -3,20 +3,24 @@
 package k3s
 
 import (
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/extensions/users"
 	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
 	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
+	"github.com/rancher/shepherd/pkg/config/operations/permutations"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/config/permutationdata"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
@@ -31,7 +35,7 @@ type HardenedK3SClusterProvisioningTestSuite struct {
 	client              *rancher.Client
 	session             *session.Session
 	standardUserClient  *rancher.Client
-	provisioningConfig  *provisioninginput.Config
+	cattleConfigs       []map[string]any
 	project             *management.Project
 	chartInstallOptions *charts.InstallOptions
 }
@@ -44,25 +48,22 @@ func (c *HardenedK3SClusterProvisioningTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	c.session = testSession
 
-	c.provisioningConfig = new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, c.provisioningConfig)
-
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(c.T(), err)
-
 	c.client = client
 
-	if c.provisioningConfig.K3SKubernetesVersions == nil {
-		k3sVersions, err := kubernetesversions.Default(c.client, extensionscluster.K3SClusterType.String(), nil)
-		require.NoError(c.T(), err)
+	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-		c.provisioningConfig.K3SKubernetesVersions = k3sVersions
-	} else if c.provisioningConfig.K3SKubernetesVersions[0] == "all" {
-		k3sVersions, err := kubernetesversions.ListK3SAllVersions(c.client)
-		require.NoError(c.T(), err)
+	providerPermutation, err := permutationdata.CreateProviderPermutation(cattleConfig)
+	require.NoError(c.T(), err)
 
-		c.provisioningConfig.K3SKubernetesVersions = k3sVersions
-	}
+	k8sPermutation, err := permutationdata.CreateK8sPermutation(c.client, "k3s", cattleConfig)
+	require.NoError(c.T(), err)
+
+	permutedConfigs, err := permutations.Permute([]permutations.Permutation{*k8sPermutation, *providerPermutation}, cattleConfig)
+	require.NoError(c.T(), err)
+
+	c.cattleConfigs = append(c.cattleConfigs, permutedConfigs...)
 
 	enabled := true
 	var testuser = namegen.AppendRandomString("testuser-")
@@ -101,46 +102,47 @@ func (c *HardenedK3SClusterProvisioningTestSuite) TestProvisioningK3SHardenedClu
 		{"CIS 1.9 Profile " + provisioninginput.StandardClientName.String(), c.standardUserClient, nodeRolesStandard, "k3s-cis-1.9-profile"},
 	}
 	for _, tt := range tests {
-		c.Run(tt.name, func() {
-			provisioningConfig := *c.provisioningConfig
-			provisioningConfig.MachinePools = tt.machinePools
-			provisioningConfig.Hardened = true
+		for _, cattleConfig := range c.cattleConfigs {
 
-			nodeProviders := provisioningConfig.NodeProviders[0]
-			externalNodeProvider := provisioning.ExternalNodeProviderSetup(nodeProviders)
+			c.Run(tt.name, func() {
+				clusterConfig := new(clusters.ClusterConfig)
+				operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
 
-			testConfig := clusters.ConvertConfigToClusterConfig(&provisioningConfig)
-			testConfig.KubernetesVersion = c.provisioningConfig.K3SKubernetesVersions[0]
+				clusterConfig.MachinePools = tt.machinePools
+				clusterConfig.Hardened = true
 
-			clusterObject, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, testConfig)
-			reports.TimeoutClusterReport(clusterObject, err)
-			require.NoError(c.T(), err)
+				externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
-			provisioning.VerifyCluster(c.T(), tt.client, testConfig, clusterObject)
+				clusterObject, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig)
+				reports.TimeoutClusterReport(clusterObject, err)
+				require.NoError(c.T(), err)
 
-			cluster, err := extensionscluster.NewClusterMeta(tt.client, clusterObject.Name)
-			reports.TimeoutClusterReport(clusterObject, err)
-			require.NoError(c.T(), err)
+				provisioning.VerifyCluster(c.T(), tt.client, clusterConfig, clusterObject)
 
-			latestCISBenchmarkVersion, err := tt.client.Catalog.GetLatestChartVersion(charts.CISBenchmarkName, catalog.RancherChartRepo)
-			require.NoError(c.T(), err)
+				cluster, err := extensionscluster.NewClusterMeta(tt.client, clusterObject.Name)
+				reports.TimeoutClusterReport(clusterObject, err)
+				require.NoError(c.T(), err)
 
-			project, err := projects.GetProjectByName(tt.client, cluster.ID, cis.System)
-			reports.TimeoutClusterReport(clusterObject, err)
-			require.NoError(c.T(), err)
+				latestCISBenchmarkVersion, err := tt.client.Catalog.GetLatestChartVersion(charts.CISBenchmarkName, catalog.RancherChartRepo)
+				require.NoError(c.T(), err)
 
-			c.project = project
-			require.NotEmpty(c.T(), c.project)
+				project, err := projects.GetProjectByName(tt.client, cluster.ID, cis.System)
+				reports.TimeoutClusterReport(clusterObject, err)
+				require.NoError(c.T(), err)
 
-			c.chartInstallOptions = &charts.InstallOptions{
-				Cluster:   cluster,
-				Version:   latestCISBenchmarkVersion,
-				ProjectID: c.project.ID,
-			}
+				c.project = project
+				require.NotEmpty(c.T(), c.project)
 
-			cis.SetupCISBenchmarkChart(tt.client, c.project.ClusterID, c.chartInstallOptions, charts.CISBenchmarkNamespace)
-			cis.RunCISScan(tt.client, c.project.ClusterID, tt.scanProfileName)
-		})
+				c.chartInstallOptions = &charts.InstallOptions{
+					Cluster:   cluster,
+					Version:   latestCISBenchmarkVersion,
+					ProjectID: c.project.ID,
+				}
+
+				cis.SetupCISBenchmarkChart(tt.client, c.project.ClusterID, c.chartInstallOptions, charts.CISBenchmarkNamespace)
+				cis.RunCISScan(tt.client, c.project.ClusterID, tt.scanProfileName)
+			})
+		}
 	}
 }
 

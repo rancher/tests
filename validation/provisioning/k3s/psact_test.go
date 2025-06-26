@@ -3,18 +3,22 @@
 package k3s
 
 import (
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/users"
 	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
 	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/provisioning/permutations"
+	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/machinepools"
+	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -25,7 +29,7 @@ type K3SPSACTTestSuite struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
-	provisioningConfig *provisioninginput.Config
+	cattleConfig       map[string]any
 }
 
 func (k *K3SPSACTTestSuite) TearDownSuite() {
@@ -36,25 +40,15 @@ func (k *K3SPSACTTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	k.session = testSession
 
-	k.provisioningConfig = new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, k.provisioningConfig)
+	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(k.T(), err)
 
 	k.client = client
 
-	if k.provisioningConfig.K3SKubernetesVersions == nil {
-		k3sVersions, err := kubernetesversions.Default(k.client, clusters.K3SClusterType.String(), nil)
-		require.NoError(k.T(), err)
-
-		k.provisioningConfig.K3SKubernetesVersions = k3sVersions
-	} else if k.provisioningConfig.K3SKubernetesVersions[0] == "all" {
-		k3sVersions, err := kubernetesversions.ListK3SAllVersions(k.client)
-		require.NoError(k.T(), err)
-
-		k.provisioningConfig.K3SKubernetesVersions = k3sVersions
-	}
+	k.cattleConfig, err = defaults.SetK8sDefault(client, "k3s", k.cattleConfig)
+	require.NoError(k.T(), err)
 
 	enabled := true
 	var testuser = namegen.AppendRandomString("testuser-")
@@ -90,17 +84,28 @@ func (k *K3SPSACTTestSuite) TestK3SPSACTNodeDriverCluster() {
 		psact        provisioninginput.PSACT
 		client       *rancher.Client
 	}{
-		{"Rancher Privileged " + provisioninginput.AdminClientName.String(), nodeRolesStandard, "rancher-privileged", k.client},
-		{"Rancher Restricted " + provisioninginput.AdminClientName.String(), nodeRolesStandard, "rancher-restricted", k.client},
+		{"Rancher Privileged " + provisioninginput.StandardClientName.String(), nodeRolesStandard, "rancher-privileged", k.standardUserClient},
+		{"Rancher Restricted " + provisioninginput.StandardClientName.String(), nodeRolesStandard, "rancher-restricted", k.standardUserClient},
 		{"Rancher Baseline " + provisioninginput.AdminClientName.String(), nodeRolesStandard, "rancher-baseline", k.client},
 	}
 
 	for _, tt := range tests {
-		provisioningConfig := *k.provisioningConfig
-		provisioningConfig.MachinePools = tt.machinePools
-		provisioningConfig.PSACT = string(tt.psact)
+		clusterConfig := new(clusters.ClusterConfig)
+		operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
 
-		permutations.RunTestPermutations(&k.Suite, tt.name, tt.client, &provisioningConfig, permutations.K3SProvisionCluster, nil, nil)
+		clusterConfig.MachinePools = tt.machinePools
+		clusterConfig.PSACT = string(tt.psact)
+
+		k.Run(tt.name, func() {
+			provider := provisioning.CreateProvider(clusterConfig.Provider)
+			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+			machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+
+			clusterObject, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+			require.NoError(k.T(), err)
+
+			provisioning.VerifyCluster(k.T(), tt.client, clusterConfig, clusterObject)
+		})
 	}
 }
 

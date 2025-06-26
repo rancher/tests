@@ -84,25 +84,28 @@ func (r *RKE2PSACTTestSuite) TestRKE2PSACTNodeDriverCluster() {
 		psact        provisioninginput.PSACT
 		client       *rancher.Client
 	}{
-		{"Rancher Privileged " + provisioninginput.AdminClientName.String(), nodeRolesStandard, "rancher-privileged", r.client},
-		{"Rancher Restricted " + provisioninginput.AdminClientName.String(), nodeRolesStandard, "rancher-restricted", r.client},
+		{"Rancher Privileged " + provisioninginput.StandardClientName.String(), nodeRolesStandard, "rancher-privileged", r.standardUserClient},
+		{"Rancher Restricted " + provisioninginput.StandardClientName.String(), nodeRolesStandard, "rancher-restricted", r.standardUserClient},
 		{"Rancher Baseline " + provisioninginput.AdminClientName.String(), nodeRolesStandard, "rancher-baseline", r.client},
 	}
 
 	for _, tt := range tests {
 		clusterConfig := new(clusters.ClusterConfig)
 		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
 		clusterConfig.MachinePools = tt.machinePools
 		clusterConfig.PSACT = string(tt.psact)
 
-		provider := provisioning.CreateProvider(clusterConfig.Provider)
-		credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
-		machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+		r.Run(tt.name, func() {
+			provider := provisioning.CreateProvider(clusterConfig.Provider)
+			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+			machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
-		clusterObject, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
-		require.NoError(r.T(), err)
+			clusterObject, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+			require.NoError(r.T(), err)
 
-		provisioning.VerifyCluster(r.T(), tt.client, clusterConfig, clusterObject)
+			provisioning.VerifyCluster(r.T(), tt.client, clusterConfig, clusterObject)
+		})
 	}
 }
 

@@ -114,11 +114,14 @@ func (c *CustomClusterProvisioningTestSuite) TestProvisioningRKE2CustomCluster()
 			c.T().Logf("SKIPPED")
 			continue
 		}
+
 		for _, cattleConfig := range c.cattleConfigs {
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
+
 			clusterConfig.MachinePools = tt.machinePools
 			name := tt.name + " Node Provider: " + clusterConfig.NodeProvider + " Kubernetes version: " + clusterConfig.KubernetesVersion + " cni: " + clusterConfig.CNI
+
 			c.Run(name, func() {
 				externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
@@ -146,6 +149,7 @@ func (c *CustomClusterProvisioningTestSuite) TestProvisioningRKE2CustomClusterDy
 			for _, cattleConfig := range c.cattleConfigs {
 				clusterConfig := new(clusters.ClusterConfig)
 				operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
+
 				if len(clusterConfig.MachinePools) == 0 {
 					c.T().Skip()
 				}

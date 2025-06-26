@@ -1,6 +1,6 @@
 # RKE2 Provisioning Configs
 
-For your config, you will need everything in the Prerequisites section on the previous readme, [Define your test](#provisioning-input), and at least one [Cloud Credential](#cloud-credentials) and [Node Driver Machine Config](#machine-rke2-config) or [Custom Cluster Template](#custom-cluster), which should match what you have specified in `provisioningInput`. 
+For your config, you will need everything in the Prerequisites section on the previous readme, [Define your test](#provisioning-input), and at least one [Cloud Credential](#cloud-credentials) and [Node Driver Machine Config](#machine-rke2-config) or [Custom Cluster Template](#custom-cluster), which should match what you have specified in `clusterConfig`. 
 
 Your GO test_package should be set to `provisioning/rke2`.
 Your GO suite should be set to `-run ^TestRKE2ProvisioningTestSuite$`.
@@ -9,7 +9,7 @@ Please see below for more details for your config. Please see below for more det
 ## Table of Contents
 1. [Prerequisites](../README.md)
 2. [Configuring test flags](#Flags)
-3. [Define your test](#provisioning-input)
+3. [Define your test](#cluster-config)
 4. [Cloud Credential](#cloud-credentials)
 5. [Cloud Provider](#cloud-provider)
 6. [Configure providers to use for Node Driver Clusters](#machine-rke2-config)
@@ -29,8 +29,8 @@ flags:
   desiredflags: "Long"
 ```
 
-## Provisioning Input
-provisioningInput is needed to the run the RKE2 tests.
+## Cluster Config
+clusterConfig is needed to the run the RKE2 tests.
 
 **nodeProviders is only needed for custom cluster tests; the framework only supports custom clusters through aws/ec2 instances.**
 ```yaml
@@ -57,7 +57,7 @@ clusterConfig:
       controlplane: false
       worker: true
       quantity: 1
-  kubernetesVersion: "v1.32.3+rke2r1" #permutable in provisioning and custom cluster tests ["v1.30.3+rke2r1", "v1.32.3+rke2r1"] || ["all"]
+  kubernetesVersion: ""               #permutable in provisioning and custom cluster tests ["v1.30.3+rke2r1", "v1.32.3+rke2r1"] || ["all"]
   cni: "calico"                       #permutable in provisioning and custom cluster tests ["calico", "cilium"]
   provider: "aws"                     #permutable in provisioning and custom cluster tests ["aws", "azure", "vsphere"]
   nodeProvider: "ec2"
@@ -276,7 +276,7 @@ If the specified test passes immediately without warning, try adding the `-count
 For custom clusters, no machineConfig or credentials are needed. Currently only supported for ec2.
 
 Dependencies:
-* **Ensure you have nodeProviders in provisioningInput**
+* **Ensure you have nodeProviders in clusterConfig**
 * make sure that all roles are entered at least once
 * windows pool(s) should always be last in the config
 ```yaml
