@@ -4,18 +4,21 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/antihax/optional"
+	"github.com/rancher/shepherd/extensions/defaults"
 	qasedefaults "github.com/rancher/tests/validation/pipeline/qase"
 	"github.com/rancher/tests/validation/pipeline/qase/testcase"
 	"github.com/rancher/tests/validation/pipeline/slack"
 	"github.com/sirupsen/logrus"
 	qase "go.qase.io/client"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -46,12 +49,32 @@ func main() {
 
 		runID, err := strconv.ParseInt(runIDEnvVar, 10, 64)
 		if err != nil {
-			logrus.Fatalf("error reporting converting string to int64: %v", err)
+			logrus.Fatalf("error converting run ID string to int64: %v", err)
 		}
 
-		err = reportTestQases(client, runID)
+		err = wait.PollUntilContextTimeout(
+			context.Background(),
+			defaults.FiveSecondTimeout,
+			defaults.TenMinuteTimeout,
+			true,
+			func(ctx context.Context) (bool, error) {
+				statusCode, err := reportTestQases(client, runID)
+				if err == nil {
+					logrus.Info("Reported results to Qase successfully.")
+					return true, nil
+				}
+
+				if statusCode == http.StatusTooManyRequests {
+					logrus.Warn("429 Too Many Requests – retrying...")
+					return false, nil
+				}
+
+				logrus.Errorf("Non-retryable error (HTTP %d): %v", statusCode, err)
+				return false, err
+			},
+		)
 		if err != nil {
-			logrus.Error("error reporting: ", err)
+			logrus.Fatalf("Failed after polling: %v", err)
 		}
 	}
 }
@@ -155,26 +178,26 @@ func parseCorrectTestCases(testCases []testcase.GoTestOutput) map[string]*testca
 	return finalTestCases
 }
 
-func reportTestQases(client *qase.APIClient, testRunID int64) error {
+func reportTestQases(client *qase.APIClient, testRunID int64) (int, error) {
 	tempTestCases, err := readTestCase()
 	if err != nil {
-		return nil
+		return 0, err
 	}
 
 	goTestCases := parseCorrectTestCases(tempTestCases)
 
 	qaseTestCases, err := getAllAutomationTestCases(client)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	resultTestMap := []*testcase.GoTestCase{}
 	for _, goTestCase := range goTestCases {
 		if testQase, ok := qaseTestCases[goTestCase.Name]; ok {
 			// update test status
-			err = updateTestInRun(client, *goTestCase, testQase.Id, testRunID)
+			httpCode, err := updateTestInRun(client, *goTestCase, testQase.Id, testRunID)
 			if err != nil {
-				return err
+				return httpCode, err
 			}
 
 			if goTestCase.Status == failStatus {
@@ -184,12 +207,12 @@ func reportTestQases(client *qase.APIClient, testRunID int64) error {
 			// write test case
 			caseID, err := writeTestCaseToQase(client, *goTestCase)
 			if err != nil {
-				return err
+				return 0, err
 			}
 
-			err = updateTestInRun(client, *goTestCase, caseID.Result.Id, testRunID)
+			httpCode, err := updateTestInRun(client, *goTestCase, caseID.Result.Id, testRunID)
 			if err != nil {
-				return err
+				return httpCode, err
 			}
 
 			if goTestCase.Status == failStatus {
@@ -197,15 +220,19 @@ func reportTestQases(client *qase.APIClient, testRunID int64) error {
 			}
 		}
 	}
-	resp, _, err := client.RunsApi.GetRun(context.TODO(), qasedefaults.RancherManagerProjectID, int32(testRunID))
+	resp, httpResponse, err := client.RunsApi.GetRun(context.TODO(), qasedefaults.RancherManagerProjectID, int32(testRunID))
 	if err != nil {
-		return fmt.Errorf("error getting test run: %v", err)
+		var statusCode int
+		if httpResponse != nil {
+			statusCode = httpResponse.StatusCode
+		}
+		return statusCode, fmt.Errorf("error getting test run: %v", err)
 	}
 	if strings.Contains(resp.Result.Title, "-head") {
-		return slack.PostSlackMessage(resultTestMap, testRunID, resp.Result.Title)
+		return 0, slack.PostSlackMessage(resultTestMap, testRunID, resp.Result.Title)
 	}
 
-	return nil
+	return http.StatusOK, nil
 }
 
 func writeTestSuiteToQase(client *qase.APIClient, testCase testcase.GoTestCase) (*int64, error) {
@@ -270,14 +297,14 @@ func writeTestCaseToQase(client *qase.APIClient, testCase testcase.GoTestCase) (
 	return &caseID, err
 }
 
-func updateTestInRun(client *qase.APIClient, testCase testcase.GoTestCase, qaseTestCaseID, testRunID int64) error {
+func updateTestInRun(client *qase.APIClient, testCase testcase.GoTestCase, qaseTestCaseID, testRunID int64) (int, error) {
 	status := fmt.Sprintf("%sed", testCase.Status)
 	var elapsedTime float64
 	if testCase.Elapsed != "" {
 		var err error
 		elapsedTime, err = strconv.ParseFloat(testCase.Elapsed, 64)
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
 
@@ -288,12 +315,15 @@ func updateTestInRun(client *qase.APIClient, testCase testcase.GoTestCase, qaseT
 		Time:    int64(elapsedTime),
 	}
 
-	_, _, err := client.ResultsApi.CreateResult(context.TODO(), resultBody, qasedefaults.RancherManagerProjectID, testRunID)
+	_, resp, err := client.ResultsApi.CreateResult(context.TODO(), resultBody, qasedefaults.RancherManagerProjectID, testRunID)
 	if err != nil {
-		return err
+		if resp != nil {
+			return resp.StatusCode, err
+		}
+		return 0, err
 	}
 
-	return nil
+	return http.StatusOK, nil
 }
 
 func getAutomationTestName(customFields []qase.CustomFieldValue) string {

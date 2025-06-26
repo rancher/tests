@@ -1,23 +1,23 @@
 linters:
   disable-all: true
   enable:
-  - ineffassign
-  - goimports
-  - govet
-  - misspell
-  - revive
-  - unused
-  - goconst
-  - forbidigo
-  - predeclared
+    - ineffassign
+    - goimports
+    - govet
+    - misspell
+    - revive
+    - unused
+    - goconst
+    - forbidigo
+    - predeclared
 linters-settings:
   revive:
     rules:
-    - name: confusing-naming
-      disabled: true
-    - name: exported
-      disabled: false
-  goconst: 
+      - name: confusing-naming
+        disabled: true
+      - name: exported
+        disabled: false
+  goconst:
     min-len: 2
     min-occurrences: 10
     match-constant: true
@@ -31,7 +31,7 @@ linters-settings:
 run:
   tests: true
   relative-path-mode: wd
-  build-tags: [validation,"2.12"]
+  build-tags: [validation, "2.12"]
   timeout: 8m
 issues:
   max-issues-per-linter: 0
