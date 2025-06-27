@@ -43,10 +43,11 @@ func (c *CertRotationWindowsTestSuite) SetupSuite() {
 
 func (c *CertRotationWindowsTestSuite) TestCertRotationWindows() {
 	tests := []struct {
-		name   string
-		client *rancher.Client
+		name      string
+		rotations int
+		client    *rancher.Client
 	}{
-		{"RKE2 Windows cert rotation", c.client},
+		{"RKE2_Windows_Certificate_Rotation", 2, c.client},
 	}
 
 	for _, tt := range tests {
@@ -72,13 +73,15 @@ func (c *CertRotationWindowsTestSuite) TestCertRotationWindows() {
 			}
 		}
 
-		if !windowsMachinePool {
-			c.T().Skip("Skipping test - no Windows machine pool found")
-		}
-
 		c.Run(tt.name, func() {
-			require.NoError(c.T(), rotateCerts(c.client, c.client.RancherConfig.ClusterName))
-			require.NoError(c.T(), rotateCerts(c.client, c.client.RancherConfig.ClusterName))
+			if !windowsMachinePool {
+				c.T().Skip("Skipping test - no Windows machine pool found")
+			}
+
+			for i := 0; i < tt.rotations; i++ {
+				err := rotateCerts(c.client, c.client.RancherConfig.ClusterName)
+				require.NoError(c.T(), err)
+			}
 		})
 	}
 }

@@ -1,0 +1,661 @@
+project: RRT
+suites:
+- suite: Provisioning/RKE2/NodeDriver
+  cases:
+  - description: Provisions a 1 node all roles node driver cluster
+    title: RKE2_Node_Driver|etcd_cp_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision rke2 node driver cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 2 node stacked roles node driver cluster
+    title: RKE2_Node_Driver|etcd_cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision rke2 node driver cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3 node split roles node driver cluster
+    title: RKE2_Node_Driver|etcd|cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision rke2 node driver cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 4 node etcd/cp/worker/windows node driver cluster
+    title: RKE2_Node_Driver|etcd|cp|worker|windows
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision rke2 node driver cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 8 node 3etcd/2cp/3worker node driver cluster
+    title: RKE2_Node_Driver|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision rke2 node driver cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+- suite: Provisioning/RKE2/Custom
+  cases:
+  - description: Provisions a 1 node all roles custom cluster
+    title: RKE2_Custom|etcd_cp_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+      - windows-2022-ctw-5-2-22
+    - title: K8sVersion
+      values:
+      - v1.32.5+rke2r1
+    - title: CNI
+      values:
+      - calico
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 2 node stacked roles custom cluster
+    title: RKE2_Custom|etcd_cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+      - windows-2022-ctw-5-2-22
+    - title: K8sVersion
+      values:
+      - v1.32.5+rke2r1
+    - title: CNI
+      values:
+      - calico
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3 node split roles custom cluster
+    title: RKE2_Custom|etcd|cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+      - windows-2022-ctw-5-2-22
+    - title: K8sVersion
+      values:
+      - v1.32.5+rke2r1
+    - title: CNI
+      values:
+      - calico
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 4 node etcd/cp/worker/windows custom cluster
+    title: RKE2_Custom|etcd|cp|worker|windows
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+      - windows-2022-ctw-5-2-22
+    - title: K8sVersion
+      values:
+      - v1.32.5+rke2r1
+    - title: CNI
+      values:
+      - calico
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 8 node 3etcd/2cp/3worker custom cluster
+    title: RKE2_Custom|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+      - windows-2022-ctw-5-2-22
+    - title: K8sVersion
+      values:
+      - v1.32.5+rke2r1
+    - title: CNI
+      values:
+      - calico
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+- suite: Provisioning/RKE2/PSACT
+  cases:
+  - description: Provisions a cluster with psact set to rancher privilaged
+    title: RKE2_Rancher_Privileged|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a psact rke2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a cluster with psact set to rancher restricted
+    title: RKE2_Rancher_Restricted|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a psact rke2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a cluster with psact set to rancher baseline
+    title: RKE2_Rancher_Baseline|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a psact rke2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+- suite: Provisioning/RKE2/Hardened
+  cases:
+  - description: Provisions a hardened 3etcd/2cp/3worker custom cluster
+    title: RKE2_CIS_1.9_Profile|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+      - windows-2022-ctw-5-2-22
+    - title: K8sVersion
+      values:
+      - v1.32.5+rke2r1
+    - title: CNI
+      values:
+      - calico
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Harden the rke2 custom cluster
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+- suite: Provisioning/RKE2/CloudProvider
+  cases:
+  - description: Provisions a 3etcd/2cp/3worker AWS cloud provider cluster
+    title: AWS_OutOfTree
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a AWS rke2 cloud provider cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3etcd/2cp/3worker vSphere cloud provider cluster
+    title: vSphere_OutOfTree
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a vSphere rke2 cloud provider cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+- suite: Provisioning/RKE2/AgentCustomization
+  cases:
+  - description: Provisions a 3etcd/2cp/2worker node driver cluster with valid fleet
+      agent settings
+    title: Custom_Fleet_Agent
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3etcd/2cp/2worker node driver cluster with valid cluster
+      agent settings
+    title: Custom_Cluster_Agent
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3etcd/2cp/2worker node driver cluster with invalid fleet
+      agent settings
+    title: Invalid_Custom_Fleet_Agent
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3etcd/2cp/2worker node driver cluster with invalid cluster
+      agent settings
+    title: Invalid_Custom_Cluster_Agent
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+- suite: Provisioning/RKE2/ACE
+  cases:
+  - description: Provisions a 3etcd/2cp/2worker node driver cluster with ACE enabled
+    title: ACE|etcd|3_cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+- suite: Provisioning/RKE2/Template
+  cases:
+  - description: Provisions a 3 node split roles cluster using an rke2 template
+    title: RKE2_Template|etcd|cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 template cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

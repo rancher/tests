@@ -22,6 +22,7 @@ import (
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/qase"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -84,7 +85,7 @@ func (r *RKE2CloudProviderTestSuite) TestAWSCloudProviderCluster() {
 		client       *rancher.Client
 		runFlag      bool
 	}{
-		{"OutOfTree" + provisioninginput.StandardClientName.String(), nodeRolesDedicated, r.standardUserClient, r.client.Flags.GetValue(environmentflag.Long)},
+		{"AWS_OutOfTree", nodeRolesDedicated, r.standardUserClient, r.client.Flags.GetValue(environmentflag.Long)},
 	}
 
 	clusterConfig := new(clusters.ClusterConfig)
@@ -126,7 +127,7 @@ func (r *RKE2CloudProviderTestSuite) TestVsphereCloudProviderCluster() {
 		client       *rancher.Client
 		runFlag      bool
 	}{
-		{"OutOfTree" + provisioninginput.StandardClientName.String(), nodeRolesDedicated, r.standardUserClient, r.client.Flags.GetValue(environmentflag.Long)},
+		{"vSphere_OutOfTree", nodeRolesDedicated, r.standardUserClient, r.client.Flags.GetValue(environmentflag.Long)},
 	}
 
 	clusterConfig := new(clusters.ClusterConfig)
@@ -153,6 +154,12 @@ func (r *RKE2CloudProviderTestSuite) TestVsphereCloudProviderCluster() {
 
 		provisioning.VerifyCluster(r.T(), tt.client, clusterConfig, clusterObject)
 		cloudprovider.VerifyCloudProvider(r.T(), tt.client, "rke2", nil, clusterConfig, clusterObject, nil)
+
+		params, err := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
+		require.NoError(r.T(), err)
+
+		err = qase.UpdateSchemaParameters(tt.name, params)
+		require.NoError(r.T(), err)
 	}
 }
 
