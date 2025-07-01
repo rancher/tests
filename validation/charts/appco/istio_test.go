@@ -162,10 +162,6 @@ func (i *IstioTestSuite) TestInPlaceUpgrade() {
 }
 
 func (i *IstioTestSuite) TestFleetInstallation() {
-	i.T().Log("Pulling Pilot Image")
-	err := pullPilotImage(i.client, i.cluster.ID)
-	require.NoError(i.T(), err)
-
 	i.T().Log("Creating Fleet repo")
 	repoObject, err := watchAndwaitCreateFleetGitRepo(i.client, i.clusterName, i.cluster.ID)
 	require.NoError(i.T(), err)
