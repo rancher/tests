@@ -1,52 +1,126 @@
 # Node Scaling
 
-These tests are designed to accept an existing cluster that the user has access to. If you do not have a downstream cluster in Rancher, you should create one first before running this test.
+The nodescaling package tests scaling nodes, whether it is replacing nodes or adding and removing nodes, in downstream clusters in Rancher. For the node driver/custom cluster scaling tests, the following workflow is followed:
 
-Please see below for more details for your config. Please note that the config can be in either JSON or YAML (all examples are illustrated in YAML).
+1. Provision a downstream cluster
+2. Perform post-cluster provisioning checks
+3. Scale specified node/machine role up and down
+
+For the replacing tests, the following workflow is followed:
+
+1. Provision a downstream cluster
+2. Perform post-cluster provisioning checks
+3. Replace specified node/machine
 
 ## Table of Contents
 1. [Getting Started](#Getting-Started)
-2. [Replacing Nodes](#Node-Replacing)
+2. [Replacing Nodes](#Replacing-Nodes)
 3. [Scaling Existing Node Pools](#Scaling-Existing-Node-Pools)
+4. [Auto Replacing NOdes](#Auto-Replacing-Nodes)
 
 ## Getting Started
-In your config file, set the following:
+Please see an example config below using AWS as the node provider to first provision the cluster:
+
 ```yaml
 rancher:
-  host: "rancher_server_address"
-  adminToken: "rancher_admin_token"
-  clusterName: "cluster_to_run_tests_on"
-  insecure: true/optional
-  cleanup: false/optional
+  host: ""
+  adminToken: ""
+  insecure: true
+
+provisioningInput:
+  cni: ["calico"]
+  providers: ["aws"]
+  nodeProviders: ["ec2"]
+
+clusterConfig:
+  cni: "calico"
+  provider: "aws"
+  nodeProvider: "ec2"
+
+awsCredentials:
+  secretKey: ""
+  accessKey: ""
+  defaultRegion: "us-east-2"
+
+awsMachineConfigs:
+  region: "us-east-2"
+  awsMachineConfig:
+  - roles: ["etcd", "controlplane", "worker"]
+    ami: ""
+    instanceType: ""
+    sshUser: ""
+    vpcId: ""
+    volumeType: ""
+    zone: "a"
+    retries: ""
+    rootSize: ""
+    securityGroup: [""]
+
+amazonec2Config:
+  accessKey: ""
+  ami: ""
+  blockDurationMinutes: "0"
+  encryptEbsVolume: false
+  httpEndpoint: "enabled"
+  httpTokens: "optional"
+  iamInstanceProfile: ""
+  insecureTransport: false
+  instanceType: ""
+  monitoring: false
+  privateAddressOnly: false
+  region: "us-east-2"
+  requestSpotInstance: true
+  retries: ""
+  rootSize: ""
+  secretKey: ""
+  securityGroup: [""]
+  securityGroupReadonly: false
+  spotPrice: ""
+  sshKeyContents: ""
+  sshUser: ""
+  subnetId: ""
+  tags: ""
+  type: "amazonec2Config"
+  useEbsOptimizedInstance: false
+  usePrivateAddress: false
+  volumeType: ""
+  vpcId: ""
+  zone: "a"
 ```
 
-## Node Replacing
-Node replacement tests require that the given pools have unique, distinct roles and more than 1 node per pool. Typically, a cluster with the following 3 pools is used for testing:
-```yaml
-provisioningInput:
-  providers: [""]     # Specify to vsphere if you have a Windows node in your cluster
-  nodePools:          # nodePools is specific for RKE1 clusters.
-  - nodeRoles:
-      etcd: true
-      quantity: 3
-  - nodeRoles:
-      controlplane: true
-      quantity: 2
-  - nodeRoles:
-      worker: true
-      quantity: 3
-  machinePools:       # machinePools is specific for RKE2/K3s clusters.
-  - machinePoolConfig:
-      etcd: true
-      quantity: 3
-  - machinePoolConfig:
-      controlplane: true
-      quantity: 2
-  - machinePoolConfig:
-      worker: true
-      quantity: 3
-  ```
+If you plan to run the custom cluster tests, your config must include the following:
 
+```yaml
+awsEC2Configs:
+  region: "us-east-2"
+  awsSecretAccessKey: ""
+  awsAccessKeyID: ""
+  awsEC2Config:
+    - instanceType: ""
+      awsRegionAZ: ""
+      awsAMI: ""
+      awsSecurityGroups: [""]
+      awsSSHKeyName: ""
+      awsCICDInstanceTag: ""
+      awsIAMProfile: ""
+      awsCICDInstanceTag: ""
+      awsUser: ""
+      volumeSize: 
+      roles: ["etcd", "controlplane", "worker"]
+    - instanceType: ""
+      awsRegionAZ: ""
+      awsAMI: ""
+      awsSecurityGroups: [""]
+      awsSSHKeyName: ""
+      awsCICDInstanceTag: ""
+      awsUser: "Administrator"
+      volumeSize: 
+      roles: ["windows"]
+sshPath: 
+  sshPath: "/<path to .ssh folder>"
+```
+
+## Replacing Nodes
 These tests utilize Go build tags. Due to this, see the below examples on how to run the tests:
 
 ### RKE1
@@ -57,6 +131,7 @@ These tests utilize Go build tags. Due to this, see the below examples on how to
 
 ## Scaling Existing Node Pools
 Similar to the `provisioning` tests, the node scaling tests have static test cases as well as dynamicInput tests you can specify. In order to run the dynamicInput tests, you will need to define the `scalingInput` block in your config file. This block defines the quantity you would like the pool to be scaled up/down to. See an example below that accounts for node drivers, custom clusters and hosted clusters:
+
 ```yaml
 provisioningInput:        # Optional block, only use if using vsphere
   providers: [""]         # Specify to vsphere if you have a Windows node in your cluster
@@ -84,28 +159,28 @@ Additionally, for AKS, you must have `enableAutoScaling` set to true if you spec
 These tests utilize Go build tags. Due to this, see the below examples on how to run the tests:
 
 ### RKE1
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1NodeScalingTestSuite/TestScalingRKE1NodePools"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1NodeScalingTestSuite/TestScalingRKE1NodePoolsDynamicInput"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1CustomClusterNodeScalingTestSuite/TestScalingRKE1CustomClusterNodes"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1CustomClusterNodeScalingTestSuite/TestScalingRKE1CustomClusterNodesDynamicInput"`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1NodeScalingTestSuite/TestScalingRKE1NodePools"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1NodeScalingTestSuite/TestScalingRKE1NodePoolsDynamicInput"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1CustomClusterNodeScalingTestSuite/TestScalingRKE1CustomClusterNodes"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1CustomClusterNodeScalingTestSuite/TestScalingRKE1CustomClusterNodesDynamicInput"`
 
 ### RKE2 | K3S
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestNodeScalingTestSuite/TestScalingNodePools"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestNodeScalingTestSuite/TestScalingNodePoolsDynamicInput"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodes"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodesDynamicInput"`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestNodeScalingTestSuite/TestScalingNodePools"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestNodeScalingTestSuite/TestScalingNodePoolsDynamicInput"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodes"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodesDynamicInput"`
 
 ### AKS
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestAKSNodeScalingTestSuite/TestScalingAKSNodePools"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestAKSNodeScalingTestSuite/TestScalingAKSNodePoolsDynamicInput"`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/hosted --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestAKSNodeScalingTestSuite/TestScalingAKSNodePools"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/hosted --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestAKSNodeScalingTestSuite/TestScalingAKSNodePoolsDynamicInput"`
 
 ### EKS
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestEKSNodeScalingTestSuite/TestScalingEKSNodePools"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestEKSNodeScalingTestSuite/TestScalingEKSNodePoolsDynamicInput"`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/hosted --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestEKSNodeScalingTestSuite/TestScalingEKSNodePools"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/hosted --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestEKSNodeScalingTestSuite/TestScalingEKSNodePoolsDynamicInput"`
 
 ### GKE
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestGKENodeScalingTestSuite/TestScalingGKENodePools"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestGKENodeScalingTestSuite/TestScalingGKENodePoolsDynamicInput"`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/hosted --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestGKENodeScalingTestSuite/TestScalingGKENodePools"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/hosted --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestGKENodeScalingTestSuite/TestScalingGKENodePoolsDynamicInput"`
 
 If the specified test passes immediately without warning, try adding the `-count=1` flag to get around this issue. This will avoid previous results from interfering with the new test run.
 

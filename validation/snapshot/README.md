@@ -1,57 +1,136 @@
 # Snapshot
 
-For the snapshot tests, these tests are designed to accept an existing cluster that the user has access to. If you do not have a downstream cluster in Rancher, you should create one first before running these tests. It is recommended to have a cluster configuration of 3 etcd, 2 controlplane, 3 workers.
+The snapshot package tests taking etcd snapshots on a downstream cluster in Rancher and then restoring that snapshot in Rancher. The following workflow is followed:
+
+1. Provision a downstream cluster
+2. Perform post-cluster provisioning checks
+3. Create workloads prior to taking an etcd snapshot
+4. Take an etcd snapshot on the downstream cluster
+5. Depending on the test, upgrade the K8s version of the downstream cluster
+6. Create workloads post taking an etcd snapshot
+7. Restore the etcd snapshot on the downstream cluster
+8. Validate if the workloads created post taking an etcd snapshot no longer exist
 
 Please see below for more details for your config. Please note that the config can be in either JSON or YAML (all examples are illustrated in YAML).
 
 ## Table of Contents
 1. [Getting Started](#Getting-Started)
+2. [Running Tests](#Running-Tests)
 
 ## Getting Started
-In your config file, set the following:
+Please see an example config below using AWS as the node provider to first provision the cluster:
+
 ```yaml
 rancher:
-  host: "rancher_server_address"
-  adminToken: "rancher_admin_token"
-  clusterName: "cluster_to_run_tests_on"
-  insecure: true/optional
-  cleanup: false/optional
-snapshotInput:
-  upgradeKubernetesVersion: ""        # If left blank, the default version in Rancher will be used.
-  snapshotRestore: "all"              # Options include none, kubernetesVersion, all. Option 'none' means that only the etcd will be restored.
-  controlPlaneConcurrencyValue: "15%"
-  workerConcurrencyValue: "20%"
-  controlPlaneUnavailableValue: "1"
-  workerUnavailableValue: "10%"
-  recurringRestores: 1                # By default, this is set to 1 if this field is not included in the config.
-  replaceRoles:                       # If selected, S3 must be properly configured on the cluster. This test is specific to S3 etcd snapshots.
-    etcd: false
-    controlplane: false
-    worker: false
+  host: ""
+  adminToken: ""
+  insecure: true
+
+provisioningInput:
+  cni: ["calico"]
+  providers: ["aws"]
+  nodeProviders: ["ec2"]
+
+clusterConfig:
+  cni: "calico"
+  provider: "aws"
+  nodeProvider: "ec2"
+
+awsCredentials:
+  secretKey: ""
+  accessKey: ""
+  defaultRegion: "us-east-2"
+
+awsMachineConfigs:
+  region: "us-east-2"
+  awsMachineConfig:
+  - roles: ["etcd", "controlplane", "worker"]
+    ami: ""
+    instanceType: ""
+    sshUser: ""
+    vpcId: ""
+    volumeType: ""
+    zone: "a"
+    retries: ""
+    rootSize: ""
+    securityGroup: [""]
+
+amazonec2Config:
+  accessKey: ""
+  ami: ""
+  blockDurationMinutes: "0"
+  encryptEbsVolume: false
+  httpEndpoint: "enabled"
+  httpTokens: "optional"
+  iamInstanceProfile: ""
+  insecureTransport: false
+  instanceType: ""
+  monitoring: false
+  privateAddressOnly: false
+  region: "us-east-2"
+  requestSpotInstance: true
+  retries: ""
+  rootSize: ""
+  secretKey: ""
+  securityGroup: [""]
+  securityGroupReadonly: false
+  spotPrice: ""
+  sshKeyContents: ""
+  sshUser: ""
+  subnetId: ""
+  tags: ""
+  type: "amazonec2Config"
+  useEbsOptimizedInstance: false
+  usePrivateAddress: false
+  volumeType: ""
+  vpcId: ""
+  zone: "a"
 ```
 
-Additionally, S3 is a supported restore option. If you choose to use S3, then you must have it already enabled on the downstream cluster. Please note that the `TestSnapshotReplaceNodes` test is specifically for S3-enabled clusters.
+If you plan to run the `snapshot_restore_wins_test.go`, your config must include the following:
 
-These tests utilize Go build tags. Due to this, see the below example on how to run the tests:
+```yaml
+awsEC2Configs:
+  region: "us-east-2"
+  awsSecretAccessKey: ""
+  awsAccessKeyID: ""
+  awsEC2Config:
+    - instanceType: ""
+      awsRegionAZ: ""
+      awsAMI: ""
+      awsSecurityGroups: [""]
+      awsSSHKeyName: ""
+      awsCICDInstanceTag: ""
+      awsIAMProfile: ""
+      awsCICDInstanceTag: ""
+      awsUser: ""
+      volumeSize: 
+      roles: ["etcd", "controlplane", "worker"]
+    - instanceType: ""
+      awsRegionAZ: ""
+      awsAMI: ""
+      awsSecurityGroups: [""]
+      awsSSHKeyName: ""
+      awsCICDInstanceTag: ""
+      awsUser: "Administrator"
+      volumeSize: 
+      roles: ["windows"]
+sshPath: 
+  sshPath: "/<path to .ssh folder>"
+```
 
-### Snapshot restore
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRestoreETCDOnlyTestSuite/TestSnapshotRestoreETCDOnly"`
+## Running Tests
 
-### Snapshot restore with K8s upgrade
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRestoreK8sUpgradeTestSuite/TestSnapshotRestoreK8sUpgrade"`
+These tests utilize Go build tags. Due to this, see the below examples on how to run the tests:
 
-### Snapshot restore with upgrade strategy
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRestoreUpgradeStrategyTestSuite/TestSnapshotRestoreUpgradeStrategy"`
+### RKE1
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1SnapshotRestoreTestSuite/TestRKE1SnapshotRestore"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1S3SnapshotRestoreTestSuite/TestRKE1S3SnapshotRestore"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1SnapshotRecurringTestSuite/TestRKE1SnapshotRecurringRestores"`
 
-### S3 snapshot restore
-Note: This test is meant to be ran only with downstream clusters that have S3 backups enabled. If you are looking to utilize local backups, use one of the other tests instead.
-
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestS3SnapshotTestSuite/TestS3SnapshotRestore"`
-
-### Snapshot restore - Windows clusters
-Note: This test will only work with Windows nodes existing in the cluster. Run this test with a vSphere Windows node driver cluster or a custom cluster with a Windows node present.
-
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows"`
-
-### Snapshot additional tests
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotAdditionalTestsTestSuite$"`
+### RKE2/K3s
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRestoreTestSuite/TestSnapshotRestore"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestS3SnapshotRestoreTestSuite/TestS3SnapshotRestore"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRetentionTestSuite/TestAutomaticSnapshotRetention"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRecurringTestSuite/TestSnapshotRecurringRestores"`

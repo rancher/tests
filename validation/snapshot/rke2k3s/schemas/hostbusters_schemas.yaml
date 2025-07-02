@@ -1,0 +1,562 @@
+- suite: Go Automation/Snapshot
+  projects: [RRT, RM]
+  cases:
+  - description: Creates and restores a snapshot on an existing cluster
+    title: RKE2_Restore_ETCD
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Restore to the snapshot
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Creates and restores a snapshot on an existing cluster
+    title: K3S_Restore_ETCD
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Restore to the snapshot
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Upgrades the kubernetes version and restores a snapshot
+    title: RKE2_Restore_ETCD_K8sVersion
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Upgrade the kubernetes version
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Restore to the snapshot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Upgrades the kubernetes version and restores a snapshot
+    title: K3S_Restore_ETCD_K8sVersion
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Upgrade the kubernetes version
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Restore to the snapshot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Creates and restores a S3 snapshot on an existing cluster
+    title: RKE2_S3_Restore
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Create an S3 snapshot
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Restore to the S3 snapshot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Creates and restores a S3 snapshot on an existing cluster
+    title: K3S_S3_Restore
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Create an S3 snapshot
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Restore to the S3 snapshot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Creates snapshots until the retention limit is reached
+    title: RKE2_Retention_Limit
+    priority: 6
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Set the retention limit and interval
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Wait for retention limit to be reached
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify snapshot limit is respected
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Creates snapshots until the retention limit is reached
+    title: K3S_Retention_Limit
+    priority: 6
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Set the retention limit and interval
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Wait for retention limit to be reached
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify snapshot limit is respected
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Creates and restores a snapshot on an existing windows cluster
+    title: RKE2_Windows_Restore
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Restore the snapshot
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Creates and restores a snapshot with upgrade strategy
+    title: RKE2_Restore_Upgrade_Strategy
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Restore the snapshot
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Creates and restores a snapshot with upgrade strategy
+    title: K3S_Restore_Upgrade_Strategy
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Restore the snapshot
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Replaces all control plane nodes on a cluster and restores a snapshot
+    title: RKE2_Replace_Control_Plane_Nodes
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Replace control plane nodes
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Restore the snapshot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Replaces all etcd nodes on a cluster and restores a snapshot
+    title: RKE2_Replace_ETCD_Nodes
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Replace etcd nodes
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Restore the snapshot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Replaces all worker nodes on a cluster and restores a snapshot
+    title: RKE2_Replace_Worker_Nodes
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Replace worker nodes
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Restore the snapshot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Replaces all control plane nodes on a cluster and restores a snapshot
+    title: K3S_Replace_Control_Plane_Nodes
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Replace control plane nodes
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Restore the snapshot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Replaces all etcd nodes on a cluster and restores a snapshot
+    title: K3S_Replace_ETCD_Nodes
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Replace etcd nodes
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Restore the snapshot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Replaces all worker nodes on a cluster and restores a snapshot
+    title: K3S_Replace_Worker_Nodes
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Replace worker nodes
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Restore the snapshot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Creates and restores a series of snapshots
+    title: RKE2_Recurring_Restores
+    priority: 6
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Restore the snapshot
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Repeat steps 1-3 
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Creates and restores a series of snapshots
+    title: K3S_Recurring_Restores
+    priority: 6
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Restore the snapshot
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Repeat steps 1-3 
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

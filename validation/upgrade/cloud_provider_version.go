@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func upgradeVsphereCloudProviderCharts(t *testing.T, client *rancher.Client, clusterName string) {
+func VsphereCloudProviderCharts(t *testing.T, client *rancher.Client, clusterName string) {
 	logrus.Info("Starting upgrade test...")
 	err := charts.UpgradeVsphereOutOfTreeCharts(client, catalog.RancherChartRepo, clusterName)
 	require.NoError(t, err)

@@ -20,10 +20,8 @@ const (
 	defaultNamespace              = "fleet-default"
 )
 
-var oneNode int64 = 1
-var twoNodes int64 = 2
-
-func scalingRKE2K3SNodePools(t *testing.T, client *rancher.Client, clusterID string, nodeRoles machinepools.NodeRoles) {
+// ScalingRKE2K3SNodePools scales the node pools of an RKE2 or K3S cluster.
+func ScalingRKE2K3SNodePools(t *testing.T, client *rancher.Client, clusterID string, nodeRoles machinepools.NodeRoles) {
 	cluster, err := client.Steve.SteveType(ProvisioningSteveResourceType).ByID(clusterID)
 	require.NoError(t, err)
 
@@ -51,26 +49,34 @@ func scalingRKE2K3SNodePools(t *testing.T, client *rancher.Client, clusterID str
 	pods.VerifyReadyDaemonsetPods(t, client, scaledClusterResp)
 }
 
-func scalingRKE2K3SCustomClusterPools(t *testing.T, client *rancher.Client, clusterID string, nodeProvider string, nodeRoles machinepools.NodeRoles) {
+// ScalingRKE2K3SCustomClusterPools scales the node pools of an RKE2 or K3S custom cluster.
+func ScalingRKE2K3SCustomClusterPools(t *testing.T, client *rancher.Client, clusterID string, nodeProvider string, nodeRoles machinepools.NodeRoles) {
 	rolesPerNode := []string{}
 	quantityPerPool := []int32{}
 	rolesPerPool := []string{}
+
 	for _, nodeRoles := range []machinepools.NodeRoles{nodeRoles} {
 		var finalRoleCommand string
+
 		if nodeRoles.ControlPlane {
 			finalRoleCommand += " --controlplane"
 		}
+
 		if nodeRoles.Etcd {
 			finalRoleCommand += " --etcd"
 		}
+
 		if nodeRoles.Worker {
 			finalRoleCommand += " --worker"
 		}
+
 		if nodeRoles.Windows {
 			finalRoleCommand += " --windows"
 		}
+
 		quantityPerPool = append(quantityPerPool, nodeRoles.Quantity)
 		rolesPerPool = append(rolesPerPool, finalRoleCommand)
+
 		for i := int32(0); i < nodeRoles.Quantity; i++ {
 			rolesPerNode = append(rolesPerNode, finalRoleCommand)
 		}
@@ -101,7 +107,8 @@ func scalingRKE2K3SCustomClusterPools(t *testing.T, client *rancher.Client, clus
 	require.NoError(t, err)
 }
 
-func scalingRKE1NodePools(t *testing.T, client *rancher.Client, clusterID string, nodeRoles rke1.NodeRoles) {
+// ScalingRKE1NodePools scales the node pools of an RKE1 cluster.
+func ScalingRKE1NodePools(t *testing.T, client *rancher.Client, clusterID string, nodeRoles rke1.NodeRoles) {
 	cluster, err := client.Management.Cluster.ByID(clusterID)
 	require.NoError(t, err)
 
@@ -116,24 +123,30 @@ func scalingRKE1NodePools(t *testing.T, client *rancher.Client, clusterID string
 	require.NoError(t, err)
 }
 
-func scalingRKE1CustomClusterPools(t *testing.T, client *rancher.Client, clusterID string, nodeProvider string, nodeRoles rke1.NodeRoles) {
+// ScalingRKE1CustomClusterPools scales the node pools of an RKE1 custom cluster.
+func ScalingRKE1CustomClusterPools(t *testing.T, client *rancher.Client, clusterID string, nodeProvider string, nodeRoles rke1.NodeRoles) {
 	rolesPerNode := []string{}
 	quantityPerPool := []int32{}
 	rolesPerPool := []string{}
+
 	for _, pool := range []rke1.NodeRoles{nodeRoles} {
 		var finalRoleCommand string
+
 		if pool.ControlPlane {
 			finalRoleCommand += " --controlplane"
 		}
+
 		if pool.Etcd {
 			finalRoleCommand += " --etcd"
 		}
+
 		if pool.Worker {
 			finalRoleCommand += " --worker"
 		}
 
 		quantityPerPool = append(quantityPerPool, int32(pool.Quantity))
 		rolesPerPool = append(rolesPerPool, finalRoleCommand)
+
 		for i := int64(0); i < pool.Quantity; i++ {
 			rolesPerNode = append(rolesPerNode, finalRoleCommand)
 		}
@@ -158,7 +171,8 @@ func scalingRKE1CustomClusterPools(t *testing.T, client *rancher.Client, cluster
 	require.NoError(t, err)
 }
 
-func scalingAKSNodePools(t *testing.T, client *rancher.Client, clusterID string, nodePool *aks.NodePool) {
+// ScalingAKSNodePools scales the node pools of an AKS cluster.
+func ScalingAKSNodePools(t *testing.T, client *rancher.Client, clusterID string, nodePool *aks.NodePool) {
 	cluster, err := client.Management.Cluster.ByID(clusterID)
 	require.NoError(t, err)
 
@@ -166,11 +180,13 @@ func scalingAKSNodePools(t *testing.T, client *rancher.Client, clusterID string,
 	require.NoError(t, err)
 
 	*nodePool.NodeCount = -*nodePool.NodeCount
+
 	_, err = aks.ScalingAKSNodePoolsNodes(client, clusterResp, nodePool)
 	require.NoError(t, err)
 }
 
-func scalingEKSNodePools(t *testing.T, client *rancher.Client, clusterID string, nodePool *eks.NodeGroupConfig) {
+// ScalingEKSNodePools scales the node pools of an EKS cluster.
+func ScalingEKSNodePools(t *testing.T, client *rancher.Client, clusterID string, nodePool *eks.NodeGroupConfig) {
 	cluster, err := client.Management.Cluster.ByID(clusterID)
 	require.NoError(t, err)
 
@@ -178,11 +194,13 @@ func scalingEKSNodePools(t *testing.T, client *rancher.Client, clusterID string,
 	require.NoError(t, err)
 
 	*nodePool.DesiredSize = -*nodePool.DesiredSize
+
 	_, err = eks.ScalingEKSNodePoolsNodes(client, clusterResp, nodePool)
 	require.NoError(t, err)
 }
 
-func scalingGKENodePools(t *testing.T, client *rancher.Client, clusterID string, nodePool *gke.NodePool) {
+// ScalingGKENodePools scales the node pools of a GKE cluster.
+func ScalingGKENodePools(t *testing.T, client *rancher.Client, clusterID string, nodePool *gke.NodePool) {
 	cluster, err := client.Management.Cluster.ByID(clusterID)
 	require.NoError(t, err)
 
@@ -190,6 +208,7 @@ func scalingGKENodePools(t *testing.T, client *rancher.Client, clusterID string,
 	require.NoError(t, err)
 
 	*nodePool.InitialNodeCount = -*nodePool.InitialNodeCount
+
 	_, err = gke.ScalingGKENodePoolsNodes(client, clusterResp, nodePool)
 	require.NoError(t, err)
 }

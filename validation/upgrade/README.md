@@ -1,32 +1,96 @@
-# Upgrade Configs
+# Upgrade
+
+The upgrade package tests upgrading a downstream cluster to a higher specified K8s version in Rancher. The following workflow is followed:
+
+1. Provision a downstream cluster that
+2. Perform post-cluster provisioning checks
+3. Upgrade the K8s version of the downstream cluster
+4. Validate that the upgrade was successful
 
 ## Table of Contents
 1. [Getting Started](#Getting-Started)
 2. [Cloud Provider Migration](#cloud-provider-migration)
 
 ## Getting Started
-Kubernetes and pre/post upgrade workload tests use the same single shared configuration as shown below. You can find the correct suite name below by checking the test file you plan to run.
-In your config file, set the following, this will run each test in parallel both for Post/Pre and Kubernetes tests:
+Please see an example config below using AWS as the node provider to first provision the cluster:
 
 ```yaml
-upgradeInput:
-  clusters:
-    - name: ""                      # Cluster name that is already provisioned in Rancher
-      psact: ""                     # Values are rancher-privileged, rancher-restricted or rancher-baseline
-      enabledFeatures:
-        chart: false                # Boolean, pre/post upgrade checks, default is false
-        ingress: false              # Boolean, pre/post upgrade checks, default is false
-      provisioningInput:            # See the [Hosted Provider Provisioning](hosted/README.md)
-        rke1KubernetesVersion: [""]
-        rke2KubernetesVersion: [""]
-        k3sKubernetesVersion: [""]              
+rancher:
+  host: ""
+  adminToken: ""
+  insecure: true
+
+provisioningInput:
+  cni: ["calico"]
+  providers: ["aws"]
+  nodeProviders: ["ec2"]
+
+clusterConfig:
+  cni: "calico"
+  provider: "aws"
+  nodeProvider: "ec2"
+
+awsCredentials:
+  secretKey: ""
+  accessKey: ""
+  defaultRegion: "us-east-2"
+
+awsMachineConfigs:
+  region: "us-east-2"
+  awsMachineConfig:
+  - roles: ["etcd", "controlplane", "worker"]
+    ami: ""
+    instanceType: ""
+    sshUser: ""
+    vpcId: ""
+    volumeType: ""
+    zone: "a"
+    retries: ""
+    rootSize: ""
+    securityGroup: [""]
+
+amazonec2Config:
+  accessKey: ""
+  ami: ""
+  blockDurationMinutes: "0"
+  encryptEbsVolume: false
+  httpEndpoint: "enabled"
+  httpTokens: "optional"
+  iamInstanceProfile: ""
+  insecureTransport: false
+  instanceType: ""
+  monitoring: false
+  privateAddressOnly: false
+  region: "us-east-2"
+  requestSpotInstance: true
+  retries: ""
+  rootSize: ""
+  secretKey: ""
+  securityGroup: [""]
+  securityGroupReadonly: false
+  spotPrice: ""
+  sshKeyContents: ""
+  sshUser: ""
+  subnetId: ""
+  tags: ""
+  type: "amazonec2Config"
+  useEbsOptimizedInstance: false
+  usePrivateAddress: false
+  volumeType: ""
+  vpcId: ""
+  zone: "a"           
 ```
 Note: To see the `provisioningInput` in further detail, please review over the [Provisioning README](../provisioning/README.md).
 See below how to run the test:
 
 ### Kubernetes Upgrade
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes"`
+
+## RKE1
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeRKE1KubernetesTestSuite/TestUpgradeRKE1Kubernetes"`
+
+## RKE2/K3s
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes"`
 
 ## Cloud Provider Migration
 Migrates a cluster's cloud provider from in-tree to out-of-tree

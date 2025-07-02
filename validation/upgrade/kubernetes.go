@@ -27,126 +27,69 @@ import (
 
 const (
 	local              = "local"
-	namespace          = "fleet-default"
 	provider           = "provider.cattle.io"
 	rke                = "rke"
 	rke2               = "rke2"
 	controllersVersion = "management.cattle.io/current-cluster-controllers-version"
 )
 
-// upgradeLocalCluster is a function to upgrade a local cluster.
-func upgradeLocalCluster(u *suite.Suite, testName string, client *rancher.Client, testConfig *clusters.ClusterConfig, cluster upgradeinput.Cluster) {
-	clusterObject, err := extensionscluster.GetClusterIDByName(client, cluster.Name)
+// LocalCluster is a function to upgrade a local cluster.
+func LocalCluster(u *suite.Suite, client *rancher.Client, testConfig *clusters.ClusterConfig, cluster upgradeinput.Cluster) {
+	clusterMeta, err := extensionscluster.NewClusterMeta(client, cluster.Name)
 	require.NoError(u.T(), err)
 
-	clusterResp, err := client.Management.Cluster.ByID(clusterObject)
+	initCluster, err := bundledclusters.NewWithClusterMeta(clusterMeta)
 	require.NoError(u.T(), err)
 
-	if cluster.VersionToUpgrade == "" {
-		u.T().Skip(u.T(), cluster.VersionToUpgrade, "Kubernetes version to upgrade is not provided, skipping the test")
+	initClusterResp, err := initCluster.Get(client)
+	require.NoError(u.T(), err)
+
+	preUpgradeCluster, err := client.Management.Cluster.ByID(clusterMeta.ID)
+	require.NoError(u.T(), err)
+
+	if strings.Contains(preUpgradeCluster.Version.GitVersion, testConfig.KubernetesVersion) {
+		u.T().Skipf("Skipping test: Kubernetes version %s already upgraded", testConfig.KubernetesVersion)
 	}
 
-	testConfig.KubernetesVersion = cluster.VersionToUpgrade
-	testName += "Local cluster from " + clusterResp.Version.GitVersion + " to " + testConfig.KubernetesVersion
+	logrus.Infof("Upgrading local cluster to: %s", testConfig.KubernetesVersion)
+	updatedCluster, err := initClusterResp.UpdateKubernetesVersion(client, &testConfig.KubernetesVersion)
+	require.NoError(u.T(), err)
 
-	u.Run(testName, func() {
-		clusterMeta, err := extensionscluster.NewClusterMeta(client, cluster.Name)
-		require.NoError(u.T(), err)
+	err = waitForLocalClusterUpgrade(client, clusterMeta.ID)
+	require.NoError(u.T(), err)
 
-		initCluster, err := bundledclusters.NewWithClusterMeta(clusterMeta)
-		require.NoError(u.T(), err)
+	upgradedCluster, err := client.Management.Cluster.ByID(updatedCluster.Meta.ID)
+	require.NoError(u.T(), err)
+	require.Contains(u.T(), testConfig.KubernetesVersion, upgradedCluster.Version.GitVersion)
 
-		initClusterResp, err := initCluster.Get(client)
-		require.NoError(u.T(), err)
-
-		preUpgradeCluster, err := client.Management.Cluster.ByID(clusterMeta.ID)
-		require.NoError(u.T(), err)
-
-		if strings.Contains(preUpgradeCluster.Version.GitVersion, testConfig.KubernetesVersion) {
-			u.T().Skipf("Skipping test: Kubernetes version %s already upgraded", testConfig.KubernetesVersion)
-		}
-
-		logrus.Infof("Upgrading local cluster to: %s", testConfig.KubernetesVersion)
-		updatedCluster, err := initClusterResp.UpdateKubernetesVersion(client, &testConfig.KubernetesVersion)
-		require.NoError(u.T(), err)
-
-		err = waitForLocalClusterUpgrade(client, clusterMeta.ID)
-		require.NoError(u.T(), err)
-
-		upgradedCluster, err := client.Management.Cluster.ByID(updatedCluster.Meta.ID)
-		require.NoError(u.T(), err)
-		require.Contains(u.T(), testConfig.KubernetesVersion, upgradedCluster.Version.GitVersion)
-
-		logrus.Infof("Local cluster has been upgraded to: %s", upgradedCluster.Version.GitVersion)
-	})
+	logrus.Infof("Local cluster has been upgraded to: %s", upgradedCluster.Version.GitVersion)
 }
 
-// upgradeDownstreamCluster is a function to upgrade a downstream cluster.
-func upgradeDownstreamCluster(u *suite.Suite, testName string, client *rancher.Client, clusterName string, testConfig *clusters.ClusterConfig, cluster upgradeinput.Cluster) {
-	var isRKE1 = false
-
-	if cluster.VersionToUpgrade == "" {
-		u.T().Skip(u.T(), cluster.VersionToUpgrade, "Kubernetes version to upgrade is not provided, skipping the test")
-	}
-
-	testConfig.KubernetesVersion = cluster.VersionToUpgrade
-
-	clusterObject, _, _ := extensionscluster.GetProvisioningClusterByName(client, clusterName, namespace)
-	if clusterObject == nil {
-		isRKE1 = true
-
-		clusterObject, err := extensionscluster.GetClusterIDByName(client, clusterName)
+// DownstreamCluster is a function to upgrade a downstream cluster.
+func DownstreamCluster(u *suite.Suite, testName string, client *rancher.Client, clusterName string, testConfig *clusters.ClusterConfig,
+	clusterID, versionToUpgrade string, isRKE1 bool) {
+	if isRKE1 {
+		upgradedCluster, err := upgradeRKE1Cluster(u.T(), client, clusterID, testConfig)
 		require.NoError(u.T(), err)
 
-		clusterResp, err := client.Management.Cluster.ByID(clusterObject)
+		clusterResp, err := extensionscluster.GetClusterIDByName(client, upgradedCluster.Name)
 		require.NoError(u.T(), err)
 
-		testName += "RKE1 cluster from " + clusterResp.RancherKubernetesEngineConfig.Version + " to " + testConfig.KubernetesVersion
+		upgradedRKE1Cluster, err := client.Management.Cluster.ByID(clusterResp)
+		require.NoError(u.T(), err)
+
+		provisioning.VerifyRKE1Cluster(u.T(), client, testConfig, upgradedRKE1Cluster)
 	} else {
-		clusterID, err := extensionscluster.GetV1ProvisioningClusterByName(client, clusterName)
+		upgradedCluster, err := upgradeRKE2K3SCluster(u.T(), client, clusterID, testConfig)
 		require.NoError(u.T(), err)
 
-		clusterResp, err := client.Steve.SteveType(extensionscluster.ProvisioningSteveResourceType).ByID(clusterID)
-		require.NoError(u.T(), err)
-
-		updatedCluster := new(provv1.Cluster)
-		err = v1.ConvertToK8sType(clusterResp, &updatedCluster)
-		require.NoError(u.T(), err)
-
-		if strings.Contains(updatedCluster.Spec.KubernetesVersion, "rke2") {
-			testName += "RKE2 cluster from " + updatedCluster.Spec.KubernetesVersion + " to " + testConfig.KubernetesVersion
-		} else if strings.Contains(updatedCluster.Spec.KubernetesVersion, "k3s") {
-			testName += "K3S cluster from " + updatedCluster.Spec.KubernetesVersion + " to " + testConfig.KubernetesVersion
-		}
+		provisioning.VerifyCluster(u.T(), client, testConfig, upgradedCluster)
 	}
-
-	u.Run(testName, func() {
-		if isRKE1 {
-			upgradedCluster, err := upgradeRKE1Cluster(u.T(), client, cluster, testConfig)
-			require.NoError(u.T(), err)
-
-			clusterResp, err := extensionscluster.GetClusterIDByName(client, upgradedCluster.Name)
-			require.NoError(u.T(), err)
-
-			upgradedRKE1Cluster, err := client.Management.Cluster.ByID(clusterResp)
-			require.NoError(u.T(), err)
-
-			provisioning.VerifyRKE1Cluster(u.T(), client, testConfig, upgradedRKE1Cluster)
-		} else {
-			upgradedCluster, err := upgradeRKE2K3SCluster(u.T(), client, cluster, testConfig)
-			require.NoError(u.T(), err)
-
-			provisioning.VerifyCluster(u.T(), client, testConfig, upgradedCluster)
-		}
-	})
 }
 
 // upgradeRKE1Cluster is a function to upgrade a downstream RKE1 cluster.
-func upgradeRKE1Cluster(t *testing.T, client *rancher.Client, cluster upgradeinput.Cluster, clustersConfig *clusters.ClusterConfig) (*management.Cluster, error) {
-	clusterObj, err := extensionscluster.GetClusterIDByName(client, cluster.Name)
-	require.NoError(t, err)
-
-	clusterResp, err := client.Management.Cluster.ByID(clusterObj)
+func upgradeRKE1Cluster(t *testing.T, client *rancher.Client, clusterID string, clustersConfig *clusters.ClusterConfig) (*management.Cluster, error) {
+	clusterResp, err := client.Management.Cluster.ByID(clusterID)
 	require.NoError(t, err)
 
 	updatedCluster := clusters.UpdateRKE1ClusterConfig(clusterResp.Name, client, clustersConfig)
@@ -164,11 +107,8 @@ func upgradeRKE1Cluster(t *testing.T, client *rancher.Client, cluster upgradeinp
 }
 
 // upgradeRKE2K3SCluster is a function to upgrade a downstream RKE2 or K3S cluster.
-func upgradeRKE2K3SCluster(t *testing.T, client *rancher.Client, cluster upgradeinput.Cluster, clustersConfig *clusters.ClusterConfig) (*v1.SteveAPIObject, error) {
-	clusterObj, err := extensionscluster.GetV1ProvisioningClusterByName(client, cluster.Name)
-	require.NoError(t, err)
-
-	clusterResp, err := client.Steve.SteveType(extensionscluster.ProvisioningSteveResourceType).ByID(clusterObj)
+func upgradeRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterID string, clustersConfig *clusters.ClusterConfig) (*v1.SteveAPIObject, error) {
+	clusterResp, err := client.Steve.SteveType(extensionscluster.ProvisioningSteveResourceType).ByID(clusterID)
 	require.NoError(t, err)
 
 	updatedCluster := clusters.UpdateK3SRKE2ClusterConfig(clusterResp, clustersConfig)

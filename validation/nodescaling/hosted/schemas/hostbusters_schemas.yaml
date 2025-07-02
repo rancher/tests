@@ -1,0 +1,188 @@
+- suite: Go Automation/NodeScaling
+  projects: [RRT, RM]
+  cases:
+  - description: Scales up/down the node group of an existing GKE cluster
+    title: GKE_Scale_Node_Group_By_1
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Scale up the node group by 1
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Scale down the node group by 1
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Scales up/down the node group of an existing GKE cluster
+    title: GKE_Scale_Node_Group_By_2
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Scale up the node group by 2
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Scale down the node group by 2
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Scales up/down the node group of an existing EKS cluster
+    title: EKS_Scale_Node_Group_By_1
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Scale up the node group by 1
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Scale down the node group by 1
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Scales up/down the node group of an existing EKS cluster
+    title: EKS_Scale_Node_Group_By_2
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Scale up the node group by 2
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Scale down the node group by 2
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Scales up/down the node group of an existing AKS cluster
+    title: AKS_Scale_Agent_Pool_By_1
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Scale up the node group by 1
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Scale down the node group by 1
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Scales up/down the node group of an existing AKS cluster
+    title: AKS_Scale_Agent_Pool_By_2
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Scale up the node group by 2
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Scale down the node group by 2
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

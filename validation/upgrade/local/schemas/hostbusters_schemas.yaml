@@ -1,0 +1,23 @@
+- suite: Go Automation/Upgrade
+  projects: [RRT, RM]
+  cases:
+  - description: Upgrading the local cluster for Rancher
+    title: Upgrading_Local_Cluster
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Upgrade the local cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verifies the local cluster upgrade
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

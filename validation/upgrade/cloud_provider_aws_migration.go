@@ -116,8 +116,8 @@ func enableLeaderMigrationRKE1(rke1Cluster *management.Cluster) *management.Clus
 	return rke1Cluster
 }
 
-// rke1AWSCloudProviderMigration is a helper function to migrate from aws in-tree to out-of-tree on rke1 clusters
-func rke1AWSCloudProviderMigration(t *testing.T, client *rancher.Client, clusterName string) {
+// RKE1AWSCloudProviderMigration is a helper function to migrate from aws in-tree to out-of-tree on rke1 clusters
+func RKE1AWSCloudProviderMigration(t *testing.T, client *rancher.Client, clusterName string) {
 	clusterID, err := extensionscluster.GetClusterIDByName(client, clusterName)
 	require.NoError(t, err)
 
@@ -207,8 +207,8 @@ func rke1AWSCloudProviderMigration(t *testing.T, client *rancher.Client, cluster
 	services.VerifyAWSLoadBalancer(t, client, lbServiceResponseOOT, status.ClusterName)
 }
 
-// rke2AWSCloudProviderMigration is a helper function to migrate from aws in-tree to out-of-tree on rke2 clusters
-func rke2AWSCloudProviderMigration(t *testing.T, client *rancher.Client, steveClusterObject *steveV1.SteveAPIObject) {
+// RKE2AWSCloudProviderMigration is a helper function to migrate from aws in-tree to out-of-tree on rke2 clusters
+func RKE2AWSCloudProviderMigration(t *testing.T, client *rancher.Client, steveClusterObject *steveV1.SteveAPIObject) {
 	lbServiceResponse := cloudprovider.CreateAWSCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
 
 	status := &provv1.ClusterStatus{}

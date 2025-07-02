@@ -37,8 +37,8 @@ const (
 	privateKeySSHKeyRegExPattern = `-----BEGIN RSA PRIVATE KEY-{3,}\n([\s\S]*?)\n-{3,}END RSA PRIVATE KEY-----`
 )
 
-// rotateCerts rotates the certificates in a RKE2/K3S downstream cluster.
-func rotateCerts(client *rancher.Client, clusterName string) error {
+// RotateCerts rotates the certificates in a RKE2/K3S downstream cluster.
+func RotateCerts(client *rancher.Client, clusterName string) error {
 	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
 	if err != nil {
 		return err
@@ -173,8 +173,8 @@ func rotateCerts(client *rancher.Client, clusterName string) error {
 	return nil
 }
 
-// rotateRKE1Certs rotates the certificates in a RKE1 downstream cluster.
-func rotateRKE1Certs(client *rancher.Client, clusterName string) error {
+// RotateRKE1Certs rotates the certificates in a RKE1 downstream cluster.
+func RotateRKE1Certs(client *rancher.Client, clusterName string) error {
 	clusterID, err := clusters.GetClusterIDByName(client, clusterName)
 	if err != nil {
 		return err

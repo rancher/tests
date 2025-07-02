@@ -1,6 +1,10 @@
 # Certificate Tests
 
-This package contains tests for certificate management and rotation. The tests are organized into two main test suites.
+This package contains tests for certificate management and cert rotation. For the `cert_rotation_test.go` and `cert_rotation_wins_test.go` tests, the following workflow is followed:
+
+1. Provision a downstream cluster
+2. Perform post-cluster provisioning checks
+3. Rotate the certificates
 
 ## Table of Contents
 - [Certificate Tests](#certificate-tests)
@@ -18,33 +22,156 @@ The certificate functional tests validate core certificate functionality in Kube
 Note: RBAC tests for certificates are covered in `rbac/certificates`
 
 ## Certificate Rotation Tests
-These tests are designed to accept an existing cluster that the user has access to. If you do not have a downstream cluster in Rancher, you should create one first before running these tests.
-
-Please see below for more details for your config. Please note that the config can be in either JSON or YAML (all examples are illustrated in YAML).
+Please see an example config below using AWS as the node provider to first provision the cluster:
 
 ## Getting Started
 In your config file, set the following:
 ```yaml
 rancher:
-  host: "rancher_server_address"
-  adminToken: "rancher_admin_token"
-  clusterName: "cluster_to_run_tests_on"
-  insecure: true/optional
-  cleanup: false/optional
+  host: ""
+  adminToken: ""
+  insecure: true
+
+provisioningInput:
+  cni: ["calico"]
+  providers: ["aws"]
+  nodeProviders: ["ec2"]
+
+clusterConfig:
+  cni: "calico"
+  provider: "aws"
+  nodeProvider: "ec2"
+
+awsCredentials:
+  secretKey: ""
+  accessKey: ""
+  defaultRegion: "us-east-2"
+
+awsMachineConfigs:
+  region: "us-east-2"
+  awsMachineConfig:
+  - roles: ["etcd", "controlplane", "worker"]
+    ami: ""
+    instanceType: ""
+    sshUser: ""
+    vpcId: ""
+    volumeType: ""
+    zone: "a"
+    retries: ""
+    rootSize: ""
+    securityGroup: [""]
+
+amazonec2Config:
+  accessKey: ""
+  ami: ""
+  blockDurationMinutes: "0"
+  encryptEbsVolume: false
+  httpEndpoint: "enabled"
+  httpTokens: "optional"
+  iamInstanceProfile: ""
+  insecureTransport: false
+  instanceType: ""
+  monitoring: false
+  privateAddressOnly: false
+  region: "us-east-2"
+  requestSpotInstance: true
+  retries: ""
+  rootSize: ""
+  secretKey: ""
+  securityGroup: [""]
+  securityGroupReadonly: false
+  spotPrice: ""
+  sshKeyContents: ""
+  sshUser: ""
+  subnetId: ""
+  tags: ""
+  type: "amazonec2Config"
+  useEbsOptimizedInstance: false
+  usePrivateAddress: false
+  volumeType: ""
+  vpcId: ""
+  zone: "a"
 ```
 
-If you running the `cert_rotation_wins_test.go`, ensure your config looks like the following:
+If you running the `cert_rotation_wins_test.go`, see an example config below:
 
 ```yaml
 rancher:
-  host: "rancher_server_address"
-  adminToken: "rancher_admin_token"
-  clusterName: "cluster_to_run_tests_on"
-  insecure: true/optional
-  cleanup: false/optional
+  host: ""
+  adminToken: ""
+  clusterName: ""
+  insecure: true
 
 provisioningInput:
   providers: ["vsphere"]
+
+vmwarevsphereCredentials:
+  password: ""
+  username: ""
+  vcenter: ""
+  vcenterPort: ""
+
+vmwarevsphereConfig:
+  cfgparam: [""]
+  cloneFrom: ""
+  cpuCount: ""
+  datacenter: ""
+  datastore: ""
+  datastoreCluster: ""
+  diskSize: ""
+  folder: ""
+  hostSystem: ""
+  memorySize: ""
+  network: [""]
+  os: ""
+  password: ""
+  pool: ""
+  sshPassword: ""
+  sshPort: ""
+  sshUser: ""
+  sshUserGroup: ""
+
+vmwarevsphereMachineConfigs:
+  pool: ""
+  datacenter: ""
+  datastore: ""
+  folder: ""
+  hostsystem: ""
+  vmwarevsphereMachineConfig:
+  - cfgparam: []
+    customAttribute: []
+    roles: []
+    cloneFrom: ""
+    cpuCount: ""
+    creationType: ""
+    datastoreCluster: ""
+    diskSize: ""
+    memorySize: ""
+    network: []
+    os: ""
+    sshPassword: ""
+    sshPort: ""
+    sshUser: ""
+    tag: []
+    sshUserGroup: ""
+  - cfgparam: []
+    customAttribute: []
+    roles: []
+    cloneFrom: ""
+    cloudConfig: ""
+    contentLibrary: ""
+    cpuCount: ""
+    creationType: ""
+    datastoreCluster: ""
+    diskSize: ""
+    memorySize: ""
+    network: []
+    os: ""
+    sshPassword: ""
+    sshPort: ""
+    sshUser: ""
+    tag: []
+    sshUserGroup: ""
 ```
 
 Typically, a cluster with the following 3 pools is used for testing:
@@ -77,7 +204,12 @@ gotestsum --format standard-verbose --packages=github.com/rancher/tests/validati
 ```
 
 ### Certificate rotation
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationTestSuite/TestCertRotation"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationWindowsTestSuite/TestCertRotationWindows"`
+
+### RKE1
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1CertRotationTestSuite/TestRKE1CertRotation"`
+
+### RKE2/K3S
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationTestSuite/TestCertRotation"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationWindowsTestSuite/TestCertRotationWindows"`
 
 If the specified test passes immediately without warning, try adding the `-count=1` flag to get around this issue. This will avoid previous results from interfering with the new test run.
