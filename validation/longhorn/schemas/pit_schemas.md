@@ -1,6 +1,6 @@
 # RANCHERINT Schemas
 
-## Test Suite: Longhorn Installation and Setup
+## Test Suite: Longhorn
 
 ### Fresh Longhorn Installation via Rancher App Catalog
 
@@ -38,10 +38,6 @@ Test Longhorn installation with custom settings including replica count, data pa
 | 10          | Create test volume and verify replica count | | Volume created with 2 replicas               |
 | 11          | Check custom data path utilization on nodes | | `/var/lib/longhorn-custom` directory is used |
 
----
-
-## Test Suite: Longhorn UI Integration
-
 ### Longhorn UI Access Through Rancher
 
 Verify seamless access to Longhorn UI through Rancher interface with proper authentication and session management.
@@ -75,10 +71,6 @@ Test Role-Based Access Control integration between Rancher and Longhorn for diff
 | 8 | Login as read-only user and access Longhorn UI | | Read-only access granted |
 | 9 | Attempt volume creation as read-only user | | Operation blocked with appropriate error message |
 | 10 | Verify RBAC consistency across both UIs | | Permissions enforced consistently |
-
----
-
-## Test Suite: Longhorn Volume Management
 
 ### Volume Creation Through Rancher Workloads
 
@@ -115,10 +107,6 @@ Test Longhorn integration with StatefulSet persistent volumes including scaling 
 | 9 | Delete one pod to trigger rescheduling | | Pod rescheduled to different node                  |
 | 10 | Verify volume reattaches to rescheduled pod with data intact | | Data consistency maintained                        |
 
----
-
-## Test Suite: Longhorn Monitoring Integration
-
 ### Longhorn Metrics in Rancher Monitoring
 
 Verify Longhorn metrics collection and visualization through Rancher's Prometheus and Grafana monitoring stack.
@@ -154,10 +142,6 @@ Test Longhorn alert integration with Rancher Alert Manager for storage-related e
 | 9 | Verify storage warning alert triggers | | `LonghornDiskStorageWarning` alert fires   |
 | 10 | Resolve issues and verify alert resolution | | Alerts automatically resolve               |
 | 11 | Confirm resolution notifications sent | | Resolution notifications received          |
-
----
-
-## Test Suite: Longhorn Backup and Recovery
 
 ### Backup Target Configuration
 
@@ -197,10 +181,6 @@ Test disaster recovery volume functionality between separate Rancher-managed clu
 | 12 | Deploy application using activated DR volume | | Application successfully uses DR volume |
 | 13 | Verify data integrity matches source cluster | | All test data present and correct |
 
----
-
-## Test Suite: Longhorn Node Operations
-
 ### Node Drain Operation via Rancher
 
 Test graceful node drain functionality with Longhorn volumes ensuring proper replica evacuation and data integrity.
@@ -236,10 +216,6 @@ Test cluster scaling operations with automatic Longhorn node configuration and r
 | 9 | Drain selected node using Rancher drain functionality | | Node drained successfully           |
 | 10 | Remove node from cluster | | Node removal completes              |
 | 11 | Verify volume health maintained after node removal | | All volumes remain healthy          |
-
----
-
-## Test Suite: Longhorn Upgrade Management
 
 ### Longhorn Upgrade via Rancher Apps
 
@@ -279,10 +255,6 @@ Test Kubernetes cluster upgrade through Rancher while maintaining Longhorn stora
 | 11 | Test volume operations after cluster upgrade | | Volume creation and operations work normally |
 | 12 | Verify all nodes at target Kubernetes version | | Cluster fully upgraded                       |
 
----
-
-## Test Suite: Longhorn Performance Testing
-
 ### High-Volume Concurrent Operations
 
 Test Longhorn performance under high-volume concurrent operations including volume creation, backup, and snapshot operations.
@@ -318,10 +290,6 @@ Test Longhorn scalability with hundreds of volumes and verify system stability a
 | 9 | Test volume cleanup operations at scale | | Bulk deletion operations succeed |
 | 10 | Verify system stability after scale testing | | Cluster returns to stable baseline |
 | 11 | Confirm no orphaned resources remain | | All test resources properly cleaned up |
-
----
-
-## Test Suite: Longhorn Error Recovery
 
 ### Network Partition Recovery
 
@@ -360,10 +328,6 @@ Test comprehensive recovery from complete storage node failure including replica
 | 11 | Validate test data integrity using checksums | | Data integrity preserved throughout failure |
 | 12 | Confirm all volumes return to "Robust" status | | Full recovery achieved |
 
----
-
-## Test Suite: Longhorn Security Testing
-
 ### Volume Encryption Integration
 
 Test encrypted volume functionality with proper key management and data protection through Rancher interface.
@@ -398,10 +362,6 @@ Test Longhorn network security features including MTLS configuration and network
 | 8 | Run security scan on Longhorn components | | Security scan passes requirements |
 | 9 | Test network policy enforcement | | Unauthorized traffic blocked |
 | 10 | Verify compliance with security benchmarks | | All benchmarks met |
-
----
-
-## Test Suite: Longhorn Compatibility Testing
 
 ### Mixed Operating System Cluster Support
 
