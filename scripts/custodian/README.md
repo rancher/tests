@@ -15,6 +15,10 @@ QA custodian will clean up resources in AWS, GCR, and AZURE. Currently, we have 
   * instances
   * GKE
 
+3rd party support:
+* Linode
+  * instances
+
 ## How It Works
 
 This stack is fairly simple. Cleanup is exclusively using [Cloud Custodian](https://cloud-custodian.github.io/cloud-custodian/docs/quickstart/index.html) in a docker container. We run this on a recurring basis using our pre-existing Jenkins setup, with a cron to run the custodian 2x per day (once at the start of the workday, once at the end). 
@@ -44,6 +48,13 @@ We tie these keys into the cloud custodian with a simple `sed` command in the do
 * `.yaml` files are built around the instructions from the [How It Works](#how-it-works) documentation from cloud custodian, which often adds new support for time-based management of resources. 
 * [Jenkinsfile](./Jenkinsfile), specifically the first docker build line, to see which variables are necessary to build the container. 
 
+### Alpha Features
+
+#### Linode
+
+Using bash scripts, we now have limited functionality cleanup running in Linode using the existing `DONOTDELETE_KEYS` and `$RANCHER_LINODE_ACCESSKEY` as the linode API key.
+
+Originally, this was a hack-week project where linode resource management was done via its cli (Cloud Custodian doesn't support linode) however CW ripped this out except for one part, the build args to the dockerfile. Doing resource management through the CLI would be difficult unless we used an api-key with org-level access to resources. Currently for QA, linode is the only cloud we use that is user-scoped correctly, meaning that my key doesn't have access to see other users resources in our org. Generally a good thing, but not for cleanup. So this is left as a placeholder until we want to manage linode resources too. This would be a separate effort, unless Cloud Custodian decides to add support for it. 
 
 
 ### Non-Implemented Features
@@ -53,11 +64,6 @@ tag-to-save is a yaml that is setup to block resources from being deleted untl u
 * untag job runs at EOD friday to cleanup any resources that were tagged to be saved earlier in the week (no resouces should be saved over the weekend)
 * tagged job would be ran manually, where user(s) would specify their key or resource(s) which would be tagged to be saved until Friday
 however, no one has had any request to save anything beyond 2 days (or at least not voiced it in any channel) so this feature isn't implemented to save on complexity/potential issues until it is needed
-
-#### Linode
-
-Originally, this was a hack-week project where linode resource management was done via its cli (Cloud Custodian doesn't support linode) however CW ripped this out except for one part, the build args to the dockerfile. Doing resource management through the CLI would be difficult unless we used an api-key with org-level access to resources. Currently for QA, linode is the only cloud we use that is user-scoped correctly, meaning that my key doesn't have access to see other users resources in our org. Generally a good thing, but not for cleanup. So this is left as a placeholder until we want to manage linode resources too. This would be a separate effort, unless Cloud Custodian decides to add support for it. 
-
 
 ### Limitations
 

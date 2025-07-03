@@ -14,10 +14,11 @@ node("vsphere-vpn-1") {
   def awsYaml = "aws.yaml"
   def azureYaml = "azure.yaml"
   def gcpYaml = "gcp.yaml"
+  def linodeScript = "linode.sh"
   if ("${env.CUSTODIAN_YAML}" != "null" && "${env.CUSTODIAN_YAML}" != "") {
     yamlToRun = "${env.CUSTODIAN_YAML}"
   }
-  def branch = "release/v2.8"
+  def branch = "main"
   if ("${env.branch}" != "null" && "${env.branch}" != "") {
     branch = "${env.branch}"
   }
@@ -69,7 +70,9 @@ node("vsphere-vpn-1") {
               try {
                 def decoded = new String(RANCHER_GKE_CREDENTIAL.decodeBase64())
                 writeFile file: 'google_credentials.json', text: decoded
-                sh "docker build -t ${imageName} -f Dockerfile . --build-arg AWS_ACCESS_KEY_ID=\"${AWS_ACCESS_KEY_ID}\" --build-arg AWS_SECRET_ACCESS_KEY=\"${AWS_SECRET_ACCESS_KEY}\" --build-arg AZURE_AKS_SUBSCRIPTION_ID=\"${AZURE_AKS_SUBSCRIPTION_ID}\" --build-arg AZURE_TENANT_ID=\"${AZURE_TENANT_ID}\" --build-arg AZURE_CLIENT_ID=\"${AZURE_CLIENT_ID}\" --build-arg AZURE_CLIENT_SECRET=\"${AZURE_CLIENT_SECRET}\" --build-arg RANCHER_LINODE_ACCESSKEY=\"${RANCHER_LINODE_ACCESSKEY}\""
+                sh returnStdout: true, script: 'wget -qO ./jq https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64'
+                sh returnStdout:true, script: 'chmod a+x ./jq'
+                sh "docker build -t ${imageName} -f Dockerfile . --build-arg AWS_ACCESS_KEY_ID=\"${AWS_ACCESS_KEY_ID}\" --build-arg AWS_SECRET_ACCESS_KEY=\"${AWS_SECRET_ACCESS_KEY}\" --build-arg AZURE_AKS_SUBSCRIPTION_ID=\"${AZURE_AKS_SUBSCRIPTION_ID}\" --build-arg AZURE_TENANT_ID=\"${AZURE_TENANT_ID}\" --build-arg AZURE_CLIENT_ID=\"${AZURE_CLIENT_ID}\" --build-arg AZURE_CLIENT_SECRET=\"${AZURE_CLIENT_SECRET}\" --build-arg RANCHER_LINODE_ACCESSKEY=\"${RANCHER_LINODE_ACCESSKEY}\" --build-arg GOOGLE_CLOUD_PROJECT=\"${GOOGLE_CLOUD_PROJECT}\""
               } catch (err) {
                 echo 'Docker Build had partial failures...'
                 echo "${err}"
@@ -83,8 +86,12 @@ node("vsphere-vpn-1") {
                 echo "No OVERRIDE_REGION passed in, running all tests"
               }
             }
-            stage('Run Docker Image for AWS,Azure, and GCP') {
-              sh "docker run --privileged --name ${testContainer} -e CUSTODIAN_YAML=\"${CUSTODIAN_YAML}\" -e DONOTDELETE_KEYS=\"${DONOTDELETE_KEYS}\" -e USER_KEYS=\"${USER_KEYS}\" ${imageName}"
+            stage('Run Docker Image for AWS, Azure, GCP, and Linode') {
+              if "${CUSTODIAN_YAML}" != "${linodeScript}" {
+                sh "docker run --privileged --name ${testContainer} -e CUSTODIAN_YAML=\"${CUSTODIAN_YAML}\" -e DONOTDELETE_KEYS=\"${DONOTDELETE_KEYS}\" -e USER_KEYS=\"${USER_KEYS}\" ${imageName}"
+              } else {
+                sh ". ${linodeScript}"
+              }
             }
           } catch (err) {
             echo "error during custodian run"

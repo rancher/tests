@@ -1,0 +1,7 @@
+[DEFAULT]
+default-user = caleb_warren
+
+[caleb_warren]
+region = us-west
+type = g6-standard-4
+image = linode/ubuntu22.04
