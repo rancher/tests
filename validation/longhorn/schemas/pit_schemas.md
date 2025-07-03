@@ -4,7 +4,7 @@
 
 ### Fresh Longhorn Installation via Rancher App Catalog
 
-Verify Longhorn can be successfully installed through Rancher's app catalog with default settings on a clean Kubernetes cluster.
+TBD Verify Longhorn can be successfully installed through Rancher's app catalog with default settings on a clean Kubernetes cluster.
 
 | Step Number | Action                                            | Data | Expected Result                                             |
 |------|---------------------------------------------------|------|-------------------------------------------------------------|
@@ -22,7 +22,7 @@ Verify Longhorn can be successfully installed through Rancher's app catalog with
 
 ### Longhorn Installation with Custom Configuration
 
-Test Longhorn installation with custom settings including replica count, data path, and node selection through Rancher interface.
+TBD Test Longhorn installation with custom settings including replica count, data path, and node selection through Rancher interface.
 
 | Step Number | Action | Data | Expected Result                             |
 |-------------|--------|--------|----------------------------------------------|
@@ -40,7 +40,7 @@ Test Longhorn installation with custom settings including replica count, data pa
 
 ### Longhorn UI Access Through Rancher
 
-Verify seamless access to Longhorn UI through Rancher interface with proper authentication and session management.
+TBD Verify seamless access to Longhorn UI through Rancher interface with proper authentication and session management.
 
 | Step Number | Action | Data | Expected Result |
 |------|--------|--------|-----------------|
@@ -57,7 +57,7 @@ Verify seamless access to Longhorn UI through Rancher interface with proper auth
 
 ### RBAC Integration Testing
 
-Test Role-Based Access Control integration between Rancher and Longhorn for different user permission levels.
+TBD Test Role-Based Access Control integration between Rancher and Longhorn for different user permission levels.
 
 | Step Number | Action | Data | Expected Result |
 |------|--------|--------|-----------------|
@@ -74,7 +74,7 @@ Test Role-Based Access Control integration between Rancher and Longhorn for diff
 
 ### Volume Creation Through Rancher Workloads
 
-Verify automatic volume provisioning and attachment when deploying workloads with Longhorn storage through Rancher.
+TBD Verify automatic volume provisioning and attachment when deploying workloads with Longhorn storage through Rancher.
 
 | Step Number | Action | Data | Expected Result |
 |------|--------|--------|-----------------|
@@ -92,7 +92,7 @@ Verify automatic volume provisioning and attachment when deploying workloads wit
 
 ### StatefulSet Volume Management
 
-Test Longhorn integration with StatefulSet persistent volumes including scaling operations and pod rescheduling.
+TBD Test Longhorn integration with StatefulSet persistent volumes including scaling operations and pod rescheduling.
 
 | Step Number | Action | Data | Expected Result                                   |
 |------|--------|--------|----------------------------------------------------|
@@ -109,7 +109,7 @@ Test Longhorn integration with StatefulSet persistent volumes including scaling 
 
 ### Longhorn Metrics in Rancher Monitoring
 
-Verify Longhorn metrics collection and visualization through Rancher's Prometheus and Grafana monitoring stack.
+TBD Verify Longhorn metrics collection and visualization through Rancher's Prometheus and Grafana monitoring stack.
 
 | Step Number | Action | Data | Expected Result                              |
 |------|--------|--------|-----------------------------------------------|
@@ -127,7 +127,7 @@ Verify Longhorn metrics collection and visualization through Rancher's Prometheu
 
 ### Alert Manager Integration
 
-Test Longhorn alert integration with Rancher Alert Manager for storage-related events and notifications.
+TBD Test Longhorn alert integration with Rancher Alert Manager for storage-related events and notifications.
 
 | Step Number | Action | Data | Expected Result                           |
 |------|--------|--------|--------------------------------------------|
@@ -145,7 +145,7 @@ Test Longhorn alert integration with Rancher Alert Manager for storage-related e
 
 ### Backup Target Configuration
 
-Test backup target setup and configuration for S3 and NFS storage through Rancher interface.
+TBD Test backup target setup and configuration for S3 and NFS storage through Rancher interface.
 
 | Step Number | Action | Data | Expected Result                    |
 |------|--------|--------|-------------------------------------|
@@ -163,7 +163,7 @@ Test backup target setup and configuration for S3 and NFS storage through Ranche
 
 ### Cross-Cluster Disaster Recovery
 
-Test disaster recovery volume functionality between separate Rancher-managed clusters with shared backup storage.
+TBD Test disaster recovery volume functionality between separate Rancher-managed clusters with shared backup storage.
 
 | Step Number | Action | Data | Expected Result |
 |------|--------|--------|-----------------|
@@ -183,7 +183,7 @@ Test disaster recovery volume functionality between separate Rancher-managed clu
 
 ### Node Drain Operation via Rancher
 
-Test graceful node drain functionality with Longhorn volumes ensuring proper replica evacuation and data integrity.
+TBD Test graceful node drain functionality with Longhorn volumes ensuring proper replica evacuation and data integrity.
 
 | Step Number | Action | Data | Expected Result |
 |------|--------|--------|-----------------|
@@ -201,7 +201,7 @@ Test graceful node drain functionality with Longhorn volumes ensuring proper rep
 
 ### Node Scaling with Auto-Configuration
 
-Test cluster scaling operations with automatic Longhorn node configuration and replica distribution.
+TBD Test cluster scaling operations with automatic Longhorn node configuration and replica distribution.
 
 | Step Number | Action | Data | Expected Result                    |
 |------|--------|--------|-------------------------------------|
@@ -219,7 +219,7 @@ Test cluster scaling operations with automatic Longhorn node configuration and r
 
 ### Longhorn Upgrade via Rancher Apps
 
-Test Longhorn upgrade process through Rancher application management ensuring zero downtime and data integrity.
+TBD Test Longhorn upgrade process through Rancher application management ensuring zero downtime and data integrity.
 
 | Step Number | Action | Data | Expected Result                       |
 |------|--------|--------|----------------------------------------|
@@ -238,7 +238,7 @@ Test Longhorn upgrade process through Rancher application management ensuring ze
 
 ### Kubernetes Cluster Upgrade Compatibility
 
-Test Kubernetes cluster upgrade through Rancher while maintaining Longhorn storage functionality.
+TBD Test Kubernetes cluster upgrade through Rancher while maintaining Longhorn storage functionality.
 
 | Step Number | Action | Data | Expected Result                             |
 |------|--------|--------|----------------------------------------------|
@@ -257,7 +257,7 @@ Test Kubernetes cluster upgrade through Rancher while maintaining Longhorn stora
 
 ### High-Volume Concurrent Operations
 
-Test Longhorn performance under high-volume concurrent operations including volume creation, backup, and snapshot operations.
+TBD Test Longhorn performance under high-volume concurrent operations including volume creation, backup, and snapshot operations.
 
 | Step Number | Action | Data | Expected Result                           |
 |------|--------|--------|--------------------------------------------|
@@ -275,7 +275,7 @@ Test Longhorn performance under high-volume concurrent operations including volu
 
 ### Large-Scale Volume Management
 
-Test Longhorn scalability with hundreds of volumes and verify system stability and UI performance.
+TBD Test Longhorn scalability with hundreds of volumes and verify system stability and UI performance.
 
 | Step Number | Action | Data | Expected Result |
 |------|--------|--------|-----------------|
@@ -293,7 +293,7 @@ Test Longhorn scalability with hundreds of volumes and verify system stability a
 
 ### Network Partition Recovery
 
-Test Longhorn behavior and automatic recovery during network partition scenarios affecting volume replicas.
+TBD Test Longhorn behavior and automatic recovery during network partition scenarios affecting volume replicas.
 
 | Step Number | Action | Data | Expected Result                                  |
 |------|--------|--------|---------------------------------------------------|
@@ -311,7 +311,7 @@ Test Longhorn behavior and automatic recovery during network partition scenarios
 
 ### Storage Node Complete Failure
 
-Test comprehensive recovery from complete storage node failure including replica rebuilding and data integrity preservation.
+TBD Test comprehensive recovery from complete storage node failure including replica rebuilding and data integrity preservation.
 
 | Step Number | Action | Data | Expected Result |
 |------|--------|--------|-----------------|
@@ -330,7 +330,7 @@ Test comprehensive recovery from complete storage node failure including replica
 
 ### Volume Encryption Integration
 
-Test encrypted volume functionality with proper key management and data protection through Rancher interface.
+TBD Test encrypted volume functionality with proper key management and data protection through Rancher interface.
 
 | Step Number | Action | Data | Expected Result |
 |------|--------|--------|-----------------|
@@ -348,7 +348,7 @@ Test encrypted volume functionality with proper key management and data protecti
 
 ### Network Security and MTLS
 
-Test Longhorn network security features including MTLS configuration and network policy enforcement.
+TBD Test Longhorn network security features including MTLS configuration and network policy enforcement.
 
 | Step Number | Action | Data | Expected Result |
 |------|--------|--------|-----------------|
@@ -365,7 +365,7 @@ Test Longhorn network security features including MTLS configuration and network
 
 ### Mixed Operating System Cluster Support
 
-Test Longhorn functionality in mixed Windows/Linux clusters managed by Rancher with proper OS-specific scheduling.
+TBD Test Longhorn functionality in mixed Windows/Linux clusters managed by Rancher with proper OS-specific scheduling.
 
 | Step Number | Action | Data | Expected Result                       |
 |------|--------|--------|----------------------------------------|
@@ -382,7 +382,7 @@ Test Longhorn functionality in mixed Windows/Linux clusters managed by Rancher w
 
 ### Cloud Provider Integration
 
-Test Longhorn integration with cloud provider features including multi-storage classes and cloud-specific functionality.
+TBD Test Longhorn integration with cloud provider features including multi-storage classes and cloud-specific functionality.
 
 | Step Number | Action | Data | Expected Result |
 |------|--------|--------|-----------------|
