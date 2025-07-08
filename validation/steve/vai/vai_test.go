@@ -531,6 +531,19 @@ func (v *VaiTestSuite) runSecretLimitTestCases(testCases []secretLimitTestCase) 
 	}
 }
 
+func (v *VaiTestSuite) checkVaiDescription() {
+	const expectedVAIDescription = "Improve performance by enabling SQLite-backed caching. This also enables server-side pagination and other scaling based performance improvements."
+
+	feature, err := v.steveClient.SteveType("management.cattle.io.feature").ByID("ui-sql-cache")
+	require.NoError(v.T(), err)
+
+	status := feature.Status.(map[string]interface{})
+	description := status["description"].(string)
+
+	assert.Equal(v.T(), expectedVAIDescription, description,
+		"VAI description should not have changed")
+}
+
 func (v *VaiTestSuite) TestVaiDisabled() {
 	v.ensureVaiDisabled()
 
@@ -593,6 +606,8 @@ func (v *VaiTestSuite) TestVaiEnabled() {
 		supportedWithVai := filterTestCases(secretLimitTestCases, true)
 		v.runSecretLimitTestCases(supportedWithVai)
 	})
+
+	v.Run("CheckVaiDescription", v.checkVaiDescription)
 }
 
 func TestVaiTestSuite(t *testing.T) {
