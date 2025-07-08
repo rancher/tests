@@ -28,30 +28,56 @@ type SupportedWithVai interface {
 
 func isVaiEnabled(client *rancher.Client) (bool, error) {
 	managementClient := client.Steve.SteveType("management.cattle.io.feature")
-	steveCacheFlagResp, err := managementClient.ByID(uiSQLCacheResource)
+	feature, err := managementClient.ByID(uiSQLCacheResource)
 	if err != nil {
 		return false, err
 	}
-	spec, ok := steveCacheFlagResp.Spec.(map[string]interface{})
+
+	// Extract spec and status
+	spec, ok := feature.Spec.(map[string]interface{})
 	if !ok {
 		return false, fmt.Errorf("unable to access Spec field")
 	}
 
-	valueInterface, exists := spec["value"]
-	if !exists {
+	status, statusOk := feature.Status.(map[string]interface{})
+	if !statusOk {
+		status = map[string]interface{}{} // Prevent nil panics
+	}
+
+	logrus.Infof("Feature: %s", feature.Name)
+	logrus.Infof("  spec.value: %v", spec["value"])
+	logrus.Infof("  status.default: %v", status["default"])
+	logrus.Infof("  status.description: %v", status["description"])
+	logrus.Infof("  status.dynamic: %v", status["dynamic"])
+	logrus.Infof("  status.lockedValue: %v", status["lockedValue"])
+
+	// Determine the effective value
+	valueInterface, hasValue := spec["value"]
+
+	// If spec.value is explicitly set (not nil)
+	if hasValue && valueInterface != nil {
+		value, ok := valueInterface.(bool)
+		if !ok {
+			return false, fmt.Errorf("value field is not a boolean")
+		}
+		logrus.Infof("  VAI enabled: %v (using spec.value)", value)
+		return value, nil
+	}
+
+	// Otherwise, use the default from status
+	defaultInterface, hasDefault := status["default"]
+	if !hasDefault {
+		logrus.Infof("  VAI enabled: false (no value or default found)")
 		return false, nil
 	}
 
-	if valueInterface == nil {
-		return false, nil
-	}
-
-	value, ok := valueInterface.(bool)
+	defaultValue, ok := defaultInterface.(bool)
 	if !ok {
-		return false, fmt.Errorf("value field is not a boolean")
+		return false, fmt.Errorf("default field is not a boolean")
 	}
 
-	return value, nil
+	logrus.Infof("  VAI enabled: %v (spec.value is nil, using default)", defaultValue)
+	return defaultValue, nil
 }
 
 func filterTestCases[T SupportedWithVai](testCases []T, vaiEnabled bool) []T {
