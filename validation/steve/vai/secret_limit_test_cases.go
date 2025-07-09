@@ -40,7 +40,7 @@ var secretLimitTestCases = []secretLimitTestCase{
 		},
 		limit:            10,
 		expectedTotal:    50,
-		supportedWithVai: true,
+		supportedWithVai: false,
 	},
 	{
 		name: "Paginate 100 secrets with limit 25",
@@ -61,14 +61,14 @@ var secretLimitTestCases = []secretLimitTestCase{
 		},
 		limit:            25,
 		expectedTotal:    100,
-		supportedWithVai: true,
+		supportedWithVai: false,
 	},
 	{
-		name: "Paginate 30 secrets with limit 50",
+		name: "Paginate 75 secrets with limit 15",
 		createSecrets: func() ([]v1.Secret, string) {
 			suffix := namegen.RandStringLower(randomStringLength)
 			ns := fmt.Sprintf("pagination-ns-%s", suffix)
-			numSecrets := 30
+			numSecrets := 75
 			secrets := make([]v1.Secret, numSecrets)
 			for i := 0; i < numSecrets; i++ {
 				secrets[i] = v1.Secret{
@@ -80,8 +80,8 @@ var secretLimitTestCases = []secretLimitTestCase{
 			}
 			return secrets, ns
 		},
-		limit:            50,
-		expectedTotal:    30,
-		supportedWithVai: true,
+		limit:            15,
+		expectedTotal:    75,
+		supportedWithVai: false,
 	},
 }

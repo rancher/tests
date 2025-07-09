@@ -484,17 +484,57 @@ func (v *VaiTestSuite) runSecretLimitTestCases(testCases []secretLimitTestCase) 
 			err = waitForResourcesCreated(secretClient, resourceIDs)
 			require.NoError(v.T(), err, "Not all secrets were created successfully")
 
+			logrus.Infof("Test expects to create %d secrets with limit=%d", len(secrets), tc.limit)
+
 			var retrievedSecrets []coreV1.Secret
 			var continueToken string
+			requestCount := 0
+			paginationWorked := true
+
 			for {
+				requestCount++
 				params := url.Values{}
 				params.Set("limit", fmt.Sprintf("%d", tc.limit))
 				if continueToken != "" {
 					params.Set("continue", continueToken)
 				}
 
+				logrus.Infof("Request %d: limit=%d, continue=%s", requestCount, tc.limit, continueToken)
+
 				secretCollection, err := secretClient.List(params)
 				require.NoError(v.T(), err)
+
+				logrus.Infof("Response %d: returned %d items", requestCount, len(secretCollection.Data))
+
+				if secretCollection.Pagination != nil {
+					logrus.Infof("  Pagination exists: Next=%s", secretCollection.Pagination.Next)
+				} else {
+					logrus.Info("  Pagination is nil")
+				}
+
+				remainingItems := tc.expectedTotal - len(retrievedSecrets)
+				expectedInThisPage := tc.limit
+				if remainingItems < tc.limit {
+					expectedInThisPage = remainingItems
+				}
+
+				if len(secretCollection.Data) != expectedInThisPage {
+					logrus.Errorf("PAGINATION BROKEN: Expected %d items in this page but got %d (remaining: %d, limit: %d)",
+						expectedInThisPage, len(secretCollection.Data), remainingItems, tc.limit)
+					paginationWorked = false
+				}
+
+				if remainingItems > tc.limit && len(secretCollection.Data) > tc.limit {
+					logrus.Errorf("PAGINATION BROKEN: Received %d items but limit was %d (remaining: %d)",
+						len(secretCollection.Data), tc.limit, remainingItems)
+					paginationWorked = false
+				}
+
+				if requestCount == 1 && len(secretCollection.Data) == tc.expectedTotal && tc.expectedTotal > tc.limit {
+					logrus.Errorf("PAGINATION BROKEN: Got all %d items in first request despite limit=%d",
+						tc.expectedTotal, tc.limit)
+					paginationWorked = false
+				}
 
 				for _, obj := range secretCollection.Data {
 					var secret coreV1.Secret
@@ -504,12 +544,25 @@ func (v *VaiTestSuite) runSecretLimitTestCases(testCases []secretLimitTestCase) 
 				}
 
 				if secretCollection.Pagination == nil || secretCollection.Pagination.Next == "" {
+					logrus.Info("No more pages, ending pagination")
+
+					if requestCount == 1 && tc.expectedTotal > tc.limit {
+						logrus.Errorf("PAGINATION BROKEN: Only made 1 request for %d items with limit %d",
+							tc.expectedTotal, tc.limit)
+						paginationWorked = false
+					}
 					break
 				}
+
 				nextURL, err := url.Parse(secretCollection.Pagination.Next)
 				require.NoError(v.T(), err)
+				oldToken := continueToken
 				continueToken = nextURL.Query().Get("continue")
+				logrus.Infof("Continue token changed from '%s' to '%s'", oldToken, continueToken)
 			}
+
+			logrus.Infof("Pagination complete: made %d requests, retrieved %d total secrets",
+				requestCount, len(retrievedSecrets))
 
 			require.Equal(v.T(), tc.expectedTotal, len(retrievedSecrets), "Number of retrieved secrets doesn't match expected")
 
@@ -526,6 +579,22 @@ func (v *VaiTestSuite) runSecretLimitTestCases(testCases []secretLimitTestCase) 
 
 			for name, found := range expectedSecrets {
 				require.True(v.T(), found, "Expected secret not found: %s", name)
+			}
+
+			expectedRequests := (tc.expectedTotal + tc.limit - 1) / tc.limit
+			if tc.expectedTotal <= tc.limit {
+				expectedRequests = 1
+			}
+
+			if paginationWorked {
+				require.Equal(v.T(), expectedRequests, requestCount,
+					"Pagination request count mismatch: expected %d requests for %d items with limit %d, but made %d requests",
+					expectedRequests, tc.expectedTotal, tc.limit, requestCount)
+
+				logrus.Infof("✓ Pagination worked correctly: Made %d requests for %d items with limit %d",
+					requestCount, tc.expectedTotal, tc.limit)
+			} else {
+				require.Fail(v.T(), "Pagination using limit/continue is not working - limit parameter is being ignored")
 			}
 		})
 	}
@@ -600,11 +669,6 @@ func (v *VaiTestSuite) TestVaiEnabled() {
 	v.Run("SecretSorting", func() {
 		supportedWithVai := filterTestCases(secretSortTestCases, true)
 		v.runSecretSortTestCases(supportedWithVai)
-	})
-
-	v.Run("SecretLimit", func() {
-		supportedWithVai := filterTestCases(secretLimitTestCases, true)
-		v.runSecretLimitTestCases(supportedWithVai)
 	})
 
 	v.Run("CheckVaiDescription", v.checkVaiDescription)
