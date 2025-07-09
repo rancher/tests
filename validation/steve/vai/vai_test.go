@@ -1,10 +1,11 @@
-//go:build (validation || infra.any || cluster.any || extended) && !stress && !2.8 && !2.9 && !2.10
+//go:build (validation || infra.any || cluster.any || extended) && !stress && !2.8 && !2.9 && !2.10 && !2.11
 
 package vai
 
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -544,6 +545,215 @@ func (v *VaiTestSuite) checkVaiDescription() {
 		"VAI description should not have changed")
 }
 
+func (v *VaiTestSuite) runTimestampTestCases(testCases []timestampTestCase) {
+	for _, tc := range testCases {
+		v.Run(tc.name, func() {
+			logrus.Infof("Starting timestamp test: %s", tc.name)
+			logrus.Infof("Running with VAI enabled: [%v]", v.vaiEnabled)
+
+			resource, ns, name := tc.createResource()
+
+			if ns != "" && tc.namespaced {
+				namespaceClient := v.steveClient.SteveType("namespace")
+				_, err := namespaceClient.Create(&coreV1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: ns,
+					},
+				})
+				if err != nil && !strings.Contains(err.Error(), "already exists") {
+					require.NoError(v.T(), err)
+				}
+
+				err = waitForNamespaceActive(namespaceClient, ns)
+				require.NoError(v.T(), err, "Namespace %s did not become active", ns)
+			}
+
+			var steveClient interface{}
+			if tc.namespaced && ns != "" {
+				steveClient = v.steveClient.SteveType(tc.resourceType).NamespacedSteveClient(ns)
+			} else {
+				steveClient = v.steveClient.SteveType(tc.resourceType)
+			}
+
+			switch client := steveClient.(type) {
+			case *steveV1.SteveClient:
+				_, err := client.Create(resource)
+				require.NoError(v.T(), err, "Failed to create %s", tc.resourceType)
+			case *steveV1.NamespacedSteveClient:
+				_, err := client.Create(resource)
+				require.NoError(v.T(), err, "Failed to create %s", tc.resourceType)
+			default:
+				require.Fail(v.T(), "Unexpected client type: %T", client)
+			}
+
+			err := waitForResourcesCreated(steveClient, []string{name})
+			require.NoError(v.T(), err, "Resource %s/%s not created", tc.resourceType, name)
+
+			logrus.Info("Waiting 5 seconds for initial age...")
+			_ = kwait.PollImmediate(time.Second, 5*time.Second, func() (bool, error) {
+				return false, nil
+			})
+
+			ages := make([]string, 0, tc.checkCount)
+			ageDurations := make([]time.Duration, 0, tc.checkCount)
+			ageIndices := make([]int, 0, tc.checkCount)
+
+			for i := 0; i < tc.checkCount; i++ {
+				if i > 0 {
+					logrus.Infof("Waiting %v before check %d...", tc.waitBetweenChecks, i+1)
+					_ = kwait.PollImmediate(time.Second, tc.waitBetweenChecks, func() (bool, error) {
+						return false, nil
+					})
+
+				}
+
+				var collection *steveV1.SteveCollection
+				var err error
+
+				switch client := steveClient.(type) {
+				case *steveV1.SteveClient:
+					collection, err = client.List(nil)
+				case *steveV1.NamespacedSteveClient:
+					collection, err = client.List(nil)
+				}
+				require.NoError(v.T(), err)
+
+				foundInList := false
+				for _, item := range collection.Data {
+					if item.Name == name {
+						foundInList = true
+
+						metadata, ok := item.JSONResp["metadata"].(map[string]interface{})
+						require.True(v.T(), ok, "metadata not found in list response")
+
+						fields, ok := metadata["fields"].([]interface{})
+						require.True(v.T(), ok, "metadata.fields not found in list response")
+						require.Greater(v.T(), len(fields), 0, "metadata.fields is empty")
+
+						if i == 0 {
+							logrus.Infof("Fields for %s: %v", tc.resourceType, fields)
+						}
+
+						ageIndex, ageStr, err := findAgeFieldIndex(fields, name)
+						require.NoError(v.T(), err, "Failed to find age field")
+
+						age, err := parseAge(ageStr)
+						require.NoError(v.T(), err, "Failed to parse age: %s", ageStr)
+
+						ages = append(ages, ageStr)
+						ageDurations = append(ageDurations, age)
+						ageIndices = append(ageIndices, ageIndex)
+
+						logrus.Infof("Check %d - %s Age: %s (at index %d)",
+							i+1, tc.resourceType, ageStr, ageIndex)
+						break
+					}
+				}
+				require.True(v.T(), foundInList, "Resource not found in list response")
+			}
+
+			for i := 1; i < len(ageIndices); i++ {
+				require.Equal(v.T(), ageIndices[0], ageIndices[i],
+					"Age field index should be consistent: check 1 had index %d, check %d had index %d",
+					ageIndices[0], i+1, ageIndices[i])
+			}
+
+			logrus.Info("Verifying Age values are increasing...")
+			for i := 1; i < len(ageDurations); i++ {
+				require.Greater(v.T(), ageDurations[i], ageDurations[i-1],
+					"Age should increase: check %d (%v) should be > check %d (%v)",
+					i+1, ages[i], i, ages[i-1])
+			}
+
+			if tc.checkCount > 1 {
+				actualIncrease := ageDurations[len(ageDurations)-1] - ageDurations[0]
+				logrus.Infof("Total age increase: %v over %d checks", actualIncrease, tc.checkCount)
+			}
+
+			logrus.Infof("✓ %s timestamp test passed: Age field correctly updates over time", tc.resourceType)
+		})
+	}
+}
+
+func parseAge(age string) (time.Duration, error) {
+	age = strings.TrimSpace(age)
+
+	if age == "0s" || age == "0" {
+		return 0, nil
+	}
+
+	if strings.HasSuffix(age, "s") || strings.HasSuffix(age, "m") || strings.HasSuffix(age, "h") {
+		return time.ParseDuration(age)
+	}
+
+	if strings.HasSuffix(age, "d") {
+		days := strings.TrimSuffix(age, "d")
+		var d int
+		fmt.Sscanf(days, "%d", &d)
+		return time.Duration(d) * 24 * time.Hour, nil
+	}
+
+	if num, err := strconv.Atoi(age); err == nil {
+		return time.Duration(num) * time.Second, nil
+	}
+
+	return 0, fmt.Errorf("unable to parse age: %s", age)
+}
+
+func isLikelyAgeField(s string) bool {
+	if s == "" || s == "<none>" || s == "none" {
+		return false
+	}
+
+	if strings.Contains(s, "=") ||
+		strings.Contains(s, "/") ||
+		strings.Contains(s, ":") ||
+		strings.Contains(s, ".") && !strings.HasSuffix(s, "s") {
+		return false
+	}
+
+	_, err := parseAge(s)
+	return err == nil
+}
+
+func findAgeFieldIndex(fields []interface{}, resourceName string) (int, string, error) {
+	candidates := []struct {
+		index int
+		value string
+	}{}
+
+	for i := len(fields) - 1; i >= 0; i-- {
+		if fieldStr, ok := fields[i].(string); ok && isLikelyAgeField(fieldStr) {
+			candidates = append(candidates, struct {
+				index int
+				value string
+			}{i, fieldStr})
+		}
+	}
+
+	if len(candidates) == 1 {
+		return candidates[0].index, candidates[0].value, nil
+	}
+
+	for _, candidate := range candidates {
+		if candidate.index > 0 &&
+			(strings.HasSuffix(candidate.value, "s") ||
+				strings.HasSuffix(candidate.value, "m") ||
+				strings.HasSuffix(candidate.value, "h") ||
+				strings.HasSuffix(candidate.value, "d")) {
+			return candidate.index, candidate.value, nil
+		}
+	}
+
+	for _, candidate := range candidates {
+		if candidate.index > 0 && candidate.value != resourceName {
+			return candidate.index, candidate.value, nil
+		}
+	}
+
+	return -1, "", fmt.Errorf("could not find age field in: %v", fields)
+}
+
 func (v *VaiTestSuite) TestVaiDisabled() {
 	v.ensureVaiDisabled()
 
@@ -608,6 +818,11 @@ func (v *VaiTestSuite) TestVaiEnabled() {
 	})
 
 	v.Run("CheckVaiDescription", v.checkVaiDescription)
+
+	v.Run("TimestampCacheTests", func() {
+		supportedWithVai := filterTestCases(timestampTestCases, v.vaiEnabled)
+		v.runTimestampTestCases(supportedWithVai)
+	})
 }
 
 func TestVaiTestSuite(t *testing.T) {
