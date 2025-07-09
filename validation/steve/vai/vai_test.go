@@ -12,9 +12,12 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rancher/shepherd/clients/rancher"
+	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/clusters"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/interoperability/vai/database"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -30,6 +33,7 @@ type VaiTestSuite struct {
 	client       *rancher.Client
 	steveClient  *steveV1.Client
 	session      *session.Session
+	cluster      *management.Cluster
 	vaiEnabled   bool
 	testData     *TestData
 	dbCollection *database.SnapshotCollection
@@ -51,6 +55,15 @@ func (v *VaiTestSuite) SetupSuite() {
 
 	v.client = client
 	v.steveClient = client.Steve
+
+	clusterName := client.RancherConfig.ClusterName
+	require.NotEmptyf(v.T(), clusterName, "Cluster name to install should be set")
+
+	clusterID, err := clusters.GetClusterIDByName(v.client, clusterName)
+	require.NoError(v.T(), err, "Error getting cluster ID")
+
+	v.cluster, err = v.client.Management.Cluster.ByID(clusterID)
+	require.NoError(v.T(), err)
 
 	enabled, err := isVaiEnabled(v.client)
 	require.NoError(v.T(), err)
@@ -823,6 +836,117 @@ func findAgeFieldIndex(fields []interface{}, resourceName string) (int, string, 
 	return -1, "", fmt.Errorf("could not find age field in: %v", fields)
 }
 
+func (v *VaiTestSuite) runSecretPageSizeTestCases(testCases []secretPageSizeTestCase) {
+	for _, tc := range testCases {
+		v.Run(tc.name, func() {
+			logrus.Infof("Starting case: %s", tc.name)
+			logrus.Infof("Running with vai enabled: [%v]", v.vaiEnabled)
+
+			secrets, _ := createPageSizeTestSecrets(tc.numSecrets)
+
+			_, ns, err := projects.CreateProjectAndNamespaceUsingWrangler(v.client, v.cluster.ID)
+			require.NoError(v.T(), err)
+
+			for i := range secrets {
+				secrets[i].Namespace = ns.Name
+			}
+
+			secretClient := v.steveClient.SteveType("secret").NamespacedSteveClient(ns.Name)
+
+			resourceIDs := make([]string, 0, len(secrets))
+			for _, secret := range secrets {
+				_, err := secretClient.Create(&secret)
+				require.NoError(v.T(), err)
+				resourceIDs = append(resourceIDs, secret.Name)
+			}
+
+			err = waitForResourcesCreated(secretClient, resourceIDs)
+			require.NoError(v.T(), err, "Not all secrets were created successfully")
+
+			var retrievedSecrets []coreV1.Secret
+			var currentPage = 1
+
+			for {
+				params := url.Values{}
+				params.Set("pagesize", fmt.Sprintf("%d", tc.pageSize))
+				params.Set("page", fmt.Sprintf("%d", currentPage))
+
+				secretCollection, err := secretClient.List(params)
+				require.NoError(v.T(), err)
+
+				if currentPage == 1 && secretCollection.Pagination != nil {
+					logrus.Infof("First page retrieved %d items", len(secretCollection.Data))
+				}
+
+				require.LessOrEqual(v.T(), len(secretCollection.Data), tc.pageSize,
+					"Page %d has more items than expected pageSize", currentPage)
+
+				for _, obj := range secretCollection.Data {
+					var secret coreV1.Secret
+					err := steveV1.ConvertToK8sType(obj.JSONResp, &secret)
+					require.NoError(v.T(), err)
+					retrievedSecrets = append(retrievedSecrets, secret)
+				}
+
+				if len(secretCollection.Data) == 0 ||
+					(len(secretCollection.Data) < tc.pageSize && currentPage > 1) {
+					break
+				}
+
+				if len(retrievedSecrets) >= tc.expectedTotal {
+					break
+				}
+
+				currentPage++
+			}
+
+			logrus.Infof("✓ Retrieved %d secrets across %d pages (expected %d pages with pagesize %d)",
+				len(retrievedSecrets), currentPage, tc.expectedPages, tc.pageSize)
+
+			require.Equal(v.T(), tc.expectedTotal, len(retrievedSecrets), "Number of retrieved secrets doesn't match expected")
+
+			expectedSecrets := make(map[string]int)
+			for _, secret := range secrets {
+				expectedSecrets[secret.Name] = 0
+			}
+
+			for _, secret := range retrievedSecrets {
+				count, ok := expectedSecrets[secret.Name]
+				require.True(v.T(), ok, "Unexpected secret: %s", secret.Name)
+				expectedSecrets[secret.Name] = count + 1
+			}
+
+			for name, count := range expectedSecrets {
+				require.Equal(v.T(), 1, count, "Secret %s was found %d times, expected exactly 1", name, count)
+			}
+
+			if tc.expectedPages > 1 {
+				params := url.Values{}
+				params.Set("pagesize", fmt.Sprintf("%d", tc.pageSize))
+				params.Set("page", fmt.Sprintf("%d", tc.expectedPages))
+
+				secretCollection, err := secretClient.List(params)
+				require.NoError(v.T(), err)
+
+				expectedLastPageSize := tc.expectedTotal % tc.pageSize
+				if expectedLastPageSize == 0 {
+					expectedLastPageSize = tc.pageSize
+				}
+				require.Equal(v.T(), expectedLastPageSize, len(secretCollection.Data),
+					"Last page doesn't have expected number of items")
+			}
+
+			params := url.Values{}
+			params.Set("pagesize", fmt.Sprintf("%d", tc.pageSize))
+			params.Set("page", fmt.Sprintf("%d", tc.expectedPages+1))
+
+			secretCollection, err := secretClient.List(params)
+			require.NoError(v.T(), err)
+			require.Equal(v.T(), 0, len(secretCollection.Data), "Out of bounds page should return empty list")
+		})
+	}
+}
+
 func (v *VaiTestSuite) TestVaiDisabled() {
 	v.ensureVaiDisabled()
 
@@ -887,6 +1011,12 @@ func (v *VaiTestSuite) TestVaiEnabled() {
 		supportedWithVai := filterTestCases(timestampTestCases, v.vaiEnabled)
 		v.runTimestampTestCases(supportedWithVai)
 	})
+
+	v.Run("SecretPageSize", func() {
+		supportedWithVai := filterTestCases(secretPageSizeTestCases, true)
+		v.runSecretPageSizeTestCases(supportedWithVai)
+	})
+
 }
 
 func TestVaiTestSuite(t *testing.T) {
