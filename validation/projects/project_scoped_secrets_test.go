@@ -396,7 +396,7 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectMemberCannotAccessOtherProje
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsForbidden(err), "Expected Forbidden error, got: %v", err)
 
-	log.Infof("Step 5: As user %s, try to create a new project scoped secret in project %s (unauthorized access).", newUser.Username, createdProject1.Name)
+	log.Infof("As user %s, try to create a new project scoped secret in project %s (unauthorized access).", newUser.Username, createdProject1.Name)
 	_, err = secrets.CreateProjectScopedSecret(standardUserClient, pss.cluster.ID, createdProject1.Name, opaqueSecretData, corev1.SecretTypeOpaque)
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsForbidden(err), "Expected Forbidden error, got: %v", err)
