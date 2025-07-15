@@ -995,6 +995,11 @@ func (v *VaiTestSuite) TestVaiEnabled() {
 		v.runSecretFilterTestCases(supportedWithVai)
 	})
 
+	v.Run("VaiOnlySecretFilters", func() {
+		supportedWithVai := filterTestCases(vaiOnlySecretFilterCases, true)
+		v.runSecretFilterTestCases(supportedWithVai)
+	})
+
 	v.Run("PodFilters", func() {
 		supportedWithVai := filterTestCases(podFilterTestCases, true)
 		v.runPodFilterTestCases(supportedWithVai)
