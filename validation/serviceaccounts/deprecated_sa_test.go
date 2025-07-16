@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || sanity) && !stress && !extended
+//go:build (validation || infra.any || cluster.any || sanity) && !stress && !extended && (2.9 || 2.10 || 2.11)
 
 package serviceaccounts
 
