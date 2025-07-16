@@ -4,12 +4,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 	upstream "go.qase.io/client"
 	"gopkg.in/yaml.v2"
+)
+
+var (
+	_, callerFilePath, _, _ = runtime.Caller(0)
+	basepath                = filepath.Join(filepath.Dir(callerFilePath), "..", "..")
 )
 
 // GetSchemas retrieves the tests from schemas.yaml files defined within each Go package.
@@ -130,6 +136,16 @@ func UploadSchemas(client *Service, basePath string) error {
 			var testCases []upstream.TestCaseCreate
 			for _, test := range suite.Cases {
 				test.SuiteId = suiteID
+				for i, step := range test.Steps {
+					if isFile(strings.TrimSpace(step.Data)) {
+						fileContent, err := os.ReadFile(filepath.Join(basepath, strings.TrimSpace(step.Data)))
+						if err != nil {
+							logrus.Error("Error reading file: ", err)
+							return err
+						}
+						test.Steps[i].Data = strings.TrimSpace(step.Data) + "\n\n" + string(fileContent)
+					}
+				}
 				testCases = append(testCases, test)
 			}
 
@@ -141,4 +157,17 @@ func UploadSchemas(client *Service, basePath string) error {
 	}
 
 	return err
+}
+
+// isFile takes any string and determines if it is pointing to a file or not
+func isFile(str string) bool {
+	regex := regexp.MustCompile(`^\S*\/\S*\.\S*$`)
+	potentialFile := regex.FindAllStringSubmatch(str, -1)
+	if len(potentialFile) > 0 {
+		fp := filepath.Join(basepath, str)
+		if _, err := os.Stat(fp); err == nil {
+			return true
+		}
+	}
+	return false
 }
