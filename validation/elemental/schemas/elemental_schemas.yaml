@@ -1,0 +1,83 @@
+- projects: [RANCHERINT]
+  suite: Elemental
+  cases:
+    - title: "Test deploying Fleet GitRepo on Elemental provisioned downstream cluster"
+      description: "Validate that a GitRepo can be deployed via Fleet on a downstream Elemental cluster within Rancher Manager"
+      automation: 0
+      steps:
+        - position: 1
+          action: "Create Rancher"
+          data: ""
+          expectedresult: "Rancher Server is up and accessible"
+        - position: 2
+          action: "Provision an Elemental cluster"
+          data: "cluster name: elementalcluster1"
+          expectedresult: "Elemental cluster is successfully provisioned and becomes Active in Rancher"
+        - position: 3
+          action: "Create a new project and namespace"
+          data: "project name: fleet-test, namespace name: fleet-testns"
+          expectedresult: "New project and namespace are created in Rancher"
+        - position: 4
+          action: "Deploy a GitRepo object"
+          data: "/validation/fleet/schemas/gitrepo.yaml"
+          expectedresult: "GitRepo reaches Active state and the defined resources are created in the fleet-testns namespace on the downstream cluster"
+
+    - title: "Test provisioning Elemental cluster on Rancher proxied environment"
+      description: "Validate that an Elemental cluster can be provisioned on a Rancher proxied environment"
+      automation: 0
+      steps:
+        - position: 1
+          action: "Create Proxy Rancher"
+          data: ""
+          expectedresult: "Proxied Rancher instance is up and accessible"
+        - position: 2
+          action: "Provision an Elemental cluster"
+          data: "cluster name: elementalcluster1"
+          expectedresult: "Elemental cluster is successfully provisioned and becomes Active in proxied Rancher"
+
+    - title: "Test installing feature charts on Elemental provisioned downstream cluster"
+      description: "Validate that various charts can be deployed on a downstream Elemental cluster within Rancher Manager"
+      automation: 0
+      steps:
+        - position: 1
+          action: "Create Rancher"
+          data: ""
+          expectedresult: "Rancher Server is up and accessible"
+        - position: 2
+          action: "Provision an Elemental cluster"
+          data: "cluster name: elementalcluster1"
+          expectedresult: "Elemental cluster is successfully provisioned and becomes Active in Rancher"
+        - position: 3
+          action: "Install StackState feature chart"
+          expectedresult: "StackState chart reaches Active state and resources are deployed successfully"
+        - position: 4
+          action: "Install Istio feature chart"
+          expectedresult: "Istio chart reaches Active state and Istio components are available on the cluster"
+        - position: 5
+          action: "Install Monitoring feature chart"
+          expectedresult: "Monitoring chart reaches Active state"
+        - position: 6
+          action: "Install Logging feature chart"
+          expectedresult: "Logging chart reaches Active state"
+        - position: 7
+          action: "Install CIS Benchmark feature chart"
+          expectedresult: "CIS Benchmark chart reaches Active state"
+        - position: 8
+          action: "Install Alerting feature chart"
+          expectedresult: "Alerting chart reaches Active state and default alerts are configured"
+        - position: 9
+          action: "Install NeuVector feature chart"
+          expectedresult: "NeuVector chart reaches Active state"
+
+    - title: "Test provisioning Elemental cluster on Rancher environment with Harvester"
+      description: "Validate that an Elemental cluster can be provisioned on a Rancher environment using Harvester as the infrastructure"
+      automation: 0
+      steps:
+        - position: 1
+          action: "Create Rancher"
+          data: ""
+          expectedresult: "Rancher instance is up and accessible"
+        - position: 2
+          action: "Provision an Elemental cluster with Harvester"
+          data: "cluster name: elementalcluster1"
+          expectedresult: "Elemental cluster using Harvester infrastructure is provisioned and becomes Active in Rancher"
