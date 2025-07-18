@@ -178,4 +178,25 @@ var vaiOnlySecretFilterCases = []secretFilterTestCase{
 		},
 		supportedWithVai: true,
 	},
+	{
+		name: "Filter by project with no namespaces - should return empty collection",
+		createSecrets: func() ([]v1.Secret, []string, []string, []string) {
+			// No secrets, no namespaces - testing empty project scenario
+			// This simulates querying a project that exists but has no associated namespaces/secrets
+			secrets := []v1.Secret{}
+			expectedNames := []string{}
+			allNamespaces := []string{}
+			expectedNamespaces := []string{}
+
+			return secrets, expectedNames, allNamespaces, expectedNamespaces
+		},
+		filter: func(namespaces []string) url.Values {
+			// Generate a unique project ID to ensure it doesn't conflict with other tests
+			projectID := fmt.Sprintf("p-%s", namegen.RandStringLower(6))
+			return url.Values{
+				"projectsornamespaces": []string{projectID},
+			}
+		},
+		supportedWithVai: true,
+	},
 }
