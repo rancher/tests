@@ -1,0 +1,184 @@
+- projects: [RANCHERINT]
+  suite: Harvester
+  cases:
+  - title: "Import a Harvester Setup into Rancher"
+    description: ""
+    automation: 2
+    steps:
+    - action: "Prerequisites"
+      data: "* harvester setup available in same subnet as your rancher setup"
+      expectedresult: ""
+      position: 1
+    - action: "Create a 'virtualization cluster' in rancher"
+      data: "generates an import-cluster name in rancher"
+      expectedresult: "`pending` import on virtualization page appears; rancher creates an import-cluster object with correct annotations for harvester registration to occur"
+      position: 2
+    - action: "Set registration URL in harvester settings"
+      data: "uses reg. command from previous step"
+      expectedresult: "harvester cluster begins registration process with rancher, and gets to an `active` state"
+      position: 3
+    custom_field:
+      "15": "TestHarvesterTestSuite/TestImport"
+  - title: "Node Driver Cluster Provisioning"
+    description: "TestRKE2ProvisioningTestSuite TestK3SProvisioningTestSuite TestRKE1ProvisioningTestSuite"
+    automation: 2
+    steps:
+    - action: "Prerequisites"
+      data: "* harvester setup imported into rancher"
+      expectedresult: ""
+      position: 1
+    - action: "create a downstream cluster using harvester node driver"
+      data: "/validation/harvester/schemas/permutation_options.md"
+      expectedresult: "cluster comes to an `active` state"
+      position: 2
+    custom_field:
+      "15": "TestRKE2ProvisioningTestSuite TestK3SProvisioningTestSuite TestRKE1ProvisioningTestSuite"
+  - title: "Node Driver Cloud Provider RKE2 - Loadbalancing and Storage"
+    description: "TestRKE2ProvisioningTestSuite TestK3SProvisioningTestSuite TestRKE1ProvisioningTestSuite"
+    automation: 2
+    steps:
+    - action: "Prerequisites"
+      data: "* downstream cluster in rancher with harvester cloud provider enabled"
+      expectedresult: "these tests are ran automatically when the cloud provider is enabled as part of provisioning"
+      position: 1
+    - action: "attach a LB to a workload/deployment"
+      data: "/validation/harvester/schemas/workload_network.md"
+      expectedresult: "IP:PORT of the loadbalancer should result in a 200 status"
+      position: 2
+    - action: "attach a PV to a workload/deployment"
+      data: "/validation/harvester/schemas/workload_storage.md"
+      expectedresult: "writing and reading file(s) in the mountpoint are successful"
+      position: 3
+    custom_field:
+      "15": "TestRKE2ProvisioningTestSuite TestK3SProvisioningTestSuite TestRKE1ProvisioningTestSuite"
+  - title: "Custom Cluster Provisioning"
+    description: "TestCustomClusterRKE2ProvisioningTestSuite TestCustomClusterK3SProvisioningTestSuite TestCustomClusterRKE1ProvisioningTestSuite"
+    automation: 2
+    steps:
+    - action: "Prerequisites"
+      data: "* harvester setup imported into rancher"
+      expectedresult: ""
+      position: 1
+    - action: "create VM(s) in harvester"
+      data: "* deploy VMs directly through harvester
+        * make sure you have ssh access and know the user for the VMs you're deploying"
+      expectedresult: "able to ssh into each node and see that it is healthy"
+      position: 2
+    - action: "create a custom cluster in rancher"
+      data: "/validation/harvester/schemas/permutation_options.md"
+      expectedresult: "custom cluster comes to `pending` state in rancher"
+      position: 3
+    - action: "register VM(s) with custom cluster"
+      data: "* for each VM, select the appropriate role(s) in rancher UI, enable/disable certificate checking (based on the http certs installed on rancher server)
+        * copy the registration command
+        * ssh into the appropriate VM and run the copied command"
+      expectedresult: "all nodes come to an active state, and the entire cluster updates to `active` once all nodes are active in the cluster"
+      position: 4
+    custom_field:
+      "15": "TestCustomClusterRKE2ProvisioningTestSuite TestCustomClusterK3SProvisioningTestSuite TestCustomClusterRKE1ProvisioningTestSuite"
+  - title: "Scale Pools on a Downstream Cluster"
+    description: ""
+    automation: 2
+    steps:
+    - action: "Prerequisites"
+      data: "Downstream cluster deployed in rancher (using harvester VMs) with dedicated node-per-role pools (i.e. 1 pool for etcd, one for cp, and one for worker)"
+      expectedresult: ""
+      position: 1
+    - action: "Scale each node role on the cluster"
+      data: "one at a time, scale up, then down, each pool in the cluster"
+      expectedresult: "all pools are scaled appropriately"
+      position: 2
+    custom_field:
+      "15": "TestNodeScalingTestSuite/TestScalingNodePools"
+  - title: "Public Fleet Git Repo"
+    description: ""
+    automation: 2
+    steps:
+    - action: "Prerequisites"
+      data: "Downstream cluster deployed in rancher (using harvester VMs)"
+      expectedresult: ""
+      position: 1
+    - action: "Deploy resources to a downstream cluster using fleet"
+      data: "* add a gitRepo in fleet; select downstream cluster(s) to deploy the resources to"
+      expectedresult: "fleet resources are active in UI. Downstream cluster shows new resources as active"
+      position: 2
+    custom_field:
+      "15": "TestFleetPublicRepoTestSuite/TestGitRepoDeployment"
+  - title: "Snapshot & Restore of a Downstream Cluster"
+    description: ""
+    automation: 2
+    steps:
+    - action: "Prerequisites"
+      data: "Downstream cluster deployed in rancher (using harvester VMs)"
+      expectedresult: ""
+      position: 1
+    - action: "Take a snapshot"
+      data: "Configure options (upgrade strategy, s3, etc.) and take the snapshot"
+      expectedresult: "snapshot completes for all etcd nodes and shows as active in the appropriate store / locally"
+      position: 2
+    - action: "Restore a snapshot"
+      data: "Configure options (upgrade strategy, s3, etc.) and take the snapshot"
+      expectedresult: "snapshot completes for all etcd nodes and shows as active in the appropriate store / locally"
+      position: 3
+    custom_field:
+      "15": "TestSnapshotRestoreUpgradeStrategyTestSuite"
+  - title: "Certificate Rotation of a Downstream Cluster"
+    description: ""
+    automation: 2
+    steps:
+    - action: "Prerequisites"
+      data: "Downstream cluster deployed in rancher (using harvester VMs)"
+      expectedresult: ""
+      position: 1
+    - action: "Rotate Certificates on the Cluster"
+      data: "rotate all certificates on the cluster"
+      expectedresult: "all certificates are rotated (have new expiration dates)"
+      position: 2
+    custom_field:
+      "15": "TestCertRotationTestSuite"
+  - title: "Imported Cluster from Harvester VMs"
+    description: ""
+    automation: 0
+    steps:
+    - action: "Prerequisites"
+      data: "* harvester setup imported into rancher"
+      expectedresult: ""
+      position: 1
+    - action: "create VM(s) in harvester"
+      data: "* deploy VMs directly through harvester"
+      expectedresult: "able to ssh into each node and see that it is healthy"
+      position: 2
+    - action: "ccreate a standalone cluster"
+      data: "/validation/harvester/schemas/distro_permutation_options.md"
+      expectedresult: "standalone cluster comes to shows all nodes as registered with `kubectl get nodes` and all workloads are healthy"
+      position: 3
+    - action: "register imported cluster with rancher"
+      data: "* create an imported cluster object in rancher
+        * copy the import cluster registration command
+        * in a shell environment where you have access to the standalone cluster, run the registration command"
+      expectedresult: "the import cluster object in rancher updates to `active`"
+      position: 4
+  - title: "Install UI Extension"
+    description: ""
+    automation: 0
+    steps:
+    - action: "Prerequisites"
+      data: "preferred for automation purposes to already have a harvester setup imported into rancher, however this is not the default/happy path from a customer point of view"
+      expectedresult: ""
+      position: 1
+    - action: "Install the UI extension"
+      data: "chart is pre-packaged in rancher. Should be nearly as simple as installing a helm chart"
+      expectedresult: "harvester UI available for admin user"
+      position: 2
+  - title: "Cloud Credential Rotation"
+    description: ""
+    automation: 0
+    steps:
+    - action: "Prerequisites"
+      data: "* harvester setup imported into rancher"
+      expectedresult: ""
+      position: 1
+    - action: "Rotate a Cloud Credential"
+      data: "/validation/harvester/schemas/cloudcredential.md"
+      expectedresult: "cloud credential is usable with a new expiration date"
+      position: 2
