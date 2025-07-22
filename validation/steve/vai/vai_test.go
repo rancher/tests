@@ -1010,6 +1010,11 @@ func (v *VaiTestSuite) TestVaiEnabled() {
 		v.runSecretSortTestCases(supportedWithVai)
 	})
 
+	v.Run("VaiOnlySecretSorting", func() {
+		supportedWithVai := filterTestCases(vaiOnlySecretSortCases, true)
+		v.runSecretSortTestCases(supportedWithVai)
+	})
+
 	v.Run("CheckVaiDescription", v.checkVaiDescription)
 
 	v.Run("TimestampCacheTests", func() {
