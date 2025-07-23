@@ -13,9 +13,15 @@ WORKDIR $WORKSPACE
 COPY ["./tests", "$WORKSPACE"]
 COPY ["./qa-infra-automation", "$WORKSPACE2"]
 
-ARG TERRAFORM_VERSION=1.11.3
+ARG TOFU_VERSION=1.10.3
+ARG RANCHER2_PROVIDER_VERSION=7.0.0
+ARG HARVESTER_PROVIDER_VERSION=0.6.7
 
-RUN zypper -n install gcc binutils glibc-devel-static ca-certificates git-core wget curl unzip tar vim less file xz gzip sed gawk iproute2 iptables jq
+ENV TOFU_VERSION=${TOFU_VERSION}
+ENV RANCHER2_PROVIDER_VERSION=${RANCHER2_PROVIDER_VERSION}
+ENV HARVESTER_PROVIDER_VERSION=${HARVESTER_PROVIDER_VERSION}
+
+RUN zypper -n install gcc binutils glibc-devel-static ca-certificates git-core wget curl unzip tar vim less file xz gzip sed gawk iproute2 iptables jq gettext-tools
 RUN zypper install -y -f docker && rpm -e --nodeps --noscripts containerd
 
 # Python related dependencies for the Integration/Validation tests.
@@ -24,6 +30,8 @@ RUN zypper -n install python311-pip python311-base python311 python311-devel pyt
 # Upgrade pip and install Python packages
 RUN python3.11 -m pip install --upgrade pip setuptools && \
     python3.11 -m pip install ansible kubernetes
+
+ENV PATH="/root/.local/bin:${PATH}"
 
 # Install ansible-inventory-terraform plugin from GitHub
 RUN ansible-galaxy collection install cloud.terraform
@@ -41,12 +49,14 @@ RUN for pem_file in /root/.ssh/jenkins-*; do \
 
 RUN ls -al /root/.ssh
 
-# Install Terraform (manual download and install)
-RUN wget "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" && \
-    unzip "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" && \
-    mv terraform /usr/local/bin/ && \
-    chmod +x /usr/local/bin/terraform && \
-    rm "terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+# Install OpenTofu (with verbose wget for network diagnostics)
+RUN TOFU_ZIP="tofu_${TOFU_VERSION}_linux_amd64.zip" && \
+    wget --verbose "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/${TOFU_ZIP}" && \
+    unzip "${TOFU_ZIP}" -d /usr/local/bin/ && \
+    chmod +x /usr/local/bin/tofu && \
+    rm "${TOFU_ZIP}"
+# Create a link for terraform to point to opentofu
+RUN ln -s /usr/local/bin/tofu /usr/local/bin/terraform
 
 # Install kubectl
 RUN curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl" && \
@@ -58,6 +68,17 @@ RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/s
 chmod +x get_helm.sh && \
 ./get_helm.sh && \
 rm get_helm.sh
+
+
+
+RUN if [[ "$RANCHER2_PROVIDER_VERSION" == *"-dev"* ]]; then \
+      chmod +x ./scripts/tofu/dev-provider.sh && ./scripts/tofu/dev-provider.sh rancher2 "https://github.com/rancher/terraform-provider-rancher2.git" ; \
+    fi;
+
+RUN if [[ "$HARVESTER_PROVIDER_VERSION" == *"-dev"* ]]; then \
+      chmod +x ./scripts/tofu/dev-provider.sh && ./scripts/tofu/dev-provider.sh harvester "https://github.com/harvester/terraform-provider-harvester.git" ; \
+    fi;
+
 
 # necessary to run if statements using [[ ]]
 SHELL ["/bin/bash", "-c"] 
