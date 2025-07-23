@@ -167,7 +167,9 @@ node("harvester-vpn-1") {
                         sh "./yq e '.terraform.harvesterCredentials.kubeconfigContent = load_str(\"harvester.yaml\")' -i ${filename}"
                         // this is really setup for the next stage...
                         env.CATTLE_TEST_CONFIG = rootPath + filename
-                        sh: returnStdout: true, script: 'sed -i "s|^\(ssh_key\s*=\s*\).*|\\1\"$ESCAPED_KEY\"|" "$VM_CONFIG"'
+                        sh returnStdout: true, script: """
+                        sed -i 's|^\\(ssh_key\\s*=\\s*\\).*|\\1"$ESCAPED_KEY"|' "$VM_CONFIG"
+                        """
                         sh returnStdout: true, script: "./yq e '.terraform.standalone.repo = \"${RANCHER_HELM_REPO}\"' -i ${filename}"
                         sh returnStdout: true, script: "./yq e '.terraform.standalone.rancherTagVersion = \"${RANCHER_VERSION}\"' -i ${filename}"
                         sh returnStdout: true, script: "./yq e '.terraform.standalone.rke2Version = \"${RANCHER_KUBERNETES_VERSION}\"' -i ${filename}"
@@ -226,10 +228,10 @@ node("harvester-vpn-1") {
                             try {
                                 if (env.HARVESTER_PROVIDER_VERSION == "0.0.0-dev") {
                                     sh """
-                            docker run -v ${validationVolume}:/root --name ${testContainer}-dev -t --env-file ${envFile} ${imageName} sh -c "
-                            find . -name "*.tf" -exec sed -i '/harvester[[:space:]]*=[[:space:]]*{/,/}/ {s/source *= *"harvester\/harvester"/source = "terraform.local\/harvester\/harvester"/g; s/version *= *"[^"]*"/version = "0.0.0-dev"/g}' {} +
-                            "
-                            """
+                                        docker run -v ${validationVolume}:/root --name ${testContainer}-dev -t --env-file ${envFile} ${imageName} sh -c '
+                                        find . -name "*.tf" -exec sed -i "/harvester[[:space:]]*=[[:space:]]*{/,/}/ {s/source *= *\\"harvester\\/harvester\\"/source = \\"terraform.local\\/harvester\\/harvester\\"/g; s/version *= *\\"[^\\"]*\\"/version = \\"0.0.0-dev\\"/g}" {} +
+                                    '
+                                    """
                                 }
                             } catch (err) {
                                 echo "${err} captured, there be dragons..."
@@ -313,7 +315,6 @@ node("harvester-vpn-1") {
                         }
                         stage('Create Downstream Cluster for Testing') {
                             dir("infra-repo") {
-                                try {
                                     def IMPORTED_HVST_KUBECONFIG = sh (
                                         script: "./yq '.harvesterCredentials.kubeconfigContent' ../test-repo/${filename}",
                                         returnStdout: true
@@ -326,10 +327,10 @@ node("harvester-vpn-1") {
                                     writeFile file: tfvars_filepath, text: DOWNSTREAM_CLUSTER_CONFIG
                                     sh """
                                 sed -i -E \\
-                                  -e "s|kubernetes_version = \\\\".*\\\\"|kubernetes_version = \\\\"${RANCHER_KUBERNETES_VERSION}\\\\"|" \\
-                                  -e "s|harvester_cluster_v1_id = \\\\".*\\\\"|harvester_cluster_v1_id = \\\\"${IMPORTED_HVST_V3_ID}\\\\"|" \\
-                                  ${tfvars_filepath}
-                              """
+                                    -e "s|kubernetes_version = \\\\".*\\\\"|kubernetes_version = \\\\"${RANCHER_KUBERNETES_VERSION}\\\\"|" \\
+                                    -e "s|harvester_cluster_v1_id = \\\\".*\\\\"|harvester_cluster_v1_id = \\\\"${IMPORTED_HVST_V3_ID}\\\\"|" \\
+                                    ${tfvars_filepath}
+                                """
                                     // multiline is different
                                     sh """
                                 sed -i '/harvester_kubeconfig_content = <<EOF/,/EOF/d' ${tfvars_filepath}
@@ -337,32 +338,32 @@ node("harvester-vpn-1") {
                                 harvester_kubeconfig_content = <<EOF
                                 ${IMPORTED_HVST_KUBECONFIG}
                                 EOF
-                              EOF
-                              """
+                                EOF
+                                """
                                     // run the test with tofu
                                     writeFile file: 'playbook.env', text: PLAYBOOK_ENVIRONMENT_VARIABLES
                                     sh """
-                              docker run -v ${validationVolume}:/root --name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
-                              . playbook.env
-                              export WORKSPACE_NAME="downstream_cluster"
-                              export TF_WORKSPACE="\$WORKSPACE_NAME"
+                                docker run -v ${validationVolume}:/root --name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
+                                . playbook.env
+                                export WORKSPACE_NAME="downstream_cluster"
+                                export TF_WORKSPACE="\$WORKSPACE_NAME"
 
-                              tofu -chdir="tofu/rancher/cluster" && \
-                              tofu -chdir=tofu/rancher/cluster apply -auto-approve -var-file=vars.tfvars -var-file=\$REPO_ROOT/ansible/rancher/generated.tfvars"
-                              """
+                                tofu -chdir="tofu/rancher/cluster" && \
+                                tofu -chdir=tofu/rancher/cluster apply -auto-approve -var-file=vars.tfvars -var-file=\$REPO_ROOT/ansible/rancher/generated.tfvars"
+                                """
                                     // get the output (cluster name) so we can use it in validation tests
                                     sh """
-                              docker run -v ${validationVolume}:/root --name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
-                              tofu -chdir="tofu/rancher/cluster" output -raw name > cluster_name"
-                              docker cp ${testContainer}:cluster_name ./cluster_name
+                                docker run -v ${validationVolume}:/root --name ${testContainer} -t --env-file ${envFile} ${imageName} sh -c "
+                                tofu -chdir="tofu/rancher/cluster" output -raw name > cluster_name"
+                                docker cp ${testContainer}:cluster_name ./cluster_name
 
-                              """
+                                """
                                     def DOWNSTREAM_CLUSTER_NAME = sh (
                                         script: "cat cluster_name",
                                         returnStdout: true
                                     ).trim()
                                     sh returnStdout: true, script: "./yq e '.rancher.clusterName = \"${DOWNSTREAM_CLUSTER_NAME}\"' -i ../test-repo/${filename}"
-                                }
+                                
                             }
                         }
                         stage('Run Validation Tests') {
