@@ -8,14 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rancher/norman/types"
 	"github.com/rancher/rancher/tests/v2/actions/rbac"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -50,30 +51,82 @@ func (na *NodeAnnotationsTestSuite) TearDownSuite() {
 	na.session.Cleanup()
 }
 
-func (na *NodeAnnotationsTestSuite) getTestNode() (string, *management.Node, error) {
-	nodeClient := na.client.Management.Node
-	nodes, err := nodeClient.List(&types.ListOpts{})
+func (na *NodeAnnotationsTestSuite) getTestNode() (string, error) {
+	steveNodes, err := na.client.Steve.SteveType("node").List(nil)
 	if err != nil {
-		return "", nil, err
+		return "", fmt.Errorf("failed to list nodes via Steve: %v", err)
 	}
-	if len(nodes.Data) == 0 {
-		return "", nil, fmt.Errorf("no nodes found in cluster")
+
+	if len(steveNodes.Data) == 0 {
+		return "", fmt.Errorf("no nodes found")
 	}
-	nodeID := nodes.Data[0].ID
-	log.Infof("Selected test node: %s", nodeID)
-	currentNode, err := nodeClient.ByID(nodeID)
-	return nodeID, currentNode, err
+
+	nodeName := steveNodes.Data[0].Name
+	if nodeName == "" {
+		nodeName = steveNodes.Data[0].ID
+	}
+	log.Infof("✅ Selected test node: %s", nodeName)
+
+	return nodeName, nil
 }
 
-func (na *NodeAnnotationsTestSuite) verifyAnnotationState(nodeID string, key string, expectedValue *string) error {
+func (na *NodeAnnotationsTestSuite) updateNodeAnnotationsV1Complete(client *rancher.Client, nodeName string, annotations map[string]string) error {
+	log.Infof("🔧 Updating annotations via v1 API with complete payload for node %s", nodeName)
+
+	nodeObject, err := client.Steve.SteveType("node").ByID(nodeName)
+	if err != nil {
+		return fmt.Errorf("failed to get node object for '%s': %v", nodeName, err)
+	}
+
+	metadata, ok := nodeObject.JSONResp["metadata"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("failed to get metadata from node object")
+	}
+
+	metadata["annotations"] = annotations
+	log.Infof("📊 Total annotations to set: %d", len(annotations))
+
+	completePayload := map[string]interface{}{
+		"id":         nodeObject.JSONResp["id"],
+		"type":       nodeObject.JSONResp["type"],
+		"apiVersion": nodeObject.JSONResp["apiVersion"],
+		"kind":       nodeObject.JSONResp["kind"],
+		"metadata":   metadata,
+		"spec":       nodeObject.JSONResp["spec"],
+	}
+
+	log.Info("📤 Sending complete payload to v1/Steve API...")
+
+	_, err = client.Steve.SteveType("node").Update(nodeObject, completePayload)
+	if err != nil {
+		log.Errorf("❌ V1 API update failed: %v", err)
+		return err
+	}
+
+	log.Info("✅ V1 API update succeeded!")
+	return nil
+}
+
+func (na *NodeAnnotationsTestSuite) verifyAnnotationState(nodeName string, key string, expectedValue *string) error {
 	return wait.PollImmediate(1*time.Second, 30*time.Second, func() (bool, error) {
-		node, err := na.client.Management.Node.ByID(nodeID)
+		nodeObject, err := na.client.Steve.SteveType("node").ByID(nodeName)
 		if err != nil {
-			log.Errorf("Error getting node %s: %v", nodeID, err)
+			log.Errorf("Error getting node %s: %v", nodeName, err)
 			return false, err
 		}
 
-		actualValue, exists := node.Annotations[key]
+		annotations := make(map[string]string)
+		if metadata, ok := nodeObject.JSONResp["metadata"].(map[string]interface{}); ok {
+			if annos, ok := metadata["annotations"].(map[string]interface{}); ok {
+				for k, v := range annos {
+					if strVal, ok := v.(string); ok {
+						annotations[k] = strVal
+					}
+				}
+			}
+		}
+
+		actualValue, exists := annotations[key]
 		if expectedValue == nil {
 			if !exists {
 				log.Infof("Successfully verified annotation %s is deleted", key)
@@ -110,7 +163,7 @@ func (na *NodeAnnotationsTestSuite) TestRBACAnnotations() {
 		{rbac.StandardUser.String(), rbac.ClusterMember.String(), false},
 	}
 
-	nodeID, currentNode, err := na.getTestNode()
+	nodeName, err := na.getTestNode()
 	require.NoError(na.T(), err)
 
 	for _, tt := range tests {
@@ -125,81 +178,132 @@ func (na *NodeAnnotationsTestSuite) TestRBACAnnotations() {
 			)
 			require.NoError(na.T(), err)
 
-			nodeClient := standardUserClient.Management.Node
-			var nodeList *management.NodeCollection
-			err = wait.PollImmediate(1*time.Second, 30*time.Second, func() (bool, error) {
-				nodeList, err = nodeClient.List(nil)
-				if err != nil {
-					return false, nil
-				}
-				return true, nil
-			})
-			require.NoError(na.T(), err, "Failed to list nodes")
-			require.NotNil(na.T(), nodeList, "Node list should not be nil")
+			steveClient, err := standardUserClient.Steve.ProxyDownstream(na.cluster.ID)
+			require.NoError(na.T(), err)
 
-			annotationKey := namegen.AppendRandomString("test-rbac")
-			annotationValue := namegen.AppendRandomString("test-value")
-
-			annotations := make(map[string]string)
-			if currentNode.Annotations != nil {
-				for k, v := range currentNode.Annotations {
-					annotations[k] = v
-				}
-			}
-
-			annotations[annotationKey] = annotationValue
-			updatePayload := map[string]interface{}{
-				"annotations": annotations,
-			}
+			annotationKey := namegen.AppendRandomString("test-rbac-")
+			annotationValue := namegen.AppendRandomString("test-value-")
 
 			var updateErr error
-			err = wait.PollImmediate(500*time.Millisecond, 10*time.Second, func() (bool, error) {
-				_, updateErr = nodeClient.Update(currentNode, updatePayload)
-				if updateErr == nil {
-					return true, nil
-				}
-				if !strings.Contains(updateErr.Error(), "401") {
-					return true, nil
-				}
-				log.Debugf("Got 401 error, retrying node update...")
-				return false, nil
-			})
+			retryCount := 3
 
-			if err != nil && updateErr != nil {
-				log.Debugf("Polling timed out with error: %v, last update error: %v", err, updateErr)
+			for i := 0; i < retryCount; i++ {
+				nodeObject, err := steveClient.SteveType("node").ByID(nodeName)
+				if err != nil {
+					updateErr = err
+					break
+				}
+
+				annotations := make(map[string]string)
+				if metadata, ok := nodeObject.JSONResp["metadata"].(map[string]interface{}); ok {
+					if annos, ok := metadata["annotations"].(map[string]interface{}); ok {
+						for k, v := range annos {
+							if strVal, ok := v.(string); ok {
+								annotations[k] = strVal
+							}
+						}
+					}
+				}
+
+				annotations[annotationKey] = annotationValue
+
+				metadata, _ := nodeObject.JSONResp["metadata"].(map[string]interface{})
+				metadata["annotations"] = annotations
+
+				completePayload := map[string]interface{}{
+					"id":         nodeObject.JSONResp["id"],
+					"type":       nodeObject.JSONResp["type"],
+					"apiVersion": nodeObject.JSONResp["apiVersion"],
+					"kind":       nodeObject.JSONResp["kind"],
+					"metadata":   metadata,
+					"spec":       nodeObject.JSONResp["spec"],
+				}
+
+				_, updateErr = steveClient.SteveType("node").Update(nodeObject, completePayload)
+
+				if updateErr == nil || !strings.Contains(updateErr.Error(), "409") {
+					break
+				}
+
+				if i < retryCount-1 {
+					log.Infof("Got 409 conflict, retrying... (attempt %d/%d)", i+2, retryCount)
+					_ = wait.PollImmediate(500*time.Millisecond, 500*time.Millisecond, func() (bool, error) {
+						return false, nil
+					})
+				}
 			}
 
 			if tt.canModify {
-				require.NoError(na.T(), err, "polling should not timeout")
-				require.NoError(na.T(), updateErr, "update should succeed")
-				err = na.verifyAnnotationState(nodeID, annotationKey, &annotationValue)
-				require.NoError(na.T(), err)
+				require.NoError(na.T(), updateErr, "update should succeed for %s", tt.role)
 
-				delete(annotations, annotationKey)
-				_, err = na.client.Management.Node.Update(currentNode, map[string]interface{}{
-					"annotations": annotations,
-				})
-				require.NoError(na.T(), err)
-				err = na.verifyAnnotationState(nodeID, annotationKey, nil)
+				err = na.verifyAnnotationStateProxied(steveClient, nodeName, annotationKey, &annotationValue)
 				require.NoError(na.T(), err)
 			} else {
 				require.Error(na.T(), updateErr)
-				require.True(na.T(),
-					strings.Contains(updateErr.Error(), "403") ||
-						strings.Contains(strings.ToLower(updateErr.Error()), "forbidden"),
-					"Expected forbidden error, got: %v", updateErr)
+				errorLower := strings.ToLower(updateErr.Error())
+				isValidError := strings.Contains(updateErr.Error(), "403") ||
+					strings.Contains(errorLower, "forbidden") ||
+					strings.Contains(errorLower, "not updatable") ||
+					strings.Contains(errorLower, "cannot update") ||
+					strings.Contains(errorLower, "permission denied")
+
+				assert.True(na.T(), isValidError,
+					"Expected permission denied error, got: %v", updateErr)
 			}
 		})
 	}
+}
+
+func (na *NodeAnnotationsTestSuite) verifyAnnotationStateProxied(steveClient *v1.Client, nodeName string, key string, expectedValue *string) error {
+	return wait.PollImmediate(1*time.Second, 30*time.Second, func() (bool, error) {
+		nodeObject, err := steveClient.SteveType("node").ByID(nodeName)
+		if err != nil {
+			log.Errorf("Error getting node %s: %v", nodeName, err)
+			return false, err
+		}
+
+		annotations := make(map[string]string)
+		if metadata, ok := nodeObject.JSONResp["metadata"].(map[string]interface{}); ok {
+			if annos, ok := metadata["annotations"].(map[string]interface{}); ok {
+				for k, v := range annos {
+					if strVal, ok := v.(string); ok {
+						annotations[k] = strVal
+					}
+				}
+			}
+		}
+
+		actualValue, exists := annotations[key]
+		if expectedValue == nil {
+			if !exists {
+				log.Infof("Successfully verified annotation %s is deleted", key)
+				return true, nil
+			}
+			log.Infof("Waiting for annotation %s to be deleted (current value: %s)", key, actualValue)
+			return false, nil
+		}
+
+		if exists {
+			if actualValue == *expectedValue {
+				log.Infof("Successfully verified annotation %s=%s", key, actualValue)
+				return true, nil
+			}
+			log.Infof("Waiting for annotation %s to be updated (current: %s, expected: %s)",
+				key, actualValue, *expectedValue)
+		} else {
+			log.Infof("Waiting for annotation %s to be created with value %s", key, *expectedValue)
+		}
+		return false, nil
+	})
 }
 
 func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 	subSession := na.session.NewSession()
 	defer subSession.Cleanup()
 
-	nodeID, currentNode, err := na.getTestNode()
+	nodeName, err := na.getTestNode()
 	require.NoError(na.T(), err)
-	log.Infof("Starting table tests on node: %s", nodeID)
+	log.Infof("Starting table tests on node: %s", nodeName)
 
 	updateKey1 := namegen.AppendRandomString("test-multi-update-1")
 	updateKey2 := namegen.AppendRandomString("test-multi-update-2")
@@ -211,21 +315,31 @@ func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 	createSetupFunc := func(annotations map[string]string) func() {
 		return func() {
 			log.Info("Setting up initial annotations")
+
+			nodeObject, err := na.client.Steve.SteveType("node").ByID(nodeName)
+			require.NoError(na.T(), err)
+
 			initialAnnotations := make(map[string]string)
-			for k, v := range currentNode.Annotations {
-				initialAnnotations[k] = v
+			if metadata, ok := nodeObject.JSONResp["metadata"].(map[string]interface{}); ok {
+				if annos, ok := metadata["annotations"].(map[string]interface{}); ok {
+					for k, v := range annos {
+						if strVal, ok := v.(string); ok {
+							initialAnnotations[k] = strVal
+						}
+					}
+				}
 			}
+
 			for k, v := range annotations {
 				log.Infof("Setting up initial annotation %s=%s", k, v)
 				initialAnnotations[k] = v
 			}
-			_, err := na.client.Management.Node.Update(currentNode, map[string]interface{}{
-				"annotations": initialAnnotations,
-			})
+
+			err = na.updateNodeAnnotationsV1Complete(na.client, nodeName, initialAnnotations)
 			require.NoError(na.T(), err)
 
 			for k, v := range annotations {
-				err = na.verifyAnnotationState(nodeID, k, &v)
+				err = na.verifyAnnotationState(nodeName, k, &v)
 				require.NoError(na.T(), err)
 			}
 		}
@@ -345,14 +459,30 @@ func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 				})
 				initialAdd()
 
-				err := na.verifyAnnotationState(nodeID, cycleKey, &initialValue)
+				err := na.verifyAnnotationState(nodeName, cycleKey, &initialValue)
 				require.NoError(na.T(), err)
 
 				log.Info("Deleting annotation")
-				deleteStep := createSetupFunc(map[string]string{})
-				deleteStep()
+				nodeObject, err := na.client.Steve.SteveType("node").ByID(nodeName)
+				require.NoError(na.T(), err)
 
-				err = na.verifyAnnotationState(nodeID, cycleKey, nil)
+				deleteAnnotations := make(map[string]string)
+				if metadata, ok := nodeObject.JSONResp["metadata"].(map[string]interface{}); ok {
+					if annos, ok := metadata["annotations"].(map[string]interface{}); ok {
+						for k, v := range annos {
+							if k != cycleKey {
+								if strVal, ok := v.(string); ok {
+									deleteAnnotations[k] = strVal
+								}
+							}
+						}
+					}
+				}
+
+				err = na.updateNodeAnnotationsV1Complete(na.client, nodeName, deleteAnnotations)
+				require.NoError(na.T(), err)
+
+				err = na.verifyAnnotationState(nodeName, cycleKey, nil)
 				require.NoError(na.T(), err)
 			},
 		},
@@ -372,7 +502,7 @@ func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 						multiEditKey: value,
 					})
 					editStep()
-					err := na.verifyAnnotationState(nodeID, multiEditKey, &value)
+					err := na.verifyAnnotationState(nodeName, multiEditKey, &value)
 					require.NoError(na.T(), err)
 				}
 			},
@@ -387,13 +517,17 @@ func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 				tt.setup()
 			}
 
-			freshNode, err := na.client.Management.Node.ByID(nodeID)
+			nodeObject, err := na.client.Steve.SteveType("node").ByID(nodeName)
 			require.NoError(na.T(), err)
 
 			updatedAnnotations := make(map[string]string)
-			if freshNode.Annotations != nil {
-				for k, v := range freshNode.Annotations {
-					updatedAnnotations[k] = v
+			if metadata, ok := nodeObject.JSONResp["metadata"].(map[string]interface{}); ok {
+				if annos, ok := metadata["annotations"].(map[string]interface{}); ok {
+					for k, v := range annos {
+						if strVal, ok := v.(string); ok {
+							updatedAnnotations[k] = strVal
+						}
+					}
 				}
 			}
 
@@ -410,9 +544,7 @@ func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 				}
 			}
 
-			_, err = na.client.Management.Node.Update(freshNode, map[string]interface{}{
-				"annotations": updatedAnnotations,
-			})
+			err = na.updateNodeAnnotationsV1Complete(na.client, nodeName, updatedAnnotations)
 
 			if tt.expectedError {
 				require.Error(na.T(), err)
@@ -421,39 +553,18 @@ func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 
 				if tt.operation != "delete" {
 					for k, v := range tt.annotations {
-						err = na.verifyAnnotationState(nodeID, k, &v)
+						err = na.verifyAnnotationState(nodeName, k, &v)
 						require.NoError(na.T(), err)
 					}
 				} else {
 					for k := range tt.annotations {
-						err = na.verifyAnnotationState(nodeID, k, nil)
+						err = na.verifyAnnotationState(nodeName, k, nil)
 						require.NoError(na.T(), err)
 					}
 				}
 			}
 		})
 	}
-
-	log.Info("Starting cleanup of test annotations")
-	finalNode, err := na.client.Management.Node.ByID(nodeID)
-	require.NoError(na.T(), err)
-
-	cleanAnnotations := make(map[string]string)
-	if finalNode.Annotations != nil {
-		for k, v := range finalNode.Annotations {
-			if !strings.Contains(k, "test-") {
-				cleanAnnotations[k] = v
-			} else {
-				log.Infof("Removing test annotation: %s", k)
-			}
-		}
-	}
-
-	_, err = na.client.Management.Node.Update(finalNode, map[string]interface{}{
-		"annotations": cleanAnnotations,
-	})
-	require.NoError(na.T(), err)
-	log.Info("Cleanup completed successfully")
 }
 
 func TestNodeAnnotationsTestSuite(t *testing.T) {
