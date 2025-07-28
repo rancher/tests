@@ -28,7 +28,7 @@ const (
 
 // VerifyDeployment waits for a deployment to be ready in the downstream cluster
 func VerifyDeployment(steveClient *steveV1.Client, deployment *steveV1.SteveAPIObject) error {
-	err := kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+	err := kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		deploymentResp, err := steveClient.SteveType(DeploymentSteveType).ByID(deployment.Namespace + "/" + deployment.Name)
 		if err != nil {
 			return false, nil
