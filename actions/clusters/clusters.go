@@ -868,7 +868,6 @@ func CheckServiceAccountTokenSecret(client *rancher.Client, clusterName string) 
 		return false, nil
 	}
 
-	logrus.Infof("serviceAccountTokenSecret in this cluster is: %s", cluster.ServiceAccountTokenSecret)
 	return true, nil
 }
 
