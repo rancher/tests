@@ -6,7 +6,7 @@ cd  /root/go/src/github.com/rancher/qa-infra-automation
 
 # Set variables (consistent with build_qa_infra.sh)
 WORKSPACE_NAME="jenkins_workspace"
-TERRAFORM_DIR="terraform/aws/cluster_nodes"
+TERRAFORM_DIR="tofu/aws/modules/cluster_nodes"
 TFVARS_FILE="cluster.tfvars" # Ensure this matches the build script
 
 # --- Terraform Steps ---

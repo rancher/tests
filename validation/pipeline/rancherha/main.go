@@ -11,9 +11,9 @@ import (
 func main() {
 	rancherConfig := new(rancher.Config)
 	config.LoadConfig(rancher.ConfigurationFileKey, rancherConfig)
-	bootstrapPassword := rancherConfig.AdminPassword
+	passwword := rancherConfig.AdminPassword
 
-	token, err := pipeline.CreateAdminToken(bootstrapPassword, rancherConfig)
+	token, err := pipeline.CreateAdminToken(passwword, rancherConfig)
 	if err != nil {
 		logrus.Errorf("error creating the admin token: %v", err)
 	}

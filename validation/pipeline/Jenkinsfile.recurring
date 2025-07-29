@@ -136,7 +136,7 @@ node {
                 dir ("./ansible") {
                   writeFile file: ansibleVarsFilename, text: ansibleConfig
                 }
-                dir ("./terraform/aws/cluster_nodes") {
+                dir ("./tofu/aws/modules/cluster_nodes") {
                   writeFile file: terraformVarsfilename, text: terraformConfig
                 }
               }

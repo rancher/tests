@@ -5,15 +5,17 @@ cd  /root/go/src/github.com/rancher/qa-infra-automation
 # Set variables
 REPO_ROOT=$(pwd)
 WORKSPACE_NAME="jenkins_workspace"
-TERRAFORM_DIR="terraform/aws/cluster_nodes"
-RKE2_PLAYBOOK_PATH="ansible/rke2/rke2-playbook.yml"
-TERRAFORM_INVENTORY="ansible/rke2/terraform-inventory.yml"
-ANSIBLE_CONFIG="ansible/rke2/ansible.cfg"
-RANCHER_PLAYBOOK_PATH="ansible/rancher/rancher-playbook.yml"
+TERRAFORM_DIR="tofu/aws/modules/cluster_nodes"
+RKE2_PLAYBOOK_PATH="ansible/rke2/default/rke2-playbook.yml"
+TERRAFORM_INVENTORY="ansible/rke2/default/terraform-inventory.yml"
+TERRAFORM_TEMPLATE="ansible/rke2/default/inventory-template.yml"
+ANSIBLE_CONFIG="ansible/rke2/default/ansible.cfg"
+RANCHER_PLAYBOOK_PATH="ansible/rancher/default-ha/rancher-playbook.yml"
 TFVARS_FILE="cluster.tfvars"
-KUBECONFIG_FILE="$REPO_ROOT/ansible/rke2/kubeconfig.yaml"
+KUBECONFIG_FILE="$REPO_ROOT/ansible/rke2/default/kubeconfig.yaml"
 VARS_FILE="./ansible/vars.yaml"
 PRIVATE_KEY_FILE="/root/.ssh/jenkins-elliptic-validation.pem"
+TERRAFORM_NODE_SOURCE="tofu/aws/modules/cluster_nodes"
 
 # --- Terraform Steps ---
 terraform -chdir="$TERRAFORM_DIR" init -input=false
@@ -23,6 +25,9 @@ terraform -chdir="$TERRAFORM_DIR" workspace new "$WORKSPACE_NAME" || terraform -
 
 # Export the TF_WORKSPACE environment variable
 export TF_WORKSPACE="$WORKSPACE_NAME"
+
+# Export the TERRAFORM_NODE_SOURCE environment variable
+export TERRAFORM_NODE_SOURCE="$TERRAFORM_NODE_SOURCE"
 
 # Export the ANSIBLE_CONFIG environment variable
 export ANSIBLE_CONFIG="$ANSIBLE_CONFIG"
@@ -36,6 +41,8 @@ if [ $? -ne 0 ]; then
     echo "Error: Terraform apply failed."
     exit 1
 fi
+
+envsubst < "$TERRAFORM_TEMPLATE" > "$TERRAFORM_INVENTORY"
 
 # --- RKE2 Playbook ---
 
