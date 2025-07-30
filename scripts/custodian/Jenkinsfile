@@ -46,6 +46,7 @@ node("vsphere-vpn-1") {
         string(credentialsId: 'AZURE_TENANT_ID', variable: 'AZURE_TENANT_ID'),
         string(credentialsId: 'AZURE_CLIENT_ID', variable: 'AZURE_CLIENT_ID'),
         string(credentialsId: 'AZURE_CLIENT_SECRET', variable: 'AZURE_CLIENT_SECRET'),
+        string(credentialsId: 'GOOGLE_CLOUD_PROJECT', variable: 'GOOGLE_CLOUD_PROJECT'),
 
         string(credentialsId: 'RANCHER_GKE_CREDENTIAL', variable: 'RANCHER_GKE_CREDENTIAL'),
 
@@ -72,7 +73,11 @@ node("vsphere-vpn-1") {
                 writeFile file: 'google_credentials.json', text: decoded
                 sh returnStdout: true, script: 'wget -qO ./jq https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64'
                 sh returnStdout:true, script: 'chmod a+x ./jq'
-                sh "docker build -t ${imageName} -f Dockerfile . --build-arg AWS_ACCESS_KEY_ID=\"${AWS_ACCESS_KEY_ID}\" --build-arg AWS_SECRET_ACCESS_KEY=\"${AWS_SECRET_ACCESS_KEY}\" --build-arg AZURE_AKS_SUBSCRIPTION_ID=\"${AZURE_AKS_SUBSCRIPTION_ID}\" --build-arg AZURE_TENANT_ID=\"${AZURE_TENANT_ID}\" --build-arg AZURE_CLIENT_ID=\"${AZURE_CLIENT_ID}\" --build-arg AZURE_CLIENT_SECRET=\"${AZURE_CLIENT_SECRET}\" --build-arg RANCHER_LINODE_ACCESSKEY=\"${RANCHER_LINODE_ACCESSKEY}\" --build-arg GOOGLE_CLOUD_PROJECT=\"${GOOGLE_CLOUD_PROJECT}\""
+                sh "docker build -t ${imageName} -f Dockerfile . --build-arg AWS_ACCESS_KEY_ID=\"${AWS_ACCESS_KEY_ID}\" \
+                 --build-arg AWS_SECRET_ACCESS_KEY=\"${AWS_SECRET_ACCESS_KEY}\" --build-arg AZURE_AKS_SUBSCRIPTION_ID=\"${AZURE_AKS_SUBSCRIPTION_ID}\" \
+                 --build-arg AZURE_TENANT_ID=\"${AZURE_TENANT_ID}\" --build-arg AZURE_CLIENT_ID=\"${AZURE_CLIENT_ID}\" \
+                 --build-arg AZURE_CLIENT_SECRET=\"${AZURE_CLIENT_SECRET}\" --build-arg RANCHER_LINODE_ACCESSKEY=\"${RANCHER_LINODE_ACCESSKEY}\" \
+                 --build-arg GOOGLE_CLOUD_PROJECT=\"${GOOGLE_CLOUD_PROJECT}\""
               } catch (err) {
                 echo 'Docker Build had partial failures...'
                 echo "${err}"
