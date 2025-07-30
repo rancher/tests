@@ -1,0 +1,1063 @@
+- projects: [RANCHERINT]
+  suite: Longhorn
+  cases:
+  - title: "Fresh Longhorn Installation via Rancher App Catalog"
+    description: "Verify Longhorn can be successfully installed through Rancher's app catalog with default settings on a clean Kubernetes cluster."
+    automation: 0
+    steps:
+    - action: "Log into Rancher UI with cluster admin privileges"
+      data: ""
+      expectedresult: "Rancher dashboard loads successfully"
+      position: 1
+    - action: "Navigate to target cluster in Rancher dashboard"
+      data: ""
+      expectedresult: "Cluster view displays"
+      position: 2
+    - action: "Click 'Apps' in the left navigation menu"
+      data: ""
+      expectedresult: "Apps section opens"
+      position: 3
+    - action: "Click 'Charts' to access the application catalog"
+      data: ""
+      expectedresult: "Charts catalog displays"
+      position: 4
+    - action: "Click 'Charts' to access the application catalog"
+      data: ""
+      expectedresult: "Search for 'Longhorn' in the search bar"
+      position: 5
+    - action: "Select the Longhorn chart from the results"
+      data: ""
+      expectedresult: "Longhorn installation page opens"
+      position: 6
+    - action: "Review default settings and click 'Install'"
+      data: ""
+      expectedresult: "Installation begins"
+      position: 7
+    - action: "Monitor installation progress in the Apps section"
+      data: ""
+      expectedresult: "Installation completes within 10 minutes"
+      position: 8
+    - action: "Verify all Longhorn pods are in Running state"
+      data: ""
+      expectedresult: "All pods show 'Running' status in longhorn-system namespace"
+      position: 9
+    - action: "Check Longhorn UI accessibility through Rancher"
+      data: ""
+      expectedresult: "Longhorn UI opens when clicking Longhorn button"
+      position: 10
+    - action: "Verify default storage class creation"
+      data: ""
+      expectedresult: "`longhorn` storage class exists and is available"
+      position: 11
+  - title: "Longhorn Installation with Custom Configuration"
+    description: "Test Longhorn installation with custom settings including replica count, data path, and node selection through Rancher interface."
+    automation: 0
+    steps:
+    - action: "Access Longhorn installation chart in Rancher Apps"
+      data: ""
+      expectedresult: "Longhorn installation page displays"
+      position: 1
+    - action: "Click 'Longhorn Default Settings' to expand configuration"
+      data: ""
+      expectedresult: "Configuration options become visible"
+      position: 2
+    - action: "Set Default replica count to `2`"
+      data: ""
+      expectedresult: "Setting accepts value of 2"
+      position: 3
+    - action: "Set Default data path to `/var/lib/longhorn-custom`"
+      data: ""
+      expectedresult: "Custom path is configured"
+      position: 4
+    - action: "Set Storage over-provisioning percentage to `150`"
+      data: ""
+      expectedresult: "Over-provisioning set to 150%"
+      position: 5
+    - action: "Enable 'Create default disk only on labeled node'"
+      data: ""
+      expectedresult: "Option is enabled"
+      position: 6
+    - action: "Label worker nodes with `node.longhorn.io/create-default-disk=true`"
+      data: ""
+      expectedresult: "Nodes are properly labeled"
+      position: 7
+    - action: "Complete installation with custom configuration"
+      data: ""
+      expectedresult: "Installation succeeds with custom settings"
+      position: 8
+    - action: "Verify custom settings in Longhorn UI"
+      data: ""
+      expectedresult: "Settings reflect custom configuration"
+      position: 9
+    - action: "Create test volume and verify replica count"
+      data: ""
+      expectedresult: "Volume created with 2 replicas"
+      position: 10
+    - action: "Check custom data path utilization on nodes"
+      data: ""
+      expectedresult: "`/var/lib/longhorn-custom` directory is used"
+      position: 11
+  - title: "Longhorn UI Access Through Rancher"
+    description: "Verify seamless access to Longhorn UI through Rancher interface with proper authentication and session management."
+    automation: 0
+    steps:
+    - action: "Navigate to cluster view in Rancher dashboard"
+      data: ""
+      expectedresult: "Cluster overview displays"
+      position: 1
+    - action: "Verify 'Longhorn' appears in left navigation menu"
+      data: ""
+      expectedresult: "Longhorn menu item is visible"
+      position: 2
+    - action: "Click 'Longhorn' menu item"
+      data: ""
+      expectedresult: "Longhorn resources display in Rancher"
+      position: 3
+    - action: "Click the 'Longhorn' button in the Overview section"
+      data: ""
+      expectedresult: "Longhorn UI opens in new tab/window"
+      position: 4
+    - action: "Navigate to 'Volume' section in Longhorn UI"
+      data: ""
+      expectedresult: "Volume management page loads"
+      position: 5
+    - action: "Navigate to 'Node' section in Longhorn UI"
+      data: ""
+      expectedresult: "Node management page loads"
+      position: 6
+    - action: "Navigate to 'Setting' section in Longhorn UI"
+      data: ""
+      expectedresult: "Settings page loads"
+      position: 7
+    - action: "Return to Rancher tab and verify session maintained"
+      data: ""
+      expectedresult: "Rancher session still active"
+      position: 8
+    - action: "Create test volume from Longhorn UI"
+      data: ""
+      expectedresult: "Volume creation succeeds"
+      position: 9
+    - action: "Return to Rancher and verify volume appears"
+      data: ""
+      expectedresult: "Volume visible in Rancher Longhorn section"
+      position: 10
+  - title: "RBAC Integration Testing"
+    description: "Test Role-Based Access Control integration between Rancher and Longhorn for different user permission levels."
+    automation: 0
+    steps:
+    - action: "Create cluster admin user in Rancher"
+      data: ""
+      expectedresult: "User created with cluster-admin role"
+      position: 1
+    - action: "Create project member user in Rancher"
+      data: ""
+      expectedresult: "User created with project-member role"
+      position: 2
+    - action: "Create read-only user in Rancher"
+      data: ""
+      expectedresult: "User created with read-only permissions"
+      position: 3
+    - action: "Login as cluster admin and access Longhorn UI"
+      data: ""
+      expectedresult: "Full access to all Longhorn features"
+      position: 4
+    - action: "Test volume creation and deletion as cluster admin"
+      data: ""
+      expectedresult: "Operations succeed without restrictions"
+      position: 5
+    - action: "Login as project member and access Longhorn UI"
+      data: ""
+      expectedresult: "Access granted with project scope"
+      position: 6
+    - action: "Test volume operations within project scope"
+      data: ""
+      expectedresult: "Operations succeed within assigned project"
+      position: 7
+    - action: "Login as read-only user and access Longhorn UI"
+      data: ""
+      expectedresult: "Read-only access granted"
+      position: 8
+    - action: "Attempt volume creation as read-only user"
+      data: ""
+      expectedresult: "Operation blocked with appropriate error message"
+      position: 9
+    - action: "Verify RBAC consistency across both UIs"
+      data: ""
+      expectedresult: "Permissions enforced consistently"
+      position: 10
+  - title: "Volume Creation Through Rancher Workloads"
+    description: "Verify automatic volume provisioning and attachment when deploying workloads with Longhorn storage through Rancher."
+    automation: 0
+    steps:
+    - action: "Navigate to 'Workloads' in Rancher cluster view"
+      data: ""
+      expectedresult: "Workloads section displays"
+      position: 1
+    - action: "Click 'Create' to deploy new workload"
+      data: ""
+      expectedresult: "Workload creation form opens"
+      position: 2
+    - action: "Configure workload with name `test-longhorn-workload` and nginx image"
+      data: ""
+      expectedresult: "Basic workload configuration set"
+      position: 3
+    - action: "Click 'Add Volume' → 'Add a new persistent volume (claim)'"
+      data: ""
+      expectedresult: "Volume configuration dialog opens"
+      position: 4
+    - action: "Configure PVC: name=`test-pvc`, storageClass=`longhorn`, size=`1Gi`, accessMode=`ReadWriteOnce`"
+      data: ""
+      expectedresult: "PVC settings configured"
+      position: 5
+    - action: "Set mount path to `/data`"
+      data: ""
+      expectedresult: "Mount path configured"
+      position: 6
+    - action: "Deploy the workload"
+      data: ""
+      expectedresult: "Workload deployment begins"
+      position: 7
+    - action: "Verify workload pod reaches Running state"
+      data: ""
+      expectedresult: "Pod shows 'Running' status"
+      position: 8
+    - action: "Check Longhorn UI for automatic volume creation"
+      data: ""
+      expectedresult: "Volume appears in Longhorn UI as 'Attached'"
+      position: 9
+    - action: "Exec into pod and write test data to `/data`"
+      data: ""
+      expectedresult: "Data write succeeds"
+      position: 10
+    - action: "Delete and recreate pod, verify data persistence"
+      data: ""
+      expectedresult: "Data persists across pod restart"
+      position: 11
+  - title: "Create and Scale StatefulSet with PVC Template"
+    description: "Test Longhorn integration with StatefulSet persistent volumes including scaling operations and pod rescheduling."
+    automation: 0
+    steps:
+    - action: "Create StatefulSet manifest with volumeClaimTemplates using Longhorn storage class"
+      data: ""
+      expectedresult: "Manifest prepared with Longhorn PVC template"
+      position: 1
+    - action: "Deploy StatefulSet with 3 replicas via Rancher or kubectl"
+      data: ""
+      expectedresult: "StatefulSet deployment begins"
+      position: 2
+    - action: "Verify each pod gets dedicated persistent volume"
+      data: ""
+      expectedresult: "3 volumes created, each attached to respective pod"
+      position: 3
+    - action: "Write unique test data to each pod's volume"
+      data: ""
+      expectedresult: "Data successfully written to all volumes"
+      position: 4
+    - action: "Scale StatefulSet up to 5 replicas"
+      data: ""
+      expectedresult: "Scaling operation succeeds"
+      position: 5
+    - action: "Verify new pods get new dedicated volumes"
+      data: ""
+      expectedresult: "2 additional volumes created and attached"
+      position: 6
+    - action: "Scale StatefulSet down to 2 replicas"
+      data: ""
+      expectedresult: "Scaling down completes"
+      position: 7
+    - action: "Verify volumes remain available for future scaling"
+      data: ""
+      expectedresult: "Volumes persist in 'Detached' state"
+      position: 8
+    - action: "Delete one pod to trigger rescheduling"
+      data: ""
+      expectedresult: "Pod rescheduled to different node"
+      position: 9
+    - action: "Verify volume reattaches to rescheduled pod with data intact"
+      data: ""
+      expectedresult: "Data consistency maintained"
+      position: 10
+  - title: "Longhorn Metrics in Rancher Monitoring Interoperability"
+    description: "Verify Longhorn metrics collection and visualization through Rancher's Prometheus and Grafana monitoring stack."
+    automation: 0
+    steps:
+    - action: "Install Rancher monitoring stack from Apps catalog"
+      data: ""
+      expectedresult: "Monitoring deployment completes"
+      position: 1
+    - action: "Verify Prometheus and Grafana pods are running"
+      data: ""
+      expectedresult: "All monitoring components operational"
+      position: 2
+    - action: "Access Longhorn Settings and enable 'Longhorn System Monitoring'"
+      data: ""
+      expectedresult: "Monitoring integration enabled"
+      position: 3
+    - action: "Access Grafana through Rancher monitoring section"
+      data: ""
+      expectedresult: "Grafana dashboard opens"
+      position: 4
+    - action: "Search for 'Longhorn' dashboards in Grafana"
+      data: ""
+      expectedresult: "Longhorn dashboards appear in search results"
+      position: 5
+    - action: "Open 'Longhorn - Volume' dashboard"
+      data: ""
+      expectedresult: "Volume metrics dashboard displays"
+      position: 6
+    - action: "Open 'Longhorn - Node' dashboard"
+      data: ""
+      expectedresult: "Node metrics dashboard displays"
+      position: 7
+    - action: "Verify volume health metrics display correctly"
+      data: ""
+      expectedresult: "Volume status, replica count, and health shown"
+      position: 8
+    - action: "Verify storage utilization metrics display"
+      data: ""
+      expectedresult: "Storage usage percentages and capacity shown"
+      position: 9
+    - action: "Verify performance metrics (IOPS, throughput) display"
+      data: ""
+      expectedresult: "Performance data visible and updating"
+      position: 10
+    - action: "Create test volume and verify new metrics appear"
+      data: ""
+      expectedresult: "New volume metrics reflected in dashboard"
+      position: 11
+  - title: "Alert Manager Integration"
+    description: "Test Longhorn alert integration with Rancher Alert Manager for storage-related events and notifications."
+    automation: 0
+    steps:
+    - action: "Verify Rancher monitoring and alerting are configured"
+      data: ""
+      expectedresult: "Alert Manager operational"
+      position: 1
+    - action: "Navigate to 'Monitoring' → 'Alertmanager' in Rancher"
+      data: ""
+      expectedresult: "Alert Manager interface accessible"
+      position: 2
+    - action: "Verify Longhorn alert rules exist in Prometheus rules"
+      data: ""
+      expectedresult: "Rules for volume/node alerts present"
+      position: 3
+    - action: "Configure notification channel (Slack/email) for testing"
+      data: ""
+      expectedresult: "Notification channel configured"
+      position: 4
+    - action: "Simulate volume degraded state by shutting down node"
+      data: ""
+      expectedresult: "Node shutdown triggers volume degradation"
+      position: 5
+    - action: "Verify alert appears in Alert Manager within 2 minutes"
+      data: ""
+      expectedresult: "`LonghornVolumeStatusCritical` alert fires"
+      position: 6
+    - action: "Check notification delivery through configured channel"
+      data: ""
+      expectedresult: "Alert notification received"
+      position: 7
+    - action: "Simulate storage space warning by filling disk"
+      data: ""
+      expectedresult: "Disk usage exceeds threshold"
+      position: 8
+    - action: "Verify storage warning alert triggers"
+      data: ""
+      expectedresult: "`LonghornDiskStorageWarning` alert fires"
+      position: 9
+    - action: "Resolve issues and verify alert resolution"
+      data: ""
+      expectedresult: "Alerts automatically resolve"
+      position: 10
+    - action: "Confirm resolution notifications sent"
+      data: ""
+      expectedresult: "Resolution notifications received"
+      position: 11
+  - title: "Backup Target Configuration"
+    description: "Test backup target setup and configuration for S3 storage through Rancher interface."
+    automation: 0
+    steps:
+    - action: "Access Longhorn Settings through Rancher → Longhorn"
+      data: ""
+      expectedresult: "Longhorn settings page displays"
+      position: 1
+    - action: "Configure S3 backup target:"
+      data: "`s3://test-bucket@us-west-2/longhorn/`"
+      expectedresult: "S3 backup target configured"
+      position: 2
+    - action: "Create Kubernetes secret with S3 credentials"
+      data: ""
+      expectedresult: "Secret created with AWS access keys"
+      position: 3
+    - action: "Set 'Backup Target Credential Secret' to created secret"
+      data: ""
+      expectedresult: "Credential secret configured"
+      position: 4
+    - action: "Click 'Test Connection' for backup target"
+      data: ""
+      expectedresult: "Connection test passes successfully"
+      position: 5
+    - action: "Create test volume with sample data"
+      data: ""
+      expectedresult: "Volume created and data written"
+      position: 6
+    - action: "Navigate to Volume in Longhorn UI and click 'Create Backup'"
+      data: ""
+      expectedresult: "Backup creation dialog opens"
+      position: 7
+    - action: "Create backup with name 'test-backup-001'"
+      data: ""
+      expectedresult: "Backup process initiates"
+      position: 8
+    - action: "Monitor backup progress until completion"
+      data: ""
+      expectedresult: "Backup completes successfully"
+      position: 9
+    - action: "Verify backup appears in backup list"
+      data: ""
+      expectedresult: "Backup listed with correct metadata"
+      position: 10
+    - action: "Test backup integrity verification"
+      data: ""
+      expectedresult: "Backup integrity check passes"
+      position: 11
+  - title: "Cross-Cluster Disaster Recovery"
+    description: "Test disaster recovery volume functionality between separate Rancher-managed clusters with shared backup storage."
+    automation: 0
+    steps:
+    - action: "Prerequiste"
+      data: "Configure two separate Rancher-managed clusters"
+      expectedresult: ""
+      position: 1
+    - action: "Configure same S3 backup target on both source and target clusters"
+      data: ""
+      expectedresult: "Both clusters use shared backup storage"
+      position: 2
+    - action: "Create volume with test data in source cluster"
+      data: ""
+      expectedresult: "Volume created with identifiable test data"
+      position: 3
+    - action: "Set up recurring backup schedule (every 30 minutes)"
+      data: ""
+      expectedresult: "Recurring backup configured"
+      position: 4
+    - action: "Wait for initial backup completion"
+      data: ""
+      expectedresult: "Backup appears in source cluster"
+      position: 5
+    - action: "Access target cluster Longhorn UI → Backup → Volume"
+      data: ""
+      expectedresult: "Backup from source cluster visible"
+      position: 6
+    - action: "Select backup and click 'Create Disaster Recovery Volume'"
+      data: ""
+      expectedresult: "DR volume creation dialog opens"
+      position: 7
+    - action: "Configure DR volume with name 'dr-test-volume'"
+      data: ""
+      expectedresult: "DR volume configuration set"
+      position: 8
+    - action: "Create DR volume and verify 'Standby' state"
+      data: ""
+      expectedresult: "DR volume shows as standby"
+      position: 9
+    - action: "Monitor incremental synchronization progress"
+      data: ""
+      expectedresult: "DR volume stays synchronized"
+      position: 10
+    - action: "Simulate source cluster failure (power off nodes)"
+      data: ""
+      expectedresult: "Source cluster becomes unavailable"
+      position: 11
+    - action: "Activate DR volume in target cluster"
+      data: ""
+      expectedresult: "DR volume activation succeeds"
+      position: 12
+    - action: "Deploy application using activated DR volume"
+      data: ""
+      expectedresult: "Application successfully uses DR volume"
+      position: 13
+    - action: "Verify data integrity matches source cluster"
+      data: ""
+      expectedresult: "All test data present and correct"
+      position: 14
+  - title: "Node Drain Operation via Rancher"
+    description: "Test graceful node drain functionality with Longhorn volumes ensuring proper replica evacuation and data integrity."
+    automation: 0
+    steps:
+    - action: "Identify node with attached Longhorn volumes"
+      data: ""
+      expectedresult: "Target node selected with active volumes"
+      position: 1
+    - action: "Document current volume replica distribution"
+      data: ""
+      expectedresult: "Baseline replica placement recorded"
+      position: 2
+    - action: "Navigate to 'Nodes' in Rancher cluster view"
+      data: ""
+      expectedresult: "Nodes section displays"
+      position: 3
+    - action: "Select target node and click '...' → 'Cordon'"
+      data: ""
+      expectedresult: "Node cordoned successfully"
+      position: 4
+    - action: "Click '...' → 'Drain' with grace period 300s"
+      data: ""
+      expectedresult: "Drain operation begins"
+      position: 5
+    - action: "Monitor drain progress in Rancher UI"
+      data: ""
+      expectedresult: "Drain proceeds respecting PDB constraints"
+      position: 6
+    - action: "Verify Longhorn volume status remains healthy during drain"
+      data: ""
+      expectedresult: "No volume degradation occurs"
+      position: 7
+    - action: "Check Longhorn UI for replica evacuation"
+      data: ""
+      expectedresult: "Replicas evacuate before pod termination"
+      position: 8
+    - action: "Confirm drain completes successfully"
+      data: ""
+      expectedresult: "Node shows as drained and cordoned"
+      position: 9
+    - action: "Verify all volumes maintain healthy status"
+      data: ""
+      expectedresult: "All volumes remain in 'Robust' state"
+      position: 10
+    - action: "Test uncordon operation by clicking '...' → 'Uncordon'"
+      data: ""
+      expectedresult: "Node returns to schedulable state"
+      position: 11
+  - title: "Node Scaling with Auto-Configuration"
+    description: "Test cluster scaling operations with automatic Longhorn node configuration and replica distribution."
+    automation: 0
+    steps:
+    - action: "Document baseline: current node count and storage capacity"
+      data: ""
+      expectedresult: "Baseline metrics recorded"
+      position: 1
+    - action: "Navigate to 'Nodes' → 'Add Node' in Rancher"
+      data: ""
+      expectedresult: "Node addition interface opens"
+      position: 2
+    - action: "Add 2 new nodes following Rancher registration process"
+      data: ""
+      expectedresult: "Nodes join cluster successfully"
+      position: 3
+    - action: "Verify new nodes reach 'Active' state in Rancher"
+      data: ""
+      expectedresult: "Nodes show as ready and active"
+      position: 4
+    - action: "Check Longhorn UI for automatic node configuration"
+      data: ""
+      expectedresult: "New nodes appear with default disks"
+      position: 5
+    - action: "Create new volumes to trigger replica placement"
+      data: ""
+      expectedresult: "Volumes created across all nodes"
+      position: 6
+    - action: "Verify replica distribution includes new nodes"
+      data: ""
+      expectedresult: "Replicas distributed to new nodes"
+      position: 7
+    - action: "Select node for removal and verify volume replicas on other nodes"
+      data: ""
+      expectedresult: "Target node has movable replicas"
+      position: 8
+    - action: "Drain selected node using Rancher drain functionality"
+      data: ""
+      expectedresult: "Node drained successfully"
+      position: 9
+    - action: "Remove node from cluster"
+      data: ""
+      expectedresult: "Node removal completes"
+      position: 10
+    - action: "Verify volume health maintained after node removal"
+      data: ""
+      expectedresult: "All volumes remain healthy"
+      position: 11
+  - title: "Longhorn Upgrade via Rancher Apps"
+    description: "Test Longhorn upgrade process through Rancher application management ensuring zero downtime and data integrity."
+    automation: 0
+    steps:
+    - action: "Create backup of all critical volumes before upgrade"
+      data: ""
+      expectedresult: "Backups completed successfully"
+      position: 1
+    - action: "Document current Longhorn version and settings"
+      data: ""
+      expectedresult: "Baseline configuration recorded"
+      position: 2
+    - action: "Navigate to 'Apps' → 'Installed Apps' in Rancher"
+      data: ""
+      expectedresult: "Installed applications list displays"
+      position: 3
+    - action: "Locate Longhorn application and click '...' → 'Upgrade'"
+      data: ""
+      expectedresult: "Upgrade interface opens"
+      position: 4
+    - action: "Review upgrade notes and breaking changes"
+      data: ""
+      expectedresult: "Upgrade requirements verified"
+      position: 5
+    - action: "Select target version (e.g., v1.9.0)"
+      data: ""
+      expectedresult: "Target version selected"
+      position: 6
+    - action: "Review configuration and preserve custom settings"
+      data: ""
+      expectedresult: "Settings maintained through upgrade"
+      position: 7
+    - action: "Click 'Upgrade' to begin process"
+      data: ""
+      expectedresult: "Upgrade process initiates"
+      position: 8
+    - action: "Monitor upgrade progress in Apps section"
+      data: ""
+      expectedresult: "Upgrade proceeds without errors"
+      position: 9
+    - action: "Verify all Longhorn components reach new version"
+      data: ""
+      expectedresult: "All pods updated to target version"
+      position: 10
+    - action: "Test volume operations post-upgrade"
+      data: ""
+      expectedresult: "Create, attach, detach operations work"
+      position: 11
+    - action: "Verify existing volumes remain functional"
+      data: ""
+      expectedresult: "All volumes accessible and healthy"
+      position: 12
+  - title: "Kubernetes Cluster Upgrade Compatibility"
+    description: "Test Kubernetes cluster upgrade through Rancher while maintaining Longhorn storage functionality."
+    automation: 0
+    steps:
+    - action: "Verify Longhorn compatibility with target K8s version"
+      data: ""
+      expectedresult: "Compatibility matrix confirms support"
+      position: 1
+    - action: "Create backup of critical data"
+      data: ""
+      expectedresult: "Data backup completed"
+      position: 2
+    - action: "Navigate to 'Cluster Management' and select cluster"
+      data: ""
+      expectedresult: "Cluster configuration page opens"
+      position: 3
+    - action: "Click 'Edit Config' and select new Kubernetes version"
+      data: ""
+      expectedresult: "Target version selected"
+      position: 4
+    - action: "Review upgrade plan and rolling update strategy"
+      data: ""
+      expectedresult: "Upgrade plan shows minimal downtime"
+      position: 5
+    - action: "Initiate cluster upgrade through Rancher"
+      data: ""
+      expectedresult: "Upgrade begins with control plane"
+      position: 6
+    - action: "Monitor control plane upgrade completion"
+      data: ""
+      expectedresult: "Control plane updated successfully"
+      position: 7
+    - action: "Monitor worker node upgrades (rolling updates)"
+      data: ""
+      expectedresult: "Nodes upgrade one by one"
+      position: 8
+    - action: "Keep Longhorn UI open to monitor volume status"
+      data: ""
+      expectedresult: "Volumes remain accessible throughout"
+      position: 9
+    - action: "Verify no volume degradation during node upgrades"
+      data: ""
+      expectedresult: "All volumes maintain healthy status"
+      position: 10
+    - action: "Test volume operations after cluster upgrade"
+      data: ""
+      expectedresult: "Volume creation and operations work normally"
+      position: 11
+    - action: "Verify all nodes at target Kubernetes version"
+      data: ""
+      expectedresult: "Cluster fully upgraded"
+      position: 12
+  - title: "High-Volume Concurrent Operations"
+    description: "Test Longhorn performance under high-volume concurrent operations including volume creation, backup, and snapshot operations."
+    automation: 0
+    steps:
+    - action: "Deploy automation scripts for concurrent volume creation"
+      data: ""
+      expectedresult: "Scripts prepared for load testing"
+      position: 1
+    - action: "Create 50 volumes concurrently via automated deployment"
+      data: ""
+      expectedresult: "Volume creation begins simultaneously"
+      position: 2
+    - action: "Monitor cluster resource utilization during creation"
+      data: ""
+      expectedresult: "CPU, memory, and network within limits"
+      position: 3
+    - action: "Verify all 50 volumes reach healthy state"
+      data: ""
+      expectedresult: "All volumes show 'Robust' status"
+      position: 4
+    - action: "Deploy applications using all 50 volumes simultaneously"
+      data: ""
+      expectedresult: "Applications deploy successfully"
+      position: 5
+    - action: "Initiate backup operations on 20 volumes concurrently"
+      data: ""
+      expectedresult: "Backup operations begin"
+      position: 6
+    - action: "Monitor backup completion times and success rates"
+      data: ""
+      expectedresult: "All backups complete within SLA"
+      position: 7
+    - action: "Create snapshots on 30 volumes while workloads active"
+      data: ""
+      expectedresult: "Snapshot creation succeeds"
+      position: 8
+    - action: "Monitor storage network utilization during operations"
+      data: ""
+      expectedresult: "Network usage remains stable"
+      position: 9
+    - action: "Test volume expansion on 25 volumes concurrently"
+      data: ""
+      expectedresult: "Expansion operations complete successfully"
+      position: 10
+    - action: "Verify UI responsiveness during high-volume operations"
+      data: ""
+      expectedresult: "Longhorn UI remains responsive"
+      position: 11
+  - title: "Large-Scale Volume Management"
+    description: "Test Longhorn scalability with hundreds of volumes and verify system stability and UI performance."
+    automation: 0
+    steps:
+    - action: "Prepare automation for creating 200+ volumes"
+      data: ""
+      expectedresult: "Automation scripts ready"
+      position: 1
+    - action: "Execute bulk volume creation to reach 200 volumes"
+      data: ""
+      expectedresult: "Volume creation scales successfully"
+      position: 2
+    - action: "Deploy workloads for 150 of the created volumes"
+      data: ""
+      expectedresult: "Applications deploy and attach volumes"
+      position: 3
+    - action: "Access Longhorn UI and test volume listing performance"
+      data: ""
+      expectedresult: "UI loads volume list within 5 seconds"
+      position: 4
+    - action: "Test volume filtering and search with large dataset"
+      data: ""
+      expectedresult: "Search and filter respond quickly"
+      position: 5
+    - action: "Perform bulk snapshot creation on 100 volumes"
+      data: ""
+      expectedresult: "Snapshot operations complete efficiently"
+      position: 6
+    - action: "Execute bulk backup operations on 50 volumes"
+      data: ""
+      expectedresult: "Backup operations scale appropriately"
+      position: 7
+    - action: "Monitor system resource usage throughout testing"
+      data: ""
+      expectedresult: "Resources remain within acceptable limits"
+      position: 8
+    - action: "Test volume cleanup operations at scale"
+      data: ""
+      expectedresult: "Bulk deletion operations succeed"
+      position: 9
+    - action: "Verify system stability after scale testing"
+      data: ""
+      expectedresult: "Cluster returns to stable baseline"
+      position: 10
+    - action: "Confirm no orphaned resources remain"
+      data: ""
+      expectedresult: "All test resources properly cleaned up"
+      position: 11
+  - title: "Network Partition Recovery"
+    description: "Test Longhorn behavior and automatic recovery during network partition scenarios affecting volume replicas."
+    automation: 0
+    steps:
+    - action: "Document baseline volume status and replica distribution"
+      data: ""
+      expectedresult: "All volumes healthy with proper replica placement"
+      position: 1
+    - action: "Create network partition isolating 2 nodes with volume replicas"
+      data: ""
+      expectedresult: "Network partition established"
+      position: 2
+    - action: "Monitor immediate impact on volume status in Longhorn UI"
+      data: ""
+      expectedresult: "Some volumes show degraded status"
+      position: 3
+    - action: "Test read/write operations on accessible replicas"
+      data: ""
+      expectedresult: "Operations continue on available replicas"
+      position: 4
+    - action: "Verify controller behavior during partition"
+      data: ""
+      expectedresult: "Controllers maintain operation where possible"
+      position: 5
+    - action: "Monitor automatic replica scheduling decisions"
+      data: ""
+      expectedresult: "System handles partition intelligently"
+      position: 6
+    - action: "Restore network connectivity between partitioned nodes"
+      data: ""
+      expectedresult: "Network partition removed"
+      position: 7
+    - action: "Monitor automatic recovery process"
+      data: ""
+      expectedresult: "Recovery begins automatically"
+      position: 8
+    - action: "Verify replica synchronization completes"
+      data: ""
+      expectedresult: "Replicas sync and volume health restores"
+      position: 9
+    - action: "Test data consistency across all replicas"
+      data: ""
+      expectedresult: "Data remains consistent across all replicas"
+      position: 10
+    - action: "Confirm all volumes return to healthy state"
+      data: ""
+      expectedresult: "All volumes show 'Robust' status"
+      position: 11
+  - title: "Storage Node Complete Failure"
+    description: "Test comprehensive recovery from complete storage node failure including replica rebuilding and data integrity preservation."
+    automation: 0
+    steps:
+    - action: "Create test data and document checksums for integrity verification"
+      data: ""
+      expectedresult: "Test data prepared with verification hashes"
+      position: 1
+    - action: "Verify volumes have replicas distributed across multiple nodes"
+      data: ""
+      expectedresult: "Replica distribution confirmed"
+      position: 2
+    - action: "Simulate complete node failure by powering off target node"
+      data: ""
+      expectedresult: "Node becomes completely unavailable"
+      position: 3
+    - action: "Monitor volume status change to degraded in Longhorn UI"
+      data: ""
+      expectedresult: "Affected volumes show 'Degraded' status"
+      position: 4
+    - action: "Verify volume accessibility maintained during failure"
+      data: ""
+      expectedresult: "Volumes remain accessible via healthy replicas"
+      position: 5
+    - action: "Monitor automatic replica rebuilding initiation"
+      data: ""
+      expectedresult: "Rebuilding begins automatically within 5 minutes"
+      position: 6
+    - action: "Track replica rebuild progress and completion"
+      data: ""
+      expectedresult: "Rebuild completes successfully"
+      position: 7
+    - action: "Add replacement node to cluster via Rancher"
+      data: ""
+      expectedresult: "New node joins cluster"
+      position: 8
+    - action: "Verify Longhorn auto-configures replacement node"
+      data: ""
+      expectedresult: "Node configured with default storage"
+      position: 9
+    - action: "Test volume operations during and after recovery"
+      data: ""
+      expectedresult: "All operations function normally"
+      position: 10
+    - action: "Validate test data integrity using checksums"
+      data: ""
+      expectedresult: "Data integrity preserved throughout failure"
+      position: 11
+    - action: "Confirm all volumes return to 'Robust' status"
+      data: ""
+      expectedresult: "Full recovery achieved"
+      position: 12
+  - title: "Volume Encryption Integration"
+    description: "Test encrypted volume functionality with proper key management and data protection through Rancher interface."
+    automation: 0
+    steps:
+    - action: "Create encryption secret with AES-256 key in longhorn-system namespace"
+      data: ""
+      expectedresult: "Encryption secret created successfully"
+      position: 1
+    - action: "Create encrypted storage class with encryption parameters"
+      data: ""
+      expectedresult: "Storage class configured for encryption"
+      position: 2
+    - action: "Deploy workload using encrypted storage class through Rancher"
+      data: ""
+      expectedresult: "Workload uses encrypted volume"
+      position: 3
+    - action: "Verify volume shows as encrypted in Longhorn UI"
+      data: ""
+      expectedresult: "Volume displays encryption status"
+      position: 4
+    - action: "Write test data to encrypted volume"
+      data: ""
+      expectedresult: "Data write operations succeed"
+      position: 5
+    - action: "Access storage backend directly to verify encryption at rest"
+      data: ""
+      expectedresult: "Data encrypted on disk"
+      position: 6
+    - action: "Create backup of encrypted volume"
+      data: ""
+      expectedresult: "Backup process handles encryption"
+      position: 7
+    - action: "Verify backup data is encrypted in backup target"
+      data: ""
+      expectedresult: "Backup maintains encryption"
+      position: 8
+    - action: "Test encrypted volume restore process"
+      data: ""
+      expectedresult: "Restore succeeds with proper decryption"
+      position: 9
+    - action: "Test key rotation by updating encryption secret"
+      data: ""
+      expectedresult: "New volumes use updated key"
+      position: 10
+    - action: "Verify mixed encryption scenarios work correctly"
+      data: ""
+      expectedresult: "Old and new keys coexist properly"
+      position: 11
+  - title: "Network Security and MTLS"
+    description: "Test Longhorn network security features including MTLS configuration and network policy enforcement."
+    automation: 0
+    steps:
+    - action: "Configure TLS certificates for Longhorn services"
+      data: ""
+      expectedresult: "Certificates configured properly"
+      position: 1
+    - action: "Enable 'Longhorn Internal MTLS' setting in Longhorn UI"
+      data: ""
+      expectedresult: "MTLS enabled without service disruption"
+      position: 2
+    - action: "Create NetworkPolicy to restrict Longhorn traffic"
+      data: ""
+      expectedresult: "Network policies applied"
+      position: 3
+    - action: "Test volume operations with MTLS enabled"
+      data: ""
+      expectedresult: "All operations function normally"
+      position: 4
+    - action: "Use network monitoring to verify encrypted communication"
+      data: ""
+      expectedresult: "All traffic encrypted"
+      position: 5
+    - action: "Test certificate rotation using cert-manager"
+      data: ""
+      expectedresult: "Rotation handled gracefully"
+      position: 6
+    - action: "Verify volume operations during certificate rotation"
+      data: ""
+      expectedresult: "No service interruption"
+      position: 7
+    - action: "Run security scan on Longhorn components"
+      data: ""
+      expectedresult: "Security scan passes requirements"
+      position: 8
+    - action: "Test network policy enforcement"
+      data: ""
+      expectedresult: "Unauthorized traffic blocked"
+      position: 9
+    - action: "Verify compliance with security benchmarks"
+      data: ""
+      expectedresult: "All benchmarks met"
+      position: 10
+  - title: "Mixed Operating System Cluster Support"
+    description: "Test Longhorn functionality in mixed Windows/Linux clusters managed by Rancher with proper OS-specific scheduling."
+    automation: 0
+    steps:
+    - action: "Verify cluster contains both Windows and Linux nodes"
+      data: ""
+      expectedresult: "Mixed OS cluster confirmed"
+      position: 1
+    - action: "Confirm Longhorn components scheduled only on Linux nodes"
+      data: ""
+      expectedresult: "Proper OS-specific scheduling"
+      position: 2
+    - action: "Deploy Linux workload with Longhorn PVC"
+      data: ""
+      expectedresult: "Linux application uses Longhorn storage"
+      position: 3
+    - action: "Deploy Windows workload on Windows nodes"
+      data: ""
+      expectedresult: "Windows application schedules correctly"
+      position: 4
+    - action: "Verify Windows workloads don't attempt Longhorn attachment"
+      data: ""
+      expectedresult: "No Longhorn scheduling on Windows"
+      position: 5
+    - action: "Test cluster drain operations on Windows nodes"
+      data: ""
+      expectedresult: "Windows node drain completes"
+      position: 6
+    - action: "Test cluster drain operations on Linux nodes with Longhorn"
+      data: ""
+      expectedresult: "Linux node drain respects Longhorn PDBs"
+      position: 7
+    - action: "Monitor resource utilization on both node types"
+      data: ""
+      expectedresult: "Resources appropriate for each platform"
+      position: 8
+    - action: "Verify cluster scaling with mixed node types"
+      data: ""
+      expectedresult: "Scaling operations work correctly"
+      position: 9
+    - action: "Test cross-platform data sharing scenarios"
+      data: ""
+      expectedresult: "Data sharing works as designed"
+      position: 10
+  - title: "Cloud Provider Integration"
+    description: "Test Longhorn integration with cloud provider features including multi-storage classes and cloud-specific functionality."
+    automation: 0
+    steps:
+    - action: "Configure cloud provider storage class (AWS EBS/Azure Disk/GCP PD)"
+      data: ""
+      expectedresult: "Cloud storage class available"
+      position: 1
+    - action: "Maintain Longhorn storage class alongside cloud storage"
+      data: ""
+      expectedresult: "Multiple storage classes coexist"
+      position: 2
+    - action: "Deploy workloads using both storage types"
+      data: ""
+      expectedresult: "Both provisioners work correctly"
+      position: 3
+    - action: "Configure Longhorn backup target using cloud object storage"
+      data: ""
+      expectedresult: "Cloud backup integration successful"
+      position: 4
+    - action: "Test backup operations to cloud storage (S3/Blob/GCS)"
+      data: ""
+      expectedresult: "Backups work with cloud storage"
+      position: 5
+    - action: "Deploy cluster across multiple availability zones"
+      data: ""
+      expectedresult: "Multi-AZ deployment successful"
+      position: 6
+    - action: "Configure Longhorn replicas across zones"
+      data: ""
+      expectedresult: "Cross-zone replication configured"
+      position: 7
+    - action: "Test zone failure scenarios"
+      data: ""
+      expectedresult: "System handles zone failures gracefully"
+      position: 8
+    - action: "Verify cross-zone data replication"
+      data: ""
+      expectedresult: "Data replicated across zones"
+      position: 9
+    - action: "Test cloud provider maintenance compatibility"
+      data: ""
+      expectedresult: "Longhorn unaffected by cloud maintenance"
+      position: 10
+    - action: "Compare performance across different cloud instance types"
+      data: ""
+      expectedresult: "Performance consistent across instance types"
+      position: 11
