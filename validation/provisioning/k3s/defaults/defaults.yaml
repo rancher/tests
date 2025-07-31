@@ -24,7 +24,6 @@ clusterConfig:
       worker: true
       quantity: 1
   kubernetesVersion: ""
-  cni: "calico"
   provider: "aws"
   nodeProvider: "ec2"
   hardened: false
@@ -70,7 +69,7 @@ awsEC2Configs:
 
 #Required for tests that utilize custom clusters
 sshPath:
-   sshPath: "<required custom>" 
+   sshPath: "<required>" 
 
 #Required for the template test
 templateTest:

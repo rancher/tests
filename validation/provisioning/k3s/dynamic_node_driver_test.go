@@ -1,6 +1,6 @@
 //go:build validation || dynamic
 
-package rke2
+package k3s
 
 import (
 	"os"
@@ -17,7 +17,6 @@ import (
 	"github.com/rancher/tests/actions/config/permutationdata"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -31,57 +30,54 @@ type DynamicNodeDriverTest struct {
 }
 
 func dynamicNodeDriverSetup(t *testing.T) DynamicNodeDriverTest {
-	var r DynamicNodeDriverTest
+	var k DynamicNodeDriverTest
 	testSession := session.NewSession()
-	r.session = testSession
+	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	assert.NoError(t, err)
-	r.client = client
+	k.client = client
 
 	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	providerPermutation, err := permutationdata.CreateProviderPermutation(cattleConfig)
 	assert.NoError(t, err)
 
-	k8sPermutation, err := permutationdata.CreateK8sPermutation(r.client, defaults.RKE2, cattleConfig)
+	k8sPermutation, err := permutationdata.CreateK8sPermutation(k.client, defaults.K3S, cattleConfig)
 	assert.NoError(t, err)
 
-	cniPermutation, err := permutationdata.CreateCNIPermutation(cattleConfig)
+	permutedConfigs, err := permutations.Permute([]permutations.Permutation{*k8sPermutation, *providerPermutation}, cattleConfig)
 	assert.NoError(t, err)
 
-	permutedConfigs, err := permutations.Permute([]permutations.Permutation{*k8sPermutation, *providerPermutation, *cniPermutation}, cattleConfig)
+	k.cattleConfigs = append(k.cattleConfigs, permutedConfigs...)
+
+	k.standardUserClient, err = standard.CreateStandardUser(k.client)
 	assert.NoError(t, err)
 
-	r.cattleConfigs = append(r.cattleConfigs, permutedConfigs...)
-
-	r.standardUserClient, err = standard.CreateStandardUser(r.client)
-	assert.NoError(t, err)
-
-	return r
+	return k
 }
 
 func TestDynamicNodeDriver(t *testing.T) {
-	r := dynamicNodeDriverSetup(t)
+	k := dynamicNodeDriverSetup(t)
 
 	tests := []struct {
 		name   string
 		client *rancher.Client
 	}{
-		{provisioninginput.AdminClientName.String(), r.client},
-		{provisioninginput.StandardClientName.String(), r.standardUserClient},
+		{"K3S_Node_Driver|Admin_Client", k.client},
+		{"K3S_Node_Driver|Standard_Client", k.standardUserClient},
 	}
 
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Info("Running cleanup")
-			r.session.Cleanup()
+			k.session.Cleanup()
 		})
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			for _, cattleConfig := range r.cattleConfigs {
+			for _, cattleConfig := range k.cattleConfigs {
 				clusterConfig := new(clusters.ClusterConfig)
 				operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
 				if len(clusterConfig.MachinePools) == 0 {

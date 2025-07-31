@@ -1,6 +1,6 @@
 //go:build validation || recurring
 
-package rke2
+package k3s
 
 import (
 	"os"
@@ -22,40 +22,43 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type psactTest struct {
+type nodeDriverTest struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
 }
 
-func psactSetup(t *testing.T) psactTest {
-	var r psactTest
+func nodeDriverSetup(t *testing.T) nodeDriverTest {
+	var k nodeDriverTest
 	testSession := session.NewSession()
-	r.session = testSession
+	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	assert.NoError(t, err)
+	k.client = client
 
-	r.client = client
+	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
-
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
 	assert.NoError(t, err)
 
-	r.cattleConfig, err = defaults.SetK8sDefault(client, defaults.RKE2, r.cattleConfig)
+	k.cattleConfig, err = defaults.SetK8sDefault(k.client, defaults.K3S, k.cattleConfig)
 	assert.NoError(t, err)
 
-	r.standardUserClient, err = standard.CreateStandardUser(r.client)
+	k.standardUserClient, err = standard.CreateStandardUser(k.client)
 	assert.NoError(t, err)
 
-	return r
+	return k
 }
 
-func TestPSACT(t *testing.T) {
+func TestNodeDriver(t *testing.T) {
 	t.Parallel()
-	r := psactSetup(t)
+	k := nodeDriverSetup(t)
+
+	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
+	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
+	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
 	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
@@ -65,30 +68,29 @@ func TestPSACT(t *testing.T) {
 	tests := []struct {
 		name         string
 		machinePools []provisioninginput.MachinePools
-		psact        provisioninginput.PSACT
 		client       *rancher.Client
 	}{
-		{"RKE2_Rancher_Privileged|3_etcd|2_cp|3_worker", nodeRolesStandard, "rancher-privileged", r.client},
-		{"RKE2_Rancher_Restricted|3_etcd|2_cp|3_worker", nodeRolesStandard, "rancher-restricted", r.client},
-		{"RKE2_Rancher_Baseline|3_etcd|2_cp|3_worker", nodeRolesStandard, "rancher-baseline", r.client},
+		{"K3S_Node_Driver|etcd_cp_worker", nodeRolesAll, k.standardUserClient},
+		{"K3S_Node_Driver|etcd_cp|worker", nodeRolesShared, k.standardUserClient},
+		{"K3S_Node_Driver|etcd|cp|worker", nodeRolesDedicated, k.standardUserClient},
+		{"K3S_Node_Driver|3_etcd|2_cp|3_worker", nodeRolesStandard, k.standardUserClient},
 	}
 
 	for _, tt := range tests {
 		var err error
 		t.Cleanup(func() {
 			logrus.Info("Running cleanup")
-			r.session.Cleanup()
+			k.session.Cleanup()
 		})
-
-		clusterConfig := new(clusters.ClusterConfig)
-		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
-
-		clusterConfig.MachinePools = tt.machinePools
-		clusterConfig.PSACT = string(tt.psact)
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			clusterConfig := new(clusters.ClusterConfig)
+			operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
+			clusterConfig.MachinePools = tt.machinePools
+
+			assert.NotNil(t, clusterConfig.Provider)
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
@@ -99,7 +101,7 @@ func TestPSACT(t *testing.T) {
 			provisioning.VerifyCluster(t, tt.client, clusterConfig, cluster)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
+		params := provisioning.GetProvisioningSchemaParams(tt.client, k.cattleConfig)
 		err = qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)

@@ -265,28 +265,27 @@ clusterConfig:
       skipSSLVerify: true
   
   clusterAgent:                        # change this to fleetAgent for fleet agent
-  appendTolerations:
-  - key: "Testkey"
-    value: "testValue"
-    effect: "NoSchedule"
-  overrideResourceRequirements:
-    limits:
-      cpu: "750m"
-      memory: "500Mi"
-    requests:
-      cpu: "250m"
-      memory: "250Mi"
-    overrideAffinity:
-      nodeAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - preference:
-              matchExpressions:
-                - key: "cattle.io/cluster-agent"
-                  operator: "In"
-                  values:
-                    - "true"
-            weight: 1
-  
+    appendTolerations:
+    - key: "Testkey"
+      value: "testValue"
+      effect: "NoSchedule"
+    overrideResourceRequirements:
+      limits:
+        cpu: "750m"
+        memory: "500Mi"
+      requests:
+        cpu: "250m"
+        memory: "250Mi"
+      overrideAffinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - preference:
+                matchExpressions:
+                  - key: "cattle.io/cluster-agent"
+                    operator: "In"
+                    values:
+                      - "true"
+              weight: 1
 ```
 
 

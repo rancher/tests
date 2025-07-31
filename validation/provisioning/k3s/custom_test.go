@@ -1,6 +1,6 @@
 //go:build validation || recurring
 
-package rke2
+package k3s
 
 import (
 	"os"
@@ -29,36 +29,36 @@ type customTest struct {
 }
 
 func customSetup(t *testing.T) customTest {
-	var r customTest
+	var k customTest
 	testSession := session.NewSession()
-	r.session = testSession
+	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	assert.NoError(t, err)
 
-	r.client = client
+	k.client = client
 
-	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
 	assert.NoError(t, err)
 
-	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.RKE2, r.cattleConfig)
+	k.cattleConfig, err = defaults.SetK8sDefault(k.client, defaults.K3S, k.cattleConfig)
 	assert.NoError(t, err)
 
-	r.standardUserClient, err = standard.CreateStandardUser(r.client)
+	k.standardUserClient, err = standard.CreateStandardUser(k.client)
 	assert.NoError(t, err)
 
-	return r
+	return k
 }
 
 func TestCustom(t *testing.T) {
 	t.Parallel()
-	r := customSetup(t)
+	k := customSetup(t)
+
 	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
 	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	nodeRolesDedicatedWindows := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool, provisioninginput.WindowsMachinePool}
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
 	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
@@ -69,22 +69,20 @@ func TestCustom(t *testing.T) {
 		name         string
 		client       *rancher.Client
 		machinePools []provisioninginput.MachinePools
-		isWindows    bool
 	}{
-		{"RKE2_Custom|etcd_cp_worker", r.standardUserClient, nodeRolesAll, false},
-		{"RKE2_Custom|etcd_cp|worker", r.standardUserClient, nodeRolesShared, false},
-		{"RKE2_Custom|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated, false},
-		{"RKE2_Custom|etcd|cp|worker|windows", r.standardUserClient, nodeRolesDedicatedWindows, true},
-		{"RKE2_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard, false},
+		{"K3S_Custom|etcd_cp_worker", k.standardUserClient, nodeRolesAll},
+		{"K3S_Custom|etcd_cp|worker", k.standardUserClient, nodeRolesShared},
+		{"K3S_Custom|etcd|cp|worker", k.standardUserClient, nodeRolesDedicated},
+		{"K3S_Custom|3_etcd|2_cp|3_worker", k.standardUserClient, nodeRolesStandard},
 	}
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Info("Running cleanup")
-			r.session.Cleanup()
+			k.session.Cleanup()
 		})
 
 		clusterConfig := new(clusters.ClusterConfig)
-		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+		operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
 
 		clusterConfig.MachinePools = tt.machinePools
 
@@ -94,13 +92,7 @@ func TestCustom(t *testing.T) {
 			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
 			awsEC2Configs := new(ec2.AWSEC2Configs)
-			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, r.cattleConfig, awsEC2Configs)
-			if tt.isWindows {
-				windowsMachineConfigs := externalNodeProvider.GetWindowsPoolsFunc(tt.client, *awsEC2Configs)
-				if len(windowsMachineConfigs) == 0 {
-					t.Skip("Windows test requires a windows machine pool")
-				}
-			}
+			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, k.cattleConfig, awsEC2Configs)
 
 			clusterObject, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
 			assert.NoError(t, err)
@@ -108,7 +100,7 @@ func TestCustom(t *testing.T) {
 			provisioning.VerifyCluster(t, tt.client, clusterConfig, clusterObject)
 		})
 
-		params := provisioning.GetCustomSchemaParams(tt.client, r.cattleConfig)
+		params := provisioning.GetCustomSchemaParams(tt.client, k.cattleConfig)
 		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)

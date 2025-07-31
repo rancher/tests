@@ -1,8 +1,9 @@
-//go:build (validation || extended) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke2k3s && !cluster.any && !cluster.custom && !cluster.nodedriver && !sanity && !stress
+//go:build validation || recurring
 
 package k3s
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -20,79 +21,93 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/steve"
 	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
+	actionsDefaults "github.com/rancher/tests/actions/config/defaults"
+	configDefaults "github.com/rancher/tests/actions/config/defaults"
+	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
 	localCluster          = "local"
-	fleetNamespace        = "fleet-default"
-	providerName          = "k3s"
 	templateTestConfigKey = "templateTest"
 )
 
-type ClusterTemplateTestSuite struct {
-	suite.Suite
+type templateTest struct {
 	client             *rancher.Client
 	standardUserClient *rancher.Client
 	session            *session.Session
 	templateConfig     *provisioninginput.TemplateConfig
 	cloudCredentials   *v1.SteveAPIObject
+	cattleConfig       map[string]any
 }
 
-func (r *ClusterTemplateTestSuite) TearDownSuite() {
-	r.session.Cleanup()
-}
-
-func (r *ClusterTemplateTestSuite) SetupSuite() {
+func templateSetup(t *testing.T) templateTest {
+	var r templateTest
 	testSession := session.NewSession()
 	r.session = testSession
 
-	r.templateConfig = new(provisioninginput.TemplateConfig)
-	config.LoadConfig(templateTestConfigKey, r.templateConfig)
-
 	client, err := rancher.NewClient("", testSession)
-	require.NoError(r.T(), err)
+	assert.NoError(t, err)
+
 	r.client = client
+
+	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+
+	r.cattleConfig, err = configDefaults.LoadPackageDefaults(r.cattleConfig, "")
+	assert.NoError(t, err)
+
+	r.templateConfig = new(provisioninginput.TemplateConfig)
+	operations.LoadObjectFromMap(templateTestConfigKey, r.cattleConfig, r.templateConfig)
 
 	provider := provisioning.CreateProvider(r.templateConfig.TemplateProvider)
 	cloudCredentialConfig := cloudcredentials.LoadCloudCredential(r.templateConfig.TemplateProvider)
 	r.cloudCredentials, err = provider.CloudCredFunc(client, cloudCredentialConfig)
-	require.NoError(r.T(), err)
+	assert.NoError(t, err)
+
+	r.standardUserClient, err = standard.CreateStandardUser(r.client)
+	assert.NoError(t, err)
+
+	return r
 }
 
-func (r *ClusterTemplateTestSuite) TestProvisionK3STemplateCluster() {
+func TestTemplate(t *testing.T) {
+	t.Parallel()
+	k := templateSetup(t)
+
 	tests := []struct {
 		name   string
 		client *rancher.Client
 	}{
-		{"K3S_Template|etcd|cp|worker", r.standardUserClient},
+		{"K3S_Template|etcd|cp|worker", k.standardUserClient},
 	}
 
 	for _, tt := range tests {
-		r.Run(tt.name, func() {
-			_, err := steve.CreateAndWaitForResource(r.client, namespaces.FleetLocal+"/"+localCluster, stevetypes.ClusterRepo, r.templateConfig.Repo, stevestates.Active, 5*time.Second, defaults.FiveMinuteTimeout)
-			require.NoError(r.T(), err)
+		t.Cleanup(func() {
+			logrus.Info("Running cleanup")
+			k.session.Cleanup()
+		})
 
-			k8sversions, err := kubernetesversions.Default(r.client, providerName, nil)
-			require.NoError(r.T(), err)
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-			clusterName := namegenerator.AppendRandomString(providerName + "-template")
-			err = charts.InstallTemplateChart(r.client, r.templateConfig.Repo.ObjectMeta.Name, r.templateConfig.TemplateName, clusterName, k8sversions[0], r.cloudCredentials)
-			require.NoError(r.T(), err)
+			_, err := steve.CreateAndWaitForResource(k.client, namespaces.FleetLocal+"/"+localCluster, stevetypes.ClusterRepo, k.templateConfig.Repo, stevestates.Active, 5*time.Second, defaults.FiveMinuteTimeout)
+			assert.NoError(t, err)
 
-			_, cluster, err := clusters.GetProvisioningClusterByName(r.client, clusterName, fleetNamespace)
-			require.NoError(r.T(), err)
+			k8sversions, err := kubernetesversions.Default(k.client, actionsDefaults.K3S, nil)
+			assert.NoError(t, err)
 
-			provisioning.VerifyCluster(r.T(), r.client, nil, cluster)
+			clusterName := namegenerator.AppendRandomString(actionsDefaults.K3S + "-template")
+			err = charts.InstallTemplateChart(k.client, k.templateConfig.Repo.ObjectMeta.Name, k.templateConfig.TemplateName, clusterName, k8sversions[0], k.cloudCredentials)
+			assert.NoError(t, err)
+
+			_, cluster, err := clusters.GetProvisioningClusterByName(k.client, clusterName, namespaces.FleetDefault)
+			assert.NoError(t, err)
+
+			provisioning.VerifyCluster(t, k.client, nil, cluster)
 		})
 	}
-}
-
-// In order for 'go test' to run this suite, we need to create
-// a normal test function and pass our suite to suite.Run
-func TestClusterTemplateTestSuite(t *testing.T) {
-	suite.Run(t, new(ClusterTemplateTestSuite))
 }

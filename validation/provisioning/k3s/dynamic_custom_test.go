@@ -1,6 +1,6 @@
 //go:build validation || dynamic
 
-package rke2
+package k3s
 
 import (
 	"os"
@@ -17,7 +17,6 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/config/permutationdata"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/reports"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
@@ -33,57 +32,54 @@ type dynamicCustomTest struct {
 }
 
 func dynamicCustomSetup(t *testing.T) dynamicCustomTest {
-	var r dynamicCustomTest
+	var k dynamicCustomTest
 	testSession := session.NewSession()
-	r.session = testSession
+	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	assert.NoError(t, err)
-	r.client = client
+	k.client = client
 
 	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	providerPermutation, err := permutationdata.CreateProviderPermutation(cattleConfig)
 	assert.NoError(t, err)
 
-	k8sPermutation, err := permutationdata.CreateK8sPermutation(r.client, defaults.RKE2, cattleConfig)
+	k8sPermutation, err := permutationdata.CreateK8sPermutation(k.client, defaults.K3S, cattleConfig)
 	assert.NoError(t, err)
 
-	cniPermutation, err := permutationdata.CreateCNIPermutation(cattleConfig)
+	permutedConfigs, err := permutations.Permute([]permutations.Permutation{*k8sPermutation, *providerPermutation}, cattleConfig)
 	assert.NoError(t, err)
 
-	permutedConfigs, err := permutations.Permute([]permutations.Permutation{*k8sPermutation, *providerPermutation, *cniPermutation}, cattleConfig)
+	k.cattleConfigs = append(k.cattleConfigs, permutedConfigs...)
+
+	k.standardUserClient, err = standard.CreateStandardUser(k.client)
 	assert.NoError(t, err)
 
-	r.cattleConfigs = append(r.cattleConfigs, permutedConfigs...)
-
-	r.standardUserClient, err = standard.CreateStandardUser(r.client)
-	assert.NoError(t, err)
-
-	return r
+	return k
 }
 
 func TestDynamicCustom(t *testing.T) {
-	r := dynamicCustomSetup(t)
+	k := dynamicCustomSetup(t)
 
 	tests := []struct {
 		name   string
 		client *rancher.Client
 	}{
-		{provisioninginput.AdminClientName.String(), r.client},
-		{provisioninginput.StandardClientName.String(), r.standardUserClient},
+		{"K3S_Custom|Admin_Client", k.client},
+		{"K3S_Custom|Standard_Client", k.standardUserClient},
 	}
 
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Info("Running cleanup")
-			r.session.Cleanup()
+			k.session.Cleanup()
 		})
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			for _, cattleConfig := range r.cattleConfigs {
+			for _, cattleConfig := range k.cattleConfigs {
 				clusterConfig := new(clusters.ClusterConfig)
 				operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
 
@@ -101,7 +97,7 @@ func TestDynamicCustom(t *testing.T) {
 				require.NoError(t, err)
 
 				provisioning.VerifyCluster(t, tt.client, clusterConfig, clusterObject)
-				cloudprovider.VerifyCloudProvider(t, tt.client, "rke2", nil, clusterConfig, clusterObject, nil)
+				cloudprovider.VerifyCloudProvider(t, tt.client, "k3s", nil, clusterConfig, clusterObject, nil)
 			}
 		})
 	}

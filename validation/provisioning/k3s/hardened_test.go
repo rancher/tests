@@ -1,6 +1,6 @@
 //go:build validation || recurring
 
-package rke2
+package k3s
 
 import (
 	"os"
@@ -26,6 +26,7 @@ import (
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type hardenedTest struct {
@@ -38,32 +39,32 @@ type hardenedTest struct {
 }
 
 func hardenedSetup(t *testing.T) hardenedTest {
-	var r hardenedTest
+	var k hardenedTest
 	testSession := session.NewSession()
-	r.session = testSession
+	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	assert.NoError(t, err)
 
-	r.client = client
+	k.client = client
 
-	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
 	assert.NoError(t, err)
 
-	r.cattleConfig, err = defaults.SetK8sDefault(client, defaults.RKE2, r.cattleConfig)
+	k.cattleConfig, err = defaults.SetK8sDefault(client, defaults.K3S, k.cattleConfig)
 	assert.NoError(t, err)
 
-	r.standardUserClient, err = standard.CreateStandardUser(r.client)
+	k.standardUserClient, err = standard.CreateStandardUser(k.client)
 	assert.NoError(t, err)
 
-	return r
+	return k
 }
 
 func TestHardened(t *testing.T) {
 	t.Parallel()
-	r := hardenedSetup(t)
+	k := hardenedSetup(t)
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
 	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
@@ -76,27 +77,27 @@ func TestHardened(t *testing.T) {
 		machinePools    []provisioninginput.MachinePools
 		scanProfileName string
 	}{
-		{"RKE2_CIS_1.9_Profile|3_etcd|2_cp|3_worker", r.client, nodeRolesStandard, "rke2-cis-1.9-profile"},
+		{"K3S_CIS_1.9_Profile|3_etcd|2_cp|3_worker", k.standardUserClient, nodeRolesStandard, "k3s-cis-1.9-profile"},
 	}
-
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Info("Running cleanup")
-			r.session.Cleanup()
+			k.session.Cleanup()
 		})
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			clusterConfig := new(clusters.ClusterConfig)
-			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+			operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
+
 			clusterConfig.MachinePools = tt.machinePools
 			clusterConfig.Hardened = true
 
 			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
 			awsEC2Configs := new(ec2.AWSEC2Configs)
-			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, r.cattleConfig, awsEC2Configs)
+			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, k.cattleConfig, awsEC2Configs)
 
 			clusterObject, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
 			reports.TimeoutClusterReport(clusterObject, err)
@@ -115,20 +116,20 @@ func TestHardened(t *testing.T) {
 			reports.TimeoutClusterReport(clusterObject, err)
 			assert.NoError(t, err)
 
-			r.project = project
-			assert.NotEmpty(t, r.project)
+			k.project = project
+			require.NotEmpty(t, k.project)
 
-			r.chartInstallOptions = &charts.InstallOptions{
+			k.chartInstallOptions = &charts.InstallOptions{
 				Cluster:   cluster,
 				Version:   latestCISBenchmarkVersion,
-				ProjectID: r.project.ID,
+				ProjectID: k.project.ID,
 			}
 
-			cis.SetupCISBenchmarkChart(tt.client, r.project.ClusterID, r.chartInstallOptions, charts.CISBenchmarkNamespace)
-			cis.RunCISScan(tt.client, r.project.ClusterID, tt.scanProfileName)
+			cis.SetupCISBenchmarkChart(tt.client, k.project.ClusterID, k.chartInstallOptions, charts.CISBenchmarkNamespace)
+			cis.RunCISScan(tt.client, k.project.ClusterID, tt.scanProfileName)
 		})
 
-		params := provisioning.GetCustomSchemaParams(tt.client, r.cattleConfig)
+		params := provisioning.GetCustomSchemaParams(tt.client, k.cattleConfig)
 		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)

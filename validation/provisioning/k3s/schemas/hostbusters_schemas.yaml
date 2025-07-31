@@ -1,5 +1,7 @@
-- suite: Go Automation/Provisioning/K3S/NodeDriver
-  projects: [RRT, RM]
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/K3S/NodeDriver
   cases:
   - description: Provisions a 1 node all roles node driver cluster
     title: K3S_Node_Driver|etcd_cp_worker
@@ -7,6 +9,19 @@
     type: 8
     is_flaky: 0
     automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+    - title: K8sVersion
+      values:
+      - v1.32.6+k3s1
+    - title: CNI
+      values:
+      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -32,6 +47,19 @@
     type: 8
     is_flaky: 0
     automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+    - title: K8sVersion
+      values:
+      - v1.32.6+k3s1
+    - title: CNI
+      values:
+      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -57,6 +85,19 @@
     type: 8
     is_flaky: 0
     automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+    - title: K8sVersion
+      values:
+      - v1.32.6+k3s1
+    - title: CNI
+      values:
+      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -82,6 +123,19 @@
     type: 8
     is_flaky: 0
     automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+    - title: K8sVersion
+      values:
+      - v1.32.6+k3s1
+    - title: CNI
+      values:
+      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -101,8 +155,10 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
-- suite: Go Automation/Provisioning/K3S/Custom
-  projects: [RRT, RM]
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/K3S/Custom
   cases:
   - description: Provisions a 1 node all roles custom cluster
     title: K3S_Custom|etcd_cp_worker
@@ -110,6 +166,20 @@
     type: 8
     is_flaky: 0
     automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+      - windows-2022-ctw-5-2-22
+    - title: K8sVersion
+      values:
+      - v1.32.6+k3s1
+    - title: CNI
+      values:
+      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -135,6 +205,20 @@
     type: 8
     is_flaky: 0
     automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+      - windows-2022-ctw-5-2-22
+    - title: K8sVersion
+      values:
+      - v1.32.6+k3s1
+    - title: CNI
+      values:
+      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -160,6 +244,20 @@
     type: 8
     is_flaky: 0
     automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+      - windows-2022-ctw-5-2-22
+    - title: K8sVersion
+      values:
+      - v1.32.6+k3s1
+    - title: CNI
+      values:
+      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -185,6 +283,20 @@
     type: 8
     is_flaky: 0
     automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+      - windows-2022-ctw-5-2-22
+    - title: K8sVersion
+      values:
+      - v1.32.6+k3s1
+    - title: CNI
+      values:
+      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -204,8 +316,10 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
-- suite: Go Automation/Provisioning/K3S/PSACT
-  projects: [RRT, RM]
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/K3S/PSACT
   cases:
   - description: Provisions a cluster with psact set to rancher privilaged
     title: K3S_Rancher_Privileged|3_etcd|2_cp|3_worker
@@ -213,6 +327,19 @@
     type: 8
     is_flaky: 0
     automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+    - title: K8sVersion
+      values:
+      - v1.32.6+k3s1
+    - title: CNI
+      values:
+      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -238,6 +365,19 @@
     type: 8
     is_flaky: 0
     automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+    - title: K8sVersion
+      values:
+      - v1.32.6+k3s1
+    - title: CNI
+      values:
+      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -263,6 +403,19 @@
     type: 8
     is_flaky: 0
     automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+    - title: K8sVersion
+      values:
+      - v1.32.6+k3s1
+    - title: CNI
+      values:
+      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -282,8 +435,10 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
-- suite: Go Automation/Provisioning/K3S/Hardened
-  projects: [RRT, RM]
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/K3S/Hardened
   cases:
   - description: Provisions a hardened 3etcd/2cp/3worker custom cluster
     title: K3S_CIS_1.9_Profile|3_etcd|2_cp|3_worker
@@ -291,6 +446,20 @@
     type: 8
     is_flaky: 0
     automation: 2
+    params:
+    - title: Provider
+      values:
+      - aws
+    - title: OS
+      values:
+      - SLES-15-SP5-FIPS-QA
+      - windows-2022-ctw-5-2-22
+    - title: K8sVersion
+      values:
+      - v1.32.6+k3s1
+    - title: CNI
+      values:
+      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -315,8 +484,10 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
-- suite: Go Automation/Provisioning/K3S/Template
-  projects: [RRT, RM]
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/K3S/Template
   cases:
   - description: Provisions a 3 node split roles cluster using an K3S template
     title: K3S_Template|etcd|cp|worker

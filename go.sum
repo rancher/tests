@@ -2199,8 +2199,8 @@ github.com/rancher/rancher/pkg/apis v0.0.0-20250410003522-2a1bf3d05723 h1:IVPo5J
 github.com/rancher/rancher/pkg/apis v0.0.0-20250410003522-2a1bf3d05723/go.mod h1:hc8fdG6FIRMmt9DEaolO/AmZku9so2R840mImM5HhD8=
 github.com/rancher/rke v1.8.0-rc.4 h1:jowVyaF3LsJonC7vNsAwWf3MONHAtEFUD/j3UzNSE5U=
 github.com/rancher/rke v1.8.0-rc.4/go.mod h1:x9N1abruzDFMwTpqq2cnaDYpKCptlNoW8VraNWB6Pc4=
-github.com/rancher/shepherd v0.0.0-20250411212007-f3f2fd268849 h1:hxa/Y0LRTx8BzMPxirT9Yg3IZg2YXus7+smLLn5n9tw=
-github.com/rancher/shepherd v0.0.0-20250411212007-f3f2fd268849/go.mod h1:IVVaLrIQ1/1Fk7KTrkhpKFlgaqhh3uv27CokmEhXHJc=
+github.com/rancher/shepherd v0.0.0-20250804172049-aa2e21c5b6aa h1:p+kZIotj8/9jSplAuObydWgMehXHGvF8iQ8GZeIzIpo=
+github.com/rancher/shepherd v0.0.0-20250804172049-aa2e21c5b6aa/go.mod h1:IVVaLrIQ1/1Fk7KTrkhpKFlgaqhh3uv27CokmEhXHJc=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250306000150-b1a9781accab h1:Ttxt14bAImsWyFrtQZ314GW2DeExrYRNoAb+u9V3RiA=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250306000150-b1a9781accab/go.mod h1:9gzmXntv/s0sEDBERi/fS58PRt5HFUfZr7niDGsDbAA=
 github.com/rancher/tfp-automation v0.0.0-20250725201905-900dbf2acfc8 h1:MSp9wtMwb8RZJtEu7M2h2Wk+dmTdx/6S8msk4MHScuE=
