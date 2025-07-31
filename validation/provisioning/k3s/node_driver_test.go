@@ -1,6 +1,6 @@
 //go:build validation || recurring
 
-package rke2
+package k3s
 
 import (
 	"os"
@@ -30,36 +30,35 @@ type nodeDriverTest struct {
 }
 
 func nodeDriverSetup(t *testing.T) nodeDriverTest {
-	var r nodeDriverTest
+	var k nodeDriverTest
 	testSession := session.NewSession()
-	r.session = testSession
+	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	assert.NoError(t, err)
-	r.client = client
+	k.client = client
 
-	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
 	assert.NoError(t, err)
 
-	r.cattleConfig, err = defaults.SetK8sDefault(r.client, "rke2", r.cattleConfig)
+	k.cattleConfig, err = defaults.SetK8sDefault(k.client, "k3s", k.cattleConfig)
 	assert.NoError(t, err)
 
-	r.standardUserClient, err = standard.CreateStandardUser(r.client)
+	k.standardUserClient, err = standard.CreateStandardUser(k.client)
 	assert.NoError(t, err)
 
-	return r
+	return k
 }
 
 func TestNodeDriver(t *testing.T) {
 	t.Parallel()
-	r := nodeDriverSetup(t)
+	k := nodeDriverSetup(t)
 
 	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
 	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	nodeRolesWindows := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool, provisioninginput.WindowsMachinePool}
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
 	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
@@ -70,34 +69,28 @@ func TestNodeDriver(t *testing.T) {
 		name         string
 		machinePools []provisioninginput.MachinePools
 		client       *rancher.Client
-		isWindows    bool
 	}{
-		{"RKE2_Node_Driver|etcd_cp_worker", nodeRolesAll, r.standardUserClient, false},
-		{"RKE2_Node_Driver|etcd_cp|worker", nodeRolesShared, r.standardUserClient, false},
-		{"RKE2_Node_Driver|etcd|cp|worker", nodeRolesDedicated, r.standardUserClient, false},
-		{"RKE2_Node_Driver|etcd|cp|worker|windows", nodeRolesWindows, r.standardUserClient, true},
-		{"RKE2_Node_Driver|3_etcd|2_cp|3_worker", nodeRolesStandard, r.standardUserClient, false},
+		{"K3S_Node_Driver|etcd_cp_worker", nodeRolesAll, k.standardUserClient},
+		{"K3S_Node_Driver|etcd_cp|worker", nodeRolesShared, k.standardUserClient},
+		{"K3S_Node_Driver|etcd|cp|worker", nodeRolesDedicated, k.standardUserClient},
+		{"K3S_Node_Driver|3_etcd|2_cp|3_worker", nodeRolesStandard, k.standardUserClient},
 	}
 
 	for _, tt := range tests {
 		var err error
 		t.Cleanup(func() {
 			logrus.Info("Running cleanup")
-			r.session.Cleanup()
+			k.session.Cleanup()
 		})
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			clusterConfig := new(clusters.ClusterConfig)
-			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+			operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
 			clusterConfig.MachinePools = tt.machinePools
 
 			assert.NotNil(t, clusterConfig.Provider)
-			if clusterConfig.Provider != "vsphere" && tt.isWindows {
-				t.Skip("Windows test requires access to vsphere")
-			}
-
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
@@ -105,11 +98,10 @@ func TestNodeDriver(t *testing.T) {
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 			assert.NoError(t, err)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
 			provisioning.VerifyCluster(t, tt.client, clusterConfig, cluster)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
+		params := provisioning.GetProvisioningSchemaParams(tt.client, k.cattleConfig)
 		err = qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
