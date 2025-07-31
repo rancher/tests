@@ -3,3 +3,5 @@
 .idea/
 .kube/
 *.pem
+go.mod
+go.sum
