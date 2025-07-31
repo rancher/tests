@@ -169,7 +169,7 @@ func (a *OpenLDAPAuthProviderSuite) TestDisableOLDAP() {
 	require.NoError(a.T(), err)
 
 	logrus.Info("Verifying OLDAP is enabled")
-	ldapConfig, err := client.Management.AuthConfig.ByID("openldap")
+	_, err = client.Management.AuthConfig.ByID("openldap")
 	require.NoError(a.T(), err)
 
 	logrus.Info("Attempting to disable OLDAP")
@@ -177,7 +177,7 @@ func (a *OpenLDAPAuthProviderSuite) TestDisableOLDAP() {
 	require.NoError(a.T(), err)
 
 	logrus.Info("Waiting for annotation update")
-	ldapConfig, err = waitUntilAnnotationIsUpdated(client)
+	ldapConfig, err := waitUntilAnnotationIsUpdated(client)
 	require.NoError(a.T(), err)
 
 	assert.Falsef(a.T(), ldapConfig.Enabled, "Checking if Open LDAP is disabled")
@@ -245,12 +245,12 @@ func (a *OpenLDAPAuthProviderSuite) TestRefreshGroup() {
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create admin global role binding")
 	}
-	require.NoError(a.T(), err, "Error occured while creating a role [%v]", newAdminGlobalRole)
+	require.NoError(a.T(), err, "Error occurred while creating a role [%v]", newAdminGlobalRole)
 
 	logrus.Infof("Refreshing group membership for group [%v]", groupName)
 
 	err = users.RefreshGroupMembership(authAdmin)
-	require.NoError(a.T(), err, "Error occured refreshing the group membership for group %v", groupName)
+	require.NoError(a.T(), err, "Error occurred refreshing the group membership for group %v", groupName)
 
 	standardGroupPrincipalID := newPrincipalID(authConfigID, "group", nestedGroupName, searchBase)
 	newStandardGlobalRole := &v3.GlobalRoleBinding{
@@ -261,11 +261,11 @@ func (a *OpenLDAPAuthProviderSuite) TestRefreshGroup() {
 	logrus.Infof("Creating global role binding for group [%v] with [%v] role", newStandardGlobalRole.GroupPrincipalID, newStandardGlobalRole.GlobalRoleID)
 
 	_, err = authAdmin.Management.GlobalRoleBinding.Create(newStandardGlobalRole)
-	require.NoError(a.T(), err, "Error occured while creating a role %v", newStandardGlobalRole)
+	require.NoError(a.T(), err, "Error occurred while creating a role %v", newStandardGlobalRole)
 
 	logrus.Infof("Refreshing group membership for group [%v]", nestedGroupName)
 	err = users.RefreshGroupMembership(authAdmin)
-	require.NoError(a.T(), err, "Error occured refreshing the group membership for group [%v]", nestedGroupName)
+	require.NoError(a.T(), err, "Error occurred refreshing the group membership for group [%v]", nestedGroupName)
 }
 
 func (a *OpenLDAPAuthProviderSuite) TestGroupMembership() {
@@ -284,7 +284,7 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembership() {
 
 	logrus.Infof("Creating cluster role template binding for group [%v] with role [%v]", groupCRTB.GroupPrincipalID, groupCRTB.RoleTemplateID)
 	_, err := authAdmin.Management.ClusterRoleTemplateBinding.Create(groupCRTB)
-	require.NoError(a.T(), err, "Error occured while creating cluster role template binding")
+	require.NoError(a.T(), err, "Error occurred while creating cluster role template binding")
 
 	for _, v := range a.authConfig.DoubleNestedUsers {
 		user := &v3.User{
@@ -301,7 +301,7 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembership() {
 		require.NoError(a.T(), err)
 
 		logrus.Infof("User [%v] lists [%v] clusters while expecting [%v] clusters", v.Username, len(clusterList.Data), 1)
-		assert.Equalf(a.T(), 1, len(clusterList.Data), "Error occured while: user [%v] lists [%v] clusters while expecting [%v] clusters to be listed", v.Username, len(clusterList.Data), 1)
+		assert.Equalf(a.T(), 1, len(clusterList.Data), "Error occurred while: user [%v] lists [%v] clusters while expecting [%v] clusters to be listed", v.Username, len(clusterList.Data), 1)
 	}
 
 	for _, v := range slices.Concat(a.authConfig.Users, a.authConfig.NestedUsers) {
@@ -322,8 +322,8 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembership() {
 			logrus.WithField("username", v.Username).Info("User correctly cannot list clusters")
 		}
 
-		assert.NotNilf(a.T(), err, "Error should contain error message", "Error occured while: user [%v] should NOT lists clusters", v.Username)
-		assert.Containsf(a.T(), err.Error(), "Resource type [provisioning.cattle.io.cluster] has no method GET", "Error occured while: user [%v] should NOT lists clusters", v.Username)
+		assert.NotNilf(a.T(), err, "Error should contain error message", "Error occurred while: user [%v] should NOT lists clusters", v.Username)
+		assert.Containsf(a.T(), err.Error(), "Resource type [provisioning.cattle.io.cluster] has no method GET", "Error occurred while: user [%v] should NOT lists clusters", v.Username)
 	}
 	logrus.Info("Verifying cluster role template binding was created")
 	crtbList, err := authAdmin.Management.ClusterRoleTemplateBinding.List(nil)
@@ -344,7 +344,7 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembership() {
 	projectResp, err := authAdmin.Management.Project.Create(projectTemplate)
 	require.NoError(a.T(), err)
 
-	assert.NotNilf(a.T(), projectResp, "Error occured while: project is created with the admin")
+	assert.NotNilf(a.T(), projectResp, "Error occurred while: project is created with the admin")
 
 	nestedGroupPrincipalID := newPrincipalID(authConfigID, "group", a.authConfig.NestedGroup, searchBase)
 	groupPRTB := &v3.ProjectRoleTemplateBinding{
@@ -358,7 +358,7 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembership() {
 	groupPRTBResp, err := authAdmin.Management.ProjectRoleTemplateBinding.Create(groupPRTB)
 	require.NoError(a.T(), err)
 
-	assert.NotNilf(a.T(), groupPRTBResp, "Error occured while: creating a  PRTB for group [%v]", a.authConfig.NestedGroup)
+	assert.NotNilf(a.T(), groupPRTBResp, "Error occurred while: creating a  PRTB for group [%v]", a.authConfig.NestedGroup)
 
 	for _, v := range a.authConfig.NestedUsers {
 		user := &v3.User{
@@ -373,7 +373,7 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembership() {
 		require.NoError(a.T(), err)
 
 		logrus.Infof("User [%v] created namespace [%v]", v.Username, namespaceName)
-		assert.Equal(a.T(), namespaceName, namespace.Name, "Error occured while: user [%v] has created namespace [%v]", v.Username, namespaceName)
+		assert.Equal(a.T(), namespaceName, namespace.Name, "Error occurred while: user [%v] has created namespace [%v]", v.Username, namespaceName)
 	}
 }
 
@@ -394,7 +394,7 @@ func (a *OpenLDAPAuthProviderSuite) TestRestrictedUsersAndGroupsAccessMode() {
 	logrus.Infof("Creating cluster role template binding for group [%v] with role [%v]", groupCRTB.GroupPrincipalID, groupCRTB.RoleTemplateID)
 
 	_, err := authAdmin.Management.ClusterRoleTemplateBinding.Create(groupCRTB)
-	require.NoError(a.T(), err, "Error occured while creating cluster role template binding")
+	require.NoError(a.T(), err, "Error occurred while creating cluster role template binding")
 
 	defaultProject, err := projects.GetProjectByName(authAdmin, a.cluster.ID, "Default")
 	require.NoError(a.T(), err)
@@ -413,7 +413,7 @@ func (a *OpenLDAPAuthProviderSuite) TestRestrictedUsersAndGroupsAccessMode() {
 		require.NoError(a.T(), err)
 
 		logrus.Infof("Project role template binding created for user [%v]", v.Username)
-		assert.NotNilf(a.T(), userPRTBResp, "Error occured while: project role template binding is created for user [%v]", v.Username)
+		assert.NotNilf(a.T(), userPRTBResp, "Error occurred while: project role template binding is created for user [%v]", v.Username)
 	}
 
 	var principalIDs []string
@@ -429,7 +429,7 @@ func (a *OpenLDAPAuthProviderSuite) TestRestrictedUsersAndGroupsAccessMode() {
 	newAuthConfig, err := a.client.Auth.OLDAP.Update(existing, updates)
 	require.NoError(a.T(), err)
 
-	assert.Equal(a.T(), existing.AccessMode, newAuthConfig.AccessMode, "Error occured while: access mode updated to restrict access to only the authorized users & groups")
+	assert.Equal(a.T(), existing.AccessMode, newAuthConfig.AccessMode, "Error occurred while: access mode updated to restrict access to only the authorized users & groups")
 
 	for _, v := range a.authConfig.DoubleNestedUsers {
 		user := &v3.User{
@@ -445,7 +445,7 @@ func (a *OpenLDAPAuthProviderSuite) TestRestrictedUsersAndGroupsAccessMode() {
 				"error":    err.Error(),
 			}).Error("Double nested user failed to login in restricted mode")
 		}
-		assert.NoErrorf(a.T(), err, "Error occured while: logging as user [%v], should be able to login", v.Username)
+		assert.NoErrorf(a.T(), err, "Error occurred while: logging as user [%v], should be able to login", v.Username)
 
 	}
 
@@ -460,7 +460,7 @@ func (a *OpenLDAPAuthProviderSuite) TestRestrictedUsersAndGroupsAccessMode() {
 		if err == nil {
 			logrus.WithField("username", v.Username).Warn("User was able to login when they shouldn't in restricted mode")
 		}
-		assert.Errorf(a.T(), err, "Error occured while: logging as user [%v], should be able to login", v.Username)
+		assert.Errorf(a.T(), err, "Error occurred while: logging as user [%v], should be able to login", v.Username)
 	}
 
 	logrus.Info("Rolling back access mode to unrestricted")
@@ -487,7 +487,7 @@ func (a *OpenLDAPAuthProviderSuite) TestAllowClusterAndProjectMembersAccessMode(
 
 	logrus.Infof("Creating cluster role template binding for group [%v] with role [%v]", groupCRTB.GroupPrincipalID, groupCRTB.RoleTemplateID)
 	_, err := authAdmin.Management.ClusterRoleTemplateBinding.Create(groupCRTB)
-	require.NoError(a.T(), err, "Error occured while creating cluster role template binding")
+	require.NoError(a.T(), err, "Error occurred while creating cluster role template binding")
 
 	defaultProject, err := projects.GetProjectByName(authAdmin, a.cluster.ID, "Default")
 	require.NoError(a.T(), err)
@@ -510,7 +510,7 @@ func (a *OpenLDAPAuthProviderSuite) TestAllowClusterAndProjectMembersAccessMode(
 		require.NoError(a.T(), err)
 
 		logrus.Infof("Project role binding created for user [%v]", v.Username)
-		assert.NotNilf(a.T(), userPRTBResp, "Error occured while: creating a project role binding for user [%v]", v.Username)
+		assert.NotNilf(a.T(), userPRTBResp, "Error occurred while: creating a project role binding for user [%v]", v.Username)
 	}
 
 	logrus.Info("Updating access mode to allow cluster and project members")
@@ -519,7 +519,7 @@ func (a *OpenLDAPAuthProviderSuite) TestAllowClusterAndProjectMembersAccessMode(
 	newAuthConfig, err := a.client.Auth.OLDAP.Update(authExisting, authWithRestricted)
 	require.NoError(a.T(), err)
 
-	assert.Equal(a.T(), authExisting.AccessMode, newAuthConfig.AccessMode, "Error occured while: access mode updated to allow members of clusters and projects, plus authorized users & groups")
+	assert.Equal(a.T(), authExisting.AccessMode, newAuthConfig.AccessMode, "Error occurred while: access mode updated to allow members of clusters and projects, plus authorized users & groups")
 
 	for _, v := range slices.Concat(a.authConfig.DoubleNestedUsers, a.authConfig.NestedUsers) {
 		user := &v3.User{
@@ -535,7 +535,7 @@ func (a *OpenLDAPAuthProviderSuite) TestAllowClusterAndProjectMembersAccessMode(
 				"error":    err.Error(),
 			}).Error("User failed to login in cluster/project members mode")
 		}
-		assert.NoErrorf(a.T(), err, "Error occured while: logging as user [%v], should be able to login", v.Username)
+		assert.NoErrorf(a.T(), err, "Error occurred while: logging as user [%v], should be able to login", v.Username)
 	}
 
 	for _, v := range a.authConfig.Users {
