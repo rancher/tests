@@ -7,11 +7,11 @@ replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.4.14-rancher3
 	github.com/docker/distribution => github.com/docker/distribution v2.8.2+incompatible // rancher-machine requires a replace is set
 	github.com/docker/docker => github.com/docker/docker v20.10.27+incompatible // rancher-machine requires a replace is set
-
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20191219222812-2987a591a72c
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20191219222812-2987a591a72c
 	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20250410003522-2a1bf3d05723
 	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20250212213103-5c3550f55322
+	github.com/rancher/shepherd => github.com/dasarinaidu/shepherd v0.0.0-20250729203419-7dc4784cb281
 
 	github.com/rancher/tests/actions => ./actions
 	github.com/rancher/tests/interoperability => ./interoperability
