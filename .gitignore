@@ -4,4 +4,6 @@
 .kube/
 *.pem
 go.mod
-go.sum
+go.sumterraform.tfstate
+terraform.tfstate.backup
+*.tfstate
