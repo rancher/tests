@@ -125,6 +125,7 @@ func VerifyCluster(t *testing.T, client *rancher.Client, clustersConfig *cluster
 	reports.TimeoutClusterReport(cluster, err)
 	require.NoError(t, err)
 
+	logrus.Infof("Waiting for cluster (%s) to be active", cluster.Name)
 	checkFunc := shepherdclusters.IsProvisioningClusterReady
 	err = wait.WatchWait(watchInterface, checkFunc)
 	reports.TimeoutClusterReport(cluster, err)
@@ -179,6 +180,7 @@ func VerifyCluster(t *testing.T, client *rancher.Client, clustersConfig *cluster
 		VerifyACE(t, adminClient, mgmtClusterObject)
 	}
 
+	logrus.Infof("Waiting for cluster (%s) pods to be active", cluster.Name)
 	podErrors := pods.StatusPods(client, status.ClusterName)
 	assert.Empty(t, podErrors)
 
