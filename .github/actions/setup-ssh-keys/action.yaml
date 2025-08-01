@@ -1,0 +1,32 @@
+---
+name: Setup SSH Keys
+description: "Sets up SSH keys for Linux and Windows"
+inputs:
+  ssh-private-key:
+    description: "SSH Private Key"
+    required: true
+  ssh-private-key-name:
+    description: "SSH Private Key Name"
+    required: true
+  windows-ssh-private-key:
+    description: "Windows SSH Private Key"
+    required: true
+  windows-ssh-private-key-name:
+    description: "Windows SSH Private Key Name"
+    required: true
+runs:
+  using: composite
+  steps:
+    - run: |
+        mkdir -p /home/runner/work/tests/tests/.ssh
+        mkdir -p /home/runner/work/tests/tests/tfp-automation/.ssh
+
+        echo "${{ inputs.ssh-private-key }}" > /home/runner/work/tests/tests/.ssh/${{ inputs.ssh-private-key-name }}.pem
+        chmod 600 /home/runner/work/tests/tests/.ssh/${{ inputs.ssh-private-key-name }}.pem
+
+        echo "${{ inputs.ssh-private-key }}" > /home/runner/work/tests/tests/tfp-automation/.ssh/${{ inputs.ssh-private-key-name }}.pem
+        chmod 600 /home/runner/work/tests/tests/tfp-automation/.ssh/${{ inputs.ssh-private-key-name }}.pem
+
+        echo "${{ inputs.windows-ssh-private-key }}" > /home/runner/work/tests/tests/.ssh/${{ inputs.windows-ssh-private-key-name }}.pem
+        chmod 600 /home/runner/work/tests/tests/.ssh/${{ inputs.windows-ssh-private-key-name }}.pem
+      shell: bash

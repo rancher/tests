@@ -124,10 +124,10 @@ sshPath:
 These tests utilize Go build tags. Due to this, see the below examples on how to run the tests:
 
 ### RKE1
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1NodeReplacingTestSuite/TestReplacingRKE1Nodes"`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1NodeReplacingTestSuite/TestReplacingRKE1Nodes"`
 
 ### RKE2 | K3S
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestNodeReplacingTestSuite/TestReplacingNodes"`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestNodeReplacingTestSuite/TestReplacingNodes"`
 
 ## Scaling Existing Node Pools
 Similar to the `provisioning` tests, the node scaling tests have static test cases as well as dynamicInput tests you can specify. In order to run the dynamicInput tests, you will need to define the `scalingInput` block in your config file. This block defines the quantity you would like the pool to be scaled up/down to. See an example below that accounts for node drivers, custom clusters and hosted clusters:

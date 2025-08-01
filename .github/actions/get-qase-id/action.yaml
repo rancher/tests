@@ -1,0 +1,44 @@
+---
+name: Get Qase ID
+description: "Accepts a rancher tag and returns the corresponding Qase ID for a release test run"
+inputs:
+  triggered_tag:
+    description: "Rancher server tag version from triggered action"
+    required: true
+  qase_release_id:
+    description: "Qase ID for the release test run"
+    required: true
+  qase_rc_id:
+    description: "Qase ID for the RC test run"
+    required: false
+  qase_recurring_id:
+    description: "Qase ID for the recurring test run"
+    required: true
+
+outputs:
+  id:
+    description: "Qase ID for the appropriate release test run, based on the provided Rancher tag"
+    value: ${{ steps.set-qase-id.outputs.id }}
+runs:
+  using: composite
+  steps:
+    - id: set-qase-id
+      run: |
+        set -euo pipefail
+        TRIGGERED_TAG="${{ inputs.triggered_tag }}"
+        QASE_ID=""
+
+        if [[ -n "$TRIGGERED_TAG" ]]; then
+          if [[ "$TRIGGERED_TAG" == *"-rc"* ]]; then
+            QASE_ID="${{ inputs.qase_rc_id }}"
+          else
+            QASE_ID="${{ inputs.qase_release_id }}"
+          fi
+        else
+          QASE_ID="${{ inputs.qase_recurring_id }}"
+        fi
+
+        echo "Qase ID for tag: $QASE_ID"
+        echo "id=$QASE_ID" >> $GITHUB_OUTPUT
+
+      shell: bash
