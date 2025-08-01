@@ -1,0 +1,72 @@
+---
+name: Run Test Suites
+description: "Runs various test suites"
+runs:
+  using: composite
+  steps:
+    - name: Run Certificate Rotation Test Suite
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s \
+        --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestCertRotationTestSuite/TestCertRotation"
+    
+    - name: Run Delete Cluster Tests
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
+        --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestDeleteClusterTestSuite/TestDeletingCluster"
+
+    - name: Run Delete Init Machine Tests
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
+        --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestDeleteInitMachineTestSuite/TestDeleteInitMachine"
+
+    - name: Run Node Replacing Tests
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
+        --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestNodeReplacingTestSuite/TestReplacingNodes"
+
+    - name: Run K3S Provisioning Tests
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
+        --junitfile results.xml -- -timeout=3h -tags=recurring -v
+
+    - name: Run RKE2 Provisioning Tests
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
+        --junitfile results.xml -- -timeout=3h -tags=recurring -v
+
+    - name: Run Scaling Custom Cluster Tests
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
+        --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodes"
+
+    - name: Run Scaling Node Driver Cluster Tests
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
+        --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestNodeScalingTestSuite/TestScalingNodePools"
+
+    - name: Run Snapshot Recurring Tests
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
+        --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestSnapshotRecurringTestSuite/TestSnapshotRecurringRestores"
+
+    - name: Run Snapshot Tests
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
+        --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestSnapshotRestoreTestSuite/TestSnapshotRestore"
+
+    - name: Run Snapshot Windows Tests
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
+        --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows"
+
+    - name: Run Upgrade Tests
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
+        --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes"
+
+    - name: Run Upgrade Windows Tests
+      run: |
+        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
+        --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes"
+
+      shell: bash
