@@ -34,6 +34,16 @@ on:
       rancher-chart-version-2-9:
         description: Rancher chart version for v2.9.x
         default: "v2.9-head"
+  workflow_call:
+    inputs:
+      rancher_version:
+        description: "Rancher tag version provided from check-rancher-tag workflow"
+        required: true
+        type: string
+      rancher_chart_version:
+        description: "Rancher chart version provided from check-rancher-tag workflow"
+        required: true
+        type: string
 
 permissions:
   id-token: write

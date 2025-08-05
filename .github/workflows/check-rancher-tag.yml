@@ -1,0 +1,153 @@
+---
+name: Check Rancher Tag
+
+on:
+  schedule:
+    - cron: "0 16,20 * * 1-5"
+    - cron: "0 0 * * 2-6"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  check-latest-rancher-tag:
+    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    env:
+      RANCHER_RELEASE_LINES: "v2.12 v2.11 v2.10 v2.9"
+      SANITIZED_RELEASES: "v212 v211 v210 v29"
+    outputs:
+      latest_tag_v212: ${{ steps.get-latest-tag.outputs.latest_tag_v212 }}
+      latest_tag_v211: ${{ steps.get-latest-tag.outputs.latest_tag_v211 }}
+      latest_tag_v210: ${{ steps.get-latest-tag.outputs.latest_tag_v210 }}
+      latest_tag_v29: ${{ steps.get-latest-tag.outputs.latest_tag_v29 }}
+      is_tag_new_v212: ${{ steps.compare-rancher-tag.outputs.is_tag_new_v212 }}
+      is_tag_new_v211: ${{ steps.compare-rancher-tag.outputs.is_tag_new_v211 }}
+      is_tag_new_v210: ${{ steps.compare-rancher-tag.outputs.is_tag_new_v210 }}
+      is_tag_new_v29: ${{ steps.compare-rancher-tag.outputs.is_tag_new_v29 }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.IAM_ROLE }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Fetch Rancher tags from S3
+        run: |
+          for release in $SANITIZED_RELEASES; do
+            if aws s3 ls "s3://${{ secrets.RANCHER_TAG_BUCKET }}/tag_${release}.txt" > /dev/null 2>&1; then
+              aws s3 cp "s3://${{ secrets.RANCHER_TAG_BUCKET }}/tag_${release}.txt" "tag/tag_${release}.txt"
+            else
+              echo "Skipping $release — no tag file found in bucket."
+            fi
+          done
+
+      - name: Get latest Rancher tag
+        id: get-latest-tag
+        uses: ./.github/actions/get-latest-rancher-tag
+        with:
+          release_lines: ${{ env.RANCHER_RELEASE_LINES }}
+          prime_artifacts_path: ${{ secrets.PRIME_ARTIFACTS_PATH }}
+
+      - name: Read cached Rancher tags
+        id: read-cached-tags
+        run: |
+          for release in $SANITIZED_RELEASES; do
+            cache_tag="CACHED_TAG_${release}"
+            file="tag/tag_${release}.txt"
+            version=$(cat "$file" 2>/dev/null || echo '')
+            echo "${cache_tag}=${version}" >> $GITHUB_ENV
+          done
+
+      - name: Compare latest Rancher tag against cached tag
+        id: compare-rancher-tag
+        uses: ./.github/actions/compare-rancher-tag
+        with:
+          cached-tag-v212: ${{ env.CACHED_TAG_v212 }}
+          cached-tag-v211: ${{ env.CACHED_TAG_v211 }}
+          cached-tag-v210: ${{ env.CACHED_TAG_v210 }}
+          cached-tag-v29: ${{ env.CACHED_TAG_v29 }}
+          latest-tag-v212: ${{ steps.get-latest-tag.outputs.latest_tag_v212 }}
+          latest-tag-v211: ${{ steps.get-latest-tag.outputs.latest_tag_v211 }}
+          latest-tag-v210: ${{ steps.get-latest-tag.outputs.latest_tag_v210 }}
+          latest-tag-v29: ${{ steps.get-latest-tag.outputs.latest_tag_v29 }}
+
+      - name: Write latest tags to files
+        env:
+          LATEST_TAG_V212: ${{ steps.get-latest-tag.outputs.latest_tag_v212 }}
+          LATEST_TAG_V211: ${{ steps.get-latest-tag.outputs.latest_tag_v211 }}
+          LATEST_TAG_V210: ${{ steps.get-latest-tag.outputs.latest_tag_v210 }}
+          LATEST_TAG_V29: ${{ steps.get-latest-tag.outputs.latest_tag_v29 }}
+        run: |
+          mkdir -p tag
+          for release in $SANITIZED_RELEASES; do
+            latest_tag="LATEST_TAG_${release^^}"
+            echo "${!latest_tag}" > tag/tag_${release}.txt
+          done
+
+      - name: Update Rancher tags to S3
+        run: |
+          for release in $SANITIZED_RELEASES; do
+            aws s3 cp "tag/tag_${release}.txt" "s3://${{ secrets.RANCHER_TAG_BUCKET }}/tag_${release}.txt"
+          done
+
+  set-latest-chart-version:
+    needs: check-latest-rancher-tag
+    runs-on: ubuntu-latest
+    outputs:
+      chart_version_v212: ${{ steps.set-latest-chart-version.outputs.chart_version_v212 }}
+      chart_version_v211: ${{ steps.set-latest-chart-version.outputs.chart_version_v211 }}
+      chart_version_v210: ${{ steps.set-latest-chart-version.outputs.chart_version_v210 }}
+      chart_version_v29: ${{ steps.set-latest-chart-version.outputs.chart_version_v29 }}
+
+    steps:
+      - name: Chart versions
+        id: set-latest-chart-version
+        run: |
+          CHART_V212="${{ needs.check-latest-rancher-tag.outputs.latest_tag_v212 }}"
+          CHART_V211="${{ needs.check-latest-rancher-tag.outputs.latest_tag_v211 }}"
+          CHART_V210="${{ needs.check-latest-rancher-tag.outputs.latest_tag_v210 }}"
+          CHART_V29="${{ needs.check-latest-rancher-tag.outputs.latest_tag_v29 }}"
+
+          echo "chart_version_v212=${CHART_V212#v}" >> $GITHUB_OUTPUT
+          echo "chart_version_v211=${CHART_V211#v}" >> $GITHUB_OUTPUT
+          echo "chart_version_v210=${CHART_V210#v}" >> $GITHUB_OUTPUT
+          echo "chart_version_v29=${CHART_V29#v}" >> $GITHUB_OUTPUT
+
+  trigger-tests-v212:
+    needs: [check-latest-rancher-tag, set-latest-chart-version]
+    if: ${{ needs.check-latest-rancher-tag.outputs.is_tag_new_v212 == 'true' }}
+    uses: ./.github/workflows/dispatch-workflows.yml
+    with:
+      rancher_version: ${{ needs.check-latest-rancher-tag.outputs.latest_tag_v212 }}
+      rancher_chart_version: ${{ needs.set-latest-chart-version.outputs.chart_version_v212 }}
+
+  trigger-tests-v211:
+    needs: [check-latest-rancher-tag, set-latest-chart-version]
+    if: ${{ needs.check-latest-rancher-tag.outputs.is_tag_new_v211 == 'true' }}
+    uses: ./.github/workflows/dispatch-workflows.yml
+    with:
+      rancher_version: ${{ needs.check-latest-rancher-tag.outputs.latest_tag_v211 }}
+      rancher_chart_version: ${{ needs.set-latest-chart-version.outputs.chart_version_v211 }}
+
+  trigger-tests-v210:
+    needs: [check-latest-rancher-tag, set-latest-chart-version]
+    if: ${{ needs.check-latest-rancher-tag.outputs.is_tag_new_v210 == 'true' }}
+    uses: ./.github/workflows/dispatch-workflows.yml
+    with:
+      rancher_version: ${{ needs.check-latest-rancher-tag.outputs.latest_tag_v210 }}
+      rancher_chart_version: ${{ needs.set-latest-chart-version.outputs.chart_version_v210 }}
+
+  trigger-tests-v29:
+    needs: [check-latest-rancher-tag, set-latest-chart-version]
+    if: ${{ needs.check-latest-rancher-tag.outputs.is_tag_new_v29 == 'true' }}
+    uses: ./.github/workflows/dispatch-workflows.yml
+    with:
+      rancher_version: ${{ needs.check-latest-rancher-tag.outputs.latest_tag_v29 }}
+      rancher_chart_version: ${{ needs.set-latest-chart-version.outputs.chart_version_v29 }}
