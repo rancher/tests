@@ -9,19 +9,6 @@
     type: 8
     is_flaky: 0
     automation: 2
-    params:
-    - title: Provider
-      values:
-      - aws
-    - title: OS
-      values:
-      - SLES-15-SP5-FIPS-QA
-    - title: K8sVersion
-      values:
-      - v1.32.6+k3s1
-    - title: CNI
-      values:
-      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -47,19 +34,6 @@
     type: 8
     is_flaky: 0
     automation: 2
-    params:
-    - title: Provider
-      values:
-      - aws
-    - title: OS
-      values:
-      - SLES-15-SP5-FIPS-QA
-    - title: K8sVersion
-      values:
-      - v1.32.6+k3s1
-    - title: CNI
-      values:
-      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -85,19 +59,6 @@
     type: 8
     is_flaky: 0
     automation: 2
-    params:
-    - title: Provider
-      values:
-      - aws
-    - title: OS
-      values:
-      - SLES-15-SP5-FIPS-QA
-    - title: K8sVersion
-      values:
-      - v1.32.6+k3s1
-    - title: CNI
-      values:
-      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -123,19 +84,6 @@
     type: 8
     is_flaky: 0
     automation: 2
-    params:
-    - title: Provider
-      values:
-      - aws
-    - title: OS
-      values:
-      - SLES-15-SP5-FIPS-QA
-    - title: K8sVersion
-      values:
-      - v1.32.6+k3s1
-    - title: CNI
-      values:
-      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -166,20 +114,6 @@
     type: 8
     is_flaky: 0
     automation: 2
-    params:
-    - title: Provider
-      values:
-      - aws
-    - title: OS
-      values:
-      - SLES-15-SP5-FIPS-QA
-      - windows-2022-ctw-5-2-22
-    - title: K8sVersion
-      values:
-      - v1.32.6+k3s1
-    - title: CNI
-      values:
-      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -205,20 +139,6 @@
     type: 8
     is_flaky: 0
     automation: 2
-    params:
-    - title: Provider
-      values:
-      - aws
-    - title: OS
-      values:
-      - SLES-15-SP5-FIPS-QA
-      - windows-2022-ctw-5-2-22
-    - title: K8sVersion
-      values:
-      - v1.32.6+k3s1
-    - title: CNI
-      values:
-      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -244,20 +164,6 @@
     type: 8
     is_flaky: 0
     automation: 2
-    params:
-    - title: Provider
-      values:
-      - aws
-    - title: OS
-      values:
-      - SLES-15-SP5-FIPS-QA
-      - windows-2022-ctw-5-2-22
-    - title: K8sVersion
-      values:
-      - v1.32.6+k3s1
-    - title: CNI
-      values:
-      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -283,20 +189,6 @@
     type: 8
     is_flaky: 0
     automation: 2
-    params:
-    - title: Provider
-      values:
-      - aws
-    - title: OS
-      values:
-      - SLES-15-SP5-FIPS-QA
-      - windows-2022-ctw-5-2-22
-    - title: K8sVersion
-      values:
-      - v1.32.6+k3s1
-    - title: CNI
-      values:
-      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -327,19 +219,6 @@
     type: 8
     is_flaky: 0
     automation: 2
-    params:
-    - title: Provider
-      values:
-      - aws
-    - title: OS
-      values:
-      - SLES-15-SP5-FIPS-QA
-    - title: K8sVersion
-      values:
-      - v1.32.6+k3s1
-    - title: CNI
-      values:
-      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -365,19 +244,6 @@
     type: 8
     is_flaky: 0
     automation: 2
-    params:
-    - title: Provider
-      values:
-      - aws
-    - title: OS
-      values:
-      - SLES-15-SP5-FIPS-QA
-    - title: K8sVersion
-      values:
-      - v1.32.6+k3s1
-    - title: CNI
-      values:
-      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -403,19 +269,6 @@
     type: 8
     is_flaky: 0
     automation: 2
-    params:
-    - title: Provider
-      values:
-      - aws
-    - title: OS
-      values:
-      - SLES-15-SP5-FIPS-QA
-    - title: K8sVersion
-      values:
-      - v1.32.6+k3s1
-    - title: CNI
-      values:
-      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -446,20 +299,6 @@
     type: 8
     is_flaky: 0
     automation: 2
-    params:
-    - title: Provider
-      values:
-      - aws
-    - title: OS
-      values:
-      - SLES-15-SP5-FIPS-QA
-      - windows-2022-ctw-5-2-22
-    - title: K8sVersion
-      values:
-      - v1.32.6+k3s1
-    - title: CNI
-      values:
-      - ""
     steps:
     - action: Create rancher provider credentials
       expectedresult: ""
@@ -509,7 +348,113 @@
     - action: Verify cluster state
       expectedresult: ""
       data: ""
-      position: 4
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+- projects: [RRT, RM]
+  suite: Go Automation/Provisioning/K3S/HostnameTruncation
+  cases:
+  - description: Provisions a 3 node split roles cluster with hostname truncation enabled
+    title: K3S_Hostname_Truncation|10_Characters
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a cluster with hostname limit set to 10 
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify that the hostname limit is respected
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+- projects: [RRT, RM]
+  suite: Go Automation/Provisioning/K3S/HostnameTruncation
+  cases:
+  - description: Provisions a 3 node split roles cluster with hostname truncation enabled
+    title: K3S_Hostname_Truncation|10_Characters
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a cluster with hostname limit set to 10 
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify that the hostname limit is respected
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3 node split roles cluster with hostname truncation enabled
+    title: K3S_Hostname_Truncation|31_Characters
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a cluster with hostname limit set to 31 
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify that the hostname limit is respected
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3 node split roles cluster with hostname truncation enabled
+    title: K3S_Hostname_Truncation|63_Characters
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a cluster with hostname limit set to 63 
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify that the hostname limit is respected
+      expectedresult: ""
+      data: ""
+      position: 3
       attachments: []
     custom_field:
       "14": Validation

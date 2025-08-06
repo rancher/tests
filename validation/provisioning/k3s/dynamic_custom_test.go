@@ -72,7 +72,7 @@ func TestDynamicCustom(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Cleanup(func() {
-			logrus.Info("Running cleanup")
+			logrus.Infof("Running cleanup (%s)", tt.name)
 			k.session.Cleanup()
 		})
 

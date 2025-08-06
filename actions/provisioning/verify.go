@@ -3,7 +3,6 @@ package provisioning
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 	"testing"
 
@@ -11,6 +10,7 @@ import (
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioninginput"
+	wranglername "github.com/rancher/wrangler/pkg/name"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
@@ -26,7 +26,6 @@ import (
 	psadeploy "github.com/rancher/tests/actions/psact"
 	"github.com/rancher/tests/actions/registries"
 	"github.com/rancher/tests/actions/reports"
-	wranglername "github.com/rancher/wrangler/pkg/name"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,6 +43,7 @@ const (
 	etcdSnapshotAnnotation      = "etcdsnapshot.rke.io/storage"
 	machineNameAnnotation       = "cluster.x-k8s.io/machine"
 	machineSteveResourceType    = "cluster.x-k8s.io.machine"
+	deploymentNameLabel         = "cluster.x-k8s.io/deployment-name"
 	onDemandPrefix              = "on-demand-"
 	s3                          = "s3"
 )
@@ -347,61 +347,54 @@ func VerifyHostnameLength(t *testing.T, client *rancher.Client, clusterObject *s
 	require.NoError(t, err)
 
 	for _, mp := range clusterSpec.RKEConfig.MachinePools {
-		n := wranglername.SafeConcatName(clusterObject.Name, mp.Name)
-		query, err := url.ParseQuery(fmt.Sprintf("labelSelector=%s=%s&fieldSelector=metadata.name=%s", capi.ClusterNameLabel, clusterObject.Name, n))
+		machineName := wranglername.SafeConcatName(clusterObject.Name, mp.Name)
+
+		machineResp, err := client.Steve.SteveType(machineSteveResourceType).List(nil)
 		require.NoError(t, err)
 
-		machineDeploymentsResp, err := client.Steve.SteveType("cluster.x-k8s.io.machinedeployment").List(query)
-		require.NoError(t, err)
-
-		assert.True(t, len(machineDeploymentsResp.Data) == 1)
-
-		md := &capi.MachineDeployment{}
-		require.NoError(t, steveV1.ConvertToK8sType(machineDeploymentsResp.Data[0].JSONResp, md))
-
-		query2, err := url.ParseQuery(fmt.Sprintf("labelSelector=%s=%s", capi.MachineDeploymentNameLabel, md.Name))
-		require.NoError(t, err)
-
-		machineResp, err := client.Steve.SteveType(machineSteveResourceType).List(query2)
-		require.NoError(t, err)
-
-		assert.True(t, len(machineResp.Data) > 0)
-
-		for i := range machineResp.Data {
-			m := capi.Machine{}
-			require.NoError(t, steveV1.ConvertToK8sType(machineResp.Data[i].JSONResp, &m))
-
-			assert.NotNil(t, m.Status.NodeRef)
-
-			dynamic, err := client.GetRancherDynamicClient()
-			require.NoError(t, err)
-
-			gv, err := schema.ParseGroupVersion(m.Spec.InfrastructureRef.APIVersion)
-			require.NoError(t, err)
-
-			gvr := schema.GroupVersionResource{
-				Group:    gv.Group,
-				Version:  gv.Version,
-				Resource: strings.ToLower(m.Spec.InfrastructureRef.Kind) + "s",
-			}
-
-			ustr, err := dynamic.Resource(gvr).Namespace(m.Namespace).Get(context.TODO(), m.Spec.InfrastructureRef.Name, metav1.GetOptions{})
-			require.NoError(t, err)
-
-			limit := hostnameLimit
-			if mp.HostnameLengthLimit != 0 {
-				limit = mp.HostnameLengthLimit
-			} else if clusterSpec.RKEConfig.MachinePoolDefaults.HostnameLengthLimit != 0 {
-				limit = clusterSpec.RKEConfig.MachinePoolDefaults.HostnameLengthLimit
-			}
-
-			assert.True(t, len(m.Status.NodeRef.Name) <= limit)
-			if len(ustr.GetName()) < limit {
-				assert.True(t, m.Status.NodeRef.Name == ustr.GetName())
+		var machinePool *steveV1.SteveAPIObject
+		for _, machine := range machineResp.Data {
+			if machine.Labels[deploymentNameLabel] == machineName {
+				machinePool = &machine
 			}
 		}
-		t.Logf("Verified hostname length for machine pool %s", mp.Name)
+		assert.NotNil(t, machinePool)
+
+		capiMachine := capi.Machine{}
+		require.NoError(t, steveV1.ConvertToK8sType(machinePool.JSONResp, &capiMachine))
+		assert.NotNil(t, capiMachine.Status.NodeRef)
+
+		dynamic, err := client.GetRancherDynamicClient()
+		require.NoError(t, err)
+
+		gv, err := schema.ParseGroupVersion(capiMachine.Spec.InfrastructureRef.APIVersion)
+		require.NoError(t, err)
+
+		gvr := schema.GroupVersionResource{
+			Group:    gv.Group,
+			Version:  gv.Version,
+			Resource: strings.ToLower(capiMachine.Spec.InfrastructureRef.Kind) + "s",
+		}
+
+		ustr, err := dynamic.Resource(gvr).Namespace(capiMachine.Namespace).Get(context.TODO(), capiMachine.Spec.InfrastructureRef.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		limit := hostnameLimit
+		if mp.HostnameLengthLimit != 0 {
+			limit = mp.HostnameLengthLimit
+		} else if clusterSpec.RKEConfig.MachinePoolDefaults.HostnameLengthLimit != 0 {
+			limit = clusterSpec.RKEConfig.MachinePoolDefaults.HostnameLengthLimit
+		}
+
+		assert.True(t, len(capiMachine.Status.NodeRef.Name) <= limit)
+		if len(ustr.GetName()) < limit {
+			assert.True(t, capiMachine.Status.NodeRef.Name == ustr.GetName())
+		}
+
+		logrus.Infof("Hostname: %s, HostnameLimit: %v", capiMachine.Status.NodeRef.Name, limit)
 	}
+
+	logrus.Infof("Verified that hostname truncation is respected on cluster(%s)", clusterObject.Name)
 }
 
 // VerifyUpgrade validates that a cluster has been upgraded to a given version

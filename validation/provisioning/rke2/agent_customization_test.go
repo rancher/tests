@@ -113,7 +113,7 @@ func TestAgentCustomization(t *testing.T) {
 	for _, tt := range tests {
 		var err error
 		t.Cleanup(func() {
-			logrus.Info("Running cleanup")
+			logrus.Infof("Running cleanup (%s)", tt.name)
 			r.session.Cleanup()
 		})
 
@@ -183,7 +183,7 @@ func TestAgentCustomizationFailure(t *testing.T) {
 	for _, tt := range tests {
 		var err error
 		t.Cleanup(func() {
-			logrus.Info("Running cleanup")
+			logrus.Infof("Running cleanup (%s)", tt.name)
 			r.session.Cleanup()
 		})
 

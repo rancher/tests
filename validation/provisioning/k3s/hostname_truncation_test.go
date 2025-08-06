@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
@@ -22,15 +23,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type nodeDriverTest struct {
+type hostnameTruncationTest struct {
 	client             *rancher.Client
 	session            *session.Session
-	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
+	standardUserClient *rancher.Client
 }
 
-func nodeDriverSetup(t *testing.T) nodeDriverTest {
-	var k nodeDriverTest
+func hostnameTruncationSetup(t *testing.T) hostnameTruncationTest {
+	var k hostnameTruncationTest
 	testSession := session.NewSession()
 	k.session = testSession
 
@@ -52,32 +53,25 @@ func nodeDriverSetup(t *testing.T) nodeDriverTest {
 	return k
 }
 
-func TestNodeDriver(t *testing.T) {
+func TestHostnameTruncation(t *testing.T) {
 	t.Parallel()
-	k := nodeDriverSetup(t)
+	k := hostnameTruncationSetup(t)
 
-	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
-	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	tests := []struct {
-		name         string
-		machinePools []provisioninginput.MachinePools
-		client       *rancher.Client
+		name                    string
+		client                  *rancher.Client
+		machinePools            []provisioninginput.MachinePools
+		ClusterNameLength       int
+		ClusterLengthLimit      int
+		machinePoolLengthLimits []int
 	}{
-		{"K3S_Node_Driver|etcd_cp_worker", nodeRolesAll, k.standardUserClient},
-		{"K3S_Node_Driver|etcd_cp|worker", nodeRolesShared, k.standardUserClient},
-		{"K3S_Node_Driver|etcd|cp|worker", nodeRolesDedicated, k.standardUserClient},
-		{"K3S_Node_Driver|3_etcd|2_cp|3_worker", nodeRolesStandard, k.standardUserClient},
+		{"K3S_Hostname_Truncation|10_Characters", k.standardUserClient, nodeRolesDedicated, 63, 10, []int{10, 31, 63}},
+		{"K3S_Hostname_Truncation|31_Characters", k.standardUserClient, nodeRolesDedicated, 63, 31, []int{10, 31, 63}},
+		{"K3S_Hostname_Truncation|63_Characters", k.standardUserClient, nodeRolesDedicated, 63, 63, []int{10, 31, 63}},
 	}
-
 	for _, tt := range tests {
-		var err error
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
 			k.session.Cleanup()
@@ -86,23 +80,34 @@ func TestNodeDriver(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			var hostnamePools []machinepools.HostnameTruncation
+			for _, machinePoolLength := range tt.machinePoolLengthLimits {
+				currentTruncationPool := machinepools.HostnameTruncation{
+					Name:                   namegen.RandStringLower(tt.ClusterNameLength),
+					ClusterNameLengthLimit: tt.ClusterLengthLimit,
+					PoolNameLengthLimit:    machinePoolLength,
+				}
+
+				hostnamePools = append(hostnamePools, currentTruncationPool)
+			}
+
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
 			clusterConfig.MachinePools = tt.machinePools
 
-			assert.NotNil(t, clusterConfig.Provider)
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
-			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+			clusterObject, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, hostnamePools)
 			assert.NoError(t, err)
 
-			provisioning.VerifyCluster(t, tt.client, clusterConfig, cluster)
+			provisioning.VerifyCluster(t, tt.client, clusterConfig, clusterObject)
+			provisioning.VerifyHostnameLength(t, k.client, clusterObject)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, k.cattleConfig)
-		err = qase.UpdateSchemaParameters(tt.name, params)
+		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
 		}

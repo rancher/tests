@@ -195,6 +195,24 @@ Template Test verfies that an RKE2 template can be used to provision a cluster.
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestTemplate -timeout=1h -v`
 
 
+### Hostname Truncation Test
+
+#### Description: 
+Hostname truncation test verifies that the node hostname is truncated properly.
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Machine Config](#machine-config)
+
+#### Table Tests
+1. `RKE2_Hostname_Truncation|10_Characters`
+2. `RKE2_Hostname_Truncation|31_Characters`
+3. `RKE2_Hostname_Truncation|63_Characters`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestHostnameTruncation -timeout=1h -v`
+
 ### All Tests
 
 #### Description: 
