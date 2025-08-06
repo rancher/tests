@@ -1,12 +1,12 @@
 package rke2k3s
 
 import (
-	"github.com/rancher/rancher/tests/v2/actions/machinepools"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/steve"
+	"github.com/rancher/tests/actions/machinepools"
 	"github.com/sirupsen/logrus"
 )
 

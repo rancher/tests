@@ -356,7 +356,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 		registries = clustersConfig.Registries.RKE2Registries
 	}
 
-	rkeSpecCommon := rkev1.RKEClusterSpecCommon{
+	rkeSpecCommon := rkev1.ClusterConfiguration{
 		UpgradeStrategy:       upgradeStrategy,
 		ChartValues:           chartValuesMap,
 		MachineGlobalConfig:   machineGlobalConfigMap,
@@ -366,7 +366,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 		ETCD:                  etcd,
 	}
 	rkeConfig := &apisV1.RKEConfig{
-		RKEClusterSpecCommon: rkeSpecCommon,
+		ClusterConfiguration: rkeSpecCommon,
 		MachinePools:         machinePools,
 	}
 

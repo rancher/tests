@@ -10,8 +10,8 @@ replace (
 
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20191219222812-2987a591a72c
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20191219222812-2987a591a72c
-	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20250410003522-2a1bf3d05723
-	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20250212213103-5c3550f55322
+	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20250806201723-9a7af3779b9d
+	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20250806201723-9a7af3779b9d
 
 	github.com/rancher/tests/actions => ./actions
 	github.com/rancher/tests/interoperability => ./interoperability
@@ -69,9 +69,9 @@ require (
 
 require (
 	github.com/mattn/go-sqlite3 v1.14.28
-	github.com/rancher/rancher v0.0.0-20250328200651-bdbb4ea81874
-	github.com/rancher/shepherd v0.0.0-20250804172049-aa2e21c5b6aa
-	github.com/rancher/tests/actions v0.0.0-20250729165811-42c7bc5bd585
+	github.com/rancher/rancher v0.0.0-20250806201723-9a7af3779b9d
+	github.com/rancher/shepherd v0.0.0-20250806164026-f0b65006babd
+	github.com/rancher/tests/actions v0.0.0-20250806190403-cb1746eb0d9d
 	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
 	github.com/rancher/tfp-automation v0.0.0-20250805185108-98f2e826d0a7
 )
@@ -96,7 +96,7 @@ require (
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/opencontainers/image-spec v1.1.0 // indirect
+	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.72.0
 	github.com/prometheus/client_golang v1.22.0 // indirect
@@ -109,12 +109,12 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.13.0
 	github.com/rancher/gke-operator v1.12.0 // indirect
 	github.com/rancher/lasso v0.2.3 // indirect
-	github.com/rancher/machine v0.15.0-rancher126 // indirect
+	github.com/rancher/machine v0.15.0-rancher131 // indirect
 	github.com/rancher/norman v0.7.0
 	github.com/rancher/rke v1.8.0-rc.4 // indirect
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250710162344-185ff9f785cd // indirect
 	github.com/rancher/wrangler v1.1.2 // indirect
-	github.com/rancher/wrangler/v3 v3.2.2 // indirect
+	github.com/rancher/wrangler/v3 v3.2.3-rc.1 // indirect
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.40.0
@@ -161,7 +161,7 @@ require (
 	github.com/aws/smithy-go v1.22.4 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/containerd/cgroups/v3 v3.0.2 // indirect
-	github.com/containerd/errdefs v0.3.0 // indirect
+	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/gruntwork-io/terratest v0.49.0 // indirect
 	github.com/harvester/harvester v1.5.0 // indirect
@@ -192,7 +192,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250505200425-f936aa4a68b2 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
-	k8s.io/pod-security-admission v0.32.2 // indirect
+	k8s.io/pod-security-admission v0.33.2 // indirect
 	kubevirt.io/api v1.4.0 // indirect
 	kubevirt.io/containerized-data-importer-api v1.61.0 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
@@ -209,7 +209,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
-	github.com/containerd/containerd v1.7.24 // indirect
+	github.com/containerd/containerd v1.7.27 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -259,14 +259,14 @@ require (
 	github.com/rancher/cis-operator v1.0.11
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
-	github.com/spf13/cast v1.7.0 // indirect
+	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
-	go.etcd.io/etcd/api/v3 v3.5.17 // indirect
-	go.etcd.io/etcd/client/pkg/v3 v3.5.17 // indirect
-	go.etcd.io/etcd/client/v2 v2.305.16 // indirect
-	go.etcd.io/etcd/client/v3 v3.5.17 // indirect
+	go.etcd.io/etcd/api/v3 v3.5.21 // indirect
+	go.etcd.io/etcd/client/pkg/v3 v3.5.21 // indirect
+	go.etcd.io/etcd/client/v2 v2.305.21 // indirect
+	go.etcd.io/etcd/client/v3 v3.5.21 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel v1.36.0 // indirect
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
