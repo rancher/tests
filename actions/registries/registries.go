@@ -8,7 +8,7 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -32,12 +32,17 @@ func CheckAllClusterPodsForRegistryPrefix(client *rancher.Client, clusterID, reg
 		if err != nil {
 			return false, err
 		}
+
 		for _, container := range podSpec.Containers {
-			if !strings.Contains(container.Image, registryPrefix) {
-				log.Warnf("pod/containerImage %s/%s is not using the correct registry prefix", pod.Name, container.Image)
-				return false, nil
+			image := container.Image
+			parts := strings.Split(image, "/")
+			if len(parts) > 1 && strings.Contains(parts[0], ".") {
+				if !strings.HasPrefix(image, registryPrefix) {
+					logrus.Warnf("pod/containerImage %s/%s is not using the correct registry prefix", pod.Name, image)
+					return false, nil
+				}
 			}
-			log.Infoln(container.Image)
+			logrus.Infof("pod/containerImage %s/%s is using the public registry", pod.Name, image)
 		}
 	}
 	return true, nil

@@ -203,6 +203,21 @@ jobs:
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
+            registries:
+            rke2Registries:
+              mirrors:
+                "docker.io":
+                  endpoint: ["https://${{ secrets.QA_PRIVATE_REGISTRY_NAME }}"]
+                  rewrites:
+                    "^(.*)": "${{ secrets.QA_PRIVATE_REGISTRY_REWRITE }}"
+              configs:
+                "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
+                  "auth":
+                    username: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
+                    password: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
+                  insecureSkipVerify: true
+            rke2Password: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
+            rke2Username: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
@@ -447,6 +462,20 @@ jobs:
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
+            rke2Registries:
+              mirrors:
+                "docker.io":
+                  endpoint: ["https://${{ secrets.QA_PRIVATE_REGISTRY_NAME }}"]
+                  rewrites:
+                    "^(.*)": "${{ secrets.QA_PRIVATE_REGISTRY_REWRITE }}"
+              configs:
+                "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
+                  "auth":
+                    username: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
+                    password: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
+                  insecureSkipVerify: true
+            rke2Password: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
+            rke2Username: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
@@ -691,6 +720,20 @@ jobs:
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
+            rke2Registries:
+              mirrors:
+                "docker.io":
+                  endpoint: ["https://${{ secrets.QA_PRIVATE_REGISTRY_NAME }}"]
+                  rewrites:
+                    "^(.*)": "${{ secrets.QA_PRIVATE_REGISTRY_REWRITE }}"
+              configs:
+                "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
+                  "auth":
+                    username: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
+                    password: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
+                  insecureSkipVerify: true
+            rke2Password: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
+            rke2Username: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
@@ -934,6 +977,20 @@ jobs:
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
+            rke2Registries:
+              mirrors:
+                "docker.io":
+                  endpoint: ["https://${{ secrets.QA_PRIVATE_REGISTRY_NAME }}"]
+                  rewrites:
+                    "^(.*)": "${{ secrets.QA_PRIVATE_REGISTRY_REWRITE }}"
+              configs:
+                "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
+                  "auth":
+                    username: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
+                    password: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
+                  insecureSkipVerify: true
+            rke2Password: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
+            rke2Username: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
