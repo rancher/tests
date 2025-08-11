@@ -235,7 +235,7 @@ jobs:
                 awsCICDInstanceTag: "hb-recurring-runs"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
                 awsUser: "${{ secrets.AWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
               - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
@@ -244,7 +244,7 @@ jobs:
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-recurring-runs-wins"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["windows"]
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
@@ -479,7 +479,7 @@ jobs:
                 awsCICDInstanceTag: "hb-recurring-runs"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
                 awsUser: "${{ secrets.AWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
               - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
@@ -488,7 +488,7 @@ jobs:
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-recurring-runs-wins"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["windows"]
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
@@ -723,7 +723,7 @@ jobs:
                 awsCICDInstanceTag: "hb-recurring-runs"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
                 awsUser: "${{ secrets.AWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
               - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
@@ -732,7 +732,7 @@ jobs:
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-recurring-runs-wins"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["windows"]
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
@@ -966,7 +966,7 @@ jobs:
                 awsCICDInstanceTag: "hb-recurring-runs"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
                 awsUser: "${{ secrets.AWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
               - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
@@ -975,7 +975,7 @@ jobs:
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-recurring-runs-wins"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["windows"]
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"

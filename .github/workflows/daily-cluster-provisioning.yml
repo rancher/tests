@@ -206,6 +206,7 @@ jobs:
             region: "${{ secrets.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
+              ami: "${{ secrets.AWS_AMI }}"
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
@@ -228,7 +229,7 @@ jobs:
                 awsCICDInstanceTag: "hb-daily-provisioning"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
                 awsUser: "${{ secrets.AWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
               - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
@@ -237,7 +238,7 @@ jobs:
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning-windows"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["windows"]
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
@@ -271,11 +272,13 @@ jobs:
         run: |
           gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
           --junitfile results.xml -- -timeout=3h -tags=recurring -v
+        shell: bash
 
       - name: Run RKE2 Provisioning Tests
         run: |
           gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
           --junitfile results.xml -- -timeout=3h -tags=recurring -v
+        shell: bash
 
       - name: Reporting Results to Qase
         if: always()
@@ -460,6 +463,7 @@ jobs:
             region: "${{ secrets.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
+              ami: "${{ secrets.AWS_AMI }}"
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
@@ -482,7 +486,7 @@ jobs:
                 awsCICDInstanceTag: "hb-daily-provisioning"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
                 awsUser: "${{ secrets.AWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
               - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
@@ -491,7 +495,7 @@ jobs:
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning-windows"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["windows"]
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
@@ -525,11 +529,13 @@ jobs:
         run: |
           gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
           --junitfile results.xml -- -timeout=3h -tags=recurring -v
+        shell: bash
 
       - name: Run RKE2 Provisioning Tests
         run: |
           gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
           --junitfile results.xml -- -timeout=3h -tags=recurring -v
+        shell: bash
 
       - name: Reporting Results to Qase
         if: always()
@@ -714,6 +720,7 @@ jobs:
             region: "${{ secrets.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
+              ami: "${{ secrets.AWS_AMI }}"
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
@@ -736,7 +743,7 @@ jobs:
                 awsCICDInstanceTag: "hb-daily-provisioning"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
                 awsUser: "${{ secrets.AWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
               - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
@@ -745,7 +752,7 @@ jobs:
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning-windows"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["windows"]
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
@@ -779,11 +786,13 @@ jobs:
         run: |
           gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
           --junitfile results.xml -- -timeout=3h -tags=recurring -v
+        shell: bash
 
       - name: Run RKE2 Provisioning Tests
         run: |
           gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
           --junitfile results.xml -- -timeout=3h -tags=recurring -v
+        shell: bash
 
       - name: Reporting Results to Qase
         if: always()
@@ -967,6 +976,7 @@ jobs:
             region: "${{ secrets.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
+              ami: "${{ secrets.AWS_AMI }}"
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
@@ -989,7 +999,7 @@ jobs:
                 awsCICDInstanceTag: "hb-daily-provisioning-runs"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
                 awsUser: "${{ secrets.AWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
               - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
@@ -998,7 +1008,7 @@ jobs:
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning-windows"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
-                volumeSize: "${{ vars.AWS_ROOT_SIZE }}"
+                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["windows"]
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
@@ -1032,11 +1042,13 @@ jobs:
         run: |
           gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
           --junitfile results.xml -- -timeout=3h -tags=recurring -v
+        shell: bash
 
       - name: Run RKE2 Provisioning Tests
         run: |
           gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
           --junitfile results.xml -- -timeout=3h -tags=recurring -v
+        shell: bash
 
       - name: Reporting Results to Qase
         if: always()
