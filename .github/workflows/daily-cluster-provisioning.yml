@@ -269,15 +269,15 @@ jobs:
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
           
           templateTest:
-          repo:
-            metadata:
-              name: "test"
-            spec:
-              gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
-              gitBranch: main
-              insecureSkipTLSVerify: true
-          templateProvider: "aws"
-          templateName: "cluster-template1"
+            repo:
+              metadata:
+                name: "test"
+              spec:
+                gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
+                gitBranch: main
+                insecureSkipTLSVerify: true
+            templateProvider: "aws"
+            templateName: "cluster-template1"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -552,15 +552,15 @@ jobs:
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
 
           templateTest:
-          repo:
-            metadata:
-              name: "test"
-            spec:
-              gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
-              gitBranch: main
-              insecureSkipTLSVerify: true
-          templateProvider: "aws"
-          templateName: "cluster-template1"
+            repo:
+              metadata:
+                name: "test"
+              spec:
+                gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
+                gitBranch: main
+                insecureSkipTLSVerify: true
+            templateProvider: "aws"
+            templateName: "cluster-template1"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -835,15 +835,15 @@ jobs:
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
           
           templateTest:
-          repo:
-            metadata:
-              name: "test"
-            spec:
-              gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
-              gitBranch: main
-              insecureSkipTLSVerify: true
-          templateProvider: "aws"
-          templateName: "cluster-template1"
+            repo:
+              metadata:
+                name: "test"
+              spec:
+                gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
+                gitBranch: main
+                insecureSkipTLSVerify: true
+            templateProvider: "aws"
+            templateName: "cluster-template1"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -1117,15 +1117,15 @@ jobs:
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
 
           templateTest:
-          repo:
-            metadata:
-              name: "test"
-            spec:
-              gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
-              gitBranch: main
-              insecureSkipTLSVerify: true
-          templateProvider: "aws"
-          templateName: "cluster-template1"
+            repo:
+              metadata:
+                name: "test"
+              spec:
+                gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
+                gitBranch: main
+                insecureSkipTLSVerify: true
+            templateProvider: "aws"
+            templateName: "cluster-template1"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
