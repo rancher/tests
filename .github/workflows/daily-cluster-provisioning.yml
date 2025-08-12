@@ -249,7 +249,7 @@ jobs:
               - instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_AMI }}"
-                awsSecurityGroups: ["${{ secrets.AWS_SECURITY_GROUP_NAMES }}"]
+                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
@@ -259,7 +259,7 @@ jobs:
               - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
-                awsSecurityGroups: ["${{ secrets.AWS_SECURITY_GROUP_NAMES }}"]
+                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning-windows"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
@@ -532,7 +532,7 @@ jobs:
               - instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_AMI }}"
-                awsSecurityGroups: ["${{ secrets.AWS_SECURITY_GROUP_NAMES }}"]
+                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
@@ -542,7 +542,7 @@ jobs:
               - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
-                awsSecurityGroups: ["${{ secrets.AWS_SECURITY_GROUP_NAMES }}"]
+                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning-windows"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
@@ -815,7 +815,7 @@ jobs:
               - instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_AMI }}"
-                awsSecurityGroups: ["${{ secrets.AWS_SECURITY_GROUP_NAMES }}"]
+                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
@@ -825,7 +825,7 @@ jobs:
               - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
-                awsSecurityGroups: ["${{ secrets.AWS_SECURITY_GROUP_NAMES }}"]
+                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning-windows"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
@@ -1097,7 +1097,7 @@ jobs:
               - instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_AMI }}"
-                awsSecurityGroups: ["${{ secrets.AWS_SECURITY_GROUP_NAMES }}"]
+                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning-runs"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
@@ -1107,7 +1107,7 @@ jobs:
               - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
-                awsSecurityGroups: ["${{ secrets.AWS_SECURITY_GROUP_NAMES }}"]
+                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning-windows"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
