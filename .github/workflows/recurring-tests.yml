@@ -303,10 +303,6 @@ jobs:
 
       - name: Run Test Suites
         uses: ./.github/actions/run-hostbusters-test-suites
-
-      - name: Reporting Results to Qase
-        if: always()
-        uses: ./.github/actions/report-to-qase
         with:
           hb-qase-test-run-id: ${{ steps.get-qase-id.outputs.id }}
           qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
@@ -466,7 +462,7 @@ jobs:
               rke2Version: "${{ vars.RKE2_VERSION_2_11 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: "${{ vars.TERRAFORM_LOGGING }}"
+            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           scalingInput:
             nodeProvider: "ec2"
@@ -573,10 +569,6 @@ jobs:
 
       - name: Run Test Suites
         uses: ./.github/actions/run-hostbusters-test-suites
-
-      - name: Reporting Results to Qase
-        if: always()
-        uses: ./.github/actions/report-to-qase
         with:
           hb-qase-test-run-id: ${{ steps.get-qase-id.outputs.id }}
           qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
@@ -736,7 +728,7 @@ jobs:
               rke2Version: "${{ vars.RKE2_VERSION_2_10 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: "${{ vars.TERRAFORM_LOGGING }}"
+            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           scalingInput:
             nodeProvider: "ec2"
@@ -843,10 +835,6 @@ jobs:
 
       - name: Run Test Suites
         uses: ./.github/actions/run-hostbusters-test-suites
-
-      - name: Reporting Results to Qase
-        if: always()
-        uses: ./.github/actions/report-to-qase
         with:
           hb-qase-test-run-id: ${{ steps.get-qase-id.outputs.id }}
           qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
@@ -1005,7 +993,7 @@ jobs:
               rke2Version: "${{ vars.RKE2_VERSION_2_9 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: "${{ vars.TERRAFORM_LOGGING }}"
+            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           scalingInput:
             nodeProvider: "ec2"
@@ -1112,10 +1100,6 @@ jobs:
 
       - name: Run Test Suites
         uses: ./.github/actions/run-hostbusters-test-suites
-
-      - name: Reporting Results to Qase
-        if: always()
-        uses: ./.github/actions/report-to-qase
         with:
           hb-qase-test-run-id: ${{ steps.get-qase-id.outputs.id }}
           qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}

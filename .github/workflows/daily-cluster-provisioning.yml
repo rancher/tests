@@ -304,21 +304,8 @@ jobs:
       - name: Creating Rancher server
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
-      - name: Run K3S Provisioning Tests
-        run: |
-          gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
-          --junitfile results.xml -- -timeout=3h -tags=recurring -v
-        shell: bash
-
-      - name: Run RKE2 Provisioning Tests
-        run: |
-          gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
-          --junitfile results.xml -- -timeout=3h -tags=recurring -v
-        shell: bash
-
-      - name: Reporting Results to Qase
-        if: always()
-        uses: ./.github/actions/report-to-qase
+      - name: Run Daily Provisioning tests
+        uses: ./.github/actions/run-hostbusters-daily-provisioning
         with:
           hb-qase-test-run-id: ${{ steps.get-qase-id.outputs.id }}
           qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
@@ -484,7 +471,7 @@ jobs:
               rke2Version: "${{ vars.RKE2_VERSION_2_11 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: "${{ vars.TERRAFORM_LOGGING }}"
+            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:
             cni: "${{ secrets.CNI }}"
@@ -587,21 +574,8 @@ jobs:
       - name: Creating Rancher server
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
-      - name: Run K3S Provisioning Tests
-        run: |
-          gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
-          --junitfile results.xml -- -timeout=3h -tags=recurring -v
-        shell: bash
-
-      - name: Run RKE2 Provisioning Tests
-        run: |
-          gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
-          --junitfile results.xml -- -timeout=3h -tags=recurring -v
-        shell: bash
-
-      - name: Reporting Results to Qase
-        if: always()
-        uses: ./.github/actions/report-to-qase
+      - name: Run Daily Provisioning tests
+        uses: ./.github/actions/run-hostbusters-daily-provisioning
         with:
           hb-qase-test-run-id: ${{ steps.get-qase-id.outputs.id }}
           qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
@@ -767,7 +741,7 @@ jobs:
               rke2Version: "${{ vars.RKE2_VERSION_2_10 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: "${{ vars.TERRAFORM_LOGGING }}"
+            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:
             cni: "${{ secrets.CNI }}"
@@ -870,21 +844,8 @@ jobs:
       - name: Creating Rancher server
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
-      - name: Run K3S Provisioning Tests
-        run: |
-          gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
-          --junitfile results.xml -- -timeout=3h -tags=recurring -v
-        shell: bash
-
-      - name: Run RKE2 Provisioning Tests
-        run: |
-          gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
-          --junitfile results.xml -- -timeout=3h -tags=recurring -v
-        shell: bash
-
-      - name: Reporting Results to Qase
-        if: always()
-        uses: ./.github/actions/report-to-qase
+      - name: Run Daily Provisioning tests
+        uses: ./.github/actions/run-hostbusters-daily-provisioning
         with:
           hb-qase-test-run-id: ${{ steps.get-qase-id.outputs.id }}
           qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
@@ -1049,7 +1010,7 @@ jobs:
               rke2Version: "${{ vars.RKE2_VERSION_2_9 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: "${{ vars.TERRAFORM_LOGGING }}"
+            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:
             cni: "${{ secrets.CNI }}"
@@ -1152,21 +1113,8 @@ jobs:
       - name: Creating Rancher server
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
-      - name: Run K3S Provisioning Tests
-        run: |
-          gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
-          --junitfile results.xml -- -timeout=3h -tags=recurring -v
-        shell: bash
-
-      - name: Run RKE2 Provisioning Tests
-        run: |
-          gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
-          --junitfile results.xml -- -timeout=3h -tags=recurring -v
-        shell: bash
-
-      - name: Reporting Results to Qase
-        if: always()
-        uses: ./.github/actions/report-to-qase
+      - name: Run Daily Provisioning tests
+        uses: ./.github/actions/run-hostbusters-daily-provisioning
         with:
           hb-qase-test-run-id: ${{ steps.get-qase-id.outputs.id }}
           qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
