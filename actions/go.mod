@@ -60,13 +60,14 @@ replace (
 
 require (
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20250806164026-f0b65006babd
+	github.com/rancher/shepherd v0.0.0-20250808210055-4a60b0f66c6b
 )
 
 require (
 	github.com/antihax/optional v1.0.0
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/pkg/errors v0.9.1
+	github.com/rancher/lasso v0.2.3
 	github.com/rancher/machine v0.15.0-rancher131
 	github.com/rancher/norman v0.7.0
 	github.com/rancher/rancher v0.0.0-20250806201723-9a7af3779b9d
@@ -172,7 +173,6 @@ require (
 	github.com/rancher/eks-operator v1.12.0 // indirect
 	github.com/rancher/fleet/pkg/apis v0.13.0 // indirect
 	github.com/rancher/gke-operator v1.12.0 // indirect
-	github.com/rancher/lasso v0.2.3 // indirect
 	github.com/rancher/rke v1.8.0-rc.4 // indirect
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250710162344-185ff9f785cd // indirect
 	github.com/rancher/wrangler/v3 v3.2.3-rc.1 // indirect
