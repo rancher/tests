@@ -176,6 +176,7 @@ type Advanced struct {
 	KubeControllerManagerArgs []string                 `json:"kubeControllerManagerArgs,omitempty" yaml:"kubeControllerManagerArgs,omitempty"`
 	KubeSchedulerArgs         []string                 `json:"kubeSchedulerArgs,omitempty" yaml:"kubeSchedulerArgs,omitempty"`
 	KubeAPIServerArgs         []string                 `json:"kubeAPIServerArgs,omitempty" yaml:"kubeAPIServerArgs,omitempty"`
+	DataDirectories           *rkev1.DataDirectories   `json:"dataDirectories,omitempty" yaml:"dataDirectories,omitempty"`
 }
 
 type Registries struct {

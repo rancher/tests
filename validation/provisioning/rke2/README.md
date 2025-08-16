@@ -87,6 +87,23 @@ Custom test verfies that various custom cluster configurations provision properl
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCustom -timeout=1h -v`
 
+### Data Directories Test
+
+#### Description: 
+Data Directories test verifies that files related to k8s, systemAgent and provisioning respect the data directories feature.
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Custom Cluster Config](#custom-cluster)
+
+#### Table Tests
+1. `RKE2_Split_Data_Directories`
+2. `RKE2_Grouped_Data_Directories`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDataDirectories -timeout=1h -v`
+
 
 ### Dynamic Custom Test
 

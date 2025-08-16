@@ -16,7 +16,6 @@ import (
 	shepworkloads "github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/namespaces"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/workloads"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -108,8 +107,6 @@ func (n *NetworkPolicyTestSuite) TestPingPodsFromCPNode() {
 	assert.NoError(n.T(), err)
 	assert.NotEmpty(n.T(), pods)
 
-	_, stevecluster, err := clusters.GetProvisioningClusterByName(n.client, n.clusterName, provisioninginput.Namespace)
-
 	query, err := url.ParseQuery("labelSelector=node-role.kubernetes.io/" + nodeRole + "=true")
 	assert.NoError(n.T(), err)
 
@@ -118,11 +115,7 @@ func (n *NetworkPolicyTestSuite) TestPingPodsFromCPNode() {
 	assert.NotEmpty(n.T(), nodeList, err)
 
 	for _, machine := range nodeList.Data {
-		sshUser, err := sshkeys.GetSSHUser(n.client, stevecluster)
-		assert.NoError(n.T(), err)
-		assert.NotEmpty(n.T(), sshUser, errors.New("sshUser does not exist"))
-
-		sshNode, err := sshkeys.GetSSHNodeFromMachine(n.client, sshUser, &machine)
+		sshNode, err := sshkeys.GetSSHNodeFromMachine(n.client, &machine)
 		assert.NoError(n.T(), err)
 
 		n.T().Logf("Running ping on [%v]", machine.Name)

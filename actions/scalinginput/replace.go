@@ -13,11 +13,11 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/nodes"
 	nodestat "github.com/rancher/shepherd/extensions/nodes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 )
@@ -149,7 +149,7 @@ func ReplaceRKE1Nodes(client *rancher.Client, clusterName string, isEtcd bool, i
 }
 
 // shutdownFirstNodeWithRole uses ssh to shutdown the first node matching the specified role in a given cluster.
-func shutdownFirstNodeWithRole(client *rancher.Client, stevecluster *steveV1.SteveAPIObject, clusterID, nodeRole string) (*steveV1.SteveAPIObject, error) {
+func shutdownFirstNodeWithRole(client *rancher.Client, clusterID, nodeRole string) (*steveV1.SteveAPIObject, error) {
 	steveclient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return nil, err
@@ -167,16 +167,7 @@ func shutdownFirstNodeWithRole(client *rancher.Client, stevecluster *steveV1.Ste
 
 	firstMachine := nodeList.Data[0]
 
-	sshUser, err := sshkeys.GetSSHUser(client, stevecluster)
-	if err != nil {
-		return nil, err
-	}
-
-	if sshUser == "" {
-		return nil, errors.New("sshUser does not exist")
-	}
-
-	sshNode, err := sshkeys.GetSSHNodeFromMachine(client, sshUser, &firstMachine)
+	sshNode, err := sshkeys.GetSSHNodeFromMachine(client, &firstMachine)
 	if err != nil {
 		return nil, err
 	}
@@ -218,12 +209,12 @@ func AutoReplaceFirstNodeWithRole(client *rancher.Client, clusterName, nodeRole 
 		return err
 	}
 
-	_, stevecluster, err := clusters.GetProvisioningClusterByName(client, clusterName, provisioninginput.Namespace)
+	_, stevecluster, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
 	if err != nil {
 		return err
 	}
 
-	machine, err := shutdownFirstNodeWithRole(client, stevecluster, clusterID, nodeRole)
+	machine, err := shutdownFirstNodeWithRole(client, clusterID, nodeRole)
 	if err != nil {
 		return err
 	}

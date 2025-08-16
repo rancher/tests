@@ -9,6 +9,7 @@ import (
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioninginput"
 	wranglername "github.com/rancher/wrangler/pkg/name"
 
@@ -46,6 +47,7 @@ const (
 	deploymentNameLabel         = "cluster.x-k8s.io/deployment-name"
 	onDemandPrefix              = "on-demand-"
 	s3                          = "s3"
+	DefaultRancherDataDir       = "/var/lib/rancher"
 )
 
 // VerifyRKE1Cluster validates that the RKE1 cluster and its resources are in a good state, matching a given config.
@@ -420,12 +422,9 @@ func VerifySSHTests(t *testing.T, client *rancher.Client, clusterObject *steveV1
 	nodesSteveObjList, err := steveClient.SteveType("node").List(nil)
 	require.NoError(t, err)
 
-	sshUser, err := sshkeys.GetSSHUser(client, clusterObject)
-	require.NoError(t, err)
-
 	for _, tests := range sshTests {
 		for _, machine := range nodesSteveObjList.Data {
-			clusterNode, err := sshkeys.GetSSHNodeFromMachine(client, sshUser, &machine)
+			clusterNode, err := sshkeys.GetSSHNodeFromMachine(client, &machine)
 			require.NoError(t, err)
 
 			machineName := machine.Annotations[machineNameAnnotation]
@@ -433,5 +432,48 @@ func VerifySSHTests(t *testing.T, client *rancher.Client, clusterObject *steveV1
 			require.NoError(t, err)
 
 		}
+	}
+}
+
+// VerifyDataDirectories validates that data is being distributed properly across data directories.
+func VerifyDataDirectories(t *testing.T, client *rancher.Client, clustersConfig *clusters.ClusterConfig, machineConfig machinepools.MachineConfigs, cluster *steveV1.SteveAPIObject) {
+	clusterSpec := &provv1.ClusterSpec{}
+	err := steveV1.ConvertToK8sType(cluster.Spec, clusterSpec)
+	require.NoError(t, err)
+
+	require.NotNil(t, clusterSpec.RKEConfig.DataDirectories)
+
+	client, err = client.ReLogin()
+	require.NoError(t, err)
+
+	status := &provv1.ClusterStatus{}
+	err = steveV1.ConvertToK8sType(cluster.Status, status)
+	require.NoError(t, err)
+
+	steveClient, err := client.Steve.ProxyDownstream(status.ClusterName)
+	require.NoError(t, err)
+
+	nodesSteveObjList, err := steveClient.SteveType("node").List(nil)
+	require.NoError(t, err)
+
+	for _, machine := range nodesSteveObjList.Data {
+		clusterNode, err := sshkeys.GetSSHNodeFromMachine(client, &machine)
+		require.NoError(t, err)
+
+		_, err = clusterNode.ExecuteCommand(fmt.Sprintf("sudo ls %s", clusterSpec.RKEConfig.DataDirectories.K8sDistro))
+		require.NoError(t, err)
+		logrus.Infof("Verfied k8sDistro directory(%s) on node(%s)", clusterSpec.RKEConfig.DataDirectories.K8sDistro, clusterNode.NodeID)
+
+		_, err = clusterNode.ExecuteCommand(fmt.Sprintf("sudo ls %s", clusterSpec.RKEConfig.DataDirectories.Provisioning))
+		require.NoError(t, err)
+		logrus.Infof("Verfied provisioning directory(%s) on node(%s)", clusterSpec.RKEConfig.DataDirectories.Provisioning, clusterNode.NodeID)
+
+		_, err = clusterNode.ExecuteCommand(fmt.Sprintf("sudo ls %s", clusterSpec.RKEConfig.DataDirectories.SystemAgent))
+		require.NoError(t, err)
+		logrus.Infof("Verfied systemAgent directory(%s) on node(%s)", clusterSpec.RKEConfig.DataDirectories.SystemAgent, clusterNode.NodeID)
+
+		_, err = clusterNode.ExecuteCommand(fmt.Sprintf("sudo ls %s", DefaultRancherDataDir))
+		require.Error(t, err)
+		logrus.Infof("Verfied that the default data directory(%s) on node(%s) does not exist", clusterSpec.RKEConfig.DataDirectories.SystemAgent, clusterNode.NodeID)
 	}
 }

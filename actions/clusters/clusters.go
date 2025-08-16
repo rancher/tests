@@ -365,6 +365,13 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 		Registries:            registries,
 		ETCD:                  etcd,
 	}
+
+	if clustersConfig.Advanced != nil {
+		if clustersConfig.Advanced.DataDirectories != nil {
+			rkeSpecCommon.DataDirectories = *clustersConfig.Advanced.DataDirectories
+		}
+	}
+
 	rkeConfig := &apisV1.RKEConfig{
 		ClusterConfiguration: rkeSpecCommon,
 		MachinePools:         machinePools,

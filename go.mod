@@ -285,3 +285,5 @@ require (
 	sigs.k8s.io/kustomize/kyaml v0.19.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 )
+
+replace github.com/rancher/shepherd => github.com/susesgartner/shepherd v0.0.0-20250816022203-95b324be9229
