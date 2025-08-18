@@ -53,7 +53,7 @@ func setupRancher(t *testing.T) (*rancher.Client, error) {
 
 	testSession := session.NewSession()
 
-	client, err := infrastructure.PostRancherSetup(t, rancherConfig, testSession, terraformConfig.Standalone.RancherHostname, false)
+	client, err := infrastructure.PostRancherSetup(t, terraformOptions, rancherConfig, testSession, terraformConfig.Standalone.RancherHostname, keyPath, false)
 	if err != nil && *rancherConfig.Cleanup {
 		cleanup.Cleanup(nil, terraformOptions, keyPath)
 	}
