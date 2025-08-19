@@ -7,7 +7,7 @@ runs:
     - name: Run K3S Provisioning Tests
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
-        --junitfile results.xml -- -timeout=3h -tags=recurring -v;
+        --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
         ./validation/reporter
       shell: bash
@@ -16,7 +16,7 @@ runs:
     - name: Run RKE2 Provisioning Tests
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
-        --junitfile results.xml -- -timeout=3h -tags=recurring -v;
+        --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
         ./validation/reporter
       shell: bash
