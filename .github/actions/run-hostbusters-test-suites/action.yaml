@@ -6,6 +6,7 @@ runs:
   steps:
     - name: Run Certificate Rotation Test Suite
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s \
         --junitfile results.xml --jsonfile results.json -- -timeout=60m -tags=recurring -v -run "TestCertRotationTestSuite/TestCertRotation";
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -15,6 +16,7 @@ runs:
     
     - name: Run Delete Cluster Tests
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
         --junitfile results.xml --jsonfile results.json -- -timeout=60m -tags=recurring -v -run "TestDeleteClusterTestSuite/TestDeletingCluster";
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -24,6 +26,7 @@ runs:
 
     - name: Run Delete Init Machine Tests
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
         --junitfile results.xml --jsonfile results.json -- -timeout=60m -tags=recurring -v -run "TestDeleteInitMachineTestSuite/TestDeleteInitMachine";
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -33,6 +36,7 @@ runs:
 
     - name: Run Node Replacing Tests
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
         --junitfile results.xml --jsonfile results.json -- -timeout=60m -tags=recurring -v -run "TestNodeReplacingTestSuite/TestReplacingNodes";
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -42,6 +46,7 @@ runs:
 
     - name: Run K3S Provisioning Tests
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
         --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -51,6 +56,7 @@ runs:
 
     - name: Run RKE2 Provisioning Tests
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
         --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -60,6 +66,7 @@ runs:
 
     - name: Run Scaling Custom Cluster Tests
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
         --junitfile results.xml --jsonfile results.json -- -timeout=60m -tags=recurring -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodes";
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -69,6 +76,7 @@ runs:
 
     - name: Run Scaling Node Driver Cluster Tests
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
         --junitfile results.xml --jsonfile results.json -- -timeout=60m -tags=recurring -v -run "TestNodeScalingTestSuite/TestScalingNodePools";
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -78,6 +86,7 @@ runs:
 
     - name: Run Snapshot Recurring Tests
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
         --junitfile results.xml --jsonfile results.json -- -timeout=60m -tags=recurring -v -run "TestSnapshotRecurringTestSuite/TestSnapshotRecurringRestores";
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -87,6 +96,7 @@ runs:
 
     - name: Run Snapshot Tests
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
         --junitfile results.xml --jsonfile results.json -- -timeout=60m -tags=recurring -v -run "TestSnapshotRestoreTestSuite/TestSnapshotRestore";
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -96,6 +106,7 @@ runs:
 
     - name: Run Snapshot Windows Tests
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
         --junitfile results.xml --jsonfile results.json -- -timeout=60m -tags=recurring -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows";
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -105,6 +116,7 @@ runs:
 
     - name: Run Upgrade Tests
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
         --junitfile results.xml --jsonfile results.json -- -timeout=60m -tags=recurring -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes";
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -113,11 +125,8 @@ runs:
       continue-on-error: true
 
     - name: Run Upgrade Windows Tests
-      env:
-        QASE_TEST_RUN_ID: ${{ inputs.hb-qase-test-run-id }}
-        QASE_AUTOMATION_TOKEN: ${{ inputs.qase-automation-token }}
-        QASE_PROJECT_ID: ${{ inputs.hb-qase-project-id }}
       run: |
+        set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
         --junitfile results.xml --jsonfile results.json -- -timeout=60m -tags=recurring -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes";
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
