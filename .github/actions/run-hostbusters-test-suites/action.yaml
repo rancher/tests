@@ -1,16 +1,6 @@
 ---
 name: Run Test Suites
 description: "Runs various test suites"
-inputs:
-  hb-qase-test-run-id:
-    description: "Hostbusters Qase Test Run ID"
-    required: true
-  qase-automation-token:
-    description: "Qase Automation Token"
-    required: true
-  hb-qase-project-id:
-    description: "Hostbusters Qase Project ID"
-    required: true
 runs:
   using: composite
   steps:
@@ -18,11 +8,8 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s \
         --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestCertRotationTestSuite/TestCertRotation";
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
     
@@ -30,11 +17,8 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
         --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestDeleteClusterTestSuite/TestDeletingCluster";
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
 
@@ -42,11 +26,8 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
         --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestDeleteInitMachineTestSuite/TestDeleteInitMachine";
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
 
@@ -54,11 +35,8 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
         --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestNodeReplacingTestSuite/TestReplacingNodes";
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
 
@@ -66,11 +44,8 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
         --junitfile results.xml -- -timeout=3h -tags=recurring -v;
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
 
@@ -78,11 +53,8 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
         --junitfile results.xml -- -timeout=3h -tags=recurring -v;
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
 
@@ -90,11 +62,8 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
         --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodes";
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
 
@@ -102,11 +71,8 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
         --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestNodeScalingTestSuite/TestScalingNodePools";
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
 
@@ -114,11 +80,8 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
         --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestSnapshotRecurringTestSuite/TestSnapshotRecurringRestores";
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
 
@@ -126,11 +89,8 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
         --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestSnapshotRestoreTestSuite/TestSnapshotRestore";
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
 
@@ -138,11 +98,8 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
         --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows";
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
 
@@ -150,22 +107,20 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
         --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes";
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
 
     - name: Run Upgrade Windows Tests
+      env:
+        QASE_TEST_RUN_ID: ${{ inputs.hb-qase-test-run-id }}
+        QASE_AUTOMATION_TOKEN: ${{ inputs.qase-automation-token }}
+        QASE_PROJECT_ID: ${{ inputs.hb-qase-project-id }}
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
         --junitfile results.xml -- -timeout=60m -tags=recurring -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes";
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true

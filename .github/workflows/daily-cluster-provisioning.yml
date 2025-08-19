@@ -302,11 +302,11 @@ jobs:
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
       - name: Run Daily Provisioning tests
+        env:
+          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
-        with:
-          hb-qase-test-run-id: ${{ steps.get-qase-id.outputs.id }}
-          qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
-          hb-qase-project-id: ${{ secrets.HB_QASE_PROJECT_ID }}
 
       - name: Refresh AWS credentials
         if: always()
@@ -569,11 +569,11 @@ jobs:
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
       - name: Run Daily Provisioning tests
+        env:
+          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
-        with:
-          hb-qase-test-run-id: ${{ steps.get-qase-id.outputs.id }}
-          qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
-          hb-qase-project-id: ${{ secrets.HB_QASE_PROJECT_ID }}
 
       - name: Refresh AWS credentials
         if: always()
@@ -836,11 +836,11 @@ jobs:
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
       - name: Run Daily Provisioning tests
+        env:
+          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
-        with:
-          hb-qase-test-run-id: ${{ steps.get-qase-id.outputs.id }}
-          qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
-          hb-qase-project-id: ${{ secrets.HB_QASE_PROJECT_ID }}
 
       - name: Refresh AWS credentials
         if: always()
@@ -1102,11 +1102,11 @@ jobs:
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
       - name: Run Daily Provisioning tests
+        env:
+          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
-        with:
-          hb-qase-test-run-id: ${{ steps.get-qase-id.outputs.id }}
-          qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
-          hb-qase-project-id: ${{ secrets.HB_QASE_PROJECT_ID }}
 
       - name: Refresh AWS credentials
         if: always()

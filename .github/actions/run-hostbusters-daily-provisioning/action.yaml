@@ -1,16 +1,6 @@
 ---
 name: Run Daily Provisioning Test Suites
 description: "Runs daily provisioning test suites"
-inputs:
-  hb-qase-test-run-id:
-    description: "Hostbusters Qase Test Run ID"
-    required: true
-  qase-automation-token:
-    description: "Qase Automation Token"
-    required: true
-  hb-qase-project-id:
-    description: "Hostbusters Qase Project ID"
-    required: true
 runs:
   using: composite
   steps:
@@ -18,11 +8,8 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
         --junitfile results.xml -- -timeout=3h -tags=recurring -v;
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
 
@@ -30,10 +17,7 @@ runs:
       run: |
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
         --junitfile results.xml -- -timeout=3h -tags=recurring -v;
-        export QASE_TEST_RUN_ID=${{ inputs.hb-qase-test-run-id }};
-        export QASE_AUTOMATION_TOKEN=${{ inputs.qase-automation-token }};
-        export QASE_PROJECT_ID=${{ inputs.hb-qase-project-id }};
-        /home/runner/work/tests/tests/validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        /home/runner/work/tests/tests/validation/reporter
+        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+        ./validation/reporter
       shell: bash
       continue-on-error: true
