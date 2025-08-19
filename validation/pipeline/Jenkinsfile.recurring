@@ -28,10 +28,12 @@ node {
     def config = env.CONFIG
     def ansibleConfig = env.ANSIBLE_CONFIG
     def terraformConfig = env.TERRAFORM_CONFIG 
+    def downstreamClusterTerraformConfig = env.DOWNSTREAM_CLUSTERTERRAFORM_CONFIG 
     def rancherToken = ""
     def filename = "config.yaml"
     def ansibleVarsFilename = "vars.yaml"
     def terraformVarsfilename = "cluster.tfvars"
+    def downstreamTerraformVarsfilename = "downstream-cluster.tfvars"
     // def individualJob = (jobName =~ /(go-recurring-[a-z]+)/)[0][1]
     def individualJob = "go-recurring-daily"
     individualJob = "${individualJob}-individual-job"
@@ -120,6 +122,11 @@ node {
               terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC)
               terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS)
               ansibleConfig = ansibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
+              downstreamClusterTerraformConfig = downstreamClusterTerraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+              downstreamClusterTerraformConfig = downstreamClusterTerraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+              downstreamClusterTerraformConfig = downstreamClusterTerraformConfig.replace('${AWS_REGION}', env.AWS_REGION)
+              downstreamClusterTerraformConfig = downstreamClusterTerraformConfig.replace('${AWS_VPC}', env.AWS_VPC)
+              downstreamClusterTerraformConfig = downstreamClusterTerraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS)
 
 
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
@@ -138,6 +145,9 @@ node {
                 }
                 dir ("./tofu/aws/modules/cluster_nodes") {
                   writeFile file: terraformVarsfilename, text: terraformConfig
+                }
+                dir ("./tofu/rancher/cluster") {
+                  writeFile file: downstreamTerraformVarsfilename, text: downstreamClusterTerraformConfig
                 }
               }
               
@@ -184,10 +194,6 @@ node {
                     def desiredflags = 'InstallRancher|Short'
 
                     sh "./yq e '.flags.desiredflags = \"${desiredflags}\"' -i ${mainRancherConfigPath}"
-
-                    def clusterName = "local"
-
-                    sh "./yq e '.rancher.clusterName = \"${clusterName}\"' -i ${mainRancherConfigPath}"
 
                     def configYaml = readFile(file: "${mainRancherConfigPath}")
 

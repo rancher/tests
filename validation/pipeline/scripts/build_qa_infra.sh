@@ -12,7 +12,10 @@ TERRAFORM_TEMPLATE="ansible/rke2/default/inventory-template.yml"
 ANSIBLE_CONFIG="ansible/rke2/default/ansible.cfg"
 RANCHER_PLAYBOOK_PATH="ansible/rancher/default-ha/rancher-playbook.yml"
 TFVARS_FILE="cluster.tfvars"
+DOWNSTREAM_TFVARS_FILE="downstream-cluster.tfvars"
 KUBECONFIG_FILE="$REPO_ROOT/ansible/rke2/default/kubeconfig.yaml"
+GENERATED_TFVARS_FILE="$REPO_ROOT/ansible/rancher/default-ha/generated.tfvars"
+RANCHER_CLUSTER_MODULE_DIR="tofu/rancher/cluster"
 VARS_FILE="./ansible/vars.yaml"
 PRIVATE_KEY_FILE="/root/.ssh/jenkins-elliptic-validation.pem"
 TERRAFORM_NODE_SOURCE="tofu/aws/modules/cluster_nodes"
@@ -95,6 +98,69 @@ if [ $? -ne 0 ]; then
         exit 1
     fi
     echo "Terraform infrastructure destroyed successfully!"
+    exit 1
+fi
+
+
+# --- Rancher Cluster Module ---
+
+# Init the Rancher cluster module
+terraform -chdir="$RANCHER_CLUSTER_MODULE_DIR" init -input=false
+if [ $? -ne 0 ]; then
+    echo "Error: Terraform init for rancher/cluster module failed. Destroying infrastructure..."
+    terraform -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$TFVARS_FILE"
+    if [ $? -ne 0 ]; then
+        echo "Error: Terraform destroy failed."
+        exit 1
+    fi
+    echo "Terraform infrastructure destroyed successfully!"
+    exit 1
+fi
+
+# Apply the Rancher cluster module
+terraform -chdir="$RANCHER_CLUSTER_MODULE_DIR" apply -auto-approve -var-file="$DOWNSTREAM_TFVARS_FILE" -var-file="$GENERATED_TFVARS_FILE"
+if [ $? -ne 0 ]; then
+    echo "Error: Terraform apply for rancher/cluster module failed. Destroying infrastructure..."
+    terraform -chdir="$RANCHER_CLUSTER_MODULE_DIR" destroy -auto-approve -var-file="$DOWNSTREAM_TFVARS_FILE" -var-file="$GENERATED_TFVARS_FILE"
+    if [ $? -ne 0 ]; then
+        echo "Warning: Terraform destroy for rancher/cluster module failed. Continuing with main infrastructure cleanup."
+    fi
+    terraform -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$TFVARS_FILE"
+    if [ $? -ne 0 ]; then
+        echo "Error: Terraform destroy failed."
+        exit 1
+    fi
+    echo "Terraform infrastructure destroyed successfully!"
+    exit 1
+fi
+
+# Get the cluster name from terraform output
+CLUSTER_NAME=$(terraform -chdir="$RANCHER_CLUSTER_MODULE_DIR" output -raw name)
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to get cluster name from terraform output."
+    exit 1
+fi
+
+# Update the clusterName in the main config file
+CONFIG_FILE="/root/go/src/github.com/rancher/tests/validation/config.yaml"
+yq e ".rancher.clusterName = \"${CLUSTER_NAME}\"" -i ${CONFIG_FILE}
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to update clusterName in $CONFIG_FILE"
+    exit 1
+fi
+
+
+# Get the admin token from the generated tfvars file
+ADMIN_TOKEN=$(grep 'api_key' "$GENERATED_TFVARS_FILE" | awk -F'"' '{print $2}')
+if [ -z "$ADMIN_TOKEN" ]; then
+    echo "Error: Failed to get api_key from $GENERATED_TFVARS_FILE."
+    exit 1
+fi
+
+# Update the adminToken in the main config file
+yq e ".rancher.adminToken = \"${ADMIN_TOKEN}\"" -i ${CONFIG_FILE}
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to update adminToken in $CONFIG_FILE"
     exit 1
 fi
 

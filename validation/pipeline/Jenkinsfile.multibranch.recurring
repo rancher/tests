@@ -7,12 +7,13 @@ node {
     def config = env.CONFIG
     def ansibleConfig = env.ANSIBLE_CONFIG
     def terraformConfig = env.TERRAFORM_CONFIG
+    def downstreamClusterTerraformConfig = env.DOWNSTREAM_CLUSTERTERRAFORM_CONFIG 
     def filename = "config.yaml"
     def ansibleVarsFilename = "vars.yaml"
     def terraformVarsfilename = "cluster.tfvars"
     def hostnameSuffix = ["v2.8-head":"v28", "v2.9-head":"v29", "v2.10-head":"v210", "head":"main"] // TODO: update with new versions supported by rancher
-    def tagChartMap = ["v2.8-head":"2.8.11", "v2.9-head":"2.9.5", "v2.10-head":"2.10.1", "head":"2.11.0"] // TODO: update with new versions supported by rancher for image tags
-    def primeChartList = ["v2.8-head", "v2.9-head"]
+    def tagChartMap = ["v2.8-head":"2.8.11", "v2.9-head":"2.9.5", "v2.10-head":"2.10.1", "head":"2.12.0"] // TODO: update with new versions supported by rancher for image tags
+    def primeChartList = ["head", "v2.9-head"]
     def rancherChartRepo = "prime"
     def configPath = ""
     def ansibleConfigPath = ""
@@ -110,12 +111,8 @@ node {
                     sh "./yq e '.rancher.host = \"${rancherHostName}\"' -i ${configPath}"
                     
                     if ( primeChartList.contains(testTag) ) {
-                      def cattleImageEnvVar = "[\\\"CATTLE_AGENT_IMAGE|${env.PRIME_STAGING_REGISTRY}/rancher/rancher-agent:${testTag}\\\"]"
-                      def rancherImage = "${env.PRIME_STAGING_REGISTRY}/rancher/rancher"
                       sh "./yq e '.rancher_chart_url = \"${env.PRIME_REPO}\"' -i ${ansibleConfigPath}"
                       sh "./yq e '.rancher_chart_repo = \"${rancherChartRepo}\"' -i ${ansibleConfigPath}"
-                      sh "./yq e '.rancher_image = \"${rancherImage}\"' -i ${ansibleConfigPath}"
-                      sh "./yq e '.env_var_map = \"${cattleImageEnvVar}\"' -i ${ansibleConfigPath}" // TODO: this will update when support multiple rancher version heads are added
                     }
                     def configYaml = readFile(file: "${configPath}")
                     def ansibleConfigYaml = readFile(file: "${ansibleConfigPath}")
@@ -124,6 +121,7 @@ node {
                         text(name: 'CONFIG', value: configYaml),
                         text(name: 'ANSIBLE_CONFIG', value: ansibleConfigYaml),
                         text(name: 'TERRAFORM_CONFIG', value: terraformConfigYaml),
+                        text(name: 'DOWNSTREAM_CLUSTERTERRAFORM_CONFIG', value: downstreamClusterTerraformConfig),
                         string(name: 'BRANCH', value: "${branch}"),
                         string(name: 'TEST_RUN_NAME', value: "${testTag}-${env.TEST_RUN_NAME}"),
                       ]

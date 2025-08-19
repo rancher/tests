@@ -4,10 +4,26 @@ set -e  # Enable exit on non-zero exit code
 
 cd  /root/go/src/github.com/rancher/qa-infra-automation
 
+REPO_ROOT=$(pwd)
 # Set variables (consistent with build_qa_infra.sh)
 WORKSPACE_NAME="jenkins_workspace"
 TERRAFORM_DIR="tofu/aws/modules/cluster_nodes"
-TFVARS_FILE="cluster.tfvars" # Ensure this matches the build script
+RANCHER_CLUSTER_MODULE_DIR="tofu/rancher/cluster"
+TFVARS_FILE="cluster.tfvars"
+DOWNSTREAM_TFVARS_FILE="downstream-cluster.tfvars"
+GENERATED_TFVARS_FILE="$REPO_ROOT/ansible/rancher/default-ha/generated.tfvars"
+
+# --- Rancher Cluster Module Destroy ---
+echo "--- Rancher Cluster Module Destroy ---"
+
+terraform -chdir="$RANCHER_CLUSTER_MODULE_DIR" init -input=false || echo "Warning: init for rancher/cluster module failed, destroy may fail."
+
+# Destroy the Rancher cluster module infrastructure
+terraform -chdir="$RANCHER_CLUSTER_MODULE_DIR" destroy -auto-approve -var-file="$DOWNSTREAM_TFVARS_FILE" -var-file="$GENERATED_TFVARS_FILE"
+if [ $? -ne 0 ]; then
+    echo "Warning: Terraform destroy for rancher/cluster module failed. Continuing with cleanup."
+fi
+
 
 # --- Terraform Steps ---
 echo "--- Terraform Destroy ---"

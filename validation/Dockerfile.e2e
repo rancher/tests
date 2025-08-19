@@ -61,6 +61,10 @@ chmod +x get_helm.sh && \
 ./get_helm.sh && \
 rm get_helm.sh
 
+# Install yq
+RUN wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq && \
+    chmod +x /usr/local/bin/yq
+
 # necessary to run if statements using [[ ]]
 SHELL ["/bin/bash", "-c"] 
 
