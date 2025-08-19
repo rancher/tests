@@ -1,71 +1,92 @@
 - projects: [RANCHERINT]
   suite: Elemental
   cases:
-    - title: "Test deploying Fleet GitRepo on Elemental provisioned downstream cluster"
-      description: "Validate that a GitRepo can be deployed via Fleet on a downstream Elemental cluster within Rancher Manager"
+    - title: "Deploy Fleet GitRepo on Elemental downstream cluster"
+      description: "Validate deployment of a GitRepo via Fleet on a downstream Elemental cluster managed by Rancher"
       automation: 0
       steps:
         - position: 1
           action: "Create Rancher"
-          data: ""
-          expectedresult: "Rancher Server is up and accessible"
+          expectedresult: "Rancher Manager is up and accessible"
         - position: 2
-          action: "Provision an Elemental cluster"
-          data: "cluster name: elementalcluster1"
-          expectedresult: "Elemental cluster is successfully provisioned and becomes Active in Rancher"
+          action: "Generate Elemental ISO"
+          data: "Follow steps in https://elemental.docs.rancher.com/quickstart-ui"
+          expectedresult: "Elemental ISO is successfully generated"
         - position: 3
-          action: "Create a new project and namespace"
-          data: "project name: fleet-test, namespace name: fleet-testns"
-          expectedresult: "New project and namespace are created in Rancher"
+          action: "Create Elemental node"
+          data: "Follow steps in elemental_node.md"
+          expectedresult: "Node is created in the inventory and becomes Active in Rancher"
         - position: 4
-          action: "Deploy a GitRepo object"
+          action: "Provision Elemental cluster using active node"
+          data: "cluster name: elementalcluster1"
+          expectedresult: "Cluster is successfully provisioned and becomes Active in Rancher"
+        - position: 5
+          action: "Create project and namespace"
+          data: "project: fleet-test, namespace: fleet-testns"
+          expectedresult: "Project and namespace are successfully created"
+        - position: 6
+          action: "Deploy GitRepo object"
           data: "/validation/fleet/schemas/gitrepo.yaml"
-          expectedresult: "GitRepo reaches Active state and the defined resources are created in the fleet-testns namespace on the downstream cluster"
+          expectedresult: "GitRepo reaches Active state and defined resources are created in fleet-testns namespace"
 
-    - title: "Test provisioning Elemental cluster on Rancher proxied environment"
-      description: "Validate that an Elemental cluster can be provisioned on a Rancher proxied environment"
+    - title: "Provision Elemental cluster in Rancher proxied environment"
+      description: "Validate provisioning of an Elemental cluster when Rancher is deployed behind a proxy"
       automation: 0
       steps:
         - position: 1
-          action: "Create Proxy Rancher"
-          data: ""
-          expectedresult: "Proxied Rancher instance is up and accessible"
+          action: "Create Rancher with proxy enabled"
+          expectedresult: "Rancher Manager with proxy is accessible"
         - position: 2
-          action: "Provision an Elemental cluster"
+          action: "Generate Elemental ISO"
+          data: "Follow steps in https://elemental.docs.rancher.com/quickstart-ui"
+          expectedresult: "Elemental ISO is successfully generated"
+        - position: 3
+          action: "Create Elemental node"
+          data: "Follow steps in elemental_node.md"
+          expectedresult: "Node is created in the inventory and becomes Active in Rancher"
+        - position: 4
+          action: "Provision Elemental cluster using active node"
           data: "cluster name: elementalcluster1"
-          expectedresult: "Elemental cluster is successfully provisioned and becomes Active in proxied Rancher"
+          expectedresult: "Elemental cluster is successfully provisioned and becomes Active in Rancher"
 
-    - title: "Test installing feature charts on Elemental provisioned downstream cluster"
-      description: "Validate that various charts can be deployed on a downstream Elemental cluster within Rancher Manager"
+    - title: "Install feature charts on Elemental downstream cluster"
+      description: "Validate deployment of feature charts on a downstream Elemental cluster managed by Rancher"
       automation: 0
       steps:
         - position: 1
           action: "Create Rancher"
-          data: ""
-          expectedresult: "Rancher Server is up and accessible"
+          expectedresult: "Rancher Manager is up and accessible"
         - position: 2
-          action: "Provision an Elemental cluster"
-          data: "cluster name: elementalcluster1"
-          expectedresult: "Elemental cluster is successfully provisioned and becomes Active in Rancher"
+          action: "Generate Elemental ISO"
+          data: "Follow steps in https://elemental.docs.rancher.com/quickstart-ui"
+          expectedresult: "Elemental ISO is successfully generated"
         - position: 3
+          action: "Create Elemental node"
+          data: "Follow steps in elemental_node.md"
+          expectedresult: "Node is created in the inventory and becomes Active in Rancher"
+        - position: 4
+          action: "Provision Elemental cluster using active node"
+          data: "cluster name: elementalcluster1"
+          expectedresult: "Cluster is successfully provisioned and becomes Active in Rancher"
+        - position: 5
           action: "Install StackState feature chart"
           expectedresult: "StackState chart reaches Active state and resources are deployed successfully"
-        - position: 4
+        - position: 6
           action: "Install Istio feature chart"
-          expectedresult: "Istio chart reaches Active state and Istio components are available on the cluster"
-        - position: 5
+          expectedresult: "Istio chart reaches Active state and Istio components are available"
+        - position: 7
           action: "Install Monitoring feature chart"
           expectedresult: "Monitoring chart reaches Active state"
-        - position: 6
+        - position: 8
           action: "Install Logging feature chart"
           expectedresult: "Logging chart reaches Active state"
-        - position: 7
+        - position: 9
           action: "Install CIS Benchmark feature chart"
           expectedresult: "CIS Benchmark chart reaches Active state"
-        - position: 8
+        - position: 10
           action: "Install Alerting feature chart"
           expectedresult: "Alerting chart reaches Active state and default alerts are configured"
-        - position: 9
+        - position: 11
           action: "Install NeuVector feature chart"
           expectedresult: "NeuVector chart reaches Active state"
 
@@ -75,9 +96,19 @@
       steps:
         - position: 1
           action: "Create Rancher"
-          data: ""
-          expectedresult: "Rancher instance is up and accessible"
+          expectedresult: "Rancher Manager is up and accessible"
         - position: 2
-          action: "Provision an Elemental cluster with Harvester"
+          action: "Generate Elemental ISO"
+          data: "Follow steps in https://elemental.docs.rancher.com/quickstart-ui"
+          expectedresult: "Elemental ISO is successfully generated"
+        - position: 3
+          action: "Create Harvester"
+          expectedresult: "Harvester is up and accessible"
+        - position: 4
+          action: "Create Elemental node in Harvester"
+          data: "Follow steps in elemental_harvester_node.md"
+          expectedresult: "Node is created in the inventory and becomes Active in Rancher"
+        - position: 5
+          action: "Provision Elemental cluster using active node"
           data: "cluster name: elementalcluster1"
-          expectedresult: "Elemental cluster using Harvester infrastructure is provisioned and becomes Active in Rancher"
+          expectedresult: "Cluster is successfully provisioned and becomes Active in Rancher"
