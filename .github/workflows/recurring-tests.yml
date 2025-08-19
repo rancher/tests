@@ -52,7 +52,7 @@ permissions:
 env:
   CLOUD_PROVIDER_VERSION: "5.95.0"
   HOSTNAME_PREFIX: "gha-recur"
-  TIMEOUT: "5h"
+  TIMEOUT: "9h"
 
 jobs:
   v2-12:

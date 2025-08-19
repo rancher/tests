@@ -1,6 +1,8 @@
 package provisioning
 
 import (
+	"time"
+
 	rancherEc2 "github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
@@ -28,12 +30,15 @@ func GetProvisioningSchemaParams(client *rancher.Client, cattleConfig map[string
 		return nil
 	}
 
+	currentDate := time.Now().Format("2006-01-02 03:04PM")
+
 	osParam := upstream.Params{Title: "OS", Values: osNames}
 	providerParam := upstream.Params{Title: "Provider", Values: []string{clusterConfig.Provider}}
 	k8sParam := upstream.Params{Title: "K8sVersion", Values: []string{clusterConfig.KubernetesVersion}}
 	cniParam := upstream.Params{Title: "CNI", Values: []string{clusterConfig.CNI}}
+	timeParam := upstream.Params{Title: "Time", Values: []string{currentDate}}
 
-	params = append(params, providerParam, osParam, k8sParam, cniParam)
+	params = append(params, providerParam, osParam, k8sParam, cniParam, timeParam)
 
 	return params
 }
@@ -54,12 +59,15 @@ func GetCustomSchemaParams(client *rancher.Client, cattleConfig map[string]any) 
 		return nil
 	}
 
+	currentDate := time.Now().Format("2006-01-02 03:04PM")
+
 	osParam := upstream.Params{Title: "OS", Values: osNames}
 	providerParam := upstream.Params{Title: "Provider", Values: []string{clusterConfig.Provider}}
 	k8sParam := upstream.Params{Title: "K8sVersion", Values: []string{clusterConfig.KubernetesVersion}}
 	cniParam := upstream.Params{Title: "CNI", Values: []string{clusterConfig.CNI}}
+	timeParam := upstream.Params{Title: "Time", Values: []string{currentDate}}
 
-	params = append(params, providerParam, osParam, k8sParam, cniParam)
+	params = append(params, providerParam, osParam, k8sParam, cniParam, timeParam)
 
 	return params
 }
