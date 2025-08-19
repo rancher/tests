@@ -5,8 +5,10 @@ OS=$(uname | tr '[:upper:]' '[:lower:]')
 cd $(dirname $0)/../../../
 
 if [[ -z "${QASE_TEST_RUN_ID}" ]]; then
-  echo "no test run ID is provided"
+  echo "No QASE test run ID provided"
+elif [[ -z "${QASE_PROJECT_ID}" ]]; then
+  echo "No QASE project ID provided"
 else
-  echo "building qase reporter bin"
-  env GOOS=${OS} GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -o validation/reporter ./validation/pipeline/qase/reporter-v2
+  echo "Building QASE reporter binary"
+  echo $(env GOOS=${OS} GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -o validation/reporter ./validation/pipeline/qase/reporter-v2)
 fi

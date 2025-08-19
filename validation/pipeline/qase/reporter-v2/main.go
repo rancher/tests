@@ -28,6 +28,7 @@ var (
 )
 
 func main() {
+	logrus.Info("Running QASE reporter v2")
 	if projectIDEnvVar == "" {
 		logrus.Warningf("Project env var not provided, defaulting to %s", qaseactions.RancherManagerProjectID)
 		projectIDEnvVar = qaseactions.RancherManagerProjectID
@@ -45,6 +46,8 @@ func main() {
 		if err != nil {
 			logrus.Error("error reporting: ", err)
 		}
+	} else {
+		logrus.Warningf("QASE run ID not provided")
 	}
 }
 
