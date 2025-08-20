@@ -1,0 +1,151 @@
+name: Platform QA Package Runner
+run-name: Platform QA Package Runner - Cluster ${{ github.event.inputs.rancher_host }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      rancher_host:
+        description: "Rancher host (e.g. mycluster.qa.rancher.space)"
+        required: true
+      admin_token:
+        description: "Admin token for Rancher API access"
+        required: true
+      cluster_name:
+        description: "Downstream cluster name"
+        required: true
+      kubernetes_version:
+        description: "Kubernetes version for the cluster (e.g. v1.32.7+k3s1)"
+        required: true
+      test_packages:
+        description: "Comma-separated test package paths (e.g. validation/rbac,validation/projects)"
+        required: true
+      run_all_tests:
+        description: "Run all test files in the package?"
+        required: true
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+      test_selector:
+        description: "Test suite or test name regex, if run_all_tests=false"
+        required: false
+      exclude_test_files:
+        description: "Test files to exclude (comma-separated)"
+        required: false
+      report_to_qase:
+        description: "Enable Qase reporting"
+        required: false
+        default: "false"
+        type: choice
+        options: ["true", "false"]
+      qase_test_run_id:
+        description: "Qase Test Run ID, if report_to_qase=true"
+        required: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  run-package:
+    runs-on: ubuntu-latest
+    env:
+      RANCHER_HOST: ${{ github.event.inputs.rancher_host }}
+      RANCHER_ADMIN_TOKEN: ${{ github.event.inputs.admin_token }}
+      CLUSTER_NAME: ${{ github.event.inputs.cluster_name }}
+      TEST_PACKAGES: ${{ github.event.inputs.test_packages }}
+      RUN_ALL_TESTS: ${{ github.event.inputs.run_all_tests }}
+      EXCLUDE_TEST_FILES: ${{ github.event.inputs.exclude_test_files }}
+      TEST_SELECTOR: ${{ github.event.inputs.test_selector }}
+      REPORT_TO_QASE: ${{ github.event.inputs.report_to_qase }}
+      QASE_TEST_RUN_ID: ${{ github.event.inputs.qase_test_run_id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Parse current and remaining packages
+        id: parse
+        run: |
+          IFS=',' read -ra PKGS <<< "$(echo "${{ github.event.inputs.test_packages }}" | xargs)"
+          CURRENT="${PKGS[0]}"
+          
+          REMAINING_PKGS=("${PKGS[@]:1}")
+          REMAINING=""
+          if [ ${#REMAINING_PKGS[@]} -gt 0 ]; then
+            REMAINING=$(IFS=,; echo "${REMAINING_PKGS[*]}")
+          fi
+
+          echo "current_pkg=$CURRENT" >> $GITHUB_OUTPUT
+          echo "remaining_packages=$REMAINING" >> $GITHUB_OUTPUT
+
+      - name: Trigger and wait for test runner to complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RANCHER_HOST: ${{ github.event.inputs.rancher_host }}
+          PKG: ${{ steps.parse.outputs.current_pkg }}
+        run: |
+          INPUTS=(
+            "-F" "rancher_host=${{ github.event.inputs.rancher_host }}"
+            "-F" "admin_token=${{ github.event.inputs.admin_token }}"
+            "-F" "cluster_name=${{ github.event.inputs.cluster_name }}"
+            "-F" "kubernetes_version=${{ github.event.inputs.kubernetes_version }}" 
+            "-F" "test_package=${{ steps.parse.outputs.current_pkg }}"
+            "-F" "run_all_tests=${{ github.event.inputs.run_all_tests }}"
+            "-F" "test_selector=${{ github.event.inputs.test_selector }}"
+            "-F" "exclude_test_files=${{ github.event.inputs.exclude_test_files }}"
+            "-F" "report_to_qase=${{ github.event.inputs.report_to_qase }}"
+            "-F" "qase_test_run_id=${{ github.event.inputs.qase_test_run_id }}"
+          )
+
+          echo "🚀 Triggering workflow for pkg=${{ steps.parse.outputs.current_pkg }}..."
+          gh workflow run "Platform QA Test Runner with Qase Reporting" \
+            --ref main "${INPUTS[@]}"
+
+          sleep 10
+          for i in {1..30}; do  
+            RUN_ID=$(gh run list --workflow "Platform QA Test Runner with Qase Reporting" \
+              --json databaseId,displayTitle,status,createdAt \
+              --limit 5 \
+              --jq '[.[] | select(.displayTitle == "Platform QA Test Runner - Cluster '"$RANCHER_HOST"' - Package '"$PKG"'") | select(.status == "queued" or .status == "in_progress")] | sort_by(.createdAt) | last | .databaseId')
+
+            if [ -n "$RUN_ID" ]; then
+              break
+            fi
+            echo "⏳ Waiting for run (cluster=$RANCHER_HOST, pkg=$PKG) to register..."
+            sleep 10
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "❌ Could not find run for cluster=$RANCHER_HOST pkg=$PKG"
+            exit 1
+          fi
+
+          echo "⏳ Waiting for run $RUN_ID (cluster=$RANCHER_HOST, pkg=$PKG) to complete..."
+          gh run watch "$RUN_ID" --interval 300 --exit-status
+
+      - name: Call Dispatcher for remaining packages
+        if: ${{ steps.parse.outputs.remaining_packages }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "platform-qa-package-dispatcher.yml",
+              ref: "main",
+              inputs: {
+                rancher_hosts: "${{ github.event.inputs.rancher_host }}",
+                admin_tokens: "${{ github.event.inputs.admin_token }}",
+                cluster_names: "${{ github.event.inputs.cluster_name }}",
+                kubernetes_versions: "${{ github.event.inputs.kubernetes_version }}",
+                test_packages: "${{ steps.parse.outputs.remaining_packages }}",
+                run_all_tests: "${{ github.event.inputs.run_all_tests }}",
+                recursive_tests: "false",
+                test_selector: "${{ github.event.inputs.test_selector }}",
+                exclude_test_files: "${{ github.event.inputs.exclude_test_files }}",
+                qase_test_run_ids: "${{ github.event.inputs.qase_test_run_id }}"
+              }
+            });
