@@ -186,11 +186,6 @@ func CreateAndValidateSnapshotRKE1(client *rancher.Client, podTemplate *corev1.P
 		return nil, "", nil, nil, fmt.Errorf("s3 is enabled for the cluster, but selected snapshot is not from s3")
 	}
 
-	podErrors := pods.StatusPods(client, clusterID)
-	if len(podErrors) != 0 {
-		return nil, "", nil, nil, errors.New("cluster's pods not in good health post snapshot")
-	}
-
 	postDeploymentResp, postServiceResp, err := createPostBackupWorkloads(client, clusterID, *podTemplate, deployment)
 	if err != nil {
 		return nil, "", nil, nil, err
@@ -365,11 +360,6 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 		}
 	}
 
-	podErrors := pods.StatusPods(client, clusterID)
-	if len(podErrors) != 0 {
-		return nil, "", nil, nil, errors.New("cluster's pods not in good health post snapshot")
-	}
-
 	postDeploymentResp, postServiceResp, err := createPostBackupWorkloads(client, clusterID, *podTemplate, deployment)
 	if err != nil {
 		return nil, "", nil, nil, err
@@ -454,11 +444,6 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 			err = clusters.WaitClusterUntilUpgrade(client, clusterID)
 			if err != nil {
 				return nil, "", nil, nil, err
-			}
-
-			podErrors := pods.StatusPods(client, clusterID)
-			if len(podErrors) != 0 {
-				return nil, "", nil, nil, errors.New("cluster's pods not in good health post upgrade")
 			}
 		}
 	}

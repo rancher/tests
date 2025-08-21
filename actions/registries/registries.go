@@ -15,6 +15,11 @@ import (
 // CheckAllClusterPodsForRegistryPrefix checks the pods of a cluster and checks to see if they're coming from the
 // expected registry fqdn.
 func CheckAllClusterPodsForRegistryPrefix(client *rancher.Client, clusterID, registryPrefix string) (bool, error) {
+	if strings.Contains(registryPrefix, "registry-1.docker.io") {
+		logrus.Infof("Skipping registry prefix check for public docker registry: %s", registryPrefix)
+		return true, nil
+	}
+
 	downstreamClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return false, err

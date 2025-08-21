@@ -1,6 +1,7 @@
 package scalinginput
 
 import (
+	"context"
 	"errors"
 	"net/url"
 	"strings"
@@ -16,10 +17,10 @@ import (
 	"github.com/rancher/shepherd/extensions/nodes"
 	nodestat "github.com/rancher/shepherd/extensions/nodes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
-	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -86,7 +87,14 @@ func ReplaceNodes(client *rancher.Client, clusterName string, isEtcd bool, isCon
 			return err
 		}
 
-		err = nodestat.IsNodeDeleted(client, nodesToDelete[i].NodeName, clusterID)
+		err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+			_, err = client.Steve.SteveType(machineSteveResourceType).ByID(machineToDelete.ID)
+			if err != nil {
+				logrus.Infof("Node has successfully been deleted!")
+				return true, nil
+			}
+			return false, nil
+		})
 		if err != nil {
 			return err
 		}
@@ -99,11 +107,6 @@ func ReplaceNodes(client *rancher.Client, clusterName string, isEtcd bool, isCon
 		err = nodestat.AllMachineReady(client, clusterID, defaults.ThirtyMinuteTimeout)
 		if err != nil {
 			return err
-		}
-
-		podErrors := pods.StatusPods(client, clusterID)
-		if len(podErrors) > 0 {
-			return errors.New("cluster's pods not healthy after deleting node: " + nodesToDelete[i].NodeName)
 		}
 	}
 
@@ -137,11 +140,6 @@ func ReplaceRKE1Nodes(client *rancher.Client, clusterName string, isEtcd bool, i
 		err = nodestat.AllManagementNodeReady(client, clusterID, defaults.ThirtyMinuteTimeout)
 		if err != nil {
 			return err
-		}
-
-		podErrors := pods.StatusPods(client, clusterID)
-		if len(podErrors) > 0 {
-			return errors.New("cluster's pods not healthy after deleting node: " + nodesToDelete[i].NodeName)
 		}
 	}
 

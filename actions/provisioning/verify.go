@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
+
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioninginput"
 	wranglername "github.com/rancher/wrangler/pkg/name"
@@ -32,6 +34,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
 )
@@ -46,6 +49,8 @@ const (
 	deploymentNameLabel         = "cluster.x-k8s.io/deployment-name"
 	onDemandPrefix              = "on-demand-"
 	s3                          = "s3"
+	oneSecondInterval           = time.Duration(1 * time.Second)
+	notFound                    = "404 Not Found"
 )
 
 // VerifyRKE1Cluster validates that the RKE1 cluster and its resources are in a good state, matching a given config.
@@ -256,34 +261,21 @@ func VerifyDeleteRKE1Cluster(t *testing.T, client *rancher.Client, clusterID str
 
 // VerifyDeleteRKE2K3SCluster validates that a non-rke1 cluster and its resources are deleted.
 func VerifyDeleteRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterID string) {
-	cluster, err := client.Steve.SteveType("provisioning.cattle.io.cluster").ByID(clusterID)
-	require.NoError(t, err)
+	ctx := context.Background()
+	err := kwait.PollUntilContextTimeout(
+		ctx, oneSecondInterval, defaults.TenMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+			_, err := client.Steve.SteveType("provisioning.cattle.io.cluster").ByID(clusterID)
+			if err != nil {
+				if strings.Contains(err.Error(), notFound) {
+					logrus.Infof("Cluster %s deleted!", clusterID)
+					return true, nil
+				}
 
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	require.NoError(t, err)
+				return false, err
+			}
 
-	provKubeClient, err := adminClient.GetKubeAPIProvisioningClient()
-	require.NoError(t, err)
-
-	watchInterface, err := provKubeClient.Clusters(namespace).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + cluster.Name,
-		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-	})
-	require.NoError(t, err)
-
-	err = wait.WatchWait(watchInterface, func(event watch.Event) (ready bool, err error) {
-		cluster := event.Object.(*provv1.Cluster)
-		if event.Type == watch.Error {
-			return false, fmt.Errorf("error: unable to delete cluster %s", cluster.ObjectMeta.Name)
-		} else if event.Type == watch.Deleted {
-			logrus.Infof("Cluster %s deleted!", cluster.ObjectMeta.Name)
-			return true, nil
-		} else if cluster == nil {
-			logrus.Info("Cluster deleted!")
-			return true, nil
-		}
-		return false, nil
-	})
+			return false, nil
+		})
 	require.NoError(t, err)
 
 	err = nodestat.AllNodeDeleted(client, clusterID)

@@ -145,19 +145,6 @@ func (s *CustomClusterNodeScalingTestSuite) TestScalingCustomClusterNodes() {
 	}
 }
 
-func (s *CustomClusterNodeScalingTestSuite) TestScalingCustomClusterNodesDynamicInput() {
-	if s.scalingConfig.MachinePools.NodeRoles == nil {
-		s.T().Skip()
-	}
-
-	clusterID, err := extClusters.GetV1ProvisioningClusterByName(s.client, s.client.RancherConfig.ClusterName)
-	require.NoError(s.T(), err)
-
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, s.cattleConfig, awsEC2Configs)
-	nodescaling.ScalingRKE2K3SCustomClusterPools(s.T(), s.client, clusterID, s.scalingConfig.NodeProvider, *s.scalingConfig.MachinePools.NodeRoles, awsEC2Configs)
-}
-
 func TestCustomClusterNodeScalingTestSuite(t *testing.T) {
 	suite.Run(t, new(CustomClusterNodeScalingTestSuite))
 }

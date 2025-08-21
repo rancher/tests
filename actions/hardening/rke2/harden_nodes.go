@@ -1,7 +1,7 @@
 package rke2
 
 import (
-	"os/user"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -58,12 +58,12 @@ func PostRKE2HardeningConfig(nodes []*nodes.Node, nodeRoles []string) error {
 	for key, node := range nodes {
 		if strings.Contains(nodeRoles[key], "--controlplane") {
 			logrus.Infof("Copying over files to node %s", node.NodeID)
-			user, err := user.Current()
+			userDir, err := os.UserHomeDir()
 			if err != nil {
-				return nil
+				return err
 			}
 
-			dirPath := filepath.Join(user.HomeDir, "go/src/github.com/rancher/tests/actions/hardening/rke2")
+			dirPath := filepath.Join(userDir, "/go/src/github.com/rancher/tests/actions/hardening/rke2")
 			err = node.SCPFileToNode(dirPath+"/account-update.yaml", "/home/"+node.SSHUser+"/account-update.yaml")
 			if err != nil {
 				return err

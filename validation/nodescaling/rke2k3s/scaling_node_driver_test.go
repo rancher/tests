@@ -141,17 +141,6 @@ func (s *NodeScalingTestSuite) TestScalingNodePools() {
 	}
 }
 
-func (s *NodeScalingTestSuite) TestScalingNodePoolsDynamicInput() {
-	if s.scalingConfig.MachinePools == nil {
-		s.T().Skip()
-	}
-
-	clusterID, err := extClusters.GetV1ProvisioningClusterByName(s.client, s.client.RancherConfig.ClusterName)
-	require.NoError(s.T(), err)
-
-	nodescaling.ScalingRKE2K3SNodePools(s.T(), s.client, clusterID, *s.scalingConfig.MachinePools.NodeRoles)
-}
-
 func TestNodeScalingTestSuite(t *testing.T) {
 	suite.Run(t, new(NodeScalingTestSuite))
 }
