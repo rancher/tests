@@ -929,19 +929,19 @@ func DeleteRKE2K3SCustomClusterNodes(client *rancher.Client, clusterID string, c
 			snippedIP := strings.Split(node.Annotations[internalIP], ",")[0]
 
 			if snippedIP == nodeToDelete.PrivateIPAddress {
-				machine, err := client.Steve.SteveType(machineSteveResourceType).ByID(namespace + "/" + node.Annotations[machineNameAnnotation])
+				machine, err := client.Steve.SteveType(stevetypes.Machine).ByID(namespace + "/" + node.Annotations[machineNameAnnotation])
 				if err != nil {
 					return err
 				}
 
 				logrus.Infof("Deleting node %s from cluster %s", nodeToDelete.NodeID, cluster.Name)
-				err = client.Steve.SteveType(machineSteveResourceType).Delete(machine)
+				err = client.Steve.SteveType(stevetypes.Machine).Delete(machine)
 				if err != nil {
 					return err
 				}
 
 				err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-					_, err = client.Steve.SteveType(machineSteveResourceType).ByID(machine.ID)
+					_, err = client.Steve.SteveType(stevetypes.Machine).ByID(machine.ID)
 					if err != nil {
 						logrus.Infof("Node has successfully been deleted!")
 						return true, nil

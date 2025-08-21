@@ -16,6 +16,8 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
 	"github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/shepherd/pkg/wait"
@@ -25,14 +27,11 @@ import (
 )
 
 const (
-	namespace                     = "fleet-default"
-	provisioningSteveResourceType = "provisioning.cattle.io.cluster"
-	machineSteveResourceType      = "cluster.x-k8s.io.machine"
-	machineSteveAnnotation        = "cluster.x-k8s.io/machine"
-	etcdLabel                     = "node-role.kubernetes.io/etcd"
-	clusterLabel                  = "cluster.x-k8s.io/cluster-name"
-	certFileExtension             = ".crt"
-	pemFileExtension              = ".pem"
+	machineSteveAnnotation = "cluster.x-k8s.io/machine"
+	etcdLabel              = "node-role.kubernetes.io/etcd"
+	clusterLabel           = "cluster.x-k8s.io/cluster-name"
+	certFileExtension      = ".crt"
+	pemFileExtension       = ".pem"
 
 	privateKeySSHKeyRegExPattern = `-----BEGIN RSA PRIVATE KEY-{3,}\n([\s\S]*?)\n-{3,}END RSA PRIVATE KEY-----`
 )
@@ -49,7 +48,7 @@ func RotateCerts(client *rancher.Client, clusterName string) error {
 		return err
 	}
 
-	cluster, err := adminClient.Steve.SteveType(provisioningSteveResourceType).ByID(id)
+	cluster, err := adminClient.Steve.SteveType(stevetypes.Provisioning).ByID(id)
 	if err != nil {
 		return err
 	}
@@ -77,17 +76,8 @@ func RotateCerts(client *rancher.Client, clusterName string) error {
 
 	nodeCertificates := map[string]map[string]string{}
 
-	sshUser, err := sshkeys.GetSSHUser(client, cluster)
-	if err != nil {
-		return err
-	}
-
-	if sshUser == "" {
-		return errors.New("SSH user not found")
-	}
-
 	for _, node := range nodeList.Data {
-		newCertificate, err := getCertificatesFromMachine(client, &node, sshUser)
+		newCertificate, err := getCertificatesFromMachine(client, &node)
 		if err != nil {
 			return err
 		}
@@ -109,7 +99,7 @@ func RotateCerts(client *rancher.Client, clusterName string) error {
 	updatedCluster.Spec = *clusterSpec
 
 	logrus.Infof("Rotating certs...")
-	_, err = client.Steve.SteveType(provisioningSteveResourceType).Update(cluster, updatedCluster)
+	_, err = client.Steve.SteveType(stevetypes.Provisioning).Update(cluster, updatedCluster)
 	if err != nil {
 		return err
 	}
@@ -119,7 +109,7 @@ func RotateCerts(client *rancher.Client, clusterName string) error {
 		return err
 	}
 
-	result, err := kubeRKEClient.RKEControlPlanes(namespace).Watch(context.TODO(), metav1.ListOptions{
+	result, err := kubeRKEClient.RKEControlPlanes(namespaces.FleetDefault).Watch(context.TODO(), metav1.ListOptions{
 		FieldSelector:  "metadata.name=" + clusterName,
 		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 	})
@@ -138,7 +128,7 @@ func RotateCerts(client *rancher.Client, clusterName string) error {
 		return err
 	}
 
-	clusterWait, err := kubeProvisioningClient.Clusters("fleet-default").Watch(context.TODO(), metav1.ListOptions{
+	clusterWait, err := kubeProvisioningClient.Clusters(namespaces.FleetDefault).Watch(context.TODO(), metav1.ListOptions{
 		FieldSelector:  "metadata.name=" + clusterName,
 		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 	})
@@ -155,7 +145,7 @@ func RotateCerts(client *rancher.Client, clusterName string) error {
 	postRotatedCertificates := map[string]map[string]string{}
 
 	for _, node := range nodeList.Data {
-		newCertificate, err := getCertificatesFromMachine(client, &node, sshUser)
+		newCertificate, err := getCertificatesFromMachine(client, &node)
 		if err != nil {
 			return err
 		}
@@ -253,10 +243,10 @@ func compareCertificatesFromMachines(certObject1, certObject2 map[string]map[str
 	return isRotated
 }
 
-func getCertificatesFromMachine(client *rancher.Client, machineNode *v1.SteveAPIObject, sshUser string) (map[string]string, error) {
+func getCertificatesFromMachine(client *rancher.Client, machineNode *v1.SteveAPIObject) (map[string]string, error) {
 	certificates := map[string]string{}
 
-	sshNode, err := sshkeys.GetSSHNodeFromMachine(client, sshUser, machineNode)
+	sshNode, err := sshkeys.GetSSHNodeFromMachine(client, machineNode)
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,6 @@ import (
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/tests/actions/clusters"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/sirupsen/logrus"
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -59,16 +58,6 @@ func CreateSSHNode(client *rancher.Client, clusterName string, clusterID string)
 
 	sshNode := &nodes.Node{}
 	if strings.Contains(newCluster.Spec.KubernetesVersion, "rke2") || strings.Contains(newCluster.Spec.KubernetesVersion, "k3s") {
-		_, stevecluster, err := extensionsClusters.GetProvisioningClusterByName(client, clusterName, provisioninginput.Namespace)
-		if err != nil {
-			return nil, err
-		}
-
-		sshUser, err := sshkeys.GetSSHUser(client, stevecluster)
-		if err != nil {
-			return nil, err
-		}
-
 		logrus.Infof("Getting the node using the label [%v]", clusters.LabelWorker)
 		query, err := url.ParseQuery(clusters.LabelWorker)
 		if err != nil {
@@ -86,7 +75,7 @@ func CreateSSHNode(client *rancher.Client, clusterName string, clusterID string)
 
 		firstMachine := nodeList.Data[0]
 
-		sshNode, err = sshkeys.GetSSHNodeFromMachine(client, sshUser, &firstMachine)
+		sshNode, err = sshkeys.GetSSHNodeFromMachine(client, &firstMachine)
 		if err != nil {
 			return nil, err
 		}

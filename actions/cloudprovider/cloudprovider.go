@@ -40,7 +40,9 @@ const (
 func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.ClusterConfig, credentials cloudcredentials.CloudCredential, additionalData map[string]interface{}) (*clusters.ClusterConfig, error) {
 	currentSelectors := []rkev1.RKESystemConfig{}
 	if clustersConfig.Advanced != nil {
-		currentSelectors = *clustersConfig.Advanced.MachineSelectors
+		if clustersConfig.Advanced.MachineSelectors != nil {
+			currentSelectors = *clustersConfig.Advanced.MachineSelectors
+		}
 	}
 
 	switch clustersConfig.CloudProvider {

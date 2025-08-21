@@ -21,7 +21,6 @@ import (
 	"github.com/rancher/shepherd/extensions/sshkeys"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/tests/actions/clusters"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
@@ -206,17 +205,7 @@ func VerifyClusterIP(client *rancher.Client, clusterName string, clusterID strin
 
 	log := ""
 	if strings.Contains(newCluster.Spec.KubernetesVersion, "rke2") || strings.Contains(newCluster.Spec.KubernetesVersion, "k3s") {
-		_, stevecluster, err := extensionClusters.GetProvisioningClusterByName(client, clusterName, provisioninginput.Namespace)
-		if err != nil {
-			return err
-		}
-
-		sshUser, err := sshkeys.GetSSHUser(client, stevecluster)
-		if err != nil {
-			return err
-		}
-
-		sshNode, err := sshkeys.GetSSHNodeFromMachine(client, sshUser, &firstMachine)
+		sshNode, err := sshkeys.GetSSHNodeFromMachine(client, &firstMachine)
 		if err != nil {
 			return err
 		}

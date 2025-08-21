@@ -459,3 +459,68 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/K3S/DataDirectories
+  cases:
+  - description: Provisions a 3 node split roles cluster with custom data directories
+    title: K3S_Split_Data_Directories
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a k3s cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify data directories on each node
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3 node split roles cluster with custom data directories
+    title: K3S_Grouped_Data_Directories
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a k3s cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify data directories on each node
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

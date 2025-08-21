@@ -13,6 +13,8 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	extnodes "github.com/rancher/shepherd/extensions/nodes"
 	"github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/tests/actions/provisioninginput"
@@ -28,7 +30,6 @@ const (
 	nodeReboot      provisioninginput.SSHTestCase = "NodeReboot"
 	activeState                                   = "active"
 	runningState                                  = "running"
-	fleetNamespace                                = "fleet-default"
 )
 
 // CallSSHTestByName tests the ssh tests specified in the provisioninginput config clusterSSHTests field.
@@ -60,7 +61,7 @@ func CallSSHTestByName(testCase provisioninginput.SSHTestCase, node *nodes.Node,
 		}
 		// Verify machine shuts down within five minutes, shutting down should not take longer than that depending on the ami
 		err = wait.Poll(1*time.Second, defaults.FiveMinuteTimeout, func() (bool, error) {
-			newNode, err := client.Steve.SteveType(machineSteveResourceType).ByID(fleetNamespace + "/" + machineName)
+			newNode, err := client.Steve.SteveType(stevetypes.Machine).ByID(namespaces.FleetDefault + "/" + machineName)
 			if err != nil {
 				return false, err
 			}
