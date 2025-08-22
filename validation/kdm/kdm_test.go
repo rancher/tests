@@ -1,4 +1,4 @@
-// //go:build validation
+//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress
 
 package kdm
 
