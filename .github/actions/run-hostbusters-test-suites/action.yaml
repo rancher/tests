@@ -12,48 +12,73 @@
        run: |
          set +e
          case "${{ inputs.suite }}" in
-           cert-rotation)
+           rancher-server-one)
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCertRotationTestSuite/TestCertRotation";;
-           delete-cluster)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteClusterTestSuite/TestDeletingCluster";;
-           delete-init-machine)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteInitMachineTestSuite/TestDeleteInitMachine";;
-           node-replacing)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestNodeReplacingTestSuite/TestReplacingNodes";;
-           scaling-custom-cluster)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodes";;
-           scaling-node-driver)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestNodeScalingTestSuite/TestScalingNodePools";;
-           k3s-provisioning)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;;
-           rke2-provisioning)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;;
-           snapshot)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRestoreTestSuite/TestSnapshotRestore";;
-           snapshot-windows)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows";;
-           snapshot-recurring)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRecurringTestSuite/TestSnapshotRecurringRestores";;
-           upgrade)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes";;
-           upgrade-windows)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
-             --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes";;
-         esac
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCertRotationTestSuite/TestCertRotation";
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
 
-         ./validation/pipeline/scripts/build_qase_reporter_v2.sh
-         ./validation/reporter
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteClusterTestSuite/TestDeletingCluster";
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteInitMachineTestSuite/TestDeleteInitMachine";
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestNodeReplacingTestSuite/TestReplacingNodes";
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodes";
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestNodeScalingTestSuite/TestScalingNodePools";
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+             ;;
+           rancher-server-two)
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
+               --junitfile resultst.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRestoreTestSuite/TestSnapshotRestore";
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows";
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRecurringTestSuite/TestSnapshotRecurringRestores";
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes";
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes";
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+             ;;
+         esac
        shell: bash
        continue-on-error: true

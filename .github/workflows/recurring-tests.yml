@@ -65,19 +65,8 @@ jobs:
     strategy:
       matrix:
         suite:
-          - cert-rotation
-          - delete-cluster
-          - delete-init-machine
-          - node-replacing
-          - scaling-custom-cluster
-          - scaling-node-driver
-          - k3s-provisioning
-          - rke2-provisioning
-          - snapshot
-          - snapshot-windows
-          - snapshot-recurring
-          - upgrade
-          - upgrade-windows
+          - rancher-server-one
+          - rancher-server-two
 
     steps:
       - name: Checkout repository
@@ -348,19 +337,8 @@ jobs:
     strategy:
       matrix:
         suite:
-          - cert-rotation
-          - delete-cluster
-          - delete-init-machine
-          - node-replacing
-          - scaling-custom-cluster
-          - scaling-node-driver
-          - k3s-provisioning
-          - rke2-provisioning
-          - snapshot
-          - snapshot-windows
-          - snapshot-recurring
-          - upgrade
-          - upgrade-windows
+          - rancher-server-one
+          - rancher-server-two
 
     steps:
       - name: Checkout repository
@@ -630,19 +608,8 @@ jobs:
     strategy:
       matrix:
         suite:
-          - cert-rotation
-          - delete-cluster
-          - delete-init-machine
-          - node-replacing
-          - scaling-custom-cluster
-          - scaling-node-driver
-          - k3s-provisioning
-          - rke2-provisioning
-          - snapshot
-          - snapshot-windows
-          - snapshot-recurring
-          - upgrade
-          - upgrade-windows
+          - rancher-server-one
+          - rancher-server-two
 
     steps:
       - name: Checkout repository
@@ -911,19 +878,8 @@ jobs:
     strategy:
       matrix:
         suite:
-          - cert-rotation
-          - delete-cluster
-          - delete-init-machine
-          - node-replacing
-          - scaling-custom-cluster
-          - scaling-node-driver
-          - k3s-provisioning
-          - rke2-provisioning
-          - snapshot
-          - snapshot-windows
-          - snapshot-recurring
-          - upgrade
-          - upgrade-windows
+          - rancher-server-one
+          - rancher-server-two
 
     steps:
       - name: Checkout repository
