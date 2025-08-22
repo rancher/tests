@@ -118,6 +118,7 @@ func (f *FleetWithSnapshotTestSuite) TestSnapshotThenFleetRestore() {
 		fleetVersion, err := fleet.GetDeploymentVersion(client, fleet.FleetControllerName, fleet.LocalName)
 		require.NoError(f.T(), err)
 
+		// as of rancher v2.12, this returns the full list of nodes instead of j
 		urlQuery, err := url.ParseQuery(fmt.Sprintf("labelSelector=%s=%s", "cattle.io/os", "windows"))
 		require.NoError(f.T(), err)
 
@@ -130,10 +131,18 @@ func (f *FleetWithSnapshotTestSuite) TestSnapshotThenFleetRestore() {
 		image := containerImage
 
 		if len(winsNodeList.Data) > 0 {
-			f.fleetGitRepo.Spec.Paths = []string{fleet.GitRepoPathWindows}
-			f.fleetGitRepo.Name += "windows"
-			tt.name += "windows"
-			image = windowsContainerImage
+			urlQuery, err = url.ParseQuery(fmt.Sprintf("labelSelector=%s=%s", "kubernetes.io/os", "linux"))
+			require.NoError(f.T(), err)
+
+			linuxNodeList, err := steveClient.SteveType("node").List(urlQuery)
+			require.NoError(f.T(), err)
+
+			if len(winsNodeList.Data) < len(linuxNodeList.Data) {
+				f.fleetGitRepo.Spec.Paths = []string{fleet.GitRepoPathWindows}
+				f.fleetGitRepo.Name += "windows"
+				tt.name += "windows"
+				image = windowsContainerImage
+			}
 		}
 
 		client, err = client.ReLogin()

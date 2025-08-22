@@ -5,6 +5,7 @@ package fleet
 import (
 	"fmt"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
@@ -80,7 +81,16 @@ func (f *FleetPublicRepoTestSuite) TestGitRepoDeployment() {
 	require.NoError(f.T(), err)
 
 	if len(winsNodeList.Data) > 0 {
-		fleetVersion += " windows"
+
+		urlQuery, err = url.ParseQuery(fmt.Sprintf("labelSelector=%s=%s", "kubernetes.io/os", "linux"))
+		require.NoError(f.T(), err)
+
+		linuxNodeList, err := steveClient.SteveType("node").List(urlQuery)
+		require.NoError(f.T(), err)
+
+		if len(winsNodeList.Data) < len(linuxNodeList.Data) {
+			fleetVersion += " windows"
+		}
 	}
 
 	_, namespace, err := projectsapi.CreateProjectAndNamespace(f.client, f.clusterID)
@@ -103,7 +113,7 @@ func (f *FleetPublicRepoTestSuite) TestGitRepoDeployment() {
 			},
 		}
 
-		if len(winsNodeList.Data) > 0 {
+		if strings.Contains(fleetVersion, "windows") {
 			fleetGitRepo.Spec.Paths = []string{fleet.GitRepoPathWindows}
 		}
 
@@ -129,6 +139,10 @@ func (f *FleetPublicRepoTestSuite) TestDynamicGitRepoDeployment() {
 
 	dynamicGitRepo := fleet.GitRepoConfig()
 	require.NotNil(f.T(), dynamicGitRepo)
+
+	if dynamicGitRepo.Spec.Repo == "" {
+		f.T().Skip("no dynamic repo specified")
+	}
 
 	if len(dynamicGitRepo.Spec.Targets) < 1 {
 		dynamicGitRepo.Spec.Targets = []v1alpha1.GitTarget{
