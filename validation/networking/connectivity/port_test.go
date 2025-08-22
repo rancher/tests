@@ -1,4 +1,4 @@
-//go:build (validation || infra.rke2k3s || cluster.any || sanity) && !stress && !extended
+//go:build (validation || infra.rke2k3s || cluster.any || sanity || pit.daily) && !stress && !extended
 
 package connectivity
 
