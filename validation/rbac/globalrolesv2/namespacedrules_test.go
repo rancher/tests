@@ -2,9 +2,10 @@ package globalrolesv2
 
 import (
 	"fmt"
+	"testing"
+
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	corev1 "k8s.io/api/core/v1"
-	"testing"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
