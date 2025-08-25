@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.k3s || sanity) && !stress && !extended
+//go:build (validation || infra.any || cluster.k3s || sanity || pit.daily) && !stress && !extended
 
 package observability
 
@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+
 	// Third-party library imports
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
