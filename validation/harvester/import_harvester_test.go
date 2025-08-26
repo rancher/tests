@@ -1,4 +1,4 @@
-//go:build validation
+//go:build validation || pit.event
 
 package harvester
 

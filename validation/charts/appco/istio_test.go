@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress
+//go:build (validation || infra.any || cluster.any || extended || pit.event) && !sanity && !stress
 
 package appco
 
