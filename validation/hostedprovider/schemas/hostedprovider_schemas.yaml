@@ -1,0 +1,261 @@
+- projects: [RANCHERINT]
+  suite: Hosted Providers/GKE
+  cases:
+  - title: "Test Existing Services after Import Into Rancher"
+    description: "Validate LBs and / or persistent volumes show up correctly after importing a cluster into rancher"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster on Native Infrastructure"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision a Service (LB/Storage)"
+      data: ""
+      expectedresult: ""
+      position: 2
+    - action: "Import the Hosted Cluster into Rancher"
+      data: ""
+      expectedresult: ""
+      position: 3
+    - action: "Validate the Service is correct in rancher API"
+      data: ""
+      expectedresult: "All services from the imported cluster show up in rancher object i.e. services/loadbalancers show an LB and the link to it works"
+      position: 4
+  - title: "Fleet with Hosted Provider Clusters - Imported"
+    description: "Fleet works with Hosted Providers - Imported"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster on Native Infrastructure"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Import the Hosted Cluster into Rancher"
+      data: ""
+      expectedresult: ""
+      position: 2
+    - action: "Create a Public Fleet GitRepo, Targeting the Imported Hosted Provider Cluster"
+      data: ""
+      expectedresult: ""
+      position: 3
+    - action: "Validate the fleetDeployment on the Imported Hosted Provider Cluster"
+      data: ""
+      expectedresult: "All services, workloads, etc. from the fleet GitRepo show up in cluster and are active"
+      position: 4
+  - title: "Fleet with Hosted Provider Clusters - Provisioned"
+    description: "Fleet works with Hosted Providers - Provisioned"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster via Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Create a Public Fleet GitRepo, Targeting the Hosted Provider Cluster"
+      data: ""
+      expectedresult: ""
+      position: 2
+    - action: "Validate the fleetDeployment on the Hosted Provider Cluster"
+      data: ""
+      expectedresult: "All services, workloads, etc. from the fleet GitRepo show up in cluster and are active"
+      position: 3
+  - title: "Airgapped Hosted Provider Cluster - Imported"
+    description: "Hosted Providers work in Airgap - Imported"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster on Native Infrastructure on an Airgapped Network"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Import the Hosted Cluster into an Airgapped Rancher in the Same Subnet"
+      data: ""
+      expectedresult: "All services, workloads, etc. from the fleet GitRepo show up in cluster and are active"
+      position: 2
+  - title: "Airgapped Hosted Provider Cluster - Provisioned"
+    description: "Hosted Providers work in Airgap - Provisioned"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster via Rancher on an Airgapped Network"
+      data: ""
+      expectedresult: "All services, workloads, etc. from the fleet GitRepo show up in cluster and are active"
+      position: 1
+  - title: "Test All UI Options When Provisioning a Hosted Provider via Rancher"
+    description: "Enable UI options when provisioning via rancher"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster via Rancher"
+      data: "Enable all options available in the UI"
+      expectedresult: "All available options should still allow the cluster to provision and work with rancher"
+      position: 1
+- projects: [RANCHERINT]
+  suite: Hosted Providers/AKS
+  cases:
+  - title: "Test Existing Services after Import Into Rancher"
+    description: "Validate LBs and / or persistent volumes show up correctly after importing a cluster into rancher"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster on Native Infrastructure"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision a Service (LB/Storage)"
+      data: ""
+      expectedresult: ""
+      position: 2
+    - action: "Import the Hosted Cluster into Rancher"
+      data: ""
+      expectedresult: ""
+      position: 3
+    - action: "Validate the Service is correct in rancher API"
+      data: ""
+      expectedresult: "All services from the imported cluster show up in rancher object i.e. services/loadbalancers show an LB and the link to it works"
+      position: 4
+  - title: "Fleet with Hosted Provider Clusters - Imported"
+    description: "Fleet works with Hosted Providers - Imported"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster on Native Infrastructure"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Import the Hosted Cluster into Rancher"
+      data: ""
+      expectedresult: ""
+      position: 2
+    - action: "Create a Public Fleet GitRepo, Targeting the Imported Hosted Provider Cluster"
+      data: ""
+      expectedresult: ""
+      position: 3
+    - action: "Validate the fleetDeployment on the Imported Hosted Provider Cluster"
+      data: ""
+      expectedresult: "All services, workloads, etc. from the fleet GitRepo show up in cluster and are active"
+      position: 4
+  - title: "Fleet with Hosted Provider Clusters - Provisioned"
+    description: "Fleet works with Hosted Providers - Provisioned"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster via Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Create a Public Fleet GitRepo, Targeting the Hosted Provider Cluster"
+      data: ""
+      expectedresult: ""
+      position: 2
+    - action: "Validate the fleetDeployment on the Hosted Provider Cluster"
+      data: ""
+      expectedresult: "All services, workloads, etc. from the fleet GitRepo show up in cluster and are active"
+      position: 3
+  - title: "Airgapped Hosted Provider Cluster - Imported"
+    description: "Hosted Providers work in Airgap - Imported"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster on Native Infrastructure on an Airgapped Network"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Import the Hosted Cluster into an Airgapped Rancher in the Same Subnet"
+      data: ""
+      expectedresult: "All services, workloads, etc. from the fleet GitRepo show up in cluster and are active"
+      position: 2
+  - title: "Airgapped Hosted Provider Cluster - Provisioned"
+    description: "Hosted Providers work in Airgap - Provisioned"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster via Rancher on an Airgapped Network"
+      data: ""
+      expectedresult: "All services, workloads, etc. from the fleet GitRepo show up in cluster and are active"
+      position: 1
+  - title: "Test All UI Options When Provisioning a Hosted Provider via Rancher"
+    description: "Enable UI options when provisioning via rancher"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster via Rancher"
+      data: "Enable all options available in the UI"
+      expectedresult: "All available options should still allow the cluster to provision and work with rancher"
+      position: 1
+- projects: [RANCHERINT]
+  suite: Hosted Providers/EKS
+  cases:
+  - title: "Test Existing Services after Import Into Rancher"
+    description: "Validate LBs and / or persistent volumes show up correctly after importing a cluster into rancher"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster on Native Infrastructure"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision a Service (LB/Storage)"
+      data: ""
+      expectedresult: ""
+      position: 2
+    - action: "Import the Hosted Cluster into Rancher"
+      data: ""
+      expectedresult: ""
+      position: 3
+    - action: "Validate the Service is correct in rancher API"
+      data: ""
+      expectedresult: "All services from the imported cluster show up in rancher object i.e. services/loadbalancers show an LB and the link to it works"
+      position: 4
+  - title: "Fleet with Hosted Provider Clusters - Imported"
+    description: "Fleet works with Hosted Providers - Imported"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster on Native Infrastructure"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Import the Hosted Cluster into Rancher"
+      data: ""
+      expectedresult: ""
+      position: 2
+    - action: "Create a Public Fleet GitRepo, Targeting the Imported Hosted Provider Cluster"
+      data: ""
+      expectedresult: ""
+      position: 3
+    - action: "Validate the fleetDeployment on the Imported Hosted Provider Cluster"
+      data: ""
+      expectedresult: "All services, workloads, etc. from the fleet GitRepo show up in cluster and are active"
+      position: 4
+  - title: "Fleet with Hosted Provider Clusters - Provisioned"
+    description: "Fleet works with Hosted Providers - Provisioned"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster via Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Create a Public Fleet GitRepo, Targeting the Hosted Provider Cluster"
+      data: ""
+      expectedresult: ""
+      position: 2
+    - action: "Validate the fleetDeployment on the Hosted Provider Cluster"
+      data: ""
+      expectedresult: "All services, workloads, etc. from the fleet GitRepo show up in cluster and are active"
+      position: 3
+  - title: "Airgapped Hosted Provider Cluster - Imported"
+    description: "Hosted Providers work in Airgap - Imported"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster on Native Infrastructure on an Airgapped Network"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Import the Hosted Cluster into an Airgapped Rancher in the Same Subnet"
+      data: ""
+      expectedresult: "All services, workloads, etc. from the fleet GitRepo show up in cluster and are active"
+      position: 2
+  - title: "Airgapped Hosted Provider Cluster - Provisioned"
+    description: "Hosted Providers work in Airgap - Provisioned"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster via Rancher on an Airgapped Network"
+      data: ""
+      expectedresult: "All services, workloads, etc. from the fleet GitRepo show up in cluster and are active"
+      position: 1
+  - title: "Test All UI Options When Provisioning a Hosted Provider via Rancher"
+    description: "Enable UI options when provisioning via rancher"
+    automation: 0
+    steps:
+    - action: "Create Hosted Provider Cluster via Rancher"
+      data: "Enable all options available in the UI"
+      expectedresult: "All available options should still allow the cluster to provision and work with rancher"
+      position: 1
