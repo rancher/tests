@@ -1,4 +1,4 @@
-//go:build !pit.daily
+//go:build !pit.daily && !pit.weekly && !pit.event
 
 package rbac
 

@@ -1,4 +1,4 @@
-// //go:build validation
+//go:build validation && !pit.daily && !pit.weekly && !pit.event
 
 package kdm
 

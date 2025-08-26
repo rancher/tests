@@ -1,3 +1,5 @@
+//go:build !pit.daily && !pit.weekly && !pit.event
+
 package globalroles
 
 import (
