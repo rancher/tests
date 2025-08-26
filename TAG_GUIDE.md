@@ -91,4 +91,16 @@ validaiton/provisioning/rke2/agent_test.go
 validaiton/provisioning/rke1/agent_test.go
 validaiton/fleet/agent_test.go
 
-all of which would have the _not_ tags added. 
+all of which would have the _not_ tags added.
+
+#### PIT TAGS
+The pit tags organizes Go tests using **build tags**. These tags define when and how different categories of tests should be executed (daily, weekly, or event)
+
+##### pit.daily
+-  Tests that should run **every day**
+
+##### pit.weekly
+-  Tests that should run **once per week**
+
+##### pit.event
+-  Tests that should run **when a new Alpha or Release Candidate (RC) is published**
