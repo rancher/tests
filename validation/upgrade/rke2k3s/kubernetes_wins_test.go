@@ -1,4 +1,4 @@
-//go:build validation || recurring
+//go:build validation || recurring || pit.weekly
 
 package rke2k3s
 
