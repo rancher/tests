@@ -2,9 +2,9 @@
 node {
     def rootPath = "/root/go/src/github.com/rancher/tests/validation/"
     def job_name = "${JOB_NAME}"
-    if (job_name.contains('/')) { 
+    if (job_name.contains('/')) {
       job_names = job_name.split('/')
-      job_name = job_names[job_names.size() - 1] 
+      job_name = job_names[job_names.size() - 1]
     }
     def testContainer = "${job_name}${env.BUILD_NUMBER}_test"
     def imageName = "rancher-validation-${job_name}${env.BUILD_NUMBER}"
@@ -23,7 +23,7 @@ node {
     }
     def timeout = "60m"
     if ("${env.TIMEOUT}" != "null" && "${env.TIMEOUT}" != "") {
-      timeout = "${env.TIMEOUT}" 
+      timeout = "${env.TIMEOUT}"
     }
     def reporterScript = "build_qase_reporter.sh"
     if ("${env.REPORTER_BUILD_SCRIPT}" != "null" && "${env.REPORTER_BUILD_SCRIPT}" != "") {
@@ -141,16 +141,16 @@ node {
                 step([$class: 'JUnitResultArchiver', testResults: "**/${testResultsOut}"])
                 sh "docker stop ${testContainer}"
                 sh "docker rm -v ${testContainer}"
-                sh "docker rmi -f ${imageName}" 
+                sh "docker rmi -f ${imageName}"
               }
-            } catch(err) {           
+            } catch(err) {
                 sh "docker stop ${testContainer}"
                 sh "docker rm -v ${testContainer}"
                 sh "docker rmi -f ${imageName}"
             } // catch error
-          } // dir 
+          } // dir
         } // withEnv
       } // creds
     } // folder properties
-  } // wrap 
+  } // wrap
 } // node
