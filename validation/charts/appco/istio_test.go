@@ -93,6 +93,8 @@ func (i *IstioTestSuite) SetupTest() {
 	require.NoError(i.T(), err)
 
 	i.T().Logf("Creating %s secret", rancherIstioSecretName)
+	i.T().Logf("AppCoUsername %s", *AppCoUsername)
+	i.T().Logf("AppCoAccessToken %s", *AppCoAccessToken)
 	logCmd, err := createIstioSecret(client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken)
 	require.NoError(i.T(), err)
 	require.True(i.T(), strings.Contains(logCmd, rancherIstioSecretName))
