@@ -123,8 +123,6 @@ node {
 
                 sh "./validation/configure.sh"
                 sh "./validation/build.sh"
-                def decodedAppCo = new String(APPCO_ACCESS_TOKEN.decodeBase64())
-                sh "echo The secret value is: ${decodedAppCo}"
                 if (env.ENV_VARIABLE && "${env.ENV_VARIABLE}" != "null" && "${env.ENV_VARIABLE}" != "") {
                   def envText = readFile("${envFile}")
                   writeFile file: "${envFile}", text: envText+env.ENV_VARIABLE
