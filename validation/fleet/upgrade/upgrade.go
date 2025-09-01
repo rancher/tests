@@ -129,7 +129,7 @@ func verifyRepoUpdate(client *rancher.Client, repoObjectID string) error {
 			return true, err
 		}
 
-		return newGitRepo.Status.Summary.WaitApplied == 1, nil
+		return newGitRepo.Status.Summary.Ready == 1, nil
 	})
 	return err
 }
