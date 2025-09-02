@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
@@ -50,6 +51,12 @@ func hardenedSetup(t *testing.T) hardenedTest {
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	assert.NoError(t, err)
+
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
 	assert.NoError(t, err)
 
 	r.cattleConfig, err = defaults.SetK8sDefault(client, defaults.RKE2, r.cattleConfig)
@@ -98,32 +105,35 @@ func TestHardened(t *testing.T) {
 			awsEC2Configs := new(ec2.AWSEC2Configs)
 			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, r.cattleConfig, awsEC2Configs)
 
-			clusterObject, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
-			reports.TimeoutClusterReport(clusterObject, err)
+			logrus.Infof("Provisioning cluster")
+			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
+			reports.TimeoutClusterReport(cluster, err)
 			assert.NoError(t, err)
 
-			provisioning.VerifyCluster(t, tt.client, clusterConfig, clusterObject)
+			logrus.Infof("Verifying cluster (%s)", cluster.Name)
+			provisioning.VerifyCluster(t, tt.client, cluster)
 
-			cluster, err := extensionscluster.NewClusterMeta(tt.client, clusterObject.Name)
-			reports.TimeoutClusterReport(clusterObject, err)
+			clusterMeta, err := extensionscluster.NewClusterMeta(tt.client, cluster.Name)
+			reports.TimeoutClusterReport(cluster, err)
 			assert.NoError(t, err)
 
 			latestCISBenchmarkVersion, err := tt.client.Catalog.GetLatestChartVersion(charts.CISBenchmarkName, catalog.RancherChartRepo)
 			assert.NoError(t, err)
 
 			project, err := projects.GetProjectByName(tt.client, cluster.ID, cis.System)
-			reports.TimeoutClusterReport(clusterObject, err)
+			reports.TimeoutClusterReport(cluster, err)
 			assert.NoError(t, err)
 
 			r.project = project
 			assert.NotEmpty(t, r.project)
 
 			r.chartInstallOptions = &charts.InstallOptions{
-				Cluster:   cluster,
+				Cluster:   clusterMeta,
 				Version:   latestCISBenchmarkVersion,
 				ProjectID: r.project.ID,
 			}
 
+			logrus.Infof("Running CIS Benchmark on cluster (%s)", cluster.Name)
 			cis.SetupCISBenchmarkChart(tt.client, r.project.ClusterID, r.chartInstallOptions, charts.CISBenchmarkNamespace)
 			cis.RunCISScan(tt.client, r.project.ClusterID, tt.scanProfileName)
 		})

@@ -15,6 +15,7 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/config/permutationdata"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
@@ -40,6 +41,12 @@ func dynamicNodeDriverSetup(t *testing.T) DynamicNodeDriverTest {
 	r.client = client
 
 	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
+	assert.NoError(t, err)
 
 	providerPermutation, err := permutationdata.CreateProviderPermutation(cattleConfig)
 	assert.NoError(t, err)
@@ -92,11 +99,12 @@ func TestDynamicNodeDriver(t *testing.T) {
 				credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 				machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
+				logrus.Info("Provisioning cluster")
 				cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 				assert.NoError(t, err)
 
 				logrus.Infof("Verifying cluster (%s)", cluster.Name)
-				provisioning.VerifyCluster(t, tt.client, clusterConfig, cluster)
+				provisioning.VerifyCluster(t, tt.client, cluster)
 			}
 		})
 	}

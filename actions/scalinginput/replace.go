@@ -15,6 +15,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/nodes"
 	nodestat "github.com/rancher/shepherd/extensions/nodes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
@@ -29,13 +30,10 @@ const (
 	etcd            = "etcd"
 	worker          = "worker"
 
-	unreachableCondition         = "NodeStatusUnknown"
-	namespace                    = "fleet-default"
-	ProvisioningSteveResouceType = "provisioning.cattle.io.cluster"
-	machineSteveResourceType     = "cluster.x-k8s.io.machine"
-	machineSteveAnnotation       = "cluster.x-k8s.io/machine"
-	etcdLabel                    = "node-role.kubernetes.io/etcd"
-	clusterLabel                 = "cluster.x-k8s.io/cluster-name"
+	unreachableCondition   = "NodeStatusUnknown"
+	machineSteveAnnotation = "cluster.x-k8s.io/machine"
+	etcdLabel              = "node-role.kubernetes.io/etcd"
+	clusterLabel           = "cluster.x-k8s.io/cluster-name"
 )
 
 // MatchNodeToRole returns the count and list of nodes that match the specified role(s) in a given cluster. Error returned, if any.
@@ -76,19 +74,19 @@ func ReplaceNodes(client *rancher.Client, clusterName string, isEtcd bool, isCon
 	}
 
 	for i := range nodesToDelete {
-		machineToDelete, err := client.Steve.SteveType(machineSteveResourceType).ByID("fleet-default/" + nodesToDelete[i].Annotations[machineSteveAnnotation])
+		machineToDelete, err := client.Steve.SteveType(stevetypes.Machine).ByID("fleet-default/" + nodesToDelete[i].Annotations[machineSteveAnnotation])
 		if err != nil {
 			return err
 		}
 
 		logrus.Infof("Deleting node: %s", nodesToDelete[i].NodeName)
-		err = client.Steve.SteveType(machineSteveResourceType).Delete(machineToDelete)
+		err = client.Steve.SteveType(stevetypes.Machine).Delete(machineToDelete)
 		if err != nil {
 			return err
 		}
 
 		err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-			_, err = client.Steve.SteveType(machineSteveResourceType).ByID(machineToDelete.ID)
+			_, err = client.Steve.SteveType(stevetypes.Machine).ByID(machineToDelete.ID)
 			if err != nil {
 				logrus.Infof("Node has successfully been deleted!")
 				return true, nil
@@ -99,6 +97,7 @@ func ReplaceNodes(client *rancher.Client, clusterName string, isEtcd bool, isCon
 			return err
 		}
 
+		logrus.Info("Waiting for node to be replaced")
 		err = clusters.WaitClusterToBeUpgraded(client, clusterID)
 		if err != nil {
 			return err
@@ -158,7 +157,7 @@ func shutdownFirstNodeWithRole(client *rancher.Client, clusterID, nodeRole strin
 		return nil, err
 	}
 
-	nodeList, err := steveclient.SteveType("node").List(query)
+	nodeList, err := steveclient.SteveType(stevetypes.Node).List(query)
 	if err != nil {
 		return nil, err
 	}

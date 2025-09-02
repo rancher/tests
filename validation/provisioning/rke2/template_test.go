@@ -24,6 +24,7 @@ import (
 	"github.com/rancher/tests/actions/charts"
 	actionsDefaults "github.com/rancher/tests/actions/config/defaults"
 	configDefaults "github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/reports"
@@ -59,6 +60,12 @@ func templateSetup(t *testing.T) templateTest {
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	r.cattleConfig, err = configDefaults.LoadPackageDefaults(r.cattleConfig, "")
+	assert.NoError(t, err)
+
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
 	assert.NoError(t, err)
 
 	r.templateConfig = new(provisioninginput.TemplateConfig)
@@ -102,6 +109,8 @@ func TestTemplate(t *testing.T) {
 			assert.NoError(t, err)
 
 			clusterName := namegenerator.AppendRandomString(actionsDefaults.RKE2 + "-template")
+
+			logrus.Infof("Provisioning template cluster (%s)", clusterName)
 			err = charts.InstallTemplateChart(r.client, r.templateConfig.Repo.ObjectMeta.Name, r.templateConfig.TemplateName, clusterName, k8sversions[0], r.cloudCredentials)
 			assert.NoError(t, err)
 
@@ -109,7 +118,8 @@ func TestTemplate(t *testing.T) {
 			reports.TimeoutClusterReport(cluster, err)
 			assert.NoError(t, err)
 
-			provisioning.VerifyCluster(t, r.client, nil, cluster)
+			logrus.Infof("Verifying cluster (%s)", cluster.Name)
+			provisioning.VerifyCluster(t, r.client, cluster)
 		})
 	}
 }

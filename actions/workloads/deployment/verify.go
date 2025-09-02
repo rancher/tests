@@ -10,6 +10,7 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wrangler"
@@ -29,7 +30,7 @@ const (
 // VerifyDeployment waits for a deployment to be ready in the downstream cluster
 func VerifyDeployment(steveClient *steveV1.Client, deployment *steveV1.SteveAPIObject) error {
 	err := kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		deploymentResp, err := steveClient.SteveType(DeploymentSteveType).ByID(deployment.Namespace + "/" + deployment.Name)
+		deploymentResp, err := steveClient.SteveType(stevetypes.Deployment).ByID(deployment.Namespace + "/" + deployment.Name)
 		if err != nil {
 			return false, nil
 		}

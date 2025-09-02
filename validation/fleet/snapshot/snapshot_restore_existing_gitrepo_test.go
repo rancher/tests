@@ -12,6 +12,8 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
 	"github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
@@ -177,13 +179,13 @@ func (f *FleetWithSnapshotTestSuite) TestSnapshotThenFleetRestore() {
 			gitRepoObject, err = extensionsfleet.CreateFleetGitRepo(client, f.fleetGitRepo)
 			require.NoError(f.T(), err)
 
-			err = fleet.VerifyGitRepo(client, gitRepoObject.ID, f.clusterID, fleet.Namespace+"/"+client.RancherConfig.ClusterName)
+			err = fleet.VerifyGitRepo(client, gitRepoObject.ID, f.clusterID, namespaces.FleetDefault+"/"+client.RancherConfig.ClusterName)
 			require.NoError(f.T(), err)
 
 			err = etcdsnapshot.RestoreAndValidateSnapshotV2Prov(client, snapshotName, tt.etcdSnapshot, cluster, f.clusterID)
 			require.NoError(f.T(), err)
 
-			_, err = steveClient.SteveType(etcdsnapshot.DeploymentSteveType).ByID(postDeploymentResp.ID)
+			_, err = steveClient.SteveType(stevetypes.Deployment).ByID(postDeploymentResp.ID)
 			require.Error(f.T(), err)
 
 			_, err = steveClient.SteveType("service").ByID(postServiceResp.ID)

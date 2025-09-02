@@ -22,13 +22,13 @@ func deleteInitMachine(client *rancher.Client, clusterID string) error {
 		return err
 	}
 
-	logrus.Info("Awaiting machine deletion...")
+	logrus.Debugf("Waiting for the init machine to be deleted on cluster (%s)", clusterID)
 	err = steve.WaitForResourceDeletion(client.Steve, initMachine, defaults.FiveHundredMillisecondTimeout, defaults.TenMinuteTimeout)
 	if err != nil {
 		return err
 	}
 
-	logrus.Info("Awaiting machine replacement...")
+	logrus.Debugf("Waiting for the init machine to be replaced on cluster (%s)", clusterID)
 	err = clusters.WatchAndWaitForCluster(client, clusterID)
 	if err != nil {
 		return err

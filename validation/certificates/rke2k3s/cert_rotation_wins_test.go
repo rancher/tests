@@ -9,12 +9,14 @@ import (
 	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults/providers"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
@@ -52,13 +54,19 @@ func (c *CertRotationWindowsTestSuite) SetupSuite() {
 
 	c.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, c.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
+	require.NoError(c.T(), err)
+
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, c.cattleConfig, clusterConfig)
 
 	awsEC2Configs := new(ec2.AWSEC2Configs)
 	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, c.cattleConfig, awsEC2Configs)
 
-	if clusterConfig.Provider != "vsphere" {
+	if clusterConfig.Provider != providers.Vsphere {
 		c.T().Skip("Test requires vSphere provider")
 	}
 
@@ -76,6 +84,7 @@ func (c *CertRotationWindowsTestSuite) SetupSuite() {
 
 	clusterConfig.MachinePools = nodeRolesStandard
 
+	logrus.Info("Provisioning RKE2 windows cluster")
 	c.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.RKE2ClusterType.String(), clusterConfig, awsEC2Configs, true, false)
 	require.NoError(c.T(), err)
 }
@@ -93,7 +102,11 @@ func (c *CertRotationWindowsTestSuite) TestCertRotationWindows() {
 		require.NoError(c.T(), err)
 
 		c.Run(tt.name, func() {
+			logrus.Infof("Rotating certificates on cluster (%s)", cluster.Name)
 			require.NoError(c.T(), certificates.RotateCerts(c.client, cluster.Name))
+
+			logrus.Infof("Verifying cluster (%s)", cluster.Name)
+			provisioning.VerifyCluster(c.T(), c.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(c.client, c.cattleConfig)

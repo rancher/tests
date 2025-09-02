@@ -69,7 +69,7 @@ func RotateCerts(client *rancher.Client, clusterName string) error {
 		return err
 	}
 
-	nodeList, err := steveclient.SteveType("node").List(nil)
+	nodeList, err := steveclient.SteveType(stevetypes.Node).List(nil)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,6 @@ func RotateCerts(client *rancher.Client, clusterName string) error {
 
 	updatedCluster.Spec = *clusterSpec
 
-	logrus.Infof("Rotating certs...")
 	_, err = client.Steve.SteveType(stevetypes.Provisioning).Update(cluster, updatedCluster)
 	if err != nil {
 		return err
@@ -136,6 +135,7 @@ func RotateCerts(client *rancher.Client, clusterName string) error {
 		return err
 	}
 
+	logrus.Infof("Waiting for cluster (%s) to be active", cluster.Name)
 	clusterCheckFunc := clusters.IsProvisioningClusterReady
 	err = wait.WatchWait(clusterWait, clusterCheckFunc)
 	if err != nil {
@@ -157,8 +157,6 @@ func RotateCerts(client *rancher.Client, clusterName string) error {
 	if !isAllCertRotated {
 		return errors.New("Certificates weren't properly rotated")
 	}
-
-	logrus.Infof("Cert Rotation Complete.")
 
 	return nil
 }
@@ -251,7 +249,7 @@ func getCertificatesFromMachine(client *rancher.Client, machineNode *v1.SteveAPI
 		return nil, err
 	}
 
-	logrus.Infof("Getting certificates from machine: %s", machineNode.Name)
+	logrus.Debugf("Getting certificates from machine: %s", machineNode.Name)
 
 	clusterType := machineNode.Labels["node.kubernetes.io/instance-type"]
 	certsPath := "/var/lib/rancher/" + clusterType + "/server/tls/"

@@ -16,7 +16,7 @@ const (
 // HardenRKE2Nodes hardens the nodes by setting kernel parameters and creating the etcd user
 func HardenRKE2Nodes(nodes []*nodes.Node, nodeRoles []string) error {
 	for _, node := range nodes {
-		logrus.Infof("Setting kernel parameters on node: %s", node.NodeID)
+		logrus.Tracef("Setting kernel parameters on node: %s", node.NodeID)
 		_, err := node.ExecuteCommand("sudo bash -c 'echo vm.panic_on_oom=0 >> " + kubeletConf + "'")
 		if err != nil {
 			return err
@@ -42,7 +42,7 @@ func HardenRKE2Nodes(nodes []*nodes.Node, nodeRoles []string) error {
 			return err
 		}
 
-		logrus.Infof("Creating etcd user on node: %s", node.NodeID)
+		logrus.Tracef("Creating etcd user on node: %s", node.NodeID)
 		_, err = node.ExecuteCommand("sudo useradd -r -c \"etcd user\" -s /sbin/nologin -M etcd -U")
 		if err != nil {
 			return err
@@ -57,7 +57,7 @@ func HardenRKE2Nodes(nodes []*nodes.Node, nodeRoles []string) error {
 func PostRKE2HardeningConfig(nodes []*nodes.Node, nodeRoles []string) error {
 	for key, node := range nodes {
 		if strings.Contains(nodeRoles[key], "--controlplane") {
-			logrus.Infof("Copying over files to node %s", node.NodeID)
+			logrus.Tracef("Copying over files to node %s", node.NodeID)
 			userDir, err := os.UserHomeDir()
 			if err != nil {
 				return err

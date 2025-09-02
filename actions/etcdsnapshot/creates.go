@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	extdefault "github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	shepherdsnapshot "github.com/rancher/shepherd/extensions/etcdsnapshot"
 	extensionsingress "github.com/rancher/shepherd/extensions/ingresses"
@@ -21,6 +22,7 @@ import (
 	"github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/scalinginput"
 	"github.com/rancher/tests/actions/services"
 	deploy "github.com/rancher/tests/actions/workloads/deployment"
@@ -35,26 +37,18 @@ const (
 	InitialIngress  = "ingress-before-restore"
 	InitialWorkload = "wload-before-restore"
 
-	all                          = "all"
-	nginxImage                   = "nginx"
-	containerName                = "nginx"
-	defaultNamespace             = "default"
-	DeploymentSteveType          = "apps.deployment"
-	isCattleLabeled              = true
-	ingressSteveType             = "networking.k8s.io.ingress"
-	ingressPath                  = "/index.html"
-	K3S                          = "k3s"
-	kubernetesVersion            = "kubernetesVersion"
-	namespace                    = "fleet-default"
-	port                         = "port"
-	postWorkload                 = "wload-after-backup"
-	ProvisioningSteveResouceType = "provisioning.cattle.io.cluster"
-	RKE1                         = "rke1"
-	RKE2                         = "rke2"
-	serviceAppendName            = "service-"
-	serviceType                  = "service"
-	windowsContainerImage        = "mcr.microsoft.com/windows/servercore/iis"
-	windowsContainerName         = "iis"
+	all                   = "all"
+	nginxImage            = "nginx"
+	containerName         = "nginx"
+	isCattleLabeled       = true
+	ingressPath           = "/index.html"
+	kubernetesVersion     = "kubernetesVersion"
+	port                  = "port"
+	postWorkload          = "wload-after-backup"
+	RKE1                  = "rke1"
+	serviceAppendName     = "service-"
+	windowsContainerImage = "mcr.microsoft.com/windows/servercore/iis"
+	windowsContainerName  = "iis"
 )
 
 // CreateAndValidateSnapshotRestore is an e2e helper that determines the engine type of the cluster, then takes a snapshot, and finally restores the cluster to the original snapshot
@@ -71,7 +65,7 @@ func CreateAndValidateSnapshotRestore(client *rancher.Client, clusterName string
 
 	var isRKE1 = false
 
-	clusterObject, _, _ := clusters.GetProvisioningClusterByName(client, clusterName, namespace)
+	clusterObject, _, _ := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
 	if clusterObject == nil {
 		_, err := client.Management.Cluster.ByID(clusterID)
 		if err != nil {
@@ -97,12 +91,12 @@ func CreateAndValidateSnapshotRestore(client *rancher.Client, clusterName string
 			return err
 		}
 
-		_, err = steveclient.SteveType(DeploymentSteveType).ByID(postDeploymentResp.ID)
+		_, err = steveclient.SteveType(stevetypes.Deployment).ByID(postDeploymentResp.ID)
 		if err == nil {
 			return errors.New("expecting cluster restore to remove resource")
 		}
 
-		_, err = steveclient.SteveType(serviceType).ByID(postServiceResp.ID)
+		_, err = steveclient.SteveType(stevetypes.Service).ByID(postServiceResp.ID)
 		if err == nil {
 			return errors.New("expecting cluster restore to remove resource")
 		}
@@ -118,29 +112,29 @@ func CreateAndValidateSnapshotRestore(client *rancher.Client, clusterName string
 			return err
 		}
 
-		_, err = steveclient.SteveType(DeploymentSteveType).ByID(postDeploymentResp.ID)
+		_, err = steveclient.SteveType(stevetypes.Deployment).ByID(postDeploymentResp.ID)
 		if err == nil {
 			return errors.New("expecting cluster restore to remove resource")
 		}
 
-		_, err = steveclient.SteveType(serviceType).ByID(postServiceResp.ID)
+		_, err = steveclient.SteveType(stevetypes.Service).ByID(postServiceResp.ID)
 		if err == nil {
 			return errors.New("expecting cluster restore to remove resource")
 		}
 	}
 
 	logrus.Infof("Deleting created workloads...")
-	err = steveclient.SteveType(DeploymentSteveType).Delete(deploymentResp)
+	err = steveclient.SteveType(stevetypes.Deployment).Delete(deploymentResp)
 	if err != nil {
 		return err
 	}
 
-	err = steveclient.SteveType(serviceType).Delete(serviceResp)
+	err = steveclient.SteveType(stevetypes.Service).Delete(serviceResp)
 	if err != nil {
 		return err
 	}
 
-	err = steveclient.SteveType(ingressSteveType).Delete(ingressResp)
+	err = steveclient.SteveType(stevetypes.Ingress).Delete(ingressResp)
 	if err != nil {
 		return err
 	}
@@ -344,7 +338,7 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 		createdSnapshotIDs = append(createdSnapshotIDs, snapshot.ID)
 	}
 
-	cluster, _, err := clusters.GetProvisioningClusterByName(client, clusterName, namespace)
+	cluster, _, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
 	if err != nil {
 		return nil, "", nil, nil, err
 	}
@@ -371,37 +365,38 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 	}
 
 	if etcdRestore.SnapshotRestore == kubernetesVersion || etcdRestore.SnapshotRestore == all {
-		clusterObject, clusterResponse, err := clusters.GetProvisioningClusterByName(client, clusterName, namespace)
+		clusterObject, clusterResponse, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
 		if err != nil {
 			return nil, "", nil, nil, err
 		}
 
 		initialKubernetesVersion := clusterObject.Spec.KubernetesVersion
-
+		var upgradeKubernetesVersion string
 		if etcdRestore.UpgradeKubernetesVersion == "" {
-			if strings.Contains(initialKubernetesVersion, RKE2) {
-				defaultVersion, err := kubernetesversions.Default(client, clusters.RKE2ClusterType.String(), nil)
-				etcdRestore.UpgradeKubernetesVersion = defaultVersion[0]
+			if strings.Contains(initialKubernetesVersion, defaults.RKE2) {
+				defaultVersion, err := kubernetesversions.Default(client, defaults.RKE2, nil)
+				upgradeKubernetesVersion = defaultVersion[0]
 				if err != nil {
 					return nil, "", nil, nil, err
 				}
-			} else if strings.Contains(initialKubernetesVersion, K3S) {
-				defaultVersion, err := kubernetesversions.Default(client, clusters.K3SClusterType.String(), nil)
-				etcdRestore.UpgradeKubernetesVersion = defaultVersion[0]
+			} else if strings.Contains(initialKubernetesVersion, defaults.K3S) {
+				defaultVersion, err := kubernetesversions.Default(client, defaults.K3S, nil)
+				upgradeKubernetesVersion = defaultVersion[0]
 				if err != nil {
 					return nil, "", nil, nil, err
 				}
 			}
 		}
 
-		clusterObject.Spec.KubernetesVersion = etcdRestore.UpgradeKubernetesVersion
+		clusterObject.Spec.KubernetesVersion = upgradeKubernetesVersion
 
 		if etcdRestore.SnapshotRestore == all && etcdRestore.ControlPlaneConcurrencyValue != "" && etcdRestore.WorkerConcurrencyValue != "" {
 			clusterObject.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency = etcdRestore.ControlPlaneConcurrencyValue
 			clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency = etcdRestore.WorkerConcurrencyValue
 		}
 
-		_, err = client.Steve.SteveType(ProvisioningSteveResouceType).Update(clusterResponse, clusterObject)
+		logrus.Infof("Upgrading K8s version to %s on cluster: %s", clusterObject.Spec.KubernetesVersion, clusterObject.Name)
+		_, err = client.Steve.SteveType(stevetypes.Provisioning).Update(clusterResponse, clusterObject)
 		if err != nil {
 			return nil, "", nil, nil, err
 		}
@@ -411,14 +406,12 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 			return nil, "", nil, nil, err
 		}
 
-		logrus.Infof("Cluster version is upgraded to: %s", clusterObject.Spec.KubernetesVersion)
-
 		podErrors := pods.StatusPods(client, clusterID)
 		if len(podErrors) != 0 {
 			return nil, "", nil, nil, errors.New("cluster's pods not in good health post upgrade")
 		}
 
-		if etcdRestore.UpgradeKubernetesVersion != clusterObject.Spec.KubernetesVersion {
+		if upgradeKubernetesVersion != clusterObject.Spec.KubernetesVersion {
 			return nil, "", nil, nil, fmt.Errorf("K8s Version after upgrade %s does not match expected version %s", clusterObject.Spec.KubernetesVersion, etcdRestore.UpgradeKubernetesVersion)
 		}
 
@@ -435,7 +428,7 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 			}
 		}
 		// sometimes we get a false positive on the cluster's state where it briefly goes 'active'. This is a way to mitigate that.
-		clusterSteveObject, err := client.Steve.SteveType(ProvisioningSteveResouceType).ByID(clusterID)
+		clusterSteveObject, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(clusterID)
 		if err != nil {
 			return nil, "", nil, nil, err
 		}
@@ -454,7 +447,7 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 // RestoreAndValidateSnapshotV2Prov restores a given snapshot for a v2prov cluster and validates its resources
 // after the restore against the original cluster object
 func RestoreAndValidateSnapshotV2Prov(client *rancher.Client, snapshotID string, etcdRestore *Config, cluster *apisV1.Cluster, clusterID string) error {
-	clusterObject, _, err := clusters.GetProvisioningClusterByName(client, cluster.Name, namespace)
+	clusterObject, _, err := clusters.GetProvisioningClusterByName(client, cluster.Name, namespaces.FleetDefault)
 	if err != nil {
 		return err
 	}
@@ -484,7 +477,7 @@ func RestoreAndValidateSnapshotV2Prov(client *rancher.Client, snapshotID string,
 			return err
 		}
 
-		clusterObject, _, err = clusters.GetProvisioningClusterByName(client, cluster.Name, namespace)
+		clusterObject, _, err = clusters.GetProvisioningClusterByName(client, cluster.Name, namespaces.FleetDefault)
 		if err != nil {
 			return err
 		}
@@ -567,11 +560,11 @@ func CreateSnapshotsUntilRetentionLimit(client *rancher.Client, clusterName stri
 func createPostBackupWorkloads(client *rancher.Client, clusterID string, podTemplate corev1.PodTemplateSpec, deployment *v1.Deployment) (*steveV1.SteveAPIObject, *steveV1.SteveAPIObject, error) {
 	workloadNamePostBackup := namegen.AppendRandomString(postWorkload)
 
-	postBackupDeployment := workloads.NewDeploymentTemplate(workloadNamePostBackup, defaultNamespace, podTemplate, isCattleLabeled, nil)
+	postBackupDeployment := workloads.NewDeploymentTemplate(workloadNamePostBackup, namespaces.Default, podTemplate, isCattleLabeled, nil)
 	postBackupService := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceAppendName + workloadNamePostBackup,
-			Namespace: defaultNamespace,
+			Namespace: namespaces.Default,
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
@@ -629,12 +622,12 @@ func createAndVerifyResources(steveclient *steveV1.Client, containerImage string
 	containerTemplate = workloads.NewContainer(containerName, containerImage, corev1.PullAlways, []corev1.VolumeMount{}, []corev1.EnvFromSource{}, nil, nil, nil)
 
 	podTemplate := workloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{}, []corev1.LocalObjectReference{}, nil, map[string]string{})
-	deploymentTemplate := workloads.NewDeploymentTemplate(initialWorkloadName, defaultNamespace, podTemplate, isCattleLabeled, nil)
+	deploymentTemplate := workloads.NewDeploymentTemplate(initialWorkloadName, namespaces.Default, podTemplate, isCattleLabeled, nil)
 
 	service := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceAppendName + initialWorkloadName,
-			Namespace: defaultNamespace,
+			Namespace: namespaces.Default,
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
@@ -677,7 +670,7 @@ func createAndVerifyResources(steveclient *steveV1.Client, containerImage string
 	}
 
 	path := extensionsingress.NewIngressPathTemplate(networking.PathTypeImplementationSpecific, ingressPath, serviceAppendName+initialWorkloadName, 80)
-	ingressTemplate := extensionsingress.NewIngressTemplate(initialIngressName, defaultNamespace, "", []networking.HTTPIngressPath{path})
+	ingressTemplate := extensionsingress.NewIngressTemplate(initialIngressName, namespaces.Default, "", []networking.HTTPIngressPath{path})
 
 	ingressResp, err := extensionsingress.CreateIngress(steveclient, initialIngressName, ingressTemplate)
 	if err != nil {
@@ -698,7 +691,7 @@ func createAndVerifyResources(steveclient *steveV1.Client, containerImage string
 
 func createDeployment(steveclient *steveV1.Client, wlName string, deployment *v1.Deployment) (*steveV1.SteveAPIObject, error) {
 	logrus.Infof("Creating deployment: %s", wlName)
-	deploymentResp, err := steveclient.SteveType(DeploymentSteveType).Create(deployment)
+	deploymentResp, err := steveclient.SteveType(stevetypes.Deployment).Create(deployment)
 	if err != nil {
 		return nil, err
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
@@ -53,6 +54,12 @@ func (c *CertRotationTestSuite) SetupSuite() {
 
 	c.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, c.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
+	require.NoError(c.T(), err)
+
 	rke2ClusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, c.cattleConfig, rke2ClusterConfig)
 
@@ -75,9 +82,11 @@ func (c *CertRotationTestSuite) SetupSuite() {
 	rke2ClusterConfig.MachinePools = nodeRolesStandard
 	k3sClusterConfig.MachinePools = nodeRolesStandard
 
+	logrus.Info("Provisioning RKE2 cluster")
 	c.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2ClusterConfig, awsEC2Configs, true, false)
 	require.NoError(c.T(), err)
 
+	logrus.Info("Provisioning K3S cluster")
 	c.k3sClusterID, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.K3SClusterType.String(), k3sClusterConfig, awsEC2Configs, true, false)
 	require.NoError(c.T(), err)
 
@@ -97,7 +106,11 @@ func (c *CertRotationTestSuite) TestCertRotation() {
 		require.NoError(c.T(), err)
 
 		c.Run(tt.name, func() {
+			logrus.Infof("Rotating certificates on cluster (%s)", cluster.Name)
 			require.NoError(c.T(), certificates.RotateCerts(c.client, cluster.Name))
+
+			logrus.Infof("Verifying cluster (%s)", cluster.Name)
+			provisioning.VerifyCluster(c.T(), c.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(c.client, c.cattleConfig)
