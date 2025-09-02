@@ -78,6 +78,12 @@ func (u *UpgradeTestSuite) SetupSuite() {
 
 	u.fleetSecretName, err = createFleetSSHSecret(u.client, u.sshNode.SSHKey)
 	require.NoError(u.T(), err)
+
+	traefikDaemonset, err := fleet.GetDaemonsetByName(u.client, u.cluster.ID, fleet.KubeSystem, fleet.TraefikDeamonSet)
+	require.NoError(u.T(), err)
+	if traefikDaemonset != nil {
+		u.T().Skip("Test requires Traefik ingress to not be installed")
+	}
 }
 
 func (u *UpgradeTestSuite) TestNewCommitFleetRepo() {
