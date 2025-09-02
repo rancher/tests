@@ -21,15 +21,15 @@ ENV TOFU_VERSION=${TOFU_VERSION}
 ENV RANCHER2_PROVIDER_VERSION=${RANCHER2_PROVIDER_VERSION}
 ENV HARVESTER_PROVIDER_VERSION=${HARVESTER_PROVIDER_VERSION}
 
-RUN zypper -n install gcc binutils glibc-devel-static ca-certificates git-core wget curl unzip tar vim less file xz gzip sed gawk iproute2 iptables jq gettext-runtime
-RUN zypper install -y -f docker && rpm -e --nodeps --noscripts containerd
+RUN zypper -n install gcc binutils glibc-devel-static ca-certificates git-core wget curl unzip tar vim less file xz gzip sed gawk iproute2 iptables jq gettext-runtime && \
+    zypper install -y -f docker && rpm -e --nodeps --noscripts containerd
 
 # Python related dependencies for the Integration/Validation tests.
 RUN zypper -n install python311-pip python311-base python311 python311-devel python311-tox libffi-devel libopenssl-devel
 
 # Upgrade pip and install Python packages
 RUN python3.11 -m pip install --upgrade pip setuptools && \
-    python3.11 -m pip install ansible kubernetes
+    python3.11 -m pip install ansible kubernetes jmespath
 
 ENV PATH="/root/.local/bin:${PATH}"
 
@@ -57,27 +57,27 @@ RUN TOFU_ZIP="tofu_${TOFU_VERSION}_linux_amd64.zip" && \
 RUN ln -s /usr/local/bin/tofu /usr/local/bin/terraform
 
 # Install kubectl
-RUN curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl" && \
+RUN curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl" & \
+    curl -fsSL -o get_helm.sh "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3" & \
+    wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq & \
+
+    wait && \
+    chmod +x get_helm.sh && \
+    ./get_helm.sh && \
+    rm get_helm.sh && \
     chmod +x kubectl && \
+    chmod +x /usr/local/bin/yq && \
     mv ./kubectl /usr/local/bin/kubectl
 
-# Install Helm
-RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 && \
-chmod +x get_helm.sh && \
-./get_helm.sh && \
-rm get_helm.sh
 
-# Install yq
-RUN wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq && \
-    chmod +x /usr/local/bin/yq
 
 RUN if [[ "$RANCHER2_PROVIDER_VERSION" == *"-dev"* ]]; then \
       chmod +x ./scripts/tofu/dev-provider.sh && ./scripts/tofu/dev-provider.sh rancher2 "https://github.com/rancher/terraform-provider-rancher2.git" ; \
-    fi;
-
-RUN if [[ "$HARVESTER_PROVIDER_VERSION" == *"-dev"* ]]; then \
+    fi; \
+    if [[ "$HARVESTER_PROVIDER_VERSION" == *"-dev"* ]]; then \
       chmod +x ./scripts/tofu/dev-provider.sh && ./scripts/tofu/dev-provider.sh harvester "https://github.com/harvester/terraform-provider-harvester.git" ; \
-    fi;
+    fi; \
+    wait
 
 # necessary to run if statements using [[ ]]
 SHELL ["/bin/bash", "-c"] 
