@@ -16,6 +16,8 @@ import (
 	extensionClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	extdefault "github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/stevestates"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/ingresses"
 	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/extensions/sshkeys"
@@ -29,21 +31,18 @@ import (
 )
 
 const (
-	active              = "active"
 	noSuchHostSubString = "no such host"
 )
 
 // VerifyService waits for a service to be ready in the downstream cluster
 func VerifyService(steveclient *steveV1.Client, serviceResp *steveV1.SteveAPIObject) error {
 	err := kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		service, err := steveclient.SteveType(ServiceSteveType).ByID(serviceResp.ID)
+		service, err := steveclient.SteveType(stevetypes.Service).ByID(serviceResp.ID)
 		if err != nil {
 			return false, nil
 		}
 
-		if service.State.Name == active {
-			logrus.Infof("Successfully created service: %s", service.Name)
-
+		if service.State.Name == stevestates.Active {
 			return true, nil
 		}
 

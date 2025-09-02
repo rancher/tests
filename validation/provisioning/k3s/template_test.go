@@ -24,6 +24,7 @@ import (
 	"github.com/rancher/tests/actions/charts"
 	actionsDefaults "github.com/rancher/tests/actions/config/defaults"
 	configDefaults "github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -46,32 +47,38 @@ type templateTest struct {
 }
 
 func templateSetup(t *testing.T) templateTest {
-	var r templateTest
+	var k templateTest
 	testSession := session.NewSession()
-	r.session = testSession
+	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	assert.NoError(t, err)
 
-	r.client = client
+	k.client = client
 
-	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = configDefaults.LoadPackageDefaults(r.cattleConfig, "")
+	k.cattleConfig, err = configDefaults.LoadPackageDefaults(k.cattleConfig, "")
 	assert.NoError(t, err)
 
-	r.templateConfig = new(provisioninginput.TemplateConfig)
-	operations.LoadObjectFromMap(templateTestConfigKey, r.cattleConfig, r.templateConfig)
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
 
-	provider := provisioning.CreateProvider(r.templateConfig.TemplateProvider)
-	cloudCredentialConfig := cloudcredentials.LoadCloudCredential(r.templateConfig.TemplateProvider)
-	r.cloudCredentials, err = provider.CloudCredFunc(client, cloudCredentialConfig)
+	err = logging.SetLogger(loggingConfig)
 	assert.NoError(t, err)
 
-	r.standardUserClient, err = standard.CreateStandardUser(r.client)
+	k.templateConfig = new(provisioninginput.TemplateConfig)
+	operations.LoadObjectFromMap(templateTestConfigKey, k.cattleConfig, k.templateConfig)
+
+	provider := provisioning.CreateProvider(k.templateConfig.TemplateProvider)
+	cloudCredentialConfig := cloudcredentials.LoadCloudCredential(k.templateConfig.TemplateProvider)
+	k.cloudCredentials, err = provider.CloudCredFunc(client, cloudCredentialConfig)
 	assert.NoError(t, err)
 
-	return r
+	k.standardUserClient, err = standard.CreateStandardUser(k.client)
+	assert.NoError(t, err)
+
+	return k
 }
 
 func TestTemplate(t *testing.T) {
@@ -101,13 +108,16 @@ func TestTemplate(t *testing.T) {
 			assert.NoError(t, err)
 
 			clusterName := namegenerator.AppendRandomString(actionsDefaults.K3S + "-template")
+
+			logrus.Infof("Provisioning template cluster (%s)", clusterName)
 			err = charts.InstallTemplateChart(k.client, k.templateConfig.Repo.ObjectMeta.Name, k.templateConfig.TemplateName, clusterName, k8sversions[0], k.cloudCredentials)
 			assert.NoError(t, err)
 
 			_, cluster, err := clusters.GetProvisioningClusterByName(k.client, clusterName, namespaces.FleetDefault)
 			assert.NoError(t, err)
 
-			provisioning.VerifyCluster(t, k.client, nil, cluster)
+			logrus.Infof("Verifying cluster (%s)", cluster.Name)
+			provisioning.VerifyCluster(t, k.client, cluster)
 		})
 	}
 }

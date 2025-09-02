@@ -26,6 +26,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters/eks"
 	"github.com/rancher/shepherd/extensions/clusters/gke"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/etcdsnapshot"
 	nodestat "github.com/rancher/shepherd/extensions/nodes"
@@ -82,7 +83,7 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 
 	clusterName := namegen.AppendRandomString(provider.Name.String())
 	generatedPoolName := fmt.Sprintf("nc-%s-pool1-", clusterName)
-	machinePoolConfigs := provider.MachinePoolFunc(machineConfigSpec, generatedPoolName, namespace)
+	machinePoolConfigs := provider.MachinePoolFunc(machineConfigSpec, generatedPoolName, namespaces.FleetDefault)
 
 	var machinePoolResponses []v1.SteveAPIObject
 
@@ -105,7 +106,7 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 				}
 
 				secretName := fmt.Sprintf("priv-reg-sec-%s", clusterName)
-				secretTemplate := secrets.NewSecretTemplate(secretName, namespace, map[string][]byte{
+				secretTemplate := secrets.NewSecretTemplate(secretName, namespaces.FleetDefault, map[string][]byte{
 					"password": []byte(clustersConfig.Registries.RKE2Password),
 					"username": []byte(clustersConfig.Registries.RKE2Username),
 				},
@@ -150,7 +151,7 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 		return nil, err
 	}
 
-	cluster := clusters.NewK3SRKE2ClusterConfig(clusterName, namespace, clustersConfig, machinePools, cloudCredential.Namespace+":"+cloudCredential.Name)
+	cluster := clusters.NewK3SRKE2ClusterConfig(clusterName, namespaces.FleetDefault, clustersConfig, machinePools, cloudCredential.Namespace+":"+cloudCredential.Name)
 
 	for _, truncatedPool := range hostnameTruncation {
 		if truncatedPool.PoolNameLengthLimit > 0 || truncatedPool.ClusterNameLengthLimit > 0 {
@@ -177,16 +178,13 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 		return nil, err
 	}
 
-	createdCluster, err := adminClient.Steve.
-		SteveType(stevetypes.Provisioning).
-		ByID(namespace + "/" + clusterName)
+	createdCluster, err := adminClient.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + clusterName)
 
 	return createdCluster, err
 }
 
 // CreateProvisioningCustomCluster provisions a non-rke1 cluster using a 3rd party client for its nodes, then runs verify checks
 func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvider *ExternalNodeProvider, clustersConfig *clusters.ClusterConfig, ec2Configs *ec2.AWSEC2Configs) (*v1.SteveAPIObject, error) {
-	setLogrusFormatter()
 	rolesPerNode := []string{}
 	quantityPerPool := []int32{}
 	rolesPerPool := []string{}
@@ -222,22 +220,24 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 		}
 	}
 
+	clusterName := namegen.AppendRandomString(externalNodeProvider.Name)
+
+	logrus.Debug("Creating custom cluster nodes")
 	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, ec2Configs)
 	if err != nil {
 		return nil, err
 	}
 
-	clusterName := namegen.AppendRandomString(externalNodeProvider.Name)
-
-	cluster := clusters.NewK3SRKE2ClusterConfig(clusterName, namespace, clustersConfig, nil, "")
+	cluster := clusters.NewK3SRKE2ClusterConfig(clusterName, namespaces.FleetDefault, clustersConfig, nil, "")
 
 	if clustersConfig.Hardened && strings.Contains(clustersConfig.KubernetesVersion, shepherdclusters.RKE2ClusterType.String()) {
+		logrus.Debugf("Hardening cluster (%s)", clusterName)
 		err = rke2Hardening.HardenRKE2Nodes(nodes, rolesPerNode)
 		if err != nil {
 			return nil, err
 		}
 
-		cluster = clusters.HardenRKE2ClusterConfig(clusterName, namespace, clustersConfig, nil, "")
+		cluster = clusters.HardenRKE2ClusterConfig(clusterName, namespaces.FleetDefault, clustersConfig, nil, "")
 	}
 
 	clusterResp, err := shepherdclusters.CreateK3SRKE2Cluster(client, cluster)
@@ -275,7 +275,7 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 		return nil, err
 	}
 
-	result, err := kubeProvisioningClient.Clusters(namespace).Watch(context.TODO(), metav1.ListOptions{
+	result, err := kubeProvisioningClient.Clusters(namespaces.FleetDefault).Watch(context.TODO(), metav1.ListOptions{
 		FieldSelector:  "metadata.name=" + clusterName,
 		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 	})
@@ -283,7 +283,8 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 		return nil, err
 	}
 
-	checkFunc := shepherdclusters.IsProvisioningClusterReady
+	logrus.Debugf("Registering linux nodes (%s)", clusterName)
+
 	var command string
 	totalNodesObserved := 0
 	for poolIndex, poolRole := range rolesPerPool {
@@ -294,49 +295,52 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 		for nodeIndex := 0; nodeIndex < int(quantityPerPool[poolIndex]); nodeIndex++ {
 			node := nodes[totalNodesObserved+nodeIndex]
 
-			logrus.Infof("Execute Registration Command for node %s", node.NodeID)
-			logrus.Infof("Linux pool detected, using bash...")
+			logrus.Tracef("Execute Registration Command for node %s", node.NodeID)
 
 			command = fmt.Sprintf("%s %s", token.InsecureNodeCommand, poolRole)
 			if clustersConfig.MachinePools[poolIndex].IsSecure {
 				command = fmt.Sprintf("%s %s", token.NodeCommand, poolRole)
 			}
 			command = createRegistrationCommand(command, node.PublicIPAddress, node.PrivateIPAddress, clustersConfig.MachinePools[poolIndex])
-			logrus.Infof("Command: %s", command)
+			logrus.Tracef("Command: %s", command)
 
 			output, err := node.ExecuteCommand(command)
 			if err != nil {
 				return nil, err
 			}
-			logrus.Info(output)
+			logrus.Trace(output)
 		}
 		totalNodesObserved += int(quantityPerPool[poolIndex])
 	}
 
+	checkFunc := shepherdclusters.IsProvisioningClusterReady
 	err = wait.WatchWait(result, checkFunc)
 	if err != nil {
 		return nil, err
 	}
+
+	logrus.Debug("Registering Windows Nodes")
+
 	totalNodesObserved = 0
 	for poolIndex := 0; poolIndex < len(rolesPerPool); poolIndex++ {
 		if strings.Contains(rolesPerPool[poolIndex], "windows") {
 			for nodeIndex := 0; nodeIndex < int(quantityPerPool[poolIndex]); nodeIndex++ {
 				node := nodes[totalNodesObserved+nodeIndex]
 
-				logrus.Infof("Execute Registration Command for node %s", node.NodeID)
-				logrus.Infof("Windows pool detected, using powershell.exe...")
+				logrus.Tracef("Execute Registration Command for node %s", node.NodeID)
+				logrus.Tracef("Windows pool detected, using powershell.exe...")
 				command = fmt.Sprintf("powershell.exe %s ", token.InsecureWindowsNodeCommand)
 				if clustersConfig.MachinePools[poolIndex].IsSecure {
 					command = fmt.Sprintf("powershell.exe %s ", token.WindowsNodeCommand)
 				}
 				command = createWindowsRegistrationCommand(command, node.PublicIPAddress, node.PrivateIPAddress, clustersConfig.MachinePools[poolIndex])
-				logrus.Infof("Command: %s", command)
+				logrus.Tracef("Command: %s", command)
 
 				output, err := node.ExecuteCommand(command)
 				if err != nil {
 					return nil, err
 				}
-				logrus.Info(output)
+				logrus.Trace(output)
 			}
 		}
 		totalNodesObserved += int(quantityPerPool[poolIndex])
@@ -344,12 +348,13 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 
 	if clustersConfig.Hardened {
 		if strings.Contains(clustersConfig.KubernetesVersion, shepherdclusters.K3SClusterType.String()) {
+			logrus.Debugf("Hardening cluster (%s)", clusterName)
 			err = k3sHardening.HardenK3SNodes(nodes, rolesPerNode, clustersConfig.KubernetesVersion)
 			if err != nil {
 				return nil, err
 			}
 
-			hardenCluster := clusters.HardenK3SClusterConfig(clusterName, namespace, clustersConfig, nil, "")
+			hardenCluster := clusters.HardenK3SClusterConfig(clusterName, namespaces.FleetDefault, clustersConfig, nil, "")
 
 			_, err := shepherdclusters.UpdateK3SRKE2Cluster(client, clusterResp, hardenCluster)
 			if err != nil {
@@ -363,9 +368,8 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 		}
 	}
 
-	createdCluster, err := client.Steve.
-		SteveType(stevetypes.Provisioning).
-		ByID(namespace + "/" + clusterName)
+	createdCluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + clusterName)
+
 	return createdCluster, err
 }
 
@@ -404,7 +408,6 @@ func CreateProvisioningRKE1Cluster(client *rancher.Client, provider RKE1Provider
 
 // CreateProvisioningRKE1CustomCluster provisions an rke1 cluster using a 3rd party client for its nodes, then runs verify checks
 func CreateProvisioningRKE1CustomCluster(client *rancher.Client, externalNodeProvider *ExternalNodeProvider, clustersConfig *clusters.ClusterConfig, ec2Configs *ec2.AWSEC2Configs) (*management.Cluster, []*nodes.Node, error) {
-	setLogrusFormatter()
 	quantityPerPool := []int32{}
 	rolesPerPool := []string{}
 	for _, pool := range clustersConfig.NodePools {
@@ -545,7 +548,6 @@ func CreateProvisioningRKE1CustomCluster(client *rancher.Client, externalNodePro
 
 // CreateProvisioningAirgapCustomCluster provisions a non-rke1 cluster using corral to gather its nodes, then runs verify checks
 func CreateProvisioningAirgapCustomCluster(client *rancher.Client, clustersConfig *clusters.ClusterConfig, corralPackages *corral.Packages) (*v1.SteveAPIObject, error) {
-	setLogrusFormatter()
 	quantityPerPool := []int32{}
 	rolesPerPool := []string{}
 	for _, pool := range clustersConfig.MachinePools {
@@ -636,7 +638,6 @@ func CreateProvisioningAirgapCustomCluster(client *rancher.Client, clustersConfi
 
 // CreateProvisioningRKE1AirgapCustomCluster provisions an rke1 cluster using corral to gather its nodes, then runs verify checks
 func CreateProvisioningRKE1AirgapCustomCluster(client *rancher.Client, clustersConfig *clusters.ClusterConfig, corralPackages *corral.Packages) (*management.Cluster, error) {
-	setLogrusFormatter()
 	clusterName := namegen.AppendRandomString(rke1AirgapCustomCluster)
 	quantityPerPool := []int32{}
 	rolesPerPool := []string{}
@@ -783,12 +784,6 @@ func CreateProvisioningGKEHostedCluster(client *rancher.Client, gkeClusterConfig
 	}
 
 	return client.Management.Cluster.ByID(clusterResp.ID)
-}
-
-func setLogrusFormatter() {
-	formatter := &logrus.TextFormatter{}
-	formatter.DisableQuote = true
-	logrus.SetFormatter(formatter)
 }
 
 // createRKE1RegistrationCommand is a helper for rke1 custom clusters to create the registration command with advanced options configured per node

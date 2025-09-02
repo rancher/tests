@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
@@ -58,6 +59,12 @@ func (u *UpgradeKubernetesTestSuite) SetupSuite() {
 
 	u.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, u.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
+	require.NoError(u.T(), err)
+
 	u.rke2ClusterConfig = new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.rke2ClusterConfig)
 
@@ -80,9 +87,11 @@ func (u *UpgradeKubernetesTestSuite) SetupSuite() {
 	u.rke2ClusterConfig.MachinePools = nodeRolesStandard
 	u.k3sClusterConfig.MachinePools = nodeRolesStandard
 
+	logrus.Info("Provisioning RKE2 cluster")
 	u.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), u.rke2ClusterConfig, awsEC2Configs, false, false)
 	require.NoError(u.T(), err)
 
+	logrus.Info("Provisioning K3S cluster")
 	u.k3sClusterID, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.K3SClusterType.String(), u.k3sClusterConfig, awsEC2Configs, false, false)
 	require.NoError(u.T(), err)
 }

@@ -21,6 +21,8 @@ import (
 	shepherdclusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/bundledclusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
 	nodestat "github.com/rancher/shepherd/extensions/nodes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
@@ -114,7 +116,7 @@ func VerifyRKE1Cluster(t *testing.T, client *rancher.Client, clustersConfig *clu
 }
 
 // VerifyCluster validates that a non-rke1 cluster and its resources are in a good state, matching a given config.
-func VerifyCluster(t *testing.T, client *rancher.Client, clustersConfig *clusters.ClusterConfig, cluster *steveV1.SteveAPIObject) {
+func VerifyCluster(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
 	client, err := client.ReLogin()
 	require.NoError(t, err)
 
@@ -125,7 +127,7 @@ func VerifyCluster(t *testing.T, client *rancher.Client, clustersConfig *cluster
 	reports.TimeoutClusterReport(cluster, err)
 	require.NoError(t, err)
 
-	watchInterface, err := kubeProvisioningClient.Clusters(namespace).Watch(context.TODO(), metav1.ListOptions{
+	watchInterface, err := kubeProvisioningClient.Clusters(namespaces.FleetDefault).Watch(context.TODO(), metav1.ListOptions{
 		FieldSelector:  "metadata.name=" + cluster.Name,
 		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 	})
@@ -143,22 +145,18 @@ func VerifyCluster(t *testing.T, client *rancher.Client, clustersConfig *cluster
 	require.NoError(t, err)
 	assert.NotEmpty(t, clusterToken)
 
+	logrus.Infof("Waiting for all machines to be ready on cluster (%s)", cluster.Name)
 	err = nodestat.AllMachineReady(client, cluster.ID, defaults.ThirtyMinuteTimeout)
 	reports.TimeoutClusterReport(cluster, err)
 	require.NoError(t, err)
 
 	status := &provv1.ClusterStatus{}
 	err = steveV1.ConvertToK8sType(cluster.Status, status)
-	reports.TimeoutClusterReport(cluster, err)
 	require.NoError(t, err)
 
 	clusterSpec := &provv1.ClusterSpec{}
 	err = steveV1.ConvertToK8sType(cluster.Spec, clusterSpec)
-	reports.TimeoutClusterReport(cluster, err)
 	require.NoError(t, err)
-
-	configKubeVersion := clusterSpec.KubernetesVersion
-	require.Equal(t, configKubeVersion, clusterSpec.KubernetesVersion)
 
 	if clusterSpec.DefaultPodSecurityAdmissionConfigurationTemplateName == string(provisioninginput.RancherPrivileged) ||
 		clusterSpec.DefaultPodSecurityAdmissionConfigurationTemplateName == string(provisioninginput.RancherRestricted) ||
@@ -187,15 +185,9 @@ func VerifyCluster(t *testing.T, client *rancher.Client, clustersConfig *cluster
 		VerifyACE(t, adminClient, mgmtClusterObject)
 	}
 
-	logrus.Infof("Waiting for cluster (%s) pods to be active", cluster.Name)
+	logrus.Infof("Waiting for pods to be active on cluster (%s)", cluster.Name)
 	podErrors := pods.StatusPods(client, status.ClusterName)
 	assert.Empty(t, podErrors)
-
-	if clustersConfig != nil {
-		if clustersConfig.ClusterSSHTests != nil {
-			VerifySSHTests(t, client, cluster, clustersConfig.ClusterSSHTests, status.ClusterName)
-		}
-	}
 }
 
 // VerifyHostedCluster validates that the hosted cluster and its resources are in a good state, matching a given config.
@@ -263,13 +255,13 @@ func VerifyDeleteRKE1Cluster(t *testing.T, client *rancher.Client, clusterID str
 
 // VerifyDeleteRKE2K3SCluster validates that a non-rke1 cluster and its resources are deleted.
 func VerifyDeleteRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterID string) {
+	logrus.Debugf("Waiting for cluster (%s) to be deleted", clusterID)
 	ctx := context.Background()
 	err := kwait.PollUntilContextTimeout(
 		ctx, oneSecondInterval, defaults.TenMinuteTimeout, true, func(ctx context.Context) (bool, error) {
-			_, err := client.Steve.SteveType("provisioning.cattle.io.cluster").ByID(clusterID)
+			_, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(clusterID)
 			if err != nil {
 				if strings.Contains(err.Error(), notFound) {
-					logrus.Infof("Cluster %s deleted!", clusterID)
 					return true, nil
 				}
 
@@ -280,6 +272,7 @@ func VerifyDeleteRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterID 
 		})
 	require.NoError(t, err)
 
+	logrus.Infof("Waiting for nodes to be deleted on cluster (%s)", clusterID)
 	err = nodestat.AllNodeDeleted(client, clusterID)
 	require.NoError(t, err)
 }
@@ -385,10 +378,8 @@ func VerifyHostnameLength(t *testing.T, client *rancher.Client, clusterObject *s
 			assert.True(t, capiMachine.Status.NodeRef.Name == ustr.GetName())
 		}
 
-		logrus.Infof("Hostname: %s, HostnameLimit: %v", capiMachine.Status.NodeRef.Name, limit)
+		logrus.Debugf("Hostname: %s, HostnameLimit: %v", capiMachine.Status.NodeRef.Name, limit)
 	}
-
-	logrus.Infof("Verified that hostname truncation is respected on cluster(%s)", clusterObject.Name)
 }
 
 // VerifyUpgrade validates that a cluster has been upgraded to a given version
@@ -454,18 +445,18 @@ func VerifyDataDirectories(t *testing.T, client *rancher.Client, clustersConfig 
 
 		_, err = clusterNode.ExecuteCommand(fmt.Sprintf("sudo ls %s", clusterSpec.RKEConfig.DataDirectories.K8sDistro))
 		require.NoError(t, err)
-		logrus.Infof("Verfied k8sDistro directory(%s) on node(%s)", clusterSpec.RKEConfig.DataDirectories.K8sDistro, clusterNode.NodeID)
+		logrus.Debugf("Verified k8sDistro directory(%s) on node(%s)", clusterSpec.RKEConfig.DataDirectories.K8sDistro, clusterNode.NodeID)
 
 		_, err = clusterNode.ExecuteCommand(fmt.Sprintf("sudo ls %s", clusterSpec.RKEConfig.DataDirectories.Provisioning))
 		require.NoError(t, err)
-		logrus.Infof("Verfied provisioning directory(%s) on node(%s)", clusterSpec.RKEConfig.DataDirectories.Provisioning, clusterNode.NodeID)
+		logrus.Debugf("Verified provisioning directory(%s) on node(%s)", clusterSpec.RKEConfig.DataDirectories.Provisioning, clusterNode.NodeID)
 
 		_, err = clusterNode.ExecuteCommand(fmt.Sprintf("sudo ls %s", clusterSpec.RKEConfig.DataDirectories.SystemAgent))
 		require.NoError(t, err)
-		logrus.Infof("Verfied systemAgent directory(%s) on node(%s)", clusterSpec.RKEConfig.DataDirectories.SystemAgent, clusterNode.NodeID)
+		logrus.Debugf("Verified systemAgent directory(%s) on node(%s)", clusterSpec.RKEConfig.DataDirectories.SystemAgent, clusterNode.NodeID)
 
 		_, err = clusterNode.ExecuteCommand(fmt.Sprintf("sudo ls %s", DefaultRancherDataDir))
 		require.Error(t, err)
-		logrus.Infof("Verfied that the default data directory(%s) on node(%s) does not exist", clusterSpec.RKEConfig.DataDirectories.SystemAgent, clusterNode.NodeID)
+		logrus.Debugf("Verified that the default data directory(%s) on node(%s) does not exist", clusterSpec.RKEConfig.DataDirectories.SystemAgent, clusterNode.NodeID)
 	}
 }

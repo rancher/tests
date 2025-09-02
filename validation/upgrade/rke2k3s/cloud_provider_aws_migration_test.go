@@ -16,10 +16,12 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioninginput"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/rancher/tests/validation/upgrade"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -52,6 +54,12 @@ func (u *MigrateCloudProviderSuite) SetupSuite() {
 
 	u.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, u.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
+	require.NoError(u.T(), err)
+
 	u.clusterConfig = new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.clusterConfig)
 
@@ -70,6 +78,7 @@ func (u *MigrateCloudProviderSuite) SetupSuite() {
 
 	u.clusterConfig.MachinePools = nodeRolesStandard
 
+	logrus.Info("Provisioning RKE2 cluster")
 	u.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(u.T(), u.standardUserClient, extClusters.RKE2ClusterType.String(), u.clusterConfig, awsEC2Configs, true, false)
 	require.NoError(u.T(), err)
 }

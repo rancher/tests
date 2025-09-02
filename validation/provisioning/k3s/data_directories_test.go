@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
@@ -31,31 +32,37 @@ type dataDirectoriesTest struct {
 }
 
 func dataDirectoriesSetup(t *testing.T) dataDirectoriesTest {
-	var r dataDirectoriesTest
+	var k dataDirectoriesTest
 	testSession := session.NewSession()
-	r.session = testSession
+	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	assert.NoError(t, err)
-	r.client = client
+	k.client = client
 
-	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
 	assert.NoError(t, err)
 
-	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.K3S, r.cattleConfig)
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
 	assert.NoError(t, err)
 
-	r.standardUserClient, err = standard.CreateStandardUser(r.client)
+	k.cattleConfig, err = defaults.SetK8sDefault(k.client, defaults.K3S, k.cattleConfig)
 	assert.NoError(t, err)
 
-	return r
+	k.standardUserClient, err = standard.CreateStandardUser(k.client)
+	assert.NoError(t, err)
+
+	return k
 }
 
 func TestDataDirectories(t *testing.T) {
 	t.Parallel()
-	r := dataDirectoriesSetup(t)
+	k := dataDirectoriesSetup(t)
 
 	splitDataDirectories := rkev1.DataDirectories{
 		SystemAgent:  "/systemAgent",
@@ -74,22 +81,22 @@ func TestDataDirectories(t *testing.T) {
 		client          *rancher.Client
 		dataDirectories rkev1.DataDirectories
 	}{
-		{"K3S_Split_Data_Directories", r.standardUserClient, splitDataDirectories},
-		{"K3S_Grouped_Data_Directories", r.standardUserClient, groupedDataDirectories},
+		{"K3S_Split_Data_Directories", k.standardUserClient, splitDataDirectories},
+		{"K3S_Grouped_Data_Directories", k.standardUserClient, groupedDataDirectories},
 	}
 
 	for _, tt := range tests {
 		var err error
 		t.Cleanup(func() {
 			logrus.Info("Running cleanup")
-			r.session.Cleanup()
+			k.session.Cleanup()
 		})
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			clusterConfig := new(clusters.ClusterConfig)
-			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+			operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
 			if clusterConfig.Advanced == nil {
 				clusterConfig.Advanced = new(provisioninginput.Advanced)
 			}
@@ -99,14 +106,18 @@ func TestDataDirectories(t *testing.T) {
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
+			logrus.Info("Provisioning cluster")
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 			assert.NoError(t, err)
 
-			provisioning.VerifyCluster(t, tt.client, clusterConfig, cluster)
-			provisioning.VerifyDataDirectories(t, r.client, clusterConfig, machineConfigSpec, cluster)
+			logrus.Infof("Verifying cluster (%s)", cluster.Name)
+			provisioning.VerifyCluster(t, tt.client, cluster)
+
+			logrus.Infof("Verifying cluster (%s) data directories", cluster.Name)
+			provisioning.VerifyDataDirectories(t, k.client, clusterConfig, machineConfigSpec, cluster)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
+		params := provisioning.GetProvisioningSchemaParams(tt.client, k.cattleConfig)
 		err = qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)

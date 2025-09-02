@@ -76,7 +76,7 @@ func (b *BackupTestSuite) TestS3InPlaceRestore() {
 	require.NoError(b.T(), err)
 
 	logrus.Info("Provisioning a downstream RKE2 cluster...")
-	rke2SteveObj, rke2ClusterConfig, err := createRKE2dsCluster(b.T(), b.client)
+	rke2SteveObj, _, err := createRKE2dsCluster(b.T(), b.client)
 	require.NoError(b.T(), err)
 
 	logrus.Info("Creating a backup of the local cluster...")
@@ -113,7 +113,7 @@ func (b *BackupTestSuite) TestS3InPlaceRestore() {
 
 	logrus.Info("Validating downstream clusters are in an Active status...")
 	provisioning.VerifyRKE1Cluster(b.T(), b.client, rke1ClusterConfig, rke1ClusterObj)
-	provisioning.VerifyCluster(b.T(), b.client, rke2ClusterConfig, rke2SteveObj)
+	provisioning.VerifyCluster(b.T(), b.client, rke2SteveObj)
 }
 
 func TestBackupTestSuite(t *testing.T) {

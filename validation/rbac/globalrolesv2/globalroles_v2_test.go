@@ -174,7 +174,7 @@ func (gr *GlobalRolesV2TestSuite) TestClusterCreationAfterAddingGlobalRoleWithIn
 	provisioning.VerifyRKE1Cluster(gr.T(), userClient, testClusterConfig, clusterObject)
 	_, steveObject, testClusterConfig, err := createDownstreamCluster(userClient, "RKE2")
 	require.NoError(gr.T(), err)
-	provisioning.VerifyCluster(gr.T(), userClient, testClusterConfig, steveObject)
+	provisioning.VerifyCluster(gr.T(), userClient, steveObject)
 
 	gr.validateRBACResources(createdUser, createdGlobalRole, inheritedClusterRoles)
 }
@@ -423,9 +423,9 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromClu
 	defer subSession.Cleanup()
 
 	log.Info("Create a RKE2 downstream cluster.")
-	_, rke2SteveObject, testClusterConfig, err := createDownstreamCluster(gr.client, "RKE2")
+	_, rke2SteveObject, _, err := createDownstreamCluster(gr.client, "RKE2")
 	require.NoError(gr.T(), err)
-	provisioning.VerifyCluster(gr.T(), gr.client, testClusterConfig, rke2SteveObject)
+	provisioning.VerifyCluster(gr.T(), gr.client, rke2SteveObject)
 
 	log.Info("Create a global role with inheritedClusterRoles.")
 	inheritedClusterRoles := []string{rbac.ClusterOwner.String()}

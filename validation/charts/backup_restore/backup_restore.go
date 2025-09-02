@@ -311,7 +311,7 @@ func createRKE2dsCluster(t *testing.T, client *rancher.Client) (*v1.SteveAPIObje
 		return nil, nil, err
 	}
 
-	provisioning.VerifyCluster(t, client, testClusterConfig, steveObject)
+	provisioning.VerifyCluster(t, client, steveObject)
 
 	return steveObject, testClusterConfig, nil
 }

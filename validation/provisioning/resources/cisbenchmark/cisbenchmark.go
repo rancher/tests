@@ -25,38 +25,38 @@ const (
 
 // SetupCISBenchmarkChart installs the CIS Benchmark chart and waits for all resources to be ready.
 func SetupCISBenchmarkChart(client *rancher.Client, projectClusterID string, chartInstallOptions *charts.InstallOptions, benchmarkNamespace string) error {
-	logrus.Infof("Installing CIS Benchmark chart...")
+	logrus.Debugf("Installing CIS Benchmark chart...")
 	err := charts.InstallCISBenchmarkChart(client, chartInstallOptions)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Waiting for CIS Benchmark chart deployments to have expected number of available replicas...")
+	logrus.Debugf("Waiting for CIS Benchmark chart deployments to have expected number of available replicas...")
 	err = extensionscharts.WatchAndWaitDeployments(client, projectClusterID, benchmarkNamespace, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Waiting for CIS Benchmark chart DaemonSets to have expected number of available nodes...")
+	logrus.Debugf("Waiting for CIS Benchmark chart DaemonSets to have expected number of available nodes...")
 	err = extensionscharts.WatchAndWaitDaemonSets(client, projectClusterID, benchmarkNamespace, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Waiting for CIS Benchmark chart StatefulSets to have expected number of ready replicas...")
+	logrus.Debugf("Waiting for CIS Benchmark chart StatefulSets to have expected number of ready replicas...")
 	err = extensionscharts.WatchAndWaitStatefulSets(client, projectClusterID, benchmarkNamespace, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Successfully installed CIS Benchmark chart!")
+	logrus.Debugf("Successfully installed CIS Benchmark chart!")
 
 	return nil
 }
 
 // RunCISScan runs the CIS Benchmark scan with the specified profile name.
 func RunCISScan(client *rancher.Client, projectClusterID, scanProfileName string) error {
-	logrus.Infof("Running CIS Benchmark scan: %s", scanProfileName)
+	logrus.Debugf("Running CIS Benchmark scan: %s", scanProfileName)
 
 	cisScan := cis.ClusterScan{
 		ObjectMeta: metav1.ObjectMeta{

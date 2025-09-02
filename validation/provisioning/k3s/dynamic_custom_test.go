@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/config/permutationdata"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/reports"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -41,6 +42,12 @@ func dynamicCustomSetup(t *testing.T) dynamicCustomTest {
 	k.client = client
 
 	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
+	assert.NoError(t, err)
 
 	providerPermutation, err := permutationdata.CreateProviderPermutation(cattleConfig)
 	assert.NoError(t, err)
@@ -92,12 +99,16 @@ func TestDynamicCustom(t *testing.T) {
 				awsEC2Configs := new(ec2.AWSEC2Configs)
 				config.LoadConfig(ec2.ConfigurationFileKey, awsEC2Configs)
 
-				clusterObject, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
-				reports.TimeoutClusterReport(clusterObject, err)
+				logrus.Info("Provisioning cluster")
+				cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
+				reports.TimeoutClusterReport(cluster, err)
 				require.NoError(t, err)
 
-				provisioning.VerifyCluster(t, tt.client, clusterConfig, clusterObject)
-				cloudprovider.VerifyCloudProvider(t, tt.client, "k3s", nil, clusterConfig, clusterObject, nil)
+				logrus.Infof("Verifying cluster (%s)", cluster.Name)
+				provisioning.VerifyCluster(t, tt.client, cluster)
+
+				logrus.Infof("Verifying cloud provider %s", cluster.Name)
+				cloudprovider.VerifyCloudProvider(t, tt.client, "k3s", nil, clusterConfig, cluster, nil)
 			}
 		})
 	}

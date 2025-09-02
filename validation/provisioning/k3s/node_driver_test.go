@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
@@ -41,6 +42,12 @@ func nodeDriverSetup(t *testing.T) nodeDriverTest {
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
+	assert.NoError(t, err)
+
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
 	assert.NoError(t, err)
 
 	k.cattleConfig, err = defaults.SetK8sDefault(k.client, defaults.K3S, k.cattleConfig)
@@ -95,10 +102,12 @@ func TestNodeDriver(t *testing.T) {
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
+			logrus.Infof("Provisioning cluster")
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 			assert.NoError(t, err)
 
-			provisioning.VerifyCluster(t, tt.client, clusterConfig, cluster)
+			logrus.Infof("Verifying cluster (%s)", cluster.Name)
+			provisioning.VerifyCluster(t, tt.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, k.cattleConfig)
