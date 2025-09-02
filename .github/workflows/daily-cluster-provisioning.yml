@@ -58,7 +58,7 @@ jobs:
     if: |
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.12')) ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12'))
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12.')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ inputs.rancher_version || github.event.inputs.rancher-version-2-12 }}
     runs-on: ubuntu-latest
     environment: latest
@@ -138,9 +138,8 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_12 }}
           qase_rc_id: ${{ vars.HB_QASE_RC_TEST_RUN_ID_2_12 }}
-          qase_recurring_id: ${{ vars.HB_QASE_DEFAULT_TEST_RUN_ID_2_12 }}
+          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_12 }}
 
       - name: Create config.yaml
         run: |
@@ -325,7 +324,7 @@ jobs:
     if: |
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.11')) ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.11'))
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.11.')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ inputs.rancher_version || github.event.inputs.rancher-version-2-11 }}
     runs-on: ubuntu-latest
     environment: staging-latest
@@ -405,9 +404,8 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_11 }}
           qase_rc_id: ${{ vars.HB_QASE_RC_TEST_RUN_ID_2_11 }}
-          qase_recurring_id: ${{ vars.HB_QASE_DEFAULT_TEST_RUN_ID_2_11 }}
+          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_11 }}
 
       - name: Create config.yaml
         run: |
@@ -592,7 +590,7 @@ jobs:
     if: |
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.10')) ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.10'))
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.10.')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ inputs.rancher_version || github.event.inputs.rancher-version-2-10 }}
     runs-on: ubuntu-latest
     environment: staging-latest
@@ -672,9 +670,8 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_10 }}
           qase_rc_id: ${{ vars.HB_QASE_RC_TEST_RUN_ID_2_10 }}
-          qase_recurring_id: ${{ vars.HB_QASE_DEFAULT_TEST_RUN_ID_2_10 }}
+          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_10 }}
 
       - name: Create config.yaml
         run: |
@@ -858,7 +855,7 @@ jobs:
   v2-9:
     if: |
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.9')) ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.9'))
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.9.')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ inputs.rancher_version || github.event.inputs.rancher-version-2-9 }}
     runs-on: ubuntu-latest
     environment: staging-latest
@@ -938,9 +935,8 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_9 }}
           qase_rc_id: ${{ vars.HB_QASE_RC_TEST_RUN_ID_2_9 }}
-          qase_recurring_id: ${{ vars.HB_QASE_DEFAULT_TEST_RUN_ID_2_9 }}
+          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_9 }}
 
       - name: Create config.yaml
         run: |
