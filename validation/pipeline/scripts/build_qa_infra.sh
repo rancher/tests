@@ -1,30 +1,96 @@
 #!/bin/bash
 
+show_help() {
+    cat <<EOF
+Usage: $0 [options] [env_file]
+
+Options:
+  -h, --help        Show this help message and exit
+
+Arguments:
+  env_file          Optional file containing environment variable overrides.
+                    Each line should be KEY=VALUE format.
+                    Example:
+                        WORKSPACE_NAME=jenkins-wkspc
+                        TERRAFORM_DIR=tofu/aws/modules/cluster_nodes
+
+Overrides:
+  You can also override variables inline when invoking:
+      WORKSPACE_NAME=jenkins-new-workspace $0
+
+Defaults:
+  REPO_ROOT=$(pwd)
+  BUILD_DOWNSTREAM_CLUSTER=true
+  CLEANUP=true
+  WORKSPACE_NAME="jenkins_workspace"
+  TERRAFORM_DIR="tofu/aws/modules/cluster_nodes"
+  RKE2_PLAYBOOK_PATH="ansible/rke2/default/rke2-playbook.yml"
+  TERRAFORM_INVENTORY="ansible/rke2/default/terraform-inventory.yml"
+  TERRAFORM_TEMPLATE="ansible/rke2/default/inventory-template.yml"
+  ANSIBLE_CONFIG="ansible/rke2/default/ansible.cfg"
+  RANCHER_PLAYBOOK_PATH="ansible/rancher/default-ha/rancher-playbook.yml"
+  TFVARS_FILE="cluster.tfvars"
+  DOWNSTREAM_TFVARS_FILE="downstream-cluster.tfvars"
+  KUBECONFIG_FILE="\$REPO_ROOT/ansible/rke2/default/kubeconfig.yaml"
+  GENERATED_TFVARS_FILE="\$REPO_ROOT/ansible/rancher/default-ha/generated.tfvars"
+  RANCHER_CLUSTER_MODULE_DIR="tofu/rancher/cluster"
+  VARS_FILE="./ansible/vars.yaml"
+  PRIVATE_KEY_FILE="/root/.ssh/jenkins-elliptic-validation.pem"
+  TERRAFORM_NODE_SOURCE="tofu/aws/modules/cluster_nodes"
+  CONFIG_FILE="/root/go/src/github.com/rancher/tests/validation/config.yaml"
+EOF
+}
+
+
+if command -v terraform >/dev/null 2>&1; then
+    echo "tofu not found, falling back to terraform"
+    alias tofu="$(command -v terraform)"
+fi
+
 cd  /root/go/src/github.com/rancher/qa-infra-automation
 
 # Set variables
 REPO_ROOT=$(pwd)
-WORKSPACE_NAME="jenkins_workspace"
-TERRAFORM_DIR="tofu/aws/modules/cluster_nodes"
-RKE2_PLAYBOOK_PATH="ansible/rke2/default/rke2-playbook.yml"
-TERRAFORM_INVENTORY="ansible/rke2/default/terraform-inventory.yml"
-TERRAFORM_TEMPLATE="ansible/rke2/default/inventory-template.yml"
-ANSIBLE_CONFIG="ansible/rke2/default/ansible.cfg"
-RANCHER_PLAYBOOK_PATH="ansible/rancher/default-ha/rancher-playbook.yml"
-TFVARS_FILE="cluster.tfvars"
-DOWNSTREAM_TFVARS_FILE="downstream-cluster.tfvars"
-KUBECONFIG_FILE="$REPO_ROOT/ansible/rke2/default/kubeconfig.yaml"
-GENERATED_TFVARS_FILE="$REPO_ROOT/ansible/rancher/default-ha/generated.tfvars"
-RANCHER_CLUSTER_MODULE_DIR="tofu/rancher/cluster"
-VARS_FILE="./ansible/vars.yaml"
-PRIVATE_KEY_FILE="/root/.ssh/jenkins-elliptic-validation.pem"
-TERRAFORM_NODE_SOURCE="tofu/aws/modules/cluster_nodes"
+
+# If first argument is an env file, load it
+if [[ -n "${1:-}" && -f "$1" ]]; then
+    echo "Loading overrides from $1"
+    set -a 
+    source "$1"
+    set +a
+fi
+
+: "${BUILD_DOWNSTREAM_CLUSTER:=true}"
+: "${CLEANUP:=true}"
+
+: "${WORKSPACE_NAME:=jenkins_workspace}"
+
+: "${TERRAFORM_DIR:=tofu/aws/modules/cluster_nodes}"
+: "${RKE2_PLAYBOOK_PATH:=ansible/rke2/default/rke2-playbook.yml}"
+: "${TERRAFORM_INVENTORY:=ansible/rke2/default/terraform-inventory.yml}"
+: "${TERRAFORM_TEMPLATE:=ansible/rke2/default/inventory-template.yml}"
+
+: "${ANSIBLE_CONFIG:=ansible/rke2/default/ansible.cfg}"
+: "${RANCHER_PLAYBOOK_PATH:=ansible/rancher/default-ha/rancher-playbook.yml}"
+
+: "${TFVARS_FILE:=cluster.tfvars}"
+: "${DOWNSTREAM_TFVARS_FILE:=downstream-cluster.tfvars}"
+
+: "${KUBECONFIG_FILE:=$REPO_ROOT/ansible/rke2/default/kubeconfig.yaml}"
+: "${GENERATED_TFVARS_FILE:=$REPO_ROOT/ansible/rancher/default-ha/generated.tfvars}"
+: "${RANCHER_CLUSTER_MODULE_DIR:=tofu/rancher/cluster}"
+
+: "${VARS_FILE:=./ansible/vars.yaml}"
+: "${PRIVATE_KEY_FILE:=/root/.ssh/jenkins-elliptic-validation.pem}"
+
+: "${TERRAFORM_NODE_SOURCE:=tofu/aws/modules/cluster_nodes}"
+: "${CONFIG_FILE:=/root/go/src/github.com/rancher/tests/validation/config.yaml}"
 
 # --- Terraform Steps ---
-terraform -chdir="$TERRAFORM_DIR" init -input=false
+tofu -chdir="$TERRAFORM_DIR" init -input=false
 
 # Create and select the Terraform workspace
-terraform -chdir="$TERRAFORM_DIR" workspace new "$WORKSPACE_NAME" || terraform -chdir="$TERRAFORM_DIR" workspace select "$WORKSPACE_NAME"
+tofu -chdir="$TERRAFORM_DIR" workspace new "$WORKSPACE_NAME" || tofu -chdir="$TERRAFORM_DIR" workspace select "$WORKSPACE_NAME"
 
 # Export the TF_WORKSPACE environment variable
 export TF_WORKSPACE="$WORKSPACE_NAME"
@@ -39,7 +105,7 @@ export ANSIBLE_CONFIG="$ANSIBLE_CONFIG"
 export ANSIBLE_PRIVATE_KEY_FILE="$PRIVATE_KEY_FILE"
 
 # Apply the Terraform configuration
-terraform -chdir="$TERRAFORM_DIR" apply -auto-approve -var-file="$TFVARS_FILE"
+tofu -chdir="$TERRAFORM_DIR" apply -auto-approve -var-file="$TFVARS_FILE"
 if [ $? -ne 0 ]; then
     echo "Error: Terraform apply failed."
     exit 1
@@ -67,13 +133,14 @@ while [ $attempt -lt $max_attempts ]; do
         echo "RKE2 playbook succeeded on attempt $attempt."
         break
     fi
+    sleep 30
 done
 
-if [ $attempt -eq $max_attempts ] && [ $rke2_exit_code -ne 0 ]; then
+if [ $attempt -eq $max_attempts ] && [ $rke2_exit_code -ne 0 ] && [[ $CLEANUP == "true" ]]; then
     echo "Error: RKE2 playbook failed after $max_attempts attempts."
-    echo "destroy the terraform"
+    echo "destroy the tofu"
     # Destroy the Terraform infrastructure
-    terraform -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$TFVARS_FILE"
+    tofu -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$TFVARS_FILE"
     if [ $? -ne 0 ]; then
         echo "Error: Terraform destroy failed."
         exit 1
@@ -90,9 +157,9 @@ echo $KUBECONFIG
 
 # Run the Rancher playbook
 ansible-playbook "$RANCHER_PLAYBOOK_PATH" -vvvv -e "@$VARS_FILE"
-if [ $? -ne 0 ]; then
+if [ $? -ne 0 ] && [[ $CLEANUP == "true" ]]; then
     echo "Error: Rancher playbook failed."
-    terraform -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$TFVARS_FILE"
+    tofu -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$TFVARS_FILE"
     if [ $? -ne 0 ]; then
         echo "Error: Terraform destroy failed."
         exit 1
@@ -100,55 +167,6 @@ if [ $? -ne 0 ]; then
     echo "Terraform infrastructure destroyed successfully!"
     exit 1
 fi
-
-
-# --- Rancher Cluster Module ---
-
-# Init the Rancher cluster module
-terraform -chdir="$RANCHER_CLUSTER_MODULE_DIR" init -input=false
-if [ $? -ne 0 ]; then
-    echo "Error: Terraform init for rancher/cluster module failed. Destroying infrastructure..."
-    terraform -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$TFVARS_FILE"
-    if [ $? -ne 0 ]; then
-        echo "Error: Terraform destroy failed."
-        exit 1
-    fi
-    echo "Terraform infrastructure destroyed successfully!"
-    exit 1
-fi
-
-# Apply the Rancher cluster module
-terraform -chdir="$RANCHER_CLUSTER_MODULE_DIR" apply -auto-approve -var-file="$DOWNSTREAM_TFVARS_FILE" -var-file="$GENERATED_TFVARS_FILE"
-if [ $? -ne 0 ]; then
-    echo "Error: Terraform apply for rancher/cluster module failed. Destroying infrastructure..."
-    terraform -chdir="$RANCHER_CLUSTER_MODULE_DIR" destroy -auto-approve -var-file="$DOWNSTREAM_TFVARS_FILE" -var-file="$GENERATED_TFVARS_FILE"
-    if [ $? -ne 0 ]; then
-        echo "Warning: Terraform destroy for rancher/cluster module failed. Continuing with main infrastructure cleanup."
-    fi
-    terraform -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$TFVARS_FILE"
-    if [ $? -ne 0 ]; then
-        echo "Error: Terraform destroy failed."
-        exit 1
-    fi
-    echo "Terraform infrastructure destroyed successfully!"
-    exit 1
-fi
-
-# Get the cluster name from terraform output
-CLUSTER_NAME=$(terraform -chdir="$RANCHER_CLUSTER_MODULE_DIR" output -raw name)
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to get cluster name from terraform output."
-    exit 1
-fi
-
-# Update the clusterName in the main config file
-CONFIG_FILE="/root/go/src/github.com/rancher/tests/validation/config.yaml"
-yq e ".rancher.clusterName = \"${CLUSTER_NAME}\"" -i ${CONFIG_FILE}
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to update clusterName in $CONFIG_FILE"
-    exit 1
-fi
-
 
 # Get the admin token from the generated tfvars file
 ADMIN_TOKEN=$(grep 'api_key' "$GENERATED_TFVARS_FILE" | awk -F'"' '{print $2}')
@@ -163,5 +181,11 @@ if [ $? -ne 0 ]; then
     echo "Error: Failed to update adminToken in $CONFIG_FILE"
     exit 1
 fi
+
+# --- Rancher Cluster Module ---
+if [[ "$BUILD_DOWNSTREAM_CLUSETER" == "true" ]]; then
+    ./root/go/src/github.com/rancher/tests/validation/pipeline/scripts/build_downstream_cluster.sh
+fi
+
 
 echo "Script completed successfully!"
