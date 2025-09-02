@@ -88,6 +88,18 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+      - name: "Fetch and Set DockerHub Credentials"
+        uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
+            
+      - name: Mask Dockerhub Credentials
+        run: |
+          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
+          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
         with:
@@ -195,8 +207,8 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
-              registryPassword: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
-              registryUsername: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
+              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
+              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_12 }}"
           terratest:
@@ -214,8 +226,8 @@ jobs:
               configs:
                 "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
                   "auth":
-                    username: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
-                    password: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
+                    username: "${{ env.DOCKERHUB_USERNAME }}"
+                    password: "${{ env.DOCKERHUB_PASSWORD }}"
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
@@ -354,6 +366,18 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+      - name: "Fetch and Set DockerHub Credentials"
+        uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
+
+      - name: Mask Dockerhub Credentials
+        run: |
+          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
+          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
         with:
@@ -461,8 +485,8 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
-              registryPassword: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
-              registryUsername: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
+              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
+              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_11 }}"
           terratest:
@@ -480,8 +504,8 @@ jobs:
               configs:
                 "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
                   "auth":
-                    username: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
-                    password: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
+                    username: "${{ env.DOCKERHUB_USERNAME }}"
+                    password: "${{ env.DOCKERHUB_PASSWORD }}"
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
@@ -620,6 +644,18 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+      - name: "Fetch and Set DockerHub Credentials"
+        uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
+
+      - name: Mask Dockerhub Credentials
+        run: |
+          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
+          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
         with:
@@ -727,8 +763,8 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
-              registryPassword: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
-              registryUsername: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
+              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
+              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_10 }}"
           terratest:
@@ -746,8 +782,8 @@ jobs:
               configs:
                 "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
                   "auth":
-                    username: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
-                    password: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
+                    username: "${{ env.DOCKERHUB_USERNAME }}"
+                    password: "${{ env.DOCKERHUB_PASSWORD }}"
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
@@ -885,6 +921,18 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+      - name: "Fetch and Set DockerHub Credentials"
+        uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
+
+      - name: Mask Dockerhub Credentials
+        run: |
+          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
+          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
         with:
@@ -992,8 +1040,8 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
-              registryPassword: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
-              registryUsername: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
+              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
+              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_9 }}"
           terratest:
@@ -1011,8 +1059,8 @@ jobs:
               configs:
                 "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
                   "auth":
-                    username: "${{ secrets.QA_PRIVATE_REGISTRY_USERNAME }}"
-                    password: "${{ secrets.QA_PRIVATE_REGISTRY_PASSWORD }}"
+                    username: "${{ env.DOCKERHUB_USERNAME }}"
+                    password: "${{ env.DOCKERHUB_PASSWORD }}"
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
