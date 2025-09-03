@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || stress) && !sanity && !extended
+//go:build (validation || infra.any || cluster.any || stress) && !sanity && !extended && !2.8 && !2.9 && !2.10
 
 package crtb
 

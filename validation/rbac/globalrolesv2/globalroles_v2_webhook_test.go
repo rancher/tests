@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || sanity) && !stress && !extended
+//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress
 
 package globalrolesv2
 

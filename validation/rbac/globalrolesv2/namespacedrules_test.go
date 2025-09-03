@@ -1,4 +1,4 @@
-//go:build !pit.daily && !pit.weekly && !pit.event
+//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress
 
 package globalrolesv2
 
