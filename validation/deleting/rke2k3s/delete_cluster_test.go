@@ -51,8 +51,8 @@ func (d *DeleteClusterTestSuite) SetupSuite() {
 
 	d.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	// rke2ClusterConfig := new(clusters.ClusterConfig)
-	// operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, rke2ClusterConfig)
+	rke2ClusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, rke2ClusterConfig)
 
 	k3sClusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, k3sClusterConfig)
@@ -70,11 +70,11 @@ func (d *DeleteClusterTestSuite) SetupSuite() {
 	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
-	// rke2ClusterConfig.MachinePools = nodeRolesStandard
+	rke2ClusterConfig.MachinePools = nodeRolesStandard
 	k3sClusterConfig.MachinePools = nodeRolesStandard
 
-	// d.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2ClusterConfig, awsEC2Configs, true, false)
-	// require.NoError(d.T(), err)
+	d.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2ClusterConfig, awsEC2Configs, true, false)
+	require.NoError(d.T(), err)
 
 	d.k3sClusterID, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.K3SClusterType.String(), k3sClusterConfig, awsEC2Configs, true, false)
 	require.NoError(d.T(), err)
@@ -85,7 +85,7 @@ func (d *DeleteClusterTestSuite) TestDeletingCluster() {
 		name      string
 		clusterID string
 	}{
-		// {"RKE2_Delete_Cluster", d.rke2ClusterID},
+		{"RKE2_Delete_Cluster", d.rke2ClusterID},
 		{"K3S_Delete_Cluster", d.k3sClusterID},
 	}
 
