@@ -33,7 +33,7 @@ node {
       withFolderProperties {
         paramsMap = []
         params.each {
-          if (it.value && it.value.trim() != "") {
+          if ((it.value instanceof String && it.value.trim() != "") || it.value instanceof Boolean) {
               paramsMap << "$it.key=$it.value"
           }
         }
