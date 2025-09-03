@@ -127,6 +127,13 @@ node {
                 }
               }
               stage('Run Validation Tests') {
+                if (CAPTURE_IMAGES) {
+                  sh "mkdir ./validation/images"
+                  sh "docker run -d --name imageCapturer -v ./validation/config.yaml:/app/config.yaml -v ./validation/images/:/app/images -t " +
+                  "${imageName} sh -c \"go build ../scripts/capture_images/capture_images.go && CATTLE_TEST_CONFIG=/app/config.yaml ./capture_images\""
+                  sleep(5) // Wait some time to guarantee the container is ready to process events.
+                }
+
                 try {
                   sh "docker run --name ${testContainer} -t --env-file ${envFile} " +
                   "${imageName} sh -c \"/root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
@@ -134,6 +141,30 @@ node {
                   "${rootPath}reporter\""
                 } catch(err) {
                   echo 'Test run had failures. Collecting results...'
+                }
+
+                if (CAPTURE_IMAGES) {
+                  stage('Showing images used on this run') {
+                    sh "docker kill --signal SIGTERM imageCapturer && docker wait imageCapturer"
+                    try {
+                      final imagefiles = sh(script: 'ls -1 ./validation/images', returnStdout: true).split("\n").toList()
+                      if (imagefiles.isEmpty()) {
+                        echo "No image list found, showing docker logs:"
+                        final logs = sh("docker logs imageCapturer", returnStdout: true)
+                        echo "${logs}"
+                      } else {
+                        echo "else"
+                        imagefiles.each { file ->
+                          echo "Images used within cluster ${file}"
+                          def content = readFile("./validation/images/${file}")
+                          echo "${content}"
+                        }
+                      }
+                      sh "docker rm imageCapturer"
+                    } catch(err) {
+                      echo "Failed showing used images: ${err}"
+                    }
+                  }
                 }
               }
               stage('Test Report') {
