@@ -56,7 +56,7 @@ func (b *BackupTestSuite) TestS3InPlaceRestore() {
 
 	config.LoadConfig(charts.BackupRestoreConfigurationFileKey, backupRestoreConfig)
 
-	logrus.Info("Checking if the backup chart is already installed...")
+	logrus.Infof("Checking if the backup chart is already installed...")
 	initialBackupChart, err := shepCharts.GetChartStatus(b.client, project.ClusterID, "cattle-resources-system", "rancher-backup")
 	require.NoError(b.T(), err)
 
@@ -67,29 +67,25 @@ func (b *BackupTestSuite) TestS3InPlaceRestore() {
 	b.client, err = b.client.ReLogin()
 	require.NoError(b.T(), err)
 
-	logrus.Info("Creating two users, projects, and role templates...")
+	logrus.Infof("Creating two users, projects, and role templates...")
 	userList, projList, roleList, err := createRancherResources(b.client, project.ClusterID, "cluster")
 	require.NoError(b.T(), err)
 
-	logrus.Info("Provisioning a downstream RKE1 cluster...")
-	rke1ClusterObj, rke1ClusterConfig, err := createRKE1dsCluster(b.T(), b.client)
-	require.NoError(b.T(), err)
-
-	logrus.Info("Provisioning a downstream RKE2 cluster...")
+	logrus.Infof("Provisioning a downstream RKE2 cluster...")
 	rke2SteveObj, rke2ClusterConfig, err := createRKE2dsCluster(b.T(), b.client)
 	require.NoError(b.T(), err)
 
-	logrus.Info("Creating a backup of the local cluster...")
+	logrus.Infof("Creating a backup of the local cluster...")
 	s3StorageLocation := backupRestoreConfig.S3BucketName + "/" + backupRestoreConfig.S3FolderName
 	_, backupFileName, err := createAndValidateBackup(b.client, s3StorageLocation, b.broConfig)
 	require.NoError(b.T(), err)
 
-	logrus.Info("Validating backup file is in AWS S3...")
+	logrus.Infof("Validating backup file is in AWS S3...")
 	backupPresent, err := checkAWSS3Object(s3StorageLocation, backupFileName)
 	require.NoError(b.T(), err)
 	assert.True(b.T(), backupPresent)
 
-	logrus.Info("Creating two more users, projects, and role templates...")
+	logrus.Infof("Creating two more users, projects, and role templates...")
 	userListPostBackup, projListPostBackup, roleListPostBackup, err := createRancherResources(b.client, project.ClusterID, "cluster")
 	require.NoError(b.T(), err)
 
@@ -104,15 +100,14 @@ func (b *BackupTestSuite) TestS3InPlaceRestore() {
 
 	charts.VerifyRestoreCompleted(b.client, restoreSteveType, restoreObj)
 
-	logrus.Info("Validating Rancher resources...")
+	logrus.Infof("Validating Rancher resources...")
 	err = verifyRancherResources(b.client, userList, projList, roleList)
 	require.NoError(b.T(), err)
 
 	err = verifyRancherResources(b.client, userListPostBackup, projListPostBackup, roleListPostBackup)
 	assert.Error(b.T(), err)
 
-	logrus.Info("Validating downstream clusters are in an Active status...")
-	provisioning.VerifyRKE1Cluster(b.T(), b.client, rke1ClusterConfig, rke1ClusterObj)
+	logrus.Infof("Validating downstream clusters are in an Active status...")
 	provisioning.VerifyCluster(b.T(), b.client, rke2ClusterConfig, rke2SteveObj)
 }
 

@@ -105,8 +105,8 @@ func (s *SnapshotRetentionTestSuite) TestAutomaticSnapshotRetention() {
 		clusterObject, clusterResponse, err := extClusters.GetProvisioningClusterByName(s.client, cluster.Name, "fleet-default")
 		require.NoError(s.T(), err)
 
-		clusterObject.Spec.RKEConfig.ETCD.SnapshotRetention = s.snapshotConfig.SnapshotRetention
-		cronSchedule := fmt.Sprintf("%s%v%s", "*/", s.snapshotConfig.SnapshotInterval, " * * * *")
+		clusterObject.Spec.RKEConfig.ETCD.SnapshotRetention = tt.retentionLimit
+		cronSchedule := fmt.Sprintf("%s%v%s", "*/", tt.intervalBetweenSnapshots, " * * * *")
 		clusterObject.Spec.RKEConfig.ETCD.SnapshotScheduleCron = cronSchedule
 
 		_, err = s.client.Steve.SteveType(stevetypes.Provisioning).Update(clusterResponse, clusterObject)

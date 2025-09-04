@@ -150,6 +150,9 @@ func createOpaqueS3Secret(steveClient *v1.Client) (string, error) {
 	logrus.Infof("Creating an opaque secret with name: %v", secretName)
 	secretTemplate := secrets.NewSecretTemplate(secretName, backupRestoreConfig.CredentialSecretNamespace, map[string][]byte{"accessKey": []byte(backupRestoreConfig.AccessKey), "secretKey": []byte(backupRestoreConfig.SecretKey)}, corev1.SecretTypeOpaque, nil, nil)
 	createdSecret, err := steveClient.SteveType(secrets.SecretSteveType).Create(secretTemplate)
+	if err != nil {
+		return "", err
+	}
 
 	return createdSecret.Name, err
 }
@@ -229,51 +232,6 @@ func createAndValidateBackup(client *rancher.Client, bucket string, config *char
 	})
 
 	return completedBackup, backupFileName, err
-}
-
-func createRKE1dsCluster(t *testing.T, client *rancher.Client) (*management.Cluster, *clusters.ClusterConfig, error) {
-	provisioningConfig := new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, provisioningConfig)
-
-	if provisioningConfig.NodeProviders == nil {
-		provisioningConfig.NodeProviders = []string{"ec2"}
-	}
-
-	externalNodeProvider := provisioning.ExternalNodeProviderSetup(provisioningConfig.NodeProviders[0])
-	testClusterConfig := clusters.ConvertConfigToClusterConfig(provisioningConfig)
-
-	if provisioningConfig.RKE1KubernetesVersions == nil {
-		rke1Versions, err := kubernetesversions.ListRKE1AllVersions(client)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		provisioningConfig.RKE1KubernetesVersions = []string{rke1Versions[len(rke1Versions)-1]}
-	}
-
-	if provisioningConfig.CNIs == nil {
-		provisioningConfig.CNIs = []string{cniCalico}
-	}
-
-	nodeAndRoles := []provisioninginput.NodePools{
-		provisioninginput.AllRolesNodePool,
-	}
-
-	testClusterConfig.NodePools = nodeAndRoles
-	testClusterConfig.KubernetesVersion = provisioningConfig.RKE1KubernetesVersions[0]
-
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	config.LoadConfig(ec2.ConfigurationFileKey, awsEC2Configs)
-
-	clusterObject, _, err := provisioning.CreateProvisioningRKE1CustomCluster(client, &externalNodeProvider, testClusterConfig, awsEC2Configs)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	provisioning.VerifyRKE1Cluster(t, client, testClusterConfig, clusterObject)
-
-	return clusterObject, testClusterConfig, nil
 }
 
 func createRKE2dsCluster(t *testing.T, client *rancher.Client) (*v1.SteveAPIObject, *clusters.ClusterConfig, error) {
