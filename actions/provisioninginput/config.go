@@ -167,6 +167,7 @@ type Networking struct {
 	NodePortServicePortRange string                          `json:"nodePortServicePortRange,omitempty" yaml:"nodePortServicePortRange,omitempty"`
 	TLSSan                   []string                        `json:"tlsSan,omitempty" yaml:"tlsSan,omitempty"`
 	LocalClusterAuthEndpoint *rkev1.LocalClusterAuthEndpoint `json:"localClusterAuthEndpoint,omitempty" yaml:"localClusterAuthEndpoint,omitempty"`
+	StackPreference          string                          `json:"stackPreference,omitempty" yaml:"stackPreference,omitempty"`
 }
 
 type Advanced struct {

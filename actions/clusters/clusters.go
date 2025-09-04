@@ -251,7 +251,6 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 		APIVersion: "provisioning.cattle.io/v1",
 	}
 
-	//metav1.ObjectMeta
 	objectMeta := metav1.ObjectMeta{
 		Name:      clusterName,
 		Namespace: namespace,
@@ -261,6 +260,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 		SnapshotRetention:    5,
 		SnapshotScheduleCron: "0 */5 * * *",
 	}
+
 	if clustersConfig.ETCD != nil {
 		etcd = clustersConfig.ETCD
 	}
@@ -268,6 +268,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 	chartValuesMap := rkev1.GenericMap{
 		Data: map[string]interface{}{},
 	}
+
 	chartAdditionalManifest := ""
 	if clustersConfig.AddOnConfig != nil {
 		if clustersConfig.AddOnConfig.ChartValues != nil {
@@ -276,14 +277,29 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 		chartAdditionalManifest = clustersConfig.AddOnConfig.AdditionalManifest
 	}
 
-	machineGlobalConfigMap := rkev1.GenericMap{
-		Data: map[string]interface{}{
-			"cni":                 clustersConfig.CNI,
-			"disable-kube-proxy":  false,
-			"etcd-expose-metrics": false,
-			"profile":             nil,
-		},
+	var machineGlobalConfigMap rkev1.GenericMap
+	if clustersConfig.Networking.ClusterCIDR != "" || clustersConfig.Networking.ServiceCIDR != "" {
+		machineGlobalConfigMap = rkev1.GenericMap{
+			Data: map[string]any{
+				"cluster-cidr":        clustersConfig.Networking.ClusterCIDR,
+				"cni":                 clustersConfig.CNI,
+				"disable-kube-proxy":  false,
+				"etcd-expose-metrics": false,
+				"profile":             nil,
+				"service-cidr":        clustersConfig.Networking.ServiceCIDR,
+			},
+		}
+	} else {
+		machineGlobalConfigMap = rkev1.GenericMap{
+			Data: map[string]any{
+				"cni":                 clustersConfig.CNI,
+				"disable-kube-proxy":  false,
+				"etcd-expose-metrics": false,
+				"profile":             nil,
+			},
+		}
 	}
+
 	machineSelectorConfigs := []rkev1.RKESystemConfig{}
 	if clustersConfig.Advanced != nil {
 		if clustersConfig.Advanced.MachineGlobalConfig != nil {
@@ -302,9 +318,18 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 		Enabled: false,
 		FQDN:    "",
 	}
+
+	networking := &rkev1.Networking{
+		StackPreference: clustersConfig.Networking.StackPreference,
+	}
+
 	if clustersConfig.Networking != nil {
 		if clustersConfig.Networking.LocalClusterAuthEndpoint != nil {
 			localClusterAuthEndpoint = *clustersConfig.Networking.LocalClusterAuthEndpoint
+		}
+
+		if clustersConfig.Networking.StackPreference != "" {
+			networking.StackPreference = clustersConfig.Networking.StackPreference
 		}
 	}
 
@@ -314,6 +339,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 		WorkerConcurrency:        "10%",
 		WorkerDrainOptions:       rkev1.DrainOptions{},
 	}
+
 	if clustersConfig.UpgradeStrategy != nil {
 		upgradeStrategy = *clustersConfig.UpgradeStrategy
 	}
@@ -351,6 +377,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 		fleetAgentDeploymentCustomization.AppendTolerations = v1FleetTolerations
 		fleetAgentDeploymentCustomization.OverrideAffinity = AgentAffinityConfigHelper(clustersConfig.FleetAgent.OverrideAffinity)
 	}
+
 	var registries *rkev1.Registry
 	if clustersConfig.Registries != nil {
 		registries = clustersConfig.Registries.RKE2Registries
@@ -364,6 +391,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 		AdditionalManifest:    chartAdditionalManifest,
 		Registries:            registries,
 		ETCD:                  etcd,
+		Networking:            networking,
 	}
 
 	if clustersConfig.Advanced != nil {
