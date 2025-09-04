@@ -38,7 +38,10 @@ func (ur *URDeleteTestSuite) SetupSuite() {
 }
 
 func (ur *URDeleteTestSuite) TearDownSuite() {
-	logrus.Info("Tearing down URDeleteTestSuite")
+	logrus.Info("Resetting user session settings")
+	err := updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, "0")
+	require.NoError(ur.T(), err)
+
 	ur.session.Cleanup()
 }
 

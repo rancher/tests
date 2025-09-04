@@ -47,7 +47,11 @@ func (ur *URDisableTestSuite) TearDownSuite() {
 			logrus.Errorf("Failed to delete admin user: %v", err)
 		}
 	}
-	logrus.Info("Cleaning up session")
+
+	logrus.Info("Resetting user session settings")
+	err := updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, "0")
+	require.NoError(ur.T(), err)
+
 	ur.session.Cleanup()
 }
 
