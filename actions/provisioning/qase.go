@@ -1,6 +1,7 @@
 package provisioning
 
 import (
+	"strings"
 	"time"
 
 	rancherEc2 "github.com/rancher/shepherd/clients/ec2"
@@ -24,15 +25,22 @@ func GetProvisioningSchemaParams(client *rancher.Client, cattleConfig map[string
 	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
-	osNames, err := provider.GetOSNamesFunc(client, credentialSpec, machineConfigSpec)
-	if err != nil {
-		logrus.Warningf("Error getting OS Name %s", err)
-		return nil
-	}
-
 	currentDate := time.Now().Format("2006-01-02 03:04PM")
 
-	osParam := upstream.Params{Title: "OS", Values: osNames}
+	var osNames []string
+	var err error
+	var osParam upstream.Params
+
+	if strings.Contains(clusterConfig.Provider, "aws") {
+		osNames, err = provider.GetOSNamesFunc(client, credentialSpec, machineConfigSpec)
+		if err != nil {
+			logrus.Warningf("Error getting OS Name %s", err)
+			return nil
+		}
+
+		osParam = upstream.Params{Title: "OS", Values: osNames}
+	}
+
 	providerParam := upstream.Params{Title: "Provider", Values: []string{clusterConfig.Provider}}
 	k8sParam := upstream.Params{Title: "K8sVersion", Values: []string{clusterConfig.KubernetesVersion}}
 	cniParam := upstream.Params{Title: "CNI", Values: []string{clusterConfig.CNI}}
