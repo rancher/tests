@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
+	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -27,6 +29,7 @@ type psactTest struct {
 	session            *session.Session
 	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
+	clusterObjects     []*v1.SteveAPIObject
 }
 
 func psactSetup(t *testing.T) psactTest {
@@ -55,6 +58,7 @@ func psactSetup(t *testing.T) psactTest {
 
 func TestPSACT(t *testing.T) {
 	t.Parallel()
+
 	r := psactSetup(t)
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
@@ -75,9 +79,21 @@ func TestPSACT(t *testing.T) {
 
 	for _, tt := range tests {
 		var err error
+
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
+
+			if len(r.clusterObjects) == 3 {
+				for _, cluster := range r.clusterObjects {
+					extClusters.DeleteK3SRKE2Cluster(tt.client, cluster.ID)
+					provisioning.VerifyDeleteRKE2K3SCluster(t, tt.client, cluster.ID)
+				}
+			}
+
+			customPSACT, err := tt.client.Steve.SteveType(extClusters.PodSecurityAdmissionSteveResoureType).ByID("rancher-baseline")
+			if err == nil && customPSACT != nil {
+				_ = clusters.DeletePSACT(tt.client, customPSACT.ID)
+			}
 		})
 
 		clusterConfig := new(clusters.ClusterConfig)
@@ -97,6 +113,9 @@ func TestPSACT(t *testing.T) {
 			assert.NoError(t, err)
 
 			provisioning.VerifyCluster(t, tt.client, clusterConfig, cluster)
+
+			r.clusterObjects = append(r.clusterObjects, cluster)
+
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)

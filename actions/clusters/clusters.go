@@ -934,3 +934,19 @@ func GetClusterType(client *rancher.Client, clusterName string) (string, error) 
 	return clusterType, nil
 
 }
+
+// DeletePSACT deletes a Pod Security Admission Configuration Template (PSACT) by its ID.
+func DeletePSACT(client *rancher.Client, psactID string) error {
+	psact, err := client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResoureType).ByID(psactID)
+	if err != nil {
+		return err
+	}
+
+	logrus.Infof("Deleting PSACT %s...", psact.Name)
+	err = client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResoureType).Delete(psact)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
