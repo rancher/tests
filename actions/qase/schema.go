@@ -13,11 +13,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var (
-	_, callerFilePath, _, _ = runtime.Caller(0)
-	basepath                = filepath.Join(filepath.Dir(callerFilePath), "..", "..")
-)
-
 // GetSchemas retrieves the tests from schemas.yaml files defined within each Go package.
 func GetSchemas(basePath string) ([]TestSuiteSchema, error) {
 	var suiteSchemas []TestSuiteSchema
@@ -137,8 +132,8 @@ func UploadSchemas(client *Service, basePath string) error {
 			for _, test := range suite.Cases {
 				test.SuiteId = suiteID
 				for i, step := range test.Steps {
-					if isFile(strings.TrimSpace(step.Data)) {
-						fileContent, err := os.ReadFile(filepath.Join(basepath, strings.TrimSpace(step.Data)))
+					if isFile(strings.TrimSpace(step.Data), basePath) {
+						fileContent, err := os.ReadFile(filepath.Join(basePath, strings.TrimSpace(step.Data)))
 						if err != nil {
 							logrus.Error("Error reading file: ", err)
 							return err
@@ -160,11 +155,11 @@ func UploadSchemas(client *Service, basePath string) error {
 }
 
 // isFile takes any string and determines if it is pointing to a file or not
-func isFile(str string) bool {
+func isFile(str, basePath string) bool {
 	regex := regexp.MustCompile(`^\S*\/\S*\.\S*$`)
 	potentialFile := regex.FindAllStringSubmatch(str, -1)
 	if len(potentialFile) > 0 {
-		fp := filepath.Join(basepath, str)
+		fp := filepath.Join(basePath, str)
 		if _, err := os.Stat(fp); err == nil {
 			return true
 		}
