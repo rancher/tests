@@ -22,6 +22,7 @@ import (
 const (
 	sshPublickey  = "ssh-publickey"
 	sshPrivatekey = "ssh-privatekey"
+	knownHosts    = "known_hosts"
 )
 
 func gitPushCommit(client *rancher.Client, sshNode *nodes.Node, repoName string) error {
@@ -129,7 +130,7 @@ func verifyRepoUpdate(client *rancher.Client, repoObjectID string) error {
 			return true, err
 		}
 
-		return newGitRepo.Status.Summary.WaitApplied == 1, nil
+		return newGitRepo.Status.Summary.Ready == 1, nil
 	})
 	return err
 }
@@ -159,7 +160,7 @@ func verifyRepoPause(client *rancher.Client, repoObjectID string, isPaused bool)
 	return err
 }
 
-func createFleetSSHSecret(client *rancher.Client, privateKey []byte) (string, error) {
+func createFleetSSHSecret(client *rancher.Client, privateKey []byte, knownHostKey string) (string, error) {
 	key, err := ssh.ParsePrivateKey(privateKey)
 	if err != nil {
 		return "", err
@@ -168,6 +169,7 @@ func createFleetSSHSecret(client *rancher.Client, privateKey []byte) (string, er
 	keyData := map[string][]byte{
 		sshPublickey:  []byte(key.PublicKey().Marshal()),
 		sshPrivatekey: privateKey,
+		knownHosts:    []byte(knownHostKey),
 	}
 
 	secretName := namegenerator.AppendRandomString("fleet-ssh")

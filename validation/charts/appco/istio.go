@@ -32,7 +32,6 @@ const (
 	getPodsMetadataNameCommand                  string = `kubectl -n %s get pod -o jsonpath='{.items..metadata.name}'`
 	logBufferSize                               string = `2MB`
 	exampleAppProjectName                              = "demo-project"
-	pilotImage                                  string = `dp.apps.rancher.io/containers/pilot:1.26.1-1.2`
 )
 
 func createIstioSecret(client *rancher.Client, clusterID string, appCoUsername string, appCoToken string) (string, error) {

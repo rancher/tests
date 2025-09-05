@@ -76,8 +76,17 @@ func (u *UpgradeTestSuite) SetupSuite() {
 	u.sshNode, err = ssh.CreateSSHNode(u.client, u.cluster.Name, u.cluster.ID)
 	require.NoError(u.T(), err)
 
-	u.fleetSecretName, err = createFleetSSHSecret(u.client, u.sshNode.SSHKey)
+	knownHostKey, err := u.sshNode.ExecuteCommand(fmt.Sprintf("ssh-keyscan -H %s", u.sshNode.PublicIPAddress))
 	require.NoError(u.T(), err)
+
+	u.fleetSecretName, err = createFleetSSHSecret(u.client, u.sshNode.SSHKey, knownHostKey)
+	require.NoError(u.T(), err)
+
+	traefikDaemonset, err := fleet.GetDaemonsetByName(u.client, u.cluster.ID, fleet.KubeSystem, fleet.TraefikDeamonSet)
+	require.NoError(u.T(), err)
+	if traefikDaemonset != nil {
+		u.T().Skip("Test requires Traefik ingress to not be installed")
+	}
 }
 
 func (u *UpgradeTestSuite) TestNewCommitFleetRepo() {
