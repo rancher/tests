@@ -8,12 +8,14 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	"github.com/rancher/shepherd/extensions/defaults/providers"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/cloudprovider"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
@@ -43,6 +45,12 @@ func cloudProviderSetup(t *testing.T) cloudProviderTest {
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	assert.NoError(t, err)
+
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
 	assert.NoError(t, err)
 
 	r.cattleConfig, err = defaults.SetK8sDefault(client, defaults.RKE2, r.cattleConfig)
@@ -87,18 +95,22 @@ func TestAWSCloudProvider(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			clusterConfig.Provider = "aws"
+			clusterConfig.Provider = providers.AWS
 			clusterConfig.MachinePools = tt.machinePools
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
-			clusterObject, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+			logrus.Infof("Provisioning cluster")
+			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 			assert.NoError(t, err)
 
-			provisioning.VerifyCluster(t, tt.client, clusterConfig, clusterObject)
-			cloudprovider.VerifyCloudProvider(t, tt.client, "rke2", nil, clusterConfig, clusterObject, nil)
+			logrus.Infof("Verifying cluster (%s)", cluster.Name)
+			provisioning.VerifyCluster(t, tt.client, cluster)
+
+			logrus.Infof("Verifying cloud provider on cluster (%s)", cluster.Name)
+			cloudprovider.VerifyCloudProvider(t, tt.client, defaults.RKE2, nil, clusterConfig, cluster, nil)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
@@ -148,11 +160,12 @@ func TestVSphereCloudProvider(t *testing.T) {
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
+			logrus.Info("Provisioning cluster")
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 			assert.NoError(t, err)
 
 			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(t, tt.client, clusterConfig, cluster)
+			provisioning.VerifyCluster(t, tt.client, cluster)
 
 			logrus.Infof("Verifying cloud provider %s", cluster.Name)
 			cloudprovider.VerifyCloudProvider(t, tt.client, "rke2", nil, clusterConfig, cluster, nil)

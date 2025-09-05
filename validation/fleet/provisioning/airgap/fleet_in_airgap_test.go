@@ -176,7 +176,7 @@ func (a *AirGapRKE2CustomClusterTestSuite) TestCustomClusterWithGitRepo() {
 		reports.TimeoutClusterReport(clusterObject, err)
 		require.NoError(a.T(), err)
 
-		provisioning.VerifyCluster(a.T(), a.standardClient, testClusterConfig, clusterObject)
+		provisioning.VerifyCluster(a.T(), a.standardClient, clusterObject)
 
 		status := &apisV1.ClusterStatus{}
 		err = steveV1.ConvertToK8sType(clusterObject.Status, status)

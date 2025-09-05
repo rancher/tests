@@ -896,7 +896,7 @@ func CheckServiceAccountTokenSecret(client *rancher.Client, clusterName string) 
 	}
 
 	if cluster.ServiceAccountTokenSecret == "" {
-		logrus.Warn("warning: serviceAccountTokenSecret does not exist in this cluster!")
+		logrus.Warningf("ServiceAccountTokenSecret does not exist on cluster (%s)", clusterName)
 		return false, nil
 	}
 

@@ -93,7 +93,7 @@ func (c *CertificateTestSuite) createCertWithData(namespace *corev1.Namespace, c
 	return secrets.CreateSecret(c.client, c.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS, nil, nil)
 }
 
-func (c *CertificateTestSuite) setupIngressWithCert(namespace *corev1.Namespace, tlsSecret *corev1.Secret, hosts []string, deploymentName string) (*netv1.Ingress, error) {
+func (c *CertificateTestSuite) setupIngressWithCert(namespace *corev1.Namespace, tlsSecret *corev1.Secret, hosts []string) (*netv1.Ingress, error) {
 	deploymentForIngress, err := deployment.CreateDeployment(c.client, c.cluster.ID, namespace.Name, 1, tlsSecret.Name, "", false, false, false, true)
 	require.NoError(c.T(), err)
 
@@ -228,7 +228,7 @@ func (c *CertificateTestSuite) TestCertificateWithIngressSingleNS() {
 	_, namespace, tlsSecret, err := c.createTestCertAndNamespace(c.certData1, c.keyData1)
 	require.NoError(c.T(), err)
 
-	ingress, err := c.setupIngressWithCert(namespace, tlsSecret, []string{testHost}, "")
+	ingress, err := c.setupIngressWithCert(namespace, tlsSecret, []string{testHost})
 	require.NoError(c.T(), err)
 
 	require.Len(c.T(), ingress.Spec.TLS, 1)
@@ -248,13 +248,13 @@ func (c *CertificateTestSuite) TestCertificateWithIngressMultiNS() {
 	require.NoError(c.T(), err)
 
 	log.Info("Creating ingress with first tls secret")
-	ingress1, err := c.setupIngressWithCert(namespace1, tlsSecret1, []string{testHost1}, "")
+	ingress1, err := c.setupIngressWithCert(namespace1, tlsSecret1, []string{testHost1})
 	require.NoError(c.T(), err)
 	require.Len(c.T(), ingress1.Spec.TLS, 1)
 	require.Equal(c.T(), tlsSecret1.Name, ingress1.Spec.TLS[0].SecretName)
 
 	log.Info("Creating ingress with second tls secret")
-	ingress2, err := c.setupIngressWithCert(namespace2, tlsSecret2, []string{testHost2}, "")
+	ingress2, err := c.setupIngressWithCert(namespace2, tlsSecret2, []string{testHost2})
 	require.NoError(c.T(), err)
 	require.Len(c.T(), ingress2.Spec.TLS, 1)
 	require.Equal(c.T(), tlsSecret2.Name, ingress2.Spec.TLS[0].SecretName)
@@ -267,7 +267,7 @@ func (c *CertificateTestSuite) TestUpdateCertificateWithIngress() {
 	_, namespace, tlsSecret, err := c.createTestCertAndNamespace(c.certData1, c.keyData1)
 	require.NoError(c.T(), err)
 
-	ingress, err := c.setupIngressWithCert(namespace, tlsSecret, []string{testHost}, "")
+	ingress, err := c.setupIngressWithCert(namespace, tlsSecret, []string{testHost})
 	require.NoError(c.T(), err)
 
 	log.Info("Updating the certificate")
@@ -302,12 +302,12 @@ func (c *CertificateTestSuite) TestSharedCertificateBetweenIngresses() {
 	require.NoError(c.T(), err)
 
 	log.Info("Creating first ingress with certificate")
-	ingress1, err := c.setupIngressWithCert(namespace, tlsSecret, []string{sharedHost}, "app1")
+	ingress1, err := c.setupIngressWithCert(namespace, tlsSecret, []string{sharedHost})
 	require.NoError(c.T(), err)
 	require.NotNil(c.T(), ingress1)
 
 	log.Info("Creating second ingress with same certificate")
-	ingress2, err := c.setupIngressWithCert(namespace, tlsSecret, []string{sharedHost}, "app2")
+	ingress2, err := c.setupIngressWithCert(namespace, tlsSecret, []string{sharedHost})
 	require.NoError(c.T(), err)
 	require.NotNil(c.T(), ingress2)
 
@@ -327,7 +327,7 @@ func (c *CertificateTestSuite) TestDeleteCertificateUsedByIngress() {
 	require.NoError(c.T(), err)
 
 	log.Info("Creating ingress with tls secret")
-	ingress, err := c.setupIngressWithCert(namespace, tlsSecret, []string{testHost}, "")
+	ingress, err := c.setupIngressWithCert(namespace, tlsSecret, []string{testHost})
 	require.NoError(c.T(), err)
 
 	log.Info("Deleting the tls secret")
@@ -354,7 +354,7 @@ func (c *CertificateTestSuite) TestCertificateWithMultipleHosts() {
 	require.NoError(c.T(), err)
 
 	hosts := []string{testHost1, testHost2, testHost3}
-	ingress, err := c.setupIngressWithCert(namespace, tlsSecret, hosts, "")
+	ingress, err := c.setupIngressWithCert(namespace, tlsSecret, hosts)
 	require.NoError(c.T(), err)
 
 	require.Len(c.T(), ingress.Spec.TLS, 1)
@@ -406,7 +406,7 @@ func (c *CertificateTestSuite) TestCertificateWithAnnotations() {
 	require.Equal(c.T(), "ClusterIssuer", retrievedSecret.Annotations["cert-manager.io/issuer-kind"])
 	require.Equal(c.T(), "test-value", retrievedSecret.Annotations["custom-annotation"])
 
-	_, err = c.setupIngressWithCert(namespace, createdSecret, []string{testHost}, "")
+	_, err = c.setupIngressWithCert(namespace, createdSecret, []string{testHost})
 	require.NoError(c.T(), err)
 
 }
@@ -418,7 +418,7 @@ func (c *CertificateTestSuite) TestCertificateRotation() {
 	_, namespace, tlsSecret, err := c.createTestCertAndNamespace(c.certData1, c.keyData1)
 	require.NoError(c.T(), err)
 
-	ingress, err := c.setupIngressWithCert(namespace, tlsSecret, []string{rotateHost}, "")
+	ingress, err := c.setupIngressWithCert(namespace, tlsSecret, []string{rotateHost})
 	require.NoError(c.T(), err)
 
 	log.Info("Creating new rotated certificate")
@@ -430,7 +430,7 @@ func (c *CertificateTestSuite) TestCertificateRotation() {
 	require.NoError(c.T(), err)
 
 	log.Info("Creating new ingress with rotated certificate")
-	updatedIngress, err := c.setupIngressWithCert(namespace, rotatedCert, []string{rotateHost}, "rotated")
+	updatedIngress, err := c.setupIngressWithCert(namespace, rotatedCert, []string{rotateHost})
 	require.NoError(c.T(), err)
 	require.NotNil(c.T(), updatedIngress)
 

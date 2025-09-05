@@ -5,7 +5,8 @@
 2. [Tests Cases](#Test-Cases)
 3. [Configurations](#Configurations)
 4. [Configuration Defaults](#defaults)
-5. [Back to general provisioning](../README.md)
+5. [Logging Levels](#Logging)
+6. [Back to general provisioning](../README.md)
 
 
 ## Test Cases
@@ -517,6 +518,13 @@ This package contains a defaults folder which contains default test configuratio
 Any data the user provides will override these defaults which are stored here: [defaults](defaults/defaults.yaml). 
 
 
+## Logging
+This package supports several logging levels. You can set the logging levels via the cattle config and all levels above the provided level will be logged while all logs below that logging level will be omitted. 
+
+```yaml
+logging:
+   level: "trace" #trace debug, info, warning, error
+```
 
 ## Additional
 1. If the tests passes immediately without warning, try adding the `-count=1` or run `go clean -cache`. This will avoid previous results from interfering with the new test run.

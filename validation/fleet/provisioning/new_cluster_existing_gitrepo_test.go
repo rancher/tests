@@ -181,7 +181,7 @@ func (f *FleetWithProvisioningTestSuite) TestHardenedAfterAddedGitRepo() {
 			reports.TimeoutClusterReport(clusterObject, err)
 			require.NoError(f.T(), err)
 
-			provisioning.VerifyCluster(f.T(), tt.client, testClusterConfig, clusterObject)
+			provisioning.VerifyCluster(f.T(), tt.client, clusterObject)
 
 			status := &provv1.ClusterStatus{}
 			err = steveV1.ConvertToK8sType(clusterObject.Status, status)
@@ -268,7 +268,7 @@ func (f *FleetWithProvisioningTestSuite) TestWindowsAfterAddedGitRepo() {
 			reports.TimeoutClusterReport(clusterObject, err)
 			require.NoError(f.T(), err)
 
-			provisioning.VerifyCluster(f.T(), tt.client, testClusterConfig, clusterObject)
+			provisioning.VerifyCluster(f.T(), tt.client, clusterObject)
 
 			status := &provv1.ClusterStatus{}
 			err = steveV1.ConvertToK8sType(clusterObject.Status, status)

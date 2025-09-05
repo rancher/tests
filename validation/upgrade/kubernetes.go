@@ -83,7 +83,7 @@ func DownstreamCluster(u *suite.Suite, testName string, client *rancher.Client, 
 		upgradedCluster, err := upgradeRKE2K3SCluster(u.T(), client, clusterID, testConfig)
 		require.NoError(u.T(), err)
 
-		provisioning.VerifyCluster(u.T(), client, testConfig, upgradedCluster)
+		provisioning.VerifyCluster(u.T(), client, upgradedCluster)
 	}
 }
 

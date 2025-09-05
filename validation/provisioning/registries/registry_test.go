@@ -346,7 +346,7 @@ func (rt *RegistryTestSuite) TestRegistriesK3S() {
 				reports.TimeoutClusterReport(clusterObject, err)
 				require.NoError(rt.T(), err)
 
-				provisioning.VerifyCluster(rt.T(), subClient, testConfig, clusterObject)
+				provisioning.VerifyCluster(rt.T(), subClient, clusterObject)
 			})
 		}
 	}
@@ -369,7 +369,7 @@ func (rt *RegistryTestSuite) TestRegistriesK3S() {
 				reports.TimeoutClusterReport(clusterObject, err)
 				require.NoError(rt.T(), err)
 
-				provisioning.VerifyCluster(rt.T(), subClient, testConfig, clusterObject)
+				provisioning.VerifyCluster(rt.T(), subClient, clusterObject)
 			})
 		}
 	}
@@ -418,7 +418,7 @@ func (rt *RegistryTestSuite) TestRegistriesRKE2() {
 				reports.TimeoutClusterReport(clusterObject, err)
 				require.NoError(rt.T(), err)
 
-				provisioning.VerifyCluster(rt.T(), subClient, testConfig, clusterObject)
+				provisioning.VerifyCluster(rt.T(), subClient, clusterObject)
 			})
 		}
 	}
@@ -439,7 +439,7 @@ func (rt *RegistryTestSuite) TestRegistriesRKE2() {
 				reports.TimeoutClusterReport(clusterObject, err)
 				require.NoError(rt.T(), err)
 
-				provisioning.VerifyCluster(rt.T(), subClient, testConfig, clusterObject)
+				provisioning.VerifyCluster(rt.T(), subClient, clusterObject)
 			})
 		}
 	}

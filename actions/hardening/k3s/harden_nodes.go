@@ -16,7 +16,7 @@ const (
 // HardenK3SNodes hardens the nodes by setting kernel parameters and creating the etcd user
 func HardenK3SNodes(nodes []*nodes.Node, nodeRoles []string, kubeVersion string) error {
 	for key, node := range nodes {
-		logrus.Infof("Setting kernel parameters on node: %s", node.NodeID)
+		logrus.Tracef("Setting kernel parameters on node: %s", node.NodeID)
 		_, err := node.ExecuteCommand("sudo bash -c 'echo vm.panic_on_oom=0 >> " + sysctlConf + "'")
 		if err != nil {
 			return err
@@ -43,7 +43,7 @@ func HardenK3SNodes(nodes []*nodes.Node, nodeRoles []string, kubeVersion string)
 		}
 
 		if strings.Contains(nodeRoles[key], "--controlplane") {
-			logrus.Infof("Copying over files to node %s", node.NodeID)
+			logrus.Tracef("Copying over files to node %s", node.NodeID)
 			userDir, err := os.UserHomeDir()
 			if err != nil {
 				return err

@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -17,9 +18,11 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/etcdsnapshot"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioninginput"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -58,6 +61,12 @@ func (s *SnapshotRetentionTestSuite) SetupSuite() {
 
 	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, s.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
+	require.NoError(s.T(), err)
+
 	rke2ClusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, rke2ClusterConfig)
 
@@ -80,9 +89,11 @@ func (s *SnapshotRetentionTestSuite) SetupSuite() {
 	rke2ClusterConfig.MachinePools = nodeRolesStandard
 	k3sClusterConfig.MachinePools = nodeRolesStandard
 
+	logrus.Info("Provisioning RKE2 cluster")
 	s.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2ClusterConfig, awsEC2Configs, true, false)
 	require.NoError(s.T(), err)
 
+	logrus.Info("Provisioning K3S cluster")
 	s.k3sClusterID, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), k3sClusterConfig, awsEC2Configs, true, false)
 	require.NoError(s.T(), err)
 }
@@ -102,7 +113,7 @@ func (s *SnapshotRetentionTestSuite) TestAutomaticSnapshotRetention() {
 		cluster, err := s.client.Steve.SteveType(stevetypes.Provisioning).ByID(tt.clusterID)
 		require.NoError(s.T(), err)
 
-		clusterObject, clusterResponse, err := extClusters.GetProvisioningClusterByName(s.client, cluster.Name, "fleet-default")
+		clusterObject, clusterResponse, err := extClusters.GetProvisioningClusterByName(s.client, cluster.Name, namespaces.FleetDefault)
 		require.NoError(s.T(), err)
 
 		clusterObject.Spec.RKEConfig.ETCD.SnapshotRetention = s.snapshotConfig.SnapshotRetention

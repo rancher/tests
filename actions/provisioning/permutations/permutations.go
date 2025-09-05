@@ -84,7 +84,7 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						reports.TimeoutClusterReport(clusterObject, err)
 						require.NoError(s.T(), err)
 
-						provisioning.VerifyCluster(s.T(), client, testClusterConfig, clusterObject)
+						provisioning.VerifyCluster(s.T(), client, clusterObject)
 
 					case RKE1ProvisionCluster:
 						testClusterConfig.KubernetesVersion = kubeVersion
@@ -112,7 +112,7 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						reports.TimeoutClusterReport(clusterObject, err)
 						require.NoError(s.T(), err)
 
-						provisioning.VerifyCluster(s.T(), client, testClusterConfig, clusterObject)
+						provisioning.VerifyCluster(s.T(), client, clusterObject)
 
 					case RKE1CustomCluster:
 						testClusterConfig.KubernetesVersion = kubeVersion
@@ -141,7 +141,7 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						reports.TimeoutClusterReport(clusterObject, err)
 						require.NoError(s.T(), err)
 
-						provisioning.VerifyCluster(s.T(), client, testClusterConfig, clusterObject)
+						provisioning.VerifyCluster(s.T(), client, clusterObject)
 
 					case RKE1AirgapCluster:
 						testClusterConfig.KubernetesVersion = kubeVersion

@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/etcdsnapshot"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
@@ -52,6 +53,12 @@ func (s *SnapshotRestoreWindowsTestSuite) SetupSuite() {
 
 	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, s.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
+	require.NoError(s.T(), err)
+
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, clusterConfig)
 
@@ -72,6 +79,7 @@ func (s *SnapshotRestoreWindowsTestSuite) SetupSuite() {
 
 	clusterConfig.MachinePools = nodeRolesStandard
 
+	logrus.Info("Provisioning RKE2 windows cluster")
 	s.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), clusterConfig, awsEC2Configs, true, true)
 	require.NoError(s.T(), err)
 }

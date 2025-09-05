@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
@@ -41,6 +42,12 @@ func customSetup(t *testing.T) customTest {
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
+	assert.NoError(t, err)
+
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
 	assert.NoError(t, err)
 
 	k.cattleConfig, err = defaults.SetK8sDefault(k.client, defaults.K3S, k.cattleConfig)
@@ -94,10 +101,12 @@ func TestCustom(t *testing.T) {
 			awsEC2Configs := new(ec2.AWSEC2Configs)
 			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, k.cattleConfig, awsEC2Configs)
 
-			clusterObject, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
+			logrus.Info("Provisioning cluster")
+			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
 			assert.NoError(t, err)
 
-			provisioning.VerifyCluster(t, tt.client, clusterConfig, clusterObject)
+			logrus.Infof("Verifying cluster (%s)", cluster.Name)
+			provisioning.VerifyCluster(t, tt.client, cluster)
 		})
 
 		params := provisioning.GetCustomSchemaParams(tt.client, k.cattleConfig)
