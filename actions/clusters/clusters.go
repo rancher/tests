@@ -278,7 +278,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 	}
 
 	var machineGlobalConfigMap rkev1.GenericMap
-	if clustersConfig.Networking.ClusterCIDR != "" || clustersConfig.Networking.ServiceCIDR != "" {
+	if clustersConfig.Networking != nil && (clustersConfig.Networking.ClusterCIDR != "" || clustersConfig.Networking.ServiceCIDR != "") {
 		machineGlobalConfigMap = rkev1.GenericMap{
 			Data: map[string]any{
 				"cluster-cidr":        clustersConfig.Networking.ClusterCIDR,
@@ -319,10 +319,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 		FQDN:    "",
 	}
 
-	networking := &rkev1.Networking{
-		StackPreference: clustersConfig.Networking.StackPreference,
-	}
-
+	networking := &rkev1.Networking{}
 	if clustersConfig.Networking != nil {
 		if clustersConfig.Networking.LocalClusterAuthEndpoint != nil {
 			localClusterAuthEndpoint = *clustersConfig.Networking.LocalClusterAuthEndpoint
