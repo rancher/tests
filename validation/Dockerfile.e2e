@@ -14,8 +14,12 @@ COPY ["./tests", "$WORKSPACE"]
 COPY ["./qa-infra-automation", "$WORKSPACE2"]
 
 ARG TOFU_VERSION=1.10.3
+ARG RANCHER2_PROVIDER_VERSION=7.0.0
+ARG HARVESTER_PROVIDER_VERSION=0.6.7
 
 ENV TOFU_VERSION=${TOFU_VERSION}
+ENV RANCHER2_PROVIDER_VERSION=${RANCHER2_PROVIDER_VERSION}
+ENV HARVESTER_PROVIDER_VERSION=${HARVESTER_PROVIDER_VERSION}
 
 RUN zypper -n install gcc binutils glibc-devel-static ca-certificates git-core wget curl unzip tar vim less file xz gzip sed gawk iproute2 iptables jq gettext-runtime
 RUN zypper install -y -f docker && rpm -e --nodeps --noscripts containerd
@@ -26,6 +30,8 @@ RUN zypper -n install python311-pip python311-base python311 python311-devel pyt
 # Upgrade pip and install Python packages
 RUN python3.11 -m pip install --upgrade pip setuptools && \
     python3.11 -m pip install ansible kubernetes
+
+ENV PATH="/root/.local/bin:${PATH}"
 
 # Install ansible-inventory-terraform plugin from GitHub
 RUN ansible-galaxy collection install cloud.terraform
@@ -64,6 +70,14 @@ rm get_helm.sh
 # Install yq
 RUN wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq && \
     chmod +x /usr/local/bin/yq
+
+RUN if [[ "$RANCHER2_PROVIDER_VERSION" == *"-dev"* ]]; then \
+      chmod +x ./scripts/tofu/dev-provider.sh && ./scripts/tofu/dev-provider.sh rancher2 "https://github.com/rancher/terraform-provider-rancher2.git" ; \
+    fi;
+
+RUN if [[ "$HARVESTER_PROVIDER_VERSION" == *"-dev"* ]]; then \
+      chmod +x ./scripts/tofu/dev-provider.sh && ./scripts/tofu/dev-provider.sh harvester "https://github.com/harvester/terraform-provider-harvester.git" ; \
+    fi;
 
 # necessary to run if statements using [[ ]]
 SHELL ["/bin/bash", "-c"] 
