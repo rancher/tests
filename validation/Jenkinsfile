@@ -2,9 +2,9 @@
 node {
     def rootPath = "/root/go/src/github.com/rancher/tests/validation/"
     def job_name = "${JOB_NAME}"
-    if (job_name.contains('/')) { 
+    if (job_name.contains('/')) {
       job_names = job_name.split('/')
-      job_name = job_names[job_names.size() - 1] 
+      job_name = job_names[job_names.size() - 1]
     }
     def testContainer = "${job_name}${env.BUILD_NUMBER}_test"
     def imageName = "rancher-validation-${job_name}${env.BUILD_NUMBER}"
@@ -23,7 +23,7 @@ node {
     }
     def timeout = "60m"
     if ("${env.TIMEOUT}" != "null" && "${env.TIMEOUT}" != "") {
-      timeout = "${env.TIMEOUT}" 
+      timeout = "${env.TIMEOUT}"
     }
     def reporterScript = "build_qase_reporter.sh"
     if ("${env.REPORTER_BUILD_SCRIPT}" != "null" && "${env.REPORTER_BUILD_SCRIPT}" != "") {
@@ -33,7 +33,7 @@ node {
       withFolderProperties {
         paramsMap = []
         params.each {
-          if (it.value && it.value.trim() != "") {
+          if ((it.value instanceof String && it.value.trim() != "") || it.value instanceof Boolean) {
               paramsMap << "$it.key=$it.value"
           }
         }
@@ -127,6 +127,13 @@ node {
                 }
               }
               stage('Run Validation Tests') {
+                if (CAPTURE_IMAGES) {
+                  sh "mkdir ./validation/images"
+                  sh "docker run -d --name imageCapturer -v ./validation/config.yaml:/app/config.yaml -v ./validation/images/:/app/images -t " +
+                  "${imageName} sh -c \"go build ../scripts/capture_images/capture_images.go && CATTLE_TEST_CONFIG=/app/config.yaml ./capture_images\""
+                  sleep(5) // Wait some time to guarantee the container is ready to process events.
+                }
+
                 try {
                   sh "docker run --name ${testContainer} -t --env-file ${envFile} " +
                   "${imageName} sh -c \"/root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
@@ -135,22 +142,46 @@ node {
                 } catch(err) {
                   echo 'Test run had failures. Collecting results...'
                 }
+
+                if (CAPTURE_IMAGES) {
+                  stage('Showing images used on this run') {
+                    sh "docker kill --signal SIGTERM imageCapturer && docker wait imageCapturer"
+                    try {
+                      final imagefiles = sh(script: 'ls -1 ./validation/images', returnStdout: true).split("\n").toList()
+                      if (imagefiles.isEmpty()) {
+                        echo "No image list found, showing docker logs:"
+                        final logs = sh("docker logs imageCapturer", returnStdout: true)
+                        echo "${logs}"
+                      } else {
+                        echo "else"
+                        imagefiles.each { file ->
+                          echo "Images used within cluster ${file}"
+                          def content = readFile("./validation/images/${file}")
+                          echo "${content}"
+                        }
+                      }
+                      sh "docker rm imageCapturer"
+                    } catch(err) {
+                      echo "Failed showing used images: ${err}"
+                    }
+                  }
+                }
               }
               stage('Test Report') {
                 sh "docker cp ${testContainer}:${rootPath}${testResultsOut} ."
                 step([$class: 'JUnitResultArchiver', testResults: "**/${testResultsOut}"])
                 sh "docker stop ${testContainer}"
                 sh "docker rm -v ${testContainer}"
-                sh "docker rmi -f ${imageName}" 
+                sh "docker rmi -f ${imageName}"
               }
-            } catch(err) {           
+            } catch(err) {
                 sh "docker stop ${testContainer}"
                 sh "docker rm -v ${testContainer}"
                 sh "docker rmi -f ${imageName}"
             } // catch error
-          } // dir 
+          } // dir
         } // withEnv
       } // creds
     } // folder properties
-  } // wrap 
+  } // wrap
 } // node
