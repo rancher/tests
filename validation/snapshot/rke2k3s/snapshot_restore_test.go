@@ -31,6 +31,28 @@ const (
 	windowsContainerImage = "mcr.microsoft.com/windows/servercore/iis"
 )
 
+var (
+	snapshotRestoreNone = &etcdsnapshot.Config{
+		UpgradeKubernetesVersion: "",
+		SnapshotRestore:          "none",
+		RecurringRestores:        1,
+	}
+
+	snapshotRestoreK8sVersion = &etcdsnapshot.Config{
+		UpgradeKubernetesVersion: "",
+		SnapshotRestore:          "kubernetesVersion",
+		RecurringRestores:        1,
+	}
+
+	snapshotRestoreAll = &etcdsnapshot.Config{
+		UpgradeKubernetesVersion:     "",
+		SnapshotRestore:              "all",
+		ControlPlaneConcurrencyValue: "15%",
+		WorkerConcurrencyValue:       "20%",
+		RecurringRestores:            1,
+	}
+)
+
 type SnapshotRestoreTestSuite struct {
 	suite.Suite
 	session       *session.Session
@@ -87,27 +109,23 @@ func (s *SnapshotRestoreTestSuite) SetupSuite() {
 	require.NoError(s.T(), err)
 }
 
-func (s *SnapshotRestoreTestSuite) TestSnapshotRestore() {
-	snapshotRestoreNone := &etcdsnapshot.Config{
-		UpgradeKubernetesVersion: "",
-		SnapshotRestore:          "none",
-		RecurringRestores:        1,
-	}
+func (s *SnapshotRestoreTestSuite) createAndVerifySnapshotRestoreByConfig(name string, etcdSnapshot *etcdsnapshot.Config, clusterID string) {
+	cluster, err := s.client.Steve.SteveType(stevetypes.Provisioning).ByID(clusterID)
+	require.NoError(s.T(), err)
 
-	snapshotRestoreK8sVersion := &etcdsnapshot.Config{
-		UpgradeKubernetesVersion: "",
-		SnapshotRestore:          "kubernetesVersion",
-		RecurringRestores:        1,
-	}
+	s.Run(name, func() {
+		err := etcdsnapshot.CreateAndValidateSnapshotRestore(s.client, cluster.Name, etcdSnapshot, containerImage)
+		require.NoError(s.T(), err)
+	})
 
-	snapshotRestoreAll := &etcdsnapshot.Config{
-		UpgradeKubernetesVersion:     "",
-		SnapshotRestore:              "all",
-		ControlPlaneConcurrencyValue: "15%",
-		WorkerConcurrencyValue:       "20%",
-		RecurringRestores:            1,
+	params := provisioning.GetProvisioningSchemaParams(s.client, s.cattleConfig)
+	err = qase.UpdateSchemaParameters(name, params)
+	if err != nil {
+		logrus.Warningf("Failed to upload schema parameters %s", err)
 	}
+}
 
+func (s *SnapshotRestoreTestSuite) TestSnapshotRestoreRKE2() {
 	tests := []struct {
 		name         string
 		etcdSnapshot *etcdsnapshot.Config
@@ -116,25 +134,24 @@ func (s *SnapshotRestoreTestSuite) TestSnapshotRestore() {
 		{"RKE2_Restore_ETCD", snapshotRestoreNone, s.rke2ClusterID},
 		{"RKE2_Restore_ETCD_K8sVersion", snapshotRestoreK8sVersion, s.rke2ClusterID},
 		{"RKE2_Restore_Upgrade_Strategy", snapshotRestoreAll, s.rke2ClusterID},
+	}
+	for _, tt := range tests {
+		s.createAndVerifySnapshotRestoreByConfig(tt.name, tt.etcdSnapshot, tt.clusterID)
+	}
+}
+
+func (s *SnapshotRestoreTestSuite) TestSnapshotRestoreK3S() {
+	tests := []struct {
+		name         string
+		etcdSnapshot *etcdsnapshot.Config
+		clusterID    string
+	}{
 		{"K3S_Restore_ETCD", snapshotRestoreNone, s.k3sClusterID},
 		{"K3S_Restore_ETCD_K8sVersion", snapshotRestoreK8sVersion, s.k3sClusterID},
 		{"K3S_Restore_Upgrade_Strategy", snapshotRestoreAll, s.k3sClusterID},
 	}
-
 	for _, tt := range tests {
-		cluster, err := s.client.Steve.SteveType(stevetypes.Provisioning).ByID(tt.clusterID)
-		require.NoError(s.T(), err)
-
-		s.Run(tt.name, func() {
-			err := etcdsnapshot.CreateAndValidateSnapshotRestore(s.client, cluster.Name, tt.etcdSnapshot, containerImage)
-			require.NoError(s.T(), err)
-		})
-
-		params := provisioning.GetProvisioningSchemaParams(s.client, s.cattleConfig)
-		err = qase.UpdateSchemaParameters(tt.name, params)
-		if err != nil {
-			logrus.Warningf("Failed to upload schema parameters %s", err)
-		}
+		s.createAndVerifySnapshotRestoreByConfig(tt.name, tt.etcdSnapshot, tt.clusterID)
 	}
 }
 

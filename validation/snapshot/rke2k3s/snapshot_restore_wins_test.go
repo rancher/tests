@@ -1,4 +1,4 @@
-//go:build validation || recurring || pit.weekly
+//go:build validation || recurring
 
 package rke2k3s
 
@@ -24,6 +24,10 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+)
+
+const (
+	windowsContainerImage = "mcr.microsoft.com/windows/servercore/iis"
 )
 
 type SnapshotRestoreWindowsTestSuite struct {
