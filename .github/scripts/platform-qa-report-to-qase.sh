@@ -11,6 +11,11 @@ if [ -z "$RESULTS_JSON" ] || [ -z "$PACKAGE_NAME" ] || [ -z "$QASE_TEST_RUN_ID" 
   exit 1
 fi
 
+if [ ! -f "$RESULTS_JSON" ]; then
+  echo "⚠️ No results file found at $RESULTS_JSON. Skipping Qase reporting."
+  exit 0
+fi
+
 if [ -z "$GITHUB_WORKSPACE" ]; then
   echo "❌ GITHUB_WORKSPACE must be set"
   exit 1
