@@ -26,10 +26,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-const (
-	windowsContainerImage = "mcr.microsoft.com/windows/servercore/iis"
-)
-
 type SnapshotRestoreWindowsTestSuite struct {
 	suite.Suite
 	session       *session.Session

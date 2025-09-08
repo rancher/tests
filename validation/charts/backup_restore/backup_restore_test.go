@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || extended || pit.weekly) && !sanity && !stress
+//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress
 
 package backup_restore
 

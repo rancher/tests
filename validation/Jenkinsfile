@@ -116,7 +116,8 @@ node {
                 dir("./validation") {
                   def filename = "config.yaml"
                   def configContents = env.CONFIG
-
+                  configContents = configContents.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+                  configContents = configContents.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
                   writeFile file: filename, text: configContents
                   env.CATTLE_TEST_CONFIG = rootPath+filename
                 }
