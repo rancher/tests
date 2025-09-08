@@ -24,8 +24,8 @@ PACKAGE_SAFE=$(echo "$PACKAGE_NAME" | tr '/' '_')
 PACKAGE_RESULTS_JSON="$RESULTS_DIR/results_${PACKAGE_SAFE}.json"
 cp "$RESULTS_JSON" "$PACKAGE_RESULTS_JSON"
 
-REPORTER_SCRIPT="${GITHUB_WORKSPACE}/rancher-tests/validation/pipeline/scripts/build_qase_reporter.sh"
-REPORTER_BINARY="${GITHUB_WORKSPACE}/rancher-tests/validation/reporter"
+REPORTER_SCRIPT="${GITHUB_WORKSPACE}/validation/pipeline/scripts/build_qase_reporter.sh"
+REPORTER_BINARY="${GITHUB_WORKSPACE}/validation/reporter"
 
 chmod +x "$REPORTER_SCRIPT"
 "$REPORTER_SCRIPT" || { echo "❌ Failed to build Qase reporter"; exit 1; }
@@ -41,7 +41,7 @@ chmod +x "$REPORTER_BINARY"
 export QASE_TEST_RUN_ID QASE_AUTOMATION_TOKEN
 "$REPORTER_BINARY" --results results.json
 
-rm -f "${GITHUB_WORKSPACE}/rancher-tests/results.xml" "${GITHUB_WORKSPACE}/rancher-tests/results.json"
+rm -f "${GITHUB_WORKSPACE}/results.xml" "${GITHUB_WORKSPACE}/results.json"
 rm -rf "$RESULTS_DIR"
 
 echo "✅ Test Results have been published to Qase for package: $PACKAGE_NAME"
