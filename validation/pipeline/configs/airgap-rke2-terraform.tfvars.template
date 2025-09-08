@@ -1,0 +1,124 @@
+# Airgap RKE2 Terraform Variables Template
+# Copy this file and customize for your environment
+
+# AWS Configuration
+aws_access_key = "${AWS_ACCESS_KEY_ID}"
+aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
+aws_region = "${AWS_REGION}"
+aws_availability_zones = ["${AWS_REGION}a", "${AWS_REGION}b", "${AWS_REGION}c"]
+
+# VPC Configuration
+aws_vpc = "${AWS_VPC}"
+aws_subnet_a = "${AWS_SUBNET_A}"
+aws_subnet_b = "${AWS_SUBNET_B}"
+aws_subnet_c = "${AWS_SUBNET_C}"
+aws_security_groups = "${AWS_SECURITY_GROUPS}"
+
+# Instance Configuration
+aws_ami = "${AWS_AMI}"  # Ubuntu 20.04 LTS or similar
+aws_user = "ubuntu"
+aws_hostname_prefix = "airgap-rke2"
+
+# SSH Configuration
+aws_ssh_key_name = "${AWS_SSH_KEY_NAME}"
+aws_ssh_key_path = "/root/.ssh/jenkins-elliptic-validation.pem"
+
+# Bastion Host Configuration
+create_bastion = true
+bastion_instance_type = "t3.medium"
+bastion_volume_size = 50
+bastion_volume_type = "gp3"
+
+# RKE2 Server Nodes Configuration
+server_instance_type = "t3.xlarge"
+server_instance_count = 3
+server_volume_size = 100
+server_volume_type = "gp3"
+server_spot_instances = false
+
+# RKE2 Agent Nodes Configuration
+agent_instance_type = "t3.large"
+agent_instance_count = 2
+agent_volume_size = 80
+agent_volume_type = "gp3"
+agent_spot_instances = false
+
+# Private Registry Configuration
+create_registry = true
+registry_instance_type = "t3.large"
+registry_volume_size = 200
+registry_volume_type = "gp3"
+
+# Load Balancer Configuration
+create_nlb = true
+nlb_type = "network"
+nlb_internal = true
+
+# Network Configuration
+enable_private_subnets = true
+enable_nat_gateway = true
+single_nat_gateway = false
+
+# Security Configuration
+enable_flow_logs = true
+enable_vpc_endpoints = true
+
+# Monitoring Configuration
+enable_cloudwatch = true
+enable_detailed_monitoring = false
+
+# Backup Configuration
+enable_ebs_snapshots = true
+snapshot_retention_days = 7
+
+# Tags
+common_tags = {
+  Environment = "airgap-testing"
+  Project = "rancher-rke2-airgap"
+  Owner = "qa-team"
+  ManagedBy = "jenkins"
+  Purpose = "airgap-rke2-deployment"
+}
+
+# Instance Tags
+server_tags = {
+  Role = "rke2-server"
+  Type = "control-plane"
+}
+
+agent_tags = {
+  Role = "rke2-agent"
+  Type = "worker"
+}
+
+bastion_tags = {
+  Role = "bastion"
+  Type = "jump-host"
+}
+
+registry_tags = {
+  Role = "private-registry"
+  Type = "container-registry"
+}
+
+# Advanced Configuration
+enable_termination_protection = false
+enable_api_termination = false
+enable_delete_on_termination = true
+
+# Placement Groups
+create_placement_group = false
+placement_group_strategy = "cluster"
+
+# Enhanced Networking
+enable_enhanced_networking = true
+enable_sr_iov = false
+
+# Instance Metadata
+metadata_http_endpoint = "enabled"
+metadata_http_tokens = "required"
+metadata_http_put_response_hop_limit = 2
+
+# User Data Scripts
+enable_user_data = true
+user_data_base64 = true

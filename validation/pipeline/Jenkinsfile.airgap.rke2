@@ -1,0 +1,269 @@
+#!groovy
+node {
+    def rootPath = "/root/go/src/github.com/rancher/tests/"
+    def qaInfraWorkPath = "/root/go/src/github.com/rancher/qa-infra-automation"
+    def jobName = "${JOB_NAME}"
+    if (jobName.contains('/')) {
+      jobNames = jobName.split('/')
+      jobName = jobNames[jobNames.size() - 1]
+    }
+
+    def buildTestContainer = "${jobName}${env.BUILD_NUMBER}-airgap-rke2"
+    def imageName = "rancher-airgap-rke2-validation-${jobName}${env.BUILD_NUMBER}"
+    def validationVolume = "AirgapRKE2SharedVolume-${jobName}${env.BUILD_NUMBER}"
+    def envFile = ".env"
+    def branch = "main"
+    def qaInfraBranch = "main"
+    def qaInfraRepo = "https://github.com/rancher/qa-infra-automation"
+    def rancherRepo = "https://github.com/rancher/rancher-tests"
+
+    // Configuration files
+    def ansibleConfig = env.ANSIBLE_CONFIG
+    def terraformConfig = env.TERRAFORM_CONFIG
+    def ansibleVarsFilename = "vars.yaml"
+    def terraformVarsfilename = "cluster.tfvars"
+
+    // Airgap-specific variables
+    def bastionHost = ""
+    def privateRegistryUrl = ""
+    def rke2Version = env.RKE2_VERSION ?: "v1.28.8+rke2r1"
+    def rancherVersion = env.RANCHER_VERSION ?: "2.8.3"
+
+    if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
+      branch = "${env.BRANCH}"
+    }
+
+    if ("${env.RANCHER_REPO}" != "null" && "${env.RANCHER_REPO}" != "") {
+      rancherRepo = "${env.RANCHER_REPO}"
+    }
+
+    if ("${env.QA_INFRA_REPO_BRANCH}" != "null" && "${env.QA_INFRA_REPO_BRANCH}" != "") {
+      qaInfraBranch = "${env.QA_INFRA_REPO_BRANCH}"
+    }
+
+    if ("${env.QA_INFRA_REPO_URL}" != "null" && "${env.QA_INFRA_REPO_URL}" != "") {
+      qaInfraRepo = "${env.QA_INFRA_REPO_URL}"
+    }
+
+    def timeout = "120m"  // Airgap deployments typically take longer
+    if ("${env.TIMEOUT}" != "null" && "${env.TIMEOUT}" != "") {
+      timeout = "${env.TIMEOUT}"
+    }
+
+    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
+      withFolderProperties {
+        paramsMap = []
+        params.each {
+          if (it.value && it.value.trim() != "") {
+              paramsMap << "$it.key=$it.value"
+          }
+        }
+        withCredentials([ string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+                          string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+                          string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+                          string(credentialsId: 'RANCHER_SSH_KEY', variable: 'RANCHER_SSH_KEY'),
+                          string(credentialsId: 'RANCHER_REGISTRY_USER_NAME', variable: 'RANCHER_REGISTRY_USER_NAME'),
+                          string(credentialsId: 'RANCHER_REGISTRY_PASSWORD', variable: 'RANCHER_REGISTRY_PASSWORD'),
+                          string(credentialsId: 'ADMIN_PASSWORD', variable: 'ADMIN_PASSWORD'),
+                          string(credentialsId: 'USER_PASSWORD', variable: 'USER_PASSWORD'),
+                          string(credentialsId: 'PRIVATE_REGISTRY_URL', variable: 'PRIVATE_REGISTRY_URL'),
+                          string(credentialsId: 'PRIVATE_REGISTRY_USERNAME', variable: 'PRIVATE_REGISTRY_USERNAME'),
+                          string(credentialsId: 'PRIVATE_REGISTRY_PASSWORD', variable: 'PRIVATE_REGISTRY_PASSWORD'),
+                          string(credentialsId: 'BASTION_HOST', variable: 'BASTION_HOST'),
+                          string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')]) {
+
+        withEnv(paramsMap) {
+          stage('Checkout Repositories') {
+            deleteDir()
+
+            // Checkout rancher tests repository
+            dir("./tests") {
+              echo "Cloning rancher tests repository"
+              checkout([
+                      $class: 'GitSCM',
+                      branches: [[name: "*/${branch}"]],
+                      extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                      userRemoteConfigs: [[url: rancherRepo]]
+                    ])
+            }
+
+            // Checkout qa-infra-automation repository
+            dir('./qa-infra-automation') {
+              echo "Cloning qa-infra-automation repository"
+              checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${qaInfraBranch}"]],
+                    extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                    userRemoteConfigs: [[url: qaInfraRepo]]
+                  ])
+            }
+          }
+
+          dir ("./") {
+            stage('Configure Environment') {
+              // Replace environment variables in configurations
+              ansibleConfig = ansibleConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+              ansibleConfig = ansibleConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+              ansibleConfig = ansibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
+              ansibleConfig = ansibleConfig.replace('${PRIVATE_REGISTRY_URL}', env.PRIVATE_REGISTRY_URL)
+              ansibleConfig = ansibleConfig.replace('${PRIVATE_REGISTRY_USERNAME}', env.PRIVATE_REGISTRY_USERNAME)
+              ansibleConfig = ansibleConfig.replace('${PRIVATE_REGISTRY_PASSWORD}', env.PRIVATE_REGISTRY_PASSWORD)
+              ansibleConfig = ansibleConfig.replace('${RKE2_VERSION}', rke2Version)
+              ansibleConfig = ansibleConfig.replace('${RANCHER_VERSION}', rancherVersion)
+
+              terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+              terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+              terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION)
+              terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC)
+              terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS)
+
+              // Setup SSH keys
+              if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
+                dir("./tests/.ssh") {
+                  def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
+                  writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                  sh "chmod 600 ${AWS_SSH_KEY_NAME}"
+                }
+              }
+
+              // Write configuration files
+              dir("./qa-infra-automation") {
+                dir ("./ansible") {
+                  writeFile file: ansibleVarsFilename, text: ansibleConfig
+                }
+                dir ("./terraform/aws/cluster_nodes") {
+                  writeFile file: terraformVarsfilename, text: terraformConfig
+                }
+              }
+
+              // Configure environment
+              dir ("./") {
+                sh "./tests/validation/configure.sh"
+                sh "docker build . -f ./tests/validation/Dockerfile.e2e -t ${imageName}"
+                sh "docker volume create --name ${validationVolume}"
+              }
+            }
+
+            stage('Setup Airgap Infrastructure') {
+              try {
+                echo "Setting up airgap infrastructure with Terraform and Ansible"
+                sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
+                "${imageName} sh -c \"cd ${qaInfraWorkPath} && " +
+                "echo 'Starting Terraform infrastructure provisioning...' && " +
+                "terraform -chdir=terraform/aws/cluster_nodes init -input=false && " +
+                "terraform -chdir=terraform/aws/cluster_nodes workspace new jenkins_airgap_workspace || terraform -chdir=terraform/aws/cluster_nodes workspace select jenkins_airgap_workspace && " +
+                "export TF_WORKSPACE=jenkins_airgap_workspace && " +
+                "terraform -chdir=terraform/aws/cluster_nodes apply -auto-approve -var-file=cluster.tfvars && " +
+                "echo 'Terraform infrastructure provisioned successfully'\""
+              } catch(err) {
+                  echo "Infrastructure setup failed: ${err}"
+                  sh "docker stop ${buildTestContainer} || true"
+                  sh "docker rm -v ${buildTestContainer} || true"
+                  sh "docker volume rm -f ${validationVolume} || true"
+                  error "Infrastructure setup failed."
+              }
+            }
+
+            stage('Deploy RKE2 Airgap Cluster') {
+              try {
+                echo "Deploying RKE2 cluster in airgap environment"
+                sh "docker exec ${buildTestContainer} sh -c \"cd ${qaInfraWorkPath} && " +
+                "export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg && " +
+                "export ANSIBLE_PRIVATE_KEY_FILE=/root/.ssh/jenkins-elliptic-validation.pem && " +
+                "echo 'Starting RKE2 airgap deployment...' && " +
+                "ansible-playbook -i ansible/rke2/terraform-inventory.yml ansible/rke2/airgap/rke2-airgap-setup.yml -vvvv -e @ansible/vars.yaml && " +
+                "echo 'RKE2 airgap cluster deployed successfully'\""
+              } catch(err) {
+                  echo "RKE2 deployment failed: ${err}"
+                  // Attempt cleanup on failure
+                  sh "docker exec ${buildTestContainer} sh -c \"cd ${qaInfraWorkPath} && " +
+                  "terraform -chdir=terraform/aws/cluster_nodes destroy -auto-approve -var-file=cluster.tfvars || true\""
+                  sh "docker stop ${buildTestContainer} || true"
+                  sh "docker rm -v ${buildTestContainer} || true"
+                  sh "docker volume rm -f ${validationVolume} || true"
+                  error "RKE2 airgap deployment failed."
+              }
+            }
+
+            stage('Deploy Rancher on Airgap Cluster') {
+              try {
+                echo "Deploying Rancher on the airgap RKE2 cluster"
+                sh "docker exec ${buildTestContainer} sh -c \"cd ${qaInfraWorkPath} && " +
+                "export KUBECONFIG=ansible/rke2/kubeconfig.yaml && " +
+                "echo 'Starting Rancher airgap deployment...' && " +
+                "ansible-playbook ansible/rancher/rancher-airgap-playbook.yml -vvvv -e @ansible/vars.yaml && " +
+                "echo 'Rancher deployed successfully on airgap cluster'\""
+              } catch(err) {
+                  echo "Rancher deployment failed: ${err}"
+                  // Attempt cleanup on failure
+                  sh "docker exec ${buildTestContainer} sh -c \"cd ${qaInfraWorkPath} && " +
+                  "terraform -chdir=terraform/aws/cluster_nodes destroy -auto-approve -var-file=cluster.tfvars || true\""
+                  sh "docker stop ${buildTestContainer} || true"
+                  sh "docker rm -v ${buildTestContainer} || true"
+                  sh "docker volume rm -f ${validationVolume} || true"
+                  error "Rancher airgap deployment failed."
+              }
+            }
+
+            stage('Validate Airgap Deployment') {
+              try {
+                echo "Validating airgap deployment"
+                sh "docker exec ${buildTestContainer} sh -c \"cd ${qaInfraWorkPath} && " +
+                "export KUBECONFIG=ansible/rke2/kubeconfig.yaml && " +
+                "echo 'Running deployment validation...' && " +
+                "kubectl get nodes -o wide && " +
+                "kubectl get pods -A && " +
+                "kubectl get svc -A && " +
+                "echo 'Airgap deployment validation completed successfully'\""
+              } catch(err) {
+                  echo "Deployment validation failed: ${err}"
+                  // Continue with cleanup even if validation fails
+              }
+            }
+
+            stage('Cleanup Resources') {
+              if ("${env.CLEANUP_RESOURCES}" == "true" || "${env.CLEANUP_RESOURCES}" == "True") {
+                try {
+                    echo "Cleaning up airgap infrastructure"
+                    sh "docker exec ${buildTestContainer} sh -c \"cd ${qaInfraWorkPath} && " +
+                    "echo 'Starting infrastructure cleanup...' && " +
+                    "terraform -chdir=terraform/aws/cluster_nodes workspace select jenkins_airgap_workspace && " +
+                    "export TF_WORKSPACE=jenkins_airgap_workspace && " +
+                    "terraform -chdir=terraform/aws/cluster_nodes destroy -auto-approve -var-file=cluster.tfvars && " +
+                    "echo 'Infrastructure cleanup completed successfully'\""
+                } catch(err) {
+                  echo "Cleanup failed: ${err}"
+                  // Log cleanup failure but don't fail the build
+                }
+              } else {
+                echo "Skipping resource cleanup (CLEANUP_RESOURCES not set to true)"
+                echo "Remember to manually clean up resources if needed"
+              }
+            }
+
+            stage('Archive Results and Cleanup Containers') {
+              try {
+                // Copy any logs or results from the container
+                sh "docker cp ${buildTestContainer}:${qaInfraWorkPath}/ansible/rke2/kubeconfig.yaml ./kubeconfig.yaml || true"
+                sh "docker cp ${buildTestContainer}:${qaInfraWorkPath}/terraform/aws/cluster_nodes/terraform.tfstate ./terraform.tfstate || true"
+
+                // Archive important files
+                archiveArtifacts artifacts: 'kubeconfig.yaml,terraform.tfstate', allowEmptyArchive: true
+
+              } catch(err) {
+                echo "Failed to archive results: ${err}"
+              } finally {
+                // Always cleanup containers and volumes
+                echo 'Cleaning up Docker containers and volumes'
+                sh "docker stop ${buildTestContainer} || true"
+                sh "docker rm -v ${buildTestContainer} || true"
+                sh "docker rmi -f ${imageName} || true"
+                sh "docker volume rm -f ${validationVolume} || true"
+              }
+            }
+          } // dir
+        } // withEnv
+      } // creds
+    } // folder properties
+  } // wrap
+} // node
