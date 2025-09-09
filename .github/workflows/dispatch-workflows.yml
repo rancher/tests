@@ -17,7 +17,8 @@ jobs:
     strategy:
       matrix:
         workflow:
-          - recurring-tests.yml
+          - community-recurring-tests.yml
+          - prime-recurring-tests.yml
 
     steps:
       - name: Trigger test workflow ${{ matrix.workflow }}
