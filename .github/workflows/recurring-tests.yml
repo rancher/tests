@@ -324,6 +324,10 @@ jobs:
           suite: ${{ matrix.suite }}
         uses: ./.github/actions/run-hostbusters-test-suites
 
+      - name: Cleanup Infrastructure
+        working-directory: tfp-automation/modules/sanity/aws
+        run: terraform destroy -auto-approve
+
       - name: Refresh AWS credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@v4
@@ -383,7 +387,7 @@ jobs:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
-            
+
       - name: Mask Dockerhub Credentials
         run: |
           echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
@@ -608,6 +612,10 @@ jobs:
           suite: ${{ matrix.suite }}
         uses: ./.github/actions/run-hostbusters-test-suites
 
+      - name: Cleanup Infrastructure
+        working-directory: tfp-automation/modules/sanity/aws
+        run: terraform destroy -auto-approve
+
       - name: Refresh AWS credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@v4
@@ -667,7 +675,7 @@ jobs:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
-            
+
       - name: Mask Dockerhub Credentials
         run: |
           echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
@@ -892,6 +900,10 @@ jobs:
           suite: ${{ matrix.suite }}
         uses: ./.github/actions/run-hostbusters-test-suites
 
+      - name: Cleanup Infrastructure
+        working-directory: tfp-automation/modules/sanity/aws
+        run: terraform destroy -auto-approve
+
       - name: Refresh AWS credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@v4
@@ -950,7 +962,7 @@ jobs:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
-            
+
       - name: Mask Dockerhub Credentials
         run: |
           echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
@@ -1173,6 +1185,10 @@ jobs:
         with:
           suite: ${{ matrix.suite }}
         uses: ./.github/actions/run-hostbusters-test-suites
+
+      - name: Cleanup Infrastructure
+        working-directory: tfp-automation/modules/sanity/aws
+        run: terraform destroy -auto-approve
 
       - name: Refresh AWS credentials
         if: always()

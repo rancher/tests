@@ -94,7 +94,7 @@ jobs:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
-            
+
       - name: Mask Dockerhub Credentials
         run: |
           echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
@@ -275,7 +275,7 @@ jobs:
                 roles: ["windows"]
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
-          
+
           templateTest:
             repo:
               metadata:
@@ -318,6 +318,10 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
+
+      - name: Cleanup Infrastructure
+        working-directory: tfp-automation/modules/sanity/aws
+        run: terraform destroy -auto-approve
 
       - name: Refresh AWS credentials
         if: always()
@@ -599,6 +603,10 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
 
+      - name: Cleanup Infrastructure
+        working-directory: tfp-automation/modules/sanity/aws
+        run: terraform destroy -auto-approve
+
       - name: Refresh AWS credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@v4
@@ -835,7 +843,7 @@ jobs:
                 roles: ["windows"]
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
-          
+
           templateTest:
             repo:
               metadata:
@@ -878,6 +886,10 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
+
+      - name: Cleanup Infrastructure
+        working-directory: tfp-automation/modules/sanity/aws
+        run: terraform destroy -auto-approve
 
       - name: Refresh AWS credentials
         if: always()
@@ -1156,6 +1168,10 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
+
+      - name: Cleanup Infrastructure
+        working-directory: tfp-automation/modules/sanity/aws
+        run: terraform destroy -auto-approve
 
       - name: Refresh AWS credentials
         if: always()
