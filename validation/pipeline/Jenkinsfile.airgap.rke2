@@ -27,7 +27,7 @@ node {
     def bastionHost = ""
     def privateRegistryUrl = ""
     def rke2Version = env.RKE2_VERSION ?: "v1.28.8+rke2r1"
-    def rancherVersion = env.RANCHER_VERSION ?: "2.8.3"
+    def rancherVersion = env.RANCHER_VERSION ?: "v2.10-head"
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"
@@ -131,7 +131,7 @@ node {
                 dir ("./ansible") {
                   writeFile file: ansibleVarsFilename, text: ansibleConfig
                 }
-                dir ("./terraform/aws/cluster_nodes") {
+                dir ("./terraform/aws/modules/airgap") {
                   writeFile file: terraformVarsfilename, text: terraformConfig
                 }
               }
@@ -146,17 +146,17 @@ node {
 
                         stage('Setup Airgap Infrastructure') {
                           try {
-                            echo "Setting up airgap infrastructure with Terraform and Ansible"
-                            // Write the setup script to a file
+                            echo "Setting up airgap infrastructure with Terraform airgap modules"
+                            // Write the setup script to a file using qa-infra-automation terraform airgap modules
                             writeFile file: 'setup_airgap_infra.sh', text: """
             #!/bin/bash
             set -e
             cd ${qaInfraWorkPath}
             echo "Starting Terraform infrastructure provisioning..."
-            terraform -chdir=terraform/aws/cluster_nodes init -input=false
-            terraform -chdir=terraform/aws/cluster_nodes workspace new jenkins_airgap_workspace || terraform -chdir=terraform/aws/cluster_nodes workspace select jenkins_airgap_workspace
+            terraform -chdir=terraform/aws/modules/airgap init -input=false
+            terraform -chdir=terraform/aws/modules/airgap workspace new jenkins_airgap_workspace || terraform -chdir=terraform/aws/modules/airgap workspace select jenkins_airgap_workspace
             export TF_WORKSPACE=jenkins_airgap_workspace
-            terraform -chdir=terraform/aws/cluster_nodes apply -auto-approve -var-file=cluster.tfvars
+            terraform -chdir=terraform/aws/modules/airgap apply -auto-approve -var-file=cluster.tfvars
             echo "Terraform infrastructure provisioned successfully"
             """
                             sh "chmod +x setup_airgap_infra.sh"
@@ -173,19 +173,19 @@ node {
                         }
 
             stage('Deploy RKE2 Airgap Cluster') {
-                sh "docker exec -e QA_INFRA_WORK_PATH=${qaInfraWorkPath} ${buildTestContainer} sh -c \"cd \$QA_INFRA_WORK_PATH && " +
+              try {
                 echo "Deploying RKE2 cluster in airgap environment"
                 sh "docker exec ${buildTestContainer} sh -c \"cd ${qaInfraWorkPath} && " +
                 "export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg && " +
                 "export ANSIBLE_PRIVATE_KEY_FILE=/root/.ssh/jenkins-elliptic-validation.pem && " +
                 "echo 'Starting RKE2 airgap deployment...' && " +
-                "ansible-playbook -i ansible/rke2/terraform-inventory.yml ansible/rke2/airgap/rke2-airgap-setup.yml -vvvv -e @ansible/vars.yaml && " +
+                "ansible-playbook -i ansible/rke2/terraform-inventory.yml ansible/rke2/airgap/playbooks/deploy/rke2-tarball-playbook.yml -vvvv -e @ansible/vars.yaml && " +
                 "echo 'RKE2 airgap cluster deployed successfully'\""
               } catch(err) {
                   echo "RKE2 deployment failed: ${err}"
                   // Attempt cleanup on failure
                   sh "docker exec ${buildTestContainer} sh -c \"cd ${qaInfraWorkPath} && " +
-                  "terraform -chdir=terraform/aws/cluster_nodes destroy -auto-approve -var-file=cluster.tfvars || true\""
+                  "terraform -chdir=terraform/aws/modules/airgap destroy -auto-approve -var-file=cluster.tfvars || true\""
                   sh "docker stop ${buildTestContainer} || true"
                   sh "docker rm -v ${buildTestContainer} || true"
                   sh "docker volume rm -f ${validationVolume} || true"
@@ -199,13 +199,13 @@ node {
                 sh "docker exec ${buildTestContainer} sh -c \"cd ${qaInfraWorkPath} && " +
                 "export KUBECONFIG=ansible/rke2/kubeconfig.yaml && " +
                 "echo 'Starting Rancher airgap deployment...' && " +
-                "ansible-playbook ansible/rancher/rancher-airgap-playbook.yml -vvvv -e @ansible/vars.yaml && " +
+                "ansible-playbook ansible/rancher/playbooks/deploy/rancher-airgap-playbook.yml -vvvv -e @ansible/vars.yaml && " +
                 "echo 'Rancher deployed successfully on airgap cluster'\""
               } catch(err) {
                   echo "Rancher deployment failed: ${err}"
                   // Attempt cleanup on failure
                   sh "docker exec ${buildTestContainer} sh -c \"cd ${qaInfraWorkPath} && " +
-                  "terraform -chdir=terraform/aws/cluster_nodes destroy -auto-approve -var-file=cluster.tfvars || true\""
+                  "terraform -chdir=terraform/aws/modules/airgap destroy -auto-approve -var-file=cluster.tfvars || true\""
                   sh "docker stop ${buildTestContainer} || true"
                   sh "docker rm -v ${buildTestContainer} || true"
                   sh "docker volume rm -f ${validationVolume} || true"
@@ -235,9 +235,9 @@ node {
                     echo "Cleaning up airgap infrastructure"
                     sh "docker exec ${buildTestContainer} sh -c \"cd ${qaInfraWorkPath} && " +
                     "echo 'Starting infrastructure cleanup...' && " +
-                    "terraform -chdir=terraform/aws/cluster_nodes workspace select jenkins_airgap_workspace && " +
+                    "terraform -chdir=terraform/aws/modules/airgap workspace select jenkins_airgap_workspace && " +
                     "export TF_WORKSPACE=jenkins_airgap_workspace && " +
-                    "terraform -chdir=terraform/aws/cluster_nodes destroy -auto-approve -var-file=cluster.tfvars && " +
+                    "terraform -chdir=terraform/aws/modules/airgap destroy -auto-approve -var-file=cluster.tfvars && " +
                     "echo 'Infrastructure cleanup completed successfully'\""
                 } catch(err) {
                   echo "Cleanup failed: ${err}"
@@ -253,7 +253,7 @@ node {
               try {
                 // Copy any logs or results from the container
                 sh "docker cp ${buildTestContainer}:${qaInfraWorkPath}/ansible/rke2/kubeconfig.yaml ./kubeconfig.yaml || true"
-                sh "docker cp ${buildTestContainer}:${qaInfraWorkPath}/terraform/aws/cluster_nodes/terraform.tfstate ./terraform.tfstate || true"
+                sh "docker cp ${buildTestContainer}:${qaInfraWorkPath}/terraform/aws/modules/airgap/terraform.tfstate ./terraform.tfstate || true"
 
                 // Archive important files
                 archiveArtifacts artifacts: 'kubeconfig.yaml,terraform.tfstate', allowEmptyArchive: true
