@@ -23,9 +23,9 @@ const (
 	istioCanaryRevisionApp                             = "istiod-canary"
 	rancherIstioSecretName                      string = `application-collection`
 	istioAmbientModeSet                         string = `--set cni.enabled=true,ztunnel.enabled=true --set istiod.cni.enabled=false --set cni.profile=ambient,istiod.profile=ambient,ztunnel.profile=ambient`
-	istioGatewayModeSet                         string = `--set base.enabled=false,istiod.enabled=false --set gateway.enabled=true,gateway.namespaceOverride=default`
-	istioGatewayDiffNamespaceModeSet            string = `--set gateway.enabled=true,gateway.namespaceOverride=default`
-	istioCanaryUpgradeSet                       string = `--set istiod.revision=canary,base.defaultRevision=canary,gateway.namespaceOverride=default`
+	istioGatewayModeSet                         string = `--set base.enabled=false,istiod.enabled=false --set gateway.enabled=true,gateway.namespaceOverride=%s`
+	istioGatewayDiffNamespaceModeSet            string = `--set gateway.enabled=true,gateway.namespaceOverride=%s`
+	istioCanaryUpgradeSet                       string = `--set istiod.revision=canary,base.defaultRevision=canary,gateway.namespaceOverride=%s`
 	createIstioSecretCommand                    string = `kubectl create secret docker-registry %s --docker-server=dp.apps.rancher.io --docker-username=%s --docker-password=%s -n %s`
 	watchAndwaitInstallIstioAppCoCommand        string = `helm registry login dp.apps.rancher.io -u %s -p %s && helm install %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s} %s`
 	watchAndwaitUpgradeIstioAppCoUpgradeCommand string = `helm registry login dp.apps.rancher.io -u %s -p %s && helm upgrade %s oci://dp.apps.rancher.io/charts/istio -n %s --set global.imagePullSecrets={%s} %s`
@@ -87,7 +87,7 @@ func verifyCanaryRevision(client *rancher.Client, clusterID string) (string, err
 	return kubectl.Command(client, nil, clusterID, getCanaryCommand, logBufferSize)
 }
 
-func watchAndwaitCreateFleetGitRepo(client *rancher.Client, clusterName string, clusterID string, namespace string) (*v1.SteveAPIObject, error) {
+func watchAndwaitCreateFleetGitRepo(client *rancher.Client, clusterName string, clusterID string) (*v1.SteveAPIObject, error) {
 	secretName, err := createFleetSecret(client)
 	if err != nil {
 		return nil, err
@@ -99,10 +99,9 @@ func watchAndwaitCreateFleetGitRepo(client *rancher.Client, clusterName string, 
 			Namespace: fleet.Namespace,
 		},
 		Spec: v1alpha1.GitRepoSpec{
-			Repo:            fleet.ExampleRepo,
-			Branch:          fleet.BranchName,
-			TargetNamespace: namespace,
-			Paths:           []string{"appco"},
+			Repo:   fleet.ExampleRepo,
+			Branch: fleet.BranchName,
+			Paths:  []string{"appco"},
 			Targets: []v1alpha1.GitTarget{
 				{
 					ClusterName: clusterName,
