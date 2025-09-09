@@ -86,18 +86,22 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955  # v4.3.0
         with:
           submodules: recursive
 
       - name: Set up Go 
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: "./go.mod"
+          cache-dependency-path: "**/*.sum"
 
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
 
+      - name: Mask admin token
+        run: echo "::add-mask::$RANCHER_ADMIN_TOKEN"
+        
       - name: Create cattle config
         run: bash .github/scripts/platform-qa-create-cattle-config.sh
 
