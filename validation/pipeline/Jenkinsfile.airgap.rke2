@@ -15,7 +15,7 @@ node {
     def branch = "main"
     def qaInfraBranch = "main"
     def qaInfraRepo = "https://github.com/rancher/qa-infra-automation"
-    def rancherRepo = "https://github.com/rancher/rancher-tests"
+    def rancherRepo = "https://github.com/rancher/tests"
 
     // Configuration files
     def ansibleConfig = env.ANSIBLE_CONFIG
@@ -144,28 +144,36 @@ node {
               }
             }
 
-            stage('Setup Airgap Infrastructure') {
-              try {
-                echo "Setting up airgap infrastructure with Terraform and Ansible"
-                sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
-                "${imageName} sh -c \"cd ${qaInfraWorkPath} && " +
-                "echo 'Starting Terraform infrastructure provisioning...' && " +
-                "terraform -chdir=terraform/aws/cluster_nodes init -input=false && " +
-                "terraform -chdir=terraform/aws/cluster_nodes workspace new jenkins_airgap_workspace || terraform -chdir=terraform/aws/cluster_nodes workspace select jenkins_airgap_workspace && " +
-                "export TF_WORKSPACE=jenkins_airgap_workspace && " +
-                "terraform -chdir=terraform/aws/cluster_nodes apply -auto-approve -var-file=cluster.tfvars && " +
-                "echo 'Terraform infrastructure provisioned successfully'\""
-              } catch(err) {
-                  echo "Infrastructure setup failed: ${err}"
-                  sh "docker stop ${buildTestContainer} || true"
-                  sh "docker rm -v ${buildTestContainer} || true"
-                  sh "docker volume rm -f ${validationVolume} || true"
-                  error "Infrastructure setup failed."
-              }
-            }
+                        stage('Setup Airgap Infrastructure') {
+                          try {
+                            echo "Setting up airgap infrastructure with Terraform and Ansible"
+                            // Write the setup script to a file
+                            writeFile file: 'setup_airgap_infra.sh', text: """
+            #!/bin/bash
+            set -e
+            cd ${qaInfraWorkPath}
+            echo "Starting Terraform infrastructure provisioning..."
+            terraform -chdir=terraform/aws/cluster_nodes init -input=false
+            terraform -chdir=terraform/aws/cluster_nodes workspace new jenkins_airgap_workspace || terraform -chdir=terraform/aws/cluster_nodes workspace select jenkins_airgap_workspace
+            export TF_WORKSPACE=jenkins_airgap_workspace
+            terraform -chdir=terraform/aws/cluster_nodes apply -auto-approve -var-file=cluster.tfvars
+            echo "Terraform infrastructure provisioned successfully"
+            """
+                            sh "chmod +x setup_airgap_infra.sh"
+                            // Copy the script into the container and execute it
+                            sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} -e QA_INFRA_WORK_PATH=${qaInfraWorkPath} ${imageName} sh -c 'cat > /tmp/setup_airgap_infra.sh' < setup_airgap_infra.sh"
+                            sh "docker exec ${buildTestContainer} bash /tmp/setup_airgap_infra.sh"
+                          } catch(err) {
+                              echo "Infrastructure setup failed: ${err}"
+                              sh "docker stop ${buildTestContainer} || true"
+                              sh "docker rm -v ${buildTestContainer} || true"
+                              sh "docker volume rm -f ${validationVolume} || true"
+                              error "Infrastructure setup failed."
+                          }
+                        }
 
             stage('Deploy RKE2 Airgap Cluster') {
-              try {
+                sh "docker exec -e QA_INFRA_WORK_PATH=${qaInfraWorkPath} ${buildTestContainer} sh -c \"cd \$QA_INFRA_WORK_PATH && " +
                 echo "Deploying RKE2 cluster in airgap environment"
                 sh "docker exec ${buildTestContainer} sh -c \"cd ${qaInfraWorkPath} && " +
                 "export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg && " +
