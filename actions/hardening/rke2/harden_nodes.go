@@ -54,7 +54,7 @@ func HardenRKE2Nodes(nodes []*nodes.Node, nodeRoles []string) error {
 
 // PostRKE2HardeningConfig updates the default service account to disable automountServiceAccountToken and
 // patches the default service account in each namespace to disable automountServiceAccountToken
-func PostRKE2HardeningConfig(nodes []*nodes.Node, nodeRoles []string) error {
+func PostRKE2HardeningConfig(nodes []*nodes.Node, nodeRoles []string, pathToRepo string) error {
 	for key, node := range nodes {
 		if strings.Contains(nodeRoles[key], "--controlplane") {
 			logrus.Infof("Copying over files to node %s", node.NodeID)
@@ -63,7 +63,7 @@ func PostRKE2HardeningConfig(nodes []*nodes.Node, nodeRoles []string) error {
 				return err
 			}
 
-			dirPath := filepath.Join(userDir, "/go/src/github.com/rancher/tests/actions/hardening/rke2")
+			dirPath := filepath.Join(userDir, pathToRepo, "/actions/hardening/rke2")
 			err = node.SCPFileToNode(dirPath+"/account-update.yaml", "/home/"+node.SSHUser+"/account-update.yaml")
 			if err != nil {
 				return err

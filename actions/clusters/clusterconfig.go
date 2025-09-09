@@ -35,6 +35,7 @@ type ClusterConfig struct {
 	ClusterSSHTests                []provisioningInput.SSHTestCase                   `json:"clusterSSHTests" yaml:"clusterSSHTests"`
 	CRIDockerd                     bool                                              `json:"criDockerd" yaml:"criDockerd"`
 	RKE1CustomClusterDockerInstall *provisioningInput.RKE1CustomClusterDockerInstall `json:"rke1CustomClusterDockerInstall" yaml:"rke1CustomClusterDockerInstall"`
+	PathToRepo                     string                                            `json:"pathToRepo" yaml:"pathToRepo"`
 }
 
 // ConvertConfigToClusterConfig converts the config from (user) provisioning input to a cluster config
@@ -64,6 +65,7 @@ func ConvertConfigToClusterConfig(provisioningConfig *provisioningInput.Config) 
 	newConfig.PNI = provisioningConfig.PNI
 	newConfig.ClusterSSHTests = provisioningConfig.ClusterSSHTests
 	newConfig.RKE1CustomClusterDockerInstall = provisioningConfig.RKE1CustomClusterDockerInstall
+	newConfig.PathToRepo = provisioningConfig.PathToRepo
 
 	return &newConfig
 }

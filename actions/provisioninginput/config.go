@@ -231,6 +231,7 @@ type Config struct {
 	ClusterSSHTests                []SSHTestCase                            `json:"clusterSSHTests,omitempty" yaml:"clusterSSHTests,omitempty"`
 	CRIDockerd                     bool                                     `json:"criDockerd,omitempty" yaml:"criDockerd,omitempty"`
 	RKE1CustomClusterDockerInstall *RKE1CustomClusterDockerInstall          `json:"rke1CustomClusterDockerInstall,omitempty" yaml:"rke1CustomClusterDockerInstall,omitempty"`
+	PathToRepo                     string                                   `json:"pathToRepo" yaml:"pathToRepo"`
 }
 
 type TemplateConfig struct {

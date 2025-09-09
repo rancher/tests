@@ -14,7 +14,7 @@ const (
 )
 
 // HardenK3SNodes hardens the nodes by setting kernel parameters and creating the etcd user
-func HardenK3SNodes(nodes []*nodes.Node, nodeRoles []string, kubeVersion string) error {
+func HardenK3SNodes(nodes []*nodes.Node, nodeRoles []string, kubeVersion, pathToRepo string) error {
 	for key, node := range nodes {
 		logrus.Infof("Setting kernel parameters on node: %s", node.NodeID)
 		_, err := node.ExecuteCommand("sudo bash -c 'echo vm.panic_on_oom=0 >> " + sysctlConf + "'")
@@ -49,7 +49,7 @@ func HardenK3SNodes(nodes []*nodes.Node, nodeRoles []string, kubeVersion string)
 				return err
 			}
 
-			dirPath := filepath.Join(userDir, "/go/src/github.com/rancher/tests/actions/hardening/k3s")
+			dirPath := filepath.Join(userDir, pathToRepo, "/actions/hardening/k3s")
 			err = node.SCPFileToNode(dirPath+"/audit.yaml", "/home/"+node.SSHUser+"/audit.yaml")
 			if err != nil {
 				return err

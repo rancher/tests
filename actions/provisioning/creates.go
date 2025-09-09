@@ -344,7 +344,7 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 
 	if clustersConfig.Hardened {
 		if strings.Contains(clustersConfig.KubernetesVersion, shepherdclusters.K3SClusterType.String()) {
-			err = k3sHardening.HardenK3SNodes(nodes, rolesPerNode, clustersConfig.KubernetesVersion)
+			err = k3sHardening.HardenK3SNodes(nodes, rolesPerNode, clustersConfig.KubernetesVersion, clustersConfig.PathToRepo)
 			if err != nil {
 				return nil, err
 			}
@@ -356,7 +356,7 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 				return nil, err
 			}
 		} else {
-			err = rke2Hardening.PostRKE2HardeningConfig(nodes, rolesPerNode)
+			err = rke2Hardening.PostRKE2HardeningConfig(nodes, rolesPerNode, clustersConfig.PathToRepo)
 			if err != nil {
 				return nil, err
 			}
