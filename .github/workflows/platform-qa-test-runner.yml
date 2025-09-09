@@ -99,9 +99,13 @@ jobs:
         run: go install gotest.tools/gotestsum@latest
 
       - name: Mask and set admin token
+        shell: bash
         run: |
-          echo "::add-mask::${{ github.event.inputs.admin_token }}"
-          echo "RANCHER_ADMIN_TOKEN=${{ github.event.inputs.admin_token }}" >> $GITHUB_ENV
+          set +x
+          TOKEN="${{ github.event.inputs.admin_token }}"
+          echo "::add-mask::$TOKEN"
+          echo "RANCHER_ADMIN_TOKEN=$TOKEN" >> $GITHUB_ENV
+          set -x
         
       - name: Create cattle config
         run: bash .github/scripts/platform-qa-create-cattle-config.sh
