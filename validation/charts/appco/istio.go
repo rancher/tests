@@ -87,7 +87,7 @@ func verifyCanaryRevision(client *rancher.Client, clusterID string) (string, err
 	return kubectl.Command(client, nil, clusterID, getCanaryCommand, logBufferSize)
 }
 
-func watchAndwaitCreateFleetGitRepo(client *rancher.Client, clusterName string, clusterID string) (*v1.SteveAPIObject, error) {
+func watchAndwaitCreateFleetGitRepo(client *rancher.Client, clusterName string, clusterID string, namespace string) (*v1.SteveAPIObject, error) {
 	secretName, err := createFleetSecret(client)
 	if err != nil {
 		return nil, err
@@ -99,9 +99,10 @@ func watchAndwaitCreateFleetGitRepo(client *rancher.Client, clusterName string, 
 			Namespace: fleet.Namespace,
 		},
 		Spec: v1alpha1.GitRepoSpec{
-			Repo:   fleet.ExampleRepo,
-			Branch: fleet.BranchName,
-			Paths:  []string{"appco"},
+			Repo:            fleet.ExampleRepo,
+			Branch:          fleet.BranchName,
+			TargetNamespace: namespace,
+			Paths:           []string{"appco"},
 			Targets: []v1alpha1.GitTarget{
 				{
 					ClusterName: clusterName,

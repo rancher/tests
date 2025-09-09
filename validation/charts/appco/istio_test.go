@@ -165,7 +165,7 @@ func (i *IstioTestSuite) TestInPlaceUpgrade() {
 
 func (i *IstioTestSuite) TestFleetInstallation() {
 	i.T().Log("Creating Fleet repo")
-	repoObject, err := watchAndwaitCreateFleetGitRepo(i.client, i.clusterName, i.cluster.ID)
+	repoObject, err := watchAndwaitCreateFleetGitRepo(i.client, i.clusterName, i.cluster.ID, charts.RancherIstioNamespace)
 	require.NoError(i.T(), err)
 
 	log.Info("Getting GitRepoStatus")
