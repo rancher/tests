@@ -54,8 +54,12 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Mask admin token
-        run: echo "::add-mask::$RANCHER_ADMIN_TOKEN"
+      - name: Mask admin tokens
+        run: |
+          IFS=',' read -ra TOKENS <<< "${{ github.event.inputs.admin_tokens }}"
+          for token in "${TOKENS[@]}"; do
+            echo "::add-mask::$token"
+          done
 
       - name: Flatten package list (only if recursive)
         id: flatten-pkg

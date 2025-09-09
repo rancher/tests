@@ -50,7 +50,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RANCHER_HOST: ${{ github.event.inputs.rancher_host }}
-      RANCHER_ADMIN_TOKEN: ${{ github.event.inputs.admin_token }}
       CLUSTER_NAME: ${{ github.event.inputs.cluster_name }}
       TEST_PACKAGES: ${{ github.event.inputs.test_packages }}
       RUN_ALL_TESTS: ${{ github.event.inputs.run_all_tests }}
@@ -65,8 +64,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Mask admin token
-        run: echo "::add-mask::$RANCHER_ADMIN_TOKEN"
+      - name: Mask and set admin token
+        run: |
+          echo "::add-mask::${{ github.event.inputs.admin_token }}"
+          echo "RANCHER_ADMIN_TOKEN=${{ github.event.inputs.admin_token }}" >> $GITHUB_ENV
 
       - name: Parse current and remaining packages
         id: parse

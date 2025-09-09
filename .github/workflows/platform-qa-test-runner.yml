@@ -73,7 +73,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RANCHER_HOST: ${{ github.event.inputs.rancher_host }}
-      RANCHER_ADMIN_TOKEN: ${{ github.event.inputs.admin_token }}
       CLUSTER_NAME: ${{ github.event.inputs.cluster_name }}
       KUBERNETES_VERSION: ${{ github.event.inputs.kubernetes_version }}
       TEST_PACKAGE: ${{ github.event.inputs.test_package }}
@@ -99,8 +98,10 @@ jobs:
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
 
-      - name: Mask admin token
-        run: echo "::add-mask::$RANCHER_ADMIN_TOKEN"
+      - name: Mask and set admin token
+        run: |
+          echo "::add-mask::${{ github.event.inputs.admin_token }}"
+          echo "RANCHER_ADMIN_TOKEN=${{ github.event.inputs.admin_token }}" >> $GITHUB_ENV
         
       - name: Create cattle config
         run: bash .github/scripts/platform-qa-create-cattle-config.sh
@@ -108,7 +109,6 @@ jobs:
       - name: Get Rancher version
         run: bash .github/scripts/platform-qa-get-rancher-version.sh
         env:
-          RANCHER_ADMIN_TOKEN: ${{ env.RANCHER_ADMIN_TOKEN }}
           RANCHER_HOST: ${{ env.RANCHER_HOST }}
 
       - name: Run all tests in package
