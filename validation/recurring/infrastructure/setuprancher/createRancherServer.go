@@ -58,7 +58,9 @@ func setupRancher(t *testing.T) (*rancher.Client, error) {
 		cleanup.Cleanup(nil, terraformOptions, keyPath)
 	}
 
-	provisioning.VerifyRancherVersion(t, rancherConfig.Host, standaloneConfig.RancherTagVersion)
+	if standaloneConfig.RancherTagVersion != "head" {
+		provisioning.VerifyRancherVersion(t, rancherConfig.Host, standaloneConfig.RancherTagVersion)
+	}
 
 	return client, err
 }
