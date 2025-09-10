@@ -1,0 +1,749 @@
+#!/usr/bin/env groovy
+
+/**
+ * Improved Rancher Airgap RKE2 Validation Pipeline
+ * 
+ * This pipeline deploys and validates Rancher in an airgap RKE2 environment
+ * with enhanced error handling, security, and maintainability.
+ */
+
+pipeline {
+    agent any
+    
+    // Global pipeline options
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 3, unit: 'HOURS')
+        timestamps()
+        ansiColor('xterm')
+        skipStagesAfterUnstable()
+        retry(1)
+    }
+    
+    // Environment-specific parameters
+    parameters {
+        choice(
+            name: 'RKE2_VERSION',
+            choices: ['v1.28.8+rke2r1', 'v1.29.5+rke2r1', 'v1.30.2+rke2r1'],
+            description: 'RKE2 version to deploy'
+        )
+        choice(
+            name: 'RANCHER_VERSION',
+            choices: ['head', 'v2.10-head', 'v2.11.0', 'v2.9-head'],
+            description: 'Rancher version to deploy'
+        )
+        string(
+            name: 'RANCHER_REPO',
+            defaultValue: 'https://github.com/rancher/tests',
+            description: 'URL of rancher/tests repository'
+        )
+        string(
+            name: 'BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of rancher/tests repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_URL',
+            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            description: 'URL of qa-infra-automation repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-infra-automation repository'
+        )
+        booleanParam(
+            name: 'CLEANUP_RESOURCES',
+            defaultValue: true,
+            description: 'Clean up AWS resources after deployment'
+        )
+        booleanParam(
+            name: 'PARALLEL_EXECUTION',
+            defaultValue: true,
+            description: 'Enable parallel execution where possible'
+        )
+        choice(
+            name: 'LOG_LEVEL',
+            choices: ['INFO', 'DEBUG', 'VERBOSE'],
+            description: 'Pipeline logging level'
+        )
+    }
+    
+    // Global environment variables
+    environment {
+        // Repository configurations - set dynamically in setupDynamicEnvironment()
+        RANCHER_REPO = ""
+        QA_INFRA_REPO = ""
+        
+        // Path configurations
+        ROOT_PATH = "/root/go/src/github.com/rancher/tests/"
+        QA_INFRA_WORK_PATH = "/root/go/src/github.com/rancher/qa-infra-automation"
+        
+        // Computed values
+        JOB_SHORT_NAME = "${getShortJobName()}"
+        BUILD_CONTAINER_NAME = "${JOB_SHORT_NAME}${BUILD_NUMBER}-airgap-rke2"
+        IMAGE_NAME = "rancher-airgap-rke2-validation-${JOB_SHORT_NAME}${BUILD_NUMBER}"
+        VALIDATION_VOLUME = "AirgapRKE2SharedVolume-${JOB_SHORT_NAME}${BUILD_NUMBER}"
+        
+        // Configuration files
+        ANSIBLE_VARS_FILENAME = "vars.yaml"
+        TERRAFORM_VARS_FILENAME = "cluster.tfvars"
+        ENV_FILE = ".env"
+        
+        // Terraform workspace
+        TF_WORKSPACE = "jenkins_airgap_workspace_${BUILD_NUMBER}"
+        
+        // Timeouts (in minutes)
+        TERRAFORM_TIMEOUT = "30"
+        ANSIBLE_TIMEOUT = "45"
+        VALIDATION_TIMEOUT = "15"
+    }
+    
+    stages {
+        stage('Initialize Pipeline') {
+            steps {
+                script {
+                    // Validate parameters and environment
+                    validateParameters()
+                    
+                    // Set up dynamic variables
+                    setupDynamicEnvironment()
+                    
+                    // Clean workspace
+                    cleanWs()
+                    
+                    logInfo("Pipeline initialized successfully")
+                    logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
+                    logInfo("Docker image: ${env.IMAGE_NAME}")
+                    logInfo("Volume: ${env.VALIDATION_VOLUME}")
+                }
+            }
+            post {
+                failure {
+                    logError("Failed to initialize pipeline")
+                }
+            }
+        }
+        
+        stage('Checkout Repositories') {
+            parallel {
+                stage('Checkout Rancher Tests') {
+                    steps {
+                        dir('./tests') {
+                            logInfo("Cloning rancher tests repository from ${env.RANCHER_REPO}")
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${params.BRANCH}"]],
+                                extensions: [
+                                    [$class: 'CleanCheckout'],
+                                    [$class: 'CloneOption', depth: 1, shallow: true]
+                                ],
+                                userRemoteConfigs: [[
+                                    url: env.RANCHER_REPO,
+                                    credentialsId: 'github-token'
+                                ]]
+                            ])
+                        }
+                    }
+                }
+                
+                stage('Checkout QA Infrastructure') {
+                    steps {
+                        dir('./qa-infra-automation') {
+                            logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
+                                extensions: [
+                                    [$class: 'CleanCheckout'],
+                                    [$class: 'CloneOption', depth: 1, shallow: true]
+                                ],
+                                userRemoteConfigs: [[
+                                    url: env.QA_INFRA_REPO,
+                                    credentialsId: 'github-token'
+                                ]]
+                            ])
+                        }
+                    }
+                }
+            }
+            post {
+                failure {
+                    logError("Failed to checkout repositories")
+                    cleanupResources()
+                }
+            }
+        }
+        
+        stage('Configure Environment') {
+            steps {
+                script {
+                    logInfo("Configuring deployment environment")
+                    
+                    // Configure credentials and environment files
+                    withCredentials(getCredentialsList()) {
+                        // Generate configuration files
+                        generateConfigurationFiles()
+                        
+                        // Setup SSH keys securely
+                        setupSSHKeys()
+                        
+                        // Build Docker image with proper tagging
+                        buildDockerImage()
+                        
+                        // Create shared volume
+                        createSharedVolume()
+                    }
+                }
+            }
+            post {
+                failure {
+                    logError("Environment configuration failed")
+                    cleanupResources()
+                }
+            }
+        }
+        
+        stage('Infrastructure & Deployment') {
+            parallel {
+                stage('Setup Infrastructure') {
+                    steps {
+                        script {
+                            logInfo("Setting up airgap infrastructure with OpenTofu")
+                            
+                            timeout(time: Integer.parseInt(env.TERRAFORM_TIMEOUT), unit: 'MINUTES') {
+                                try {
+                                    // Execute infrastructure setup with proper error handling
+                                    executeInContainer([
+                                        "cd ${env.QA_INFRA_WORK_PATH}",
+                                        "echo 'Initializing OpenTofu...'",
+                                        "tofu -chdir=tofu/aws/modules/airgap init -input=false",
+                                        "tofu -chdir=tofu/aws/modules/airgap workspace new ${env.TF_WORKSPACE} || tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}",
+                                        "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+                                        "echo 'Applying infrastructure configuration...'",
+                                        "tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}",
+                                        "echo 'Infrastructure provisioned successfully'"
+                                    ])
+                                } catch (Exception e) {
+                                    logError("Infrastructure setup failed: ${e.message}")
+                                    // Attempt infrastructure cleanup on failure
+                                    destroyInfrastructure()
+                                    throw e
+                                }
+                            }
+                        }
+                    }
+                    post {
+                        failure {
+                            logError("Infrastructure setup failed")
+                        }
+                    }
+                }
+                
+                stage('Prepare Airgap Assets') {
+                    steps {
+                        script {
+                            logInfo("Preparing airgap container images and assets")
+                            
+                            // This stage can run in parallel with infrastructure
+                            // while Terraform sets up the base infrastructure
+                            executeInContainer([
+                                "cd ${env.QA_INFRA_WORK_PATH}",
+                                "echo 'Preparing RKE2 airgap assets...'",
+                                "ansible-playbook ansible/rke2/airgap/playbooks/prep/prepare-airgap-assets.yml -e @ansible/${env.ANSIBLE_VARS_FILENAME}",
+                                "echo 'Airgap assets prepared successfully'"
+                            ])
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy RKE2 Cluster') {
+            steps {
+                script {
+                    logInfo("Deploying RKE2 cluster in airgap environment")
+                    
+                    timeout(time: Integer.parseInt(env.ANSIBLE_TIMEOUT), unit: 'MINUTES') {
+                        try {
+                            executeInContainer([
+                                "cd ${env.QA_INFRA_WORK_PATH}",
+                                "export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg",
+                                "export ANSIBLE_PRIVATE_KEY_FILE=/root/.ssh/jenkins-elliptic-validation.pem",
+                                "echo 'Starting RKE2 airgap deployment...'",
+                                "ansible-playbook -i ansible/rke2/terraform-inventory.yml " +
+                                "ansible/rke2/airgap/playbooks/deploy/rke2-tarball-playbook.yml " +
+                                "${getAnsibleVerbosity()} -e @ansible/${env.ANSIBLE_VARS_FILENAME}",
+                                "echo 'RKE2 airgap cluster deployed successfully'"
+                            ])
+                        } catch (Exception e) {
+                            logError("RKE2 deployment failed: ${e.message}")
+                            throw e
+                        }
+                    }
+                }
+            }
+            post {
+                failure {
+                    logError("RKE2 deployment failed")
+                    // Continue to cleanup stage
+                }
+            }
+        }
+        
+        stage('Deploy Rancher') {
+            steps {
+                script {
+                    logInfo("Deploying Rancher on the airgap RKE2 cluster")
+                    
+                    timeout(time: Integer.parseInt(env.ANSIBLE_TIMEOUT), unit: 'MINUTES') {
+                        try {
+                            executeInContainer([
+                                "cd ${env.QA_INFRA_WORK_PATH}",
+                                "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
+                                "echo 'Starting Rancher airgap deployment...'",
+                                "ansible-playbook ansible/rancher/playbooks/deploy/rancher-airgap-playbook.yml " +
+                                "${getAnsibleVerbosity()} -e @ansible/${env.ANSIBLE_VARS_FILENAME}",
+                                "echo 'Rancher deployed successfully on airgap cluster'"
+                            ])
+                        } catch (Exception e) {
+                            logError("Rancher deployment failed: ${e.message}")
+                            throw e
+                        }
+                    }
+                }
+            }
+            post {
+                failure {
+                    logError("Rancher deployment failed")
+                }
+            }
+        }
+        
+        stage('Validate Deployment') {
+            parallel {
+                stage('Kubernetes Validation') {
+                    steps {
+                        script {
+                            logInfo("Validating Kubernetes cluster")
+                            
+                            timeout(time: Integer.parseInt(env.VALIDATION_TIMEOUT), unit: 'MINUTES') {
+                                executeInContainer([
+                                    "cd ${env.QA_INFRA_WORK_PATH}",
+                                    "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
+                                    "echo 'Validating cluster nodes...'",
+                                    "kubectl get nodes -o wide",
+                                    "echo 'Validating system pods...'",
+                                    "kubectl get pods -A --field-selector=status.phase!=Running",
+                                    "echo 'Validating services...'",
+                                    "kubectl get svc -A",
+                                    "echo 'Cluster validation completed successfully'"
+                                ])
+                            }
+                        }
+                    }
+                }
+                
+                stage('Rancher Validation') {
+                    steps {
+                        script {
+                            logInfo("Validating Rancher deployment")
+                            
+                            timeout(time: Integer.parseInt(env.VALIDATION_TIMEOUT), unit: 'MINUTES') {
+                                executeInContainer([
+                                    "cd ${env.QA_INFRA_WORK_PATH}",
+                                    "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
+                                    "echo 'Validating Rancher pods...'",
+                                    "kubectl get pods -n cattle-system",
+                                    "echo 'Validating Rancher services...'",
+                                    "kubectl get svc -n cattle-system",
+                                    "echo 'Checking Rancher ingress...'",
+                                    "kubectl get ingress -A",
+                                    "echo 'Rancher validation completed successfully'"
+                                ])
+                            }
+                        }
+                    }
+                }
+            }
+            post {
+                failure {
+                    logError("Deployment validation failed")
+                }
+                always {
+                    // Archive validation results regardless of success/failure
+                    archiveValidationResults()
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                logInfo("Starting post-build cleanup")
+                
+                // Archive important artifacts
+                archiveArtifacts([
+                    'kubeconfig.yaml',
+                    'terraform.tfstate',
+                    'ansible-logs.txt',
+                    'deployment-summary.json'
+                ])
+                
+                // Clean up resources
+                if (params.CLEANUP_RESOURCES) {
+                    cleanupInfrastructure()
+                } else {
+                    logInfo("Resource cleanup skipped (CLEANUP_RESOURCES=false)")
+                    logInfo("Remember to manually clean up AWS resources")
+                }
+                
+                // Always cleanup containers and volumes
+                cleanupContainersAndVolumes()
+            }
+        }
+        
+        success {
+            script {
+                logInfo("Pipeline completed successfully")
+                sendSlackNotification([
+                    color: 'good',
+                    message: "✅ Airgap RKE2 deployment succeeded for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+                ])
+            }
+        }
+        
+        failure {
+            script {
+                logError("Pipeline failed")
+                sendSlackNotification([
+                    color: 'danger',
+                    message: "❌ Airgap RKE2 deployment failed for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+                ])
+            }
+        }
+        
+        unstable {
+            script {
+                logWarning("Pipeline completed with warnings")
+                sendSlackNotification([
+                    color: 'warning',
+                    message: "⚠️ Airgap RKE2 deployment completed with warnings for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+                ])
+            }
+        }
+    }
+}
+
+/**
+ * HELPER FUNCTIONS
+ * These functions improve code reusability and maintainability
+ */
+
+def getShortJobName() {
+    def jobName = "${env.JOB_NAME}"
+    if (jobName.contains('/')) {
+        def jobNames = jobName.split('/')
+        return jobNames[jobNames.size() - 1]
+    }
+    return jobName
+}
+
+def validateParameters() {
+    // Validate required parameters
+    if (!params.RKE2_VERSION) {
+        error("RKE2_VERSION parameter is required")
+    }
+    if (!params.RANCHER_VERSION) {
+        error("RANCHER_VERSION parameter is required")
+    }
+    if (!params.RANCHER_REPO) {
+        error("RANCHER_REPO parameter is required")
+    }
+    if (!params.QA_INFRA_REPO_URL) {
+        error("QA_INFRA_REPO_URL parameter is required")
+    }
+    
+    // Validate repository URLs format
+    if (!params.RANCHER_REPO.startsWith('https://github.com/') && !params.RANCHER_REPO.startsWith('git@github.com:')) {
+        error("RANCHER_REPO must be a valid GitHub repository URL")
+    }
+    if (!params.QA_INFRA_REPO_URL.startsWith('https://github.com/') && !params.QA_INFRA_REPO_URL.startsWith('git@github.com:')) {
+        error("QA_INFRA_REPO_URL must be a valid GitHub repository URL")
+    }
+    
+    logInfo("Parameters validated successfully")
+}
+
+def setupDynamicEnvironment() {
+    // Set environment variables that depend on parameters
+    env.RKE2_VERSION = params.RKE2_VERSION
+    env.RANCHER_VERSION = params.RANCHER_VERSION
+    env.RANCHER_REPO = params.RANCHER_REPO
+    env.QA_INFRA_REPO = params.QA_INFRA_REPO_URL
+    
+    logInfo("Dynamic environment configured")
+    logInfo("Rancher repository: ${env.RANCHER_REPO}")
+    logInfo("QA Infrastructure repository: ${env.QA_INFRA_REPO}")
+}
+
+def getCredentialsList() {
+    return [
+        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+        string(credentialsId: 'RANCHER_SSH_KEY', variable: 'RANCHER_SSH_KEY'),
+        string(credentialsId: 'RANCHER_REGISTRY_USER_NAME', variable: 'RANCHER_REGISTRY_USER_NAME'),
+        string(credentialsId: 'RANCHER_REGISTRY_PASSWORD', variable: 'RANCHER_REGISTRY_PASSWORD'),
+        string(credentialsId: 'ADMIN_PASSWORD', variable: 'ADMIN_PASSWORD'),
+        string(credentialsId: 'USER_PASSWORD', variable: 'USER_PASSWORD'),
+        string(credentialsId: 'PRIVATE_REGISTRY_URL', variable: 'PRIVATE_REGISTRY_URL'),
+        string(credentialsId: 'PRIVATE_REGISTRY_USERNAME', variable: 'PRIVATE_REGISTRY_USERNAME'),
+        string(credentialsId: 'PRIVATE_REGISTRY_PASSWORD', variable: 'PRIVATE_REGISTRY_PASSWORD'),
+        string(credentialsId: 'BASTION_HOST', variable: 'BASTION_HOST'),
+        string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')
+    ]
+}
+
+def generateConfigurationFiles() {
+    logInfo("Generating configuration files")
+    
+    // Generate Ansible configuration with secure template replacement
+    def ansibleConfig = env.ANSIBLE_CONFIG
+    def configReplacements = [
+        '${AWS_SECRET_ACCESS_KEY}': env.AWS_SECRET_ACCESS_KEY,
+        '${AWS_ACCESS_KEY_ID}': env.AWS_ACCESS_KEY_ID,
+        '${ADMIN_PASSWORD}': env.ADMIN_PASSWORD,
+        '${PRIVATE_REGISTRY_URL}': env.PRIVATE_REGISTRY_URL,
+        '${PRIVATE_REGISTRY_USERNAME}': env.PRIVATE_REGISTRY_USERNAME,
+        '${PRIVATE_REGISTRY_PASSWORD}': env.PRIVATE_REGISTRY_PASSWORD,
+        '${RKE2_VERSION}': env.RKE2_VERSION,
+        '${RANCHER_VERSION}': env.RANCHER_VERSION
+    ]
+    
+    configReplacements.each { key, value ->
+        ansibleConfig = ansibleConfig.replace(key, value ?: '')
+    }
+    
+    // Generate Terraform configuration
+    def tofuConfig = env.TERRAFORM_CONFIG
+    def tfReplacements = [
+        '${AWS_SECRET_ACCESS_KEY}': env.AWS_SECRET_ACCESS_KEY,
+        '${AWS_ACCESS_KEY_ID}': env.AWS_ACCESS_KEY_ID,
+        '${AWS_REGION}': env.AWS_REGION,
+        '${AWS_VPC}': env.AWS_VPC,
+        '${AWS_SECURITY_GROUPS}': env.AWS_SECURITY_GROUPS
+    ]
+    
+    tfReplacements.each { key, value ->
+        tofuConfig = tofuConfig.replace(key, value ?: '')
+    }
+    
+    // Write configuration files
+    dir('./qa-infra-automation') {
+        dir('./ansible') {
+            writeFile file: env.ANSIBLE_VARS_FILENAME, text: ansibleConfig
+        }
+        dir('./tofu/aws/modules/airgap') {
+            writeFile file: env.TERRAFORM_VARS_FILENAME, text: tofuConfig
+        }
+    }
+    
+    logInfo("Configuration files generated successfully")
+}
+
+def setupSSHKeys() {
+    if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
+        logInfo("Setting up SSH keys")
+        
+        dir('./tests/.ssh') {
+            // Securely decode and write SSH key
+            def decodedKey = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
+            writeFile file: env.AWS_SSH_KEY_NAME, text: decodedKey
+            sh "chmod 600 ${env.AWS_SSH_KEY_NAME}"
+        }
+        
+        logInfo("SSH keys configured successfully")
+    }
+}
+
+def buildDockerImage() {
+    logInfo("Building Docker image: ${env.IMAGE_NAME}")
+    
+    dir('./') {
+        sh "./tests/validation/configure.sh"
+        sh """
+            docker build . \
+                -f ./tests/validation/Dockerfile.tofu.e2e \
+                -t ${env.IMAGE_NAME} \
+                --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+                --build-arg VCS_REF=\$(git rev-parse --short HEAD) \
+                --label "pipeline.build.number=${env.BUILD_NUMBER}" \
+                --label "pipeline.job.name=${env.JOB_NAME}"
+        """
+    }
+    
+    logInfo("Docker image built successfully")
+}
+
+def createSharedVolume() {
+    logInfo("Creating shared volume: ${env.VALIDATION_VOLUME}")
+    sh "docker volume create --name ${env.VALIDATION_VOLUME}"
+}
+
+def executeInContainer(commands) {
+    def commandString = commands.join(' && ')
+    def dockerCommand = """
+        docker run --rm \
+            -v ${env.VALIDATION_VOLUME}:/root \
+            --name ${env.BUILD_CONTAINER_NAME}-\$(date +%s) \
+            -t --env-file ${env.ENV_FILE} \
+            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
+            -e TF_WORKSPACE=${env.TF_WORKSPACE} \
+            ${env.IMAGE_NAME} \
+            sh -c '${commandString}'
+    """
+    
+    sh dockerCommand
+}
+
+def getAnsibleVerbosity() {
+    switch (params.LOG_LEVEL) {
+        case 'DEBUG':
+            return '-vvv'
+        case 'VERBOSE':
+            return '-vvvv'
+        default:
+            return '-v'
+    }
+}
+
+def destroyInfrastructure() {
+    logInfo("Destroying infrastructure")
+    
+    try {
+        executeInContainer([
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            "tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}",
+            "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+            "tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}",
+            "echo 'Infrastructure destroyed successfully'"
+        ])
+    } catch (Exception e) {
+        logError("Infrastructure destruction failed: ${e.message}")
+    }
+}
+
+def archiveValidationResults() {
+    logInfo("Archiving validation results")
+    
+    try {
+        // Copy artifacts from container
+        sh """
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/ansible/rke2/kubeconfig.yaml ./kubeconfig.yaml || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/terraform.tfstate ./terraform.tfstate || true
+        """
+        
+        // Generate deployment summary
+        def deploymentSummary = [
+            buildNumber: env.BUILD_NUMBER,
+            rke2Version: env.RKE2_VERSION,
+            rancherVersion: env.RANCHER_VERSION,
+            timestamp: new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'"),
+            status: currentBuild.currentResult ?: 'SUCCESS'
+        ]
+        
+        writeJSON file: 'deployment-summary.json', json: deploymentSummary
+        
+    } catch (Exception e) {
+        logError("Failed to archive validation results: ${e.message}")
+    }
+}
+
+def cleanupInfrastructure() {
+    logInfo("Cleaning up infrastructure resources")
+    destroyInfrastructure()
+}
+
+def cleanupContainersAndVolumes() {
+    logInfo("Cleaning up Docker containers and volumes")
+    
+    sh """
+        # Stop and remove any containers with our naming pattern
+        docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker stop || true
+        docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker rm -v || true
+        
+        # Remove the Docker image
+        docker rmi -f ${env.IMAGE_NAME} || true
+        
+        # Remove the shared volume
+        docker volume rm -f ${env.VALIDATION_VOLUME} || true
+        
+        # Clean up any dangling images and volumes
+        docker system prune -f || true
+    """
+}
+
+def archiveArtifacts(artifacts) {
+    try {
+        archiveArtifacts artifacts: artifacts.join(','), allowEmptyArchive: true
+        logInfo("Artifacts archived: ${artifacts.join(', ')}")
+    } catch (Exception e) {
+        logError("Failed to archive artifacts: ${e.message}")
+    }
+}
+
+def sendSlackNotification(config) {
+    if (env.SLACK_WEBHOOK) {
+        try {
+            def payload = [
+                channel: '#rancher-qa',
+                username: 'Jenkins',
+                color: config.color,
+                title: 'Airgap RKE2 Pipeline',
+                message: config.message,
+                fields: [
+                    [title: 'Job', value: env.JOB_NAME, short: true],
+                    [title: 'Build', value: env.BUILD_NUMBER, short: true],
+                    [title: 'RKE2 Version', value: env.RKE2_VERSION, short: true],
+                    [title: 'Rancher Version', value: env.RANCHER_VERSION, short: true]
+                ]
+            ]
+            
+            httpRequest(
+                httpMode: 'POST',
+                url: env.SLACK_WEBHOOK,
+                contentType: 'APPLICATION_JSON',
+                requestBody: groovy.json.JsonOutput.toJson(payload)
+            )
+            
+            logInfo("Slack notification sent successfully")
+        } catch (Exception e) {
+            logError("Failed to send Slack notification: ${e.message}")
+        }
+    }
+}
+
+/**
+ * LOGGING FUNCTIONS
+ * Provide structured logging with different levels
+ */
+
+def logInfo(message) {
+    echo "ℹ️ [INFO] ${new Date().format('HH:mm:ss')} - ${message}"
+}
+
+def logError(message) {
+    echo "❌ [ERROR] ${new Date().format('HH:mm:ss')} - ${message}"
+}
+
+def logWarning(message) {
+    echo "⚠️ [WARNING] ${new Date().format('HH:mm:ss')} - ${message}"
+}
+
+def logDebug(message) {
+    if (params.LOG_LEVEL == 'DEBUG' || params.LOG_LEVEL == 'VERBOSE') {
+        echo "🔍 [DEBUG] ${new Date().format('HH:mm:ss')} - ${message}"
+    }
+}
