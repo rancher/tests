@@ -57,10 +57,15 @@ func HardenRKE2Nodes(nodes []*nodes.Node, nodeRoles []string) error {
 func PostRKE2HardeningConfig(nodes []*nodes.Node, nodeRoles []string, pathToRepo string) error {
 	for key, node := range nodes {
 		if strings.Contains(nodeRoles[key], "--controlplane") {
-			logrus.Tracef("Copying over files to node %s", node.NodeID)
-			userDir, err := os.UserHomeDir()
-			if err != nil {
-				return err
+			logrus.Infof("Copying over files to node %s", node.NodeID)
+
+			var err error
+			userDir := os.Getenv("GOPATH")
+			if userDir == "" {
+				userDir, err = os.UserHomeDir()
+				if err != nil {
+					return err
+				}
 			}
 
 			dirPath := filepath.Join(userDir, pathToRepo, "/actions/hardening/rke2")

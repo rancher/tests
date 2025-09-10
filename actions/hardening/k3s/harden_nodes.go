@@ -43,10 +43,13 @@ func HardenK3SNodes(nodes []*nodes.Node, nodeRoles []string, kubeVersion, pathTo
 		}
 
 		if strings.Contains(nodeRoles[key], "--controlplane") {
-			logrus.Tracef("Copying over files to node %s", node.NodeID)
-			userDir, err := os.UserHomeDir()
-			if err != nil {
-				return err
+			logrus.Infof("Copying over files to node %s", node.NodeID)
+			userDir := os.Getenv("GOPATH")
+			if userDir == "" {
+				userDir, err = os.UserHomeDir()
+				if err != nil {
+					return err
+				}
 			}
 
 			dirPath := filepath.Join(userDir, pathToRepo, "/actions/hardening/k3s")
