@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.k3s || sanity || pit.daily) && !stress && !extended
+//go:build (validation || infra.any || cluster.k3s || sanity) && !stress && !extended
 
 package observability
 

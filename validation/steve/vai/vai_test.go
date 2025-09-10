@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || extended || pit.daily) && !stress && !2.8 && !2.9 && !2.10 && !2.11
+//go:build (validation || infra.any || cluster.any || extended) && !stress && !2.8 && !2.9 && !2.10 && !2.11
 
 package vai
 
@@ -56,10 +56,7 @@ func (v *VaiTestSuite) SetupSuite() {
 	v.client = client
 	v.steveClient = client.Steve
 
-	clusterName := client.RancherConfig.ClusterName
-	require.NotEmptyf(v.T(), clusterName, "Cluster name to install should be set")
-
-	clusterID, err := clusters.GetClusterIDByName(v.client, clusterName)
+	clusterID, err := clusters.GetClusterIDByName(v.client, "local")
 	require.NoError(v.T(), err, "Error getting cluster ID")
 
 	v.cluster, err = v.client.Management.Cluster.ByID(clusterID)
