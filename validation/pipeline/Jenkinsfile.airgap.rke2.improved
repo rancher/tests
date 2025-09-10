@@ -22,15 +22,15 @@ pipeline {
     
     // Environment-specific parameters
     parameters {
-        choice(
+        string(
             name: 'RKE2_VERSION',
-            choices: ['v1.28.8+rke2r1', 'v1.29.5+rke2r1', 'v1.30.2+rke2r1'],
-            description: 'RKE2 version to deploy'
+            defaultValue: 'v1.28.8+rke2r1',
+            description: 'RKE2 version to deploy (e.g., v1.28.8+rke2r1, v1.29.5+rke2r1, v1.30.2+rke2r1)'
         )
-        choice(
+        string(
             name: 'RANCHER_VERSION',
-            choices: ['head', 'v2.10-head', 'v2.11.0', 'v2.9-head'],
-            description: 'Rancher version to deploy'
+            defaultValue: 'v2.10-head',
+            description: 'Rancher version to deploy (e.g., head, v2.10-head, v2.11.0, v2.9-head)'
         )
         string(
             name: 'RANCHER_TEST_REPO_URL',
@@ -72,8 +72,8 @@ pipeline {
     // Global environment variables
     environment {
         // Repository configurations - set dynamically in setupDynamicEnvironment()
-        RANCHER_TEST_REPO_URL = ""
-        QA_INFRA_REPO = ""
+        RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
+        QA_INFRA_REPO = "${params.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation'}"
         
         // Path configurations
         ROOT_PATH = "/root/go/src/github.com/rancher/tests/"
@@ -480,10 +480,10 @@ def setupDynamicEnvironment() {
     // Set environment variables that depend on parameters
     env.RKE2_VERSION = params.RKE2_VERSION
     env.RANCHER_VERSION = params.RANCHER_VERSION
-    env.RANCHER_TEST_REPO_URL = params.RANCHER_TEST_REPO_URL
-    env.QA_INFRA_REPO = params.QA_INFRA_REPO_URL
     
     logInfo("Dynamic environment configured")
+    logInfo("RKE2 Version: ${env.RKE2_VERSION}")
+    logInfo("Rancher Version: ${env.RANCHER_VERSION}")
     logInfo("Rancher repository: ${env.RANCHER_TEST_REPO_URL}")
     logInfo("QA Infrastructure repository: ${env.QA_INFRA_REPO}")
 }
