@@ -55,7 +55,7 @@ jobs:
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.11.')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ inputs.rancher_version || github.event.inputs.rancher-version-2-11 }}
     runs-on: ubuntu-latest
-    environment: staging-alpha
+    environment: staging
     strategy:
       matrix:
         suite:
@@ -144,6 +144,13 @@ jobs:
           rancher-version: ${{ env.RANCHER_VERSION }}
           fallback-repo: ${{ secrets.RANCHER_REPO }}
 
+      - name: Set Rancher chart url
+        uses: ./.github/actions/set-rancher-chart-url
+        with:
+          rancher-repo: ${{ env.RANCHER_REPO }}
+          staging-chart-url: ${{ secrets.STAGING_RANCHER_HELM_CHART_URL }}
+          fallback-chart-url: ${{ secrets.RANCHER_HELM_CHART_URL }}
+
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
@@ -197,7 +204,7 @@ jobs:
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
               rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
-              rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
+              rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
@@ -319,8 +326,9 @@ jobs:
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
+        if: always()
         working-directory: tfp-automation/modules/sanity/aws
-        run: terraform destroy -auto-approve
+        run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
         if: always()
@@ -343,7 +351,7 @@ jobs:
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.10.')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ inputs.rancher_version || github.event.inputs.rancher-version-2-10 }}
     runs-on: ubuntu-latest
-    environment: staging-alpha
+    environment: staging
     strategy:
       matrix:
         suite:
@@ -432,6 +440,13 @@ jobs:
           rancher-version: ${{ env.RANCHER_VERSION }}
           fallback-repo: ${{ secrets.RANCHER_REPO }}
 
+      - name: Set Rancher chart url
+        uses: ./.github/actions/set-rancher-chart-url
+        with:
+          rancher-repo: ${{ env.RANCHER_REPO }}
+          staging-chart-url: ${{ secrets.STAGING_RANCHER_HELM_CHART_URL }}
+          fallback-chart-url: ${{ secrets.RANCHER_HELM_CHART_URL }}
+
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
@@ -485,7 +500,7 @@ jobs:
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
               rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
-              rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
+              rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
@@ -607,8 +622,9 @@ jobs:
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
+        if: always()
         working-directory: tfp-automation/modules/sanity/aws
-        run: terraform destroy -auto-approve
+        run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
         if: always()
@@ -630,7 +646,7 @@ jobs:
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.9.')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ inputs.rancher_version || github.event.inputs.rancher-version-2-9 }}
     runs-on: ubuntu-latest
-    environment: staging-alpha
+    environment: staging
     strategy:
       matrix:
         suite:
@@ -719,6 +735,13 @@ jobs:
           rancher-version: ${{ env.RANCHER_VERSION }}
           fallback-repo: ${{ secrets.RANCHER_REPO }}
 
+      - name: Set Rancher chart url
+        uses: ./.github/actions/set-rancher-chart-url
+        with:
+          rancher-repo: ${{ env.RANCHER_REPO }}
+          staging-chart-url: ${{ secrets.STAGING_RANCHER_HELM_CHART_URL }}
+          fallback-chart-url: ${{ secrets.RANCHER_HELM_CHART_URL }}
+
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
@@ -771,7 +794,7 @@ jobs:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
-              rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
+              rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
@@ -893,8 +916,9 @@ jobs:
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
+        if: always()
         working-directory: tfp-automation/modules/sanity/aws
-        run: terraform destroy -auto-approve
+        run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
         if: always()

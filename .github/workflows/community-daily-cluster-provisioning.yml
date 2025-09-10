@@ -304,8 +304,9 @@ jobs:
         uses: ./.github/actions/run-hostbusters-daily-provisioning
 
       - name: Cleanup Infrastructure
+        if: always()
         working-directory: tfp-automation/modules/sanity/aws
-        run: terraform destroy -auto-approve
+        run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
         if: always()
@@ -587,8 +588,9 @@ jobs:
         uses: ./.github/actions/run-hostbusters-daily-provisioning
 
       - name: Cleanup Infrastructure
+        if: always()
         working-directory: tfp-automation/modules/sanity/aws
-        run: terraform destroy -auto-approve
+        run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
         if: always()
