@@ -19,16 +19,14 @@ node {
 
     // Configuration files
     def ansibleConfig = env.ANSIBLE_CONFIG
-    def terraformConfig = env.TERRAFORM_CONFIG
+    def tofuConfig = env.TERRAFORM_CONFIG
     def ansibleVarsFilename = "vars.yaml"
     def terraformVarsfilename = "cluster.tfvars"
 
     // Airgap-specific variables
     def bastionHost = ""
-    def privateRegistryUrl = ""
     def rke2Version = env.RKE2_VERSION ?: "v1.28.8+rke2r1"
     def rancherVersion = env.RANCHER_VERSION ?: "v2.10-head"
-
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"
     }
@@ -111,11 +109,11 @@ node {
               ansibleConfig = ansibleConfig.replace('${RKE2_VERSION}', rke2Version)
               ansibleConfig = ansibleConfig.replace('${RANCHER_VERSION}', rancherVersion)
 
-              terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
-              terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
-              terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION)
-              terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC)
-              terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS)
+              tofuConfig = tofuConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+              tofuConfig = tofuConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+              tofuConfig = tofuConfig.replace('${AWS_REGION}', env.AWS_REGION)
+              tofuConfig = tofuConfig.replace('${AWS_VPC}', env.AWS_VPC)
+              tofuConfig = tofuConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS)
 
               // Setup SSH keys
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
@@ -131,15 +129,15 @@ node {
                 dir ("./ansible") {
                   writeFile file: ansibleVarsFilename, text: ansibleConfig
                 }
-                dir ("./terraform/aws/modules/airgap") {
-                  writeFile file: terraformVarsfilename, text: terraformConfig
+                dir ("./tofu/aws/modules/airgap") {
+                  writeFile file: terraformVarsfilename, text: tofuConfig
                 }
               }
 
               // Configure environment
               dir ("./") {
                 sh "./tests/validation/configure.sh"
-                sh "docker build . -f ./tests/validation/Dockerfile.e2e -t ${imageName}"
+                sh "docker build . -f ./tests/validation/Dockerfile.tofu.e2e -t ${imageName}"
                 sh "docker volume create --name ${validationVolume}"
               }
             }
@@ -153,10 +151,10 @@ node {
             set -e
             cd ${qaInfraWorkPath}
             echo "Starting Terraform infrastructure provisioning..."
-            terraform -chdir=terraform/aws/modules/airgap init -input=false
-            terraform -chdir=terraform/aws/modules/airgap workspace new jenkins_airgap_workspace || terraform -chdir=terraform/aws/modules/airgap workspace select jenkins_airgap_workspace
+            terraform -chdir=tofu/aws/modules/airgap init -input=false
+            terraform -chdir=tofu/aws/modules/airgap workspace new jenkins_airgap_workspace || terraform -chdir=terraform/aws/modules/airgap workspace select jenkins_airgap_workspace
             export TF_WORKSPACE=jenkins_airgap_workspace
-            terraform -chdir=terraform/aws/modules/airgap apply -auto-approve -var-file=cluster.tfvars
+            terraform -chdir=tofu/aws/modules/airgap apply -auto-approve -var-file=cluster.tfvars
             echo "Terraform infrastructure provisioned successfully"
             """
                             sh "chmod +x setup_airgap_infra.sh"
