@@ -170,7 +170,7 @@ pipeline {
             post {
                 failure {
                     logError("Failed to checkout repositories")
-                    cleanupResources()
+                    cleanupContainersAndVolumes()
                 }
             }
         }
@@ -199,7 +199,7 @@ pipeline {
             post {
                 failure {
                     logError("Environment configuration failed")
-                    cleanupResources()
+                    cleanupContainersAndVolumes()
                 }
             }
         }
