@@ -110,7 +110,7 @@ pipeline {
                     setupDynamicEnvironment()
                     
                     // Clean workspace
-                    cleanWs()
+                    deleteDir()
                     
                     logInfo("Pipeline initialized successfully")
                     logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
