@@ -130,8 +130,14 @@ node {
                 try {
                   sh "docker run --name ${testContainer} -t --env-file ${envFile} " +
                   "${imageName} sh -c \"/root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
-                  "${rootPath}pipeline/scripts/${reporterScript};" +
-                  "${rootPath}reporter\""
+                  "${rootPath}pipeline/scripts/${reporterScript}\""
+
+                  def reporterPresent = sh(script: '[ -f ./reporter ] && echo "true" || echo "false"', returnStdout: true)
+                  if (reporterPresent == "true") {
+                    sh "${rootPath}reporter"
+                  } else {
+                    echo "Reporter binary not present"
+                  }
                 } catch(err) {
                   echo 'Test run had failures. Collecting results...'
                 }
