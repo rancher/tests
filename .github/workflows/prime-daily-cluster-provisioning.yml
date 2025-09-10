@@ -214,7 +214,7 @@ jobs:
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
+            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             rke2Registries:
               mirrors:
                 "docker.io":
@@ -498,7 +498,7 @@ jobs:
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
+            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             rke2Registries:
               mirrors:
                 "docker.io":
@@ -780,7 +780,7 @@ jobs:
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
+            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             rke2Registries:
               mirrors:
                 "docker.io":
