@@ -33,12 +33,12 @@ pipeline {
             description: 'Rancher version to deploy'
         )
         string(
-            name: 'RANCHER_REPO',
+            name: 'RANCHER_TEST_REPO_URL',
             defaultValue: 'https://github.com/rancher/tests',
             description: 'URL of rancher/tests repository'
         )
         string(
-            name: 'BRANCH',
+            name: 'RANCHER_TEST_REPO_BRANCH',
             defaultValue: 'main',
             description: 'Branch of rancher/tests repository'
         )
@@ -72,7 +72,7 @@ pipeline {
     // Global environment variables
     environment {
         // Repository configurations - set dynamically in setupDynamicEnvironment()
-        RANCHER_REPO = ""
+        RANCHER_TEST_REPO_URL = ""
         QA_INFRA_REPO = ""
         
         // Path configurations
@@ -130,16 +130,16 @@ pipeline {
                 stage('Checkout Rancher Tests') {
                     steps {
                         dir('./tests') {
-                            logInfo("Cloning rancher tests repository from ${env.RANCHER_REPO}")
+                            logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
                             checkout([
                                 $class: 'GitSCM',
-                                branches: [[name: "*/${params.BRANCH}"]],
+                                branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
                                 extensions: [
                                     [$class: 'CleanCheckout'],
                                     [$class: 'CloneOption', depth: 1, shallow: true]
                                 ],
                                 userRemoteConfigs: [[
-                                    url: env.RANCHER_REPO,
+                                    url: env.RANCHER_TEST_REPO_URL,
                                     credentialsId: 'github-token'
                                 ]]
                             ])
@@ -458,16 +458,16 @@ def validateParameters() {
     if (!params.RANCHER_VERSION) {
         error("RANCHER_VERSION parameter is required")
     }
-    if (!params.RANCHER_REPO) {
-        error("RANCHER_REPO parameter is required")
+    if (!params.RANCHER_TEST_REPO_URL) {
+        error("RANCHER_TEST_REPO_URL parameter is required")
     }
     if (!params.QA_INFRA_REPO_URL) {
         error("QA_INFRA_REPO_URL parameter is required")
     }
     
     // Validate repository URLs format
-    if (!params.RANCHER_REPO.startsWith('https://github.com/') && !params.RANCHER_REPO.startsWith('git@github.com:')) {
-        error("RANCHER_REPO must be a valid GitHub repository URL")
+    if (!params.RANCHER_TEST_REPO_URL.startsWith('https://github.com/') && !params.RANCHER_TEST_REPO_URL.startsWith('git@github.com:')) {
+        error("RANCHER_TEST_REPO_URL must be a valid GitHub repository URL")
     }
     if (!params.QA_INFRA_REPO_URL.startsWith('https://github.com/') && !params.QA_INFRA_REPO_URL.startsWith('git@github.com:')) {
         error("QA_INFRA_REPO_URL must be a valid GitHub repository URL")
@@ -480,11 +480,11 @@ def setupDynamicEnvironment() {
     // Set environment variables that depend on parameters
     env.RKE2_VERSION = params.RKE2_VERSION
     env.RANCHER_VERSION = params.RANCHER_VERSION
-    env.RANCHER_REPO = params.RANCHER_REPO
+    env.RANCHER_TEST_REPO_URL = params.RANCHER_TEST_REPO_URL
     env.QA_INFRA_REPO = params.QA_INFRA_REPO_URL
     
     logInfo("Dynamic environment configured")
-    logInfo("Rancher repository: ${env.RANCHER_REPO}")
+    logInfo("Rancher repository: ${env.RANCHER_TEST_REPO_URL}")
     logInfo("QA Infrastructure repository: ${env.QA_INFRA_REPO}")
 }
 
