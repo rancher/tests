@@ -433,59 +433,60 @@ pipeline {
             }
         }
 
-    post {
-        always {
-            script {
-                logInfo("Starting post-build cleanup")
-                
-                // Archive important artifacts
-                archiveArtifacts([
-                    'kubeconfig.yaml',
-                    'terraform.tfstate',
-                    'ansible-logs.txt',
-                    'deployment-summary.json'
-                ])
-                
-                // Clean up resources
-                if (params.CLEANUP_RESOURCES) {
-                    cleanupInfrastructure()
-                } else {
-                    logInfo("Resource cleanup skipped (CLEANUP_RESOURCES=false)")
-                    logInfo("Remember to manually clean up AWS resources")
+        post {
+            always {
+                script {
+                    logInfo("Starting post-build cleanup")
+                    
+                    // Archive important artifacts
+                    archiveArtifacts([
+                        'kubeconfig.yaml',
+                        'terraform.tfstate',
+                        'ansible-logs.txt',
+                        'deployment-summary.json'
+                    ])
+                    
+                    // Clean up resources
+                    if (params.CLEANUP_RESOURCES) {
+                        cleanupInfrastructure()
+                    } else {
+                        logInfo("Resource cleanup skipped (CLEANUP_RESOURCES=false)")
+                        logInfo("Remember to manually clean up AWS resources")
+                    }
+                    
+                    // Always cleanup containers and volumes
+                    cleanupContainersAndVolumes()
                 }
-                
-                // Always cleanup containers and volumes
-                cleanupContainersAndVolumes()
             }
-        }
-        
-        success {
-            script {
-                logInfo("Pipeline completed successfully")
-                sendSlackNotification([
-                    color: 'good',
-                    message: "✅ Airgap RKE2 deployment succeeded for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
-                ])
+            
+            success {
+                script {
+                    logInfo("Pipeline completed successfully")
+                    sendSlackNotification([
+                        color: 'good',
+                        message: "✅ Airgap RKE2 deployment succeeded for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+                    ])
+                }
             }
-        }
-        
-        failure {
-            script {
-                logError("Pipeline failed")
-                sendSlackNotification([
-                    color: 'danger',
-                    message: "❌ Airgap RKE2 deployment failed for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
-                ])
+            
+            failure {
+                script {
+                    logError("Pipeline failed")
+                    sendSlackNotification([
+                        color: 'danger',
+                        message: "❌ Airgap RKE2 deployment failed for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+                    ])
+                }
             }
-        }
-        
-        unstable {
-            script {
-                logWarning("Pipeline completed with warnings")
-                sendSlackNotification([
-                    color: 'warning',
-                    message: "⚠️ Airgap RKE2 deployment completed with warnings for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
-                ])
+            
+            unstable {
+                script {
+                    logWarning("Pipeline completed with warnings")
+                    sendSlackNotification([
+                        color: 'warning',
+                        message: "⚠️ Airgap RKE2 deployment completed with warnings for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+                    ])
+                }
             }
         }
     }
@@ -1197,5 +1198,4 @@ def logDebug(message) {
     if (params.LOG_LEVEL == 'DEBUG' || params.LOG_LEVEL == 'VERBOSE') {
         echo "🔍 [DEBUG] ${new Date().format('HH:mm:ss')} - ${message}"
     }
-}
 }
