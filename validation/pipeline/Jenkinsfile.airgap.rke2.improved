@@ -1,5 +1,7 @@
 #!/usr/bin/env groovy
 
+import groovy.json.JsonOutput
+
 /**
  * Improved Rancher Airgap RKE2 Validation Pipeline
  * 
@@ -97,13 +99,11 @@ pipeline {
         
         // Path configurations
         ROOT_PATH = "/root/go/src/github.com/rancher/tests/"
-        QA_INFRA_WORK_PATH = "/root/go/src/github.com/rancher/qa-infra-automation"
-        
         // Computed values
-        JOB_SHORT_NAME = "${getShortJobName()}"
-        BUILD_CONTAINER_NAME = "${JOB_SHORT_NAME}${BUILD_NUMBER}-airgap-rke2"
-        IMAGE_NAME = "rancher-airgap-rke2-validation-${JOB_SHORT_NAME}${BUILD_NUMBER}"
-        VALIDATION_VOLUME = "AirgapRKE2SharedVolume-${JOB_SHORT_NAME}${BUILD_NUMBER}"
+        JOB_SHORT_NAME = "${env.JOB_NAME ? getShortJobName() : ''}"
+        BUILD_CONTAINER_NAME = "${env.JOB_SHORT_NAME ?: ''}${env.BUILD_NUMBER ?: ''}-airgap-rke2"
+        IMAGE_NAME = "rancher-airgap-rke2-validation-${env.JOB_SHORT_NAME ?: ''}${env.BUILD_NUMBER ?: ''}"
+        VALIDATION_VOLUME = "AirgapRKE2SharedVolume-${env.JOB_SHORT_NAME ?: ''}${env.BUILD_NUMBER ?: ''}"
         
         // Configuration files
         ANSIBLE_VARS_FILENAME = "vars.yaml"
@@ -111,11 +111,13 @@ pipeline {
         ENV_FILE = ".env"
         
         // Terraform workspace
-        TF_WORKSPACE = "jenkins_airgap_workspace_${BUILD_NUMBER}"
+        TF_WORKSPACE = "jenkins_airgap_workspace_${env.BUILD_NUMBER ?: ''}"
         
         // Timeouts (in minutes)
         TERRAFORM_TIMEOUT = "30"
         ANSIBLE_TIMEOUT = "45"
+        VALIDATION_TIMEOUT = "15"
+    }
         VALIDATION_TIMEOUT = "15"
     }
     
@@ -336,6 +338,7 @@ pipeline {
         }
         
         stage('Rancher Deployment & Integration') {
+            steps {
                 script {
                     logInfo("Deploying Rancher with integrated health monitoring")
                     
