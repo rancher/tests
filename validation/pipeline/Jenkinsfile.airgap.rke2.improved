@@ -751,7 +751,7 @@ def sendSlackNotification(config) {
             
             httpRequest(
                 httpMode: 'POST',
-                url: env.SLACK_WEBHOOK,
+
 /**
  * ENHANCED DEVOPS FUNCTIONS
  * Advanced infrastructure and deployment management with monitoring and rollback capabilities
@@ -1150,7 +1150,7 @@ def getRancherPodCount() {
         return 0
     }
 }
-
+                url: env.SLACK_WEBHOOK,
                 contentType: 'APPLICATION_JSON',
                 requestBody: groovy.json.JsonOutput.toJson(payload)
             )
