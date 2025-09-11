@@ -641,7 +641,7 @@ def archiveValidationResults() {
             status: currentBuild.currentResult ?: 'SUCCESS'
         ]
         
-        writeJSON file: 'deployment-summary.json', json: deploymentSummary
+        writeFile file: 'deployment-summary.json', text: groovy.json.JsonOutput.toJson(deploymentSummary)
         
     } catch (Exception e) {
         logError("Failed to archive validation results: ${e.message}")
