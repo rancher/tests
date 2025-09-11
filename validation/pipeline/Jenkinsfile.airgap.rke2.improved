@@ -486,7 +486,7 @@ def getShortJobName() {
     def jobName = "${env.JOB_NAME}"
     if (jobName.contains('/')) {
         def jobNames = jobName.split('/')
-        return jobNames[jobNames.size() - 1]
+        return jobNames.get(jobNames.size() - 1)
     }
     return jobName
 }
@@ -568,7 +568,8 @@ def validateConfigurationEnvironmentVariables() {
     
     def missingVars = []
     requiredVars.each { varName, description ->
-        if (!env[varName] || env[varName].trim().isEmpty()) {
+        def varValue = env."${varName}"
+        if (!varValue || varValue.trim().isEmpty()) {
             missingVars.add("${varName} (${description})")
         }
     }
@@ -907,7 +908,8 @@ def validateRequiredVariables(requiredVars) {
     
     def missingVars = []
     requiredVars.each { varName ->
-        if (!env."${varName}" || env."${varName}".trim().isEmpty()) {
+        def varValue = env."${varName}"
+        if (!varValue || varValue.trim().isEmpty()) {
             missingVars.add(varName)
         }
     }
