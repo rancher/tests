@@ -744,7 +744,7 @@ def buildDockerImage() {
         sh "./tests/validation/configure.sh"
         sh """
             docker build . \
-                -f ./tests/validation/Dockerfile.tofu.e2e \
+                -f ./tests/validation/Dockerfile.e2e \
                 -t ${env.IMAGE_NAME} \
                 --build-arg BUILD_DATE=\\\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
                 --build-arg VCS_REF=\\\$(git rev-parse --short HEAD) \
@@ -763,18 +763,19 @@ def createSharedVolume() {
 
 def executeInContainer(commands) {
     def commandString = commands.join(' && ')
-    def dockerCommand = """
+    def timestamp = System.currentTimeMillis()
+    def containerName = "${env.BUILD_CONTAINER_NAME}-${timestamp}"
+    
+    sh """
         docker run --rm \
             -v ${env.VALIDATION_VOLUME}:/root \
-            --name ${env.BUILD_CONTAINER_NAME}-\\\$(date +%s) \
+            --name ${containerName} \
             -t --env-file ${env.ENV_FILE} \
             -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
             -e TF_WORKSPACE=${env.TF_WORKSPACE} \
             ${env.IMAGE_NAME} \
-            sh -c '${commandString}'
+            sh -c "${commandString.replaceAll('"', '\\\\"')}"
     """
-    
-    sh dockerCommand
 }
 
 def getAnsibleVerbosity() {
@@ -935,32 +936,41 @@ def logDebug(message) {
 def debugTerraformOutputs() {
     logInfo("Debugging Terraform outputs for inventory generation")
     
-    def debugCommands = [
-        "cd ${env.QA_INFRA_WORK_PATH}",
-        "export TF_WORKSPACE=${env.TF_WORKSPACE}",
-        
-        // List all available outputs
-        "echo 'Available Terraform outputs:'",
-        "tofu -chdir=tofu/aws/modules/airgap output -json | jq -r 'keys[]' 2>/dev/null | head -20 || echo 'No JSON outputs available or jq not installed'",
-        "tofu -chdir=tofu/aws/modules/airgap output 2>/dev/null | head -30 || echo 'No outputs available'",
-        
-        // Check specific inventory-related outputs
-        "echo 'Checking for inventory-related outputs:'",
-        "tofu -chdir=tofu/aws/modules/airgap output inventory 2>/dev/null || echo 'No inventory output'",
-        "tofu -chdir=tofu/aws/modules/airgap output hosts 2>/dev/null || echo 'No hosts output'",
-        "tofu -chdir=tofu/aws/modules/airgap output ansible_inventory 2>/dev/null || echo 'No ansible_inventory output'",
-        
-        // Check instance IPs for manual inventory generation
-        "echo 'Available instance information:'",
-        "tofu -chdir=tofu/aws/modules/airgap output server_ips 2>/dev/null || echo 'No server_ips'",
-        "tofu -chdir=tofu/aws/modules/airgap output agent_ips 2>/dev/null || echo 'No agent_ips'",
-        "tofu -chdir=tofu/aws/modules/airgap output server_private_ips 2>/dev/null || echo 'No server_private_ips'",
-        "tofu -chdir=tofu/aws/modules/airgap output agent_private_ips 2>/dev/null || echo 'No agent_private_ips'",
-        
-        "echo 'Terraform outputs debugging completed'"
-    ]
+    def debugScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+export TF_WORKSPACE=${env.TF_WORKSPACE}
+
+echo 'Available Terraform outputs:'
+tofu -chdir=tofu/aws/modules/airgap output -json | jq -r 'keys[]' 2>/dev/null | head -20 || echo 'No JSON outputs available or jq not installed'
+tofu -chdir=tofu/aws/modules/airgap output 2>/dev/null | head -30 || echo 'No outputs available'
+
+echo 'Checking for inventory-related outputs:'
+tofu -chdir=tofu/aws/modules/airgap output inventory 2>/dev/null || echo 'No inventory output'
+tofu -chdir=tofu/aws/modules/airgap output hosts 2>/dev/null || echo 'No hosts output'
+tofu -chdir=tofu/aws/modules/airgap output ansible_inventory 2>/dev/null || echo 'No ansible_inventory output'
+
+echo 'Available instance information:'
+tofu -chdir=tofu/aws/modules/airgap output server_ips 2>/dev/null || echo 'No server_ips'
+tofu -chdir=tofu/aws/modules/airgap output agent_ips 2>/dev/null || echo 'No agent_ips'
+tofu -chdir=tofu/aws/modules/airgap output server_private_ips 2>/dev/null || echo 'No server_private_ips'
+tofu -chdir=tofu/aws/modules/airgap output agent_private_ips 2>/dev/null || echo 'No agent_private_ips'
+
+echo 'Terraform outputs debugging completed'
+"""
+
+    def timestamp = System.currentTimeMillis()
+    def containerName = "${env.BUILD_CONTAINER_NAME}-debug-${timestamp}"
     
-    executeInContainer(debugCommands)
+    sh """
+        docker run --rm \
+            -v ${env.VALIDATION_VOLUME}:/root \
+            --name ${containerName} \
+            -t --env-file ${env.ENV_FILE} \
+            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
+            -e TF_WORKSPACE=${env.TF_WORKSPACE} \
+            ${env.IMAGE_NAME} \
+            sh -c '${debugScript}'
+    """
 }
 
 def validateRequiredVariables(requiredVars) {
@@ -1086,42 +1096,73 @@ def planInfrastructure() {
 def applyInfrastructure() {
     logInfo("Applying infrastructure configuration")
     
-    def applyCommands = [
-        "cd ${env.QA_INFRA_WORK_PATH}",
-        "export TF_WORKSPACE=${env.TF_WORKSPACE}",
-        "echo 'Applying infrastructure configuration...'",
-        // Apply directly like the original script but with enhanced error handling
-        "tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}",
-        // Verify state after apply
-        "tofu -chdir=tofu/aws/modules/airgap state list",
-        // Generate outputs for downstream stages
-        "tofu -chdir=tofu/aws/modules/airgap output -json > infrastructure-outputs.json",
-        // Enhanced inventory generation with better error handling
-        "echo 'Enhanced inventory generation starting...'",
-        "echo 'Checking available Terraform outputs...'",
-        "tofu -chdir=tofu/aws/modules/airgap output -json | jq -r 'keys[]' || echo 'No outputs available'",
-        
-        // Try multiple inventory generation methods
-        "echo 'Attempting inventory generation...'",
-        "mkdir -p ansible/rke2/",
-        
-        // Method 1: Try inventory output
-        "tofu -chdir=tofu/aws/modules/airgap output -raw inventory > ansible/rke2/terraform-inventory.yml 2>/dev/null || echo 'No inventory output'",
-        
-        // Method 2: Try hosts output
-        "if [ ! -s ansible/rke2/terraform-inventory.yml ]; then tofu -chdir=tofu/aws/modules/airgap output -raw hosts > ansible/rke2/terraform-inventory.yml 2>/dev/null || echo 'No hosts output'; fi",
-        
-        // Method 3: Try ansible_inventory output
-        "if [ ! -s ansible/rke2/terraform-inventory.yml ]; then tofu -chdir=tofu/aws/modules/airgap output -raw ansible_inventory > ansible/rke2/terraform-inventory.yml 2>/dev/null || echo 'No ansible_inventory output'; fi",
-        
-        // Method 4: Generate basic inventory from instance outputs if nothing else works
-        "if [ ! -s ansible/rke2/terraform-inventory.yml ]; then echo 'Generating basic inventory from available instance data...'; fi",
-        "if [ ! -s ansible/rke2/terraform-inventory.yml ]; then bash -c 'echo \"# Generated inventory from Terraform outputs\"; echo \"all:\"; echo \"  children:\"; echo \"    rke2_servers:\"; echo \"      hosts:\"; echo \"    rke2_agents:\"; echo \"      hosts:\"' > ansible/rke2/terraform-inventory.yml; fi",
-        
-        "echo 'Infrastructure provisioned and inventory generated successfully'"
-    ]
+    def applyScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+export TF_WORKSPACE=${env.TF_WORKSPACE}
+
+echo 'Applying infrastructure configuration...'
+tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}
+
+echo 'Verifying state after apply...'
+tofu -chdir=tofu/aws/modules/airgap state list
+
+echo 'Generating outputs for downstream stages...'
+tofu -chdir=tofu/aws/modules/airgap output -json > infrastructure-outputs.json
+
+echo 'Enhanced inventory generation starting...'
+echo 'Checking available Terraform outputs...'
+tofu -chdir=tofu/aws/modules/airgap output -json | jq -r 'keys[]' || echo 'No outputs available'
+
+echo 'Attempting inventory generation...'
+mkdir -p ansible/rke2/
+
+# Method 1: Try inventory output
+echo 'Method 1: Trying inventory output...'
+tofu -chdir=tofu/aws/modules/airgap output -raw inventory > ansible/rke2/terraform-inventory.yml 2>/dev/null || echo 'No inventory output'
+
+# Method 2: Try hosts output if inventory is empty
+if [ ! -s ansible/rke2/terraform-inventory.yml ]; then
+    echo 'Method 2: Trying hosts output...'
+    tofu -chdir=tofu/aws/modules/airgap output -raw hosts > ansible/rke2/terraform-inventory.yml 2>/dev/null || echo 'No hosts output'
+fi
+
+# Method 3: Try ansible_inventory output if still empty
+if [ ! -s ansible/rke2/terraform-inventory.yml ]; then
+    echo 'Method 3: Trying ansible_inventory output...'
+    tofu -chdir=tofu/aws/modules/airgap output -raw ansible_inventory > ansible/rke2/terraform-inventory.yml 2>/dev/null || echo 'No ansible_inventory output'
+fi
+
+# Method 4: Generate basic inventory if nothing else works
+if [ ! -s ansible/rke2/terraform-inventory.yml ]; then
+    echo 'Method 4: Generating basic inventory from available instance data...'
     
-    executeInContainer(applyCommands)
+cat > ansible/rke2/terraform-inventory.yml << 'EOF'
+# Generated inventory from Terraform outputs
+all:
+  children:
+    rke2_servers:
+      hosts:
+    rke2_agents:
+      hosts:
+EOF
+fi
+
+echo 'Infrastructure provisioned and inventory generated successfully'
+"""
+
+    def timestamp = System.currentTimeMillis()
+    def containerName = "${env.BUILD_CONTAINER_NAME}-apply-${timestamp}"
+    
+    sh """
+        docker run --rm \
+            -v ${env.VALIDATION_VOLUME}:/root \
+            --name ${containerName} \
+            -t --env-file ${env.ENV_FILE} \
+            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
+            -e TF_WORKSPACE=${env.TF_WORKSPACE} \
+            ${env.IMAGE_NAME} \
+            sh -c '${applyScript}'
+    """
 }
 
 // def generateAndManageInventory() {
@@ -1199,87 +1240,105 @@ def validateInfrastructureState() {
 def validateInventoryFiles() {
     logInfo("Enhanced Ansible inventory validation with debugging")
     
-    def inventoryValidationCommands = [
-        "cd ${env.QA_INFRA_WORK_PATH}",
-        "echo 'Enhanced inventory validation starting...'",
-        
-        // Debug: Check multiple possible inventory locations
-        "echo 'Debugging: Checking inventory file locations:'",
-        "find . -name '*inventory*' -type f 2>/dev/null | head -10 || echo 'No inventory files found with find'",
-        "find . -name 'terraform-inventory.yml' -type f 2>/dev/null | head -5 || echo 'No terraform-inventory.yml found'",
-        
-        // Debug: List ansible directory contents
-        "echo 'Contents of ansible/rke2/ directory:'",
-        "ls -la ansible/rke2/ 2>/dev/null || echo 'ansible/rke2/ directory does not exist'",
-        
-        // Main inventory file validation with enhanced error handling
-        "echo 'Checking main inventory file...'",
-        "if [ -f ansible/rke2/terraform-inventory.yml ]; then",
-        "  echo 'SUCCESS: terraform-inventory.yml exists for Ansible playbooks'",
-        "  echo 'File details:'",
-        "  ls -lh ansible/rke2/terraform-inventory.yml",
-        "  wc -l ansible/rke2/terraform-inventory.yml",
-        "else",
-        "  echo 'WARNING: terraform-inventory.yml not found at expected location'",
-        "  echo 'Attempting to locate and copy inventory files...'",
-        "  FOUND_INVENTORY=\\\$(find ansible/ -name '*inventory*.yml' -o -name '*inventory*.yaml' 2>/dev/null | head -1)",
-        "  if [ ! -z \"\\\$FOUND_INVENTORY\" ]; then",
-        "    echo \"Found inventory file: \\\$FOUND_INVENTORY\"",
-        "    cp \"\\\$FOUND_INVENTORY\" ansible/rke2/terraform-inventory.yml",
-        "    echo 'Copied found inventory file to expected location'",
-        "  else",
-        "    echo 'ERROR: No inventory files found anywhere - generating minimal inventory'",
-        "    mkdir -p ansible/rke2/",
-        "    cat > ansible/rke2/terraform-inventory.yml << 'EOF'",
-        "# Minimal inventory generated by Jenkins due to missing Terraform outputs",
-        "all:",
-        "  children:",
-        "    rke2_servers:",
-        "      hosts:",
-        "        # Server hosts will be populated by Terraform outputs",
-        "    rke2_agents:",
-        "      hosts:",
-        "        # Agent hosts will be populated by Terraform outputs",
-        "EOF",
-        "    echo 'Generated minimal inventory file'",
-        "  fi",
-        "fi",
-        
-        // Content validation with better error messages
-        "echo 'Validating inventory content...'",
-        "if [ -s ansible/rke2/terraform-inventory.yml ]; then",
-        "  echo 'SUCCESS: terraform-inventory.yml has content'",
-        "  echo 'File size:'",
-        "  du -h ansible/rke2/terraform-inventory.yml",
-        "  echo 'Preview of inventory content:'",
-        "  head -30 ansible/rke2/terraform-inventory.yml",
-        "else",
-        "  echo 'ERROR: terraform-inventory.yml is empty'",
-        "  exit 1",
-        "fi",
-        
-        // YAML syntax validation with detailed error reporting
-        "echo 'Validating YAML syntax...'",
-        "if python3 -c \"import yaml; yaml.safe_load(open('ansible/rke2/terraform-inventory.yml'))\" 2>/dev/null; then",
-        "  echo 'SUCCESS: Inventory YAML is valid'",
-        "else",
-        "  echo 'WARNING: YAML syntax issues detected'",
-        "  echo 'Attempting to show YAML validation errors:'",
-        "  python3 -c \"import yaml; yaml.safe_load(open('ansible/rke2/terraform-inventory.yml'))\" || true",
-        "fi",
-        
-        // Final status summary
-        "echo 'Enhanced inventory validation completed'",
-        "echo 'Final inventory file status:'",
-        "if [ -f ansible/rke2/terraform-inventory.yml ] && [ -s ansible/rke2/terraform-inventory.yml ]; then",
-        "  echo 'STATUS: READY - Inventory file exists and has content'",
-        "else",
-        "  echo 'STATUS: ERROR - Inventory file missing or empty'",
-        "  exit 1",
-        "fi"
-    ]
+    // Use a script approach to avoid complex shell syntax in command arrays
+    def validationScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+echo 'Enhanced inventory validation starting...'
+
+# Debug: Check multiple possible inventory locations
+echo 'Debugging: Checking inventory file locations:'
+find . -name '*inventory*' -type f 2>/dev/null | head -10 || echo 'No inventory files found'
+find . -name 'terraform-inventory.yml' -type f 2>/dev/null | head -5 || echo 'No terraform-inventory.yml found'
+
+# Debug: List ansible directory contents
+echo 'Contents of ansible/rke2/ directory:'
+ls -la ansible/rke2/ 2>/dev/null || echo 'ansible/rke2/ directory does not exist'
+
+# Main inventory file validation
+echo 'Checking main inventory file...'
+if [ -f ansible/rke2/terraform-inventory.yml ]; then
+  echo 'SUCCESS: terraform-inventory.yml exists for Ansible playbooks'
+  echo 'File details:'
+  ls -lh ansible/rke2/terraform-inventory.yml
+  wc -l ansible/rke2/terraform-inventory.yml
+else
+  echo 'WARNING: terraform-inventory.yml not found at expected location'
+  echo 'Attempting to locate and copy inventory files...'
+  
+  # Search for any inventory file
+  FOUND_INVENTORY=\$(find ansible/ -name '*inventory*.yml' -o -name '*inventory*.yaml' 2>/dev/null | head -1)
+  
+  if [ ! -z "\$FOUND_INVENTORY" ]; then
+    echo "Found inventory file: \$FOUND_INVENTORY"
+    cp "\$FOUND_INVENTORY" ansible/rke2/terraform-inventory.yml
+    echo 'Copied found inventory file to expected location'
+  else
+    echo 'ERROR: No inventory files found anywhere - generating minimal inventory'
+    mkdir -p ansible/rke2/
     
-    executeInContainer(inventoryValidationCommands)
+    # Generate minimal inventory file
+cat > ansible/rke2/terraform-inventory.yml << 'EOF'
+# Minimal inventory generated by Jenkins due to missing Terraform outputs
+all:
+  children:
+    rke2_servers:
+      hosts:
+        # Server hosts will be populated by Terraform outputs
+    rke2_agents:
+      hosts:
+        # Agent hosts will be populated by Terraform outputs
+EOF
+    echo 'Generated minimal inventory file'
+  fi
+fi
+
+# Content validation
+echo 'Validating inventory content...'
+if [ -s ansible/rke2/terraform-inventory.yml ]; then
+  echo 'SUCCESS: terraform-inventory.yml has content'
+  echo 'File size:'
+  du -h ansible/rke2/terraform-inventory.yml
+  echo 'Preview of inventory content:'
+  head -30 ansible/rke2/terraform-inventory.yml
+else
+  echo 'ERROR: terraform-inventory.yml is empty'
+  exit 1
+fi
+
+# YAML syntax validation
+echo 'Validating YAML syntax...'
+if python3 -c "import yaml; yaml.safe_load(open('ansible/rke2/terraform-inventory.yml'))" 2>/dev/null; then
+  echo 'SUCCESS: Inventory YAML is valid'
+else
+  echo 'WARNING: YAML syntax issues detected'
+  echo 'Attempting to show YAML validation errors:'
+  python3 -c "import yaml; yaml.safe_load(open('ansible/rke2/terraform-inventory.yml'))" || true
+fi
+
+# Final status summary
+echo 'Enhanced inventory validation completed'
+echo 'Final inventory file status:'
+if [ -f ansible/rke2/terraform-inventory.yml ] && [ -s ansible/rke2/terraform-inventory.yml ]; then
+  echo 'STATUS: READY - Inventory file exists and has content'
+else
+  echo 'STATUS: ERROR - Inventory file missing or empty'
+  exit 1
+fi
+"""
+
+    def timestamp = System.currentTimeMillis()
+    def containerName = "${env.BUILD_CONTAINER_NAME}-validation-${timestamp}"
+    
+    sh """
+        docker run --rm \
+            -v ${env.VALIDATION_VOLUME}:/root \
+            --name ${containerName} \
+            -t --env-file ${env.ENV_FILE} \
+            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
+            -e TF_WORKSPACE=${env.TF_WORKSPACE} \
+            ${env.IMAGE_NAME} \
+            sh -c '${validationScript.replaceAll("'", "\\\\'")}'
+    """
 }
 
 def handleInfrastructureFailure(failureType, exception) {
