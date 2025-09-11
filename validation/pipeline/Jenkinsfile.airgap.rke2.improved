@@ -67,12 +67,12 @@ pipeline {
             defaultValue: '',
             description: 'Private registry password for airgap deployment'
         )
-        bool(
+        booleanParam(
             name: 'CLEANUP_RESOURCES',
             defaultValue: true,
             description: 'Clean up AWS resources after deployment'
         )
-        bool(
+        booleanParam(
             name: 'PARALLEL_EXECUTION',
             defaultValue: true,
             description: 'Enable parallel execution where possible'
