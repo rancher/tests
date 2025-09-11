@@ -222,41 +222,41 @@ pipeline {
             }
         }
         
-        stage('Infrastructure & Deployment') {
-            stage('Setup Infrastructure') {
-                steps {
-                    script {
-                        logInfo("Setting up airgap infrastructure with OpenTofu")
-                        
-                        timeout(time: Integer.parseInt(env.TERRAFORM_TIMEOUT), unit: 'MINUTES') {
-                            try {
-                                // Execute infrastructure setup with proper error handling
-                                executeInContainer([
-                                    "cd ${env.QA_INFRA_WORK_PATH}",
-                                    "echo 'Initializing OpenTofu...'",
-                                    "tofu -chdir=tofu/aws/modules/airgap init -input=false",
-                                    "tofu -chdir=tofu/aws/modules/airgap workspace new ${env.TF_WORKSPACE} || tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}",
-                                    "export TF_WORKSPACE=${env.TF_WORKSPACE}",
-                                    "echo 'Applying infrastructure configuration...'",
-                                    "tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}",
-                                    "echo 'Infrastructure provisioned successfully'"
-                                ])
-                            } catch (Exception e) {
-                                logError("Infrastructure setup failed: ${e.message}")
-                                // Attempt infrastructure cleanup on failure
-                                destroyInfrastructure()
-                                throw e
-                            }
+
+        stage('Setup Infrastructure') {
+            steps {
+                script {
+                    logInfo("Setting up airgap infrastructure with OpenTofu")
+                    
+                    timeout(time: Integer.parseInt(env.TERRAFORM_TIMEOUT), unit: 'MINUTES') {
+                        try {
+                            // Execute infrastructure setup with proper error handling
+                            executeInContainer([
+                                "cd ${env.QA_INFRA_WORK_PATH}",
+                                "echo 'Initializing OpenTofu...'",
+                                "tofu -chdir=tofu/aws/modules/airgap init -input=false",
+                                "tofu -chdir=tofu/aws/modules/airgap workspace new ${env.TF_WORKSPACE} || tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}",
+                                "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+                                "echo 'Applying infrastructure configuration...'",
+                                "tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}",
+                                "echo 'Infrastructure provisioned successfully'"
+                            ])
+                        } catch (Exception e) {
+                            logError("Infrastructure setup failed: ${e.message}")
+                            // Attempt infrastructure cleanup on failure
+                            destroyInfrastructure()
+                            throw e
                         }
                     }
                 }
-                post {
-                    failure {
-                        logError("Infrastructure setup failed")
-                    }
+            }
+            post {
+                failure {
+                    logError("Infrastructure setup failed")
                 }
             }
         }
+    
         
         stage('Deploy RKE2 Cluster') {
             steps {
