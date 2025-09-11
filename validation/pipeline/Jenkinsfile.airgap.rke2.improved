@@ -440,8 +440,20 @@ pipeline {
                     logInfo("Remember to manually clean up AWS resources")
                 }
                 
-                // Always cleanup containers and volumes
-                cleanupContainersAndVolumes()
+                // Always cleanup containers and volumes (with try-catch for node context)
+                try {
+                    node {
+                        cleanupContainersAndVolumes()
+                    }
+                } catch (Exception e) {
+                    // If node context is not available, try basic cleanup
+                    logError("Node context not available for cleanup: ${e.message}")
+                    try {
+                        cleanupContainersAndVolumes()
+                    } catch (Exception cleanupException) {
+                        logError("Cleanup failed: ${cleanupException.message}")
+                    }
+                }
             }
         }
         
@@ -485,8 +497,9 @@ pipeline {
 def getShortJobName() {
     def jobName = "${env.JOB_NAME}"
     if (jobName.contains('/')) {
-        def jobNames = jobName.split('/')
-        return jobNames.get(jobNames.size() - 1)
+        // Use string manipulation instead of array access to avoid Jenkins sandbox issues
+        def lastSlashIndex = jobName.lastIndexOf('/')
+        return jobName.substring(lastSlashIndex + 1)
     }
     return jobName
 }
@@ -819,20 +832,30 @@ def cleanupInfrastructure() {
 def cleanupContainersAndVolumes() {
     logInfo("Cleaning up Docker containers and volumes")
     
-    sh """
-        # Stop and remove any containers with our naming pattern
-        docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker stop || true
-        docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker rm -v || true
-        
-        # Remove the Docker image
-        docker rmi -f ${env.IMAGE_NAME} || true
-        
-        # Remove the shared volume
-        docker volume rm -f ${env.VALIDATION_VOLUME} || true
-        
-        # Clean up any dangling images and volumes
-        docker system prune -f || true
-    """
+    try {
+        // Ensure we have a node context for shell commands
+        if (env.NODE_NAME) {
+            sh """
+                # Stop and remove any containers with our naming pattern
+                docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker stop || true
+                docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker rm -v || true
+                
+                # Remove the Docker image
+                docker rmi -f ${env.IMAGE_NAME} || true
+                
+                # Remove the shared volume
+                docker volume rm -f ${env.VALIDATION_VOLUME} || true
+                
+                # Clean up any dangling images and volumes
+                docker system prune -f || true
+            """
+        } else {
+            logWarning("No node context available for Docker cleanup - skipping shell commands")
+        }
+    } catch (Exception e) {
+        logError("Docker cleanup failed: ${e.message}")
+        // Don't fail the pipeline on cleanup issues
+    }
 }
 
 def archiveArtifacts(artifacts) {
