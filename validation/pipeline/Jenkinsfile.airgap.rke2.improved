@@ -872,7 +872,7 @@ def publishInfrastructureMetrics() {
             "cd ${env.QA_INFRA_WORK_PATH}",
             "echo 'Collecting infrastructure metrics...'",
             "tofu -chdir=tofu/aws/modules/airgap output -json | jq '.instance_count.value' > /tmp/instance_count.txt || echo '0' > /tmp/instance_count.txt",
-            "aws ec2 describe-instances --query 'length(Reservations[*].Instances[?State.Name==\`running\`])' --output text > /tmp/running_instances.txt || echo '0' > /tmp/running_instances.txt",
+            "aws ec2 describe-instances --query 'Reservations[].Instances[?State.Name==`running`]' --output json | jq 'flatten | length' > /tmp/running_instances.txt || echo '0' > /tmp/running_instances.txt",
             "echo 'Infrastructure metrics collected'"
         ])
     } catch (Exception e) {
