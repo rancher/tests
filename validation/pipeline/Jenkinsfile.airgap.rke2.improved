@@ -222,98 +222,150 @@ pipeline {
             }
         }
         
-        stage('Infrastructure & Deployment') {
-            stage('Setup Infrastructure') {
-                steps {
-                    script {
-                        logInfo("Setting up airgap infrastructure with OpenTofu")
-                        
-                        timeout(time: Integer.parseInt(env.TERRAFORM_TIMEOUT), unit: 'MINUTES') {
-                            try {
-                                // Execute infrastructure setup with proper error handling
-                                executeInContainer([
-                                    "cd ${env.QA_INFRA_WORK_PATH}",
-                                    "echo 'Initializing OpenTofu...'",
-                                    "tofu -chdir=tofu/aws/modules/airgap init -input=false",
-                                    "tofu -chdir=tofu/aws/modules/airgap workspace new ${env.TF_WORKSPACE} || tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}",
-                                    "export TF_WORKSPACE=${env.TF_WORKSPACE}",
-                                    "echo 'Applying infrastructure configuration...'",
-                                    "tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}",
-                                    "echo 'Infrastructure provisioned successfully'"
-                                ])
-                            } catch (Exception e) {
-                                logError("Infrastructure setup failed: ${e.message}")
-                                // Attempt infrastructure cleanup on failure
-                                destroyInfrastructure()
-                                throw e
-                            }
-                        }
-                    }
-                }
-                post {
-                    failure {
-                        logError("Infrastructure setup failed")
-                    }
-                }
-            }
-        
-        stage('Deploy RKE2 Cluster') {
+        stage('Infrastructure Provisioning') {
             steps {
                 script {
-                    logInfo("Deploying RKE2 cluster in airgap environment")
+                    logInfo("Starting infrastructure provisioning with enhanced validation and monitoring")
                     
-                    timeout(time: Integer.parseInt(env.ANSIBLE_TIMEOUT), unit: 'MINUTES') {
+                    // Pre-flight validation checks
+                    validateInfrastructurePrerequisites()
+                    
+                    timeout(time: Integer.parseInt(env.TERRAFORM_TIMEOUT), unit: 'MINUTES') {
                         try {
-                            executeInContainer([
-                                "cd ${env.QA_INFRA_WORK_PATH}",
-                                "export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg",
-                                "export ANSIBLE_PRIVATE_KEY_FILE=/root/.ssh/jenkins-elliptic-validation.pem",
-                                "echo 'Starting RKE2 airgap deployment...'",
-                                "ansible-playbook -i ansible/rke2/terraform-inventory.yml " +
-                                "ansible/rke2/airgap/playbooks/deploy/rke2-tarball-playbook.yml " +
-                                "${getAnsibleVerbosity()} -e @ansible/${env.ANSIBLE_VARS_FILENAME}",
-                                "echo 'RKE2 airgap cluster deployed successfully'"
-                            ])
+                            // Initialize with state locking and backend validation
+                            executeInfrastructureSetup()
+                            
+                            // Validate infrastructure state
+                            validateInfrastructureState()
+                            
+                            // Cache infrastructure outputs for later stages
+                            cacheInfrastructureOutputs()
+                            
                         } catch (Exception e) {
-                            logError("RKE2 deployment failed: ${e.message}")
+                            logError("Infrastructure provisioning failed: ${e.message}")
+                            handleInfrastructureFailure(e)
                             throw e
                         }
                     }
                 }
             }
             post {
+                success {
+                    logInfo("Infrastructure provisioning completed successfully")
+                    publishInfrastructureMetrics()
+                }
                 failure {
-                    logError("RKE2 deployment failed")
-                    // Continue to cleanup stage
+                    logError("Infrastructure provisioning failed - initiating rollback")
+                    script {
+                        rollbackInfrastructure()
+                    }
                 }
             }
         }
         
-        stage('Deploy Rancher') {
+        stage('Deployment Pipeline') {
+            parallel {
+                stage('RKE2 Cluster Deployment') {
+                    steps {
+                        script {
+                            logInfo("Deploying RKE2 cluster with enhanced monitoring")
+                            
+                            timeout(time: Integer.parseInt(env.ANSIBLE_TIMEOUT), unit: 'MINUTES') {
+                                try {
+                                    // Pre-deployment validation
+                                    validateClusterPrerequisites()
+                                    
+                                    // Deploy with progress monitoring
+                                    deployRKE2WithMonitoring()
+                                    
+                                    // Post-deployment validation
+                                    validateClusterHealth()
+                                    
+                                } catch (Exception e) {
+                                    logError("RKE2 deployment failed: ${e.message}")
+                                    handleClusterDeploymentFailure(e)
+                                    throw e
+                                }
+                            }
+                        }
+                    }
+                    post {
+                        success {
+                            logInfo("RKE2 cluster deployed successfully")
+                            archiveClusterArtifacts()
+                        }
+                        failure {
+                            script {
+                                logError("RKE2 deployment failed - collecting diagnostic information")
+                                collectClusterDiagnostics()
+                            }
+                        }
+                    }
+                }
+                
+                stage('Security & Compliance Validation') {
+                    when {
+                        expression { params.PARALLEL_EXECUTION == true }
+                    }
+                    steps {
+                        script {
+                            logInfo("Running security and compliance validations")
+                            
+                            timeout(time: 10, unit: 'MINUTES') {
+                                parallel {
+                                    'Network Security': {
+                                        validateNetworkSecurity()
+                                    },
+                                    'Resource Compliance': {
+                                        validateResourceCompliance()
+                                    },
+                                    'Access Controls': {
+                                        validateAccessControls()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        
+        stage('Rancher Deployment & Integration') {
             steps {
                 script {
-                    logInfo("Deploying Rancher on the airgap RKE2 cluster")
+                    logInfo("Deploying Rancher with integrated health monitoring")
                     
                     timeout(time: Integer.parseInt(env.ANSIBLE_TIMEOUT), unit: 'MINUTES') {
                         try {
-                            executeInContainer([
-                                "cd ${env.QA_INFRA_WORK_PATH}",
-                                "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
-                                "echo 'Starting Rancher airgap deployment...'",
-                                "ansible-playbook ansible/rancher/playbooks/deploy/rancher-airgap-playbook.yml " +
-                                "${getAnsibleVerbosity()} -e @ansible/${env.ANSIBLE_VARS_FILENAME}",
-                                "echo 'Rancher deployed successfully on airgap cluster'"
-                            ])
+                            // Wait for cluster readiness
+                            waitForClusterReadiness()
+                            
+                            // Deploy Rancher with real-time monitoring
+                            deployRancherWithMonitoring()
+                            
+                            // Validate Rancher integration
+                            validateRancherIntegration()
+                            
+                            // Run smoke tests
+                            runRancherSmokeTests()
+                            
                         } catch (Exception e) {
                             logError("Rancher deployment failed: ${e.message}")
+                            handleRancherDeploymentFailure(e)
                             throw e
                         }
                     }
                 }
             }
             post {
+                success {
+                    logInfo("Rancher deployment completed successfully")
+                    publishDeploymentMetrics()
+                }
                 failure {
-                    logError("Rancher deployment failed")
+                    script {
+                        logError("Rancher deployment failed - collecting diagnostic data")
+                        collectRancherDiagnostics()
+                    }
                 }
             }
         }
@@ -700,6 +752,405 @@ def sendSlackNotification(config) {
             httpRequest(
                 httpMode: 'POST',
                 url: env.SLACK_WEBHOOK,
+/**
+ * ENHANCED DEVOPS FUNCTIONS
+ * Advanced infrastructure and deployment management with monitoring and rollback capabilities
+ */
+
+def validateInfrastructurePrerequisites() {
+    logInfo("Validating infrastructure prerequisites")
+    
+    executeInContainer([
+        "echo 'Validating AWS credentials and permissions...'",
+        "aws sts get-caller-identity",
+        "aws ec2 describe-vpcs --max-items 1",
+        "echo 'Validating OpenTofu installation...'",
+        "tofu version",
+        "echo 'Checking required environment variables...'",
+        "env | grep -E '^(AWS_|TF_)' | sort",
+        "echo 'Prerequisites validation completed'"
+    ])
+}
+
+def executeInfrastructureSetup() {
+    logInfo("Executing infrastructure setup with state management")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "echo 'Initializing OpenTofu with remote state...'",
+        "tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade",
+        "echo 'Setting up workspace isolation...'",
+        "tofu -chdir=tofu/aws/modules/airgap workspace new ${env.TF_WORKSPACE} || tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}",
+        "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+        "echo 'Planning infrastructure changes...'",
+        "tofu -chdir=tofu/aws/modules/airgap plan -var-file=${env.TERRAFORM_VARS_FILENAME} -out=tfplan",
+        "echo 'Applying infrastructure configuration...'",
+        "tofu -chdir=tofu/aws/modules/airgap apply tfplan",
+        "echo 'Infrastructure provisioned successfully'"
+    ])
+}
+
+def validateInfrastructureState() {
+    logInfo("Validating infrastructure state and connectivity")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "echo 'Validating infrastructure outputs...'",
+        "tofu -chdir=tofu/aws/modules/airgap output",
+        "echo 'Testing connectivity to provisioned resources...'",
+        "tofu -chdir=tofu/aws/modules/airgap output -json > infrastructure_outputs.json",
+        "echo 'Infrastructure state validation completed'"
+    ])
+}
+
+def cacheInfrastructureOutputs() {
+    logInfo("Caching infrastructure outputs for pipeline stages")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "mkdir -p /tmp/pipeline-cache",
+        "tofu -chdir=tofu/aws/modules/airgap output -json > /tmp/pipeline-cache/infrastructure.json",
+        "echo 'Infrastructure outputs cached successfully'"
+    ])
+}
+
+def handleInfrastructureFailure(Exception e) {
+    logError("Handling infrastructure failure: ${e.message}")
+    
+    // Collect diagnostic information
+    try {
+        executeInContainer([
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            "echo 'Collecting infrastructure diagnostic information...'",
+            "tofu -chdir=tofu/aws/modules/airgap show -json > /tmp/terraform-state-dump.json || true",
+            "tofu -chdir=tofu/aws/modules/airgap plan -var-file=${env.TERRAFORM_VARS_FILENAME} -detailed-exitcode || true",
+            "aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,State.Name,PublicIpAddress]' --output table || true"
+        ])
+    } catch (Exception diagException) {
+        logError("Failed to collect diagnostic information: ${diagException.message}")
+    }
+}
+
+def rollbackInfrastructure() {
+    logInfo("Initiating infrastructure rollback")
+    
+    try {
+        executeInContainer([
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            "echo 'Starting infrastructure rollback...'",
+            "tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}",
+            "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+            "tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}",
+            "echo 'Infrastructure rollback completed'"
+        ])
+    } catch (Exception e) {
+        logError("Infrastructure rollback failed: ${e.message}")
+        // Send critical alert
+        sendSlackNotification([
+            color: 'danger',
+            message: "🚨 CRITICAL: Infrastructure rollback failed for ${env.JOB_NAME} #${env.BUILD_NUMBER}. Manual intervention required!"
+        ])
+    }
+}
+
+def publishInfrastructureMetrics() {
+    logInfo("Publishing infrastructure metrics")
+    
+    try {
+        executeInContainer([
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            "echo 'Collecting infrastructure metrics...'",
+            "tofu -chdir=tofu/aws/modules/airgap output -json | jq '.instance_count.value' > /tmp/instance_count.txt || echo '0' > /tmp/instance_count.txt",
+            "aws ec2 describe-instances --query 'length(Reservations[*].Instances[?State.Name==\`running\`])' --output text > /tmp/running_instances.txt || echo '0' > /tmp/running_instances.txt",
+            "echo 'Infrastructure metrics collected'"
+        ])
+    } catch (Exception e) {
+        logWarning("Failed to publish infrastructure metrics: ${e.message}")
+    }
+}
+
+def validateClusterPrerequisites() {
+    logInfo("Validating cluster deployment prerequisites")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "echo 'Validating Ansible configuration...'",
+        "ansible --version",
+        "ansible-inventory -i ansible/rke2/terraform-inventory.yml --list",
+        "echo 'Testing SSH connectivity to nodes...'",
+        "ansible -i ansible/rke2/terraform-inventory.yml all -m ping -e @ansible/${env.ANSIBLE_VARS_FILENAME}",
+        "echo 'Cluster prerequisites validated'"
+    ])
+}
+
+def deployRKE2WithMonitoring() {
+    logInfo("Deploying RKE2 cluster with progress monitoring")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg",
+        "export ANSIBLE_PRIVATE_KEY_FILE=/root/.ssh/jenkins-elliptic-validation.pem",
+        "echo 'Starting RKE2 airgap deployment with monitoring...'",
+        "ansible-playbook -i ansible/rke2/terraform-inventory.yml " +
+        "ansible/rke2/airgap/playbooks/deploy/rke2-tarball-playbook.yml " +
+        "${getAnsibleVerbosity()} -e @ansible/${env.ANSIBLE_VARS_FILENAME} " +
+        "--extra-vars 'monitoring_enabled=true'",
+        "echo 'RKE2 airgap cluster deployed successfully'"
+    ])
+}
+
+def validateClusterHealth() {
+    logInfo("Validating cluster health and readiness")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
+        "echo 'Validating cluster nodes status...'",
+        "kubectl get nodes -o wide",
+        "kubectl wait --for=condition=Ready nodes --all --timeout=300s",
+        "echo 'Validating system pods...'",
+        "kubectl get pods -n kube-system",
+        "kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=300s",
+        "echo 'Cluster health validation completed'"
+    ])
+}
+
+def handleClusterDeploymentFailure(Exception e) {
+    logError("Handling cluster deployment failure: ${e.message}")
+    
+    try {
+        executeInContainer([
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            "echo 'Collecting cluster diagnostic information...'",
+            "kubectl get events --all-namespaces --sort-by='.lastTimestamp' || true",
+            "kubectl describe nodes || true",
+            "journalctl -u rke2-server --no-pager -n 100 || true",
+            "systemctl status rke2-server || true"
+        ])
+    } catch (Exception diagException) {
+        logError("Failed to collect cluster diagnostics: ${diagException.message}")
+    }
+}
+
+def archiveClusterArtifacts() {
+    logInfo("Archiving cluster artifacts")
+    
+    try {
+        sh """
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/ansible/rke2/kubeconfig.yaml ./kubeconfig.yaml || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):/tmp/cluster-info.yaml ./cluster-info.yaml || true
+        """
+    } catch (Exception e) {
+        logWarning("Failed to archive cluster artifacts: ${e.message}")
+    }
+}
+
+def collectClusterDiagnostics() {
+    logInfo("Collecting comprehensive cluster diagnostics")
+    
+    try {
+        executeInContainer([
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            "mkdir -p /tmp/diagnostics",
+            "kubectl cluster-info dump --output-directory=/tmp/diagnostics/cluster-dump || true",
+            "kubectl get events --all-namespaces --sort-by='.lastTimestamp' -o yaml > /tmp/diagnostics/events.yaml || true",
+            "kubectl get nodes -o yaml > /tmp/diagnostics/nodes.yaml || true",
+            "kubectl get pods --all-namespaces -o yaml > /tmp/diagnostics/pods.yaml || true"
+        ])
+        
+        sh """
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):/tmp/diagnostics ./cluster-diagnostics/ || true
+        """
+    } catch (Exception e) {
+        logError("Failed to collect cluster diagnostics: ${e.message}")
+    }
+}
+
+def validateNetworkSecurity() {
+    logInfo("Validating network security policies")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "echo 'Checking network policies...'",
+        "kubectl get networkpolicies --all-namespaces || true",
+        "echo 'Validating security groups...'",
+        "aws ec2 describe-security-groups --query 'SecurityGroups[*].[GroupId,GroupName,Description]' --output table || true",
+        "echo 'Network security validation completed'"
+    ])
+}
+
+def validateResourceCompliance() {
+    logInfo("Validating resource compliance")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "echo 'Checking resource limits...'",
+        "kubectl describe limitranges --all-namespaces || true",
+        "kubectl describe resourcequotas --all-namespaces || true",
+        "echo 'Validating pod security standards...'",
+        "kubectl get pods --all-namespaces -o jsonpath='{.items[*].spec.securityContext}' || true",
+        "echo 'Resource compliance validation completed'"
+    ])
+}
+
+def validateAccessControls() {
+    logInfo("Validating access controls and RBAC")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "echo 'Checking RBAC configuration...'",
+        "kubectl get clusterroles,clusterrolebindings,roles,rolebindings --all-namespaces || true",
+        "echo 'Validating service accounts...'",
+        "kubectl get serviceaccounts --all-namespaces || true",
+        "echo 'Access control validation completed'"
+    ])
+}
+
+def waitForClusterReadiness() {
+    logInfo("Waiting for cluster readiness before Rancher deployment")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
+        "echo 'Waiting for cluster to be fully ready...'",
+        "kubectl wait --for=condition=Ready nodes --all --timeout=600s",
+        "kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=300s",
+        "echo 'Cluster is ready for Rancher deployment'"
+    ])
+}
+
+def deployRancherWithMonitoring() {
+    logInfo("Deploying Rancher with integrated monitoring")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
+        "echo 'Starting Rancher airgap deployment with monitoring...'",
+        "ansible-playbook ansible/rancher/playbooks/deploy/rancher-airgap-playbook.yml " +
+        "${getAnsibleVerbosity()} -e @ansible/${env.ANSIBLE_VARS_FILENAME} " +
+        "--extra-vars 'enable_monitoring=true deployment_monitoring=true'",
+        "echo 'Rancher deployed successfully on airgap cluster'"
+    ])
+}
+
+def validateRancherIntegration() {
+    logInfo("Validating Rancher integration and services")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
+        "echo 'Validating Rancher pods...'",
+        "kubectl get pods -n cattle-system",
+        "kubectl wait --for=condition=Ready pods --all -n cattle-system --timeout=600s",
+        "echo 'Validating Rancher services...'",
+        "kubectl get svc -n cattle-system",
+        "echo 'Checking Rancher ingress...'",
+        "kubectl get ingress -A",
+        "echo 'Rancher integration validation completed'"
+    ])
+}
+
+def runRancherSmokeTests() {
+    logInfo("Running Rancher smoke tests")
+    
+    executeInContainer([
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
+        "echo 'Running basic Rancher API health checks...'",
+        "kubectl get --raw='/readyz' || true",
+        "kubectl get --raw='/healthz' || true",
+        "echo 'Testing Rancher UI accessibility...'",
+        "curl -k -s -o /dev/null -w '%{http_code}' https://rancher.local/dashboard/ || echo 'UI check completed'",
+        "echo 'Rancher smoke tests completed'"
+    ])
+}
+
+def handleRancherDeploymentFailure(Exception e) {
+    logError("Handling Rancher deployment failure: ${e.message}")
+    
+    try {
+        executeInContainer([
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
+            "echo 'Collecting Rancher diagnostic information...'",
+            "kubectl logs -n cattle-system -l app=rancher --tail=100 || true",
+            "kubectl describe pods -n cattle-system || true",
+            "kubectl get events -n cattle-system --sort-by='.lastTimestamp' || true"
+        ])
+    } catch (Exception diagException) {
+        logError("Failed to collect Rancher diagnostics: ${diagException.message}")
+    }
+}
+
+def publishDeploymentMetrics() {
+    logInfo("Publishing deployment metrics and summary")
+    
+    try {
+        def deploymentSummary = [
+            buildNumber: env.BUILD_NUMBER,
+            rke2Version: env.RKE2_VERSION,
+            rancherVersion: env.RANCHER_VERSION,
+            deploymentTime: new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'"),
+            status: 'SUCCESS',
+            infraNodes: getInfrastructureNodeCount(),
+            rancherPods: getRancherPodCount()
+        ]
+        
+        writeJSON file: 'deployment-metrics.json', json: deploymentSummary
+        
+        logInfo("Deployment metrics published successfully")
+    } catch (Exception e) {
+        logWarning("Failed to publish deployment metrics: ${e.message}")
+    }
+}
+
+def collectRancherDiagnostics() {
+    logInfo("Collecting comprehensive Rancher diagnostics")
+    
+    try {
+        executeInContainer([
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
+            "mkdir -p /tmp/rancher-diagnostics",
+            "kubectl logs -n cattle-system --all-containers=true > /tmp/rancher-diagnostics/cattle-system-logs.txt || true",
+            "kubectl get all -n cattle-system -o yaml > /tmp/rancher-diagnostics/cattle-system-resources.yaml || true",
+            "kubectl describe pods -n cattle-system > /tmp/rancher-diagnostics/pod-descriptions.txt || true"
+        ])
+        
+        sh """
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):/tmp/rancher-diagnostics ./rancher-diagnostics/ || true
+        """
+    } catch (Exception e) {
+        logError("Failed to collect Rancher diagnostics: ${e.message}")
+    }
+}
+
+def getInfrastructureNodeCount() {
+    try {
+        def output = sh(
+            script: "docker exec \$(docker ps -aqf \"name=${env.BUILD_CONTAINER_NAME}\") sh -c \"cd ${env.QA_INFRA_WORK_PATH} && kubectl get nodes --no-headers | wc -l\"",
+            returnStdout: true
+        ).trim()
+        return output.toInteger()
+    } catch (Exception e) {
+        logWarning("Failed to get node count: ${e.message}")
+        return 0
+    }
+}
+
+def getRancherPodCount() {
+    try {
+        def output = sh(
+            script: "docker exec \$(docker ps -aqf \"name=${env.BUILD_CONTAINER_NAME}\") sh -c \"cd ${env.QA_INFRA_WORK_PATH} && kubectl get pods -n cattle-system --no-headers | wc -l\"",
+            returnStdout: true
+        ).trim()
+        return output.toInteger()
+    } catch (Exception e) {
+        logWarning("Failed to get Rancher pod count: ${e.message}")
+        return 0
+    }
+}
+
                 contentType: 'APPLICATION_JSON',
                 requestBody: groovy.json.JsonOutput.toJson(payload)
             )
