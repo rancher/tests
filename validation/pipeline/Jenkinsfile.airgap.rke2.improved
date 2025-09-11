@@ -855,9 +855,9 @@ def initializeOpenTofu() {
         "echo 'OpenTofu initialization completed successfully'"
     ]
     
-    retryWithBackoff(3, 10) {
+    retryWithBackoff(3, 10, {
         executeInContainer(initCommands)
-    }
+    })
 }
 
 def manageWorkspace() {
@@ -993,7 +993,7 @@ def safeDestroyInfrastructure() {
     }
 }
 
-def retryWithBackoff(maxAttempts, backoffSeconds) {
+def retryWithBackoff(maxAttempts, backoffSeconds, closure) {
     def attempt = 0
     def lastException
     
@@ -1001,7 +1001,7 @@ def retryWithBackoff(maxAttempts, backoffSeconds) {
         attempt++
         try {
             logInfo("Attempt ${attempt} of ${maxAttempts}")
-            return it() // Execute the closure
+            return closure() // Execute the closure
         } catch (Exception e) {
             lastException = e
             logError("Attempt ${attempt} failed: ${e.message}")
