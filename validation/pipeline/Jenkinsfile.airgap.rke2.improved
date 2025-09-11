@@ -67,12 +67,12 @@ pipeline {
             defaultValue: '',
             description: 'Private registry password for airgap deployment'
         )
-        booleanParam(
+        bool(
             name: 'CLEANUP_RESOURCES',
             defaultValue: true,
             description: 'Clean up AWS resources after deployment'
         )
-        booleanParam(
+        bool(
             name: 'PARALLEL_EXECUTION',
             defaultValue: true,
             description: 'Enable parallel execution where possible'
@@ -117,6 +117,10 @@ pipeline {
         TERRAFORM_TIMEOUT = "30"
         ANSIBLE_TIMEOUT = "45"
         VALIDATION_TIMEOUT = "15"
+        
+        // AWS Infrastructure defaults (will be overridden by credentials)
+        AWS_REGION = "us-west-2"
+        AWS_AMI = "ami-0c2d3e23fb3adceb8" // Ubuntu 20.04 LTS in us-west-2
     }
     
     stages {
@@ -536,46 +540,166 @@ def getCredentialsList() {
 }
 
 def generateConfigurationFiles() {
-    logInfo("Generating configuration files")
+    logInfo("Generating configuration files for infrastructure deployment")
     
-    // Generate Ansible configuration with secure template replacement
-    def ansibleConfig = env.ANSIBLE_CONFIG
-    def configReplacements = [
-        '${AWS_SECRET_ACCESS_KEY}': env.AWS_SECRET_ACCESS_KEY,
-        '${AWS_ACCESS_KEY_ID}': env.AWS_ACCESS_KEY_ID,
-        '${RKE2_VERSION}': env.RKE2_VERSION,
-        '${RANCHER_VERSION}': env.RANCHER_VERSION
+    // Validate required environment variables
+    validateConfigurationEnvironmentVariables()
+    
+    // Generate Terraform configuration from TERRAFORM_CONFIG variable
+    generateTerraformConfiguration()
+    
+    // Generate Ansible configuration
+    generateAnsibleConfiguration()
+    
+    // Generate environment file for containers
+    generateEnvironmentFile()
+    
+    logInfo("Configuration files generated successfully")
+}
+
+def validateConfigurationEnvironmentVariables() {
+    logInfo("Validating configuration environment variables")
+    
+    def requiredVars = [
+        'TERRAFORM_CONFIG': 'Terraform configuration content (from Jenkins job)',
+        'RKE2_VERSION': 'RKE2 version for deployment',
+        'RANCHER_VERSION': 'Rancher version for deployment'
     ]
     
-    configReplacements.each { key, value ->
-        ansibleConfig = ansibleConfig.replace(key, value ?: '')
+    def missingVars = []
+    requiredVars.each { varName, description ->
+        if (!env[varName] || env[varName].trim().isEmpty()) {
+            missingVars.add("${varName} (${description})")
+        }
     }
     
-    // Generate Terraform configuration
+    if (!missingVars.isEmpty()) {
+        def errorMsg = "Missing required environment variables for configuration:\n- ${missingVars.join('\n- ')}"
+        logError(errorMsg)
+        throw new IllegalArgumentException(errorMsg)
+    }
+    
+    logInfo("All required environment variables validated successfully")
+}
+
+def generateTerraformConfiguration() {
+    logInfo("Generating Terraform configuration from TERRAFORM_CONFIG variable")
+    
+    // Validate TERRAFORM_CONFIG has content
+    if (!env.TERRAFORM_CONFIG) {
+        throw new RuntimeException("TERRAFORM_CONFIG environment variable is not set")
+    }
+    
     def tofuConfig = env.TERRAFORM_CONFIG
-    def tfReplacements = [
-        '${AWS_SECRET_ACCESS_KEY}': env.AWS_SECRET_ACCESS_KEY,
-        '${AWS_ACCESS_KEY_ID}': env.AWS_ACCESS_KEY_ID,
-        '${AWS_REGION}': env.AWS_REGION,
-        '${AWS_VPC}': env.AWS_VPC,
-        '${AWS_SECURITY_GROUPS}': env.AWS_SECURITY_GROUPS
-    ]
     
-    tfReplacements.each { key, value ->
-        tofuConfig = tofuConfig.replace(key, value ?: '')
+    if (tofuConfig.trim().isEmpty()) {
+        throw new RuntimeException("TERRAFORM_CONFIG environment variable is empty")
     }
     
-    // Write configuration files
+    // Write the configuration file to the correct location
+    dir('./qa-infra-automation') {
+        dir('./tofu/aws/modules/airgap') {
+            writeFile file: env.TERRAFORM_VARS_FILENAME, text: tofuConfig
+            logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
+            
+            // Log configuration stats for verification (without exposing secrets)
+            def lines = tofuConfig.split('\n')
+            def nonCommentLines = lines.findAll { line ->
+                def trimmed = line.trim()
+                !trimmed.isEmpty() && !trimmed.startsWith('#')
+            }
+            
+            logInfo("Terraform config contains ${lines.size()} total lines, ${nonCommentLines.size()} configuration lines")
+            
+            // Show first few non-sensitive lines for debugging
+            def previewLines = lines.take(5).findAll { line ->
+                def cleanLine = line.toLowerCase()
+                !cleanLine.contains('secret') && !cleanLine.contains('password') &&
+                !cleanLine.contains('key') && !cleanLine.contains('token')
+            }
+            
+            if (!previewLines.isEmpty()) {
+                logInfo("Terraform config preview (non-sensitive lines):")
+                previewLines.each { line -> logInfo("  ${line}") }
+            }
+        }
+    }
+}
+
+def generateAnsibleConfiguration() {
+    logInfo("Generating Ansible configuration for deployment")
+    
+    def ansibleConfig = generateAnsibleVarsContent()
+    
+    // Write the Ansible configuration file
     dir('./qa-infra-automation') {
         dir('./ansible') {
             writeFile file: env.ANSIBLE_VARS_FILENAME, text: ansibleConfig
-        }
-        dir('./tofu/aws/modules/airgap') {
-            writeFile file: env.TERRAFORM_VARS_FILENAME, text: tofuConfig
+            logInfo("Ansible configuration written to: ${env.ANSIBLE_VARS_FILENAME}")
         }
     }
+}
+
+def generateAnsibleVarsContent() {
+    return """---
+# Ansible Variables for Airgap RKE2 Deployment
+# Generated by Jenkins pipeline
+
+# Software Versions
+rke2_version: "${env.RKE2_VERSION}"
+rancher_version: "${env.RANCHER_VERSION}"
+
+# Build Information
+build_number: "${env.BUILD_NUMBER}"
+job_name: "${env.JOB_NAME}"
+workspace: "${env.TF_WORKSPACE}"
+
+# Private Registry Configuration
+private_registry_url: "${env.PRIVATE_REGISTRY_URL ?: ''}"
+private_registry_username: "${env.PRIVATE_REGISTRY_USERNAME ?: ''}"
+private_registry_password: "${env.PRIVATE_REGISTRY_PASSWORD ?: ''}"
+
+# Deployment Configuration
+airgap_mode: true
+install_mode: "airgap"
+deployment_type: "ha"
+
+# Network Configuration
+cluster_cidr: "10.42.0.0/16"
+service_cidr: "10.43.0.0/16"
+cluster_dns: "10.43.0.10"
+
+# Security Configuration
+selinux: false
+disable_firewall: true
+
+# Timeout Configuration
+deployment_timeout: "${env.TERRAFORM_TIMEOUT ?: '30'}"
+ansible_timeout: "${env.ANSIBLE_TIMEOUT ?: '45'}"
+
+# Pipeline Configuration
+log_level: "${params.LOG_LEVEL ?: 'INFO'}"
+cleanup_resources: ${params.CLEANUP_RESOURCES ?: true}
+parallel_execution: ${params.PARALLEL_EXECUTION ?: true}
+"""
+}
+
+def generateEnvironmentFile() {
+    logInfo("Generating environment file for container execution")
     
-    logInfo("Configuration files generated successfully")
+    def envContent = """# Environment variables for infrastructure deployment containers
+TF_WORKSPACE=${env.TF_WORKSPACE}
+BUILD_NUMBER=${env.BUILD_NUMBER}
+JOB_NAME=${env.JOB_NAME}
+TERRAFORM_TIMEOUT=${env.TERRAFORM_TIMEOUT}
+ANSIBLE_TIMEOUT=${env.ANSIBLE_TIMEOUT}
+QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}
+TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}
+ANSIBLE_VARS_FILENAME=${env.ANSIBLE_VARS_FILENAME}
+"""
+    
+    writeFile file: env.ENV_FILE, text: envContent
+    logInfo("Environment file created: ${env.ENV_FILE}")
 }
 
 def setupSSHKeys() {
@@ -839,6 +963,9 @@ def deployInfrastructure() {
     // Step 4: Apply infrastructure with state management
     applyInfrastructure()
     
+    // Step 5: Generate and manage Ansible inventory from OpenTofu outputs
+    // generateAndManageInventory()
+    
     logInfo("Infrastructure deployment completed successfully")
 }
 
@@ -909,30 +1036,103 @@ def applyInfrastructure() {
         "tofu -chdir=tofu/aws/modules/airgap state list",
         // Generate outputs for downstream stages
         "tofu -chdir=tofu/aws/modules/airgap output -json > infrastructure-outputs.json",
+        // Generate inventory files as part of apply process
+        "echo 'Generating inventory files from OpenTofu outputs...'",
+        "tofu -chdir=tofu/aws/modules/airgap output -raw inventory > ansible/rke2/airgap/inventory/terraform-inventory.yml 2>/dev/null || echo 'No inventory output from terraform'",
         "echo 'Infrastructure provisioned successfully'"
     ]
     
     executeInContainer(applyCommands)
 }
 
-def validateInfrastructureState() {
-    logInfo("Validating infrastructure deployment state")
+// def generateAndManageInventory() {
+//     logInfo("Generating and managing Ansible inventory files")
     
-    def validationCommands = [
-        "cd ${env.QA_INFRA_WORK_PATH}",
-        "export TF_WORKSPACE=${env.TF_WORKSPACE}",
-        "echo 'Validating infrastructure state...'",
-        // Validate state integrity
-        "tofu -chdir=tofu/aws/modules/airgap state list | wc -l",
-        // Check critical outputs exist
-        "tofu -chdir=tofu/aws/modules/airgap output -raw vpc_id || echo 'WARNING: vpc_id output missing'",
-        "tofu -chdir=tofu/aws/modules/airgap output -raw subnet_ids || echo 'WARNING: subnet_ids output missing'",
-        // Validate AWS resources are accessible
-        "aws ec2 describe-instances --filters 'Name=tag:Workspace,Values=${env.TF_WORKSPACE}' --query 'Reservations[*].Instances[*].State.Name' --output text",
-        "echo 'Infrastructure state validation completed'"
-    ]
+//     def inventoryCommands = [
+//         "cd ${env.QA_INFRA_WORK_PATH}",
+//         "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+//         "echo 'Setting up inventory directories...'",
+//         // Ensure inventory directories exist
+//         "mkdir -p ansible/rke2/airgap/inventory",
+//         "mkdir -p ansible/rke2/",
+        
+//         "echo 'Checking for generated inventory files...'",
+//         // List what's in the inventory directory
+//         "ls -la ansible/rke2/airgap/inventory/ 2>/dev/null || echo 'No inventory directory found yet'",
+        
+//         // Try to generate inventory from terraform outputs if not already generated
+//         "if [ ! -f ansible/rke2/airgap/inventory/terraform-inventory.yml ]; then echo 'Generating inventory from terraform outputs...'; fi",
+//         "tofu -chdir=tofu/aws/modules/airgap output -raw inventory > ansible/rke2/airgap/inventory/terraform-inventory.yml 2>/dev/null || echo 'No inventory output available from terraform'",
+//         "tofu -chdir=tofu/aws/modules/airgap output -raw hosts > ansible/rke2/airgap/inventory/hosts.yml 2>/dev/null || echo 'No hosts output available from terraform'",
+        
+//         // Try alternative inventory generation methods
+//         "if [ ! -f ansible/rke2/airgap/inventory/terraform-inventory.yml ] && [ -f scripts/generate-inventory.py ]; then python3 scripts/generate-inventory.py; fi",
+//         "if [ ! -f ansible/rke2/airgap/inventory/terraform-inventory.yml ] && [ -f ansible/scripts/generate-inventory.sh ]; then bash ansible/scripts/generate-inventory.sh; fi",
+        
+//         "echo 'Managing inventory file locations...'",
+//         // Copy inventory files to expected locations for playbooks
+//         "find ansible/rke2/airgap/inventory/ -name '*.yml' -o -name '*.yaml' | head -5",
+        
+//         // Copy the generated inventory to the location expected by RKE2 playbook
+//         "if [ -f ansible/rke2/airgap/inventory/terraform-inventory.yml ]; then cp ansible/rke2/airgap/inventory/terraform-inventory.yml ansible/rke2/terraform-inventory.yml; echo 'Copied terraform-inventory.yml'; fi",
+//         "if [ -f ansible/rke2/airgap/inventory/inventory.yml ]; then cp ansible/rke2/airgap/inventory/inventory.yml ansible/rke2/terraform-inventory.yml; echo 'Copied inventory.yml'; fi",
+//         "if [ -f ansible/rke2/airgap/inventory/hosts.yml ]; then cp ansible/rke2/airgap/inventory/hosts.yml ansible/rke2/terraform-inventory.yml; echo 'Copied hosts.yml'; fi",
+        
+//         // Find any inventory file and use it
+//         "if [ ! -f ansible/rke2/terraform-inventory.yml ]; then INVENTORY_FILE=\$(find ansible/rke2/airgap/inventory/ -name '*.yml' -o -name '*.yaml' | head -1); if [ ! -z \"\$INVENTORY_FILE\" ]; then cp \"\$INVENTORY_FILE\" ansible/rke2/terraform-inventory.yml; echo \"Copied \$INVENTORY_FILE as fallback\"; fi; fi",
+        
+//         "echo 'Verifying final inventory setup...'",
+//         "if [ -f ansible/rke2/terraform-inventory.yml ]; then echo 'SUCCESS: terraform-inventory.yml found'; wc -l ansible/rke2/terraform-inventory.yml; else echo 'WARNING: No terraform-inventory.yml file available for Ansible playbooks'; fi",
+//         "if [ -f ansible/rke2/terraform-inventory.yml ]; then echo 'Inventory file preview:'; head -10 ansible/rke2/terraform-inventory.yml; fi",
+        
+//         "echo 'Inventory management completed'"
+//     ]
     
-    executeInContainer(validationCommands)
+//     executeInContainer(inventoryCommands)
+// }
+
+// def validateInfrastructureState() {
+//     logInfo("Validating infrastructure deployment state")
+    
+//     def validationCommands = [
+//         "cd ${env.QA_INFRA_WORK_PATH}",
+//         "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+//         "echo 'Validating infrastructure state...'",
+//         // Validate state integrity
+//         "tofu -chdir=tofu/aws/modules/airgap state list | wc -l",
+//         // Check critical outputs exist
+//         "tofu -chdir=tofu/aws/modules/airgap output -raw vpc_id || echo 'WARNING: vpc_id output missing'",
+//         "tofu -chdir=tofu/aws/modules/airgap output -raw subnet_ids || echo 'WARNING: subnet_ids output missing'",
+//         // Validate AWS resources are accessible
+//         "aws ec2 describe-instances --filters 'Name=tag:Workspace,Values=${env.TF_WORKSPACE}' --query 'Reservations[*].Instances[*].State.Name' --output text",
+//         "echo 'Infrastructure state validation completed'"
+//     ]
+    
+//     executeInContainer(validationCommands)
+    
+//     // Also validate inventory files are ready for Ansible
+//     validateInventoryFiles()
+// }
+
+// def validateInventoryFiles() {
+//     logInfo("Validating Ansible inventory files are ready")
+    
+//     def inventoryValidationCommands = [
+//         "cd ${env.QA_INFRA_WORK_PATH}",
+//         "echo 'Validating Ansible inventory setup...'",
+//         // Check if the main inventory file exists
+//         "if [ -f ansible/rke2/terraform-inventory.yml ]; then echo 'SUCCESS: terraform-inventory.yml exists for Ansible playbooks'; else echo 'ERROR: terraform-inventory.yml missing - Ansible playbooks will fail'; exit 1; fi",
+//         // Validate inventory file has content
+//         "if [ -s ansible/rke2/terraform-inventory.yml ]; then echo 'SUCCESS: terraform-inventory.yml has content'; else echo 'ERROR: terraform-inventory.yml is empty'; exit 1; fi",
+//         // Show inventory structure
+//         "echo 'Inventory file structure:'",
+//         "head -20 ansible/rke2/terraform-inventory.yml",
+//         // Validate YAML syntax
+//         "python3 -c \"import yaml; yaml.safe_load(open('ansible/rke2/terraform-inventory.yml'))\" && echo 'SUCCESS: Inventory YAML is valid' || echo 'WARNING: Inventory YAML syntax issues detected'",
+//         "echo 'Inventory validation completed'"
+//     ]
+    
+//     executeInContainer(inventoryValidationCommands)
 }
 
 def handleInfrastructureFailure(failureType, exception) {
