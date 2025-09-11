@@ -312,17 +312,17 @@ pipeline {
                             logInfo("Running security and compliance validations")
                             
                             timeout(time: 10, unit: 'MINUTES') {
-                                parallel {
-                                    'Network Security': {
+                                parallel(
+                                    "Network Security": {
                                         validateNetworkSecurity()
                                     },
-                                    'Resource Compliance': {
+                                    "Resource Compliance": {
                                         validateResourceCompliance()
                                     },
-                                    'Access Controls': {
+                                    "Access Controls": {
                                         validateAccessControls()
                                     }
-                                }
+                                )
                             }
                         }
                     }
