@@ -84,7 +84,7 @@ func (b *BackupTestSuite) TestS3InPlaceRestore() {
 	_, backupFileName, err := createAndValidateBackup(b.client, s3StorageLocation, b.broConfig)
 	require.NoError(b.T(), err)
 
-	logrus.Infof("Validating backup file is in AWS S3...")
+	logrus.Info("Validating backup file is in AWS S3...")
 	backupPresent, err := checkAWSS3Object(s3StorageLocation, backupFileName)
 	require.NoError(b.T(), err)
 	assert.True(b.T(), backupPresent)

@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || stress || pit.daily) && !sanity && !extended
+//go:build (validation || infra.any || cluster.any || stress) && !sanity && !extended
 
 package charts
 
