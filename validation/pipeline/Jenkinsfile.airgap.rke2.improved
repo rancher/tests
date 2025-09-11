@@ -427,7 +427,8 @@ pipeline {
             }
         }
     } // <-- Add this closing brace to properly close the 'stages' block
-    
+    } // <-- This is the actual closing brace for the 'stages' block
+
     post {
         always {
             script {
