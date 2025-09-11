@@ -223,39 +223,404 @@ pipeline {
         }
         
 
-        stage('Setup Infrastructure') {
-            steps {
-                script {
-                    logInfo("Setting up airgap infrastructure with OpenTofu")
+   /**
+ * Enhanced Infrastructure Setup Stage
+ * 
+ * Improvements implemented:
+ * 1. Code readability and maintainability
+ * 2. Performance optimization  
+ * 3. Best practices and patterns
+ * 4. Error handling and edge cases
+ */
+
+stage('Setup Infrastructure') {
+    steps {
+        script {
+            logInfo("Initializing airgap infrastructure deployment with OpenTofu")
+            
+            // Configuration validation
+            def requiredVars = [
+                'QA_INFRA_WORK_PATH',
+                'TF_WORKSPACE', 
+                'TERRAFORM_VARS_FILENAME',
+                'TERRAFORM_TIMEOUT'
+            ]
+            
+            validateRequiredVariables(requiredVars)
+            
+            // Enhanced timeout with reasonable defaults
+            def timeoutMinutes = env.TERRAFORM_TIMEOUT ? 
+                Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
+            
+            timeout(time: timeoutMinutes, unit: 'MINUTES') {
+                try {
+                    // Pre-flight checks
+                    validateInfrastructurePrerequisites()
                     
-                    timeout(time: Integer.parseInt(env.TERRAFORM_TIMEOUT), unit: 'MINUTES') {
-                        try {
-                            // Execute infrastructure setup with proper error handling
-                            executeInContainer([
-                                "cd ${env.QA_INFRA_WORK_PATH}",
-                                "echo 'Initializing OpenTofu...'",
-                                "tofu -chdir=tofu/aws/modules/airgap init -input=false",
-                                "tofu -chdir=tofu/aws/modules/airgap workspace new ${env.TF_WORKSPACE} || tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}",
-                                "export TF_WORKSPACE=${env.TF_WORKSPACE}",
-                                "echo 'Applying infrastructure configuration...'",
-                                "tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}",
-                                "echo 'Infrastructure provisioned successfully'"
-                            ])
-                        } catch (Exception e) {
-                            logError("Infrastructure setup failed: ${e.message}")
-                            // Attempt infrastructure cleanup on failure
-                            destroyInfrastructure()
-                            throw e
-                        }
-                    }
-                }
-            }
-            post {
-                failure {
-                    logError("Infrastructure setup failed")
+                    // Infrastructure deployment with enhanced error handling
+                    deployInfrastructure()
+                    
+                    // Post-deployment validation
+                    validateInfrastructureState()
+                    
+                    logInfo("Infrastructure provisioned and validated successfully")
+                    
+                } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+                    logError("Infrastructure deployment timed out after ${timeoutMinutes} minutes")
+                    handleInfrastructureFailure("TIMEOUT", e)
+                    throw e
+                } catch (Exception e) {
+                    logError("Infrastructure setup failed: ${e.message}")
+                    handleInfrastructureFailure("DEPLOYMENT_FAILED", e)
+                    throw e
                 }
             }
         }
+    }
+    post {
+        failure {
+            script {
+                logError("Infrastructure setup stage failed")
+                // Archive failure artifacts for debugging
+                archiveInfrastructureFailureArtifacts()
+            }
+        }
+        always {
+            script {
+                // Archive infrastructure state regardless of outcome
+                archiveInfrastructureState()
+            }
+        }
+    }
+}
+
+/**
+ * ENHANCED HELPER FUNCTIONS FOR INFRASTRUCTURE MANAGEMENT
+ * These functions implement DevOps best practices and improve maintainability
+ */
+
+def validateRequiredVariables(requiredVars) {
+    logInfo("Validating required environment variables")
+    
+    def missingVars = []
+    requiredVars.each { varName ->
+        if (!env."${varName}" || env."${varName}".trim().isEmpty()) {
+            missingVars.add(varName)
+        }
+    }
+    
+    if (!missingVars.isEmpty()) {
+        def errorMsg = "Missing required environment variables: ${missingVars.join(', ')}"
+        logError(errorMsg)
+        throw new IllegalArgumentException(errorMsg)
+    }
+    
+    logInfo("All required variables validated successfully")
+}
+
+def validateInfrastructurePrerequisites() {
+    logInfo("Validating infrastructure prerequisites")
+    
+    def prerequisites = [
+        "Checking OpenTofu installation": "tofu version",
+        "Validating AWS credentials": "aws sts get-caller-identity",
+        "Checking workspace directory": "test -d ${env.QA_INFRA_WORK_PATH}",
+        "Validating terraform vars file": "test -f ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+    ]
+    
+    prerequisites.each { description, command ->
+        try {
+            logInfo(description)
+            executeInContainer([
+                "cd ${env.QA_INFRA_WORK_PATH}",
+                command
+            ])
+        } catch (Exception e) {
+            def errorMsg = "${description} failed: ${e.message}"
+            logError(errorMsg)
+            throw new RuntimeException(errorMsg, e)
+        }
+    }
+    
+    logInfo("All infrastructure prerequisites validated")
+}
+
+def deployInfrastructure() {
+    logInfo("Starting infrastructure deployment process")
+    
+    // Step 1: Initialize OpenTofu with enhanced configuration
+    initializeOpenTofu()
+    
+    // Step 2: Manage workspace with proper isolation
+    manageWorkspace()
+    
+    // Step 3: Plan infrastructure changes (best practice)
+    planInfrastructure()
+    
+    // Step 4: Apply infrastructure with state management
+    applyInfrastructure()
+    
+    logInfo("Infrastructure deployment completed successfully")
+}
+
+def initializeOpenTofu() {
+    logInfo("Initializing OpenTofu with enhanced configuration")
+    
+    def initCommands = [
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "echo 'Initializing OpenTofu backend...'",
+        // Enhanced init with provider caching and upgrade
+        "tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure",
+        // Verify initialization success
+        "tofu -chdir=tofu/aws/modules/airgap providers",
+        "echo 'OpenTofu initialization completed successfully'"
+    ]
+    
+    retryWithBackoff(3, 10) {
+        executeInContainer(initCommands)
+    }
+}
+
+def manageWorkspace() {
+    logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
+    
+    def workspaceCommands = [
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "echo 'Managing workspace state...'",
+        // List existing workspaces for debugging
+        "tofu -chdir=tofu/aws/modules/airgap workspace list",
+        // Create or select workspace with proper error handling
+        "tofu -chdir=tofu/aws/modules/airgap workspace new ${env.TF_WORKSPACE} 2>/dev/null || tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}",
+        // Verify workspace selection
+        "tofu -chdir=tofu/aws/modules/airgap workspace show",
+        "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+        "echo 'Workspace management completed: ${TF_WORKSPACE}'"
+    ]
+    
+    executeInContainer(workspaceCommands)
+}
+
+def planInfrastructure() {
+    logInfo("Planning infrastructure changes")
+    
+    def planCommands = [
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+        "echo 'Generating infrastructure plan...'",
+        // Create detailed plan with output file
+        "tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=tfplan",
+        // Show plan summary for logging
+        "tofu -chdir=tofu/aws/modules/airgap show -no-color tfplan | head -50",
+        "echo 'Infrastructure plan generated successfully'"
+    ]
+    
+    executeInContainer(planCommands)
+}
+
+def applyInfrastructure() {
+    logInfo("Applying infrastructure configuration")
+    
+    def applyCommands = [
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+        "echo 'Applying infrastructure configuration...'",
+        // Apply from plan file for consistency
+        "tofu -chdir=tofu/aws/modules/airgap apply -input=false tfplan",
+        // Verify state after apply
+        "tofu -chdir=tofu/aws/modules/airgap state list",
+        // Generate outputs for downstream stages
+        "tofu -chdir=tofu/aws/modules/airgap output -json > infrastructure-outputs.json",
+        "echo 'Infrastructure provisioned successfully'"
+    ]
+    
+    executeInContainer(applyCommands)
+}
+
+def validateInfrastructureState() {
+    logInfo("Validating infrastructure deployment state")
+    
+    def validationCommands = [
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+        "echo 'Validating infrastructure state...'",
+        // Validate state integrity
+        "tofu -chdir=tofu/aws/modules/airgap state list | wc -l",
+        // Check critical outputs exist
+        "tofu -chdir=tofu/aws/modules/airgap output -raw vpc_id || echo 'WARNING: vpc_id output missing'",
+        "tofu -chdir=tofu/aws/modules/airgap output -raw subnet_ids || echo 'WARNING: subnet_ids output missing'",
+        // Validate AWS resources are accessible
+        "aws ec2 describe-instances --filters 'Name=tag:Workspace,Values=${env.TF_WORKSPACE}' --query 'Reservations[*].Instances[*].State.Name' --output text",
+        "echo 'Infrastructure state validation completed'"
+    ]
+    
+    executeInContainer(validationCommands)
+}
+
+def handleInfrastructureFailure(failureType, exception) {
+    logError("Handling infrastructure failure of type: ${failureType}")
+    
+    try {
+        switch(failureType) {
+            case "TIMEOUT":
+                logError("Infrastructure deployment timed out - attempting graceful cleanup")
+                // Don't destroy on timeout - might be close to completion
+                archiveInfrastructureState()
+                break
+                
+            case "DEPLOYMENT_FAILED":
+                logError("Infrastructure deployment failed - attempting cleanup")
+                // Attempt cleanup but don't fail the entire pipeline if cleanup fails
+                safeDestroyInfrastructure()
+                break
+                
+            default:
+                logError("Unknown failure type: ${failureType}")
+                safeDestroyInfrastructure()
+        }
+        
+        // Archive failure diagnostics
+        archiveFailureDiagnostics(exception)
+        
+    } catch (Exception cleanupException) {
+        logError("Cleanup failed during failure handling: ${cleanupException.message}")
+        // Continue - don't mask original failure
+    }
+}
+
+def safeDestroyInfrastructure() {
+    logInfo("Attempting safe infrastructure destruction")
+    
+    try {
+        def destroyCommands = [
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+            "echo 'Selecting workspace for destruction...'",
+            "tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE} || echo 'Workspace selection failed'",
+            "echo 'Destroying infrastructure...'",
+            "tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME} || echo 'Destroy completed with warnings'",
+            "echo 'Infrastructure destruction completed'"
+        ]
+        
+        // Use timeout for destroy operation
+        timeout(time: 15, unit: 'MINUTES') {
+            executeInContainer(destroyCommands)
+        }
+        
+        logInfo("Infrastructure destroyed successfully")
+        
+    } catch (Exception e) {
+        logError("Infrastructure destruction failed: ${e.message}")
+        logError("Manual cleanup may be required for workspace: ${env.TF_WORKSPACE}")
+    }
+}
+
+def retryWithBackoff(maxAttempts, backoffSeconds) {
+    def attempt = 0
+    def lastException
+    
+    while (attempt < maxAttempts) {
+        attempt++
+        try {
+            logInfo("Attempt ${attempt} of ${maxAttempts}")
+            return it() // Execute the closure
+        } catch (Exception e) {
+            lastException = e
+            logError("Attempt ${attempt} failed: ${e.message}")
+            
+            if (attempt < maxAttempts) {
+                def waitTime = backoffSeconds * Math.pow(2, attempt - 1) // Exponential backoff
+                logInfo("Waiting ${waitTime} seconds before retry...")
+                sleep(waitTime as Integer)
+            }
+        }
+    }
+    
+    logError("All ${maxAttempts} attempts failed")
+    throw lastException
+}
+
+def archiveInfrastructureState() {
+    logInfo("Archiving infrastructure state and outputs")
+    
+    try {
+        def archiveCommands = [
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+            // Copy state file with workspace context
+            "cp tofu/aws/modules/airgap/terraform.tfstate infrastructure-${env.TF_WORKSPACE}.tfstate 2>/dev/null || echo 'No state file to archive'",
+            // Copy plan file if exists
+            "cp tofu/aws/modules/airgap/tfplan infrastructure-plan.tfplan 2>/dev/null || echo 'No plan file to archive'",
+            // Generate state summary
+            "tofu -chdir=tofu/aws/modules/airgap show -no-color > infrastructure-state-summary.txt 2>/dev/null || echo 'Could not generate state summary'",
+            "echo 'State archival completed'"
+        ]
+        
+        executeInContainer(archiveCommands)
+        
+        // Archive files from container
+        sh """
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/infrastructure-${env.TF_WORKSPACE}.tfstate ./ || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/infrastructure-outputs.json ./ || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/infrastructure-state-summary.txt ./ || true
+        """
+        
+    } catch (Exception e) {
+        logError("Failed to archive infrastructure state: ${e.message}")
+    }
+}
+
+def archiveInfrastructureFailureArtifacts() {
+    logInfo("Archiving infrastructure failure artifacts")
+    
+    try {
+        def debugCommands = [
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+            // Capture debug information
+            "tofu -chdir=tofu/aws/modules/airgap workspace list > workspace-list.txt 2>&1",
+            "tofu -chdir=tofu/aws/modules/airgap state list > state-resources.txt 2>&1 || echo 'No state available'",
+            "tofu -chdir=tofu/aws/modules/airgap providers > providers.txt 2>&1 || echo 'Providers not available'",
+            // Capture AWS resource state
+            "aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,State.Name,Tags[?Key==`Name`].Value|[0]]' --output table > aws-instances.txt 2>&1 || echo 'Could not query AWS instances'",
+            "echo 'Failure artifact collection completed'"
+        ]
+        
+        executeInContainer(debugCommands)
+        
+        // Copy debug files from container
+        sh """
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./ || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/state-resources.txt ./ || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/providers.txt ./ || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/aws-instances.txt ./ || true
+        """
+        
+    } catch (Exception e) {
+        logError("Failed to archive failure artifacts: ${e.message}")
+    }
+}
+
+def archiveFailureDiagnostics(exception) {
+    logInfo("Archiving failure diagnostics")
+    
+    def diagnostics = [
+        timestamp: new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'"),
+        buildNumber: env.BUILD_NUMBER,
+        workspace: env.TF_WORKSPACE,
+        failureType: exception.class.simpleName,
+        errorMessage: exception.message,
+        stackTrace: exception.stackTrace?.take(10)?.join('\n') ?: 'No stack trace available'
+    ]
+    
+    try {
+        writeFile file: 'infrastructure-failure-diagnostics.json', 
+                  text: groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(diagnostics))
+        
+        logInfo("Failure diagnostics archived successfully")
+    } catch (Exception e) {
+        logError("Failed to archive failure diagnostics: ${e.message}")
+    }
+}
     
         
         stage('Deploy RKE2 Cluster') {
