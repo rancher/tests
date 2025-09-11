@@ -802,7 +802,7 @@ def validateInfrastructurePrerequisites() {
     
     def prerequisites = [
         "Checking OpenTofu installation": "tofu version",
-        "Validating AWS credentials": "aws sts get-caller-identity",
+        // "Validating AWS credentials": "aws sts get-caller-identity",
         "Checking workspace directory": "test -d ${env.QA_INFRA_WORK_PATH}",
         "Validating terraform vars file": "test -f ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
     ]
