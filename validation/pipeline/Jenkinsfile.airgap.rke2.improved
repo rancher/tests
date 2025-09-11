@@ -160,7 +160,6 @@ pipeline {
                                 ],
                                 userRemoteConfigs: [[
                                     url: env.RANCHER_TEST_REPO_URL,
-                                    credentialsId: 'github-token'
                                 ]]
                             ])
                         }
@@ -180,7 +179,6 @@ pipeline {
                                 ],
                                 userRemoteConfigs: [[
                                     url: env.QA_INFRA_REPO,
-                                    credentialsId: 'github-token'
                                 ]]
                             ])
                         }
