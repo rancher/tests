@@ -118,8 +118,6 @@ pipeline {
         ANSIBLE_TIMEOUT = "45"
         VALIDATION_TIMEOUT = "15"
     }
-        VALIDATION_TIMEOUT = "15"
-    }
     
     stages {
         stage('Initialize Pipeline') {
