@@ -512,11 +512,6 @@ def getCredentialsList() {
         string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
         string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
         string(credentialsId: 'RANCHER_SSH_KEY', variable: 'RANCHER_SSH_KEY'),
-        string(credentialsId: 'RANCHER_REGISTRY_USER_NAME', variable: 'RANCHER_REGISTRY_USER_NAME'),
-        string(credentialsId: 'RANCHER_REGISTRY_PASSWORD', variable: 'RANCHER_REGISTRY_PASSWORD'),
-        string(credentialsId: 'ADMIN_PASSWORD', variable: 'ADMIN_PASSWORD'),
-        string(credentialsId: 'USER_PASSWORD', variable: 'USER_PASSWORD'),
-        string(credentialsId: 'BASTION_HOST', variable: 'BASTION_HOST'),
         string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')
     ]
 }
