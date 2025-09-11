@@ -52,6 +52,21 @@ pipeline {
             defaultValue: 'main',
             description: 'Branch of qa-infra-automation repository'
         )
+        string(
+            name: 'PRIVATE_REGISTRY_URL',
+            defaultValue: '',
+            description: 'Private registry URL for airgap deployment'
+        )
+        string(
+            name: 'PRIVATE_REGISTRY_USERNAME',
+            defaultValue: '',
+            description: 'Private registry username for airgap deployment'
+        )
+        password(
+            name: 'PRIVATE_REGISTRY_PASSWORD',
+            defaultValue: '',
+            description: 'Private registry password for airgap deployment'
+        )
         booleanParam(
             name: 'CLEANUP_RESOURCES',
             defaultValue: true,
@@ -71,9 +86,14 @@ pipeline {
     
     // Global environment variables
     environment {
-        // Repository configurations - set dynamically in setupDynamicEnvironment()
+        // Repository configurations - directly from parameters with fallbacks
         RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
         QA_INFRA_REPO = "${params.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation'}"
+        
+        // Private registry configurations - from job parameters
+        PRIVATE_REGISTRY_URL = "${params.PRIVATE_REGISTRY_URL ?: ''}"
+        PRIVATE_REGISTRY_USERNAME = "${params.PRIVATE_REGISTRY_USERNAME ?: ''}"
+        PRIVATE_REGISTRY_PASSWORD = "${params.PRIVATE_REGISTRY_PASSWORD ?: ''}"
         
         // Path configurations
         ROOT_PATH = "/root/go/src/github.com/rancher/tests/"
@@ -498,9 +518,6 @@ def getCredentialsList() {
         string(credentialsId: 'RANCHER_REGISTRY_PASSWORD', variable: 'RANCHER_REGISTRY_PASSWORD'),
         string(credentialsId: 'ADMIN_PASSWORD', variable: 'ADMIN_PASSWORD'),
         string(credentialsId: 'USER_PASSWORD', variable: 'USER_PASSWORD'),
-        string(credentialsId: 'PRIVATE_REGISTRY_URL', variable: 'PRIVATE_REGISTRY_URL'),
-        string(credentialsId: 'PRIVATE_REGISTRY_USERNAME', variable: 'PRIVATE_REGISTRY_USERNAME'),
-        string(credentialsId: 'PRIVATE_REGISTRY_PASSWORD', variable: 'PRIVATE_REGISTRY_PASSWORD'),
         string(credentialsId: 'BASTION_HOST', variable: 'BASTION_HOST'),
         string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')
     ]
