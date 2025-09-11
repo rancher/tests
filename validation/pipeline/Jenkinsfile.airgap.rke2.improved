@@ -626,10 +626,16 @@ def generateTerraformConfiguration() {
             logInfo("Terraform config contains ${lines.size()} total lines, ${nonCommentLines.size()} configuration lines")
             
             // Show first few non-sensitive lines for debugging
-            def previewLines = lines.take(5).findAll { line ->
+            def previewLines = []
+            def count = 0
+            for (line in lines) {
+                if (count >= 5) break
                 def cleanLine = line.toLowerCase()
-                !cleanLine.contains('secret') && !cleanLine.contains('password') &&
-                !cleanLine.contains('key') && !cleanLine.contains('token')
+                if (!cleanLine.contains('secret') && !cleanLine.contains('password') &&
+                    !cleanLine.contains('key') && !cleanLine.contains('token')) {
+                    previewLines.add(line)
+                }
+                count++
             }
             
             if (!previewLines.isEmpty()) {
@@ -1313,7 +1319,7 @@ def archiveFailureDiagnostics(exception) {
         workspace: env.TF_WORKSPACE,
         failureType: exception.class.simpleName,
         errorMessage: exception.message,
-        stackTrace: exception.stackTrace?.take(10)?.join('\n') ?: 'No stack trace available'
+        stackTrace: getStackTracePreview(exception.stackTrace, 10)
     ]
     
     try {
@@ -1324,4 +1330,24 @@ def archiveFailureDiagnostics(exception) {
     } catch (Exception e) {
         logError("Failed to archive failure diagnostics: ${e.message}")
     }
+}
+
+def getStackTracePreview(stackTrace, maxLines) {
+    if (!stackTrace) {
+        return 'No stack trace available'
+    }
+    
+    def lines = []
+    def count = 0
+    
+    // Manual iteration to avoid Jenkins security restrictions on .take()
+    for (element in stackTrace) {
+        if (count >= maxLines) {
+            break
+        }
+        lines.add(element.toString())
+        count++
+    }
+    
+    return lines.join('\n')
 }
