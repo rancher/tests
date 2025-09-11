@@ -1122,49 +1122,49 @@ def applyInfrastructure() {
 //     executeInContainer(inventoryCommands)
 // }
 
-// def validateInfrastructureState() {
-//     logInfo("Validating infrastructure deployment state")
+def validateInfrastructureState() {
+    logInfo("Validating infrastructure deployment state")
     
-//     def validationCommands = [
-//         "cd ${env.QA_INFRA_WORK_PATH}",
-//         "export TF_WORKSPACE=${env.TF_WORKSPACE}",
-//         "echo 'Validating infrastructure state...'",
-//         // Validate state integrity
-//         "tofu -chdir=tofu/aws/modules/airgap state list | wc -l",
-//         // Check critical outputs exist
-//         "tofu -chdir=tofu/aws/modules/airgap output -raw vpc_id || echo 'WARNING: vpc_id output missing'",
-//         "tofu -chdir=tofu/aws/modules/airgap output -raw subnet_ids || echo 'WARNING: subnet_ids output missing'",
-//         // Validate AWS resources are accessible
-//         "aws ec2 describe-instances --filters 'Name=tag:Workspace,Values=${env.TF_WORKSPACE}' --query 'Reservations[*].Instances[*].State.Name' --output text",
-//         "echo 'Infrastructure state validation completed'"
-//     ]
+    def validationCommands = [
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "export TF_WORKSPACE=${env.TF_WORKSPACE}",
+        "echo 'Validating infrastructure state...'",
+        // Validate state integrity
+        "tofu -chdir=tofu/aws/modules/airgap state list | wc -l",
+        // Check critical outputs exist
+        "tofu -chdir=tofu/aws/modules/airgap output -raw vpc_id || echo 'WARNING: vpc_id output missing'",
+        "tofu -chdir=tofu/aws/modules/airgap output -raw subnet_ids || echo 'WARNING: subnet_ids output missing'",
+        // Validate AWS resources are accessible
+        "aws ec2 describe-instances --filters 'Name=tag:Workspace,Values=${env.TF_WORKSPACE}' --query 'Reservations[*].Instances[*].State.Name' --output text",
+        "echo 'Infrastructure state validation completed'"
+    ]
     
-//     executeInContainer(validationCommands)
+    executeInContainer(validationCommands)
     
-//     // Also validate inventory files are ready for Ansible
-//     validateInventoryFiles()
-// }
+    // Also validate inventory files are ready for Ansible
+    validateInventoryFiles()
+}
 
-// def validateInventoryFiles() {
-//     logInfo("Validating Ansible inventory files are ready")
+def validateInventoryFiles() {
+    logInfo("Validating Ansible inventory files are ready")
     
-//     def inventoryValidationCommands = [
-//         "cd ${env.QA_INFRA_WORK_PATH}",
-//         "echo 'Validating Ansible inventory setup...'",
-//         // Check if the main inventory file exists
-//         "if [ -f ansible/rke2/terraform-inventory.yml ]; then echo 'SUCCESS: terraform-inventory.yml exists for Ansible playbooks'; else echo 'ERROR: terraform-inventory.yml missing - Ansible playbooks will fail'; exit 1; fi",
-//         // Validate inventory file has content
-//         "if [ -s ansible/rke2/terraform-inventory.yml ]; then echo 'SUCCESS: terraform-inventory.yml has content'; else echo 'ERROR: terraform-inventory.yml is empty'; exit 1; fi",
-//         // Show inventory structure
-//         "echo 'Inventory file structure:'",
-//         "head -20 ansible/rke2/terraform-inventory.yml",
-//         // Validate YAML syntax
-//         "python3 -c \"import yaml; yaml.safe_load(open('ansible/rke2/terraform-inventory.yml'))\" && echo 'SUCCESS: Inventory YAML is valid' || echo 'WARNING: Inventory YAML syntax issues detected'",
-//         "echo 'Inventory validation completed'"
-//     ]
+    def inventoryValidationCommands = [
+        "cd ${env.QA_INFRA_WORK_PATH}",
+        "echo 'Validating Ansible inventory setup...'",
+        // Check if the main inventory file exists
+        "if [ -f ansible/rke2/terraform-inventory.yml ]; then echo 'SUCCESS: terraform-inventory.yml exists for Ansible playbooks'; else echo 'ERROR: terraform-inventory.yml missing - Ansible playbooks will fail'; exit 1; fi",
+        // Validate inventory file has content
+        "if [ -s ansible/rke2/terraform-inventory.yml ]; then echo 'SUCCESS: terraform-inventory.yml has content'; else echo 'ERROR: terraform-inventory.yml is empty'; exit 1; fi",
+        // Show inventory structure
+        "echo 'Inventory file structure:'",
+        "head -20 ansible/rke2/terraform-inventory.yml",
+        // Validate YAML syntax
+        "python3 -c \"import yaml; yaml.safe_load(open('ansible/rke2/terraform-inventory.yml'))\" && echo 'SUCCESS: Inventory YAML is valid' || echo 'WARNING: Inventory YAML syntax issues detected'",
+        "echo 'Inventory validation completed'"
+    ]
     
-//     executeInContainer(inventoryValidationCommands)
-// }
+    executeInContainer(inventoryValidationCommands)
+}
 
 def handleInfrastructureFailure(failureType, exception) {
     logError("Handling infrastructure failure of type: ${failureType}")
