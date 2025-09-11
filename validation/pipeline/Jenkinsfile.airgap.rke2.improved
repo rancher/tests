@@ -1133,7 +1133,7 @@ def applyInfrastructure() {
 //     ]
     
 //     executeInContainer(inventoryValidationCommands)
-}
+// }
 
 def handleInfrastructureFailure(failureType, exception) {
     logError("Handling infrastructure failure of type: ${failureType}")
