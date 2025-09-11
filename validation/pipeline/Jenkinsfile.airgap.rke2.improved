@@ -1038,19 +1038,15 @@ def manageWorkspace() {
 }
 
 def planInfrastructure() {
-    logInfo("Planning infrastructure changes")
+    logInfo("Planning infrastructure changes (for validation)")
 
     def planCommands = [
         "cd ${env.QA_INFRA_WORK_PATH}",
         "export TF_WORKSPACE=${env.TF_WORKSPACE}",
-        "echo 'Generating infrastructure plan...'",
-        // Copy terraform vars file to the correct module directory
-        "cp ${env.TERRAFORM_VARS_FILENAME} tofu/aws/modules/airgap/",
-        // Create detailed plan with output file
-        "tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=tfplan",
-        // Show plan summary for logging
-        "tofu -chdir=tofu/aws/modules/airgap show -no-color tfplan | head -50",
-        "echo 'Infrastructure plan generated successfully'"
+        "echo 'Generating infrastructure plan for validation...'",
+        // Create detailed plan for validation (but don't save to file since we'll apply directly)
+        "tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file=${env.TERRAFORM_VARS_FILENAME}",
+        "echo 'Infrastructure plan validation completed'"
     ]
 
     executeInContainer(planCommands)
@@ -1063,8 +1059,8 @@ def applyInfrastructure() {
         "cd ${env.QA_INFRA_WORK_PATH}",
         "export TF_WORKSPACE=${env.TF_WORKSPACE}",
         "echo 'Applying infrastructure configuration...'",
-        // Apply from plan file for consistency
-        "tofu -chdir=tofu/aws/modules/airgap apply -input=false tfplan",
+        // Apply directly like the original script but with enhanced error handling
+        "tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}",
         // Verify state after apply
         "tofu -chdir=tofu/aws/modules/airgap state list",
         // Generate outputs for downstream stages
