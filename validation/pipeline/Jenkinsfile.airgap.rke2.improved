@@ -426,7 +426,7 @@ pipeline {
                 }
             }
         }
-    }
+    } // <-- Add this closing brace to properly close the 'stages' block
     
     post {
         always {
