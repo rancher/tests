@@ -510,7 +510,8 @@ def getCredentialsList() {
     return [
         string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
         string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),        
+        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
         string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')
     ]
 }
@@ -523,10 +524,6 @@ def generateConfigurationFiles() {
     def configReplacements = [
         '${AWS_SECRET_ACCESS_KEY}': env.AWS_SECRET_ACCESS_KEY,
         '${AWS_ACCESS_KEY_ID}': env.AWS_ACCESS_KEY_ID,
-        '${ADMIN_PASSWORD}': env.ADMIN_PASSWORD,
-        '${PRIVATE_REGISTRY_URL}': env.PRIVATE_REGISTRY_URL,
-        '${PRIVATE_REGISTRY_USERNAME}': env.PRIVATE_REGISTRY_USERNAME,
-        '${PRIVATE_REGISTRY_PASSWORD}': env.PRIVATE_REGISTRY_PASSWORD,
         '${RKE2_VERSION}': env.RKE2_VERSION,
         '${RANCHER_VERSION}': env.RANCHER_VERSION
     ]
