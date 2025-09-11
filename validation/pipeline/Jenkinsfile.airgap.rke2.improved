@@ -267,29 +267,28 @@ pipeline {
             when {
                 expression { params.PARALLEL_EXECUTION == true }
             }
-            parallel {
+            stages {
+                stage('RKE2 Deployment') {
+                    steps {
                         script {
                             logInfo("Deploying RKE2 cluster with enhanced monitoring for environment: ${env.JOB_NAME}, cluster: ${env.BUILD_CONTAINER_NAME}")
-                            
+
                             timeout(time: Integer.parseInt(env.ANSIBLE_TIMEOUT), unit: 'MINUTES') {
                                 try {
                                     // Pre-deployment validation
                                     validateClusterPrerequisites()
-                                    
+
                                     // Deploy with progress monitoring
                                     // Enhanced monitoring: runs Ansible playbook with monitoring enabled, logs progress, and collects deployment metrics for troubleshooting.
                                     deployRKE2WithMonitoring()
                                     // Post-deployment validation: checks node readiness, system pods, and waits for all kube-system pods to be ready (see validateClusterHealth())
                                     validateClusterHealth()
                                     validateClusterHealth()
-                                    
+
                                 } catch (Exception e) {
                                     logError("[RKE2 Deployment] RKE2 deployment failed: ${e.message}")
                                     handleClusterDeploymentFailure(e)
                                     throw e
-                                }
-                            }
-                        }
                                 }
                             }
                         }
@@ -299,6 +298,7 @@ pipeline {
                             // Artifacts archived: kubeconfig.yaml, cluster-info.yaml
                             logInfo("RKE2 cluster deployed successfully")
                             logInfo("Archiving cluster artifacts: kubeconfig.yaml, cluster-info.yaml")
+                        }
                         failure {
                             script {
                                 logError("RKE2 deployment failed - collecting diagnostic information (diagnostics will be stored in ./cluster-diagnostics/)")
@@ -306,11 +306,8 @@ pipeline {
                                 collectClusterDiagnostics()
                             }
                         }
-                            }
-                        }
                     }
                 }
-                
                 stage('Security & Compliance Validation') {
                     when {
                         expression { params.PARALLEL_EXECUTION == true }
@@ -318,7 +315,7 @@ pipeline {
                     steps {
                         script {
                             logInfo("Running security and compliance validations")
-                            
+
                             timeout(time: 10, unit: 'MINUTES') {
                                 parallel(
                                     "Network Security": {
@@ -336,9 +333,10 @@ pipeline {
                     }
                 }
             }
+            }
+        }
         
         stage('Rancher Deployment & Integration') {
-            steps {
                 script {
                     logInfo("Deploying Rancher with integrated health monitoring")
                     
