@@ -422,11 +422,18 @@ pipeline {
                     }
                 }
             }
-            post {
-                failure {
-                    logError("Deployment validation failed")
-                }
-                always {
+        }
+        // Move the post block outside the parallel block, but inside the stage
+        stage('Validate Deployment Post Actions') {
+            when {
+                beforeAgent true
+                expression { currentBuild.currentResult == 'FAILURE' || true }
+            }
+            steps {
+                script {
+                    if (currentBuild.currentResult == 'FAILURE') {
+                        logError("Deployment validation failed")
+                    }
                     // Archive validation results regardless of success/failure
                     archiveValidationResults()
                 }
