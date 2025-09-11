@@ -264,11 +264,12 @@ pipeline {
         }
         
         stage('Deployment Pipeline') {
+            when {
+                expression { params.PARALLEL_EXECUTION == true }
+            }
             parallel {
-                stage('RKE2 Cluster Deployment') {
-                    steps {
                         script {
-                            logInfo("Deploying RKE2 cluster with enhanced monitoring")
+                            logInfo("Deploying RKE2 cluster with enhanced monitoring for environment: ${env.JOB_NAME}, cluster: ${env.BUILD_CONTAINER_NAME}")
                             
                             timeout(time: Integer.parseInt(env.ANSIBLE_TIMEOUT), unit: 'MINUTES') {
                                 try {
@@ -276,28 +277,35 @@ pipeline {
                                     validateClusterPrerequisites()
                                     
                                     // Deploy with progress monitoring
+                                    // Enhanced monitoring: runs Ansible playbook with monitoring enabled, logs progress, and collects deployment metrics for troubleshooting.
                                     deployRKE2WithMonitoring()
-                                    
-                                    // Post-deployment validation
+                                    // Post-deployment validation: checks node readiness, system pods, and waits for all kube-system pods to be ready (see validateClusterHealth())
+                                    validateClusterHealth()
                                     validateClusterHealth()
                                     
                                 } catch (Exception e) {
-                                    logError("RKE2 deployment failed: ${e.message}")
+                                    logError("[RKE2 Deployment] RKE2 deployment failed: ${e.message}")
                                     handleClusterDeploymentFailure(e)
                                     throw e
+                                }
+                            }
+                        }
                                 }
                             }
                         }
                     }
                     post {
                         success {
+                            // Artifacts archived: kubeconfig.yaml, cluster-info.yaml
                             logInfo("RKE2 cluster deployed successfully")
-                            archiveClusterArtifacts()
-                        }
+                            logInfo("Archiving cluster artifacts: kubeconfig.yaml, cluster-info.yaml")
                         failure {
                             script {
-                                logError("RKE2 deployment failed - collecting diagnostic information")
+                                logError("RKE2 deployment failed - collecting diagnostic information (diagnostics will be stored in ./cluster-diagnostics/)")
+                                // Cluster diagnostics will be archived in the ./cluster-diagnostics/ directory for further analysis.
                                 collectClusterDiagnostics()
+                            }
+                        }
                             }
                         }
                     }
@@ -531,6 +539,15 @@ def setupDynamicEnvironment() {
     // Set environment variables that depend on parameters
     env.RKE2_VERSION = params.RKE2_VERSION
     env.RANCHER_VERSION = params.RANCHER_VERSION
+
+    // Ensure ANSIBLE_TIMEOUT is a valid integer string
+    try {
+        env.ANSIBLE_TIMEOUT = env.ANSIBLE_TIMEOUT?.isInteger() ? env.ANSIBLE_TIMEOUT : "45"
+        Integer.parseInt(env.ANSIBLE_TIMEOUT)
+    } catch (Exception e) {
+        logWarning("ANSIBLE_TIMEOUT is invalid, defaulting to 45 minutes")
+        env.ANSIBLE_TIMEOUT = "45"
+    }
     
     logInfo("Dynamic environment configured")
     logInfo("RKE2 Version: ${env.RKE2_VERSION}")
