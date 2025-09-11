@@ -584,7 +584,7 @@ def buildDockerImage() {
         sh "./tests/validation/configure.sh"
         sh """
             docker build . \
-                -f ./tests/validation/Dockerfile.tofu.e2e \
+                -f ./tests/validation/Dockerfile.e2e \
                 -t ${env.IMAGE_NAME} \
                 --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
                 --build-arg VCS_REF=\$(git rev-parse --short HEAD) \
