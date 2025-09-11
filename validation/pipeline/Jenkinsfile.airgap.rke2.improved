@@ -751,6 +751,17 @@ def sendSlackNotification(config) {
             
             httpRequest(
                 httpMode: 'POST',
+                url: env.SLACK_WEBHOOK,
+                contentType: 'APPLICATION_JSON',
+                requestBody: groovy.json.JsonOutput.toJson(payload)
+            )
+            
+            logInfo("Slack notification sent successfully")
+        } catch (Exception e) {
+            logError("Failed to send Slack notification: ${e.message}")
+        }
+    }
+}
 
 /**
  * ENHANCED DEVOPS FUNCTIONS
@@ -1148,17 +1159,6 @@ def getRancherPodCount() {
     } catch (Exception e) {
         logWarning("Failed to get Rancher pod count: ${e.message}")
         return 0
-    }
-}
-                url: env.SLACK_WEBHOOK,
-                contentType: 'APPLICATION_JSON',
-                requestBody: groovy.json.JsonOutput.toJson(payload)
-            )
-            
-            logInfo("Slack notification sent successfully")
-        } catch (Exception e) {
-            logError("Failed to send Slack notification: ${e.message}")
-        }
     }
 }
 
