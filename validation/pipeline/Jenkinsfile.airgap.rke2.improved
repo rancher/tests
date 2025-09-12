@@ -1187,7 +1187,7 @@ fi
 
 # Verify the plan file is not empty
 PLAN_SIZE=\$(stat -c%s tfplan 2>/dev/null || echo 0)
-if [ "\$PLAN_SIZE" -eq 0 ]; then
+if [ "\$PLAN_SIZE" = "0" ]; then
     echo 'ERROR: Plan file is empty'
     exit 1
 fi
