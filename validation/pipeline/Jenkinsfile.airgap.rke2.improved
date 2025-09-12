@@ -78,6 +78,11 @@ pipeline {
             defaultValue: true,
             description: 'Enable parallel execution where possible'
         )
+        booleanParam(
+            name: 'DESTROY_ON_FAILURE',
+            defaultValue: false,
+            description: 'Destroy infrastructure when Ansible playbooks fail (automatic cleanup)'
+        )
         choice(
             name: 'LOG_LEVEL',
             choices: ['INFO', 'DEBUG', 'VERBOSE'],
@@ -99,6 +104,9 @@ pipeline {
         // Path configurations
         ROOT_PATH = "/root/go/src/github.com/rancher/tests/"
         QA_INFRA_WORK_PATH = "/root/go/src/github.com/rancher/qa-infra-automation"
+        
+        // Cleanup configurations
+        DESTROY_ON_FAILURE = "${params.DESTROY_ON_FAILURE}"
         
         // Computed values
         JOB_SHORT_NAME = "${getShortJobName()}"
@@ -294,7 +302,7 @@ pipeline {
                     timeout(time: 10, unit: 'MINUTES') {
                         try {
                             executeScriptInContainer("""
-cd ${env.QA_INFRA_WORK_PATH}/qa-infra-automation
+cd ${env.QA_INFRA_WORK_PATH}
 
 echo 'Setting up SSH keys for airgap nodes...'
 export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg
@@ -317,6 +325,9 @@ echo 'SSH keys setup completed successfully'
             post {
                 failure {
                     logError("SSH key setup failed")
+                    script {
+                        destroyInfrastructureOnFailure("SSH Key Setup")
+                    }
                 }
             }
         }
@@ -329,7 +340,7 @@ echo 'SSH keys setup completed successfully'
                     timeout(time: Integer.parseInt(env.ANSIBLE_TIMEOUT), unit: 'MINUTES') {
                         try {
                             executeScriptInContainer("""
-cd ${env.QA_INFRA_WORK_PATH}/qa-infra-automation
+cd ${env.QA_INFRA_WORK_PATH}
 
 echo 'Starting RKE2 airgap deployment...'
 export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg
@@ -359,6 +370,9 @@ echo 'RKE2 airgap cluster deployed successfully'
             post {
                 failure {
                     logError("RKE2 deployment failed")
+                    script {
+                        destroyInfrastructureOnFailure("RKE2 Deployment")
+                    }
                 }
             }
         }
@@ -371,7 +385,7 @@ echo 'RKE2 airgap cluster deployed successfully'
                     timeout(time: 5, unit: 'MINUTES') {
                         try {
                             executeScriptInContainer("""
-cd ${env.QA_INFRA_WORK_PATH}/qa-infra-automation
+cd ${env.QA_INFRA_WORK_PATH}
 
 echo 'Setting up kubectl access...'
 export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg
@@ -400,6 +414,10 @@ echo 'kubectl access setup completed successfully'
             post {
                 failure {
                     logWarning("kubectl access setup failed (non-critical)")
+                    script {
+                        // Don't destroy infrastructure for kubectl setup failures since it's non-critical
+                        logWarning("kubectl setup is non-critical - infrastructure will be preserved")
+                    }
                 }
             }
         }
@@ -412,7 +430,7 @@ echo 'kubectl access setup completed successfully'
                     timeout(time: Integer.parseInt(env.ANSIBLE_TIMEOUT), unit: 'MINUTES') {
                         try {
                             executeScriptInContainer("""
-cd ${env.QA_INFRA_WORK_PATH}/qa-infra-automation
+cd ${env.QA_INFRA_WORK_PATH}
 
 echo 'Starting Rancher airgap deployment...'
 export KUBECONFIG=ansible/rke2/kubeconfig.yaml
@@ -442,6 +460,9 @@ kubectl get pods -n cattle-fleet-system
             post {
                 failure {
                     logError("Rancher deployment failed")
+                    script {
+                        destroyInfrastructureOnFailure("Rancher Deployment")
+                    }
                 }
             }
         }
@@ -868,6 +889,23 @@ echo 'Infrastructure destroyed successfully'
 """)
     } catch (Exception e) {
         logError("Infrastructure destruction failed: ${e.message}")
+        logError("Manual cleanup may be required for workspace: ${env.TF_WORKSPACE}")
+    }
+}
+
+def destroyInfrastructureOnFailure(String stageName) {
+    if (params.DESTROY_ON_FAILURE.toBoolean()) {
+        logWarning("DESTROY_ON_FAILURE enabled - Destroying infrastructure due to ${stageName} failure")
+        try {
+            destroyInfrastructure()
+            logWarning("Infrastructure destroyed due to ${stageName} failure")
+        } catch (Exception e) {
+            logError("Failed to destroy infrastructure during failure cleanup: ${e.message}")
+            logError("Manual cleanup may be required for workspace: ${env.TF_WORKSPACE}")
+        }
+    } else {
+        logWarning("DESTROY_ON_FAILURE disabled - Infrastructure will be preserved for debugging")
+        logWarning("Manual cleanup will be required for workspace: ${env.TF_WORKSPACE}")
     }
 }
 
