@@ -69,11 +69,6 @@ pipeline {
             description: 'Private registry password for airgap deployment'
         )
         booleanParam(
-            name: 'CLEANUP_RESOURCES',
-            defaultValue: true,
-            description: 'Clean up AWS resources after deployment'
-        )
-        booleanParam(
             name: 'PARALLEL_EXECUTION',
             defaultValue: true,
             description: 'Enable parallel execution where possible'
@@ -545,14 +540,6 @@ echo 'Rancher validation completed successfully'
                     'deployment-summary.json'
                 ])
                 
-                // Clean up resources
-                if (params.CLEANUP_RESOURCES) {
-                    cleanupInfrastructure()
-                } else {
-                    logInfo("Resource cleanup skipped (CLEANUP_RESOURCES=false)")
-                    logInfo("Remember to manually clean up AWS resources")
-                }
-                
                 // Always cleanup containers and volumes
                 try {
                     node {
@@ -907,11 +894,6 @@ def destroyInfrastructureOnFailure(String stageName) {
         logWarning("DESTROY_ON_FAILURE disabled - Infrastructure will be preserved for debugging")
         logWarning("Manual cleanup will be required for workspace: ${env.TF_WORKSPACE}")
     }
-}
-
-def cleanupInfrastructure() {
-    logInfo("Cleaning up infrastructure resources")
-    destroyInfrastructure()
 }
 
 def cleanupContainersAndVolumes() {
