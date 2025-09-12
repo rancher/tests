@@ -689,7 +689,7 @@ def executeInContainer(commands) {
             -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
             -e TF_WORKSPACE=${env.TF_WORKSPACE} \
             ${env.IMAGE_NAME} \
-            sh -c "${commandString.replaceAll('"', '\\\\"')}"
+            sh -c '${commandString.replaceAll('"', '\\\\"')}'
     """
 }
 
