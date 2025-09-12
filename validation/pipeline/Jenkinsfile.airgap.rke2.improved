@@ -1220,7 +1220,7 @@ def archiveInfrastructureFailureArtifacts() {
             "tofu -chdir=tofu/aws/modules/airgap workspace list > workspace-list.txt 2>&1",
             "tofu -chdir=tofu/aws/modules/airgap state list > state-resources.txt 2>&1 || echo 'No state available'",
             "tofu -chdir=tofu/aws/modules/airgap providers > providers.txt 2>&1 || echo 'Providers not available'",
-            "aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,State.Name,Tags[?Key==\`Name\`].Value|[0]]' --output table > aws-instances.txt 2>&1 || echo 'Could not query AWS instances'",
+            "aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,State.Name,Tags[?Key==\\`Name\\`].Value|[0]]' --output table > aws-instances.txt 2>&1 || echo 'Could not query AWS instances'",
             "echo 'Failure artifact collection completed'"
         ]
         
