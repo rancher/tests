@@ -55,7 +55,7 @@ func agentCustomizationSetup(t *testing.T) agentCustomizationTest {
 	r.cattleConfig, err = defaults.SetK8sDefault(client, defaults.RKE2, r.cattleConfig)
 	assert.NoError(t, err)
 
-	r.standardUserClient, err = standard.CreateStandardUser(r.client)
+	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
 	assert.NoError(t, err)
 
 	return r

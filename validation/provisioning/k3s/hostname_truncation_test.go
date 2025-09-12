@@ -54,7 +54,7 @@ func hostnameTruncationSetup(t *testing.T) hostnameTruncationTest {
 	k.cattleConfig, err = defaults.SetK8sDefault(k.client, defaults.K3S, k.cattleConfig)
 	assert.NoError(t, err)
 
-	k.standardUserClient, err = standard.CreateStandardUser(k.client)
+	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
 	assert.NoError(t, err)
 
 	return k

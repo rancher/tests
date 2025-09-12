@@ -53,7 +53,7 @@ func customSetup(t *testing.T) customTest {
 	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.RKE2, r.cattleConfig)
 	assert.NoError(t, err)
 
-	r.standardUserClient, err = standard.CreateStandardUser(r.client)
+	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
 	assert.NoError(t, err)
 
 	return r

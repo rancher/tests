@@ -47,7 +47,7 @@ func (d *DeleteClusterTestSuite) SetupSuite() {
 
 	d.client = client
 
-	standardUserClient, err := standard.CreateStandardUser(d.client)
+	standardUserClient, _, _, err := standard.CreateStandardUser(d.client)
 	require.NoError(d.T(), err)
 
 	d.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))

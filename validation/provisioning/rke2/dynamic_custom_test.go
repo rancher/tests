@@ -64,7 +64,7 @@ func dynamicCustomSetup(t *testing.T) dynamicCustomTest {
 
 	r.cattleConfigs = append(r.cattleConfigs, permutedConfigs...)
 
-	r.standardUserClient, err = standard.CreateStandardUser(r.client)
+	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
 	assert.NoError(t, err)
 
 	return r

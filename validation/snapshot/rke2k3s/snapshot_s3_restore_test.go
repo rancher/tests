@@ -50,7 +50,7 @@ func (s *S3SnapshotRestoreTestSuite) SetupSuite() {
 
 	s.client = client
 
-	standardUserClient, err := standard.CreateStandardUser(s.client)
+	standardUserClient, _, _, err := standard.CreateStandardUser(s.client)
 	require.NoError(s.T(), err)
 
 	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))

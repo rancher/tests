@@ -58,7 +58,7 @@ func dynamicNodeDriverSetup(t *testing.T) DynamicNodeDriverTest {
 
 	k.cattleConfigs = append(k.cattleConfigs, permutedConfigs...)
 
-	k.standardUserClient, err = standard.CreateStandardUser(k.client)
+	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
 	assert.NoError(t, err)
 
 	return k

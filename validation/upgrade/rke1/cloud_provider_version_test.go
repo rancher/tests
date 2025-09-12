@@ -41,7 +41,7 @@ func (u *UpgradeCloudProviderSuite) SetupSuite() {
 
 	u.client = client
 
-	standardUserClient, err := standard.CreateStandardUser(u.client)
+	standardUserClient, _, _, err := standard.CreateStandardUser(u.client)
 	require.NoError(u.T(), err)
 
 	nodeRolesStandard := []provisioninginput.NodePools{

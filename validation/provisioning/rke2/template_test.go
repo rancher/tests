@@ -76,7 +76,7 @@ func templateSetup(t *testing.T) templateTest {
 	r.cloudCredentials, err = provider.CloudCredFunc(client, cloudCredentialConfig)
 	assert.NoError(t, err)
 
-	r.standardUserClient, err = standard.CreateStandardUser(r.client)
+	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
 	assert.NoError(t, err)
 
 	return r

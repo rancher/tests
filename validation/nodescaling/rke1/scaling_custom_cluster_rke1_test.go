@@ -46,7 +46,7 @@ func (s *RKE1CustomClusterNodeScalingTestSuite) SetupSuite() {
 
 	s.client = client
 
-	standardUserClient, err := standard.CreateStandardUser(s.client)
+	standardUserClient, _, _, err := standard.CreateStandardUser(s.client)
 	require.NoError(s.T(), err)
 
 	nodeRolesStandard := []provisioninginput.NodePools{

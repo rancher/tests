@@ -49,7 +49,7 @@ func (u *MigrateCloudProviderSuite) SetupSuite() {
 
 	u.client = client
 
-	u.standardUserClient, err = standard.CreateStandardUser(u.client)
+	u.standardUserClient, _, _, err = standard.CreateStandardUser(u.client)
 	require.NoError(u.T(), err)
 
 	u.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))

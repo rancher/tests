@@ -49,7 +49,7 @@ func (c *CertRotationTestSuite) SetupSuite() {
 
 	c.client = client
 
-	standardUserClient, err := standard.CreateStandardUser(c.client)
+	standardUserClient, _, _, err := standard.CreateStandardUser(c.client)
 	require.NoError(c.T(), err)
 
 	c.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))

@@ -40,7 +40,7 @@ func (d *DeleteRKE1ClusterTestSuite) SetupSuite() {
 
 	d.client = client
 
-	standardUserClient, err := standard.CreateStandardUser(d.client)
+	standardUserClient, _, _, err := standard.CreateStandardUser(d.client)
 	require.NoError(d.T(), err)
 
 	nodeRolesStandard := []provisioninginput.NodePools{

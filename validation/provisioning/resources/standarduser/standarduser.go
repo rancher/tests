@@ -9,7 +9,7 @@ import (
 )
 
 // CreateStandardUser is a helper function that creates a standard user in the Rancher cluster.
-func CreateStandardUser(client *rancher.Client) (*rancher.Client, error) {
+func CreateStandardUser(client *rancher.Client) (*rancher.Client, string, string, error) {
 	enabled := true
 	testuser := namegen.AppendRandomString("testuser-")
 	testpassword := password.GenerateUserPassword("testpass-")
@@ -23,15 +23,15 @@ func CreateStandardUser(client *rancher.Client) (*rancher.Client, error) {
 
 	newUser, err := users.CreateUserWithRole(client, user, "user")
 	if err != nil {
-		return nil, err
+		return nil, "", "", err
 	}
 
 	newUser.Password = user.Password
 
 	standardUserClient, err := client.AsUser(newUser)
 	if err != nil {
-		return nil, err
+		return nil, "", "", err
 	}
 
-	return standardUserClient, nil
+	return standardUserClient, testuser, testpassword, nil
 }
