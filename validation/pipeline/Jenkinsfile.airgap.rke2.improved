@@ -701,6 +701,34 @@ def executeInContainer(commands) {
     sh "rm -f ${scriptFile}"
 }
 
+def executeScriptInContainer(scriptContent, extraEnv = [:]) {
+    def timestamp = System.currentTimeMillis()
+    def containerName = "${env.BUILD_CONTAINER_NAME}-script-${timestamp}"
+    def scriptFile = "docker-script-${timestamp}.sh"
+    
+    writeFile file: scriptFile, text: scriptContent
+    
+    def envVars = ""
+    extraEnv.each { key, value ->
+        envVars += " -e ${key}=${value}"
+    }
+    
+    sh """
+        docker run --rm \
+            -v ${env.VALIDATION_VOLUME}:/root \
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh \
+            --name ${containerName} \
+            -t --env-file ${env.ENV_FILE} \
+            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
+            -e TF_WORKSPACE=${env.TF_WORKSPACE} \
+            ${envVars} \
+            ${env.IMAGE_NAME} \
+            sh /tmp/script.sh
+    """
+    
+    sh "rm -f ${scriptFile}"
+}
+
 def getAnsibleVerbosity() {
     switch (params.LOG_LEVEL) {
         case 'DEBUG':
@@ -842,21 +870,9 @@ test -f ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_F
 
 echo 'All infrastructure prerequisites validated successfully'
 """
-
-    def timestamp = System.currentTimeMillis()
-    def containerName = "${env.BUILD_CONTAINER_NAME}-prereq-${timestamp}"
     
     try {
-        sh """
-            docker run --rm \
-                -v ${env.VALIDATION_VOLUME}:/root \
-                --name ${containerName} \
-                -t --env-file ${env.ENV_FILE} \
-                -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
-                -e TF_WORKSPACE=${env.TF_WORKSPACE} \
-                ${env.IMAGE_NAME} \
-                sh -c '${prerequisiteScript}'
-        """
+        executeScriptInContainer(prerequisiteScript)
         logInfo("All infrastructure prerequisites validated")
     } catch (Exception e) {
         def errorMsg = "Infrastructure prerequisites validation failed: ${e.message}"
@@ -897,20 +913,8 @@ tofu -chdir=tofu/aws/modules/airgap providers
 
 echo 'OpenTofu initialization completed successfully'
 """
-
-    def timestamp = System.currentTimeMillis()
-    def containerName = "${env.BUILD_CONTAINER_NAME}-init-${timestamp}"
     
-    sh """
-        docker run --rm \
-            -v ${env.VALIDATION_VOLUME}:/root \
-            --name ${containerName} \
-            -t --env-file ${env.ENV_FILE} \
-            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
-            -e TF_WORKSPACE=${env.TF_WORKSPACE} \
-            ${env.IMAGE_NAME} \
-            sh -c '${initScript}'
-    """
+    executeScriptInContainer(initScript)
 }
 
 def manageWorkspace() {
@@ -959,19 +963,8 @@ fi
 export TF_WORKSPACE=${env.TF_WORKSPACE}
 echo "Workspace management completed: \$TF_WORKSPACE"
 """
-
-    def timestamp = System.currentTimeMillis()
-    def containerName = "${env.BUILD_CONTAINER_NAME}-workspace-${timestamp}"
     
-    sh """
-        docker run --rm \
-            -v ${env.VALIDATION_VOLUME}:/root \
-            --name ${containerName} \
-            -t --env-file ${env.ENV_FILE} \
-            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
-            ${env.IMAGE_NAME} \
-            sh -c '${workspaceScript}'
-    """
+    executeScriptInContainer(workspaceScript)
 }
 
 def planInfrastructure() {
@@ -986,20 +979,8 @@ tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file=${env.TERRAFORM_
 
 echo 'Infrastructure plan validation completed'
 """
-
-    def timestamp = System.currentTimeMillis()
-    def containerName = "${env.BUILD_CONTAINER_NAME}-plan-${timestamp}"
     
-    sh """
-        docker run --rm \
-            -v ${env.VALIDATION_VOLUME}:/root \
-            --name ${containerName} \
-            -t --env-file ${env.ENV_FILE} \
-            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
-            -e TF_WORKSPACE=${env.TF_WORKSPACE} \
-            ${env.IMAGE_NAME} \
-            sh -c '${planScript}'
-    """
+    executeScriptInContainer(planScript)
 }
 
 def applyInfrastructure() {
@@ -1059,19 +1040,7 @@ fi
 echo 'Infrastructure provisioned and inventory generated successfully'
 """
 
-    def timestamp = System.currentTimeMillis()
-    def containerName = "${env.BUILD_CONTAINER_NAME}-apply-${timestamp}"
-    
-    sh """
-        docker run --rm \
-            -v ${env.VALIDATION_VOLUME}:/root \
-            --name ${containerName} \
-            -t --env-file ${env.ENV_FILE} \
-            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
-            -e TF_WORKSPACE=${env.TF_WORKSPACE} \
-            ${env.IMAGE_NAME} \
-            sh -c '${applyScript}'
-    """
+    executeScriptInContainer(applyScript)
 }
 
 def validateInfrastructureState() {
@@ -1099,19 +1068,7 @@ fi
 echo 'Infrastructure state validation completed'
 """
 
-    def timestamp = System.currentTimeMillis()
-    def containerName = "${env.BUILD_CONTAINER_NAME}-validate-${timestamp}"
-    
-    sh """
-        docker run --rm \
-            -v ${env.VALIDATION_VOLUME}:/root \
-            --name ${containerName} \
-            -t --env-file ${env.ENV_FILE} \
-            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
-            -e TF_WORKSPACE=${env.TF_WORKSPACE} \
-            ${env.IMAGE_NAME} \
-            sh -c '${validationScript}'
-    """
+    executeScriptInContainer(validationScript)
 }
 
 def archiveValidationResults() {
