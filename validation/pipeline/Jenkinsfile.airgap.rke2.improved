@@ -439,7 +439,7 @@ export ANSIBLE_PRIVATE_KEY_FILE=/root/.ssh/jenkins-elliptic-validation.pem
 
 # Run Rancher airgap deployment
 ansible-playbook -i ansible/rke2/airgap/inventory/inventory.yml \\
-ansible/rancher/playbooks/deploy/rancher-airgap-playbook.yml \\
+ansible/rke2/airgap/playbooks/deploy/rancher-helm-deploy-playbook.yml \\
 ${getAnsibleVerbosity()}
 
 echo 'Rancher deployed successfully on airgap cluster'
@@ -1354,17 +1354,27 @@ echo 'State archival completed'
         
         executeScriptInContainer(archiveScript)
         
-        // Archive files from container
-        def containerId = sh(returnStdout: true, script: "docker ps -aqf \"name=${env.BUILD_CONTAINER_NAME}\"").trim()
-        if (containerId) {
-            sh """
-                docker cp ${containerId}:${env.QA_INFRA_WORK_PATH}/infrastructure-${env.TF_WORKSPACE}.tfstate ./ || true
-                docker cp ${containerId}:${env.QA_INFRA_WORK_PATH}/infrastructure-outputs.json ./ || true
-                docker cp ${containerId}:${env.QA_INFRA_WORK_PATH}/infrastructure-state-summary.txt ./ || true
-            """
-        } else {
-            logWarning("No container found for archival")
-        }
+        // Archive files from shared volume (more reliable than container)
+        sh """
+            # Copy files from shared volume to Jenkins workspace
+            docker run --rm \
+                -v ${env.VALIDATION_VOLUME}:/root \
+                -v ${pwd()}:/workspace \
+                --name archival-check-${env.BUILD_NUMBER} \
+                -t ${env.IMAGE_NAME} \
+                sh -c "
+                    echo 'Checking shared volume contents...'
+                    ls -la /root/go/src/github.com/rancher/qa-infra-automation/
+                    echo 'Checking for archived files...'
+                    ls -la /root/go/src/github.com/rancher/qa-infra-automation/infrastructure-${env.TF_WORKSPACE}.tfstate 2>/dev/null || echo 'Archived tfstate not found in shared volume'
+                    echo 'Copying files to workspace...'
+                    cp /root/go/src/github.com/rancher/qa-infra-automation/infrastructure-${env.TF_WORKSPACE}.tfstate /workspace/ 2>/dev/null || echo 'Failed to copy tfstate'
+                    cp /root/go/src/github.com/rancher/qa-infra-automation/infrastructure-outputs.json /workspace/ 2>/dev/null || echo 'Failed to copy outputs'
+                    cp /root/go/src/github.com/rancher/qa-infra-automation/infrastructure-state-summary.txt /workspace/ 2>/dev/null || echo 'Failed to copy summary'
+                    echo 'Files in workspace after copy:'
+                    ls -la /workspace/
+                "
+        """
         
     } catch (Exception e) {
         logError("Failed to archive infrastructure state: ${e.message}")
