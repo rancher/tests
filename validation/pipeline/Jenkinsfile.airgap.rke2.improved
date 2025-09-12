@@ -1164,6 +1164,10 @@ echo 'Infrastructure plan validation completed'
     """
 }
 
+/**
+ * Applies the infrastructure configuration using OpenTofu, generates inventory files,
+ * and ensures the environment is ready for subsequent deployment stages.
+ */
 def applyInfrastructure() {
     logInfo("Applying infrastructure configuration")
     
@@ -1172,13 +1176,17 @@ cd ${env.QA_INFRA_WORK_PATH}
 export TF_WORKSPACE=${env.TF_WORKSPACE}
 
 echo 'Applying infrastructure configuration...'
-tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}
+# Generate a plan file for auditability and reliability
+tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=tfplan
+
+# Apply the generated plan file
+tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -input=false tfplan
 
 echo 'Verifying state after apply...'
 tofu -chdir=tofu/aws/modules/airgap state list
 
 echo 'Generating outputs for downstream stages...'
-tofu -chdir=tofu/aws/modules/airgap output -json > infrastructure-outputs.json
+tofu -chdir=tofu/aws/modules/airgap output -json > ${env.QA_INFRA_WORK_PATH}/infrastructure-outputs.json
 
 echo 'Enhanced inventory generation starting...'
 echo 'Checking available Terraform outputs...'
@@ -1190,17 +1198,29 @@ mkdir -p ansible/rke2/
 # Method 1: Try inventory output
 echo 'Method 1: Trying inventory output...'
 tofu -chdir=tofu/aws/modules/airgap output -raw inventory > ansible/rke2/terraform-inventory.yml 2>/dev/null || echo 'No inventory output'
+# Remove the file if it is empty to avoid confusion in later steps
+if [ -s ansible/rke2/terraform-inventory.yml ]; then
+    echo 'SUCCESS: Inventory generated using Method 1 (inventory output)'
+else
+    rm -f ansible/rke2/terraform-inventory.yml
+fi
 
 # Method 2: Try hosts output if inventory is empty
 if [ ! -s ansible/rke2/terraform-inventory.yml ]; then
     echo 'Method 2: Trying hosts output...'
     tofu -chdir=tofu/aws/modules/airgap output -raw hosts > ansible/rke2/terraform-inventory.yml 2>/dev/null || echo 'No hosts output'
+    if [ -s ansible/rke2/terraform-inventory.yml ]; then
+        echo 'SUCCESS: Inventory generated using Method 2 (hosts output)'
+    fi
 fi
 
 # Method 3: Try ansible_inventory output if still empty
 if [ ! -s ansible/rke2/terraform-inventory.yml ]; then
     echo 'Method 3: Trying ansible_inventory output...'
     tofu -chdir=tofu/aws/modules/airgap output -raw ansible_inventory > ansible/rke2/terraform-inventory.yml 2>/dev/null || echo 'No ansible_inventory output'
+    if [ -s ansible/rke2/terraform-inventory.yml ]; then
+        echo 'SUCCESS: Inventory generated using Method 3 (ansible_inventory output)'
+    fi
 fi
 
 # Method 4: Generate basic inventory if nothing else works
@@ -1216,8 +1236,10 @@ all:
     rke2_agents:
       hosts:
 EOF
+    echo 'SUCCESS: Inventory generated using Method 4 (basic inventory fallback)'
 fi
 
+echo 'Infrastructure provisioned and inventory generated successfully'
 echo 'Infrastructure provisioned and inventory generated successfully'
 """
 
