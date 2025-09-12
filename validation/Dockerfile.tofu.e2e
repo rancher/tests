@@ -1,4 +1,4 @@
-FROM registry.suse.com/bci/base:latest
+FROM registry.suse.com/bci/bci-base:latest
 
 ENV WORKSPACE=/root/go/src/github.com/rancher/tests
 ENV WORKSPACE2=/root/go/src/github.com/rancher/qa-infra-automation
