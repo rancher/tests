@@ -1332,9 +1332,23 @@ cd ${env.QA_INFRA_WORK_PATH}
 export TF_WORKSPACE=${env.TF_WORKSPACE}
 
 echo 'Archiving infrastructure state...'
+echo 'Current directory contents:'
+ls -la
+
+echo 'Checking tfstate file location:'
+ls -la tofu/aws/modules/airgap/terraform.tfstate 2>/dev/null || echo 'tfstate not found in module directory'
+echo 'Tofu workspace status:'
+tofu -chdir=tofu/aws/modules/airgap workspace list
+
+echo 'Copying state files...'
 cp tofu/aws/modules/airgap/terraform.tfstate infrastructure-${env.TF_WORKSPACE}.tfstate 2>/dev/null || echo 'No state file to archive'
 cp tofu/aws/modules/airgap/tfplan infrastructure-plan.tfplan 2>/dev/null || echo 'No plan file to archive'
 tofu -chdir=tofu/aws/modules/airgap show -no-color > infrastructure-state-summary.txt 2>/dev/null || echo 'Could not generate state summary'
+
+echo 'Verifying copied files:'
+ls -la infrastructure-${env.TF_WORKSPACE}.tfstate 2>/dev/null || echo 'Archived tfstate not found'
+ls -la infrastructure-plan.tfplan 2>/dev/null || echo 'Archived plan not found'
+
 echo 'State archival completed'
 """
         
