@@ -303,6 +303,13 @@ echo 'Setting up SSH keys for airgap nodes...'
 export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg
 export ANSIBLE_PRIVATE_KEY_FILE=/root/.ssh/jenkins-elliptic-validation.pem
 
+# Set correct roles path for Ansible
+export ANSIBLE_ROLES_PATH=ansible/rke2/airgap/roles:ansible/rke2/roles:ansible/roles
+
+# Verify role location
+echo 'Checking for ssh_setup role...'
+ls -la ansible/rke2/airgap/roles/ssh_setup/ 2>/dev/null || echo 'ssh_setup role not found'
+
 # Run SSH key setup playbook
 ansible-playbook -i ansible/rke2/airgap/inventory/inventory.yml \\
 ansible/rke2/airgap/playbooks/setup/setup-ssh-keys.yml \\
