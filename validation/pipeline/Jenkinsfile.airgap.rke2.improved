@@ -741,7 +741,7 @@ def buildDockerImage() {
     logInfo("Building Docker image: ${env.IMAGE_NAME}")
     
     dir('./') {
-        sh "./tests/validation/configure.sh"
+        // sh "./tests/validation/configure.sh"
         sh """
             docker build . \
                 -f ./tests/validation/Dockerfile.e2e \
