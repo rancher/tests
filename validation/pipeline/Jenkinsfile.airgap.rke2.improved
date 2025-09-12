@@ -286,6 +286,41 @@ pipeline {
             }
         }
         
+        stage('Setup SSH Keys') {
+            steps {
+                script {
+                    logInfo("Setting up SSH keys for airgap deployment")
+                    
+                    timeout(time: 10, unit: 'MINUTES') {
+                        try {
+                            executeScriptInContainer("""
+cd ${env.QA_INFRA_WORK_PATH}/qa-infra-automation
+
+echo 'Setting up SSH keys for airgap nodes...'
+export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg
+export ANSIBLE_PRIVATE_KEY_FILE=/root/.ssh/jenkins-elliptic-validation.pem
+
+# Run SSH key setup playbook
+ansible-playbook -i ansible/rke2/terraform-inventory.yml \\
+ansible/rke2/airgap/playbooks/setup/setup-ssh-keys.yml \\
+${getAnsibleVerbosity()} -e @ansible/${env.ANSIBLE_VARS_FILENAME}
+
+echo 'SSH keys setup completed successfully'
+""")
+                        } catch (Exception e) {
+                            logError("SSH key setup failed: ${e.message}")
+                            throw e
+                        }
+                    }
+                }
+            }
+            post {
+                failure {
+                    logError("SSH key setup failed")
+                }
+            }
+        }
+        
         stage('Deploy RKE2 Cluster') {
             steps {
                 script {
@@ -293,16 +328,27 @@ pipeline {
                     
                     timeout(time: Integer.parseInt(env.ANSIBLE_TIMEOUT), unit: 'MINUTES') {
                         try {
-                            executeInContainer([
-                                "cd ${env.QA_INFRA_WORK_PATH}",
-                                "export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg",
-                                "export ANSIBLE_PRIVATE_KEY_FILE=/root/.ssh/jenkins-elliptic-validation.pem",
-                                "echo 'Starting RKE2 airgap deployment...'",
-                                "ansible-playbook -i ansible/rke2/terraform-inventory.yml " +
-                                "ansible/rke2/airgap/playbooks/deploy/rke2-tarball-playbook.yml " +
-                                "${getAnsibleVerbosity()} -e @ansible/${env.ANSIBLE_VARS_FILENAME}",
-                                "echo 'RKE2 airgap cluster deployed successfully'"
-                            ])
+                            executeScriptInContainer("""
+cd ${env.QA_INFRA_WORK_PATH}/qa-infra-automation
+
+echo 'Starting RKE2 airgap deployment...'
+export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg
+export ANSIBLE_PRIVATE_KEY_FILE=/root/.ssh/jenkins-elliptic-validation.pem
+
+# Ensure inventory file exists and is properly formatted
+if [ ! -f ansible/rke2/terraform-inventory.yml ]; then
+    echo 'ERROR: Terraform inventory file not found'
+    ls -la ansible/rke2/
+    exit 1
+fi
+
+# Run RKE2 airgap deployment
+ansible-playbook -i ansible/rke2/terraform-inventory.yml \\
+ansible/rke2/airgap/playbooks/deploy/rke2-tarball-playbook.yml \\
+${getAnsibleVerbosity()} -e @ansible/${env.ANSIBLE_VARS_FILENAME}
+
+echo 'RKE2 airgap cluster deployed successfully'
+""")
                         } catch (Exception e) {
                             logError("RKE2 deployment failed: ${e.message}")
                             throw e
@@ -317,6 +363,47 @@ pipeline {
             }
         }
         
+        stage('Setup kubectl Access') {
+            steps {
+                script {
+                    logInfo("Setting up kubectl access to RKE2 cluster")
+                    
+                    timeout(time: 5, unit: 'MINUTES') {
+                        try {
+                            executeScriptInContainer("""
+cd ${env.QA_INFRA_WORK_PATH}/qa-infra-automation
+
+echo 'Setting up kubectl access...'
+export ANSIBLE_CONFIG=ansible/rke2/ansible.cfg
+export ANSIBLE_PRIVATE_KEY_FILE=/root/.ssh/jenkins-elliptic-validation.pem
+
+# Run kubectl setup playbook
+ansible-playbook -i ansible/rke2/terraform-inventory.yml \\
+ansible/rke2/airgap/playbooks/setup/setup-kubectl-access.yml \\
+${getAnsibleVerbosity()} -e @ansible/${env.ANSIBLE_VARS_FILENAME}
+
+# Verify kubectl access
+export KUBECONFIG=ansible/rke2/kubeconfig.yaml
+echo 'Verifying cluster access...'
+kubectl cluster-info
+kubectl get nodes
+
+echo 'kubectl access setup completed successfully'
+""")
+                        } catch (Exception e) {
+                            logWarning("kubectl setup failed (non-critical): ${e.message}")
+                            // Don't fail the pipeline for kubectl setup issues
+                        }
+                    }
+                }
+            }
+            post {
+                failure {
+                    logWarning("kubectl access setup failed (non-critical)")
+                }
+            }
+        }
+        
         stage('Deploy Rancher') {
             steps {
                 script {
@@ -324,14 +411,27 @@ pipeline {
                     
                     timeout(time: Integer.parseInt(env.ANSIBLE_TIMEOUT), unit: 'MINUTES') {
                         try {
-                            executeInContainer([
-                                "cd ${env.QA_INFRA_WORK_PATH}",
-                                "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
-                                "echo 'Starting Rancher airgap deployment...'",
-                                "ansible-playbook ansible/rancher/playbooks/deploy/rancher-airgap-playbook.yml " +
-                                "${getAnsibleVerbosity()} -e @ansible/${env.ANSIBLE_VARS_FILENAME}",
-                                "echo 'Rancher deployed successfully on airgap cluster'"
-                            ])
+                            executeScriptInContainer("""
+cd ${env.QA_INFRA_WORK_PATH}/qa-infra-automation
+
+echo 'Starting Rancher airgap deployment...'
+export KUBECONFIG=ansible/rke2/kubeconfig.yaml
+export ANSIBLE_CONFIG=ansible/rancher/ansible.cfg
+export ANSIBLE_PRIVATE_KEY_FILE=/root/.ssh/jenkins-elliptic-validation.pem
+
+# Run Rancher airgap deployment
+ansible-playbook -i ansible/rke2/terraform-inventory.yml \\
+ansible/rancher/playbooks/deploy/rancher-airgap-playbook.yml \\
+${getAnsibleVerbosity()} -e @ansible/${env.ANSIBLE_VARS_FILENAME}
+
+echo 'Rancher deployed successfully on airgap cluster'
+
+# Verify Rancher deployment
+export KUBECONFIG=ansible/rke2/kubeconfig.yaml
+echo 'Verifying Rancher deployment...'
+kubectl get pods -n cattle-system
+kubectl get pods -n cattle-fleet-system
+""")
                         } catch (Exception e) {
                             logError("Rancher deployment failed: ${e.message}")
                             throw e
