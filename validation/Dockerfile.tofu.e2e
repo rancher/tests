@@ -30,13 +30,13 @@ SHELL ["/bin/bash", "-c"]
 # RUN ansible-galaxy collection install cloud.terraform
 
 # Setup SSH directory and copy keys
-RUN mkdir -p /root/.ssh && \
-    if [ -d .ssh ]; then \
-        chmod 600 .ssh/jenkins-* 2>/dev/null || true; \
-        cp -r .ssh/jenkins-* /root/.ssh/ 2>/dev/null || true; \
-        for pem_file in /root/.ssh/jenkins-* 2>/dev/null; do \
-            [ -f "$pem_file" ] && ssh-keygen -f "$pem_file" -y > "/root/.ssh/$(basename "$pem_file").pub"; \
-        done; \
+RUN mkdir -p /root/.ssh
+RUN if [ -d .ssh ]; then chmod 600 .ssh/jenkins-* 2>/dev/null || true; fi
+RUN if [ -d .ssh ]; then cp -r .ssh/jenkins-* /root/.ssh/ 2>/dev/null || true; fi
+RUN if [ -d /root/.ssh ]; then \
+    for pem_file in /root/.ssh/jenkins-*; do \
+        [ -f "$pem_file" ] && ssh-keygen -f "$pem_file" -y > "/root/.ssh/$(basename "$pem_file").pub"; \
+    done; \
     fi
 
 RUN ls -al /root/.ssh || echo "No SSH keys found"
