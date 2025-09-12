@@ -454,17 +454,21 @@ kubectl get pods -n cattle-fleet-system
                             logInfo("Validating Kubernetes cluster")
                             
                             timeout(time: Integer.parseInt(env.VALIDATION_TIMEOUT), unit: 'MINUTES') {
-                                executeInContainer([
-                                    "cd ${env.QA_INFRA_WORK_PATH}",
-                                    "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
-                                    "echo 'Validating cluster nodes...'",
-                                    "kubectl get nodes -o wide",
-                                    "echo 'Validating system pods...'",
-                                    "kubectl get pods -A --field-selector=status.phase!=Running",
-                                    "echo 'Validating services...'",
-                                    "kubectl get svc -A",
-                                    "echo 'Cluster validation completed successfully'"
-                                ])
+                                executeScriptInContainer("""
+cd ${env.QA_INFRA_WORK_PATH}
+export KUBECONFIG=ansible/rke2/kubeconfig.yaml
+
+echo 'Validating cluster nodes...'
+kubectl get nodes -o wide
+
+echo 'Validating system pods...'
+kubectl get pods -A --field-selector=status.phase!=Running
+
+echo 'Validating services...'
+kubectl get svc -A
+
+echo 'Cluster validation completed successfully'
+""")
                             }
                         }
                     }
@@ -476,17 +480,21 @@ kubectl get pods -n cattle-fleet-system
                             logInfo("Validating Rancher deployment")
                             
                             timeout(time: Integer.parseInt(env.VALIDATION_TIMEOUT), unit: 'MINUTES') {
-                                executeInContainer([
-                                    "cd ${env.QA_INFRA_WORK_PATH}",
-                                    "export KUBECONFIG=ansible/rke2/kubeconfig.yaml",
-                                    "echo 'Validating Rancher pods...'",
-                                    "kubectl get pods -n cattle-system",
-                                    "echo 'Validating Rancher services...'",
-                                    "kubectl get svc -n cattle-system",
-                                    "echo 'Checking Rancher ingress...'",
-                                    "kubectl get ingress -A",
-                                    "echo 'Rancher validation completed successfully'"
-                                ])
+                                executeScriptInContainer("""
+cd ${env.QA_INFRA_WORK_PATH}
+export KUBECONFIG=ansible/rke2/kubeconfig.yaml
+
+echo 'Validating Rancher pods...'
+kubectl get pods -n cattle-system
+
+echo 'Validating Rancher services...'
+kubectl get svc -n cattle-system
+
+echo 'Checking Rancher ingress...'
+kubectl get ingress -A
+
+echo 'Rancher validation completed successfully'
+""")
                             }
                         }
                     }
@@ -851,13 +859,13 @@ def destroyInfrastructure() {
     logInfo("Destroying infrastructure")
     
     try {
-        executeInContainer([
-            "cd ${env.QA_INFRA_WORK_PATH}",
-            "tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}",
-            "export TF_WORKSPACE=${env.TF_WORKSPACE}",
-            "tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}",
-            "echo 'Infrastructure destroyed successfully'"
-        ])
+        executeScriptInContainer("""
+cd ${env.QA_INFRA_WORK_PATH}
+tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}
+export TF_WORKSPACE=${env.TF_WORKSPACE}
+tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME}
+echo 'Infrastructure destroyed successfully'
+""")
     } catch (Exception e) {
         logError("Infrastructure destruction failed: ${e.message}")
     }
@@ -1281,23 +1289,30 @@ def archiveInfrastructureState() {
     logInfo("Archiving infrastructure state and outputs")
     
     try {
-        def archiveCommands = [
-            "cd ${env.QA_INFRA_WORK_PATH}",
-            "export TF_WORKSPACE=${env.TF_WORKSPACE}",
-            "cp tofu/aws/modules/airgap/terraform.tfstate infrastructure-${env.TF_WORKSPACE}.tfstate 2>/dev/null || echo 'No state file to archive'",
-            "cp tofu/aws/modules/airgap/tfplan infrastructure-plan.tfplan 2>/dev/null || echo 'No plan file to archive'",
-            "tofu -chdir=tofu/aws/modules/airgap show -no-color > infrastructure-state-summary.txt 2>/dev/null || echo 'Could not generate state summary'",
-            "echo 'State archival completed'"
-        ]
+        def archiveScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+export TF_WORKSPACE=${env.TF_WORKSPACE}
+
+echo 'Archiving infrastructure state...'
+cp tofu/aws/modules/airgap/terraform.tfstate infrastructure-${env.TF_WORKSPACE}.tfstate 2>/dev/null || echo 'No state file to archive'
+cp tofu/aws/modules/airgap/tfplan infrastructure-plan.tfplan 2>/dev/null || echo 'No plan file to archive'
+tofu -chdir=tofu/aws/modules/airgap show -no-color > infrastructure-state-summary.txt 2>/dev/null || echo 'Could not generate state summary'
+echo 'State archival completed'
+"""
         
-        executeInContainer(archiveCommands)
+        executeScriptInContainer(archiveScript)
         
         // Archive files from container
-        sh """
-            docker cp \\\$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/infrastructure-${env.TF_WORKSPACE}.tfstate ./ || true
-            docker cp \\\$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/infrastructure-outputs.json ./ || true
-            docker cp \\\$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/infrastructure-state-summary.txt ./ || true
-        """
+        def containerId = sh(returnStdout: true, script: "docker ps -aqf \"name=${env.BUILD_CONTAINER_NAME}\"").trim()
+        if (containerId) {
+            sh """
+                docker cp ${containerId}:${env.QA_INFRA_WORK_PATH}/infrastructure-${env.TF_WORKSPACE}.tfstate ./ || true
+                docker cp ${containerId}:${env.QA_INFRA_WORK_PATH}/infrastructure-outputs.json ./ || true
+                docker cp ${containerId}:${env.QA_INFRA_WORK_PATH}/infrastructure-state-summary.txt ./ || true
+            """
+        } else {
+            logWarning("No container found for archival")
+        }
         
     } catch (Exception e) {
         logError("Failed to archive infrastructure state: ${e.message}")
