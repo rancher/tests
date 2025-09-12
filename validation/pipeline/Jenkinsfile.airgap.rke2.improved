@@ -975,7 +975,26 @@ cd ${env.QA_INFRA_WORK_PATH}
 export TF_WORKSPACE=${env.TF_WORKSPACE}
 
 echo 'Generating infrastructure plan for validation...'
-tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file=${env.TERRAFORM_VARS_FILENAME}
+tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=tfplan
+
+echo 'Checking if plan file was generated...'
+if [ ! -f tfplan ]; then
+    echo 'ERROR: Plan file was not generated successfully'
+    exit 1
+fi
+
+echo 'Verifying plan file is not empty...'
+PLAN_SIZE=\$(stat -c%s tfplan 2>/dev/null || echo 0)
+if [ "\$PLAN_SIZE" = "0" ]; then
+    echo 'ERROR: Plan file is empty'
+    exit 1
+fi
+
+echo "Plan file generated successfully (\$PLAN_SIZE bytes)"
+
+# Copy plan file to shared volume for persistence
+cp tfplan /root/tfplan-backup
+echo 'Plan file backed up to shared volume'
 
 echo 'Infrastructure plan validation completed'
 """
@@ -990,10 +1009,17 @@ def applyInfrastructure() {
 cd ${env.QA_INFRA_WORK_PATH}
 export TF_WORKSPACE=${env.TF_WORKSPACE}
 
-echo 'Applying infrastructure configuration...'
-tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=tfplan
+echo 'Restoring plan file from shared volume...'
+if [ -f /root/tfplan-backup ]; then
+    cp /root/tfplan-backup tfplan
+    echo 'Plan file restored from shared volume'
+else
+    echo 'ERROR: No backup plan file found in shared volume'
+    echo 'Generating new plan...'
+    tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=tfplan
+fi
 
-# Check if plan was generated successfully
+# Check if plan was restored/generated successfully
 if [ ! -f tfplan ]; then
     echo 'ERROR: Plan file was not generated successfully'
     exit 1
@@ -1006,7 +1032,7 @@ if [ "\$PLAN_SIZE" = "0" ]; then
     exit 1
 fi
 
-echo 'Plan file generated successfully (\$PLAN_SIZE bytes), applying...'
+echo 'Plan file restored successfully (\$PLAN_SIZE bytes), applying...'
 tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -input=false tfplan
 
 # Clean up the plan file after successful application
