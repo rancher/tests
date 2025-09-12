@@ -1179,8 +1179,25 @@ echo 'Applying infrastructure configuration...'
 # Generate a plan file for auditability and reliability
 tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=tfplan
 
-# Apply the generated plan file
+# Check if plan was generated successfully
+if [ ! -f tfplan ]; then
+    echo 'ERROR: Plan file was not generated successfully'
+    exit 1
+fi
+
+# Verify the plan file is not empty
+PLAN_SIZE=\$(stat -c%s tfplan 2>/dev/null || echo 0)
+if [ "\$PLAN_SIZE" -eq 0 ]; then
+    echo 'ERROR: Plan file is empty'
+    exit 1
+fi
+
+echo 'Plan file generated successfully (\$PLAN_SIZE bytes), applying...'
+# Apply the generated plan file with proper error handling
 tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -input=false tfplan
+
+# Clean up the plan file after successful application
+rm -f tfplan
 
 echo 'Verifying state after apply...'
 tofu -chdir=tofu/aws/modules/airgap state list
