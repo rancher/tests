@@ -80,7 +80,7 @@ pipeline {
         )
         booleanParam(
             name: 'DESTROY_ON_FAILURE',
-            defaultValue: false,
+            defaultValue: true,
             description: 'Destroy infrastructure when Ansible playbooks fail (automatic cleanup)'
         )
         choice(
@@ -538,7 +538,7 @@ echo 'Rancher validation completed successfully'
                 logInfo("Starting post-build cleanup")
                 
                 // Archive important artifacts
-                archiveArtifacts([
+                archiveBuildArtifacts([
                     'kubeconfig.yaml',
                     'terraform.tfstate',
                     'ansible-logs.txt',
@@ -941,7 +941,7 @@ def cleanupContainersAndVolumes() {
     }
 }
 
-def archiveArtifacts(artifacts) {
+def archiveBuildArtifacts(artifacts) {
     try {
         archiveArtifacts artifacts: artifacts.join(','), allowEmptyArchive: true
         logInfo("Artifacts archived: ${artifacts.join(', ')}")
