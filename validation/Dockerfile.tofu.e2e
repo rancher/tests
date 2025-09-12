@@ -23,8 +23,11 @@ RUN zypper install -y -f docker && rpm -e --nodeps --noscripts containerd
 RUN python3.11 -m pip install --upgrade pip setuptools && \
     python3.11 -m pip install ansible
 
+# necessary to run if statements using [[ ]]
+SHELL ["/bin/bash", "-c"]
+
 # Install ansible-inventory-terraform plugin
-RUN ansible-galaxy collection install cloud.terraform
+# RUN ansible-galaxy collection install cloud.terraform
 
 # Setup SSH directory and copy keys
 RUN mkdir -p /root/.ssh && \
