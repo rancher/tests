@@ -203,7 +203,7 @@ jobs:
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
+            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             compliance: true
             registries:
               rke2Registries:
@@ -489,7 +489,7 @@ jobs:
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
+            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             compliance: true
             registries:
               rke2Registries:
