@@ -1,12 +1,7 @@
-FROM registry.suse.com/bci/golang:1.24
+FROM registry.suse.com/bci/base:latest
 
-# Configure Go
-ENV GOFLAGS=-buildvcs=false
-ENV GOPATH=/root/go
-ENV PATH=${PATH}:/root/go/bin
-
-ENV WORKSPACE=${GOPATH}/src/github.com/rancher/tests
-ENV WORKSPACE2=${GOPATH}/src/github.com/rancher/qa-infra-automation
+ENV WORKSPACE=/root/go/src/github.com/rancher/tests
+ENV WORKSPACE2=/root/go/src/github.com/rancher/qa-infra-automation
 
 WORKDIR $WORKSPACE
 
@@ -15,32 +10,35 @@ COPY ["./qa-infra-automation", "$WORKSPACE2"]
 
 ARG TOFU_VERSION=1.10.6
 
-RUN zypper -n install gcc binutils glibc-devel-static ca-certificates git-core wget curl unzip tar vim less file xz gzip sed gawk iproute2 iptables jq
+# Install essential packages for airgap RKE2 deployment
+RUN zypper -n install -y \
+    ca-certificates git-core wget curl unzip tar \
+    vim less file xz gzip sed gawk iproute2 iptables jq \
+    python311 python311-pip python311-base openssh
+
+# Install Docker
 RUN zypper install -y -f docker && rpm -e --nodeps --noscripts containerd
 
-# Python related dependencies for the Integration/Validation tests.
-RUN zypper -n install python311-pip python311-base python311 python311-devel python311-tox libffi-devel libopenssl-devel
-
-# Upgrade pip and install Python packages
+# Install Ansible (required for RKE2 deployment)
 RUN python3.11 -m pip install --upgrade pip setuptools && \
-    python3.11 -m pip install ansible kubernetes
+    python3.11 -m pip install ansible
 
-# Install ansible-inventory-terraform plugin from GitHub
+# Install ansible-inventory-terraform plugin
 RUN ansible-galaxy collection install cloud.terraform
-    
-RUN go mod download && \
-    go install gotest.tools/gotestsum@latest 
 
-RUN zypper install -y openssh && \
-    mkdir -p /root/.ssh && chmod 600 .ssh/jenkins-* && \
-    cp -r .ssh/jenkins-* /root/.ssh/
+# Setup SSH directory and copy keys
+RUN mkdir -p /root/.ssh && \
+    if [ -d .ssh ]; then \
+        chmod 600 .ssh/jenkins-* 2>/dev/null || true; \
+        cp -r .ssh/jenkins-* /root/.ssh/ 2>/dev/null || true; \
+        for pem_file in /root/.ssh/jenkins-* 2>/dev/null; do \
+            [ -f "$pem_file" ] && ssh-keygen -f "$pem_file" -y > "/root/.ssh/$(basename "$pem_file").pub"; \
+        done; \
+    fi
 
-RUN for pem_file in /root/.ssh/jenkins-*; do \
-        ssh-keygen -f "$pem_file" -y > "/root/.ssh/$(basename "$pem_file").pub"; \
-    done
+RUN ls -al /root/.ssh || echo "No SSH keys found"
 
-RUN ls -al /root/.ssh
-# Install Terraform (manual download and install)
+# Install OpenTofu
 RUN wget "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.zip" && \
     unzip -j "tofu_${TOFU_VERSION}_linux_amd64.zip" "tofu" && \
     mv tofu /usr/local/bin/ && \
@@ -52,26 +50,5 @@ RUN curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -
     chmod +x kubectl && \
     mv ./kubectl /usr/local/bin/kubectl
 
-# Install Helm
-RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 && \
-chmod +x get_helm.sh && \
-./get_helm.sh && \
-rm get_helm.sh
-
 # necessary to run if statements using [[ ]]
-SHELL ["/bin/bash", "-c"] 
-
-ARG RKE_VERSION
-RUN if [[ -n "$RKE_VERSION" ]] ; then echo installing latest version RKE && \
-    curl -0Ls https://github.com/rancher/rke/releases/latest/download/rke_linux-amd64 > rke ; else echo installing ${RKE_VERSION} version RKE && \
-    curl -0Ls https://github.com/rancher/rke/releases/download/$RKE_VERSION/rke_linux-amd64 > rke; fi;
-RUN mv rke /bin/rke && \
-    chmod +x /bin/rke
-
-ARG CLI_VERSION
-RUN if [[ -n "$CLI_VERSION" ]] ; then  \
-        echo installing CLI version $CLI_VERSION ; \
-        curl -LO https://github.com/rancher/cli/releases/download/$CLI_VERSION/rancher-linux-amd64-$CLI_VERSION.tar.gz ; \
-        tar -xf rancher-linux-amd64-$CLI_VERSION.tar.gz && \
-        mv rancher-$CLI_VERSION/rancher /bin/rancher && \
-        chmod +x /bin/rancher; fi;
+SHELL ["/bin/bash", "-c"]
