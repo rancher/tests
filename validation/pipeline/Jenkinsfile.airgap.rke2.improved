@@ -369,22 +369,248 @@ else
 fi
 echo '========================================'
 
-# First, validate all YAML files for syntax errors
-echo 'Validating YAML files...'
-echo 'Checking inventory.yml:'
-echo 'Inventory file contents:'
-cat ansible/rke2/airgap/inventory/inventory.yml
-echo 'Attempting to validate inventory...'
-ansible-inventory -i ansible/rke2/airgap/inventory/inventory.yml --list || echo 'Inventory validation failed'
+# Enhanced YAML validation and fixing for inventory and group_vars files
+echo '=== Enhanced YAML Validation and Fixing ==='
+echo "Timestamp: \$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+echo ""
 
-echo 'Checking group_vars/all.yml:'
-cat ansible/rke2/airgap/inventory/group_vars/all.yml | head -10
+# Validate and fix inventory.yml
+echo '📋 Processing inventory.yml...'
+if [ -f ansible/rke2/airgap/inventory/inventory.yml ]; then
+    echo '✓ inventory.yml exists, validating content...'
+    
+    # Check if file has content
+    if [ -s ansible/rke2/airgap/inventory/inventory.yml ]; then
+        echo '✓ inventory.yml has content'
+        
+        # Show current content for debugging
+        echo '📄 Current inventory.yml content (first 30 lines):'
+        head -30 ansible/rke2/airgap/inventory/inventory.yml
+        echo ""
+        
+        # Create backup before fixing
+        cp ansible/rke2/airgap/inventory/inventory.yml ansible/rke2/airgap/inventory/inventory.yml.ssh-backup
+        
+        # Fix YAML syntax issues using Python
+        echo '🔧 Fixing YAML syntax issues in inventory.yml...'
+        python3 << 'INVENTORY_FIX_EOF'
+import re
+import yaml
+import sys
 
-echo 'Checking playbook syntax:'
-ansible-playbook --syntax-check -M ansible/rke2/airgap/roles \\
--i ansible/rke2/airgap/inventory/inventory.yml \\
-ansible/rke2/airgap/playbooks/setup/setup-ssh-keys.yml \\
-${getAnsibleVerbosity()} || echo 'Syntax check failed'
+print("=== Inventory YAML Fixer ===")
+
+try:
+    # Read the inventory file
+    with open('ansible/rke2/airgap/inventory/inventory.yml', 'r') as f:
+        content = f.read()
+    
+    print("Original content length:", len(content))
+    
+    # Common YAML fixes for inventory files
+    fixed_content = content
+    
+    # Fix 1: ProxyCommand quoting issues
+    patterns_to_fix = [
+        # Fix single quotes around ProxyCommand values with Jinja2 templates
+        (r"ProxyCommand='([^']*{{[^}]*}}[^']*)'", r'ProxyCommand="\1"'),
+        # Fix unquoted values that contain special characters
+        (r"(\s+)([a-zA-Z_][a-zA-Z0-9_]*): ([^'\"\s][^#\n]*[{}][^#\n]*)", r'\1\2: "\3"'),
+        # Fix boolean values that might be misformatted
+        (r"(\s+)([a-zA-Z_][a-zA-Z0-9_]*): (yes|no|true|false|on|off)\s*$", r'\1\2: \3'),
+    ]
+    
+    for pattern, replacement in patterns_to_fix:
+        old_content = fixed_content
+        fixed_content = re.sub(pattern, replacement, fixed_content, flags=re.MULTILINE)
+        if old_content != fixed_content:
+            print(f"Applied fix: {pattern[:50]}...")
+    
+    # Fix 2: Ensure proper indentation and structure
+    lines = fixed_content.split('\n')
+    cleaned_lines = []
+    
+    for line in lines:
+        # Remove trailing whitespace but preserve line structure
+        cleaned_line = line.rstrip()
+        
+        # Fix common indentation issues
+        if cleaned_line.strip() and not cleaned_line.startswith('#'):
+            # Ensure consistent indentation (convert tabs to spaces)
+            cleaned_line = cleaned_line.expandtabs(2)
+        
+        cleaned_lines.append(cleaned_line)
+    
+    fixed_content = '\n'.join(cleaned_lines)
+    
+    # Write the fixed content back
+    with open('ansible/rke2/airgap/inventory/inventory.yml', 'w') as f:
+        f.write(fixed_content)
+    
+    print("=== YAML fixes applied ===")
+    
+    # Validate the fixed YAML
+    try:
+        with open('ansible/rke2/airgap/inventory/inventory.yml', 'r') as f:
+            yaml.safe_load(f)
+        print("✓ YAML validation: SUCCESS")
+    except yaml.YAMLError as e:
+        print(f"❌ YAML validation: FAILED - {e}")
+        
+        # Try to provide more specific error information
+        try:
+            import yaml
+            with open('ansible/rke2/airgap/inventory/inventory.yml', 'r') as f:
+                yaml.safe_load(f)
+        except yaml.YAMLError as detailed_error:
+            print(f"Detailed error: {detailed_error}")
+    
+except Exception as e:
+    print(f"❌ Error during inventory YAML fixing: {e}")
+    sys.exit(1)
+
+print("=== Inventory YAML fixer completed ===")
+INVENTORY_FIX_EOF
+        
+        echo '📊 Validating fixed inventory.yml with ansible-inventory...'
+        if ansible-inventory -i ansible/rke2/airgap/inventory/inventory.yml --list > /dev/null 2>&1; then
+            echo '✅ inventory.yml validation: SUCCESS'
+        else
+            echo '⚠️  inventory.yml validation: ISSUES DETECTED'
+            echo 'Ansible inventory validation output:'
+            ansible-inventory -i ansible/rke2/airgap/inventory/inventory.yml --list || true
+        fi
+        
+    else
+        echo '❌ inventory.yml is empty'
+        exit 1
+    fi
+else
+    echo '❌ inventory.yml not found'
+    ls -la ansible/rke2/airgap/inventory/
+    exit 1
+fi
+
+echo ""
+
+# Validate and fix group_vars/all.yml
+echo '📋 Processing group_vars/all.yml...'
+if [ -f ansible/rke2/airgap/inventory/group_vars/all.yml ]; then
+    echo '✓ group_vars/all.yml exists, validating content...'
+    
+    if [ -s ansible/rke2/airgap/inventory/group_vars/all.yml ]; then
+        echo '✓ group_vars/all.yml has content'
+        
+        # Show current content for debugging
+        echo '📄 Current group_vars/all.yml content (first 20 lines):'
+        head -20 ansible/rke2/airgap/inventory/group_vars/all.yml
+        echo ""
+        
+        # Create backup before fixing
+        cp ansible/rke2/airgap/inventory/group_vars/all.yml ansible/rke2/airgap/inventory/group_vars/all.yml.ssh-backup
+        
+        # Fix YAML syntax issues
+        echo '🔧 Fixing YAML syntax issues in group_vars/all.yml...'
+        python3 << 'GROUPVARS_FIX_EOF'
+import re
+import yaml
+import sys
+
+print("=== Group Vars YAML Fixer ===")
+
+try:
+    # Read the group_vars file
+    with open('ansible/rke2/airgap/inventory/group_vars/all.yml', 'r') as f:
+        content = f.read()
+    
+    print("Original content length:", len(content))
+    
+    # Common YAML fixes for group_vars files
+    fixed_content = content
+    
+    # Fix patterns for group_vars
+    patterns_to_fix = [
+        # Fix unquoted strings that contain special characters
+        (r"^(\s*)([a-zA-Z_][a-zA-Z0-9_]*): ([^'\"\s#][^#\n]*[{}:@/][^#\n]*)\s*$", r'\1\2: "\3"'),
+        # Fix boolean and numeric values
+        (r"^(\s*)([a-zA-Z_][a-zA-Z0-9_]*): (yes|no|true|false|on|off)\s*$", r'\1\2: \3'),
+        (r"^(\s*)([a-zA-Z_][a-zA-Z0-9_]*): ([0-9]+)\s*$", r'\1\2: \3'),
+        # Fix list items that might need quoting
+        (r"^(\s*)-\s+([^'\"\s#][^#\n]*[{}:@/][^#\n]*)\s*$", r'\1- "\2"'),
+    ]
+    
+    for pattern, replacement in patterns_to_fix:
+        old_content = fixed_content
+        fixed_content = re.sub(pattern, replacement, fixed_content, flags=re.MULTILINE)
+        if old_content != fixed_content:
+            print(f"Applied fix: {pattern[:50]}...")
+    
+    # Clean up indentation and whitespace
+    lines = fixed_content.split('\n')
+    cleaned_lines = []
+    
+    for line in lines:
+        cleaned_line = line.rstrip().expandtabs(2)
+        cleaned_lines.append(cleaned_line)
+    
+    fixed_content = '\n'.join(cleaned_lines)
+    
+    # Write the fixed content back
+    with open('ansible/rke2/airgap/inventory/group_vars/all.yml', 'w') as f:
+        f.write(fixed_content)
+    
+    print("=== Group vars YAML fixes applied ===")
+    
+    # Validate the fixed YAML
+    try:
+        with open('ansible/rke2/airgap/inventory/group_vars/all.yml', 'r') as f:
+            yaml.safe_load(f)
+        print("✓ YAML validation: SUCCESS")
+    except yaml.YAMLError as e:
+        print(f"❌ YAML validation: FAILED - {e}")
+    
+except Exception as e:
+    print(f"❌ Error during group_vars YAML fixing: {e}")
+    sys.exit(1)
+
+print("=== Group vars YAML fixer completed ===")
+GROUPVARS_FIX_EOF
+        
+    else
+        echo '❌ group_vars/all.yml is empty'
+        # Don't exit here as group_vars might be optional
+        echo '⚠️  Warning: group_vars/all.yml is empty, playbook may use defaults'
+    fi
+else
+    echo '⚠️  group_vars/all.yml not found, checking if directory exists...'
+    ls -la ansible/rke2/airgap/inventory/group_vars/ || echo 'group_vars directory not found'
+    # Don't exit here as group_vars might be optional
+fi
+
+echo ""
+
+# Final validation with ansible-playbook syntax check
+echo '📋 Final playbook syntax validation...'
+echo 'Checking playbook syntax with fixed YAML files:'
+if ansible-playbook --syntax-check -M ansible/rke2/airgap/roles \\
+   -i ansible/rke2/airgap/inventory/inventory.yml \\
+   ansible/rke2/airgap/playbooks/setup/setup-ssh-keys.yml \\
+   ${getAnsibleVerbosity}; then
+    echo '✅ Playbook syntax check: SUCCESS'
+else
+    echo '❌ Playbook syntax check: FAILED'
+    echo '🔍 Debugging information:'
+    echo 'Files in inventory directory:'
+    ls -la ansible/rke2/airgap/inventory/
+    echo 'Files in roles directory:'
+    ls -la ansible/rke2/airgap/roles/ || echo 'Roles directory not accessible'
+    echo 'Files in playbooks directory:'
+    ls -la ansible/rke2/airgap/playbooks/setup/ || echo 'Playbooks directory not accessible'
+    echo ""
+    echo '⚠️  Continuing with playbook execution despite syntax check failure...'
+fi
+
+echo '============================================'
 
 echo 'Running SSH key setup playbook...'
 ansible-playbook -M ansible/rke2/airgap/roles \\
