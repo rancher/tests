@@ -311,9 +311,63 @@ echo 'Checking for ssh_setup role...'
 ls -la ansible/rke2/airgap/roles/ssh_setup/ 2>/dev/null || echo 'ssh_setup role not found'
 ls -la ansible/rke2/airgap/roles/ 2>/dev/null || echo 'roles directory not found'
 
-# Show Ansible what roles paths it's using
-echo 'Current ANSIBLE_ROLES_PATH:'
-echo \$ANSIBLE_ROLES_PATH
+# Comprehensive ANSIBLE_ROLES_PATH validation and debugging
+echo '=== Ansible Environment Validation ==='
+echo "Timestamp: \$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+echo "Working Directory: \$(pwd)"
+echo "User: \${USER:-unknown}"
+echo ""
+
+if [ -z "\$ANSIBLE_ROLES_PATH" ]; then
+    echo '❌ ANSIBLE_ROLES_PATH is not configured'
+    echo '   Status: Using Ansible default search locations'
+    echo '   Defaults: ~/.ansible/roles:/usr/share/ansible/roles:/etc/ansible/roles'
+    echo '   Recommendation: Configure ANSIBLE_ROLES_PATH for custom roles'
+else
+    echo '✅ ANSIBLE_ROLES_PATH is configured'
+    echo "   Value: \$ANSIBLE_ROLES_PATH"
+    echo ""
+    
+    # Validate each path in the roles path
+    valid_paths=0
+    invalid_paths=0
+    echo '📁 Path Analysis:'
+    
+    echo "\$ANSIBLE_ROLES_PATH" | tr ':' '\n' | while IFS= read -r path; do
+        if [ -n "\$path" ]; then
+            if [ -d "\$path" ]; then
+                echo "   ✓ \$path (accessible)"
+                valid_paths=\$((valid_paths + 1))
+            else
+                echo "   ❌ \$path (not found or inaccessible)"
+                invalid_paths=\$((invalid_paths + 1))
+            fi
+        fi
+    done
+    
+    # Summary validation
+    echo ""
+    echo '📊 Validation Summary:'
+    total_paths=\$(echo "\$ANSIBLE_ROLES_PATH" | tr ':' '\n' | grep -c '^.')
+    echo "   Total paths configured: \$total_paths"
+    
+    # Check for inaccessible paths (simplified check since we can't easily pass variables from subshell)
+    inaccessible_count=0
+    for path in \$(echo "\$ANSIBLE_ROLES_PATH" | tr ':' ' '); do
+        if [ -n "\$path" ] && [ ! -d "\$path" ]; then
+            inaccessible_count=\$((inaccessible_count + 1))
+        fi
+    done
+    
+    if [ \$inaccessible_count -gt 0 ]; then
+        echo '⚠️  Warning: Some paths are inaccessible'
+        echo '   This may cause:'
+        echo '   - Role resolution failures'
+        echo '   - Playbook execution errors'
+        echo '   - Fallback to default locations'
+    fi
+fi
+echo '========================================'
 
 # First, validate all YAML files for syntax errors
 echo 'Validating YAML files...'
