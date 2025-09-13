@@ -315,8 +315,8 @@ ls -la ansible/rke2/airgap/roles/ 2>/dev/null || echo 'roles directory not found
 echo 'Current ANSIBLE_ROLES_PATH:'
 echo \$ANSIBLE_ROLES_PATH
 
-# Run SSH key setup playbook with explicit roles path
-ansible-playbook --roles-path ansible/rke2/airgap/roles \\
+# Run SSH key setup playbook with explicit roles path using -M for roles
+ansible-playbook -M ansible/rke2/airgap/roles \\
 -i ansible/rke2/airgap/inventory/inventory.yml \\
 ansible/rke2/airgap/playbooks/setup/setup-ssh-keys.yml \\
 ${getAnsibleVerbosity()}
