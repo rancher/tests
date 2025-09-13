@@ -413,18 +413,18 @@ try:
     # Fix 1: ProxyCommand quoting issues
     patterns_to_fix = [
         # Fix single quotes around ProxyCommand values with Jinja2 templates
-        (r"ProxyCommand='([^']*{{[^}]*}}[^']*)'", r'ProxyCommand="\1"'),
+        (r"ProxyCommand='([^']*{{[^}]*}}[^']*)'", r'ProxyCommand="\\1"'),
         # Fix unquoted values that contain special characters
-        (r"(\s+)([a-zA-Z_][a-zA-Z0-9_]*): ([^'\"\s][^#\n]*[{}][^#\n]*)", r'\1\2: "\3"'),
+        (r"(\\s+)([a-zA-Z_][a-zA-Z0-9_]*): ([^'\"\\s][^#\\n]*[{}][^#\\n]*)", r'\\1\\2: "\\3"'),
         # Fix boolean values that might be misformatted
-        (r"(\s+)([a-zA-Z_][a-zA-Z0-9_]*): (yes|no|true|false|on|off)\s*$", r'\1\2: \3'),
+        (r"(\\s+)([a-zA-Z_][a-zA-Z0-9_]*): (yes|no|true|false|on|off)\\s*$", r'\\1\\2: \\3'),
     ]
     
     for pattern, replacement in patterns_to_fix:
         old_content = fixed_content
         fixed_content = re.sub(pattern, replacement, fixed_content, flags=re.MULTILINE)
         if old_content != fixed_content:
-            print(f"Applied fix: {pattern[:50]}...")
+            print("Applied fix: " + pattern[:50] + "...")
     
     # Fix 2: Ensure proper indentation and structure
     lines = fixed_content.split('\n')
@@ -441,7 +441,7 @@ try:
         
         cleaned_lines.append(cleaned_line)
     
-    fixed_content = '\n'.join(cleaned_lines)
+    fixed_content = '\\n'.join(cleaned_lines)
     
     # Write the fixed content back
     with open('ansible/rke2/airgap/inventory/inventory.yml', 'w') as f:
@@ -455,7 +455,7 @@ try:
             yaml.safe_load(f)
         print("✓ YAML validation: SUCCESS")
     except yaml.YAMLError as e:
-        print(f"❌ YAML validation: FAILED - {e}")
+        print("❌ YAML validation: FAILED - " + str(e))
         
         # Try to provide more specific error information
         try:
@@ -463,10 +463,10 @@ try:
             with open('ansible/rke2/airgap/inventory/inventory.yml', 'r') as f:
                 yaml.safe_load(f)
         except yaml.YAMLError as detailed_error:
-            print(f"Detailed error: {detailed_error}")
+            print("Detailed error: " + str(detailed_error))
     
 except Exception as e:
-    print(f"❌ Error during inventory YAML fixing: {e}")
+    print("❌ Error during inventory YAML fixing: " + str(e))
     sys.exit(1)
 
 print("=== Inventory YAML fixer completed ===")
@@ -531,19 +531,19 @@ try:
     # Fix patterns for group_vars
     patterns_to_fix = [
         # Fix unquoted strings that contain special characters
-        (r"^(\s*)([a-zA-Z_][a-zA-Z0-9_]*): ([^'\"\s#][^#\n]*[{}:@/][^#\n]*)\s*$", r'\1\2: "\3"'),
+        (r"^(\\s*)([a-zA-Z_][a-zA-Z0-9_]*): ([^'\"\\s#][^#\\n]*[{}:@/][^#\\n]*)\\s*$", r'\\1\\2: "\\3"'),
         # Fix boolean and numeric values
-        (r"^(\s*)([a-zA-Z_][a-zA-Z0-9_]*): (yes|no|true|false|on|off)\s*$", r'\1\2: \3'),
-        (r"^(\s*)([a-zA-Z_][a-zA-Z0-9_]*): ([0-9]+)\s*$", r'\1\2: \3'),
+        (r"^(\\s*)([a-zA-Z_][a-zA-Z0-9_]*): (yes|no|true|false|on|off)\\s*$", r'\\1\\2: \\3'),
+        (r"^(\\s*)([a-zA-Z_][a-zA-Z0-9_]*): ([0-9]+)\\s*$", r'\\1\\2: \\3'),
         # Fix list items that might need quoting
-        (r"^(\s*)-\s+([^'\"\s#][^#\n]*[{}:@/][^#\n]*)\s*$", r'\1- "\2"'),
+        (r"^(\\s*)-\\s+([^'\"\\s#][^#\\n]*[{}:@/][^#\\n]*)\\s*$", r'\\1- "\\2"'),
     ]
     
     for pattern, replacement in patterns_to_fix:
         old_content = fixed_content
         fixed_content = re.sub(pattern, replacement, fixed_content, flags=re.MULTILINE)
         if old_content != fixed_content:
-            print(f"Applied fix: {pattern[:50]}...")
+            print("Applied fix: " + pattern[:50] + "...")
     
     # Clean up indentation and whitespace
     lines = fixed_content.split('\n')
@@ -553,7 +553,7 @@ try:
         cleaned_line = line.rstrip().expandtabs(2)
         cleaned_lines.append(cleaned_line)
     
-    fixed_content = '\n'.join(cleaned_lines)
+    fixed_content = '\\n'.join(cleaned_lines)
     
     # Write the fixed content back
     with open('ansible/rke2/airgap/inventory/group_vars/all.yml', 'w') as f:
@@ -567,10 +567,10 @@ try:
             yaml.safe_load(f)
         print("✓ YAML validation: SUCCESS")
     except yaml.YAMLError as e:
-        print(f"❌ YAML validation: FAILED - {e}")
+        print("❌ YAML validation: FAILED - " + str(e))
     
 except Exception as e:
-    print(f"❌ Error during group_vars YAML fixing: {e}")
+    print("❌ Error during group_vars YAML fixing: " + str(e))
     sys.exit(1)
 
 print("=== Group vars YAML fixer completed ===")
