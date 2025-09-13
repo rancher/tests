@@ -1242,35 +1242,44 @@ with open('ansible/rke2/airgap/inventory/inventory.yml', 'r') as f:
 
 print("=== Python YAML fixer ===")
 print("Original content:")
-print(repr(content[:500]))  # Show first 500 chars to see the issue
+print(content)
 
-# Fix the ProxyCommand issue - the problem is single quotes inside double quotes
-# Pattern: ansible_ssh_common_args: "... ProxyCommand='ssh ... %h:%p ...' ..."
-# Replace single quotes around ProxyCommand value with double quotes
+# Find the exact problematic line and fix it
+# The specific issue is: ProxyCommand='ssh -W %h:%p -i {{ ssh_private_key_file }} {{ bastion_user }}@{{ bastion_host }}'
+# We need to change the single quotes to double quotes
 
-# First pattern: handle ProxyCommand='...' inside double quotes
-pattern1 = r"(ansible_ssh_common_args:.*ProxyCommand=)'([^']*)'(.*)"
-replacement1 = r'\1"\2"\3'
-fixed_content = re.sub(pattern1, replacement1, content)
+# Pattern to match the exact problematic line
+pattern = r"ProxyCommand='ssh -W %h:%p -i \{\{ ssh_private_key_file \}\} \{\{ bastion_user \}\}@\{\{ bastion_host \}\}'"
+replacement = r'ProxyCommand="ssh -W %h:%p -i {{ ssh_private_key_file }} {{ bastion_user }}@{{ bastion_host }}"'
 
-# Second pattern: handle any remaining single quotes in ProxyCommand
+fixed_content = re.sub(pattern, replacement, content)
+
+print("=== After first replacement ===")
+print(fixed_content)
+
+# Also handle a more general pattern
 pattern2 = r"ProxyCommand='([^']*)'"
 replacement2 = r'ProxyCommand="\1"'
 fixed_content = re.sub(pattern2, replacement2, fixed_content)
 
-# Third pattern: fix escaped quotes if they exist
-pattern3 = r'ProxyCommand="\\"ssh -W %h:%p([^"]*)\\"'
-replacement3 = r'ProxyCommand="ssh -W %h:%p\1"'
-fixed_content = re.sub(pattern3, replacement3, fixed_content)
-
-print("Fixed content:")
-print(repr(fixed_content[:500]))
+print("=== Final fixed content ===")
+print(fixed_content)
 
 # Write the fixed content back
 with open('ansible/rke2/airgap/inventory/inventory.yml', 'w') as f:
     f.write(fixed_content)
 
 print("=== Python YAML fixer completed ===")
+
+# Validate the fix
+try:
+    import yaml
+    with open('ansible/rke2/airgap/inventory/inventory.yml', 'r') as f:
+        yaml.safe_load(f)
+    print("=== YAML validation: SUCCESS ===")
+except Exception as e:
+    print("=== YAML validation: FAILED ===")
+    print(f"Error: {e}")
 EOF
     
     echo 'Fixed inventory file contents:'
