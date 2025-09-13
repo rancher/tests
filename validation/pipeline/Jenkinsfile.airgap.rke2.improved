@@ -318,6 +318,9 @@ echo \$ANSIBLE_ROLES_PATH
 # First, validate all YAML files for syntax errors
 echo 'Validating YAML files...'
 echo 'Checking inventory.yml:'
+echo 'Inventory file contents:'
+cat ansible/rke2/airgap/inventory/inventory.yml
+echo 'Attempting to validate inventory...'
 ansible-inventory -i ansible/rke2/airgap/inventory/inventory.yml --list || echo 'Inventory validation failed'
 
 echo 'Checking group_vars/all.yml:'
