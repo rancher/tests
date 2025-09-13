@@ -1241,20 +1241,30 @@ with open('ansible/rke2/airgap/inventory/inventory.yml', 'r') as f:
     content = f.read()
 
 print("=== Python YAML fixer ===")
-print("Original content length:", len(content))
+print("Original content:")
+print(repr(content[:500]))  # Show first 500 chars to see the issue
 
-# Fix the ProxyCommand line - look for the pattern and replace with proper quoting
-pattern = r"ansible_ssh_common_args: \"-o ProxyCommand='([^']*)'(.*)"
-replacement = r"ansible_ssh_common_args: \"-o ProxyCommand=\"\1\"\2"
+# Fix the ProxyCommand issue - the problem is single quotes inside double quotes
+# Pattern: ansible_ssh_common_args: "... ProxyCommand='ssh ... %h:%p ...' ..."
+# Replace single quotes around ProxyCommand value with double quotes
 
-fixed_content = re.sub(pattern, replacement, content)
+# First pattern: handle ProxyCommand='...' inside double quotes
+pattern1 = r"(ansible_ssh_common_args:.*ProxyCommand=)'([^']*)'(.*)"
+replacement1 = r'\1"\2"\3'
+fixed_content = re.sub(pattern1, replacement1, content)
 
-# Also handle cases where the single quotes might be escaped differently
+# Second pattern: handle any remaining single quotes in ProxyCommand
 pattern2 = r"ProxyCommand='([^']*)'"
 replacement2 = r'ProxyCommand="\1"'
 fixed_content = re.sub(pattern2, replacement2, fixed_content)
 
-print("Fixed content length:", len(fixed_content))
+# Third pattern: fix escaped quotes if they exist
+pattern3 = r'ProxyCommand="\\"ssh -W %h:%p([^"]*)\\"'
+replacement3 = r'ProxyCommand="ssh -W %h:%p\1"'
+fixed_content = re.sub(pattern3, replacement3, fixed_content)
+
+print("Fixed content:")
+print(repr(fixed_content[:500]))
 
 # Write the fixed content back
 with open('ansible/rke2/airgap/inventory/inventory.yml', 'w') as f:
