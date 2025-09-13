@@ -595,7 +595,7 @@ echo 'Checking playbook syntax with fixed YAML files:'
 if ansible-playbook --syntax-check -M ansible/rke2/airgap/roles \\
    -i ansible/rke2/airgap/inventory/inventory.yml \\
    ansible/rke2/airgap/playbooks/setup/setup-ssh-keys.yml \\
-   ${getAnsibleVerbosity}; then
+   ${getAnsibleVerbosity()}; then
     echo '✅ Playbook syntax check: SUCCESS'
 else
     echo '❌ Playbook syntax check: FAILED'
