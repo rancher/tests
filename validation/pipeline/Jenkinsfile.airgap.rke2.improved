@@ -417,7 +417,7 @@ try:
         # Fix unquoted values that contain special characters
         (r"(\\s+)([a-zA-Z_][a-zA-Z0-9_]*): ([^'\"\\s][^#\\n]*[{}][^#\\n]*)", r'\\1\\2: "\\3"'),
         # Fix boolean values that might be misformatted
-        (r"(\\s+)([a-zA-Z_][a-zA-Z0-9_]*): (yes|no|true|false|on|off)\\s*$", r'\\1\\2: \\3'),
+        (r"(\\s+)([a-zA-Z_][a-zA-Z0-9_]*): (yes|no|true|false|on|off)\\s*\\$", r'\\1\\2: \\3'),
     ]
     
     for pattern, replacement in patterns_to_fix:
@@ -531,12 +531,12 @@ try:
     # Fix patterns for group_vars
     patterns_to_fix = [
         # Fix unquoted strings that contain special characters
-        (r"^(\\s*)([a-zA-Z_][a-zA-Z0-9_]*): ([^'\"\\s#][^#\\n]*[{}:@/][^#\\n]*)\\s*$", r'\\1\\2: "\\3"'),
+        (r"^(\\s*)([a-zA-Z_][a-zA-Z0-9_]*): ([^'\"\\s#][^#\\n]*[{}:@/][^#\\n]*)\\s*\\$", r'\\1\\2: "\\3"'),
         # Fix boolean and numeric values
-        (r"^(\\s*)([a-zA-Z_][a-zA-Z0-9_]*): (yes|no|true|false|on|off)\\s*$", r'\\1\\2: \\3'),
-        (r"^(\\s*)([a-zA-Z_][a-zA-Z0-9_]*): ([0-9]+)\\s*$", r'\\1\\2: \\3'),
+        (r"^(\\s*)([a-zA-Z_][a-zA-Z0-9_]*): (yes|no|true|false|on|off)\\s*\\$", r'\\1\\2: \\3'),
+        (r"^(\\s*)([a-zA-Z_][a-zA-Z0-9_]*): ([0-9]+)\\s*\\$", r'\\1\\2: \\3'),
         # Fix list items that might need quoting
-        (r"^(\\s*)-\\s+([^'\"\\s#][^#\\n]*[{}:@/][^#\\n]*)\\s*$", r'\\1- "\\2"'),
+        (r"^(\\s*)-\\s+([^'\"\\s#][^#\\n]*[{}:@/][^#\\n]*)\\s*\\$", r'\\1- "\\2"'),
     ]
     
     for pattern, replacement in patterns_to_fix:
