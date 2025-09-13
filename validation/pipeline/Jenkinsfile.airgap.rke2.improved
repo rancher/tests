@@ -661,10 +661,10 @@ except Exception as e:
             ansible-inventory -i ansible/rke2/airgap/inventory/inventory.yml --list -vvv --plugin auto 2>&1 | head -10 || echo 'Auto plugin test failed'
             
             echo '--- Searching for specific error patterns ---'
-            grep -n "declined parsing" ansible_inventory_debug.log || echo 'No "declined parsing" message found'
-            grep -n "verify_file" ansible_inventory_debug.log || echo 'No "verify_file" message found'
-            grep -n "host_list" ansible_inventory_debug.log || echo 'No "host_list" message found'
-            grep -n "ERROR\|Error\|error" ansible_inventory_debug.log | head -5 || echo 'No error messages found'
+            grep -n "declined parsing" ansible_inventory_debug.log \\|\\| echo 'No "declined parsing" message found'
+            grep -n "verify_file" ansible_inventory_debug.log \\|\\| echo 'No "verify_file" message found'
+            grep -n "host_list" ansible_inventory_debug.log \\|\\| echo 'No "host_list" message found'
+            grep -n "ERROR\\\\|Error\\\\|error" ansible_inventory_debug.log \\| head -5 \\|\\| echo 'No error messages found'
             
             echo '--- Attempting manual inventory structure creation ---'
             python3 -c "
@@ -1742,7 +1742,7 @@ if [ -f ansible/rke2/airgap/inventory/inventory.yml ] && [ -s ansible/rke2/airga
     
     # Show specific lines that might have YAML syntax issues
     echo "=== Lines with potential YAML syntax issues ==="
-    grep -n ":" ansible/rke2/airgap/inventory/inventory.yml | grep ": [^']" | head -10
+    grep -n ":" ansible/rke2/airgap/inventory/inventory.yml \\| grep ": [^']" \\| head -10
     echo "=== End potential issues ==="
     
     # Fix the ProxyCommand quoting issue with a comprehensive approach
