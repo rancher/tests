@@ -393,7 +393,7 @@ if [ -f ansible/rke2/airgap/inventory/inventory.yml ]; then
         
         # Fix YAML syntax issues using Python
         echo '🔧 Fixing YAML syntax issues in inventory.yml...'
-        python3 << 'INVENTORY_FIX_EOF'
+        python << 'INVENTORY_FIX_EOF'
 import re
 import yaml
 import sys
@@ -596,7 +596,7 @@ INVENTORY_FIX_EOF
             echo ''
             
             echo '--- Advanced YAML syntax validation ---'
-            python3 -c "
+            python -c "
 import yaml
 import sys
 try:
@@ -667,7 +667,7 @@ except Exception as e:
             grep -n "ERROR\\\\|Error\\\\|error" ansible_inventory_debug.log \\| head -5 \\|\\| echo 'No error messages found'
             
             echo '--- Attempting manual inventory structure creation ---'
-            python3 -c "
+            python -c "
 import yaml
 import sys
 
@@ -749,7 +749,7 @@ if [ -f ansible/rke2/airgap/inventory/group_vars/all.yml ]; then
         
         # Fix YAML syntax issues
         echo '🔧 Fixing YAML syntax issues in group_vars/all.yml...'
-        python3 << 'GROUPVARS_FIX_EOF'
+        python << 'GROUPVARS_FIX_EOF'
 import re
 import yaml
 import sys
@@ -1750,7 +1750,7 @@ if [ -f ansible/rke2/airgap/inventory/inventory.yml ] && [ -s ansible/rke2/airga
     cp ansible/rke2/airgap/inventory/inventory.yml ansible/rke2/airgap/inventory/inventory.yml.backup
     
     # Use python to properly fix the YAML syntax (more reliable than sed)
-    python3 << 'EOF'
+    python << 'EOF'
 import re
 import sys
 
@@ -1805,7 +1805,7 @@ EOF
     
     # Validate the YAML syntax
     echo "=== Validating YAML syntax ==="
-    python3 -c "import yaml; yaml.safe_load(open('ansible/rke2/airgap/inventory/inventory.yml', 'r'))" && echo "YAML syntax is valid" || echo "YAML syntax still has issues"
+    python -c "import yaml; yaml.safe_load(open('ansible/rke2/airgap/inventory/inventory.yml', 'r'))" && echo "YAML syntax is valid" || echo "YAML syntax still has issues"
     echo "=== End YAML validation ==="
 else
     echo 'ERROR: inventory.yml missing or empty after tofu apply'
