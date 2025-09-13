@@ -1224,7 +1224,7 @@ if [ -f ansible/rke2/airgap/inventory/inventory.yml ] && [ -s ansible/rke2/airga
     
     # Show specific lines that might have YAML syntax issues
     echo "=== Lines with potential YAML syntax issues ==="
-    grep -n ":" ansible/rke2/airgap/inventory/inventory.yml | grep -E ":\s+[^']" | head -10
+    grep -n ":" ansible/rke2/airgap/inventory/inventory.yml | grep ": [^']" | head -10
     echo "=== End potential issues ==="
     
     # Fix the ProxyCommand quoting issue with a comprehensive approach
