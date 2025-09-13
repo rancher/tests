@@ -315,7 +315,21 @@ ls -la ansible/rke2/airgap/roles/ 2>/dev/null || echo 'roles directory not found
 echo 'Current ANSIBLE_ROLES_PATH:'
 echo \$ANSIBLE_ROLES_PATH
 
-# Run SSH key setup playbook with explicit roles path using -M for roles
+# First, validate all YAML files for syntax errors
+echo 'Validating YAML files...'
+echo 'Checking inventory.yml:'
+ansible-inventory -i ansible/rke2/airgap/inventory/inventory.yml --list || echo 'Inventory validation failed'
+
+echo 'Checking group_vars/all.yml:'
+cat ansible/rke2/airgap/inventory/group_vars/all.yml | head -10
+
+echo 'Checking playbook syntax:'
+ansible-playbook --syntax-check -M ansible/rke2/airgap/roles \\
+-i ansible/rke2/airgap/inventory/inventory.yml \\
+ansible/rke2/airgap/playbooks/setup/setup-ssh-keys.yml \\
+${getAnsibleVerbosity()} || echo 'Syntax check failed'
+
+echo 'Running SSH key setup playbook...'
 ansible-playbook -M ansible/rke2/airgap/roles \\
 -i ansible/rke2/airgap/inventory/inventory.yml \\
 ansible/rke2/airgap/playbooks/setup/setup-ssh-keys.yml \\
