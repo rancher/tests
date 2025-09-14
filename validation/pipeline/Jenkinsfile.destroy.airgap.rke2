@@ -11,15 +11,13 @@
 pipeline {
     agent any
 
-    // Global pipeline options with pipeline-level locking
+    // Global pipeline options
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timeout(time: 2, unit: 'HOURS')
         timestamps()
         ansiColor('xterm')
         skipStagesAfterUnstable()
-        // Pipeline-level locking to prevent concurrent operations
-        lock(resource: "terraform-destroy-lock-${params.TARGET_WORKSPACE ?: 'default'}")
     }
 
     parameters {
@@ -88,188 +86,167 @@ pipeline {
     }
 
     stages {
-        stage('Validate Parameters') {
+        // Wrap destruction operations with lock to prevent concurrent state operations
+        stage('Infrastructure Destruction Operations') {
             steps {
-                script {
-                    logInfo('Validating destruction parameters')
+                lock(resource: "terraform-destroy-lock-${params.TARGET_WORKSPACE ?: 'default'}") {
+                    script {
+                        logInfo("🔒 Acquired destruction lock: terraform-destroy-lock-${params.TARGET_WORKSPACE ?: 'default'}")
+                        logInfo("⚠️ WARNING: Using Jenkins pipeline locks instead of DynamoDB state locking")
+                    }
                     
-                    if (!params.TARGET_WORKSPACE || params.TARGET_WORKSPACE.trim().isEmpty()) {
-                        error('TARGET_WORKSPACE parameter is required for destruction')
-                    }
-
-                    if (params.STATE_SOURCE == 'JENKINS_ARTIFACTS' && 
-                        (!params.UPSTREAM_BUILD_NUMBER || !params.UPSTREAM_JOB_NAME)) {
-                        error('UPSTREAM_BUILD_NUMBER and UPSTREAM_JOB_NAME are required when using JENKINS_ARTIFACTS as state source')
-                    }
-
-                    env.TARGET_WORKSPACE = params.TARGET_WORKSPACE
-                    
-                    logInfo("Target workspace: ${env.TARGET_WORKSPACE}")
-                    logInfo("State source: ${params.STATE_SOURCE}")
-                    logInfo("Dry run mode: ${params.DRY_RUN}")
-                    logInfo("Force destroy: ${params.FORCE_DESTROY}")
-                }
-            }
-        }
-
-        stage('Prepare Environment') {
-            steps {
-                script {
-                    logInfo('Preparing destruction environment')
-                    
-                    // Clean workspace
-                    deleteDir()
-
-                    // Checkout QA infrastructure repository
-                    dir('./qa-infra-automation') {
-                        logInfo("Cloning qa-infra-automation repository")
-                        checkout([
-                            $class: 'GitSCM',
-                            branches: [[name: "*/main"]],
-                            extensions: [
-                                [$class: 'CleanCheckout'],
-                                [$class: 'CloneOption', depth: 1, shallow: true]
-                            ],
-                            userRemoteConfigs: [[url: env.QA_INFRA_REPO]]
-                        ])
-                    }
-
-                    // Configure credentials and build environment
-                    withCredentials(getCredentialsList()) {
-                        generateDestructionEnvironmentFile()
-                        buildDestructionDockerImage()
-                        createSharedVolume()
-                    }
-                }
-            }
-            post {
-                failure {
-                    logError('Environment preparation failed')
-                    cleanupContainersAndVolumes()
-                }
-            }
-        }
-
-        stage('Retrieve Terraform State') {
-            steps {
-                script {
-                    logInfo('Retrieving Terraform state for destruction')
-                    
-                    def stateRetrieved = false
-
-                    if (params.STATE_SOURCE == 'S3_BACKEND' || params.STATE_SOURCE == 'BOTH') {
-                        logInfo('Attempting to retrieve state from S3 backend')
-                        stateRetrieved = retrieveStateFromS3()
-                    }
-
-                    if (!stateRetrieved && (params.STATE_SOURCE == 'JENKINS_ARTIFACTS' || params.STATE_SOURCE == 'BOTH')) {
-                        logInfo('Attempting to retrieve state from Jenkins artifacts')
-                        stateRetrieved = retrieveStateFromJenkinsArtifacts(params.UPSTREAM_BUILD_NUMBER)
-                    }
-
-                    if (!stateRetrieved && !params.FORCE_DESTROY) {
-                        error('Could not retrieve Terraform state and FORCE_DESTROY is not enabled')
-                    } else if (!stateRetrieved && params.FORCE_DESTROY) {
-                        logWarning('State retrieval failed but FORCE_DESTROY is enabled - proceeding with caution')
-                    }
-
-                    // Validate state if retrieved
-                    if (stateRetrieved) {
-                        validateStateForDestruction()
-                    }
-                }
-            }
-            post {
-                failure {
-                    logError('State retrieval failed')
-                    archiveDestructionFailureArtifacts()
-                }
-            }
-        }
-
-        stage('Plan Destruction') {
-            steps {
-                script {
-                    logInfo('Planning infrastructure destruction')
-                    
-                    try {
-                        planDestruction()
+                    // Validate Parameters
+                    script {
+                        logInfo('Validating destruction parameters')
                         
-                        // Archive the destruction plan
-                        archiveDestructionPlan()
-                        
-                        if (params.DRY_RUN) {
-                            logInfo('DRY_RUN mode enabled - destruction plan completed without execution')
-                            currentBuild.result = 'SUCCESS'
-                            return
+                        if (!params.TARGET_WORKSPACE || params.TARGET_WORKSPACE.trim().isEmpty()) {
+                            error('TARGET_WORKSPACE parameter is required for destruction')
                         }
-                    } catch (Exception e) {
-                        logError("Destruction planning failed: ${e.message}")
-                        throw e
-                    }
-                }
-            }
-            post {
-                failure {
-                    logError('Destruction planning failed')
-                    archiveDestructionFailureArtifacts()
-                }
-            }
-        }
 
-        stage('Execute Destruction') {
-            when {
-                not { params.DRY_RUN }
-            }
-            steps {
-                script {
-                    logInfo('Executing infrastructure destruction')
+                        if (params.STATE_SOURCE == 'JENKINS_ARTIFACTS' &&
+                            (!params.UPSTREAM_BUILD_NUMBER || !params.UPSTREAM_JOB_NAME)) {
+                            error('UPSTREAM_BUILD_NUMBER and UPSTREAM_JOB_NAME are required when using JENKINS_ARTIFACTS as state source')
+                        }
+
+                        env.TARGET_WORKSPACE = params.TARGET_WORKSPACE
+                        
+                        logInfo("Target workspace: ${env.TARGET_WORKSPACE}")
+                        logInfo("State source: ${params.STATE_SOURCE}")
+                        logInfo("Dry run mode: ${params.DRY_RUN}")
+                        logInfo("Force destroy: ${params.FORCE_DESTROY}")
+                    }
                     
-                    def proceedWithDestruction = true
+                    // Prepare Environment
+                    script {
+                        logInfo('Preparing destruction environment')
+                        
+                        // Clean workspace
+                        deleteDir()
+
+                        // Checkout QA infrastructure repository
+                        dir('./qa-infra-automation') {
+                            logInfo("Cloning qa-infra-automation repository")
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/main"]],
+                                extensions: [
+                                    [$class: 'CleanCheckout'],
+                                    [$class: 'CloneOption', depth: 1, shallow: true]
+                                ],
+                                userRemoteConfigs: [[url: env.QA_INFRA_REPO]]
+                            ])
+                        }
+
+                        // Configure credentials and build environment
+                        withCredentials(getCredentialsList()) {
+                            generateDestructionEnvironmentFile()
+                            buildDestructionDockerImage()
+                            createSharedVolume()
+                        }
+                    }
                     
-                    // Final confirmation step
-                    if (!params.FORCE_DESTROY) {
-                        timeout(time: 5, unit: 'MINUTES') {
-                            try {
-                                proceedWithDestruction = input(
-                                    message: "Proceed with destruction of workspace: ${env.TARGET_WORKSPACE}?",
-                                    ok: 'Destroy',
-                                    parameters: [
-                                        booleanParam(
-                                            name: 'CONFIRM_DESTRUCTION', 
-                                            defaultValue: false, 
-                                            description: 'I understand this will permanently destroy the infrastructure'
-                                        )
-                                    ]
-                                )
-                            } catch (Exception e) {
-                                logWarning('Destruction cancelled by user or timeout')
-                                currentBuild.result = 'ABORTED'
+                    // Retrieve Terraform State
+                    script {
+                        logInfo('Retrieving Terraform state for destruction')
+                        
+                        def stateRetrieved = false
+
+                        if (params.STATE_SOURCE == 'S3_BACKEND' || params.STATE_SOURCE == 'BOTH') {
+                            logInfo('Attempting to retrieve state from S3 backend')
+                            stateRetrieved = retrieveStateFromS3()
+                        }
+
+                        if (!stateRetrieved && (params.STATE_SOURCE == 'JENKINS_ARTIFACTS' || params.STATE_SOURCE == 'BOTH')) {
+                            logInfo('Attempting to retrieve state from Jenkins artifacts')
+                            stateRetrieved = retrieveStateFromJenkinsArtifacts(params.UPSTREAM_BUILD_NUMBER)
+                        }
+
+                        if (!stateRetrieved && !params.FORCE_DESTROY) {
+                            error('Could not retrieve Terraform state and FORCE_DESTROY is not enabled')
+                        } else if (!stateRetrieved && params.FORCE_DESTROY) {
+                            logWarning('State retrieval failed but FORCE_DESTROY is enabled - proceeding with caution')
+                        }
+
+                        // Validate state if retrieved
+                        if (stateRetrieved) {
+                            validateStateForDestruction()
+                        }
+                    }
+                    
+                    // Plan Destruction
+                    script {
+                        logInfo('Planning infrastructure destruction')
+                        
+                        try {
+                            planDestruction()
+                            
+                            // Archive the destruction plan
+                            archiveDestructionPlan()
+                            
+                            if (params.DRY_RUN) {
+                                logInfo('DRY_RUN mode enabled - destruction plan completed without execution')
+                                currentBuild.result = 'SUCCESS'
                                 return
+                            }
+                        } catch (Exception e) {
+                            logError("Destruction planning failed: ${e.message}")
+                            throw e
+                        }
+                    }
+                    
+                    // Execute Destruction (only if not DRY_RUN)
+                    script {
+                        if (!params.DRY_RUN) {
+                            logInfo('Executing infrastructure destruction')
+                            
+                            def proceedWithDestruction = true
+                            
+                            // Final confirmation step
+                            if (!params.FORCE_DESTROY) {
+                                timeout(time: 5, unit: 'MINUTES') {
+                                    try {
+                                        proceedWithDestruction = input(
+                                            message: "Proceed with destruction of workspace: ${env.TARGET_WORKSPACE}?",
+                                            ok: 'Destroy',
+                                            parameters: [
+                                                booleanParam(
+                                                    name: 'CONFIRM_DESTRUCTION',
+                                                    defaultValue: false,
+                                                    description: 'I understand this will permanently destroy the infrastructure'
+                                                )
+                                            ]
+                                        )
+                                    } catch (Exception e) {
+                                        logWarning('Destruction cancelled by user or timeout')
+                                        currentBuild.result = 'ABORTED'
+                                        return
+                                    }
+                                }
+                            }
+
+                            if (proceedWithDestruction || params.FORCE_DESTROY) {
+                                executeDestruction()
+                                validateDestruction()
+                                logInfo('Infrastructure destruction completed successfully')
+                                archiveDestructionResults()
+                            } else {
+                                logInfo('Destruction cancelled by user')
+                                currentBuild.result = 'ABORTED'
                             }
                         }
                     }
-
-                    if (proceedWithDestruction || params.FORCE_DESTROY) {
-                        executeDestruction()
-                        validateDestruction()
-                    } else {
-                        logInfo('Destruction cancelled by user')
-                        currentBuild.result = 'ABORTED'
-                    }
                 }
             }
             post {
                 failure {
                     script {
-                        logError('Infrastructure destruction failed')
+                        logError('Infrastructure destruction operations failed')
                         archiveDestructionFailureArtifacts()
                     }
                 }
-                success {
+                always {
                     script {
-                        logInfo('Infrastructure destruction completed successfully')
-                        archiveDestructionResults()
+                        logInfo("🔓 Released destruction lock: terraform-destroy-lock-${params.TARGET_WORKSPACE ?: 'default'}")
                     }
                 }
             }
