@@ -164,7 +164,7 @@ pipeline {
                     }
                     
                     // Checkout Repositories
-                    parallel {
+                    parallel([
                         'Checkout Rancher Tests': {
                             dir('./tests') {
                                 logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
@@ -197,7 +197,7 @@ pipeline {
                                 ])
                             }
                         }
-                    }
+                    ])
                     
                     // Configure Environment
                     script {
