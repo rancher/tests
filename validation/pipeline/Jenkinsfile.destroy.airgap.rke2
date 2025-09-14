@@ -136,6 +136,20 @@ pipeline {
                             ])
                         }
 
+                        // Checkout Tests repository for Dockerfile access
+                        dir('./tests') {
+                            logInfo("Cloning tests repository for Docker build")
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/main"]],
+                                extensions: [
+                                    [$class: 'CleanCheckout'],
+                                    [$class: 'CloneOption', depth: 1, shallow: true]
+                                ],
+                                userRemoteConfigs: [[url: 'https://github.com/floatingman/rancher-tests']]
+                            ])
+                        }
+
                         // Configure credentials and build environment
                         withCredentials(getCredentialsList()) {
                             generateDestructionEnvironmentFile()
@@ -309,27 +323,32 @@ def getCredentialsList() {
 def generateDestructionEnvironmentFile() {
     logInfo('Generating environment file for destruction containers')
 
-    def envContent = """# Environment variables for infrastructure destruction containers
-TARGET_WORKSPACE=${env.TARGET_WORKSPACE}
-BUILD_NUMBER=${env.BUILD_NUMBER}
-JOB_NAME=${env.JOB_NAME}
-QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}
-TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}
-TF_STATE_BUCKET=${env.TF_STATE_BUCKET}
-TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX}
-TF_STATE_REGION=${env.TF_STATE_REGION}
-AWS_REGION=${env.AWS_REGION}
+    // Build environment content securely without direct interpolation of secrets
+    def envLines = [
+        "# Environment variables for infrastructure destruction containers",
+        "TARGET_WORKSPACE=${env.TARGET_WORKSPACE}",
+        "BUILD_NUMBER=${env.BUILD_NUMBER}",
+        "JOB_NAME=${env.JOB_NAME}",
+        "QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}",
+        "TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}",
+        "TF_STATE_BUCKET=${env.TF_STATE_BUCKET}",
+        "TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX}",
+        "TF_STATE_REGION=${env.TF_STATE_REGION}",
+        "AWS_REGION=${env.AWS_REGION}",
+        "",
+        "# AWS Credentials for OpenTofu"
+    ]
+    
+    // Add credentials securely
+    envLines.add("AWS_ACCESS_KEY_ID=" + env.AWS_ACCESS_KEY_ID)
+    envLines.add("AWS_SECRET_ACCESS_KEY=" + env.AWS_SECRET_ACCESS_KEY)
+    envLines.add("")
+    envLines.add("# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)")
+    envLines.add("TF_VAR_aws_access_key=" + env.AWS_ACCESS_KEY_ID)
+    envLines.add("TF_VAR_aws_secret_access_key=" + env.AWS_SECRET_ACCESS_KEY)
+    envLines.add("TF_VAR_aws_region=" + env.AWS_REGION)
 
-# AWS Credentials for OpenTofu
-AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}
-AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}
-
-# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)
-TF_VAR_aws_access_key=${env.AWS_ACCESS_KEY_ID}
-TF_VAR_aws_secret_access_key=${env.AWS_SECRET_ACCESS_KEY}
-TF_VAR_aws_region=${env.AWS_REGION}
-"""
-
+    def envContent = envLines.join('\n')
     writeFile file: env.ENV_FILE, text: envContent
     logInfo("Environment file created: ${env.ENV_FILE}")
 }
