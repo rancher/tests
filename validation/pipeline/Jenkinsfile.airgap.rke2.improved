@@ -572,31 +572,6 @@ def createSharedVolume() {
     sh "docker volume create --name ${env.VALIDATION_VOLUME}"
 }
 
-def executeInContainer(commands) {
-    def commandString = commands.join(' && ')
-    def timestamp = System.currentTimeMillis()
-    def containerName = "${env.BUILD_CONTAINER_NAME}-${timestamp}"
-
-    // Write the command to a temporary file to avoid shell escaping issues
-    def scriptFile = "docker-script-${timestamp}.sh"
-    writeFile file: scriptFile, text: commandString
-
-    sh """
-        docker run --rm \
-            -v ${env.VALIDATION_VOLUME}:/root \
-            -v ${pwd()}/${scriptFile}:/tmp/script.sh \
-            --name ${containerName} \
-            -t --env-file ${env.ENV_FILE} \
-            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
-            -e TF_WORKSPACE=${env.TF_WORKSPACE} \
-            ${env.IMAGE_NAME} \
-            sh /tmp/script.sh
-    """
-
-    // Clean up the temporary script file
-    sh "rm -f ${scriptFile}"
-}
-
 def executeScriptInContainer(scriptContent, extraEnv = [:]) {
     def timestamp = System.currentTimeMillis()
     def containerName = "${env.BUILD_CONTAINER_NAME}-script-${timestamp}"
@@ -623,17 +598,6 @@ def executeScriptInContainer(scriptContent, extraEnv = [:]) {
     """
 
     sh "rm -f ${scriptFile}"
-}
-
-def getAnsibleVerbosity() {
-    switch (params.LOG_LEVEL) {
-        case 'DEBUG':
-            return '-vvv'
-        case 'VERBOSE':
-            return '-vvvv'
-        default:
-            return '-v'
-    }
 }
 
 def cleanupContainersAndVolumes() {
@@ -1078,8 +1042,3 @@ def logWarning(message) {
     echo "⚠️ [WARNING] ${new Date().format('HH:mm:ss')} - ${message}"
 }
 
-def logDebug(message) {
-    if (params.LOG_LEVEL == 'DEBUG' || params.LOG_LEVEL == 'VERBOSE') {
-        echo "🔍 [DEBUG] ${new Date().format('HH:mm:ss')} - ${message}"
-    }
-}
