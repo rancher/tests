@@ -489,18 +489,27 @@ else
         
         # List available workspaces under env:/ prefix
         echo "🔍 Listing workspaces under env:/ prefix..."
-        AVAILABLE_WORKSPACES=$(aws s3 ls "s3://''' + env.TF_STATE_BUCKET + '''/env:/" --region ''' + env.TF_STATE_REGION + ''' | grep "PRE" | awk "{print $2}" | sed "s|/||g" | sort || echo "")
+        
+        # Parse AWS S3 ls output more carefully
+        aws s3 ls "s3://''' + env.TF_STATE_BUCKET + '''/env:/" --region ''' + env.TF_STATE_REGION + ''' > /tmp/s3_listing.txt
+        echo "Raw S3 listing:"
+        cat /tmp/s3_listing.txt
+        
+        # Extract workspace names properly (handle "PRE" prefix and whitespace)
+        AVAILABLE_WORKSPACES=$(cat /tmp/s3_listing.txt | grep "PRE" | awk "{print \\$NF}" | sed "s|/||g" | sed "s|PRE ||g" | tr -d " " | sort || echo "")
         
         if [ -n "$AVAILABLE_WORKSPACES" ]; then
-            echo "Available workspaces found:"
+            echo "Available workspaces found (cleaned):"
             echo "$AVAILABLE_WORKSPACES" | while read -r workspace; do
-                echo "  → $workspace"
+                echo "  → [$workspace]"
             done
             
             # Check if any contain our target workspace
             MATCHING_WORKSPACE=$(echo "$AVAILABLE_WORKSPACES" | grep "''' + env.TARGET_WORKSPACE + '''" | head -1 || echo "")
             if [ -n "$MATCHING_WORKSPACE" ]; then
-                echo "Found matching workspace: $MATCHING_WORKSPACE"
+                # Clean up any remaining whitespace
+                MATCHING_WORKSPACE=$(echo "$MATCHING_WORKSPACE" | tr -d " " | tr -d "\\t")
+                echo "Found matching workspace (cleaned): [$MATCHING_WORKSPACE]"
                 ALT_STATE_KEY="env:/$MATCHING_WORKSPACE/''' + env.TF_STATE_KEY_PREFIX + '''/terraform.tfstate"
                 
                 echo "Trying alternative state key: s3://''' + env.TF_STATE_BUCKET + '''/$ALT_STATE_KEY"
@@ -508,6 +517,7 @@ else
                     echo "✅ Successfully downloaded from alternative location"
                 else
                     echo "❌ Alternative download also failed"
+                    echo "Debug: Final S3 key was: $ALT_STATE_KEY"
                     exit 1
                 fi
             else
