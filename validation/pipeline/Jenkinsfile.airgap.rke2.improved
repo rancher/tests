@@ -1215,7 +1215,7 @@ cd ${env.QA_INFRA_WORK_PATH}
 export TF_WORKSPACE=${env.TF_WORKSPACE}
 
 echo 'Pulling latest state from S3 backend...'
-tofu -chdir=tofu/aws/modules/airgap refresh || echo 'Refresh failed, continuing with existing state'
+tofu -chdir=tofu/aws/modules/airgap refresh -var-file=${env.TERRAFORM_VARS_FILENAME} || echo 'Refresh failed, continuing with existing state'
 
 echo 'Exporting state and outputs...'
 tofu -chdir=tofu/aws/modules/airgap show -no-color > infrastructure-state-summary.txt 2>/dev/null || echo 'Could not generate state summary'
