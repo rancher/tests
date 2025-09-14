@@ -131,136 +131,137 @@ pipeline {
         TF_STATE_KEY_PREFIX = 'jenkins-airgap-rke2'
         TF_STATE_REGION = "${AWS_REGION}"
         JENKINS_STATE_ARCHIVE_PREFIX = 'terraform-state'
-        
-        // Pipeline locking (replaces DynamoDB locking)
-        PIPELINE_LOCK_KEY = "terraform-lock-${JOB_SHORT_NAME}"
     }
 
     stages {
-        // Wrap infrastructure stages with lock to prevent concurrent operations
-        stage('Infrastructure Operations') {
+        stage('Initialize Pipeline') {
             steps {
-                lock(resource: "${env.PIPELINE_LOCK_KEY ?: 'terraform-default-lock'}") {
-                    script {
-                        logInfo("🔒 Acquired pipeline lock: ${env.PIPELINE_LOCK_KEY ?: 'terraform-default-lock'}")
-                        logInfo("⚠️ WARNING: Using Jenkins pipeline locks instead of DynamoDB state locking")
+                script {
+                    logWarning("⚠️ IMPORTANT: No concurrent state locking available")
+                    logWarning("⚠️ Ensure only ONE instance of this pipeline runs at a time")
+                    logWarning("⚠️ Manual coordination required to prevent state conflicts")
+                    
+                    // Validate parameters and environment
+                    validateParameters()
+
+                    // Set up dynamic variables
+                    setupDynamicEnvironment()
+
+                    // Clean workspace
+                    deleteDir()
+
+                    logInfo('Pipeline initialized successfully')
+                    logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
+                    logInfo("Docker image: ${env.IMAGE_NAME}")
+                    logInfo("Volume: ${env.VALIDATION_VOLUME}")
+                }
+            }
+        }
+
+        stage('Checkout Repositories') {
+            steps {
+                script {
+                    logInfo('Checking out source repositories')
+                    
+                    // Checkout Rancher Tests Repository
+                    dir('./tests') {
+                        logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
+                            extensions: [
+                                [$class: 'CleanCheckout'],
+                                [$class: 'CloneOption', depth: 1, shallow: true]
+                            ],
+                            userRemoteConfigs: [[
+                                url: env.RANCHER_TEST_REPO_URL,
+                            ]]
+                        ])
                     }
                     
-                    // Initialize Pipeline
-                    script {
-                        // Validate parameters and environment
-                        validateParameters()
-
-                        // Set up dynamic variables
-                        setupDynamicEnvironment()
-
-                        // Clean workspace
-                        deleteDir()
-
-                        logInfo('Pipeline initialized successfully')
-                        logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
-                        logInfo("Docker image: ${env.IMAGE_NAME}")
-                        logInfo("Volume: ${env.VALIDATION_VOLUME}")
+                    // Checkout QA Infrastructure Repository
+                    dir('./qa-infra-automation') {
+                        logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
+                            extensions: [
+                                [$class: 'CleanCheckout'],
+                                [$class: 'CloneOption', depth: 1, shallow: true]
+                            ],
+                            userRemoteConfigs: [[
+                                url: env.QA_INFRA_REPO,
+                            ]]
+                        ])
                     }
                     
-                    // Checkout Repositories (Sequential within lock)
-                    script {
-                        logInfo('Checking out source repositories')
-                        
-                        // Checkout Rancher Tests Repository
-                        dir('./tests') {
-                            logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
-                            checkout([
-                                $class: 'GitSCM',
-                                branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
-                                extensions: [
-                                    [$class: 'CleanCheckout'],
-                                    [$class: 'CloneOption', depth: 1, shallow: true]
-                                ],
-                                userRemoteConfigs: [[
-                                    url: env.RANCHER_TEST_REPO_URL,
-                                ]]
-                            ])
-                        }
-                        
-                        // Checkout QA Infrastructure Repository
-                        dir('./qa-infra-automation') {
-                            logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
-                            checkout([
-                                $class: 'GitSCM',
-                                branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
-                                extensions: [
-                                    [$class: 'CleanCheckout'],
-                                    [$class: 'CloneOption', depth: 1, shallow: true]
-                                ],
-                                userRemoteConfigs: [[
-                                    url: env.QA_INFRA_REPO,
-                                ]]
-                            ])
-                        }
-                        
-                        logInfo('Repository checkout completed successfully')
+                    logInfo('Repository checkout completed successfully')
+                }
+            }
+        }
+
+        stage('Configure Environment') {
+            steps {
+                script {
+                    logInfo('Configuring deployment environment')
+
+                    // Configure credentials and environment files
+                    withCredentials(getCredentialsList()) {
+                        // Generate configuration files
+                        generateConfigurationFiles()
+
+                        // Setup SSH keys securely
+                        setupSSHKeys()
+
+                        // Build Docker image with proper tagging
+                        buildDockerImage()
+
+                        // Create shared volume
+                        createSharedVolume()
                     }
-                    
-                    // Configure Environment
-                    script {
-                        logInfo('Configuring deployment environment')
+                }
+            }
+        }
 
-                        // Configure credentials and environment files
-                        withCredentials(getCredentialsList()) {
-                            // Generate configuration files
-                            generateConfigurationFiles()
+        stage('Deploy Infrastructure') {
+            steps {
+                script {
+                    logInfo('Initializing airgap infrastructure deployment with OpenTofu')
 
-                            // Setup SSH keys securely
-                            setupSSHKeys()
+                    // Configuration validation
+                    def requiredVars = [
+                        'QA_INFRA_WORK_PATH',
+                        'TF_WORKSPACE',
+                        'TERRAFORM_VARS_FILENAME',
+                        'TERRAFORM_TIMEOUT'
+                    ]
 
-                            // Build Docker image with proper tagging
-                            buildDockerImage()
+                    validateRequiredVariables(requiredVars)
 
-                            // Create shared volume
-                            createSharedVolume()
-                        }
-                    }
-                    
-                    // Setup Infrastructure
-                    script {
-                        logInfo('Initializing airgap infrastructure deployment with OpenTofu')
+                    // Enhanced timeout with reasonable defaults
+                    def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
+                        Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
 
-                        // Configuration validation
-                        def requiredVars = [
-                            'QA_INFRA_WORK_PATH',
-                            'TF_WORKSPACE',
-                            'TERRAFORM_VARS_FILENAME',
-                            'TERRAFORM_TIMEOUT'
-                        ]
+                    timeout(time: timeoutMinutes, unit: 'MINUTES') {
+                        try {
+                            // Pre-flight checks
+                            validateInfrastructurePrerequisites()
 
-                        validateRequiredVariables(requiredVars)
+                            // Infrastructure deployment with enhanced error handling
+                            deployInfrastructure()
 
-                        // Enhanced timeout with reasonable defaults
-                        def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
-                            Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
+                            // Post-deployment validation
+                            validateInfrastructureState()
 
-                        timeout(time: timeoutMinutes, unit: 'MINUTES') {
-                            try {
-                                // Pre-flight checks
-                                validateInfrastructurePrerequisites()
-
-                                // Infrastructure deployment with enhanced error handling
-                                deployInfrastructure()
-
-                                // Post-deployment validation
-                                validateInfrastructureState()
-
-                                logInfo('Infrastructure provisioned and validated successfully')
-                            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
-                                logError("Infrastructure deployment timed out after ${timeoutMinutes} minutes")
-                                handleInfrastructureFailure('TIMEOUT', e)
-                                throw e
-                            } catch (Exception e) {
-                                logError("Infrastructure setup failed: ${e.message}")
-                                handleInfrastructureFailure('DEPLOYMENT_FAILED', e)
-                                throw e
-                            }
+                            logInfo('Infrastructure provisioned and validated successfully')
+                        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+                            logError("Infrastructure deployment timed out after ${timeoutMinutes} minutes")
+                            handleInfrastructureFailure('TIMEOUT', e)
+                            throw e
+                        } catch (Exception e) {
+                            logError("Infrastructure setup failed: ${e.message}")
+                            handleInfrastructureFailure('DEPLOYMENT_FAILED', e)
+                            throw e
                         }
                     }
                 }
@@ -275,12 +276,10 @@ pipeline {
                 always {
                     script {
                         archiveInfrastructureState()
-                        logInfo("🔓 Released pipeline lock: ${env.PIPELINE_LOCK_KEY ?: 'terraform-default-lock'}")
                     }
                 }
             }
         }
-
     }
 
     post {
@@ -634,13 +633,13 @@ terraform {
     region  = "${env.TF_STATE_REGION}"
     encrypt = true
     
-    # WARNING: No state locking without DynamoDB
-    # Pipeline-level locking prevents concurrent operations
+    # WARNING: No state locking available
+    # Manual coordination required to prevent concurrent operations
   }
 }
 EOF
 
-echo '⚠️  WARNING: Using S3-only backend without state locking'
+echo '⚠️  WARNING: S3-only backend without any state locking mechanism'
 
 echo 'Initializing backend to access remote state...'
 tofu -chdir=tofu/aws/modules/airgap init -input=false -reconfigure
@@ -845,13 +844,13 @@ terraform {
     region  = "${env.TF_STATE_REGION}"
     encrypt = true
     
-    # WARNING: No state locking without DynamoDB
-    # Pipeline-level locking is used instead via Jenkins lock() option
+    # WARNING: No state locking available
+    # Manual coordination required to prevent concurrent operations
   }
 }
 EOF
 
-echo '⚠️  WARNING: State locking disabled - using Jenkins pipeline locks instead'
+echo '⚠️  WARNING: No state locking available - manual coordination required'
 echo 'Backend configuration without DynamoDB:'
 cat tofu/aws/modules/airgap/backend.tf
 
@@ -1369,13 +1368,13 @@ terraform {
     region  = "${env.TF_STATE_REGION}"
     encrypt = true
     
-    # WARNING: No state locking without DynamoDB
-    # Ensure no concurrent operations are running
+    # WARNING: No state locking available
+    # Manual coordination required to prevent concurrent operations
   }
 }
 EOF
 
-echo '⚠️  WARNING: State locking unavailable - verify no concurrent operations'
+echo '⚠️  WARNING: No state locking - ensure no concurrent operations running'
 
 echo 'Initializing backend...'
 tofu -chdir=tofu/aws/modules/airgap init -input=false -reconfigure
