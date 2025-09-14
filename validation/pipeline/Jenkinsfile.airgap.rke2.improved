@@ -136,10 +136,10 @@ pipeline {
         stage('Initialize Pipeline') {
             steps {
                 script {
-                    logWarning("⚠️ IMPORTANT: No concurrent state locking available")
-                    logWarning("⚠️ Ensure only ONE instance of this pipeline runs at a time")
-                    logWarning("⚠️ Manual coordination required to prevent state conflicts")
-                    
+                    logWarning('⚠️ IMPORTANT: No concurrent state locking available')
+                    logWarning('⚠️ Ensure only ONE instance of this pipeline runs at a time')
+                    logWarning('⚠️ Manual coordination required to prevent state conflicts')
+
                     // Validate parameters and environment
                     validateParameters()
 
@@ -161,7 +161,7 @@ pipeline {
             steps {
                 script {
                     logInfo('Checking out source repositories')
-                    
+
                     // Checkout Rancher Tests Repository
                     dir('./tests') {
                         logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
@@ -177,7 +177,7 @@ pipeline {
                             ]]
                         ])
                     }
-                    
+
                     // Checkout QA Infrastructure Repository
                     dir('./qa-infra-automation') {
                         logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
@@ -193,7 +193,7 @@ pipeline {
                             ]]
                         ])
                     }
-                    
+
                     logInfo('Repository checkout completed successfully')
                 }
             }
@@ -497,7 +497,7 @@ def generateEnvironmentFile() {
 
     // Build environment content securely without direct interpolation of secrets
     def envLines = [
-        "# Environment variables for infrastructure deployment containers",
+        '# Environment variables for infrastructure deployment containers',
         "TF_WORKSPACE=${env.TF_WORKSPACE}",
         "BUILD_NUMBER=${env.BUILD_NUMBER}",
         "JOB_NAME=${env.JOB_NAME}",
@@ -510,21 +510,21 @@ def generateEnvironmentFile() {
         "RANCHER_VERSION=${env.RANCHER_VERSION}",
         "PRIVATE_REGISTRY_URL=${env.PRIVATE_REGISTRY_URL}",
         "PRIVATE_REGISTRY_USERNAME=${env.PRIVATE_REGISTRY_USERNAME}",
-        "",
-        "# AWS Credentials for OpenTofu (Standard AWS environment variables)"
+        '',
+        '# AWS Credentials for OpenTofu (Standard AWS environment variables)'
     ]
-    
+
     // Add credentials securely
-    envLines.add("AWS_ACCESS_KEY_ID=" + env.AWS_ACCESS_KEY_ID)
-    envLines.add("AWS_SECRET_ACCESS_KEY=" + env.AWS_SECRET_ACCESS_KEY)
-    envLines.add("AWS_REGION=" + env.AWS_REGION)
-    envLines.add("")
-    envLines.add("# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)")
-    envLines.add("TF_VAR_aws_access_key=" + env.AWS_ACCESS_KEY_ID)
-    envLines.add("TF_VAR_aws_secret_access_key=" + env.AWS_SECRET_ACCESS_KEY)
-    envLines.add("TF_VAR_aws_region=" + env.AWS_REGION)
-    envLines.add("")
-    envLines.add("# S3 Backend State Storage Configuration")
+    envLines.add('AWS_ACCESS_KEY_ID=' + env.AWS_ACCESS_KEY_ID)
+    envLines.add('AWS_SECRET_ACCESS_KEY=' + env.AWS_SECRET_ACCESS_KEY)
+    envLines.add('AWS_REGION=' + env.AWS_REGION)
+    envLines.add('')
+    envLines.add('# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)')
+    envLines.add('TF_VAR_aws_access_key=' + env.AWS_ACCESS_KEY_ID)
+    envLines.add('TF_VAR_aws_secret_access_key=' + env.AWS_SECRET_ACCESS_KEY)
+    envLines.add('TF_VAR_aws_region=' + env.AWS_REGION)
+    envLines.add('')
+    envLines.add('# S3 Backend State Storage Configuration')
     envLines.add("TF_STATE_BUCKET=${env.TF_STATE_BUCKET}")
     envLines.add("TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX}")
     envLines.add("TF_STATE_REGION=${env.TF_STATE_REGION}")
@@ -651,7 +651,7 @@ terraform {
     key     = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
     region  = "${env.TF_STATE_REGION}"
     encrypt = true
-    
+
     # WARNING: No state locking available
     # Manual coordination required to prevent concurrent operations
   }
@@ -862,7 +862,7 @@ terraform {
     key     = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
     region  = "${env.TF_STATE_REGION}"
     encrypt = true
-    
+
     # WARNING: No state locking available
     # Manual coordination required to prevent concurrent operations
   }
@@ -1383,7 +1383,7 @@ terraform {
     key     = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
     region  = "${env.TF_STATE_REGION}"
     encrypt = true
-    
+
     # WARNING: No state locking available
     # Manual coordination required to prevent concurrent operations
   }
@@ -1399,7 +1399,7 @@ echo 'Selecting workspace...'
 tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE} || {
     echo 'Workspace does not exist in backend, creating...'
     tofu -chdir=tofu/aws/modules/airgap workspace new ${env.TF_WORKSPACE}
-}
+    }
 
 echo 'Pulling current state...'
 tofu -chdir=tofu/aws/modules/airgap state pull > current-state.tfstate
@@ -1423,9 +1423,8 @@ echo 'State retrieval completed'
     } catch (Exception e) {
         logError("Failed to retrieve state from S3: ${e.message}")
         return false
-    }
 }
-
+}
 
 def validateStateConsistency() {
     logInfo('Validating Terraform state consistency')
@@ -1448,7 +1447,7 @@ tofu -chdir=tofu/aws/modules/airgap plan -detailed-exitcode -var-file=${env.TERR
     else
         echo 'SUCCESS: No drift detected'
     fi
-}
+    }
 
 echo 'State consistency validation completed'
 """
@@ -1457,8 +1456,8 @@ echo 'State consistency validation completed'
         logInfo('State consistency validated')
     } catch (Exception e) {
         logWarning("State consistency validation failed: ${e.message}")
-        logWarning("Manual state inspection may be required")
-    }
+        logWarning('Manual state inspection may be required')
+}
 }
 
 def backupStateToMultipleLocations() {
@@ -1492,12 +1491,12 @@ ls -la "\$BACKUP_DIR"
 """
 
         executeScriptInContainer(backupScript)
-        
+
         // Archive backup to Jenkins
         sh """
             docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/state-backups ./state-backups || true
         """
-        
+
         logInfo('State backup completed in container')
     } catch (Exception e) {
         logError("Failed to create state backup: ${e.message}")
@@ -1527,13 +1526,13 @@ echo "Timestamp: \$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo 'Attempting safe infrastructure destruction...'
 tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME} || {
     echo 'Normal destroy failed, attempting force destroy...'
-    
+
     # Force destroy individual resources if bulk destroy fails
     tofu -chdir=tofu/aws/modules/airgap state list | while read resource; do
         echo "Force destroying resource: \$resource"
         tofu -chdir=tofu/aws/modules/airgap destroy -target="\$resource" -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME} || echo "Failed to destroy \$resource"
     done
-}
+    }
 
 # Verify destruction
 REMAINING_RESOURCES=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l)
@@ -1549,15 +1548,14 @@ echo 'Emergency rollback completed'
 
         executeScriptInContainer(rollbackScript)
         logInfo('Emergency rollback completed')
-        
+
         // Clean up workspace
         cleanupWorkspaceAfterRollback()
-        
     } catch (Exception e) {
         logError("Emergency rollback failed: ${e.message}")
         logError("Manual intervention required for workspace: ${env.TF_WORKSPACE}")
         logError("State location: s3://${env.TF_STATE_BUCKET}/${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate")
-    }
+}
 }
 
 def restoreStateFromBackup(backupTimestamp) {
@@ -1572,16 +1570,16 @@ BACKUP_FILE="state-backups/${backupTimestamp}/terraform.tfstate"
 
 if [ -f "\$BACKUP_FILE" ]; then
     echo 'Backup file found, restoring...'
-    
+
     # Push the backup state to remote backend
     tofu -chdir=tofu/aws/modules/airgap state push "\$BACKUP_FILE"
-    
+
     echo 'State restored from backup'
-    
+
     # Verify restoration
     RESOURCE_COUNT=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l)
     echo "Resources restored: \$RESOURCE_COUNT"
-    
+
 else
     echo 'ERROR: Backup file not found'
     exit 1
@@ -1590,10 +1588,9 @@ fi
 
         executeScriptInContainer(restoreScript)
         logInfo('State restoration completed')
-        
     } catch (Exception e) {
         logError("State restoration failed: ${e.message}")
-        throw new RuntimeException("Failed to restore state from backup", e)
+        throw new RuntimeException('Failed to restore state from backup', e)
     }
 }
 
@@ -1623,7 +1620,6 @@ echo 'Workspace cleanup completed'
 
         executeScriptInContainer(cleanupScript)
         logInfo('Workspace cleanup completed')
-        
     } catch (Exception e) {
         logWarning("Workspace cleanup failed: ${e.message}")
     }
@@ -1677,7 +1673,6 @@ fi
         executeScriptInContainer(healthCheckScript)
         logInfo('State health check completed')
         return true
-        
     } catch (Exception e) {
         logError("State health check failed: ${e.message}")
         return false
@@ -1697,22 +1692,21 @@ def createRollbackPlan() {
             rollbackInstructions: [
                 "1. Use destruction pipeline with TARGET_WORKSPACE=${env.TF_WORKSPACE}",
                 "2. Set S3_BUCKET_NAME=${env.TF_STATE_BUCKET} and S3_REGION=${env.TF_STATE_REGION}",
-                "3. Enable DRY_RUN=true for initial validation",
-                "4. Set FORCE_DESTROY=true only if normal process fails"
+                '3. Enable DRY_RUN=true for initial validation',
+                '4. Set FORCE_DESTROY=true only if normal process fails'
             ],
             emergencyContacts: [
-                "DevOps Team: #rancher-devops",
-                "Infrastructure Team: #rancher-infrastructure"
+                'DevOps Team: #rancher-devops',
+                'Infrastructure Team: #rancher-infrastructure'
             ]
         ]
 
         writeFile file: 'rollback-plan.json', text: groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(rollbackData))
-        
+
         // Archive rollback plan
         archiveArtifacts artifacts: 'rollback-plan.json', allowEmptyArchive: true
-        
+
         logInfo('Rollback plan created and archived')
-        
     } catch (Exception e) {
         logError("Failed to create rollback plan: ${e.message}")
     }
@@ -1724,13 +1718,13 @@ def performGracefulShutdown() {
     try {
         // Create final state backup before shutdown
         backupStateToMultipleLocations()
-        
+
         // Archive all important artifacts
         archiveInfrastructureState()
-        
+
         // Create rollback plan for potential restoration
         createRollbackPlan()
-        
+
         // Optional: Perform controlled destruction if DESTROY_ON_FAILURE is enabled
         if (params.DESTROY_ON_FAILURE?.toBoolean()) {
             logInfo('DESTROY_ON_FAILURE enabled - performing controlled destruction')
@@ -1739,7 +1733,6 @@ def performGracefulShutdown() {
             logInfo('Infrastructure preserved for manual cleanup')
             logInfo("Use destruction pipeline with workspace: ${env.TF_WORKSPACE}")
         }
-        
     } catch (Exception e) {
         logError("Graceful shutdown failed: ${e.message}")
         // Attempt emergency procedures

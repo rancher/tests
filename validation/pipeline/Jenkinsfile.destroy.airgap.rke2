@@ -2,7 +2,7 @@
 
 /**
  * Infrastructure Destruction Jenkinsfile for Airgap RKE2
- * 
+ *
  * This pipeline is designed to safely destroy infrastructure created by
  * the main airgap RKE2 deployment pipeline. It retrieves Terraform state
  * from S3 backend and performs controlled destruction.
@@ -103,7 +103,7 @@ pipeline {
 
         // Target workspace from parameters
         TARGET_WORKSPACE = "${params.TARGET_WORKSPACE}"
-        
+
         // Configuration files
         TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
         ENV_FILE = '.env-destroy'
@@ -116,37 +116,37 @@ pipeline {
         stage('Infrastructure Destruction Operations') {
             steps {
                 script {
-                    logWarning("⚠️ IMPORTANT: No concurrent state locking available")
-                    logWarning("⚠️ Ensure only ONE destruction pipeline runs at a time for the same workspace")
-                    logWarning("⚠️ Manual coordination required to prevent state conflicts")
+                    logWarning('⚠️ IMPORTANT: No concurrent state locking available')
+                    logWarning('⚠️ Ensure only ONE destruction pipeline runs at a time for the same workspace')
+                    logWarning('⚠️ Manual coordination required to prevent state conflicts')
                 }
-                    
+
                     // Validate Parameters
                     script {
                         logInfo('Validating destruction parameters')
-                        
+
                         if (!params.TARGET_WORKSPACE || params.TARGET_WORKSPACE.trim().isEmpty()) {
                             error('TARGET_WORKSPACE parameter is required for destruction')
                         }
 
                         env.TARGET_WORKSPACE = params.TARGET_WORKSPACE
-                        
+
                         logInfo("Target workspace: ${env.TARGET_WORKSPACE}")
-                        logInfo("State source: S3 Backend")
+                        logInfo('State source: S3 Backend')
                         logInfo("Dry run mode: ${params.DRY_RUN}")
                         logInfo("Force destroy: ${params.FORCE_DESTROY}")
                     }
-                    
+
                     // Prepare Environment
                     script {
                         logInfo('Preparing destruction environment')
-                        
+
                         // Clean workspace
                         deleteDir()
 
                         // Checkout QA infrastructure repository
                         dir('./qa-infra-automation') {
-                            logInfo("Cloning qa-infra-automation repository")
+                            logInfo('Cloning qa-infra-automation repository')
                             checkout([
                                 $class: 'GitSCM',
                                 branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
@@ -160,7 +160,7 @@ pipeline {
 
                         // Checkout Tests repository for Dockerfile access
                         dir('./tests') {
-                            logInfo("Cloning tests repository for Docker build")
+                            logInfo('Cloning tests repository for Docker build')
                             checkout([
                                 $class: 'GitSCM',
                                 branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
@@ -179,11 +179,11 @@ pipeline {
                             createSharedVolume()
                         }
                     }
-                    
+
                     // Retrieve Terraform State
                     script {
                         logInfo('Retrieving Terraform state from S3 backend for destruction')
-                        
+
                         def stateRetrieved = retrieveStateFromS3()
 
                         if (!stateRetrieved && !params.FORCE_DESTROY) {
@@ -197,17 +197,17 @@ pipeline {
                             validateStateForDestruction()
                         }
                     }
-                    
+
                     // Plan Destruction
                     script {
                         logInfo('Planning infrastructure destruction')
-                        
+
                         try {
                             planDestruction()
-                            
+
                             // Archive the destruction plan
                             archiveDestructionPlan()
-                            
+
                             if (params.DRY_RUN) {
                                 logInfo('DRY_RUN mode enabled - destruction plan completed without execution')
                                 currentBuild.result = 'SUCCESS'
@@ -218,14 +218,14 @@ pipeline {
                             throw e
                         }
                     }
-                    
+
                     // Execute Destruction (only if not DRY_RUN)
                     script {
                         if (!params.DRY_RUN) {
                             logInfo('Executing infrastructure destruction')
-                            
+
                             def proceedWithDestruction = true
-                            
+
                             // Final confirmation step
                             if (!params.FORCE_DESTROY) {
                                 timeout(time: 5, unit: 'MINUTES') {
@@ -347,7 +347,7 @@ def generateDestructionEnvironmentFile() {
 
     // Build environment content securely without direct interpolation of secrets
     def envLines = [
-        "# Environment variables for infrastructure destruction containers",
+        '# Environment variables for infrastructure destruction containers',
         "TARGET_WORKSPACE=${env.TARGET_WORKSPACE}",
         "BUILD_NUMBER=${env.BUILD_NUMBER}",
         "JOB_NAME=${env.JOB_NAME}",
@@ -357,18 +357,18 @@ def generateDestructionEnvironmentFile() {
         "TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX}",
         "TF_STATE_REGION=${env.TF_STATE_REGION}",
         "AWS_REGION=${env.AWS_REGION}",
-        "",
-        "# AWS Credentials for OpenTofu"
+        '',
+        '# AWS Credentials for OpenTofu'
     ]
-    
+
     // Add credentials securely
-    envLines.add("AWS_ACCESS_KEY_ID=" + env.AWS_ACCESS_KEY_ID)
-    envLines.add("AWS_SECRET_ACCESS_KEY=" + env.AWS_SECRET_ACCESS_KEY)
-    envLines.add("")
-    envLines.add("# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)")
-    envLines.add("TF_VAR_aws_access_key=" + env.AWS_ACCESS_KEY_ID)
-    envLines.add("TF_VAR_aws_secret_access_key=" + env.AWS_SECRET_ACCESS_KEY)
-    envLines.add("TF_VAR_aws_region=" + env.AWS_REGION)
+    envLines.add('AWS_ACCESS_KEY_ID=' + env.AWS_ACCESS_KEY_ID)
+    envLines.add('AWS_SECRET_ACCESS_KEY=' + env.AWS_SECRET_ACCESS_KEY)
+    envLines.add('')
+    envLines.add('# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)')
+    envLines.add('TF_VAR_aws_access_key=' + env.AWS_ACCESS_KEY_ID)
+    envLines.add('TF_VAR_aws_secret_access_key=' + env.AWS_SECRET_ACCESS_KEY)
+    envLines.add('TF_VAR_aws_region=' + env.AWS_REGION)
 
     def envContent = envLines.join('\n')
     writeFile file: env.ENV_FILE, text: envContent
@@ -444,7 +444,7 @@ terraform {
     key     = "${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/terraform.tfstate"
     region  = "${env.TF_STATE_REGION}"
     encrypt = true
-    
+
     # WARNING: No state locking without DynamoDB
     # Pipeline-level locking prevents concurrent operations
   }
@@ -468,12 +468,12 @@ if tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TARGET_WORKSPACE};
         echo "SUCCESS: State retrieved (\$STATE_SIZE bytes)"
         RESOURCE_COUNT=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l)
         echo "Resources in state: \$RESOURCE_COUNT"
-        
+
         if [ "\$RESOURCE_COUNT" -eq 0 ]; then
             echo 'WARNING: State exists but contains no resources'
             exit 1
         fi
-        
+
         exit 0
     else
         echo 'WARNING: State is empty'
@@ -493,7 +493,6 @@ fi
         return false
     }
 }
-
 
 def validateStateForDestruction() {
     logInfo('Validating state for destruction')
@@ -525,7 +524,7 @@ echo 'State validation completed successfully'
     } catch (Exception e) {
         logWarning("State validation failed: ${e.message}")
         if (!params.FORCE_DESTROY) {
-            throw new RuntimeException("State validation failed and FORCE_DESTROY is not enabled", e)
+            throw new RuntimeException('State validation failed and FORCE_DESTROY is not enabled', e)
         }
     }
 }
@@ -573,7 +572,7 @@ def archiveDestructionPlan() {
         """
 
         archiveArtifacts artifacts: 'destruction-plan.txt', allowEmptyArchive: true
-        
+
         logInfo('Destruction plan archived')
     } catch (Exception e) {
         logError("Failed to archive destruction plan: ${e.message}")
@@ -598,12 +597,12 @@ REMAINING_RESOURCES=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l)
 
 if [ "\$REMAINING_RESOURCES" -eq 0 ]; then
     echo 'SUCCESS: All resources have been destroyed'
-    
+
     # Clean up the workspace
     echo 'Cleaning up Terraform workspace...'
     tofu -chdir=tofu/aws/modules/airgap workspace select default || echo 'Could not switch to default workspace'
     tofu -chdir=tofu/aws/modules/airgap workspace delete ${env.TARGET_WORKSPACE} || echo 'Could not delete workspace'
-    
+
 else
     echo "WARNING: \$REMAINING_RESOURCES resources still remain in state"
     echo 'Remaining resources:'
@@ -701,7 +700,7 @@ def executeInContainer(commands) {
     def timestamp = System.currentTimeMillis()
     def containerName = "${env.BUILD_CONTAINER_NAME}-${timestamp}"
     def scriptFile = "destroy-commands-${timestamp}.sh"
-    
+
     writeFile file: scriptFile, text: commandString
 
     sh """
