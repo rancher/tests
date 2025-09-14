@@ -19,8 +19,6 @@ pipeline {
         ansiColor('xterm')
         skipStagesAfterUnstable()
         retry(1)
-        // Pipeline-level locking to prevent concurrent state operations
-        lock(resource: "${env.PIPELINE_LOCK_KEY ?: 'terraform-default-lock'}")
     }
 
     // Environment-specific parameters
@@ -139,147 +137,127 @@ pipeline {
     }
 
     stages {
-        stage('Initialize Pipeline') {
+        // Wrap infrastructure stages with lock to prevent concurrent operations
+        stage('Infrastructure Operations') {
             steps {
-                script {
-                    // Validate parameters and environment
-                    validateParameters()
+                lock(resource: "${env.PIPELINE_LOCK_KEY ?: 'terraform-default-lock'}") {
+                    script {
+                        logInfo("🔒 Acquired pipeline lock: ${env.PIPELINE_LOCK_KEY ?: 'terraform-default-lock'}")
+                        logInfo("⚠️ WARNING: Using Jenkins pipeline locks instead of DynamoDB state locking")
+                    }
+                    
+                    // Initialize Pipeline
+                    script {
+                        // Validate parameters and environment
+                        validateParameters()
 
-                    // Set up dynamic variables
-                    setupDynamicEnvironment()
+                        // Set up dynamic variables
+                        setupDynamicEnvironment()
 
-                    // Clean workspace
-                    deleteDir()
+                        // Clean workspace
+                        deleteDir()
 
-                    logInfo('Pipeline initialized successfully')
-                    logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
-                    logInfo("Docker image: ${env.IMAGE_NAME}")
-                    logInfo("Volume: ${env.VALIDATION_VOLUME}")
-                }
-            }
-            post {
-                failure {
-                    logError('Failed to initialize pipeline')
-                }
-            }
-        }
-
-        stage('Checkout Repositories') {
-            parallel {
-                stage('Checkout Rancher Tests') {
-                    steps {
-                        dir('./tests') {
-                            logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
-                            checkout([
-                                $class: 'GitSCM',
-                                branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
-                                extensions: [
-                                    [$class: 'CleanCheckout'],
-                                    [$class: 'CloneOption', depth: 1, shallow: true]
-                                ],
-                                userRemoteConfigs: [[
-                                    url: env.RANCHER_TEST_REPO_URL,
-                                ]]
-                            ])
+                        logInfo('Pipeline initialized successfully')
+                        logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
+                        logInfo("Docker image: ${env.IMAGE_NAME}")
+                        logInfo("Volume: ${env.VALIDATION_VOLUME}")
+                    }
+                    
+                    // Checkout Repositories
+                    parallel {
+                        'Checkout Rancher Tests': {
+                            dir('./tests') {
+                                logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
+                                checkout([
+                                    $class: 'GitSCM',
+                                    branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
+                                    extensions: [
+                                        [$class: 'CleanCheckout'],
+                                        [$class: 'CloneOption', depth: 1, shallow: true]
+                                    ],
+                                    userRemoteConfigs: [[
+                                        url: env.RANCHER_TEST_REPO_URL,
+                                    ]]
+                                ])
+                            }
+                        },
+                        'Checkout QA Infrastructure': {
+                            dir('./qa-infra-automation') {
+                                logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
+                                checkout([
+                                    $class: 'GitSCM',
+                                    branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
+                                    extensions: [
+                                        [$class: 'CleanCheckout'],
+                                        [$class: 'CloneOption', depth: 1, shallow: true]
+                                    ],
+                                    userRemoteConfigs: [[
+                                        url: env.QA_INFRA_REPO,
+                                    ]]
+                                ])
+                            }
                         }
                     }
-                }
+                    
+                    // Configure Environment
+                    script {
+                        logInfo('Configuring deployment environment')
 
-                stage('Checkout QA Infrastructure') {
-                    steps {
-                        dir('./qa-infra-automation') {
-                            logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
-                            checkout([
-                                $class: 'GitSCM',
-                                branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
-                                extensions: [
-                                    [$class: 'CleanCheckout'],
-                                    [$class: 'CloneOption', depth: 1, shallow: true]
-                                ],
-                                userRemoteConfigs: [[
-                                    url: env.QA_INFRA_REPO,
-                                ]]
-                            ])
+                        // Configure credentials and environment files
+                        withCredentials(getCredentialsList()) {
+                            // Generate configuration files
+                            generateConfigurationFiles()
+
+                            // Setup SSH keys securely
+                            setupSSHKeys()
+
+                            // Build Docker image with proper tagging
+                            buildDockerImage()
+
+                            // Create shared volume
+                            createSharedVolume()
                         }
                     }
-                }
-            }
-            post {
-                failure {
-                    logError('Failed to checkout repositories')
-                    cleanupContainersAndVolumes()
-                }
-            }
-        }
+                    
+                    // Setup Infrastructure
+                    script {
+                        logInfo('Initializing airgap infrastructure deployment with OpenTofu')
 
-        stage('Configure Environment') {
-            steps {
-                script {
-                    logInfo('Configuring deployment environment')
+                        // Configuration validation
+                        def requiredVars = [
+                            'QA_INFRA_WORK_PATH',
+                            'TF_WORKSPACE',
+                            'TERRAFORM_VARS_FILENAME',
+                            'TERRAFORM_TIMEOUT'
+                        ]
 
-                    // Configure credentials and environment files
-                    withCredentials(getCredentialsList()) {
-                        // Generate configuration files
-                        generateConfigurationFiles()
+                        validateRequiredVariables(requiredVars)
 
-                        // Setup SSH keys securely
-                        setupSSHKeys()
+                        // Enhanced timeout with reasonable defaults
+                        def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
+                            Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
 
-                        // Build Docker image with proper tagging
-                        buildDockerImage()
+                        timeout(time: timeoutMinutes, unit: 'MINUTES') {
+                            try {
+                                // Pre-flight checks
+                                validateInfrastructurePrerequisites()
 
-                        // Create shared volume
-                        createSharedVolume()
-                    }
-                }
-            }
-            post {
-                failure {
-                    logError('Environment configuration failed')
-                    cleanupContainersAndVolumes()
-                }
-            }
-        }
+                                // Infrastructure deployment with enhanced error handling
+                                deployInfrastructure()
 
-        stage('Setup Infrastructure') {
-            steps {
-                script {
-                    logInfo('Initializing airgap infrastructure deployment with OpenTofu')
+                                // Post-deployment validation
+                                validateInfrastructureState()
 
-                    // Configuration validation
-                    def requiredVars = [
-                        'QA_INFRA_WORK_PATH',
-                        'TF_WORKSPACE',
-                        'TERRAFORM_VARS_FILENAME',
-                        'TERRAFORM_TIMEOUT'
-                    ]
-
-                    validateRequiredVariables(requiredVars)
-
-                    // Enhanced timeout with reasonable defaults
-                    def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
-                        Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
-
-                    timeout(time: timeoutMinutes, unit: 'MINUTES') {
-                        try {
-                            // Pre-flight checks
-                            validateInfrastructurePrerequisites()
-
-                            // Infrastructure deployment with enhanced error handling
-                            deployInfrastructure()
-
-                            // Post-deployment validation
-                            validateInfrastructureState()
-
-                            logInfo('Infrastructure provisioned and validated successfully')
-                        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
-                            logError("Infrastructure deployment timed out after ${timeoutMinutes} minutes")
-                            handleInfrastructureFailure('TIMEOUT', e)
-                            throw e
-                        } catch (Exception e) {
-                            logError("Infrastructure setup failed: ${e.message}")
-                            handleInfrastructureFailure('DEPLOYMENT_FAILED', e)
-                            throw e
+                                logInfo('Infrastructure provisioned and validated successfully')
+                            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+                                logError("Infrastructure deployment timed out after ${timeoutMinutes} minutes")
+                                handleInfrastructureFailure('TIMEOUT', e)
+                                throw e
+                            } catch (Exception e) {
+                                logError("Infrastructure setup failed: ${e.message}")
+                                handleInfrastructureFailure('DEPLOYMENT_FAILED', e)
+                                throw e
+                            }
                         }
                     }
                 }
@@ -287,17 +265,19 @@ pipeline {
             post {
                 failure {
                     script {
-                        logError('Infrastructure setup stage failed')
+                        logError('Infrastructure operations failed')
                         archiveInfrastructureFailureArtifacts()
                     }
                 }
                 always {
                     script {
                         archiveInfrastructureState()
+                        logInfo("🔓 Released pipeline lock: ${env.PIPELINE_LOCK_KEY ?: 'terraform-default-lock'}")
                     }
                 }
             }
         }
+
     }
 
     post {
@@ -1432,7 +1412,6 @@ def retrieveStateFromJenkinsArtifacts(buildNumber = null) {
     logInfo("Retrieving Terraform state from Jenkins artifacts")
 
     try {
-        def targetBuild = buildNumber ?: env.BUILD_NUMBER
         def artifactPattern = "infrastructure-${env.TF_WORKSPACE}.tfstate"
         
         // Check if artifacts exist in current build
@@ -1442,6 +1421,9 @@ def retrieveStateFromJenkinsArtifacts(buildNumber = null) {
         }
 
         // For destruction jobs, this would typically copy from upstream job
+        if (buildNumber) {
+            logWarning("State retrieval from build ${buildNumber} requires manual intervention")
+        }
         logWarning("State retrieval from Jenkins artifacts requires manual intervention")
         logWarning("Expected artifact: ${artifactPattern}")
         logWarning("Ensure the state file is available in the workspace before destruction")
