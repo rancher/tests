@@ -495,36 +495,41 @@ def generateAnsibleConfiguration() {
 def generateEnvironmentFile() {
     logInfo('Generating environment file for container execution')
 
-    def envContent = """# Environment variables for infrastructure deployment containers
-TF_WORKSPACE=${env.TF_WORKSPACE}
-BUILD_NUMBER=${env.BUILD_NUMBER}
-JOB_NAME=${env.JOB_NAME}
-TERRAFORM_TIMEOUT=${env.TERRAFORM_TIMEOUT}
-ANSIBLE_TIMEOUT=${env.ANSIBLE_TIMEOUT}
-QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}
-TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}
-ANSIBLE_VARS_FILENAME=${env.ANSIBLE_VARS_FILENAME}
-RKE2_VERSION=${env.RKE2_VERSION}
-RANCHER_VERSION=${env.RANCHER_VERSION}
-PRIVATE_REGISTRY_URL=${env.PRIVATE_REGISTRY_URL}
-PRIVATE_REGISTRY_USERNAME=${env.PRIVATE_REGISTRY_USERNAME}
+    // Build environment content securely without direct interpolation of secrets
+    def envLines = [
+        "# Environment variables for infrastructure deployment containers",
+        "TF_WORKSPACE=${env.TF_WORKSPACE}",
+        "BUILD_NUMBER=${env.BUILD_NUMBER}",
+        "JOB_NAME=${env.JOB_NAME}",
+        "TERRAFORM_TIMEOUT=${env.TERRAFORM_TIMEOUT}",
+        "ANSIBLE_TIMEOUT=${env.ANSIBLE_TIMEOUT}",
+        "QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}",
+        "TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}",
+        "ANSIBLE_VARS_FILENAME=${env.ANSIBLE_VARS_FILENAME}",
+        "RKE2_VERSION=${env.RKE2_VERSION}",
+        "RANCHER_VERSION=${env.RANCHER_VERSION}",
+        "PRIVATE_REGISTRY_URL=${env.PRIVATE_REGISTRY_URL}",
+        "PRIVATE_REGISTRY_USERNAME=${env.PRIVATE_REGISTRY_USERNAME}",
+        "",
+        "# AWS Credentials for OpenTofu (Standard AWS environment variables)"
+    ]
+    
+    // Add credentials securely
+    envLines.add("AWS_ACCESS_KEY_ID=" + env.AWS_ACCESS_KEY_ID)
+    envLines.add("AWS_SECRET_ACCESS_KEY=" + env.AWS_SECRET_ACCESS_KEY)
+    envLines.add("AWS_REGION=" + env.AWS_REGION)
+    envLines.add("")
+    envLines.add("# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)")
+    envLines.add("TF_VAR_aws_access_key=" + env.AWS_ACCESS_KEY_ID)
+    envLines.add("TF_VAR_aws_secret_access_key=" + env.AWS_SECRET_ACCESS_KEY)
+    envLines.add("TF_VAR_aws_region=" + env.AWS_REGION)
+    envLines.add("")
+    envLines.add("# S3 Backend State Storage Configuration")
+    envLines.add("TF_STATE_BUCKET=${env.TF_STATE_BUCKET}")
+    envLines.add("TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX}")
+    envLines.add("TF_STATE_REGION=${env.TF_STATE_REGION}")
 
-# AWS Credentials for OpenTofu (Standard AWS environment variables)
-AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}
-AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}
-AWS_REGION=${env.AWS_REGION}
-
-# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)
-TF_VAR_aws_access_key=${env.AWS_ACCESS_KEY_ID}
-TF_VAR_aws_secret_access_key=${env.AWS_SECRET_ACCESS_KEY}
-TF_VAR_aws_region=${env.AWS_REGION}
-
-# S3 Backend State Storage Configuration
-TF_STATE_BUCKET=${env.TF_STATE_BUCKET}
-TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX}
-TF_STATE_REGION=${env.TF_STATE_REGION}
-"""
-
+    def envContent = envLines.join('\n')
     writeFile file: env.ENV_FILE, text: envContent
     logInfo("Environment file created: ${env.ENV_FILE}")
 }
