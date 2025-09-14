@@ -58,5 +58,14 @@ RUN curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -
     chmod +x kubectl && \
     mv ./kubectl /usr/local/bin/kubectl
 
+# Install AWS CLI v2 (required for S3 state operations)
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip aws/
+
+# Verify installations
+RUN tofu version && kubectl version --client && aws --version
+
 # necessary to run if statements using [[ ]]
 SHELL ["/bin/bash", "-c"]
