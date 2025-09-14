@@ -1037,8 +1037,97 @@ def logInfo(message) {
 def logError(message) {
     echo "❌ [ERROR] ${new Date().format('HH:mm:ss')} - ${message}"
 }
-
 def logWarning(message) {
     echo "⚠️ [WARNING] ${new Date().format('HH:mm:ss')} - ${message}"
 }
+
+/**
+ * INFRASTRUCTURE ARCHIVAL FUNCTIONS
+ */
+
+def archiveInfrastructureState() {
+    logInfo('Archiving infrastructure state files')
+    
+    try {
+        // Copy state files from container to workspace
+        sh """
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/terraform.tfstate ./terraform-state.tfstate || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/infrastructure-outputs.json ./infrastructure-outputs.json || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/ansible/rke2/airgap/inventory/inventory.yml ./ansible-inventory.yml || true
+        """
+        
+        // Archive the infrastructure artifacts
+        archiveArtifacts artifacts: 'terraform-state.tfstate,infrastructure-outputs.json,ansible-inventory.yml', allowEmptyArchive: true
+        
+        logInfo('Infrastructure state archived successfully')
+    } catch (Exception e) {
+        logError("Failed to archive infrastructure state: ${e.message}")
+    }
+}
+
+def archiveInfrastructureFailureArtifacts() {
+    logInfo('Archiving infrastructure failure artifacts for debugging')
+    
+    try {
+        // Create debugging artifacts
+        def debugCommands = [
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            'tofu -chdir=tofu/aws/modules/airgap workspace list > workspace-list.txt 2>&1 || echo "No workspace list available"',
+            'tofu -chdir=tofu/aws/modules/airgap state list > state-list.txt 2>&1 || echo "No state available"',
+            'tofu -chdir=tofu/aws/modules/airgap show > terraform-show.txt 2>&1 || echo "No terraform show available"',
+            'ls -la tofu/aws/modules/airgap/ > directory-contents.txt 2>&1 || echo "Directory not accessible"',
+            'echo "Infrastructure failure artifact collection completed"'
+        ]
+        
+        executeScriptInContainer(debugCommands.join(' && '))
+        
+        // Copy debug files from container
+        sh """
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./ || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/state-list.txt ./ || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/terraform-show.txt ./ || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/directory-contents.txt ./ || true
+        """
+        
+        // Archive failure artifacts
+        archiveArtifacts artifacts: 'workspace-list.txt,state-list.txt,terraform-show.txt,directory-contents.txt', allowEmptyArchive: true
+        
+        logInfo('Infrastructure failure artifacts archived')
+    } catch (Exception e) {
+        logError("Failed to archive failure artifacts: ${e.message}")
+    }
+}
+
+def handleInfrastructureFailure(failureType, exception) {
+    logError("Handling infrastructure failure: ${failureType}")
+    logError("Exception: ${exception.message}")
+    
+    if (env.DESTROY_ON_FAILURE == 'true') {
+        logWarning('DESTROY_ON_FAILURE is enabled - cleaning up infrastructure')
+        try {
+            def cleanupScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+export TF_WORKSPACE=${env.TF_WORKSPACE}
+
+echo 'Starting infrastructure cleanup due to failure...'
+echo 'Current workspace:'
+tofu -chdir=tofu/aws/modules/airgap workspace show
+
+echo 'Destroying infrastructure...'
+tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME} || echo 'Destroy command completed with warnings'
+
+echo 'Cleanup completed'
+"""
+            
+            executeScriptInContainer(cleanupScript)
+            logInfo('Infrastructure cleanup completed')
+        } catch (Exception cleanupException) {
+            logError("Infrastructure cleanup failed: ${cleanupException.message}")
+        }
+    } else {
+        logWarning('DESTROY_ON_FAILURE is disabled - infrastructure left in current state')
+        logWarning("Workspace ${env.TF_WORKSPACE} may need manual cleanup")
+    }
+}
+
 
