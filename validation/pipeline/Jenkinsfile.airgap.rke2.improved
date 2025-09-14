@@ -1511,6 +1511,7 @@ ls -la "\$BACKUP_DIR"
     } catch (Exception e) {
         logError("Failed to create state backup: ${e.message}")
     }
+}
 
 /**
  * ROLLBACK AND RECOVERY FUNCTIONS
@@ -1754,5 +1755,4 @@ def performGracefulShutdown() {
         // Attempt emergency procedures
         performEmergencyRollback()
     }
-}
 }
