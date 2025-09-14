@@ -627,22 +627,7 @@ fi
 
 # Validate JSON structure after potential decompression
 echo "🔍 Validating JSON structure..."
-if python3.11 -c "
-import json
-import sys
-try:
-    with open('$LOCAL_STATE_FILE', 'r') as f:
-        data = json.load(f)
-    print('✅ State file is valid JSON')
-    print('JSON keys:', list(data.keys()) if isinstance(data, dict) else 'Not a JSON object')
-    sys.exit(0)
-except json.JSONDecodeError as e:
-    print('❌ JSON decode error:', str(e))
-    sys.exit(1)
-except Exception as e:
-    print('❌ Unexpected error:', str(e))
-    sys.exit(1)
-" 2>/dev/null; then
+if python3.11 -c 'import json, sys; data=json.load(open("'"$LOCAL_STATE_FILE"'", "r")); print("✅ State file is valid JSON"); print("JSON keys:", list(data.keys()) if isinstance(data, dict) else "Not a JSON object")' 2>/dev/null; then
     echo "JSON validation successful"
 else
     echo "❌ ERROR: State file is not valid JSON after processing"
@@ -667,15 +652,7 @@ else
 fi
 
 # Count resources in the state file
-RESOURCE_COUNT=$(python3 -c "
-import json
-try:
-    with open('$LOCAL_STATE_FILE') as f:
-        data = json.load(f)
-    print(len(data.get('resources', [])))
-except:
-    print(0)
-" 2>/dev/null || echo 0)
+RESOURCE_COUNT=$(python3.11 -c 'import json; data=json.load(open("'"$LOCAL_STATE_FILE"'", "r")); print(len(data.get("resources", [])))' 2>/dev/null || echo 0)
 
 echo "Resources in state: $RESOURCE_COUNT"
 
