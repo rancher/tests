@@ -466,22 +466,38 @@ def retrieveStateFromS3() {
             '\n' +
             'echo "📥 Attempting to download state file from S3..."\n' +
             '\n' +
-            '# Try .tfstate extension first\n' +
-            'STATE_KEY="env:/' + env.TARGET_WORKSPACE + '/' + env.TF_STATE_KEY_PREFIX + '/terraform.tfstate"\n' +
+            '# Try .tfstate extension first with correct path structure\n' +
+            'STATE_KEY="env:/' + env.TARGET_WORKSPACE + '/' + env.TF_STATE_KEY_PREFIX + '/' + env.TARGET_WORKSPACE + '/terraform.tfstate"\n' +
             'echo "Trying .tfstate extension: s3://' + env.TF_STATE_BUCKET + '/$STATE_KEY"\n' +
             'if aws s3 cp "s3://' + env.TF_STATE_BUCKET + '/$STATE_KEY" "$LOCAL_STATE_FILE" --region ' + env.TF_STATE_REGION + ' --quiet; then\n' +
             '    echo "✅ State file downloaded successfully with .tfstate extension"\n' +
             'else\n' +
             '    echo "❌ .tfstate extension failed, trying .json extension..."\n' +
             '    \n' +
-            '    # Try .json extension\n' +
-            '    STATE_KEY_JSON="env:/' + env.TARGET_WORKSPACE + '/' + env.TF_STATE_KEY_PREFIX + '/terraform.json"\n' +
+            '    # Try .json extension with correct path structure\n' +
+            '    STATE_KEY_JSON="env:/' + env.TARGET_WORKSPACE + '/' + env.TF_STATE_KEY_PREFIX + '/' + env.TARGET_WORKSPACE + '/terraform.json"\n' +
             '    echo "Trying .json extension: s3://' + env.TF_STATE_BUCKET + '/$STATE_KEY_JSON"\n' +
             '    if aws s3 cp "s3://' + env.TF_STATE_BUCKET + '/$STATE_KEY_JSON" "$LOCAL_STATE_FILE" --region ' + env.TF_STATE_REGION + ' --quiet; then\n' +
             '        echo "✅ State file downloaded successfully with .json extension"\n' +
             '    else\n' +
-            '        echo "❌ Both .tfstate and .json extensions failed"\n' +
-            '        exit 1\n' +
+            '        echo "❌ Both extensions failed with correct path structure"\n' +
+            '        \n' +
+            '        # Try fallback without duplicate workspace name\n' +
+            '        echo "🔍 Trying fallback path without duplicate workspace..."\n' +
+            '        FALLBACK_KEY="env:/' + env.TARGET_WORKSPACE + '/' + env.TF_STATE_KEY_PREFIX + '/terraform.tfstate"\n' +
+            '        echo "Trying fallback .tfstate: s3://' + env.TF_STATE_BUCKET + '/$FALLBACK_KEY"\n' +
+            '        if aws s3 cp "s3://' + env.TF_STATE_BUCKET + '/$FALLBACK_KEY" "$LOCAL_STATE_FILE" --region ' + env.TF_STATE_REGION + ' --quiet; then\n' +
+            '            echo "✅ State file downloaded with fallback path (.tfstate)"\n' +
+            '        else\n' +
+            '            FALLBACK_KEY_JSON="env:/' + env.TARGET_WORKSPACE + '/' + env.TF_STATE_KEY_PREFIX + '/terraform.json"\n' +
+            '            echo "Trying fallback .json: s3://' + env.TF_STATE_BUCKET + '/$FALLBACK_KEY_JSON"\n' +
+            '            if aws s3 cp "s3://' + env.TF_STATE_BUCKET + '/$FALLBACK_KEY_JSON" "$LOCAL_STATE_FILE" --region ' + env.TF_STATE_REGION + ' --quiet; then\n' +
+            '                echo "✅ State file downloaded with fallback path (.json)"\n' +
+            '            else\n' +
+            '                echo "❌ All download attempts failed"\n' +
+            '                exit 1\n' +
+            '            fi\n' +
+            '        fi\n' +
             '    fi\n' +
             'fi\n' +
             '\n' +
