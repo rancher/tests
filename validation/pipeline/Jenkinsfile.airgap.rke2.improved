@@ -130,7 +130,6 @@ pipeline {
         TF_STATE_BUCKET = 'jenkins-terraform-state-storage'
         TF_STATE_KEY_PREFIX = 'jenkins-airgap-rke2'
         TF_STATE_REGION = "${AWS_REGION}"
-        JENKINS_STATE_ARCHIVE_PREFIX = 'terraform-state'
     }
 
     stages {
@@ -1207,7 +1206,7 @@ def safeDestroyInfrastructure() {
 }
 
 def archiveInfrastructureState() {
-    logInfo('Archiving infrastructure state to S3 and Jenkins artifacts')
+    logInfo('Archiving infrastructure state to S3 backend')
 
     try {
         def archiveScript = """
@@ -1262,10 +1261,7 @@ echo 'State archival to local files completed'
                 "
         """
 
-        // Archive as Jenkins artifacts for easy retrieval
-        archiveArtifacts artifacts: 'infrastructure-*.tfstate,infrastructure-outputs.json,infrastructure-state-metadata.json,infrastructure-state-summary.txt', allowEmptyArchive: true
-        
-        logInfo('State archived to both S3 backend and Jenkins artifacts')
+        logInfo('State archived to S3 backend with local backup files generated')
     } catch (Exception e) {
         logError("Failed to archive infrastructure state: ${e.message}")
     }
@@ -1425,32 +1421,6 @@ echo 'State retrieval completed'
     }
 }
 
-def retrieveStateFromJenkinsArtifacts(buildNumber = null) {
-    logInfo("Retrieving Terraform state from Jenkins artifacts")
-
-    try {
-        def artifactPattern = "infrastructure-${env.TF_WORKSPACE}.tfstate"
-        
-        // Check if artifacts exist in current build
-        if (fileExists(artifactPattern)) {
-            logInfo("State file found in current build artifacts")
-            return true
-        }
-
-        // For destruction jobs, this would typically copy from upstream job
-        if (buildNumber) {
-            logWarning("State retrieval from build ${buildNumber} requires manual intervention")
-        }
-        logWarning("State retrieval from Jenkins artifacts requires manual intervention")
-        logWarning("Expected artifact: ${artifactPattern}")
-        logWarning("Ensure the state file is available in the workspace before destruction")
-        
-        return false
-    } catch (Exception e) {
-        logError("Failed to retrieve state from Jenkins artifacts: ${e.message}")
-        return false
-    }
-}
 
 def validateStateConsistency() {
     logInfo('Validating Terraform state consistency')
@@ -1523,9 +1493,7 @@ ls -la "\$BACKUP_DIR"
             docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/state-backups ./state-backups || true
         """
         
-        archiveArtifacts artifacts: 'state-backups/**/*', allowEmptyArchive: true
-        
-        logInfo('State backup completed and archived')
+        logInfo('State backup completed in container')
     } catch (Exception e) {
         logError("Failed to create state backup: ${e.message}")
     }
@@ -1723,10 +1691,9 @@ def createRollbackPlan() {
             s3StateLocation: "s3://${env.TF_STATE_BUCKET}/${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate",
             rollbackInstructions: [
                 "1. Use destruction pipeline with TARGET_WORKSPACE=${env.TF_WORKSPACE}",
-                "2. Set STATE_SOURCE=S3_BACKEND for primary state retrieval",
-                "3. Set STATE_SOURCE=JENKINS_ARTIFACTS as fallback with BUILD_NUMBER=${env.BUILD_NUMBER}",
-                "4. Enable DRY_RUN=true for initial validation",
-                "5. Set FORCE_DESTROY=true only if normal process fails"
+                "2. Set S3_BUCKET_NAME=${env.TF_STATE_BUCKET} and S3_REGION=${env.TF_STATE_REGION}",
+                "3. Enable DRY_RUN=true for initial validation",
+                "4. Set FORCE_DESTROY=true only if normal process fails"
             ],
             emergencyContacts: [
                 "DevOps Team: #rancher-devops",
