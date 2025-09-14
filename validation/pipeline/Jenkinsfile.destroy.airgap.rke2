@@ -22,6 +22,21 @@ pipeline {
 
     parameters {
         string(
+            name: 'S3_BUCKET_NAME',
+            defaultValue: 'jenkins-terraform-state-storage',
+            description: 'S3 bucket name where Terraform state is stored'
+        )
+        string(
+            name: 'S3_REGION',
+            defaultValue: 'us-east-2',
+            description: 'AWS region where the S3 bucket is located'
+        )
+        string(
+            name: 'S3_KEY_PREFIX',
+            defaultValue: 'jenkins-airgap-rke2',
+            description: 'S3 key prefix for the Terraform state files'
+        )
+        string(
             name: 'TARGET_WORKSPACE',
             defaultValue: '',
             description: 'Terraform workspace to destroy (e.g., jenkins_airgap_ansible_workspace_123)'
@@ -29,12 +44,12 @@ pipeline {
         string(
             name: 'UPSTREAM_BUILD_NUMBER',
             defaultValue: '',
-            description: 'Build number of the deployment job that created the infrastructure'
+            description: 'Build number of the deployment job that created the infrastructure (optional)'
         )
         string(
             name: 'UPSTREAM_JOB_NAME',
             defaultValue: '',
-            description: 'Name of the deployment job that created the infrastructure'
+            description: 'Name of the deployment job that created the infrastructure (optional)'
         )
         choice(
             name: 'STATE_SOURCE',
@@ -59,10 +74,10 @@ pipeline {
     }
 
     environment {
-        // State storage configuration (S3-only, no DynamoDB)
-        TF_STATE_BUCKET = 'jenkins-terraform-state-storage'
-        TF_STATE_KEY_PREFIX = 'jenkins-airgap-rke2'
-        TF_STATE_REGION = 'us-east-2'
+        // Dynamic state storage configuration from parameters
+        TF_STATE_BUCKET = "${params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'}"
+        TF_STATE_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2'}"
+        TF_STATE_REGION = "${params.S3_REGION ?: 'us-east-2'}"
 
         // Repository configurations
         QA_INFRA_REPO = 'https://github.com/rancher/qa-infra-automation'
@@ -86,14 +101,13 @@ pipeline {
     }
 
     stages {
-        // Wrap destruction operations with lock to prevent concurrent state operations
         stage('Infrastructure Destruction Operations') {
             steps {
-                lock(resource: "terraform-destroy-lock-${params.TARGET_WORKSPACE ?: 'default'}") {
-                    script {
-                        logInfo("🔒 Acquired destruction lock: terraform-destroy-lock-${params.TARGET_WORKSPACE ?: 'default'}")
-                        logInfo("⚠️ WARNING: Using Jenkins pipeline locks instead of DynamoDB state locking")
-                    }
+                script {
+                    logWarning("⚠️ IMPORTANT: No concurrent state locking available")
+                    logWarning("⚠️ Ensure only ONE destruction pipeline runs at a time for the same workspace")
+                    logWarning("⚠️ Manual coordination required to prevent state conflicts")
+                }
                     
                     // Validate Parameters
                     script {
@@ -235,18 +249,12 @@ pipeline {
                             }
                         }
                     }
-                }
             }
             post {
                 failure {
                     script {
                         logError('Infrastructure destruction operations failed')
                         archiveDestructionFailureArtifacts()
-                    }
-                }
-                always {
-                    script {
-                        logInfo("🔓 Released destruction lock: terraform-destroy-lock-${params.TARGET_WORKSPACE ?: 'default'}")
                     }
                 }
             }
@@ -336,6 +344,15 @@ TF_STATE_BUCKET=${env.TF_STATE_BUCKET}
 TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX}
 TF_STATE_REGION=${env.TF_STATE_REGION}
 AWS_REGION=${env.AWS_REGION}
+
+# AWS Credentials for OpenTofu
+AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}
+AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}
+
+# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)
+TF_VAR_aws_access_key=${env.AWS_ACCESS_KEY_ID}
+TF_VAR_aws_secret_access_key=${env.AWS_SECRET_ACCESS_KEY}
+TF_VAR_aws_region=${env.AWS_REGION}
 """
 
     writeFile file: env.ENV_FILE, text: envContent
@@ -535,7 +552,9 @@ cat > ${env.TERRAFORM_VARS_FILENAME} << 'EOF'
 # Minimal configuration for destruction
 # The actual values don't matter for destroy operations
 # as Terraform will read the current state
-region = "${env.AWS_REGION}"
+aws_region = "${env.AWS_REGION}"
+aws_access_key = "placeholder"
+aws_secret_access_key = "placeholder"
 EOF
 
 echo 'Creating destruction plan...'
