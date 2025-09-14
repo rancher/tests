@@ -11,12 +11,15 @@
 pipeline {
     agent any
 
+    // Global pipeline options with pipeline-level locking
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timeout(time: 2, unit: 'HOURS')
         timestamps()
         ansiColor('xterm')
         skipStagesAfterUnstable()
+        // Pipeline-level locking to prevent concurrent operations
+        lock(resource: "terraform-destroy-lock-${params.TARGET_WORKSPACE ?: 'default'}")
     }
 
     parameters {
@@ -58,7 +61,7 @@ pipeline {
     }
 
     environment {
-        // State storage configuration
+        // State storage configuration (S3-only, no DynamoDB)
         TF_STATE_BUCKET = 'jenkins-terraform-state-storage'
         TF_STATE_KEY_PREFIX = 'jenkins-airgap-rke2'
         TF_STATE_REGION = 'us-east-2'
@@ -423,18 +426,24 @@ def retrieveStateFromS3() {
         def retrieveScript = """
 cd ${env.QA_INFRA_WORK_PATH}
 
-echo 'Configuring S3 backend for state retrieval...'
+echo 'Configuring S3 backend for state retrieval (no DynamoDB locking)...'
 cat > tofu/aws/modules/airgap/backend.tf << 'EOF'
 terraform {
   backend "s3" {
-    bucket         = "${env.TF_STATE_BUCKET}"
-    key            = "${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/terraform.tfstate"
-    region         = "${env.TF_STATE_REGION}"
-    encrypt        = true
-    dynamodb_table = "${env.TF_STATE_BUCKET}-locks"
+    bucket  = "${env.TF_STATE_BUCKET}"
+    key     = "${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/terraform.tfstate"
+    region  = "${env.TF_STATE_REGION}"
+    encrypt = true
+    
+    # WARNING: No state locking without DynamoDB
+    # Pipeline-level locking prevents concurrent operations
   }
 }
 EOF
+
+echo '⚠️  WARNING: Using S3-only backend without state locking'
+echo 'Backend configuration:'
+cat tofu/aws/modules/airgap/backend.tf
 
 echo 'Initializing backend...'
 tofu -chdir=tofu/aws/modules/airgap init -input=false -reconfigure
