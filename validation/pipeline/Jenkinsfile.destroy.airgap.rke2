@@ -61,7 +61,7 @@ pipeline {
         // State storage configuration
         TF_STATE_BUCKET = 'rancher-terraform-state-storage'
         TF_STATE_KEY_PREFIX = 'jenkins-airgap-rke2'
-        TF_STATE_REGION = 'us-east-1'
+        TF_STATE_REGION = 'us-east-2'
 
         // Repository configurations
         QA_INFRA_REPO = 'https://github.com/rancher/qa-infra-automation'
@@ -81,7 +81,7 @@ pipeline {
         ENV_FILE = '.env-destroy'
 
         // AWS defaults
-        AWS_REGION = 'us-west-2'
+        AWS_REGION = 'us-east-2'
     }
 
     stages {
