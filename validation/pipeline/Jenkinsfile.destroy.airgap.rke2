@@ -5,7 +5,7 @@
  * 
  * This pipeline is designed to safely destroy infrastructure created by
  * the main airgap RKE2 deployment pipeline. It retrieves Terraform state
- * from S3 backend or Jenkins artifacts and performs controlled destruction.
+ * from S3 backend and performs controlled destruction.
  */
 
 pipeline {
@@ -41,20 +41,10 @@ pipeline {
             defaultValue: '',
             description: 'Terraform workspace to destroy (e.g., jenkins_airgap_ansible_workspace_123)'
         )
-        string(
-            name: 'UPSTREAM_BUILD_NUMBER',
-            defaultValue: '',
-            description: 'Build number of the deployment job that created the infrastructure (optional)'
-        )
-        string(
-            name: 'UPSTREAM_JOB_NAME',
-            defaultValue: '',
-            description: 'Name of the deployment job that created the infrastructure (optional)'
-        )
         choice(
             name: 'STATE_SOURCE',
-            choices: ['S3_BACKEND', 'JENKINS_ARTIFACTS', 'BOTH'],
-            description: 'Where to retrieve Terraform state from'
+            choices: ['S3_BACKEND'],
+            description: 'Terraform state source (S3 backend only)'
         )
         booleanParam(
             name: 'FORCE_DESTROY',
@@ -117,15 +107,10 @@ pipeline {
                             error('TARGET_WORKSPACE parameter is required for destruction')
                         }
 
-                        if (params.STATE_SOURCE == 'JENKINS_ARTIFACTS' &&
-                            (!params.UPSTREAM_BUILD_NUMBER || !params.UPSTREAM_JOB_NAME)) {
-                            error('UPSTREAM_BUILD_NUMBER and UPSTREAM_JOB_NAME are required when using JENKINS_ARTIFACTS as state source')
-                        }
-
                         env.TARGET_WORKSPACE = params.TARGET_WORKSPACE
                         
                         logInfo("Target workspace: ${env.TARGET_WORKSPACE}")
-                        logInfo("State source: ${params.STATE_SOURCE}")
+                        logInfo("State source: S3 Backend")
                         logInfo("Dry run mode: ${params.DRY_RUN}")
                         logInfo("Force destroy: ${params.FORCE_DESTROY}")
                     }
@@ -161,24 +146,14 @@ pipeline {
                     
                     // Retrieve Terraform State
                     script {
-                        logInfo('Retrieving Terraform state for destruction')
+                        logInfo('Retrieving Terraform state from S3 backend for destruction')
                         
-                        def stateRetrieved = false
-
-                        if (params.STATE_SOURCE == 'S3_BACKEND' || params.STATE_SOURCE == 'BOTH') {
-                            logInfo('Attempting to retrieve state from S3 backend')
-                            stateRetrieved = retrieveStateFromS3()
-                        }
-
-                        if (!stateRetrieved && (params.STATE_SOURCE == 'JENKINS_ARTIFACTS' || params.STATE_SOURCE == 'BOTH')) {
-                            logInfo('Attempting to retrieve state from Jenkins artifacts')
-                            stateRetrieved = retrieveStateFromJenkinsArtifacts(params.UPSTREAM_BUILD_NUMBER)
-                        }
+                        def stateRetrieved = retrieveStateFromS3()
 
                         if (!stateRetrieved && !params.FORCE_DESTROY) {
-                            error('Could not retrieve Terraform state and FORCE_DESTROY is not enabled')
+                            error('Could not retrieve Terraform state from S3 and FORCE_DESTROY is not enabled')
                         } else if (!stateRetrieved && params.FORCE_DESTROY) {
-                            logWarning('State retrieval failed but FORCE_DESTROY is enabled - proceeding with caution')
+                            logWarning('S3 state retrieval failed but FORCE_DESTROY is enabled - proceeding with caution')
                         }
 
                         // Validate state if retrieved
@@ -363,14 +338,14 @@ def buildDestructionDockerImage() {
     logInfo("Building destruction Docker image: ${env.IMAGE_NAME}")
 
     dir('./') {
-        sh './qa-infra-automation/scripts/configure.sh || echo "Configure script not found, continuing..."'
+        sh './tests/validation/configure.sh || echo "Configure script not found, continuing..."'
         sh """
             # Use the same Dockerfile as the main pipeline for consistency
             docker build . \
-                -f ./qa-infra-automation/Dockerfile.tofu.e2e \
+                -f ./tests/validation/Dockerfile.tofu.e2e \
                 -t ${env.IMAGE_NAME} \
                 --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
-                --build-arg VCS_REF=\$(git rev-parse --short HEAD) \
+                --build-arg VCS_REF=\$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') \
                 --label "pipeline.build.number=${env.BUILD_NUMBER}" \
                 --label "pipeline.job.name=${env.JOB_NAME}" \
                 --label "pipeline.purpose=destruction"
@@ -478,28 +453,6 @@ fi
     }
 }
 
-def retrieveStateFromJenkinsArtifacts(buildNumber) {
-    logInfo("Retrieving Terraform state from Jenkins artifacts")
-
-    try {
-        // This would need to be implemented based on your Jenkins setup
-        // For now, we'll check if state files exist in the current workspace
-        def artifactPattern = "infrastructure-${env.TARGET_WORKSPACE}.tfstate"
-        
-        if (fileExists(artifactPattern)) {
-            logInfo("State file found: ${artifactPattern}")
-            return true
-        }
-
-        logWarning("State retrieval from Jenkins artifacts not fully implemented")
-        logWarning("Manual state file placement may be required")
-        
-        return false
-    } catch (Exception e) {
-        logError("Failed to retrieve state from Jenkins artifacts: ${e.message}")
-        return false
-    }
-}
 
 def validateStateForDestruction() {
     logInfo('Validating state for destruction')
@@ -770,7 +723,7 @@ def sendSlackNotification(config) {
                     [title: 'Job', value: env.JOB_NAME, short: true],
                     [title: 'Build', value: env.BUILD_NUMBER, short: true],
                     [title: 'Workspace', value: env.TARGET_WORKSPACE, short: true],
-                    [title: 'State Source', value: params.STATE_SOURCE, short: true]
+                    [title: 'State Source', value: 'S3 Backend', short: true]
                 ]
             ]
 
