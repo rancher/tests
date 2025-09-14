@@ -749,7 +749,7 @@ cat > tofu/aws/modules/airgap/backend.tf << 'EOF'
 terraform {
   backend "s3" {
     bucket  = "${env.TF_STATE_BUCKET}"
-    key     = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
+    key     = "${env.TF_STATE_KEY_PREFIX}/terraform.tfstate"
     region  = "${env.TF_STATE_REGION}"
     encrypt = true
 
