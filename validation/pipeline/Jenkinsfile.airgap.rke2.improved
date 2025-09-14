@@ -163,41 +163,44 @@ pipeline {
                         logInfo("Volume: ${env.VALIDATION_VOLUME}")
                     }
                     
-                    // Checkout Repositories
-                    parallel([
-                        'Checkout Rancher Tests': {
-                            dir('./tests') {
-                                logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
-                                checkout([
-                                    $class: 'GitSCM',
-                                    branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
-                                    extensions: [
-                                        [$class: 'CleanCheckout'],
-                                        [$class: 'CloneOption', depth: 1, shallow: true]
-                                    ],
-                                    userRemoteConfigs: [[
-                                        url: env.RANCHER_TEST_REPO_URL,
-                                    ]]
-                                ])
-                            }
-                        },
-                        'Checkout QA Infrastructure': {
-                            dir('./qa-infra-automation') {
-                                logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
-                                checkout([
-                                    $class: 'GitSCM',
-                                    branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
-                                    extensions: [
-                                        [$class: 'CleanCheckout'],
-                                        [$class: 'CloneOption', depth: 1, shallow: true]
-                                    ],
-                                    userRemoteConfigs: [[
-                                        url: env.QA_INFRA_REPO,
-                                    ]]
-                                ])
-                            }
+                    // Checkout Repositories (Sequential within lock)
+                    script {
+                        logInfo('Checking out source repositories')
+                        
+                        // Checkout Rancher Tests Repository
+                        dir('./tests') {
+                            logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
+                                extensions: [
+                                    [$class: 'CleanCheckout'],
+                                    [$class: 'CloneOption', depth: 1, shallow: true]
+                                ],
+                                userRemoteConfigs: [[
+                                    url: env.RANCHER_TEST_REPO_URL,
+                                ]]
+                            ])
                         }
-                    ])
+                        
+                        // Checkout QA Infrastructure Repository
+                        dir('./qa-infra-automation') {
+                            logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
+                                extensions: [
+                                    [$class: 'CleanCheckout'],
+                                    [$class: 'CloneOption', depth: 1, shallow: true]
+                                ],
+                                userRemoteConfigs: [[
+                                    url: env.QA_INFRA_REPO,
+                                ]]
+                            ])
+                        }
+                        
+                        logInfo('Repository checkout completed successfully')
+                    }
                     
                     // Configure Environment
                     script {
