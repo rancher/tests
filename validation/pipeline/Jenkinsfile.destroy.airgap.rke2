@@ -445,66 +445,193 @@ def executeScriptInContainer(scriptContent, extraEnv = [:]) {
 }
 
 def retrieveStateFromS3() {
-    logInfo("Retrieving Terraform state from S3 for workspace: ${env.TARGET_WORKSPACE}")
+    logInfo("Retrieving Terraform state directly from S3 (bypassing workspace selection)")
 
     try {
         def retrieveScript = """
 cd ${env.QA_INFRA_WORK_PATH}
 
-echo 'Configuring S3 backend for state retrieval (no DynamoDB locking)...'
+echo '🚀 Direct State Retrieval Approach'
+echo '================================='
+echo 'Target workspace: ${env.TARGET_WORKSPACE}'
+echo 'S3 bucket: ${env.TF_STATE_BUCKET}'
+echo 'Key prefix: ${env.TF_STATE_KEY_PREFIX}'
+echo 'Region: ${env.TF_STATE_REGION}'
+echo
+
+# Step 1: Download state file directly from S3 (no workspace selection needed)
+STATE_KEY="${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/terraform.tfstate"
+LOCAL_STATE_FILE="tofu/aws/modules/airgap/terraform.tfstate"
+
+echo "📥 Downloading state file directly from S3..."
+echo "Source: s3://${env.TF_STATE_BUCKET}/\$STATE_KEY"
+echo "Target: \$LOCAL_STATE_FILE"
+
+# Ensure target directory exists
+mkdir -p tofu/aws/modules/airgap/
+
+if aws s3 cp "s3://${env.TF_STATE_BUCKET}/\$STATE_KEY" "\$LOCAL_STATE_FILE" --region ${env.TF_STATE_REGION} --quiet; then
+    echo "✅ State file downloaded successfully"
+else
+    echo "❌ ERROR: Could not download state file from S3"
+    
+    # Try to find the actual location
+    echo "🔍 Searching for state file in alternative locations..."
+    
+    # List available workspaces
+    AVAILABLE_WORKSPACES=\$(aws s3 ls "s3://${env.TF_STATE_BUCKET}/${env.TF_STATE_KEY_PREFIX}/" --region ${env.TF_STATE_REGION} | grep "PRE" | awk '{print \$2}' | sed 's|/||g' | sort || echo "")
+    
+    if [ -n "\$AVAILABLE_WORKSPACES" ]; then
+        echo "Available workspaces found:"
+        echo "\$AVAILABLE_WORKSPACES" | while read -r workspace; do
+            echo "  → \$workspace"
+        done
+        
+        # Check if any contain our target
+        MATCHING_WORKSPACE=\$(echo "\$AVAILABLE_WORKSPACES" | grep "${env.TARGET_WORKSPACE}" | head -1 || echo "")
+        if [ -n "\$MATCHING_WORKSPACE" ]; then
+            echo "Found matching workspace: \$MATCHING_WORKSPACE"
+            ALT_STATE_KEY="${env.TF_STATE_KEY_PREFIX}/\$MATCHING_WORKSPACE/terraform.tfstate"
+            
+            echo "Trying alternative state key: s3://${env.TF_STATE_BUCKET}/\$ALT_STATE_KEY"
+            if aws s3 cp "s3://${env.TF_STATE_BUCKET}/\$ALT_STATE_KEY" "\$LOCAL_STATE_FILE" --region ${env.TF_STATE_REGION} --quiet; then
+                echo "✅ Successfully downloaded from alternative location"
+            else
+                echo "❌ Alternative download also failed"
+                exit 1
+            fi
+        else
+            echo "❌ No matching workspaces found"
+            exit 1
+        fi
+    else
+        echo "❌ No workspaces found in S3 bucket"
+        exit 1
+    fi
+fi
+
+# Step 2: Validate the downloaded state file
+echo
+echo "🔍 Validating downloaded state file..."
+
+STATE_SIZE=\$(stat -c%s "\$LOCAL_STATE_FILE" 2>/dev/null || echo 0)
+echo "State file size: \$STATE_SIZE bytes"
+
+if [ "\$STATE_SIZE" -eq 0 ]; then
+    echo "❌ ERROR: Downloaded state file is empty"
+    exit 1
+elif [ "\$STATE_SIZE" -lt 50 ]; then
+    echo "⚠️ WARNING: State file is very small - might be corrupted"
+    echo "File contents:"
+    cat "\$LOCAL_STATE_FILE" | head -5
+fi
+
+# Validate JSON structure
+if python3 -c "import json; json.load(open('\$LOCAL_STATE_FILE'))" 2>/dev/null; then
+    echo "✅ State file is valid JSON"
+else
+    echo "❌ ERROR: State file is not valid JSON"
+    echo "First few lines:"
+    head -5 "\$LOCAL_STATE_FILE"
+    exit 1
+fi
+
+# Count resources in the state file
+RESOURCE_COUNT=\$(python3 -c "
+import json
+try:
+    with open('\$LOCAL_STATE_FILE') as f:
+        data = json.load(f)
+    print(len(data.get('resources', [])))
+except:
+    print(0)
+" 2>/dev/null || echo 0)
+
+echo "Resources in state: \$RESOURCE_COUNT"
+
+if [ "\$RESOURCE_COUNT" -eq 0 ]; then
+    echo "⚠️ WARNING: No resources found in state file"
+    echo "This might mean infrastructure was already destroyed"
+    
+    # Check if FORCE_DESTROY is enabled
+    if [ "${params.FORCE_DESTROY ?: 'false'}" != "true" ]; then
+        echo "❌ Refusing to proceed with empty state (set FORCE_DESTROY=true to override)"
+        exit 1
+    else
+        echo "⚠️ FORCE_DESTROY=true, proceeding despite empty state"
+    fi
+else
+    echo "✅ Found \$RESOURCE_COUNT resources ready for destruction"
+fi
+
+# Step 3: Configure local backend (no workspace selection needed)
+echo
+echo "⚚ Configuring OpenTofu backend for direct state access..."
+
 cat > tofu/aws/modules/airgap/backend.tf << 'EOF'
 terraform {
-  backend "s3" {
-    bucket  = "${env.TF_STATE_BUCKET}"
-    key     = "${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/terraform.tfstate"
-    region  = "${env.TF_STATE_REGION}"
-    encrypt = true
-
-    # WARNING: No state locking without DynamoDB
-    # Pipeline-level locking prevents concurrent operations
+  backend "local" {
+    path = "terraform.tfstate"
   }
 }
 EOF
 
-echo '⚠️  WARNING: Using S3-only backend without state locking'
-echo 'Backend configuration:'
-cat tofu/aws/modules/airgap/backend.tf
+echo "✅ Using local backend configuration (no workspace selection required)"
 
-echo 'Initializing backend...'
-tofu -chdir=tofu/aws/modules/airgap init -input=false -reconfigure
-
-echo 'Checking if workspace exists...'
-if tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TARGET_WORKSPACE}; then
-    echo 'Workspace found, pulling state...'
-    tofu -chdir=tofu/aws/modules/airgap state pull > current-state.tfstate
-
-    STATE_SIZE=\$(stat -c%s current-state.tfstate 2>/dev/null || echo 0)
-    if [ "\$STATE_SIZE" -gt 50 ]; then
-        echo "SUCCESS: State retrieved (\$STATE_SIZE bytes)"
-        RESOURCE_COUNT=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l)
-        echo "Resources in state: \$RESOURCE_COUNT"
-
-        if [ "\$RESOURCE_COUNT" -eq 0 ]; then
-            echo 'WARNING: State exists but contains no resources'
-            exit 1
-        fi
-
-        exit 0
-    else
-        echo 'WARNING: State is empty'
-        exit 1
-    fi
+# Step 4: Initialize with local backend
+echo
+echo "🔧 Initializing OpenTofu with local backend..."
+if tofu -chdir=tofu/aws/modules/airgap init -input=false -reconfigure; then
+    echo "✅ OpenTofu initialized successfully"
 else
-    echo 'ERROR: Workspace does not exist in backend'
+    echo "❌ ERROR: Failed to initialize OpenTofu"
     exit 1
 fi
+
+# Step 5: Verify state is loaded correctly
+echo
+echo "🔍 Verifying state is loaded correctly..."
+LOADED_RESOURCES=\$(tofu -chdir=tofu/aws/modules/airgap state list 2>/dev/null | wc -l || echo 0)
+echo "Resources loaded in OpenTofu: \$LOADED_RESOURCES"
+
+if [ "\$LOADED_RESOURCES" -ne "\$RESOURCE_COUNT" ]; then
+    echo "⚠️ WARNING: Resource count mismatch (state: \$RESOURCE_COUNT, loaded: \$LOADED_RESOURCES)"
+fi
+
+if [ "\$LOADED_RESOURCES" -eq 0 ]; then
+    echo "❌ ERROR: No resources loaded in OpenTofu state"
+    exit 1
+fi
+
+echo "✅ State loaded successfully - \$LOADED_RESOURCES resources ready for destruction"
+
+# Show some sample resources
+echo "Sample resources in state:"
+tofu -chdir=tofu/aws/modules/airgap state list | head -5 | while read -r resource; do
+    echo "  → \$resource"
+done
+
+echo
+echo "✅ SUCCESS: State retrieval completed using direct approach"
+echo "   - Bypassed workspace selection entirely"
+echo "   - Downloaded state directly from S3"
+echo "   - Configured local backend"
+echo "   - Ready for destruction planning"
 """
 
         executeScriptInContainer(retrieveScript)
-        logInfo('State successfully retrieved from S3 backend')
+        logInfo('✅ State successfully retrieved using direct approach (no workspace selection needed)')
         return true
     } catch (Exception e) {
-        logError("Failed to retrieve state from S3: ${e.message}")
+        logError("❌ Failed to retrieve state from S3: ${e.message}")
+        
+        // Provide helpful context for troubleshooting
+        logError("💡 Troubleshooting suggestions:")
+        logError("   1. Verify TARGET_WORKSPACE parameter: ${env.TARGET_WORKSPACE}")
+        logError("   2. Check S3 bucket access: ${env.TF_STATE_BUCKET}")
+        logError("   3. Confirm key prefix: ${env.TF_STATE_KEY_PREFIX}")
+        logError("   4. Run workspace diagnosis script for detailed analysis")
+        
         return false
     }
 }
