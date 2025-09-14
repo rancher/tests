@@ -127,7 +127,7 @@ pipeline {
         AWS_AMI = 'ami-0c2d3e23fb3adceb8'
 
         // State storage configuration
-        TF_STATE_BUCKET = 'rancher-terraform-state-storage'
+        TF_STATE_BUCKET = 'jenkins-terraform-state-storage'
         TF_STATE_KEY_PREFIX = 'jenkins-airgap-rke2'
         TF_STATE_REGION = "${AWS_REGION}"
         JENKINS_STATE_ARCHIVE_PREFIX = 'terraform-state'

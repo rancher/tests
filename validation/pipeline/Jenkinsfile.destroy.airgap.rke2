@@ -59,7 +59,7 @@ pipeline {
 
     environment {
         // State storage configuration
-        TF_STATE_BUCKET = 'rancher-terraform-state-storage'
+        TF_STATE_BUCKET = 'jenkins-terraform-state-storage'
         TF_STATE_KEY_PREFIX = 'jenkins-airgap-rke2'
         TF_STATE_REGION = 'us-east-2'
 
