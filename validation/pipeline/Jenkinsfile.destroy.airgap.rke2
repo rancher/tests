@@ -765,33 +765,84 @@ echo 'State validation completed successfully'
 def planDestruction() {
     logInfo('Creating destruction plan')
 
-    def planScript = """
-cd ${env.QA_INFRA_WORK_PATH}
+    def planScript = '''
+cd ''' + env.QA_INFRA_WORK_PATH + '''
 
 echo 'Generating destruction plan...'
-# Note: We need the original tfvars file for planning
-# This is a simplified approach - in practice, you might need to reconstruct
-# or retrieve the original configuration
 
-# Create a minimal tfvars for destruction planning
-cat > ${env.TERRAFORM_VARS_FILENAME} << 'EOF'
+# For destroy operations, we don't need the original tfvars file
+# OpenTofu can read the current state and plan destruction without variable files
+# We'll create minimal vars only if they're absolutely required by the configuration
+
+echo 'Attempting direct destruction planning without tfvars...'
+if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -out=destroy-plan 2>/dev/null; then
+    echo '✅ Destruction plan created without tfvars file'
+else
+    echo 'Direct planning failed, creating minimal tfvars...'
+    
+    # Create minimal tfvars for destruction planning
+    cat > ''' + env.TERRAFORM_VARS_FILENAME + ''' << 'EOFVARS'
 # Minimal configuration for destruction
 # The actual values don't matter for destroy operations
-# as Terraform will read the current state
-aws_region = "${env.AWS_REGION}"
+# OpenTofu will read from the current state
+aws_region = "''' + env.AWS_REGION + '''"
 aws_access_key = "placeholder"
 aws_secret_access_key = "placeholder"
-EOF
+# Add other common variables that might be required
+instance_type = "t3.medium"
+node_count = 1
+EOFVARS
 
-echo 'Creating destruction plan...'
-tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=destroy-plan
+    echo 'Created minimal tfvars file:'
+    cat ''' + env.TERRAFORM_VARS_FILENAME + '''
+    echo
+    
+    echo 'Attempting destruction planning with minimal tfvars...'
+    if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=''' + env.TERRAFORM_VARS_FILENAME + ''' -out=destroy-plan; then
+        echo '✅ Destruction plan created with minimal tfvars'
+    else
+        echo '❌ Destruction planning failed even with tfvars'
+        echo 'Checking what variables are actually required...'
+        
+        # Try to get more info about required variables
+        tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=''' + env.TERRAFORM_VARS_FILENAME + ''' 2>&1 | grep -i "required" || echo "No variable requirements found"
+        
+        echo 'Attempting plan without output file to see detailed error...'
+        tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=''' + env.TERRAFORM_VARS_FILENAME + ''' || echo "Detailed planning failed"
+        
+        exit 1
+    fi
+fi
+
+# Verify plan file was created
+if [ ! -f tofu/aws/modules/airgap/destroy-plan ]; then
+    echo '❌ ERROR: destroy-plan file was not created'
+    echo 'Contents of module directory:'
+    ls -la tofu/aws/modules/airgap/
+    exit 1
+fi
+
+PLAN_SIZE=$(stat -c%s tofu/aws/modules/airgap/destroy-plan 2>/dev/null || echo 0)
+echo "Plan file size: $PLAN_SIZE bytes"
 
 echo 'Showing destruction plan summary...'
-tofu -chdir=tofu/aws/modules/airgap show -no-color destroy-plan > destruction-plan-summary.txt
+if tofu -chdir=tofu/aws/modules/airgap show -no-color destroy-plan > destruction-plan-summary.txt; then
+    echo 'Destruction plan summary generated successfully'
+    
+    echo 'Plan summary (first 50 lines):'
+    head -50 destruction-plan-summary.txt
+    
+    echo
+    echo 'Resources to be destroyed:'
+    grep -c "will be destroyed" destruction-plan-summary.txt || echo "No destroy actions found in plan"
+    
+else
+    echo '❌ ERROR: Failed to show destruction plan'
+    exit 1
+fi
 
-echo 'Destruction plan created successfully'
-cat destruction-plan-summary.txt
-"""
+echo '✅ Destruction plan created and validated successfully'
+'''
 
     executeScriptInContainer(planScript)
 }
