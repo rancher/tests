@@ -123,7 +123,7 @@ pipeline {
         VALIDATION_TIMEOUT = '15'
 
         // AWS Infrastructure defaults
-        AWS_REGION = 'us-west-2'
+        AWS_REGION = 'us-east-2'
         AWS_AMI = 'ami-0c2d3e23fb3adceb8'
 
         // State storage configuration
