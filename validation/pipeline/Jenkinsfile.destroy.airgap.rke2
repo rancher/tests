@@ -175,6 +175,7 @@ pipeline {
                         // Configure credentials and build environment
                         withCredentials(getCredentialsList()) {
                             generateDestructionEnvironmentFile()
+                            setupSSHKeys()
                             buildDestructionDockerImage()
                             createSharedVolume()
                         }
@@ -373,6 +374,20 @@ def generateDestructionEnvironmentFile() {
     def envContent = envLines.join('\n')
     writeFile file: env.ENV_FILE, text: envContent
     logInfo("Environment file created: ${env.ENV_FILE}")
+}
+
+def setupSSHKeys() {
+    if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
+        logInfo('Setting up SSH keys')
+
+        dir('./tests/.ssh') {
+            def decodedKey = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
+            writeFile file: env.AWS_SSH_KEY_NAME, text: decodedKey
+            sh "chmod 600 ${env.AWS_SSH_KEY_NAME}"
+        }
+
+        logInfo('SSH keys configured successfully')
+    }
 }
 
 def buildDestructionDockerImage() {
