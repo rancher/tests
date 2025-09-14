@@ -19,6 +19,8 @@ pipeline {
         ansiColor('xterm')
         skipStagesAfterUnstable()
         retry(1)
+        // Pipeline-level locking to prevent concurrent state operations
+        lock(resource: "${env.PIPELINE_LOCK_KEY ?: 'terraform-default-lock'}")
     }
 
     // Environment-specific parameters
@@ -126,11 +128,14 @@ pipeline {
         AWS_REGION = 'us-east-2'
         AWS_AMI = 'ami-0c2d3e23fb3adceb8'
 
-        // State storage configuration
+        // State storage configuration (S3-only, no DynamoDB)
         TF_STATE_BUCKET = 'jenkins-terraform-state-storage'
         TF_STATE_KEY_PREFIX = 'jenkins-airgap-rke2'
         TF_STATE_REGION = "${AWS_REGION}"
         JENKINS_STATE_ARCHIVE_PREFIX = 'terraform-state'
+        
+        // Pipeline locking (replaces DynamoDB locking)
+        PIPELINE_LOCK_KEY = "terraform-lock-${JOB_SHORT_NAME}"
     }
 
     stages {
@@ -637,18 +642,22 @@ def destroyInfrastructure() {
         executeScriptInContainer("""
 cd ${env.QA_INFRA_WORK_PATH}
 
-echo 'Configuring S3 backend for destruction...'
+echo 'Configuring S3 backend for destruction (no DynamoDB locking)...'
 cat > tofu/aws/modules/airgap/backend.tf << 'EOF'
 terraform {
   backend "s3" {
-    bucket         = "${env.TF_STATE_BUCKET}"
-    key            = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
-    region         = "${env.TF_STATE_REGION}"
-    encrypt        = true
-    dynamodb_table = "${env.TF_STATE_BUCKET}-locks"
+    bucket  = "${env.TF_STATE_BUCKET}"
+    key     = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
+    region  = "${env.TF_STATE_REGION}"
+    encrypt = true
+    
+    # WARNING: No state locking without DynamoDB
+    # Pipeline-level locking prevents concurrent operations
   }
 }
 EOF
+
+echo '⚠️  WARNING: Using S3-only backend without state locking'
 
 echo 'Initializing backend to access remote state...'
 tofu -chdir=tofu/aws/modules/airgap init -input=false -reconfigure
@@ -844,18 +853,24 @@ def initializeOpenTofu() {
     def initScript = """
 cd ${env.QA_INFRA_WORK_PATH}
 
-echo 'Configuring S3 backend for state storage...'
+echo 'Configuring S3 backend for state storage (no DynamoDB locking)...'
 cat > tofu/aws/modules/airgap/backend.tf << 'EOF'
 terraform {
   backend "s3" {
-    bucket         = "${env.TF_STATE_BUCKET}"
-    key            = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
-    region         = "${env.TF_STATE_REGION}"
-    encrypt        = true
-    dynamodb_table = "${env.TF_STATE_BUCKET}-locks"
+    bucket  = "${env.TF_STATE_BUCKET}"
+    key     = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
+    region  = "${env.TF_STATE_REGION}"
+    encrypt = true
+    
+    # WARNING: No state locking without DynamoDB
+    # Pipeline-level locking is used instead via Jenkins lock() option
   }
 }
 EOF
+
+echo '⚠️  WARNING: State locking disabled - using Jenkins pipeline locks instead'
+echo 'Backend configuration without DynamoDB:'
+cat tofu/aws/modules/airgap/backend.tf
 
 echo 'Backend configuration written:'
 cat tofu/aws/modules/airgap/backend.tf
@@ -1362,18 +1377,22 @@ def retrieveStateFromS3() {
         def retrieveScript = """
 cd ${env.QA_INFRA_WORK_PATH}
 
-echo 'Configuring S3 backend for state retrieval...'
+echo 'Configuring S3 backend for state retrieval (no DynamoDB locking)...'
 cat > tofu/aws/modules/airgap/backend.tf << 'EOF'
 terraform {
   backend "s3" {
-    bucket         = "${env.TF_STATE_BUCKET}"
-    key            = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
-    region         = "${env.TF_STATE_REGION}"
-    encrypt        = true
-    dynamodb_table = "${env.TF_STATE_BUCKET}-locks"
+    bucket  = "${env.TF_STATE_BUCKET}"
+    key     = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
+    region  = "${env.TF_STATE_REGION}"
+    encrypt = true
+    
+    # WARNING: No state locking without DynamoDB
+    # Ensure no concurrent operations are running
   }
 }
 EOF
+
+echo '⚠️  WARNING: State locking unavailable - verify no concurrent operations'
 
 echo 'Initializing backend...'
 tofu -chdir=tofu/aws/modules/airgap init -input=false -reconfigure
