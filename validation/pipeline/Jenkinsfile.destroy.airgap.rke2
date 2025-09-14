@@ -1,0 +1,806 @@
+#!/usr/bin/env groovy
+
+/**
+ * Infrastructure Destruction Jenkinsfile for Airgap RKE2
+ * 
+ * This pipeline is designed to safely destroy infrastructure created by
+ * the main airgap RKE2 deployment pipeline. It retrieves Terraform state
+ * from S3 backend or Jenkins artifacts and performs controlled destruction.
+ */
+
+pipeline {
+    agent any
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 2, unit: 'HOURS')
+        timestamps()
+        ansiColor('xterm')
+        skipStagesAfterUnstable()
+    }
+
+    parameters {
+        string(
+            name: 'TARGET_WORKSPACE',
+            defaultValue: '',
+            description: 'Terraform workspace to destroy (e.g., jenkins_airgap_ansible_workspace_123)'
+        )
+        string(
+            name: 'UPSTREAM_BUILD_NUMBER',
+            defaultValue: '',
+            description: 'Build number of the deployment job that created the infrastructure'
+        )
+        string(
+            name: 'UPSTREAM_JOB_NAME',
+            defaultValue: '',
+            description: 'Name of the deployment job that created the infrastructure'
+        )
+        choice(
+            name: 'STATE_SOURCE',
+            choices: ['S3_BACKEND', 'JENKINS_ARTIFACTS', 'BOTH'],
+            description: 'Where to retrieve Terraform state from'
+        )
+        booleanParam(
+            name: 'FORCE_DESTROY',
+            defaultValue: false,
+            description: 'Force destruction even if state validation fails'
+        )
+        booleanParam(
+            name: 'DRY_RUN',
+            defaultValue: true,
+            description: 'Perform dry run (plan only) without actual destruction'
+        )
+        choice(
+            name: 'LOG_LEVEL',
+            choices: ['INFO', 'DEBUG', 'VERBOSE'],
+            description: 'Pipeline logging level'
+        )
+    }
+
+    environment {
+        // State storage configuration
+        TF_STATE_BUCKET = 'rancher-terraform-state-storage'
+        TF_STATE_KEY_PREFIX = 'jenkins-airgap-rke2'
+        TF_STATE_REGION = 'us-east-1'
+
+        // Repository configurations
+        QA_INFRA_REPO = 'https://github.com/rancher/qa-infra-automation'
+        QA_INFRA_WORK_PATH = '/root/go/src/github.com/rancher/qa-infra-automation'
+
+        // Computed values
+        JOB_SHORT_NAME = "${getShortJobName()}"
+        BUILD_CONTAINER_NAME = "${JOB_SHORT_NAME}${BUILD_NUMBER}-destroy"
+        IMAGE_NAME = "rancher-destroy-${JOB_SHORT_NAME}${BUILD_NUMBER}"
+        VALIDATION_VOLUME = "DestroySharedVolume-${JOB_SHORT_NAME}${BUILD_NUMBER}"
+
+        // Target workspace from parameters
+        TARGET_WORKSPACE = "${params.TARGET_WORKSPACE}"
+        
+        // Configuration files
+        TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
+        ENV_FILE = '.env-destroy'
+
+        // AWS defaults
+        AWS_REGION = 'us-west-2'
+    }
+
+    stages {
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    logInfo('Validating destruction parameters')
+                    
+                    if (!params.TARGET_WORKSPACE || params.TARGET_WORKSPACE.trim().isEmpty()) {
+                        error('TARGET_WORKSPACE parameter is required for destruction')
+                    }
+
+                    if (params.STATE_SOURCE == 'JENKINS_ARTIFACTS' && 
+                        (!params.UPSTREAM_BUILD_NUMBER || !params.UPSTREAM_JOB_NAME)) {
+                        error('UPSTREAM_BUILD_NUMBER and UPSTREAM_JOB_NAME are required when using JENKINS_ARTIFACTS as state source')
+                    }
+
+                    env.TARGET_WORKSPACE = params.TARGET_WORKSPACE
+                    
+                    logInfo("Target workspace: ${env.TARGET_WORKSPACE}")
+                    logInfo("State source: ${params.STATE_SOURCE}")
+                    logInfo("Dry run mode: ${params.DRY_RUN}")
+                    logInfo("Force destroy: ${params.FORCE_DESTROY}")
+                }
+            }
+        }
+
+        stage('Prepare Environment') {
+            steps {
+                script {
+                    logInfo('Preparing destruction environment')
+                    
+                    // Clean workspace
+                    deleteDir()
+
+                    // Checkout QA infrastructure repository
+                    dir('./qa-infra-automation') {
+                        logInfo("Cloning qa-infra-automation repository")
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "*/main"]],
+                            extensions: [
+                                [$class: 'CleanCheckout'],
+                                [$class: 'CloneOption', depth: 1, shallow: true]
+                            ],
+                            userRemoteConfigs: [[url: env.QA_INFRA_REPO]]
+                        ])
+                    }
+
+                    // Configure credentials and build environment
+                    withCredentials(getCredentialsList()) {
+                        generateDestructionEnvironmentFile()
+                        buildDestructionDockerImage()
+                        createSharedVolume()
+                    }
+                }
+            }
+            post {
+                failure {
+                    logError('Environment preparation failed')
+                    cleanupContainersAndVolumes()
+                }
+            }
+        }
+
+        stage('Retrieve Terraform State') {
+            steps {
+                script {
+                    logInfo('Retrieving Terraform state for destruction')
+                    
+                    def stateRetrieved = false
+
+                    if (params.STATE_SOURCE == 'S3_BACKEND' || params.STATE_SOURCE == 'BOTH') {
+                        logInfo('Attempting to retrieve state from S3 backend')
+                        stateRetrieved = retrieveStateFromS3()
+                    }
+
+                    if (!stateRetrieved && (params.STATE_SOURCE == 'JENKINS_ARTIFACTS' || params.STATE_SOURCE == 'BOTH')) {
+                        logInfo('Attempting to retrieve state from Jenkins artifacts')
+                        stateRetrieved = retrieveStateFromJenkinsArtifacts(params.UPSTREAM_BUILD_NUMBER)
+                    }
+
+                    if (!stateRetrieved && !params.FORCE_DESTROY) {
+                        error('Could not retrieve Terraform state and FORCE_DESTROY is not enabled')
+                    } else if (!stateRetrieved && params.FORCE_DESTROY) {
+                        logWarning('State retrieval failed but FORCE_DESTROY is enabled - proceeding with caution')
+                    }
+
+                    // Validate state if retrieved
+                    if (stateRetrieved) {
+                        validateStateForDestruction()
+                    }
+                }
+            }
+            post {
+                failure {
+                    logError('State retrieval failed')
+                    archiveDestructionFailureArtifacts()
+                }
+            }
+        }
+
+        stage('Plan Destruction') {
+            steps {
+                script {
+                    logInfo('Planning infrastructure destruction')
+                    
+                    try {
+                        planDestruction()
+                        
+                        // Archive the destruction plan
+                        archiveDestructionPlan()
+                        
+                        if (params.DRY_RUN) {
+                            logInfo('DRY_RUN mode enabled - destruction plan completed without execution')
+                            currentBuild.result = 'SUCCESS'
+                            return
+                        }
+                    } catch (Exception e) {
+                        logError("Destruction planning failed: ${e.message}")
+                        throw e
+                    }
+                }
+            }
+            post {
+                failure {
+                    logError('Destruction planning failed')
+                    archiveDestructionFailureArtifacts()
+                }
+            }
+        }
+
+        stage('Execute Destruction') {
+            when {
+                not { params.DRY_RUN }
+            }
+            steps {
+                script {
+                    logInfo('Executing infrastructure destruction')
+                    
+                    def proceedWithDestruction = true
+                    
+                    // Final confirmation step
+                    if (!params.FORCE_DESTROY) {
+                        timeout(time: 5, unit: 'MINUTES') {
+                            try {
+                                proceedWithDestruction = input(
+                                    message: "Proceed with destruction of workspace: ${env.TARGET_WORKSPACE}?",
+                                    ok: 'Destroy',
+                                    parameters: [
+                                        booleanParam(
+                                            name: 'CONFIRM_DESTRUCTION', 
+                                            defaultValue: false, 
+                                            description: 'I understand this will permanently destroy the infrastructure'
+                                        )
+                                    ]
+                                )
+                            } catch (Exception e) {
+                                logWarning('Destruction cancelled by user or timeout')
+                                currentBuild.result = 'ABORTED'
+                                return
+                            }
+                        }
+                    }
+
+                    if (proceedWithDestruction || params.FORCE_DESTROY) {
+                        executeDestruction()
+                        validateDestruction()
+                    } else {
+                        logInfo('Destruction cancelled by user')
+                        currentBuild.result = 'ABORTED'
+                    }
+                }
+            }
+            post {
+                failure {
+                    script {
+                        logError('Infrastructure destruction failed')
+                        archiveDestructionFailureArtifacts()
+                    }
+                }
+                success {
+                    script {
+                        logInfo('Infrastructure destruction completed successfully')
+                        archiveDestructionResults()
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                logInfo('Starting post-destruction cleanup')
+
+                // Archive important artifacts
+                archiveBuildArtifacts([
+                    'destruction-plan.txt',
+                    'destruction-summary.json',
+                    'destruction-logs.txt'
+                ])
+
+                // Cleanup containers and volumes
+                cleanupContainersAndVolumes()
+            }
+        }
+
+        success {
+            script {
+                logInfo('Destruction pipeline completed successfully')
+                sendSlackNotification([
+                    color: 'good',
+                    message: "✅ Infrastructure destruction succeeded for workspace: ${env.TARGET_WORKSPACE}"
+                ])
+            }
+        }
+
+        failure {
+            script {
+                logError('Destruction pipeline failed')
+                sendSlackNotification([
+                    color: 'danger',
+                    message: "❌ Infrastructure destruction failed for workspace: ${env.TARGET_WORKSPACE}"
+                ])
+            }
+        }
+
+        aborted {
+            script {
+                logWarning('Destruction pipeline was aborted')
+                sendSlackNotification([
+                    color: 'warning',
+                    message: "⚠️ Infrastructure destruction aborted for workspace: ${env.TARGET_WORKSPACE}"
+                ])
+            }
+        }
+    }
+}
+
+/**
+ * DESTRUCTION-SPECIFIC HELPER FUNCTIONS
+ */
+
+def getShortJobName() {
+    def jobName = "${env.JOB_NAME}"
+    if (jobName.contains('/')) {
+        def lastSlashIndex = jobName.lastIndexOf('/')
+        return jobName.substring(lastSlashIndex + 1)
+    }
+    return jobName
+}
+
+def getCredentialsList() {
+    return [
+        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+        string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')
+    ]
+}
+
+def generateDestructionEnvironmentFile() {
+    logInfo('Generating environment file for destruction containers')
+
+    def envContent = """# Environment variables for infrastructure destruction containers
+TARGET_WORKSPACE=${env.TARGET_WORKSPACE}
+BUILD_NUMBER=${env.BUILD_NUMBER}
+JOB_NAME=${env.JOB_NAME}
+QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}
+TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}
+TF_STATE_BUCKET=${env.TF_STATE_BUCKET}
+TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX}
+TF_STATE_REGION=${env.TF_STATE_REGION}
+AWS_REGION=${env.AWS_REGION}
+"""
+
+    writeFile file: env.ENV_FILE, text: envContent
+    logInfo("Environment file created: ${env.ENV_FILE}")
+}
+
+def buildDestructionDockerImage() {
+    logInfo("Building destruction Docker image: ${env.IMAGE_NAME}")
+
+    dir('./') {
+        sh './qa-infra-automation/scripts/configure.sh || echo "Configure script not found, continuing..."'
+        sh """
+            # Use the same Dockerfile as the main pipeline for consistency
+            docker build . \
+                -f ./qa-infra-automation/Dockerfile.tofu.e2e \
+                -t ${env.IMAGE_NAME} \
+                --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+                --build-arg VCS_REF=\$(git rev-parse --short HEAD) \
+                --label "pipeline.build.number=${env.BUILD_NUMBER}" \
+                --label "pipeline.job.name=${env.JOB_NAME}" \
+                --label "pipeline.purpose=destruction"
+        """
+    }
+
+    logInfo('Destruction Docker image built successfully')
+}
+
+def createSharedVolume() {
+    logInfo("Creating shared volume: ${env.VALIDATION_VOLUME}")
+    sh "docker volume create --name ${env.VALIDATION_VOLUME}"
+}
+
+def executeScriptInContainer(scriptContent, extraEnv = [:]) {
+    def timestamp = System.currentTimeMillis()
+    def containerName = "${env.BUILD_CONTAINER_NAME}-${timestamp}"
+    def scriptFile = "destroy-script-${timestamp}.sh"
+
+    writeFile file: scriptFile, text: scriptContent
+
+    def envVars = ''
+    extraEnv.each { key, value ->
+        envVars += " -e ${key}=${value}"
+    }
+
+    sh """
+        docker run --rm \
+            -v ${env.VALIDATION_VOLUME}:/root \
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh \
+            --name ${containerName} \
+            -t --env-file ${env.ENV_FILE} \
+            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
+            -e TF_WORKSPACE=${env.TARGET_WORKSPACE} \
+            ${envVars} \
+            ${env.IMAGE_NAME} \
+            sh /tmp/script.sh
+    """
+
+    sh "rm -f ${scriptFile}"
+}
+
+def retrieveStateFromS3() {
+    logInfo("Retrieving Terraform state from S3 for workspace: ${env.TARGET_WORKSPACE}")
+
+    try {
+        def retrieveScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+
+echo 'Configuring S3 backend for state retrieval...'
+cat > tofu/aws/modules/airgap/backend.tf << 'EOF'
+terraform {
+  backend "s3" {
+    bucket         = "${env.TF_STATE_BUCKET}"
+    key            = "${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/terraform.tfstate"
+    region         = "${env.TF_STATE_REGION}"
+    encrypt        = true
+    dynamodb_table = "${env.TF_STATE_BUCKET}-locks"
+  }
+}
+EOF
+
+echo 'Initializing backend...'
+tofu -chdir=tofu/aws/modules/airgap init -input=false -reconfigure
+
+echo 'Checking if workspace exists...'
+if tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TARGET_WORKSPACE}; then
+    echo 'Workspace found, pulling state...'
+    tofu -chdir=tofu/aws/modules/airgap state pull > current-state.tfstate
+
+    STATE_SIZE=\$(stat -c%s current-state.tfstate 2>/dev/null || echo 0)
+    if [ "\$STATE_SIZE" -gt 50 ]; then
+        echo "SUCCESS: State retrieved (\$STATE_SIZE bytes)"
+        RESOURCE_COUNT=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l)
+        echo "Resources in state: \$RESOURCE_COUNT"
+        
+        if [ "\$RESOURCE_COUNT" -eq 0 ]; then
+            echo 'WARNING: State exists but contains no resources'
+            exit 1
+        fi
+        
+        exit 0
+    else
+        echo 'WARNING: State is empty'
+        exit 1
+    fi
+else
+    echo 'ERROR: Workspace does not exist in backend'
+    exit 1
+fi
+"""
+
+        executeScriptInContainer(retrieveScript)
+        logInfo('State successfully retrieved from S3 backend')
+        return true
+    } catch (Exception e) {
+        logError("Failed to retrieve state from S3: ${e.message}")
+        return false
+    }
+}
+
+def retrieveStateFromJenkinsArtifacts(buildNumber) {
+    logInfo("Retrieving Terraform state from Jenkins artifacts")
+
+    try {
+        // This would need to be implemented based on your Jenkins setup
+        // For now, we'll check if state files exist in the current workspace
+        def artifactPattern = "infrastructure-${env.TARGET_WORKSPACE}.tfstate"
+        
+        if (fileExists(artifactPattern)) {
+            logInfo("State file found: ${artifactPattern}")
+            return true
+        }
+
+        logWarning("State retrieval from Jenkins artifacts not fully implemented")
+        logWarning("Manual state file placement may be required")
+        
+        return false
+    } catch (Exception e) {
+        logError("Failed to retrieve state from Jenkins artifacts: ${e.message}")
+        return false
+    }
+}
+
+def validateStateForDestruction() {
+    logInfo('Validating state for destruction')
+
+    try {
+        def validationScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+
+echo 'Validating Terraform configuration...'
+tofu -chdir=tofu/aws/modules/airgap validate
+
+echo 'Checking state resources...'
+RESOURCE_COUNT=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l)
+echo "Resources to be destroyed: \$RESOURCE_COUNT"
+
+if [ "\$RESOURCE_COUNT" -eq 0 ]; then
+    echo 'WARNING: No resources found in state'
+    exit 1
+fi
+
+echo 'Listing resources to be destroyed:'
+tofu -chdir=tofu/aws/modules/airgap state list
+
+echo 'State validation completed successfully'
+"""
+
+        executeScriptInContainer(validationScript)
+        logInfo('State validation completed')
+    } catch (Exception e) {
+        logWarning("State validation failed: ${e.message}")
+        if (!params.FORCE_DESTROY) {
+            throw new RuntimeException("State validation failed and FORCE_DESTROY is not enabled", e)
+        }
+    }
+}
+
+def planDestruction() {
+    logInfo('Creating destruction plan')
+
+    def planScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+
+echo 'Generating destruction plan...'
+# Note: We need the original tfvars file for planning
+# This is a simplified approach - in practice, you might need to reconstruct
+# or retrieve the original configuration
+
+# Create a minimal tfvars for destruction planning
+cat > ${env.TERRAFORM_VARS_FILENAME} << 'EOF'
+# Minimal configuration for destruction
+# The actual values don't matter for destroy operations
+# as Terraform will read the current state
+region = "${env.AWS_REGION}"
+EOF
+
+echo 'Creating destruction plan...'
+tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=destroy-plan
+
+echo 'Showing destruction plan summary...'
+tofu -chdir=tofu/aws/modules/airgap show -no-color destroy-plan > destruction-plan-summary.txt
+
+echo 'Destruction plan created successfully'
+cat destruction-plan-summary.txt
+"""
+
+    executeScriptInContainer(planScript)
+}
+
+def archiveDestructionPlan() {
+    logInfo('Archiving destruction plan')
+
+    try {
+        sh """
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/destruction-plan-summary.txt ./destruction-plan.txt || true
+        """
+
+        archiveArtifacts artifacts: 'destruction-plan.txt', allowEmptyArchive: true
+        
+        logInfo('Destruction plan archived')
+    } catch (Exception e) {
+        logError("Failed to archive destruction plan: ${e.message}")
+    }
+}
+
+def executeDestruction() {
+    logInfo('Executing infrastructure destruction')
+
+    def destroyScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+
+echo 'Starting infrastructure destruction...'
+echo "Target workspace: ${env.TARGET_WORKSPACE}"
+echo "Timestamp: \$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# Execute the destruction
+tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -input=false destroy-plan
+
+echo 'Verifying destruction completion...'
+REMAINING_RESOURCES=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l)
+
+if [ "\$REMAINING_RESOURCES" -eq 0 ]; then
+    echo 'SUCCESS: All resources have been destroyed'
+    
+    # Clean up the workspace
+    echo 'Cleaning up Terraform workspace...'
+    tofu -chdir=tofu/aws/modules/airgap workspace select default || echo 'Could not switch to default workspace'
+    tofu -chdir=tofu/aws/modules/airgap workspace delete ${env.TARGET_WORKSPACE} || echo 'Could not delete workspace'
+    
+else
+    echo "WARNING: \$REMAINING_RESOURCES resources still remain in state"
+    echo 'Remaining resources:'
+    tofu -chdir=tofu/aws/modules/airgap state list
+    exit 1
+fi
+
+echo 'Infrastructure destruction completed successfully'
+"""
+
+    executeScriptInContainer(destroyScript)
+}
+
+def validateDestruction() {
+    logInfo('Validating destruction results')
+
+    try {
+        def validationScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+
+echo 'Final validation of destruction...'
+
+# Check if any resources remain
+RESOURCE_COUNT=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l || echo 0)
+
+if [ "\$RESOURCE_COUNT" -eq 0 ]; then
+    echo 'SUCCESS: Destruction validation passed - no resources remain'
+else
+    echo "WARNING: \$RESOURCE_COUNT resources still exist in state"
+    tofu -chdir=tofu/aws/modules/airgap state list
+fi
+
+# Generate destruction summary
+cat > destruction-summary.json << EOF
+{
+    "workspace": "${env.TARGET_WORKSPACE}",
+    "destruction_timestamp": "\$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+    "build_number": "${env.BUILD_NUMBER}",
+    "job_name": "${env.JOB_NAME}",
+    "remaining_resources": \$RESOURCE_COUNT,
+    "status": "\$([ \$RESOURCE_COUNT -eq 0 ] && echo 'COMPLETED' || echo 'INCOMPLETE')"
+}
+EOF
+
+echo 'Destruction validation completed'
+"""
+
+        executeScriptInContainer(validationScript)
+        logInfo('Destruction validation completed')
+    } catch (Exception e) {
+        logWarning("Destruction validation failed: ${e.message}")
+    }
+}
+
+def archiveDestructionResults() {
+    logInfo('Archiving destruction results')
+
+    try {
+        sh """
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/destruction-summary.json ./ || true
+        """
+
+        logInfo('Destruction results archived')
+    } catch (Exception e) {
+        logError("Failed to archive destruction results: ${e.message}")
+    }
+}
+
+def archiveDestructionFailureArtifacts() {
+    logInfo('Archiving destruction failure artifacts')
+
+    try {
+        def debugCommands = [
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            'tofu -chdir=tofu/aws/modules/airgap workspace list > workspace-list.txt 2>&1 || echo "No workspace list available"',
+            "tofu -chdir=tofu/aws/modules/airgap state list > remaining-resources.txt 2>&1 || echo 'No state available'",
+            "echo 'Destruction failure artifact collection completed'"
+        ]
+
+        executeInContainer(debugCommands)
+
+        sh """
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./ || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./ || true
+        """
+
+        archiveArtifacts artifacts: 'workspace-list.txt,remaining-resources.txt', allowEmptyArchive: true
+    } catch (Exception e) {
+        logError("Failed to archive failure artifacts: ${e.message}")
+    }
+}
+
+def executeInContainer(commands) {
+    def commandString = commands.join(' && ')
+    def timestamp = System.currentTimeMillis()
+    def containerName = "${env.BUILD_CONTAINER_NAME}-${timestamp}"
+    def scriptFile = "destroy-commands-${timestamp}.sh"
+    
+    writeFile file: scriptFile, text: commandString
+
+    sh """
+        docker run --rm \
+            -v ${env.VALIDATION_VOLUME}:/root \
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh \
+            --name ${containerName} \
+            -t --env-file ${env.ENV_FILE} \
+            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
+            -e TF_WORKSPACE=${env.TARGET_WORKSPACE} \
+            ${env.IMAGE_NAME} \
+            sh /tmp/script.sh
+    """
+
+    sh "rm -f ${scriptFile}"
+}
+
+def cleanupContainersAndVolumes() {
+    logInfo('Cleaning up Docker containers and volumes')
+
+    try {
+        sh """
+            # Stop and remove containers
+            docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker stop || true
+            docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker rm -v || true
+
+            # Remove the Docker image
+            docker rmi -f ${env.IMAGE_NAME} || true
+
+            # Remove the shared volume
+            docker volume rm -f ${env.VALIDATION_VOLUME} || true
+
+            # Clean up dangling resources
+            docker system prune -f || true
+        """
+    } catch (Exception e) {
+        logError("Docker cleanup failed: ${e.message}")
+    }
+}
+
+def archiveBuildArtifacts(artifacts) {
+    try {
+        archiveArtifacts artifacts: artifacts.join(','), allowEmptyArchive: true
+        logInfo("Artifacts archived: ${artifacts.join(', ')}")
+    } catch (Exception e) {
+        logError("Failed to archive artifacts: ${e.message}")
+    }
+}
+
+def sendSlackNotification(config) {
+    if (env.SLACK_WEBHOOK) {
+        try {
+            def payload = [
+                channel: '#rancher-qa',
+                username: 'Jenkins-Destroyer',
+                color: config.color,
+                title: 'Infrastructure Destruction Pipeline',
+                message: config.message,
+                fields: [
+                    [title: 'Job', value: env.JOB_NAME, short: true],
+                    [title: 'Build', value: env.BUILD_NUMBER, short: true],
+                    [title: 'Workspace', value: env.TARGET_WORKSPACE, short: true],
+                    [title: 'State Source', value: params.STATE_SOURCE, short: true]
+                ]
+            ]
+
+            httpRequest(
+                httpMode: 'POST',
+                url: env.SLACK_WEBHOOK,
+                contentType: 'APPLICATION_JSON',
+                requestBody: groovy.json.JsonOutput.toJson(payload)
+            )
+
+            logInfo('Slack notification sent successfully')
+        } catch (Exception e) {
+            logError("Failed to send Slack notification: ${e.message}")
+        }
+    }
+}
+
+/**
+ * LOGGING FUNCTIONS
+ */
+
+def logInfo(message) {
+    echo "ℹ️ [INFO] ${new Date().format('HH:mm:ss')} - ${message}"
+}
+
+def logError(message) {
+    echo "❌ [ERROR] ${new Date().format('HH:mm:ss')} - ${message}"
+}
+
+def logWarning(message) {
+    echo "⚠️ [WARNING] ${new Date().format('HH:mm:ss')} - ${message}"
+}
+
+def logDebug(message) {
+    if (params.LOG_LEVEL == 'DEBUG' || params.LOG_LEVEL == 'VERBOSE') {
+        echo "🔍 [DEBUG] ${new Date().format('HH:mm:ss')} - ${message}"
+    }
+}
