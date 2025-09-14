@@ -22,6 +22,26 @@ pipeline {
 
     parameters {
         string(
+            name: 'RANCHER_TEST_REPO_URL',
+            defaultValue: 'https://github.com/rancher/tests',
+            description: 'URL of rancher/tests repository'
+        )
+        string(
+            name: 'RANCHER_TEST_REPO_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of rancher/tests repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_URL',
+            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            description: 'URL of qa-infra-automation repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-infra-automation repository'
+        )
+        string(
             name: 'S3_BUCKET_NAME',
             defaultValue: 'jenkins-terraform-state-storage',
             description: 'S3 bucket name where Terraform state is stored'
@@ -70,8 +90,10 @@ pipeline {
         TF_STATE_REGION = "${params.S3_REGION ?: 'us-east-2'}"
 
         // Repository configurations
-        QA_INFRA_REPO = 'https://github.com/rancher/qa-infra-automation'
+        RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
+        QA_INFRA_REPO = "${params.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation'}"
         QA_INFRA_WORK_PATH = '/root/go/src/github.com/rancher/qa-infra-automation'
+        ROOT_PATH = '/root/go/src/github.com/rancher/tests/'
 
         // Computed values
         JOB_SHORT_NAME = "${getShortJobName()}"
@@ -127,7 +149,7 @@ pipeline {
                             logInfo("Cloning qa-infra-automation repository")
                             checkout([
                                 $class: 'GitSCM',
-                                branches: [[name: "*/main"]],
+                                branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
                                 extensions: [
                                     [$class: 'CleanCheckout'],
                                     [$class: 'CloneOption', depth: 1, shallow: true]
@@ -141,12 +163,12 @@ pipeline {
                             logInfo("Cloning tests repository for Docker build")
                             checkout([
                                 $class: 'GitSCM',
-                                branches: [[name: "*/main"]],
+                                branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
                                 extensions: [
                                     [$class: 'CleanCheckout'],
                                     [$class: 'CloneOption', depth: 1, shallow: true]
                                 ],
-                                userRemoteConfigs: [[url: 'https://github.com/floatingman/rancher-tests']]
+                                userRemoteConfigs: [[url: env.RANCHER_TEST_REPO_URL,]]
                             ])
                         }
 
