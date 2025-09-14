@@ -459,33 +459,51 @@ echo 'Key prefix: ''' + env.TF_STATE_KEY_PREFIX + ''''
 echo 'Region: ''' + env.TF_STATE_REGION + ''''
 echo
 
-# Step 1: Download state file directly from S3 (correct path structure)
-# Based on actual S3 structure: s3://bucket/env:/workspace/key-prefix/terraform.tfstate
-STATE_KEY="env:/''' + env.TARGET_WORKSPACE + '''/''' + env.TF_STATE_KEY_PREFIX + '''/terraform.tfstate"
+# Step 1: Download state file directly from S3 (try both .tfstate and .json extensions)
 LOCAL_STATE_FILE="tofu/aws/modules/airgap/terraform.tfstate"
-
-echo "📥 Downloading state file directly from S3..."
-echo "Source: s3://''' + env.TF_STATE_BUCKET + '''/$STATE_KEY"
-echo "Target: $LOCAL_STATE_FILE"
 
 # Ensure target directory exists
 mkdir -p tofu/aws/modules/airgap/
 
+echo "📥 Attempting to download state file from S3..."
+
+# Try .tfstate extension first
+STATE_KEY="env:/''' + env.TARGET_WORKSPACE + '''/''' + env.TF_STATE_KEY_PREFIX + '''/terraform.tfstate"
+echo "Trying .tfstate extension: s3://''' + env.TF_STATE_BUCKET + '''/$STATE_KEY"
 if aws s3 cp "s3://''' + env.TF_STATE_BUCKET + '''/$STATE_KEY" "$LOCAL_STATE_FILE" --region ''' + env.TF_STATE_REGION + ''' --quiet; then
-    echo "✅ State file downloaded successfully"
+    echo "✅ State file downloaded successfully with .tfstate extension"
 else
-    echo "❌ ERROR: Could not download state file from S3"
+    echo "❌ .tfstate extension failed, trying .json extension..."
     
-    # Try to find the actual location by exploring the S3 structure
-    echo "🔍 Searching for state file in alternative locations..."
-    
-    # First, try the old format as fallback
-    OLD_STATE_KEY="''' + env.TF_STATE_KEY_PREFIX + '''/''' + env.TARGET_WORKSPACE + '''/terraform.tfstate"
-    echo "Trying old format: s3://''' + env.TF_STATE_BUCKET + '''/$OLD_STATE_KEY"
-    if aws s3 cp "s3://''' + env.TF_STATE_BUCKET + '''/$OLD_STATE_KEY" "$LOCAL_STATE_FILE" --region ''' + env.TF_STATE_REGION + ''' --quiet; then
-        echo "✅ Successfully downloaded using old path format"
+    # Try .json extension
+    STATE_KEY_JSON="env:/''' + env.TARGET_WORKSPACE + '''/''' + env.TF_STATE_KEY_PREFIX + '''/terraform.json"
+    echo "Trying .json extension: s3://''' + env.TF_STATE_BUCKET + '''/$STATE_KEY_JSON"
+    if aws s3 cp "s3://''' + env.TF_STATE_BUCKET + '''/$STATE_KEY_JSON" "$LOCAL_STATE_FILE" --region ''' + env.TF_STATE_REGION + ''' --quiet; then
+        echo "✅ State file downloaded successfully with .json extension"
     else
-        echo "❌ Old format also failed"
+        echo "❌ Both .tfstate and .json extensions failed"
+        
+        # Explore what files actually exist in the workspace directory
+        echo "🔍 Exploring files in workspace directory..."
+        WORKSPACE_PATH="env:/''' + env.TARGET_WORKSPACE + '''/''' + env.TF_STATE_KEY_PREFIX + '''/"
+        echo "Listing contents of s3://''' + env.TF_STATE_BUCKET + '''/$WORKSPACE_PATH"
+        
+        aws s3 ls "s3://''' + env.TF_STATE_BUCKET + '''/$WORKSPACE_PATH" --region ''' + env.TF_STATE_REGION + ''' || echo "Could not list workspace directory contents"
+        
+        # Try to find the actual location by exploring the S3 structure
+        echo "🔍 Searching for state file in alternative locations..."
+    
+    # First, try the old format as fallback (try both extensions)
+    OLD_STATE_KEY_TFSTATE="''' + env.TF_STATE_KEY_PREFIX + '''/''' + env.TARGET_WORKSPACE + '''/terraform.tfstate"
+    OLD_STATE_KEY_JSON="''' + env.TF_STATE_KEY_PREFIX + '''/''' + env.TARGET_WORKSPACE + '''/terraform.json"
+    
+    echo "Trying old format (.tfstate): s3://''' + env.TF_STATE_BUCKET + '''/$OLD_STATE_KEY_TFSTATE"
+    if aws s3 cp "s3://''' + env.TF_STATE_BUCKET + '''/$OLD_STATE_KEY_TFSTATE" "$LOCAL_STATE_FILE" --region ''' + env.TF_STATE_REGION + ''' --quiet; then
+        echo "✅ Successfully downloaded using old path format (.tfstate)"
+    elif echo "Trying old format (.json): s3://''' + env.TF_STATE_BUCKET + '''/$OLD_STATE_KEY_JSON" && aws s3 cp "s3://''' + env.TF_STATE_BUCKET + '''/$OLD_STATE_KEY_JSON" "$LOCAL_STATE_FILE" --region ''' + env.TF_STATE_REGION + ''' --quiet; then
+        echo "✅ Successfully downloaded using old path format (.json)"
+    else
+        echo "❌ Old format failed for both extensions"
         
         # List available workspaces under env:/ prefix
         echo "🔍 Listing workspaces under env:/ prefix..."
@@ -510,14 +528,25 @@ else
                 # Clean up any remaining whitespace
                 MATCHING_WORKSPACE=$(echo "$MATCHING_WORKSPACE" | tr -d " " | tr -d "\\t")
                 echo "Found matching workspace (cleaned): [$MATCHING_WORKSPACE]"
-                ALT_STATE_KEY="env:/$MATCHING_WORKSPACE/''' + env.TF_STATE_KEY_PREFIX + '''/terraform.tfstate"
                 
-                echo "Trying alternative state key: s3://''' + env.TF_STATE_BUCKET + '''/$ALT_STATE_KEY"
-                if aws s3 cp "s3://''' + env.TF_STATE_BUCKET + '''/$ALT_STATE_KEY" "$LOCAL_STATE_FILE" --region ''' + env.TF_STATE_REGION + ''' --quiet; then
-                    echo "✅ Successfully downloaded from alternative location"
+                # Try both .tfstate and .json extensions for alternative location
+                ALT_STATE_KEY_TFSTATE="env:/$MATCHING_WORKSPACE/''' + env.TF_STATE_KEY_PREFIX + '''/terraform.tfstate"
+                ALT_STATE_KEY_JSON="env:/$MATCHING_WORKSPACE/''' + env.TF_STATE_KEY_PREFIX + '''/terraform.json"
+                
+                echo "Trying alternative state key (.tfstate): s3://''' + env.TF_STATE_BUCKET + '''/$ALT_STATE_KEY_TFSTATE"
+                if aws s3 cp "s3://''' + env.TF_STATE_BUCKET + '''/$ALT_STATE_KEY_TFSTATE" "$LOCAL_STATE_FILE" --region ''' + env.TF_STATE_REGION + ''' --quiet; then
+                    echo "✅ Successfully downloaded from alternative location (.tfstate)"
+                elif echo "Trying alternative state key (.json): s3://''' + env.TF_STATE_BUCKET + '''/$ALT_STATE_KEY_JSON" && aws s3 cp "s3://''' + env.TF_STATE_BUCKET + '''/$ALT_STATE_KEY_JSON" "$LOCAL_STATE_FILE" --region ''' + env.TF_STATE_REGION + ''' --quiet; then
+                    echo "✅ Successfully downloaded from alternative location (.json)"
                 else
-                    echo "❌ Alternative download also failed"
-                    echo "Debug: Final S3 key was: $ALT_STATE_KEY"
+                    echo "❌ Alternative download failed for both extensions"
+                    echo "Debug: Tried both:"
+                    echo "  - $ALT_STATE_KEY_TFSTATE"
+                    echo "  - $ALT_STATE_KEY_JSON"
+                    
+                    # List actual files in the workspace directory
+                    echo "🔍 Listing actual files in workspace directory:"
+                    aws s3 ls "s3://''' + env.TF_STATE_BUCKET + '''/env:/$MATCHING_WORKSPACE/''' + env.TF_STATE_KEY_PREFIX + '''/" --region ''' + env.TF_STATE_REGION + ''' || echo "Could not list workspace files"
                     exit 1
                 fi
             else
