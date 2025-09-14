@@ -459,8 +459,9 @@ echo 'Key prefix: ${env.TF_STATE_KEY_PREFIX}'
 echo 'Region: ${env.TF_STATE_REGION}'
 echo
 
-# Step 1: Download state file directly from S3 (no workspace selection needed)
-STATE_KEY="${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/terraform.tfstate"
+# Step 1: Download state file directly from S3 (correct path structure)
+# Based on actual S3 structure: s3://bucket/env:/workspace/key-prefix/terraform.tfstate
+STATE_KEY="env:/${env.TARGET_WORKSPACE}/${env.TF_STATE_KEY_PREFIX}/terraform.tfstate"
 LOCAL_STATE_FILE="tofu/aws/modules/airgap/terraform.tfstate"
 
 echo "📥 Downloading state file directly from S3..."
@@ -475,38 +476,67 @@ if aws s3 cp "s3://${env.TF_STATE_BUCKET}/\$STATE_KEY" "\$LOCAL_STATE_FILE" --re
 else
     echo "❌ ERROR: Could not download state file from S3"
     
-    # Try to find the actual location
+    # Try to find the actual location by exploring the S3 structure
     echo "🔍 Searching for state file in alternative locations..."
     
-    # List available workspaces
-    AVAILABLE_WORKSPACES=\$(aws s3 ls "s3://${env.TF_STATE_BUCKET}/${env.TF_STATE_KEY_PREFIX}/" --region ${env.TF_STATE_REGION} | grep "PRE" | awk '{print \$2}' | sed 's|/||g' | sort || echo "")
-    
-    if [ -n "\$AVAILABLE_WORKSPACES" ]; then
-        echo "Available workspaces found:"
-        echo "\$AVAILABLE_WORKSPACES" | while read -r workspace; do
-            echo "  → \$workspace"
-        done
+    # First, try the old format as fallback
+    OLD_STATE_KEY="${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/terraform.tfstate"
+    echo "Trying old format: s3://${env.TF_STATE_BUCKET}/\$OLD_STATE_KEY"
+    if aws s3 cp "s3://${env.TF_STATE_BUCKET}/\$OLD_STATE_KEY" "\$LOCAL_STATE_FILE" --region ${env.TF_STATE_REGION} --quiet; then
+        echo "✅ Successfully downloaded using old path format"
+    else
+        echo "❌ Old format also failed"
         
-        # Check if any contain our target
-        MATCHING_WORKSPACE=\$(echo "\$AVAILABLE_WORKSPACES" | grep "${env.TARGET_WORKSPACE}" | head -1 || echo "")
-        if [ -n "\$MATCHING_WORKSPACE" ]; then
-            echo "Found matching workspace: \$MATCHING_WORKSPACE"
-            ALT_STATE_KEY="${env.TF_STATE_KEY_PREFIX}/\$MATCHING_WORKSPACE/terraform.tfstate"
+        # List available workspaces under env:/ prefix
+        echo "🔍 Listing workspaces under env:/ prefix..."
+        AVAILABLE_WORKSPACES=\$(aws s3 ls "s3://${env.TF_STATE_BUCKET}/env:/" --region ${env.TF_STATE_REGION} | grep "PRE" | awk '{print \$2}' | sed 's|/||g' | sort || echo "")
+        
+        if [ -n "\$AVAILABLE_WORKSPACES" ]; then
+            echo "Available workspaces found:"
+            echo "\$AVAILABLE_WORKSPACES" | while read -r workspace; do
+                echo "  → \$workspace"
+            done
             
-            echo "Trying alternative state key: s3://${env.TF_STATE_BUCKET}/\$ALT_STATE_KEY"
-            if aws s3 cp "s3://${env.TF_STATE_BUCKET}/\$ALT_STATE_KEY" "\$LOCAL_STATE_FILE" --region ${env.TF_STATE_REGION} --quiet; then
-                echo "✅ Successfully downloaded from alternative location"
+            # Check if any contain our target workspace
+            MATCHING_WORKSPACE=\$(echo "\$AVAILABLE_WORKSPACES" | grep "${env.TARGET_WORKSPACE}" | head -1 || echo "")
+            if [ -n "\$MATCHING_WORKSPACE" ]; then
+                echo "Found matching workspace: \$MATCHING_WORKSPACE"
+                ALT_STATE_KEY="env:/\$MATCHING_WORKSPACE/${env.TF_STATE_KEY_PREFIX}/terraform.tfstate"
+                
+                echo "Trying alternative state key: s3://${env.TF_STATE_BUCKET}/\$ALT_STATE_KEY"
+                if aws s3 cp "s3://${env.TF_STATE_BUCKET}/\$ALT_STATE_KEY" "\$LOCAL_STATE_FILE" --region ${env.TF_STATE_REGION} --quiet; then
+                    echo "✅ Successfully downloaded from alternative location"
+                else
+                    echo "❌ Alternative download also failed"
+                    exit 1
+                fi
             else
-                echo "❌ Alternative download also failed"
-                exit 1
+                echo "❌ No matching workspaces found in env:/ prefix"
+                
+                # Last resort: try without env: prefix in case structure varies
+                echo "🔍 Trying direct workspace search..."
+                DIRECT_WORKSPACES=\$(aws s3 ls "s3://${env.TF_STATE_BUCKET}/" --region ${env.TF_STATE_REGION} | grep "PRE.*${env.TARGET_WORKSPACE}" | awk '{print \$2}' | sed 's|/||g' | head -1 || echo "")
+                
+                if [ -n "\$DIRECT_WORKSPACES" ]; then
+                    echo "Found direct workspace match: \$DIRECT_WORKSPACES"
+                    DIRECT_STATE_KEY="\$DIRECT_WORKSPACES/${env.TF_STATE_KEY_PREFIX}/terraform.tfstate"
+                    
+                    echo "Trying direct state key: s3://${env.TF_STATE_BUCKET}/\$DIRECT_STATE_KEY"
+                    if aws s3 cp "s3://${env.TF_STATE_BUCKET}/\$DIRECT_STATE_KEY" "\$LOCAL_STATE_FILE" --region ${env.TF_STATE_REGION} --quiet; then
+                        echo "✅ Successfully downloaded using direct path"
+                    else
+                        echo "❌ All attempts failed"
+                        exit 1
+                    fi
+                else
+                    echo "❌ No workspaces found at all"
+                    exit 1
+                fi
             fi
         else
-            echo "❌ No matching workspaces found"
+            echo "❌ No workspaces found in S3 bucket under env:/ prefix"
             exit 1
         fi
-    else
-        echo "❌ No workspaces found in S3 bucket"
-        exit 1
     fi
 fi
 
