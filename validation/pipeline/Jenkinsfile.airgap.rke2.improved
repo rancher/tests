@@ -509,6 +509,21 @@ RKE2_VERSION=${env.RKE2_VERSION}
 RANCHER_VERSION=${env.RANCHER_VERSION}
 PRIVATE_REGISTRY_URL=${env.PRIVATE_REGISTRY_URL}
 PRIVATE_REGISTRY_USERNAME=${env.PRIVATE_REGISTRY_USERNAME}
+
+# AWS Credentials for OpenTofu (Standard AWS environment variables)
+AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}
+AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}
+AWS_REGION=${env.AWS_REGION}
+
+# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)
+TF_VAR_aws_access_key=${env.AWS_ACCESS_KEY_ID}
+TF_VAR_aws_secret_access_key=${env.AWS_SECRET_ACCESS_KEY}
+TF_VAR_aws_region=${env.AWS_REGION}
+
+# S3 Backend State Storage Configuration
+TF_STATE_BUCKET=${env.TF_STATE_BUCKET}
+TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX}
+TF_STATE_REGION=${env.TF_STATE_REGION}
 """
 
     writeFile file: env.ENV_FILE, text: envContent
