@@ -393,7 +393,7 @@ if [ -f ansible/rke2/airgap/inventory/inventory.yml ]; then
         
         # Fix YAML syntax issues using Python
         echo '🔧 Fixing YAML syntax issues in inventory.yml...'
-        python << 'INVENTORY_FIX_EOF'
+        python3 << 'INVENTORY_FIX_EOF'
 import re
 import yaml
 import sys
@@ -596,7 +596,7 @@ INVENTORY_FIX_EOF
             echo ''
             
             echo '--- Advanced YAML syntax validation ---'
-            python -c "
+            python3 -c "
 import yaml
 import sys
 try:
@@ -667,7 +667,7 @@ except Exception as e:
             grep -n "ERROR\\\\|Error\\\\|error" ansible_inventory_debug.log \\| head -5 \\|\\| echo 'No error messages found'
             
             echo '--- Attempting manual inventory structure creation ---'
-            python -c "
+            python3 -c "
 import yaml
 import sys
 
@@ -749,7 +749,10 @@ if [ -f ansible/rke2/airgap/inventory/group_vars/all.yml ]; then
         
         # Fix YAML syntax issues
         echo '🔧 Fixing YAML syntax issues in group_vars/all.yml...'
-        python << 'GROUPVARS_FIX_EOF'
+        
+        # Check if python3 is available, if not use basic sed fixes
+        if command -v python3 >/dev/null 2>&1; then
+            python3 << 'GROUPVARS_FIX_EOF'
 import re
 import yaml
 import sys
@@ -784,7 +787,7 @@ try:
             print("Applied fix: " + pattern[:50] + "...")
     
     # Clean up indentation and whitespace
-    lines = fixed_content.split('\n')
+    lines = fixed_content.split('\\n')
     cleaned_lines = []
     
     for line in lines:
@@ -813,6 +816,12 @@ except Exception as e:
 
 print("=== Group vars YAML fixer completed ===")
 GROUPVARS_FIX_EOF
+        else
+            echo '⚠️  Python3 not available, using basic sed fixes for group_vars/all.yml'
+            # Basic sed-based YAML fixes as fallback
+            sed -i 's/\\t/  /g' ansible/rke2/airgap/inventory/group_vars/all.yml || echo 'Tab conversion failed'
+            echo '✓ Basic YAML cleanup completed'
+        fi
         
     else
         echo '❌ group_vars/all.yml is empty'
@@ -1750,7 +1759,7 @@ if [ -f ansible/rke2/airgap/inventory/inventory.yml ] && [ -s ansible/rke2/airga
     cp ansible/rke2/airgap/inventory/inventory.yml ansible/rke2/airgap/inventory/inventory.yml.backup
     
     # Use python to properly fix the YAML syntax (more reliable than sed)
-    python << 'EOF'
+    python3 << 'EOF'
 import re
 import sys
 
@@ -1805,7 +1814,7 @@ EOF
     
     # Validate the YAML syntax
     echo "=== Validating YAML syntax ==="
-    python -c "import yaml; yaml.safe_load(open('ansible/rke2/airgap/inventory/inventory.yml', 'r'))" && echo "YAML syntax is valid" || echo "YAML syntax still has issues"
+    python3 -c "import yaml; yaml.safe_load(open('ansible/rke2/airgap/inventory/inventory.yml', 'r'))" && echo "YAML syntax is valid" || echo "YAML syntax still has issues"
     echo "=== End YAML validation ==="
 else
     echo 'ERROR: inventory.yml missing or empty after tofu apply'
