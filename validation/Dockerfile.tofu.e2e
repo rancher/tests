@@ -34,9 +34,14 @@ RUN mkdir -p /root/.ssh
 RUN if [ -d .ssh ]; then chmod 600 .ssh/jenkins-* 2>/dev/null || true; fi
 RUN if [ -d .ssh ]; then cp -r .ssh/jenkins-* /root/.ssh/ 2>/dev/null || true; fi
 RUN if [ -d /root/.ssh ]; then \
+    shopt -s nullglob; \
     for pem_file in /root/.ssh/jenkins-*; do \
-        [ -f "$pem_file" ] && ssh-keygen -f "$pem_file" -y > "/root/.ssh/$(basename "$pem_file").pub"; \
+        if [ -f "$pem_file" ]; then \
+            echo "Generating public key for: $pem_file"; \
+            ssh-keygen -f "$pem_file" -y > "/root/.ssh/$(basename "$pem_file").pub" || echo "Failed to generate key for $pem_file"; \
+        fi; \
     done; \
+    shopt -u nullglob; \
     fi
 
 RUN ls -al /root/.ssh || echo "No SSH keys found"
