@@ -742,11 +742,8 @@ echo 'All infrastructure prerequisites validated successfully'
 def deployInfrastructure() {
     logInfo('Starting infrastructure deployment process')
 
-    // Step 1: Initialize OpenTofu
-    initializeOpenTofu()
-
-    // Step 2: Manage workspace
-    manageWorkspace()
+    // Step 1: Initialize OpenTofu and manage workspace (combined to run in same container)
+    initializeAndSetupWorkspace()
 
     // Step 3: Plan infrastructure changes
     planInfrastructure()
@@ -755,6 +752,112 @@ def deployInfrastructure() {
     applyInfrastructure()
 
     logInfo('Infrastructure deployment completed successfully')
+}
+
+def initializeAndSetupWorkspace() {
+    logInfo('Initializing OpenTofu with S3 backend and setting up workspace')
+
+    def combinedScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+
+echo '=================================================='
+echo 'Step 1: Configuring S3 backend for state storage'
+echo '=================================================='
+
+echo 'Configuring S3 backend for state storage (no DynamoDB locking)...'
+cat > tofu/aws/modules/airgap/backend.tf << EOF
+terraform {
+  backend "s3" {
+    bucket  = "\${TF_STATE_BUCKET}"
+    key     = "\${TF_STATE_KEY_PREFIX}/\${TF_WORKSPACE}/terraform.tfstate"
+    region  = "\${TF_STATE_REGION}"
+    encrypt = true
+
+    # WARNING: No state locking available
+    # Manual coordination required to prevent concurrent operations
+  }
+}
+EOF
+
+echo '⚠️  WARNING: No state locking available - manual coordination required'
+echo 'Backend configuration written:'
+cat tofu/aws/modules/airgap/backend.tf
+
+echo 'Verifying environment variables are set:'
+echo "TF_STATE_BUCKET: \${TF_STATE_BUCKET}"
+echo "TF_STATE_KEY_PREFIX: \${TF_STATE_KEY_PREFIX}"
+echo "TF_WORKSPACE: \${TF_WORKSPACE}"
+echo "TF_STATE_REGION: \${TF_STATE_REGION}"
+
+echo 'Cleaning any existing backend state to ensure clean initialization...'
+rm -f tofu/aws/modules/airgap/.terraform/terraform.tfstate
+rm -rf tofu/aws/modules/airgap/.terraform/terraform.tfstate.d/
+rm -f tofu/aws/modules/airgap/.terraform.lock.hcl
+
+echo 'Initializing OpenTofu backend...'
+tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure
+
+echo 'Verifying initialization success...'
+tofu -chdir=tofu/aws/modules/airgap providers
+
+echo 'OpenTofu initialization with S3 backend completed successfully'
+
+echo
+echo '=================================================='
+echo 'Step 2: Managing workspace state'
+echo '=================================================='
+
+# Store workspace name before unsetting TF_WORKSPACE
+TARGET_WORKSPACE_NAME="\${TF_WORKSPACE}"
+echo "Target workspace: \$TARGET_WORKSPACE_NAME"
+
+# Unset TF_WORKSPACE to prevent conflicts during workspace operations
+unset TF_WORKSPACE
+
+echo 'Current workspaces:'
+tofu -chdir=tofu/aws/modules/airgap workspace list
+
+echo "Creating or selecting workspace: \$TARGET_WORKSPACE_NAME"
+if ! tofu -chdir=tofu/aws/modules/airgap workspace select "\$TARGET_WORKSPACE_NAME" 2>/dev/null; then
+    echo 'Workspace does not exist, creating new workspace...'
+    tofu -chdir=tofu/aws/modules/airgap workspace new "\$TARGET_WORKSPACE_NAME"
+
+    if ! tofu -chdir=tofu/aws/modules/airgap workspace select "\$TARGET_WORKSPACE_NAME"; then
+        echo 'ERROR: Failed to create and select workspace'
+        exit 1
+    fi
+fi
+
+# Verify workspace selection
+CURRENT_WORKSPACE=\$(tofu -chdir=tofu/aws/modules/airgap workspace show)
+echo "Current workspace: \$CURRENT_WORKSPACE"
+
+# Strip whitespace and handle empty responses
+CURRENT_WORKSPACE=\$(echo "\$CURRENT_WORKSPACE" | xargs)
+
+if [ "\$CURRENT_WORKSPACE" = "" ]; then
+    echo 'ERROR: Workspace show command returned empty response'
+    tofu -chdir=tofu/aws/modules/airgap workspace list
+    exit 1
+fi
+
+if [ "\$CURRENT_WORKSPACE" != "\$TARGET_WORKSPACE_NAME" ]; then
+    echo "ERROR: Expected workspace \$TARGET_WORKSPACE_NAME, but got '\$CURRENT_WORKSPACE'"
+    echo 'Available workspaces:'
+    tofu -chdir=tofu/aws/modules/airgap workspace list
+    exit 1
+fi
+
+export TF_WORKSPACE="\$TARGET_WORKSPACE_NAME"
+echo "Workspace management completed: \$TF_WORKSPACE"
+
+echo
+echo '=================================================='
+echo 'Initialization and workspace setup completed successfully'
+echo '=================================================='
+"""
+
+    executeScriptInContainer(combinedScript)
 }
 
 def initializeOpenTofu() {
