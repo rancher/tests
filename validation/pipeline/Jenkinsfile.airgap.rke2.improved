@@ -869,12 +869,38 @@ echo 'Step 1: Configuring S3 backend for state storage'
 echo '=================================================='
 
 echo 'Configuring S3 backend for state storage (no DynamoDB locking)...'
+
+# Debug environment variables
+echo "Debug - Environment variables in container:"
+echo "TF_STATE_BUCKET: '\$TF_STATE_BUCKET'"
+echo "TF_STATE_KEY_PREFIX: '\$TF_STATE_KEY_PREFIX'"
+echo "TF_STATE_REGION: '\$TF_STATE_REGION'"
+echo "TF_WORKSPACE: '\$TF_WORKSPACE'"
+
+# Check if required variables are set
+if [ -z "\$TF_STATE_BUCKET" ]; then
+    echo "ERROR: TF_STATE_BUCKET is not set"
+    env | grep TF_STATE || echo "No TF_STATE variables found"
+    exit 1
+fi
+
+if [ -z "\$TF_STATE_KEY_PREFIX" ]; then
+    echo "ERROR: TF_STATE_KEY_PREFIX is not set"
+    exit 1
+fi
+
+if [ -z "\$TF_STATE_REGION" ]; then
+    echo "ERROR: TF_STATE_REGION is not set"
+    exit 1
+fi
+
+# Create backend.tf with proper variable substitution
 cat > tofu/aws/modules/airgap/backend.tf << EOF
 terraform {
   backend "s3" {
-    bucket  = "\${TF_STATE_BUCKET}"
-    key     = "\${TF_STATE_KEY_PREFIX}/\${TF_WORKSPACE}/terraform.tfstate"
-    region  = "\${TF_STATE_REGION}"
+    bucket  = "\$TF_STATE_BUCKET"
+    key     = "\$TF_STATE_KEY_PREFIX/\$TF_WORKSPACE/terraform.tfstate"
+    region  = "\$TF_STATE_REGION"
     encrypt = true
 
     # WARNING: No state locking available
