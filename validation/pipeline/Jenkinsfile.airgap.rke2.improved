@@ -745,7 +745,7 @@ def initializeOpenTofu() {
 cd ${env.QA_INFRA_WORK_PATH}
 
 echo 'Configuring S3 backend for state storage (no DynamoDB locking)...'
-cat > tofu/aws/modules/airgap/backend.tf << 'EOF'
+cat > tofu/aws/modules/airgap/backend.tf << EOF
 terraform {
   backend "s3" {
     bucket  = "${env.TF_STATE_BUCKET}"
