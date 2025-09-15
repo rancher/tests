@@ -514,8 +514,113 @@ if aws s3 ls "s3://${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY" --region ${env.TF_
     echo "  🕐 Modified: \$LAST_MODIFIED"
     
     if [ "\$STATE_SIZE" -eq 0 ]; then
-        echo "❌ ERROR: State file is empty"
-        exit 1
+        echo "⚠️ WARNING: State file is empty (0 bytes)"
+        echo "This indicates one of the following scenarios:"
+        echo "  1. Deployment failed after creating state file"
+        echo "  2. Infrastructure was already destroyed"
+        echo "  3. State file was corrupted or truncated"
+        echo
+        
+        # Check for S3 versioning to find previous state versions
+        echo "🔍 Checking for previous state file versions..."
+        VERSIONS=\$(aws s3api list-object-versions --bucket "${env.TF_STATE_BUCKET}" --prefix "\$ACTUAL_STATE_KEY" --region ${env.TF_STATE_REGION} --query 'Versions[?Size > \`0\`].[VersionId,Size,LastModified]' --output table 2>/dev/null || echo "")
+        
+        if [ -n "\$VERSIONS" ] && [ "\$VERSIONS" != "None" ]; then
+            echo "✅ Found previous non-empty state versions:"
+            echo "\$VERSIONS"
+            
+            # Get the latest non-empty version
+            LATEST_VERSION=\$(aws s3api list-object-versions --bucket "${env.TF_STATE_BUCKET}" --prefix "\$ACTUAL_STATE_KEY" --region ${env.TF_STATE_REGION} --query 'Versions[?Size > \`0\`] | sort_by(@, &LastModified) | [-1].VersionId' --output text 2>/dev/null || echo "")
+            
+            if [ -n "\$LATEST_VERSION" ] && [ "\$LATEST_VERSION" != "None" ]; then
+                echo "🔄 Attempting to restore from latest non-empty version: \$LATEST_VERSION"
+                
+                if aws s3api copy-object --bucket "${env.TF_STATE_BUCKET}" --copy-source "${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY?versionId=\$LATEST_VERSION" --key "\$ACTUAL_STATE_KEY" --region ${env.TF_STATE_REGION} >/dev/null 2>&1; then
+                    echo "✅ State file restored from version \$LATEST_VERSION"
+                    
+                    # Re-check the restored file
+                    RESTORED_METADATA=\$(aws s3api head-object --bucket "${env.TF_STATE_BUCKET}" --key "\$ACTUAL_STATE_KEY" --region ${env.TF_STATE_REGION} 2>/dev/null)
+                    RESTORED_SIZE=\$(echo "\$RESTORED_METADATA" | python3 -c "import json,sys; data=json.load(sys.stdin); print(data.get('ContentLength', 0))" 2>/dev/null || echo 0)
+                    
+                    if [ "\$RESTORED_SIZE" -gt 0 ]; then
+                        echo "✅ Restored state file size: \$RESTORED_SIZE bytes"
+                        STATE_SIZE=\$RESTORED_SIZE
+                    else
+                        echo "❌ Restored state file is still empty"
+                    fi
+                else
+                    echo "❌ Failed to restore state from version \$LATEST_VERSION"
+                fi
+            fi
+        else
+            echo "❌ No previous non-empty state versions found"
+        fi
+        
+        # If still empty after restoration attempt
+        if [ "\$STATE_SIZE" -eq 0 ]; then
+            echo
+            echo "🔍 Checking for orphaned AWS resources..."
+            echo "Searching for resources that might exist despite empty state:"
+            
+            # Check for common resource patterns that might exist
+            echo "Checking for EC2 instances with workspace tag..."
+            INSTANCES=\$(aws ec2 describe-instances --region ${env.TF_STATE_REGION} --filters "Name=tag:workspace,Values=${env.TARGET_WORKSPACE}" --query 'Reservations[*].Instances[*].[InstanceId,State.Name,Tags[?Key==\`Name\`].Value|[0]]' --output table 2>/dev/null || echo "No instances found")
+            
+            if [ "\$INSTANCES" != "No instances found" ] && [ -n "\$INSTANCES" ]; then
+                echo "⚠️ Found EC2 instances that may be orphaned:"
+                echo "\$INSTANCES"
+                ORPHANED_RESOURCES=true
+            else
+                echo "No EC2 instances found with workspace tag"
+            fi
+            
+            echo "Checking for VPCs with workspace tag..."
+            VPCS=\$(aws ec2 describe-vpcs --region ${env.TF_STATE_REGION} --filters "Name=tag:workspace,Values=${env.TARGET_WORKSPACE}" --query 'Vpcs[*].[VpcId,State,Tags[?Key==\`Name\`].Value|[0]]' --output table 2>/dev/null || echo "No VPCs found")
+            
+            if [ "\$VPCS" != "No VPCs found" ] && [ -n "\$VPCS" ]; then
+                echo "⚠️ Found VPCs that may be orphaned:"
+                echo "\$VPCS"
+                ORPHANED_RESOURCES=true
+            else
+                echo "No VPCs found with workspace tag"
+            fi
+            
+            echo
+            if [ "\$ORPHANED_RESOURCES" = "true" ]; then
+                echo "⚠️ ORPHANED RESOURCES DETECTED"
+                echo "Found AWS resources that may belong to this workspace but are not in Terraform state."
+                echo "These resources may need manual cleanup."
+                echo
+                echo "Recommended actions:"
+                echo "1. Review the resources listed above"
+                echo "2. Manually delete orphaned resources if confirmed"
+                echo "3. Check deployment logs for what went wrong"
+                echo
+                if [ "${params.FORCE_DESTROY ?: 'false'}" = "true" ]; then
+                    echo "⚠️ FORCE_DESTROY is enabled, but no state resources to destroy"
+                    echo "Manual cleanup of orphaned resources may be required"
+                    exit 0
+                else
+                    echo "❌ Empty state with potential orphaned resources - manual intervention required"
+                    exit 1
+                fi
+            else
+                echo "✅ No orphaned resources found - infrastructure appears to be fully cleaned up"
+                echo "The empty state file indicates successful cleanup or deployment failure"
+                echo
+                if [ "${params.FORCE_DESTROY ?: 'false'}" = "true" ]; then
+                    echo "✅ FORCE_DESTROY enabled - treating empty state as successful cleanup"
+                    exit 0
+                else
+                    echo "ℹ️ No resources to destroy - workspace appears clean"
+                    echo "This may indicate:"
+                    echo "  - Infrastructure was already destroyed"
+                    echo "  - Original deployment never completed"
+                    echo "  - This is the expected state"
+                    exit 0
+                fi
+            fi
+        fi
     fi
     
 else
