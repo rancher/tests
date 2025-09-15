@@ -489,24 +489,29 @@ echo "Region: ${env.TF_STATE_REGION}"
 echo "Target workspace: ${env.TARGET_WORKSPACE}"
 echo
 
-# Step 1: Search for actual state file location
-echo 'Step 1: Discovering actual state file location...'
+# Step 1: Use confirmed env: S3 key pattern
+echo 'Step 1: Using confirmed env: S3 key pattern...'
 mkdir -p tofu/aws/modules/airgap/
 
-echo "🔍 Searching for state files in S3 bucket..."
-SEARCH_RESULTS=\$(aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} --recursive | grep "${env.TARGET_WORKSPACE}" | grep "terraform.tfstate" || echo "")
+# Use the exact confirmed pattern: env:/workspace/prefix/workspace/terraform.tfstate
+ACTUAL_STATE_KEY="env:/${env.TARGET_WORKSPACE}/${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/terraform.tfstate"
 
-if [ -n "\$SEARCH_RESULTS" ]; then
-    echo "✅ Found state files matching workspace pattern:"
-    echo "\$SEARCH_RESULTS"
+echo "🎯 Using confirmed S3 key pattern: \$ACTUAL_STATE_KEY"
+echo "Full S3 path: s3://${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY"
+
+# Verify the exact state file exists
+echo "🔍 Verifying state file exists at confirmed location..."
+if aws s3 ls "s3://${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY" --region ${env.TF_STATE_REGION} >/dev/null 2>&1; then
+    echo "✅ CONFIRMED: State file exists at exact location"
     
-    # Extract the actual S3 key
-    ACTUAL_STATE_KEY=\$(echo "\$SEARCH_RESULTS" | head -1 | awk '{print \$4}')
-    echo "Using state file: \$ACTUAL_STATE_KEY"
+    # Get file metadata
+    STATE_METADATA=\$(aws s3api head-object --bucket "${env.TF_STATE_BUCKET}" --key "\$ACTUAL_STATE_KEY" --region ${env.TF_STATE_REGION} 2>/dev/null)
+    STATE_SIZE=\$(echo "\$STATE_METADATA" | python3 -c "import json,sys; data=json.load(sys.stdin); print(data.get('ContentLength', 0))" 2>/dev/null || echo 0)
+    LAST_MODIFIED=\$(echo "\$STATE_METADATA" | python3 -c "import json,sys; data=json.load(sys.stdin); print(data.get('LastModified', 'unknown'))" 2>/dev/null || echo "unknown")
     
-    # Get file metadata to verify it's not empty
-    STATE_SIZE=\$(echo "\$SEARCH_RESULTS" | head -1 | awk '{print \$3}')
-    echo "State file size: \$STATE_SIZE bytes"
+    echo "State file details:"
+    echo "  📏 Size: \$STATE_SIZE bytes"
+    echo "  🕐 Modified: \$LAST_MODIFIED"
     
     if [ "\$STATE_SIZE" -eq 0 ]; then
         echo "❌ ERROR: State file is empty"
@@ -514,19 +519,30 @@ if [ -n "\$SEARCH_RESULTS" ]; then
     fi
     
 else
-    echo "❌ ERROR: No state files found for workspace ${env.TARGET_WORKSPACE}"
+    echo "❌ ERROR: State file not found at confirmed location"
+    echo "Expected: s3://${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY"
     
-    echo "Searching for any terraform.tfstate files in bucket:"
-    ALL_STATES=\$(aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} --recursive | grep "terraform.tfstate" || echo "")
+    # Fallback: search for any files with this workspace name
+    echo "🔍 Searching for alternative locations..."
+    SEARCH_RESULTS=\$(aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} --recursive | grep "${env.TARGET_WORKSPACE}" | grep "terraform.tfstate" || echo "")
     
-    if [ -n "\$ALL_STATES" ]; then
-        echo "Found terraform.tfstate files (first 10):"
-        echo "\$ALL_STATES" | head -10
+    if [ -n "\$SEARCH_RESULTS" ]; then
+        echo "Found state files matching workspace pattern:"
+        echo "\$SEARCH_RESULTS"
+        
+        # Use the first match as fallback
+        ACTUAL_STATE_KEY=\$(echo "\$SEARCH_RESULTS" | head -1 | awk '{print \$4}')
+        STATE_SIZE=\$(echo "\$SEARCH_RESULTS" | head -1 | awk '{print \$3}')
+        echo "Using fallback state file: \$ACTUAL_STATE_KEY"
+        
+        if [ "\$STATE_SIZE" -eq 0 ]; then
+            echo "❌ ERROR: Fallback state file is also empty"
+            exit 1
+        fi
     else
-        echo "No terraform.tfstate files found in entire bucket"
+        echo "❌ ERROR: No state files found for workspace ${env.TARGET_WORKSPACE}"
+        exit 1
     fi
-    
-    exit 1
 fi
 
 # Step 2: Configure backend with actual discovered S3 key
