@@ -475,7 +475,7 @@ def executeScriptInContainerWithWorkspace(scriptContent, extraEnv = [:]) {
 }
 
 def retrieveStateFromS3() {
-    logInfo("Enhanced state retrieval with proper workspace initialization sequence")
+    logInfo("Enhanced state retrieval with alternative S3 key pattern detection")
 
     try {
         def retrieveScript = """
@@ -489,16 +489,55 @@ echo "Region: ${env.TF_STATE_REGION}"
 echo "Target workspace: ${env.TARGET_WORKSPACE}"
 echo
 
-# Step 1: Configure S3 backend to match deployment pipeline
-echo 'Step 1: Configuring S3 backend to match deployment pipeline...'
+# Step 1: Search for actual state file location
+echo 'Step 1: Discovering actual state file location...'
 mkdir -p tofu/aws/modules/airgap/
 
-# Use the same S3 backend configuration as the deployment pipeline
-cat > tofu/aws/modules/airgap/backend.tf << 'EOF'
+echo "🔍 Searching for state files in S3 bucket..."
+SEARCH_RESULTS=\$(aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} --recursive | grep "${env.TARGET_WORKSPACE}" | grep "terraform.tfstate" || echo "")
+
+if [ -n "\$SEARCH_RESULTS" ]; then
+    echo "✅ Found state files matching workspace pattern:"
+    echo "\$SEARCH_RESULTS"
+    
+    # Extract the actual S3 key
+    ACTUAL_STATE_KEY=\$(echo "\$SEARCH_RESULTS" | head -1 | awk '{print \$4}')
+    echo "Using state file: \$ACTUAL_STATE_KEY"
+    
+    # Get file metadata to verify it's not empty
+    STATE_SIZE=\$(echo "\$SEARCH_RESULTS" | head -1 | awk '{print \$3}')
+    echo "State file size: \$STATE_SIZE bytes"
+    
+    if [ "\$STATE_SIZE" -eq 0 ]; then
+        echo "❌ ERROR: State file is empty"
+        exit 1
+    fi
+    
+else
+    echo "❌ ERROR: No state files found for workspace ${env.TARGET_WORKSPACE}"
+    
+    echo "Searching for any terraform.tfstate files in bucket:"
+    ALL_STATES=\$(aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} --recursive | grep "terraform.tfstate" || echo "")
+    
+    if [ -n "\$ALL_STATES" ]; then
+        echo "Found terraform.tfstate files (first 10):"
+        echo "\$ALL_STATES" | head -10
+    else
+        echo "No terraform.tfstate files found in entire bucket"
+    fi
+    
+    exit 1
+fi
+
+# Step 2: Configure backend with actual discovered S3 key
+echo
+echo 'Step 2: Configuring backend with discovered S3 key...'
+
+cat > tofu/aws/modules/airgap/backend.tf << EOF
 terraform {
   backend "s3" {
     bucket  = "${env.TF_STATE_BUCKET}"
-    key     = "${env.TF_STATE_KEY_PREFIX}/terraform.tfstate"
+    key     = "\$ACTUAL_STATE_KEY"
     region  = "${env.TF_STATE_REGION}"
     encrypt = true
     
@@ -508,20 +547,20 @@ terraform {
     skip_region_validation      = false
     skip_requesting_account_id  = false
     
-    # WARNING: No state locking available without DynamoDB
-    # Manual coordination required to prevent concurrent operations
+    # Note: No DynamoDB locking configured
+    # Using direct S3 key access (no workspace needed)
   }
 }
 EOF
 
-echo "✅ Backend configuration written (matches deployment pipeline):"
+echo "✅ Backend configuration created with discovered key:"
 cat tofu/aws/modules/airgap/backend.tf
 
-# Step 2: Initialize OpenTofu with S3 backend (in default workspace)
+# Step 3: Initialize OpenTofu with direct S3 key backend
 echo
-echo 'Step 2: Initializing OpenTofu with S3 backend (default workspace)...'
+echo 'Step 3: Initializing OpenTofu with direct S3 key access...'
 
-# CRITICAL: Unset TF_WORKSPACE before initialization to avoid workspace conflicts
+# CRITICAL: Unset TF_WORKSPACE for direct state access
 unset TF_WORKSPACE
 
 # Clean any existing backend state
@@ -529,9 +568,9 @@ rm -f tofu/aws/modules/airgap/.terraform/terraform.tfstate
 rm -rf tofu/aws/modules/airgap/.terraform/terraform.tfstate.d/
 rm -f tofu/aws/modules/airgap/.terraform.lock.hcl
 
-# Initialize backend in default workspace
+# Initialize backend with direct S3 key
 if tofu -chdir=tofu/aws/modules/airgap init -input=false -reconfigure; then
-    echo "✅ OpenTofu backend initialized successfully in default workspace"
+    echo "✅ OpenTofu backend initialized successfully with direct S3 key"
 else
     echo "❌ ERROR: Failed to initialize OpenTofu backend"
     
@@ -546,88 +585,58 @@ else
     echo "3. Checking backend configuration:"
     cat tofu/aws/modules/airgap/backend.tf || echo "Backend config missing"
     
-    exit 1
-fi
-
-# Step 3: List available workspaces
-echo
-echo 'Step 3: Listing available workspaces...'
-echo "Available workspaces in S3 backend:"
-tofu -chdir=tofu/aws/modules/airgap workspace list
-
-# Step 4: Select target workspace
-echo
-echo 'Step 4: Selecting target workspace...'
-echo "Attempting to select workspace: ${env.TARGET_WORKSPACE}"
-
-if tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TARGET_WORKSPACE} 2>/dev/null; then
-    echo "✅ Successfully selected existing workspace: ${env.TARGET_WORKSPACE}"
-else
-    echo "❌ Workspace '${env.TARGET_WORKSPACE}' does not exist or is not accessible"
-    echo
-    echo "This indicates one of the following issues:"
-    echo "1. The deployment pipeline did not complete successfully"
-    echo "2. The workspace name doesn't match the deployment"
-    echo "3. The state files are in a different S3 location"
-    echo "4. The workspace was already destroyed"
-    echo
-    echo "Available workspaces:"
-    tofu -chdir=tofu/aws/modules/airgap workspace list
-    
-    echo
-    echo "🔍 Searching for workspace in S3 bucket..."
-    echo "Searching for files containing workspace name:"
-    aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} --recursive | grep "${env.TARGET_WORKSPACE}" || echo "No files found containing workspace name"
-    
-    echo
-    echo "Searching for terraform.tfstate files in bucket:"
-    aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} --recursive | grep "terraform.tfstate" || echo "No terraform.tfstate files found"
-    
-    echo
-    if [ "${params.FORCE_DESTROY ?: 'false'}" == "true" ]; then
-        echo "⚠️ FORCE_DESTROY=true, but cannot proceed without a valid workspace"
-        echo "Even with FORCE_DESTROY, we need access to the workspace to destroy resources"
-    fi
+    echo "4. Testing direct state file access:"
+    aws s3 ls s3://${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY --region ${env.TF_STATE_REGION} || echo "Direct state file access failed"
     
     exit 1
 fi
 
-# Step 5: Verify workspace selection
+# Step 4: Verify state resources are loaded (no workspace needed with direct key)
 echo
-echo 'Step 5: Verifying workspace selection...'
-CURRENT_WORKSPACE=\$(tofu -chdir=tofu/aws/modules/airgap workspace show | xargs)
-echo "Current workspace: \$CURRENT_WORKSPACE"
-
-if [ "\$CURRENT_WORKSPACE" != "${env.TARGET_WORKSPACE}" ]; then
-    echo "❌ ERROR: Workspace selection verification failed"
-    echo "Expected: ${env.TARGET_WORKSPACE}"
-    echo "Current: \$CURRENT_WORKSPACE"
-    exit 1
-fi
-
-# Step 6: Verify state resources are loaded
-echo
-echo 'Step 6: Verifying state resources are loaded...'
+echo 'Step 4: Verifying state resources are loaded...'
 LOADED_RESOURCES=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l)
 echo "Resources loaded from state: \$LOADED_RESOURCES"
 
 if [ "\$LOADED_RESOURCES" -eq 0 ]; then
-    echo "⚠️ WARNING: No resources found in workspace state"
+    echo "⚠️ WARNING: No resources found in state"
     echo "This could mean:"
     echo "  1. Infrastructure was already destroyed"
-    echo "  2. State file is empty"
-    echo "  3. Workspace state is corrupted"
+    echo "  2. State file is empty or corrupted"
+    echo "  3. Configuration compatibility issues"
     
     echo
     echo "🔍 Additional debugging:"
-    echo "State file information:"
-    tofu -chdir=tofu/aws/modules/airgap state list -state=terraform.tfstate 2>&1 | head -10 || echo "Could not read state directly"
+    echo "Direct state file download test:"
+    
+    # Try to download and analyze state directly
+    TEMP_STATE="/tmp/direct_state_analysis.tfstate"
+    if aws s3 cp s3://${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY "\$TEMP_STATE" --region ${env.TF_STATE_REGION} --quiet; then
+        echo "✅ State file downloaded successfully"
+        
+        if python3 -c "import json; json.load(open('\$TEMP_STATE'))" 2>/dev/null; then
+            DIRECT_RESOURCES=\$(python3 -c "import json; data=json.load(open('\$TEMP_STATE')); print(len(data.get('resources', [])))" 2>/dev/null || echo 0)
+            echo "Resources in direct state file: \$DIRECT_RESOURCES"
+            
+            if [ "\$DIRECT_RESOURCES" -gt 0 ]; then
+                echo "⚠️ State file contains resources but OpenTofu cannot access them"
+                echo "This may indicate configuration or provider compatibility issues"
+            else
+                echo "State file is empty - infrastructure may have been destroyed"
+            fi
+        else
+            echo "❌ State file is corrupted (invalid JSON)"
+        fi
+        
+        rm -f "\$TEMP_STATE"
+    else
+        echo "❌ Failed to download state file directly"
+    fi
     
     if [ "${params.FORCE_DESTROY ?: 'false'}" != "true" ]; then
         echo "❌ No resources to destroy and FORCE_DESTROY not enabled"
         exit 1
     else
-        echo "⚠️ FORCE_DESTROY enabled, continuing despite no resources (this will essentially be a no-op)"
+        echo "⚠️ FORCE_DESTROY enabled, continuing despite no resources"
     fi
 else
     echo "✅ Found \$LOADED_RESOURCES resources ready for destruction"
@@ -640,10 +649,14 @@ fi
 
 echo
 echo "✅ SUCCESS: Enhanced state retrieval completed"
-echo "   - Backend: S3 (${env.TF_STATE_BUCKET}/${env.TF_STATE_KEY_PREFIX})"
-echo "   - Selected workspace: ${env.TARGET_WORKSPACE}"
+echo "   - Backend: S3 Direct Key Access"
+echo "   - State file: \$ACTUAL_STATE_KEY"
+echo "   - File size: \$STATE_SIZE bytes"
 echo "   - Resources available: \$LOADED_RESOURCES"
 echo "   - Ready for destruction planning"
+
+# Store the actual state key for use in other functions
+echo "\$ACTUAL_STATE_KEY" > /tmp/actual_state_key.txt
 """
 
         executeScriptInContainer(retrieveScript)
@@ -652,13 +665,13 @@ echo "   - Ready for destruction planning"
     } catch (Exception e) {
         logError("❌ Enhanced state retrieval failed: ${e.message}")
         
-        // Provide detailed troubleshooting information
+        // Enhanced troubleshooting with fallback options
         logError("💡 Enhanced troubleshooting suggestions:")
-        logError("   1. Verify deployment pipeline completed successfully")
-        logError("   2. Check if TARGET_WORKSPACE matches deployment: ${env.TARGET_WORKSPACE}")
-        logError("   3. Confirm the workspace was created by the deployment pipeline")
-        logError("   4. Check S3 bucket for actual workspace files")
-        logError("   5. Verify backend configuration matches between pipelines")
+        logError("   1. State file found but with non-standard S3 key pattern")
+        logError("   2. Run diagnostic script: ./scripts/diagnose_destroy_state_issue.sh ${env.TARGET_WORKSPACE}")
+        logError("   3. Use targeted fix script: ./scripts/fix_destroy_state_mismatch.sh ${env.TARGET_WORKSPACE}")
+        logError("   4. Verify deployment pipeline completed successfully")
+        logError("   5. Check deployment logs for actual workspace name and S3 locations")
         
         return false
     }
