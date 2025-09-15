@@ -535,7 +535,7 @@ if aws s3 ls "s3://${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY" --region ${env.TF_
             echo "\$VERSIONS"
             
             # Get the latest non-empty version
-            LATEST_VERSION=\$(aws s3api list-object-versions --bucket "${env.TF_STATE_BUCKET}" --prefix "\$ACTUAL_STATE_KEY" --region ${env.TF_STATE_REGION} --query 'Versions[?Size > \`0\`] | sort_by(@, &LastModified) | [-1].VersionId' --output text 2>/dev/null || echo "")
+            LATEST_VERSION=\$(aws s3api list-object-versions --bucket "${env.TF_STATE_BUCKET}" --prefix "\$ACTUAL_STATE_KEY" --region ${env.TF_STATE_REGION} --query 'Versions[?Size > `0`] | sort_by(@, &LastModified) | [-1].VersionId' --output text 2>/dev/null || echo "")
             
             if [ -n "\$LATEST_VERSION" ] && [ "\$LATEST_VERSION" != "None" ]; then
                 echo "🔄 Attempting to restore from latest non-empty version: \$LATEST_VERSION"
