@@ -489,12 +489,12 @@ echo "Region: ${env.TF_STATE_REGION}"
 echo "Target workspace: ${env.TARGET_WORKSPACE}"
 echo
 
-# Step 1: Use confirmed env: S3 key pattern
-echo 'Step 1: Using confirmed env: S3 key pattern...'
+# Step 1: Use correct S3 key pattern
+echo 'Step 1: Using correct S3 key pattern...'
 mkdir -p tofu/aws/modules/airgap/
 
-# Use the exact confirmed pattern: env:/workspace/prefix/workspace/terraform.tfstate
-ACTUAL_STATE_KEY="env:/${env.TARGET_WORKSPACE}/${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/terraform.tfstate"
+# Use the correct S3 key pattern: prefix/workspace/terraform.tfstate
+ACTUAL_STATE_KEY="${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/terraform.tfstate"
 
 echo "🎯 Using confirmed S3 key pattern: \$ACTUAL_STATE_KEY"
 echo "Full S3 path: s3://${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY"
