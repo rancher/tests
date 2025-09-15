@@ -569,7 +569,7 @@ if aws s3 ls "s3://${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY" --region ${env.TF_
             
             # Check for common resource patterns that might exist
             echo "Checking for EC2 instances with workspace tag..."
-            INSTANCES=\$(aws ec2 describe-instances --region ${env.TF_STATE_REGION} --filters "Name=tag:workspace,Values=${env.TARGET_WORKSPACE}" --query 'Reservations[*].Instances[*].[InstanceId,State.Name,Tags[?Key==\`Name\`].Value|[0]]' --output table 2>/dev/null || echo "No instances found")
+            INSTANCES=\$(aws ec2 describe-instances --region ${env.TF_STATE_REGION} --filters "Name=tag:workspace,Values=${env.TARGET_WORKSPACE}" --query 'Reservations[*].Instances[*].[InstanceId,State.Name,Tags[?Key==`Name`].Value|[0]]' --output table 2>/dev/null || echo "No instances found")
             
             if [ "\$INSTANCES" != "No instances found" ] && [ -n "\$INSTANCES" ]; then
                 echo "⚠️ Found EC2 instances that may be orphaned:"
@@ -580,7 +580,7 @@ if aws s3 ls "s3://${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY" --region ${env.TF_
             fi
             
             echo "Checking for VPCs with workspace tag..."
-            VPCS=\$(aws ec2 describe-vpcs --region ${env.TF_STATE_REGION} --filters "Name=tag:workspace,Values=${env.TARGET_WORKSPACE}" --query 'Vpcs[*].[VpcId,State,Tags[?Key==\`Name\`].Value|[0]]' --output table 2>/dev/null || echo "No VPCs found")
+            VPCS=\$(aws ec2 describe-vpcs --region ${env.TF_STATE_REGION} --filters "Name=tag:workspace,Values=${env.TARGET_WORKSPACE}" --query 'Vpcs[*].[VpcId,State,Tags[?Key==`Name`].Value|[0]]' --output table 2>/dev/null || echo "No VPCs found")
             
             if [ "\$VPCS" != "No VPCs found" ] && [ -n "\$VPCS" ]; then
                 echo "⚠️ Found VPCs that may be orphaned:"
