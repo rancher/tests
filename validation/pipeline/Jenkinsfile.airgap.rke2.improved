@@ -246,6 +246,11 @@ pipeline {
                             // Pre-flight checks
                             validateInfrastructurePrerequisites()
 
+                            // Regenerate environment file for container execution
+                            withCredentials(getCredentialsList()) {
+                                generateEnvironmentFile()
+                            }
+
                             // Infrastructure deployment with enhanced error handling
                             deployInfrastructure()
 
@@ -616,6 +621,17 @@ def executeScriptInContainer(scriptContent, extraEnv = [:]) {
     def scriptFile = "docker-script-${timestamp}.sh"
 
     writeFile file: scriptFile, text: scriptContent
+
+    // Debug: verify environment file exists and show its path
+    def envFilePath = "${pwd()}/${env.ENV_FILE}"
+    logInfo("Debug - Environment file path: ${envFilePath}")
+    if (fileExists(env.ENV_FILE)) {
+        logInfo("Debug - Environment file exists")
+        def envContent = readFile(env.ENV_FILE)
+        logInfo("Debug - Environment file content:\n${envContent}")
+    } else {
+        logError("Debug - Environment file does not exist: ${env.ENV_FILE}")
+    }
 
     def envVars = ''
     extraEnv.each { key, value ->
