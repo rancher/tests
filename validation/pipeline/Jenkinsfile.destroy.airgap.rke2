@@ -571,19 +571,57 @@ def retrieveStateFromS3() {
             '    exit 1\n' +
             'fi\n' +
             '\n' +
-            '# Step 5: Verify state is loaded correctly\n' +
+            '# Step 5: Debug and fix state file location\n' +
+            'echo\n' +
+            'echo "🔍 Debugging state file location..."\n' +
+            'echo "Current working directory: $(pwd)"\n' +
+            'echo "OpenTofu working directory: tofu/aws/modules/airgap/"\n' +
+            'echo "State file location: $LOCAL_STATE_FILE"\n' +
+            'echo "State file exists: $([ -f "$LOCAL_STATE_FILE" ] && echo "YES" || echo "NO")"\n' +
+            'echo "State file size: $(stat -c%s "$LOCAL_STATE_FILE" 2>/dev/null || echo "0") bytes"\n' +
+            'echo "Directory contents:"\n' +
+            'ls -la tofu/aws/modules/airgap/ | head -10\n' +
+            '\n' +
+            '# Check if OpenTofu can find the state file\n' +
+            'echo "🔍 Testing OpenTofu state access..."\n' +
+            'cd tofu/aws/modules/airgap/\n' +
+            'echo "Now in directory: $(pwd)"\n' +
+            'echo "Files in current directory:"\n' +
+            'ls -la | head -10\n' +
+            '\n' +
+            '# Verify state file is accessible from OpenTofu working directory\n' +
+            'if [ -f "terraform.tfstate" ]; then\n' +
+            '    echo "✅ State file found in OpenTofu working directory"\n' +
+            '    echo "State file size from OpenTofu dir: $(stat -c%s terraform.tfstate) bytes"\n' +
+            'else\n' +
+            '    echo "❌ State file NOT found in OpenTofu working directory"\n' +
+            '    echo "Looking for state file in parent directories..."\n' +
+            '    find .. -name "terraform.tfstate" -type f 2>/dev/null || echo "No terraform.tfstate found"\n' +
+            'fi\n' +
+            '\n' +
+            'cd ' + env.QA_INFRA_WORK_PATH + '\n' +
+            '\n' +
+            '# Step 6: Verify state is loaded correctly\n' +
             'echo\n' +
             'echo "🔍 Verifying state is loaded correctly..."\n' +
-            'LOADED_RESOURCES=$(tofu -chdir=tofu/aws/modules/airgap state list 2>/dev/null | wc -l || echo 0)\n' +
+            'LOADED_RESOURCES=$(tofu -chdir=tofu/aws/modules/airgap state list 2>&1 | tee /tmp/state_list_output.txt | wc -l || echo 0)\n' +
             'echo "Resources loaded in OpenTofu: $LOADED_RESOURCES"\n' +
+            '\n' +
+            'if [ "$LOADED_RESOURCES" -eq 0 ]; then\n' +
+            '    echo "❌ No resources loaded - debugging..."\n' +
+            '    echo "OpenTofu state list output:"\n' +
+            '    cat /tmp/state_list_output.txt || echo "No output file"\n' +
+            '    echo\n' +
+            '    echo "Checking OpenTofu state file directly:"\n' +
+            '    tofu -chdir=tofu/aws/modules/airgap show 2>&1 | head -20\n' +
+            '    echo\n' +
+            '    echo "Backend configuration:"\n' +
+            '    cat tofu/aws/modules/airgap/backend.tf\n' +
+            '    exit 1\n' +
+            'fi\n' +
             '\n' +
             'if [ "$LOADED_RESOURCES" -ne "$RESOURCE_COUNT" ]; then\n' +
             '    echo "⚠️ WARNING: Resource count mismatch (state: $RESOURCE_COUNT, loaded: $LOADED_RESOURCES)"\n' +
-            'fi\n' +
-            '\n' +
-            'if [ "$LOADED_RESOURCES" -eq 0 ]; then\n' +
-            '    echo "❌ ERROR: No resources loaded in OpenTofu state"\n' +
-            '    exit 1\n' +
             'fi\n' +
             '\n' +
             'echo "✅ State loaded successfully - $LOADED_RESOURCES resources ready for destruction"\n' +
