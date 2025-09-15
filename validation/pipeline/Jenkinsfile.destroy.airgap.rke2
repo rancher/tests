@@ -428,6 +428,36 @@ def executeScriptInContainer(scriptContent, extraEnv = [:]) {
         envVars += " -e ${key}=${value}"
     }
 
+    // Note: TF_WORKSPACE is intentionally NOT set here to avoid workspace conflicts during init
+    // The script itself will manage workspace selection after backend initialization
+    sh """
+        docker run --rm \
+            -v ${env.VALIDATION_VOLUME}:/root \
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh \
+            --name ${containerName} \
+            -t --env-file ${env.ENV_FILE} \
+            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
+            ${envVars} \
+            ${env.IMAGE_NAME} \
+            sh /tmp/script.sh
+    """
+
+    sh "rm -f ${scriptFile}"
+}
+
+def executeScriptInContainerWithWorkspace(scriptContent, extraEnv = [:]) {
+    def timestamp = System.currentTimeMillis()
+    def containerName = "${env.BUILD_CONTAINER_NAME}-${timestamp}"
+    def scriptFile = "destroy-script-${timestamp}.sh"
+
+    writeFile file: scriptFile, text: scriptContent
+
+    def envVars = ''
+    extraEnv.each { key, value ->
+        envVars += " -e ${key}=${value}"
+    }
+
+    // This version sets TF_WORKSPACE for operations that need it (like planning and applying)
     sh """
         docker run --rm \
             -v ${env.VALIDATION_VOLUME}:/root \
@@ -445,7 +475,7 @@ def executeScriptInContainer(scriptContent, extraEnv = [:]) {
 }
 
 def retrieveStateFromS3() {
-    logInfo("Enhanced state retrieval - matching deployment pipeline S3 paths")
+    logInfo("Enhanced state retrieval with proper workspace initialization sequence")
 
     try {
         def retrieveScript = """
@@ -487,72 +517,89 @@ EOF
 echo "✅ Backend configuration written (matches deployment pipeline):"
 cat tofu/aws/modules/airgap/backend.tf
 
-# Step 2: Initialize OpenTofu with S3 backend
+# Step 2: Initialize OpenTofu with S3 backend (in default workspace)
 echo
-echo 'Step 2: Initializing OpenTofu with S3 backend...'
+echo 'Step 2: Initializing OpenTofu with S3 backend (default workspace)...'
+
+# CRITICAL: Unset TF_WORKSPACE before initialization to avoid workspace conflicts
+unset TF_WORKSPACE
 
 # Clean any existing backend state
 rm -f tofu/aws/modules/airgap/.terraform/terraform.tfstate
 rm -rf tofu/aws/modules/airgap/.terraform/terraform.tfstate.d/
 rm -f tofu/aws/modules/airgap/.terraform.lock.hcl
 
-# Initialize backend
+# Initialize backend in default workspace
 if tofu -chdir=tofu/aws/modules/airgap init -input=false -reconfigure; then
-    echo "✅ OpenTofu backend initialized successfully"
+    echo "✅ OpenTofu backend initialized successfully in default workspace"
 else
     echo "❌ ERROR: Failed to initialize OpenTofu backend"
-    exit 1
-fi
-
-# Step 3: Verify backend connectivity
-echo
-echo 'Step 3: Verifying S3 backend connectivity...'
-if ! tofu -chdir=tofu/aws/modules/airgap workspace list >/dev/null 2>&1; then
-    echo "❌ ERROR: S3 backend not accessible"
-    echo "This could indicate:"
-    echo "  1. AWS credentials issues"
-    echo "  2. S3 bucket permissions"
-    echo "  3. Network connectivity problems"
     
-    # Debug S3 connectivity
-    echo "Testing S3 bucket access..."
+    # Debug initialization failure
+    echo "Debugging backend initialization failure:"
+    echo "1. Checking AWS credentials:"
+    aws sts get-caller-identity || echo "AWS credentials check failed"
+    
+    echo "2. Checking S3 bucket access:"
     aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} || echo "S3 bucket access failed"
     
+    echo "3. Checking backend configuration:"
+    cat tofu/aws/modules/airgap/backend.tf || echo "Backend config missing"
+    
     exit 1
 fi
 
-# Step 4: List and select target workspace
+# Step 3: List available workspaces
 echo
-echo 'Step 4: Managing workspace selection...'
-unset TF_WORKSPACE
-
-echo "Available workspaces:"
+echo 'Step 3: Listing available workspaces...'
+echo "Available workspaces in S3 backend:"
 tofu -chdir=tofu/aws/modules/airgap workspace list
 
-echo "Selecting workspace: ${env.TARGET_WORKSPACE}"
-if tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TARGET_WORKSPACE}; then
-    echo "✅ Successfully selected workspace: ${env.TARGET_WORKSPACE}"
+# Step 4: Select target workspace
+echo
+echo 'Step 4: Selecting target workspace...'
+echo "Attempting to select workspace: ${env.TARGET_WORKSPACE}"
+
+if tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TARGET_WORKSPACE} 2>/dev/null; then
+    echo "✅ Successfully selected existing workspace: ${env.TARGET_WORKSPACE}"
 else
-    echo "❌ ERROR: Failed to select workspace: ${env.TARGET_WORKSPACE}"
+    echo "❌ Workspace '${env.TARGET_WORKSPACE}' does not exist or is not accessible"
     echo
-    echo "Available workspaces for debugging:"
+    echo "This indicates one of the following issues:"
+    echo "1. The deployment pipeline did not complete successfully"
+    echo "2. The workspace name doesn't match the deployment"
+    echo "3. The state files are in a different S3 location"
+    echo "4. The workspace was already destroyed"
+    echo
+    echo "Available workspaces:"
     tofu -chdir=tofu/aws/modules/airgap workspace list
     
     echo
-    echo "Searching for workspace in S3 bucket:"
-    aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} --recursive | grep "${env.TARGET_WORKSPACE}" || echo "No workspace files found in S3"
+    echo "🔍 Searching for workspace in S3 bucket..."
+    echo "Searching for files containing workspace name:"
+    aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} --recursive | grep "${env.TARGET_WORKSPACE}" || echo "No files found containing workspace name"
+    
+    echo
+    echo "Searching for terraform.tfstate files in bucket:"
+    aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} --recursive | grep "terraform.tfstate" || echo "No terraform.tfstate files found"
+    
+    echo
+    if [ "${params.FORCE_DESTROY ?: 'false'}" == "true" ]; then
+        echo "⚠️ FORCE_DESTROY=true, but cannot proceed without a valid workspace"
+        echo "Even with FORCE_DESTROY, we need access to the workspace to destroy resources"
+    fi
     
     exit 1
 fi
 
-# Step 5: Verify workspace selection and state access
+# Step 5: Verify workspace selection
 echo
-echo 'Step 5: Verifying workspace selection and state access...'
+echo 'Step 5: Verifying workspace selection...'
 CURRENT_WORKSPACE=\$(tofu -chdir=tofu/aws/modules/airgap workspace show | xargs)
 echo "Current workspace: \$CURRENT_WORKSPACE"
 
 if [ "\$CURRENT_WORKSPACE" != "${env.TARGET_WORKSPACE}" ]; then
-    echo "❌ ERROR: Workspace mismatch"
+    echo "❌ ERROR: Workspace selection verification failed"
     echo "Expected: ${env.TARGET_WORKSPACE}"
     echo "Current: \$CURRENT_WORKSPACE"
     exit 1
@@ -562,35 +609,40 @@ fi
 echo
 echo 'Step 6: Verifying state resources are loaded...'
 LOADED_RESOURCES=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l)
-echo "Resources loaded in OpenTofu: \$LOADED_RESOURCES"
+echo "Resources loaded from state: \$LOADED_RESOURCES"
 
 if [ "\$LOADED_RESOURCES" -eq 0 ]; then
-    echo "⚠️ WARNING: No resources found in state"
-    echo "This might mean:"
+    echo "⚠️ WARNING: No resources found in workspace state"
+    echo "This could mean:"
     echo "  1. Infrastructure was already destroyed"
-    echo "  2. State file is empty or corrupted"
-    echo "  3. Wrong workspace selected"
+    echo "  2. State file is empty"
+    echo "  3. Workspace state is corrupted"
+    
+    echo
+    echo "🔍 Additional debugging:"
+    echo "State file information:"
+    tofu -chdir=tofu/aws/modules/airgap state list -state=terraform.tfstate 2>&1 | head -10 || echo "Could not read state directly"
     
     if [ "${params.FORCE_DESTROY ?: 'false'}" != "true" ]; then
         echo "❌ No resources to destroy and FORCE_DESTROY not enabled"
         exit 1
     else
-        echo "⚠️ FORCE_DESTROY enabled, continuing despite no resources"
+        echo "⚠️ FORCE_DESTROY enabled, continuing despite no resources (this will essentially be a no-op)"
     fi
 else
     echo "✅ Found \$LOADED_RESOURCES resources ready for destruction"
     echo
-    echo "Sample resources in state:"
-    tofu -chdir=tofu/aws/modules/airgap state list | head -5 | while read -r resource; do
+    echo "Sample resources in state (first 10):"
+    tofu -chdir=tofu/aws/modules/airgap state list | head -10 | while read -r resource; do
         echo "  → \$resource"
     done
 fi
 
 echo
 echo "✅ SUCCESS: Enhanced state retrieval completed"
-echo "   - Configured S3 backend matching deployment pipeline"
+echo "   - Backend: S3 (${env.TF_STATE_BUCKET}/${env.TF_STATE_KEY_PREFIX})"
 echo "   - Selected workspace: ${env.TARGET_WORKSPACE}"
-echo "   - Loaded \$LOADED_RESOURCES resources for destruction"
+echo "   - Resources available: \$LOADED_RESOURCES"
 echo "   - Ready for destruction planning"
 """
 
@@ -604,8 +656,9 @@ echo "   - Ready for destruction planning"
         logError("💡 Enhanced troubleshooting suggestions:")
         logError("   1. Verify deployment pipeline completed successfully")
         logError("   2. Check if TARGET_WORKSPACE matches deployment: ${env.TARGET_WORKSPACE}")
-        logError("   3. Confirm S3 backend configuration matches between pipelines")
-        logError("   4. Check if state file exists in expected S3 location")
+        logError("   3. Confirm the workspace was created by the deployment pipeline")
+        logError("   4. Check S3 bucket for actual workspace files")
+        logError("   5. Verify backend configuration matches between pipelines")
         
         return false
     }
@@ -647,88 +700,131 @@ echo 'State validation completed successfully'
 }
 
 def planDestruction() {
-    logInfo('Creating destruction plan')
+    logInfo('Creating destruction plan with proper workspace environment')
 
-    def planScript = '''
-cd ''' + env.QA_INFRA_WORK_PATH + '''
+    def planScript = """
+cd ${env.QA_INFRA_WORK_PATH}
 
-echo 'Generating destruction plan...'
+echo '🎯 Creating Destruction Plan'
+echo '=========================='
+echo "Workspace: ${env.TARGET_WORKSPACE}"
 
-# For destroy operations, we don't need the original tfvars file
-# OpenTofu can read the current state and plan destruction without variable files
-# We'll create minimal vars only if they're absolutely required by the configuration
+# Verify we're in the correct workspace
+CURRENT_WORKSPACE=\$(tofu -chdir=tofu/aws/modules/airgap workspace show | xargs)
+echo "Active workspace: \$CURRENT_WORKSPACE"
 
-echo 'Attempting direct destruction planning without tfvars...'
-if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -out=destroy-plan 2>/dev/null; then
-    echo '✅ Destruction plan created without tfvars file'
-else
-    echo 'Direct planning failed, creating minimal tfvars...'
-    
-    # Create minimal tfvars for destruction planning
-    cat > ''' + env.TERRAFORM_VARS_FILENAME + ''' << 'EOFVARS'
+if [ "\$CURRENT_WORKSPACE" != "${env.TARGET_WORKSPACE}" ]; then
+    echo "❌ ERROR: Not in target workspace for planning"
+    echo "Expected: ${env.TARGET_WORKSPACE}"
+    echo "Current: \$CURRENT_WORKSPACE"
+    exit 1
+fi
+
+echo 'Step 1: Creating minimal terraform variables for destruction...'
+cat > tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} << 'EOFVARS'
 # Minimal configuration for destruction
-# The actual values don't matter for destroy operations
-# OpenTofu will read from the current state
-aws_region = "''' + env.AWS_REGION + '''"
-aws_access_key = "placeholder"
-aws_secret_access_key = "placeholder"
-# Add other common variables that might be required
+# Values are read from state, so these are just placeholders
+aws_region = "${env.AWS_REGION}"
+aws_access_key = "placeholder-for-destroy"
+aws_secret_access_key = "placeholder-for-destroy"
+
+# Common variables that might be required by the configuration
 instance_type = "t3.medium"
 node_count = 1
+availability_zones = ["${env.AWS_REGION}a", "${env.AWS_REGION}b"]
 EOFVARS
 
-    echo 'Created minimal tfvars file:'
-    cat ''' + env.TERRAFORM_VARS_FILENAME + '''
-    echo
+echo "✅ Created minimal terraform variables"
+
+echo
+echo 'Step 2: Attempting destruction planning...'
+
+# First try without tfvars (OpenTofu should read everything from state)
+if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -out=destroy-plan 2>/dev/null; then
+    echo "✅ Destruction plan created successfully (no tfvars needed)"
+else
+    echo "Planning without tfvars failed, trying with minimal tfvars..."
     
-    echo 'Attempting destruction planning with minimal tfvars...'
-    if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=''' + env.TERRAFORM_VARS_FILENAME + ''' -out=destroy-plan; then
-        echo '✅ Destruction plan created with minimal tfvars'
+    if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=destroy-plan; then
+        echo "✅ Destruction plan created successfully (with minimal tfvars)"
     else
-        echo '❌ Destruction planning failed even with tfvars'
-        echo 'Checking what variables are actually required...'
+        echo "❌ ERROR: Destruction planning failed"
+        echo
+        echo "Debugging destruction planning failure:"
+        echo "1. Checking current state resources:"
+        tofu -chdir=tofu/aws/modules/airgap state list | head -10 || echo "Could not list state resources"
         
-        # Try to get more info about required variables
-        tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=''' + env.TERRAFORM_VARS_FILENAME + ''' 2>&1 | grep -i "required" || echo "No variable requirements found"
+        echo "2. Checking configuration validation:"
+        tofu -chdir=tofu/aws/modules/airgap validate || echo "Configuration validation failed"
         
-        echo 'Attempting plan without output file to see detailed error...'
-        tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=''' + env.TERRAFORM_VARS_FILENAME + ''' || echo "Detailed planning failed"
+        echo "3. Attempting plan without output file for detailed error:"
+        tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} 2>&1 | head -20 || echo "Plan generation failed"
+        
+        echo "4. Checking required variables:"
+        tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} 2>&1 | grep -i "required" || echo "No specific variable requirements found"
         
         exit 1
     fi
 fi
 
-# Verify plan file was created
+# Step 3: Verify plan file was created
 if [ ! -f tofu/aws/modules/airgap/destroy-plan ]; then
-    echo '❌ ERROR: destroy-plan file was not created'
-    echo 'Contents of module directory:'
+    echo "❌ ERROR: destroy-plan file was not created"
+    echo "Contents of module directory:"
     ls -la tofu/aws/modules/airgap/
     exit 1
 fi
 
-PLAN_SIZE=$(stat -c%s tofu/aws/modules/airgap/destroy-plan 2>/dev/null || echo 0)
-echo "Plan file size: $PLAN_SIZE bytes"
+PLAN_SIZE=\$(stat -c%s tofu/aws/modules/airgap/destroy-plan 2>/dev/null || echo 0)
+echo "Plan file size: \$PLAN_SIZE bytes"
 
-echo 'Showing destruction plan summary...'
-if tofu -chdir=tofu/aws/modules/airgap show -no-color destroy-plan > destruction-plan-summary.txt; then
-    echo 'Destruction plan summary generated successfully'
-    
-    echo 'Plan summary (first 50 lines):'
-    head -50 destruction-plan-summary.txt
-    
-    echo
-    echo 'Resources to be destroyed:'
-    grep -c "will be destroyed" destruction-plan-summary.txt || echo "No destroy actions found in plan"
-    
-else
-    echo '❌ ERROR: Failed to show destruction plan'
+if [ "\$PLAN_SIZE" -eq 0 ]; then
+    echo "❌ ERROR: Plan file is empty"
     exit 1
 fi
 
-echo '✅ Destruction plan created and validated successfully'
-'''
+echo
+echo 'Step 4: Generating destruction plan summary...'
+if tofu -chdir=tofu/aws/modules/airgap show -no-color destroy-plan > destruction-plan-summary.txt; then
+    echo "✅ Destruction plan summary generated successfully"
+    
+    echo "Plan summary (first 30 lines):"
+    head -30 destruction-plan-summary.txt
+    
+    echo
+    DESTROY_COUNT=\$(grep -c "will be destroyed" destruction-plan-summary.txt || echo 0)
+    echo "Resources to be destroyed: \$DESTROY_COUNT"
+    
+    if [ "\$DESTROY_COUNT" -eq 0 ]; then
+        echo "⚠️ WARNING: No resources marked for destruction in plan"
+        echo "This could indicate:"
+        echo "  1. Infrastructure was already destroyed"
+        echo "  2. State file issues"
+        echo "  3. Configuration mismatch"
+        
+        if [ "${params.FORCE_DESTROY ?: 'false'}" != "true" ]; then
+            echo "❌ No resources to destroy and FORCE_DESTROY not enabled"
+            exit 1
+        else
+            echo "⚠️ FORCE_DESTROY enabled, continuing despite no resources"
+        fi
+    else
+        echo "✅ Found \$DESTROY_COUNT resources scheduled for destruction"
+    fi
+    
+else
+    echo "❌ ERROR: Failed to generate destruction plan summary"
+    exit 1
+fi
 
-    executeScriptInContainer(planScript)
+echo
+echo "✅ Destruction plan created and validated successfully"
+echo "   - Workspace: \$CURRENT_WORKSPACE"
+echo "   - Resources to destroy: \$DESTROY_COUNT"
+echo "   - Plan file size: \$PLAN_SIZE bytes"
+"""
+
+    executeScriptInContainerWithWorkspace(planScript)
 }
 
 def archiveDestructionPlan() {
