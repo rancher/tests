@@ -626,8 +626,9 @@ def executeScriptInContainer(scriptContent, extraEnv = [:]) {
         docker run --rm \
             -v ${env.VALIDATION_VOLUME}:/root \
             -v ${pwd()}/${scriptFile}:/tmp/script.sh \
+            -v ${pwd()}/${env.ENV_FILE}:/tmp/env.file \
             --name ${containerName} \
-            -t --env-file ${env.ENV_FILE} \
+            -t --env-file /tmp/env.file \
             -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
             -e TF_WORKSPACE=${env.TF_WORKSPACE} \
             ${envVars} \
