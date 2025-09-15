@@ -272,8 +272,7 @@ pipeline {
                         archiveInfrastructureState()
                         // Additional immediate state backup for successful deployments
                         backupTerraformStateImmediately()
-                        // Upload tfvars to S3 for destruction pipeline
-                        uploadTfvarsToS3()
+                        // Note: tfvars upload to S3 happens during apply process
                     }
                 }
                 failure {
@@ -932,8 +931,21 @@ cp tofu/aws/modules/airgap/terraform.tfstate /root/terraform-state-primary.tfsta
 cp tofu/aws/modules/airgap/terraform.tfstate /root/terraform.tfstate
 
 echo 'Backing up terraform variables file for destruction pipeline...'
-# Use standardized S3 upload function
-cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} /root/${env.TERRAFORM_VARS_FILENAME} || echo "Could not backup tfvars locally"
+# Upload tfvars to S3 and backup locally
+TFVARS_S3_KEY="${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}"
+if [ -f tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ] && [ -s tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ]; then
+    echo "Uploading tfvars file to S3: s3://${env.TF_STATE_BUCKET}/\$TFVARS_S3_KEY"
+    if aws s3 cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} s3://${env.TF_STATE_BUCKET}/\$TFVARS_S3_KEY --region ${env.TF_STATE_REGION} --no-progress; then
+        echo "SUCCESS: tfvars file uploaded to S3 for destruction pipeline"
+    else
+        echo "WARNING: Failed to upload tfvars file to S3"
+    fi
+
+    # Also backup locally for archival
+    cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} /root/${env.TERRAFORM_VARS_FILENAME} || echo "Could not backup tfvars locally"
+else
+    echo "WARNING: tfvars file not found or empty: tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+fi
 
 # Verify state file exists and has content
 if [ -f tofu/aws/modules/airgap/terraform.tfstate ] && [ -s tofu/aws/modules/airgap/terraform.tfstate ]; then
@@ -1515,65 +1527,6 @@ def s3GenerateKey(workspace, filename, keyPrefix = null) {
     return "${prefix}/${workspace}/${filename}"
 }
 
-def uploadTfvarsToS3() {
-    """
-    Upload terraform variables file to S3 for use by destruction pipeline
-    """
-    logInfo('Uploading terraform variables to S3 for destruction pipeline')
-
-    try {
-        // Extract tfvars from container first
-        extractTfvarsFromContainer()
-
-        // Generate S3 key using standardized function
-        def tfvarsS3Key = s3GenerateKey(env.TF_WORKSPACE, env.TERRAFORM_VARS_FILENAME)
-        def localTfvarsPath = "terraform-vars.tfvars"
-
-        // Check if local tfvars file exists
-        if (fileExists(localTfvarsPath)) {
-            // Upload using standardized S3 function
-            def uploadSuccess = s3UploadFile(localTfvarsPath, tfvarsS3Key, "terraform variables")
-
-            if (uploadSuccess) {
-                logInfo("✅ Terraform variables uploaded successfully for destruction pipeline")
-            } else {
-                logWarning("⚠️ Failed to upload terraform variables to S3")
-            }
-        } else {
-            logWarning("⚠️ No terraform variables file found to upload")
-        }
-    } catch (Exception e) {
-        logError("Failed to upload terraform variables: ${e.message}")
-    }
-}
-
-def extractTfvarsFromContainer() {
-    """
-    Extract terraform variables file from container
-    """
-    try {
-        // Find running containers
-        def containerIds = sh(
-            script: "docker ps -q --filter 'name=${env.BUILD_CONTAINER_NAME}' || true",
-            returnStdout: true
-        ).trim()
-
-        if (containerIds) {
-            sh """
-                CONTAINER_ID=\$(echo "${containerIds}" | head -n1)
-                echo "Extracting tfvars from container: \$CONTAINER_ID"
-
-                # Try multiple possible locations for tfvars file
-                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ./terraform-vars.tfvars 2>/dev/null || \\
-                docker cp \$CONTAINER_ID:/root/${env.TERRAFORM_VARS_FILENAME} ./terraform-vars.tfvars 2>/dev/null || \\
-                echo "WARNING: Could not extract terraform variables from container"
-            """
-        } else {
-            logWarning('No running containers found for tfvars extraction')
-        }
-    } catch (Exception e) {
-        logWarning("Tfvars extraction failed: ${e.message}")
-    }
-}
+// Note: tfvars upload functionality moved to container script for better file access timing
 
 
