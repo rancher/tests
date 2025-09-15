@@ -527,7 +527,7 @@ if aws s3 ls "s3://${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY" --region ${env.TF_
             --bucket "${env.TF_STATE_BUCKET}" \
             --prefix "\$ACTUAL_STATE_KEY" \
             --region ${env.TF_STATE_REGION} \
-            --query 'Versions[?Size > \`0\`].[VersionId,Size,LastModified]' \
+            --query 'Versions[?Size > `0`].[VersionId,Size,LastModified]' \
             --output table 2>/dev/null || echo "")
         
         if [ -n "\$VERSIONS" ] && [ "\$VERSIONS" != "None" ]; then
