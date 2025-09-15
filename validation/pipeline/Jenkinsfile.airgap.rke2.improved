@@ -305,6 +305,7 @@ pipeline {
                     'terraform-state-backup-*.tfstate',
                     'tfstate-backup-*.tfstate',
                     'terraform-state-build-*.tfstate',
+                    'terraform-vars.tfvars',
                     'infrastructure-outputs.json',
                     'ansible-inventory.yml',
                     'ansible-logs.txt',
@@ -928,6 +929,23 @@ cp tofu/aws/modules/airgap/terraform.tfstate terraform-state-backup-\$(date +%Y%
 cp tofu/aws/modules/airgap/terraform.tfstate /root/terraform-state-primary.tfstate
 cp tofu/aws/modules/airgap/terraform.tfstate /root/terraform.tfstate
 
+echo 'Backing up terraform variables file for destruction pipeline...'
+# Upload tfvars to S3 for use by destruction pipeline
+TFVARS_S3_KEY="${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}"
+if [ -f tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ] && [ -s tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ]; then
+    echo "Uploading tfvars file to S3: s3://${env.TF_STATE_BUCKET}/\$TFVARS_S3_KEY"
+    if aws s3 cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} s3://${env.TF_STATE_BUCKET}/\$TFVARS_S3_KEY --region ${env.TF_STATE_REGION}; then
+        echo "SUCCESS: tfvars file uploaded to S3 for destruction pipeline"
+    else
+        echo "WARNING: Failed to upload tfvars file to S3"
+    fi
+
+    # Also backup locally for archival
+    cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} /root/${env.TERRAFORM_VARS_FILENAME}
+else
+    echo "WARNING: tfvars file not found or empty: tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+fi
+
 # Verify state file exists and has content
 if [ -f tofu/aws/modules/airgap/terraform.tfstate ] && [ -s tofu/aws/modules/airgap/terraform.tfstate ]; then
     echo "SUCCESS: terraform.tfstate backed up successfully (\$(stat -c%s tofu/aws/modules/airgap/terraform.tfstate) bytes)"
@@ -1091,6 +1109,7 @@ def archiveInfrastructureState() {
             'terraform.tfstate',
             'terraform-state.tfstate',
             'terraform-state-backup-*.tfstate',
+            'terraform-vars.tfvars',
             'infrastructure-outputs.json',
             'ansible-inventory.yml',
             'tfstate-backup-*.tfstate'
@@ -1144,7 +1163,16 @@ docker run --rm \\
             cp /shared/go/src/github.com/rancher/qa-infra-automation/infrastructure-outputs.json /workspace/infrastructure-outputs.json
             echo "SUCCESS: infrastructure-outputs.json extracted"
         fi
-        
+
+        # Copy terraform variables file
+        if [ -f /shared/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ]; then
+            cp /shared/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} /workspace/terraform-vars.tfvars
+            echo "SUCCESS: terraform variables file extracted"
+        elif [ -f /shared/${env.TERRAFORM_VARS_FILENAME} ]; then
+            cp /shared/${env.TERRAFORM_VARS_FILENAME} /workspace/terraform-vars.tfvars
+            echo "SUCCESS: terraform variables file extracted from shared root"
+        fi
+
         # Copy ansible inventory
         if [ -f /shared/go/src/github.com/rancher/qa-infra-automation/ansible/rke2/airgap/inventory/inventory.yml ]; then
             cp /shared/go/src/github.com/rancher/qa-infra-automation/ansible/rke2/airgap/inventory/inventory.yml /workspace/ansible-inventory.yml
@@ -1189,7 +1217,12 @@ def extractStateFromContainer() {
                 
                 docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/infrastructure-outputs.json ./infrastructure-outputs.json 2>/dev/null || \\
                 echo "WARNING: Could not extract infrastructure-outputs.json from container"
-                
+
+                # Copy terraform variables file with multiple fallback paths
+                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ./terraform-vars.tfvars 2>/dev/null || \\
+                docker cp \$CONTAINER_ID:/root/${env.TERRAFORM_VARS_FILENAME} ./terraform-vars.tfvars 2>/dev/null || \\
+                echo "WARNING: Could not extract terraform variables file from container"
+
                 docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/ansible/rke2/airgap/inventory/inventory.yml ./ansible-inventory.yml 2>/dev/null || \\
                 echo "WARNING: Could not extract ansible-inventory.yml from container"
             """
