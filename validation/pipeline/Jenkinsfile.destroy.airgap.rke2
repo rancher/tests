@@ -854,14 +854,29 @@ cd ${env.QA_INFRA_WORK_PATH}
 
 echo '🎯 Creating Destruction Plan'
 echo '=========================='
-echo "Workspace: ${env.TARGET_WORKSPACE}"
+echo "Target workspace: ${env.TARGET_WORKSPACE}"
+
+# Select the target workspace before attempting destruction
+echo "Selecting target workspace: ${env.TARGET_WORKSPACE}"
+echo "Available workspaces:"
+tofu -chdir=tofu/aws/modules/airgap workspace list
+
+if tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TARGET_WORKSPACE} 2>/dev/null; then
+    echo "✅ Successfully selected workspace: ${env.TARGET_WORKSPACE}"
+else
+    echo "❌ ERROR: Could not select workspace: ${env.TARGET_WORKSPACE}"
+    echo "This workspace may not exist or may have been deleted"
+    echo "Available workspaces:"
+    tofu -chdir=tofu/aws/modules/airgap workspace list
+    exit 1
+fi
 
 # Verify we're in the correct workspace
 CURRENT_WORKSPACE=\$(tofu -chdir=tofu/aws/modules/airgap workspace show | xargs)
 echo "Active workspace: \$CURRENT_WORKSPACE"
 
 if [ "\$CURRENT_WORKSPACE" != "${env.TARGET_WORKSPACE}" ]; then
-    echo "❌ ERROR: Not in target workspace for planning"
+    echo "❌ ERROR: Workspace selection failed"
     echo "Expected: ${env.TARGET_WORKSPACE}"
     echo "Current: \$CURRENT_WORKSPACE"
     exit 1
