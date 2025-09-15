@@ -815,17 +815,22 @@ def manageWorkspace() {
 cd ${env.QA_INFRA_WORK_PATH}
 
 echo 'Managing workspace state...'
+# Store workspace name before unsetting TF_WORKSPACE
+TARGET_WORKSPACE_NAME="\${TF_WORKSPACE}"
+echo "Target workspace: \$TARGET_WORKSPACE_NAME"
+
+# Unset TF_WORKSPACE to prevent conflicts during workspace operations
 unset TF_WORKSPACE
 
 echo 'Current workspaces:'
 tofu -chdir=tofu/aws/modules/airgap workspace list
 
-echo 'Creating or selecting workspace: ${env.TF_WORKSPACE}'
-if ! tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE} 2>/dev/null; then
+echo "Creating or selecting workspace: \$TARGET_WORKSPACE_NAME"
+if ! tofu -chdir=tofu/aws/modules/airgap workspace select "\$TARGET_WORKSPACE_NAME" 2>/dev/null; then
     echo 'Workspace does not exist, creating new workspace...'
-    tofu -chdir=tofu/aws/modules/airgap workspace new ${env.TF_WORKSPACE}
+    tofu -chdir=tofu/aws/modules/airgap workspace new "\$TARGET_WORKSPACE_NAME"
 
-    if ! tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}; then
+    if ! tofu -chdir=tofu/aws/modules/airgap workspace select "\$TARGET_WORKSPACE_NAME"; then
         echo 'ERROR: Failed to create and select workspace'
         exit 1
     fi
@@ -844,14 +849,14 @@ if [ "\$CURRENT_WORKSPACE" = "" ]; then
     exit 1
 fi
 
-if [ "\$CURRENT_WORKSPACE" != "${env.TF_WORKSPACE}" ]; then
-    echo "ERROR: Expected workspace ${env.TF_WORKSPACE}, but got '\$CURRENT_WORKSPACE'"
+if [ "\$CURRENT_WORKSPACE" != "\$TARGET_WORKSPACE_NAME" ]; then
+    echo "ERROR: Expected workspace \$TARGET_WORKSPACE_NAME, but got '\$CURRENT_WORKSPACE'"
     echo 'Available workspaces:'
     tofu -chdir=tofu/aws/modules/airgap workspace list
     exit 1
 fi
 
-export TF_WORKSPACE=${env.TF_WORKSPACE}
+export TF_WORKSPACE="\$TARGET_WORKSPACE_NAME"
 echo "Workspace management completed: \$TF_WORKSPACE"
 """
 
