@@ -785,6 +785,17 @@ cat tofu/aws/modules/airgap/backend.tf
 echo 'Backend configuration written:'
 cat tofu/aws/modules/airgap/backend.tf
 
+echo 'Verifying environment variables are set:'
+echo "TF_STATE_BUCKET: \${TF_STATE_BUCKET}"
+echo "TF_STATE_KEY_PREFIX: \${TF_STATE_KEY_PREFIX}"
+echo "TF_WORKSPACE: \${TF_WORKSPACE}"
+echo "TF_STATE_REGION: \${TF_STATE_REGION}"
+
+echo 'Cleaning any existing backend state to ensure clean initialization...'
+rm -f tofu/aws/modules/airgap/.terraform/terraform.tfstate
+rm -rf tofu/aws/modules/airgap/.terraform/terraform.tfstate.d/
+rm -f tofu/aws/modules/airgap/.terraform.lock.hcl
+
 echo 'Initializing OpenTofu backend...'
 tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure
 
