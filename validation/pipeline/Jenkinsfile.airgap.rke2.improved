@@ -693,60 +693,21 @@ def validateRequiredVariables(requiredVars) {
 }
 
 def validateInfrastructurePrerequisites() {
-    logInfo('Validating infrastructure prerequisites - Enhanced Version')
+    logInfo('Validating infrastructure prerequisites')
 
     def prerequisiteScript = """
 cd ${env.QA_INFRA_WORK_PATH}
 
-echo '🔍 Enhanced infrastructure prerequisites validation...'
+echo 'Checking OpenTofu installation...'
+tofu version
 
-echo 'Step 1: Verify OpenTofu installation and version...'
-if ! tofu version; then
-    echo '❌ ERROR: OpenTofu not installed or not accessible'
-    exit 1
-fi
+echo 'Checking workspace directory...'
+test -d ${env.QA_INFRA_WORK_PATH}
 
-echo 'Step 2: Verify workspace directory structure...'
-if [ ! -d "${env.QA_INFRA_WORK_PATH}" ]; then
-    echo '❌ ERROR: QA_INFRA_WORK_PATH directory does not exist: ${env.QA_INFRA_WORK_PATH}'
-    exit 1
-fi
+echo 'Validating terraform vars file...'
+test -f ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}
 
-echo 'Step 3: Verify Terraform configuration files...'
-if [ ! -f "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}" ]; then
-    echo '❌ ERROR: Terraform vars file missing: ${env.TERRAFORM_VARS_FILENAME}'
-    echo 'Expected location: ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}'
-    echo 'Contents of tofu/aws/modules/airgap/:'
-    ls -la tofu/aws/modules/airgap/ || echo 'Directory not accessible'
-    exit 1
-fi
-
-echo 'Step 4: Verify AWS credentials and permissions...'
-if ! aws sts get-caller-identity; then
-    echo '❌ ERROR: AWS credentials not configured or invalid'
-    exit 1
-fi
-
-echo 'Step 5: Verify S3 backend bucket accessibility...'
-if ! aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION}; then
-    echo '❌ ERROR: S3 backend bucket not accessible'
-    echo 'Bucket: ${env.TF_STATE_BUCKET}'
-    echo 'Region: ${env.TF_STATE_REGION}'
-    exit 1
-fi
-
-echo 'Step 6: Test S3 write permissions for state storage...'
-echo 'test-write-permissions' | aws s3 cp - s3://${env.TF_STATE_BUCKET}/${env.TF_STATE_KEY_PREFIX}/test-permissions.txt --region ${env.TF_STATE_REGION}
-aws s3 rm s3://${env.TF_STATE_BUCKET}/${env.TF_STATE_KEY_PREFIX}/test-permissions.txt --region ${env.TF_STATE_REGION}
-
-echo 'Step 7: Verify backend configuration file exists...'
-if [ ! -f tofu/aws/modules/airgap/backend.tf ]; then
-    echo '❌ ERROR: Backend configuration file missing'
-    echo 'Expected: tofu/aws/modules/airgap/backend.tf'
-    exit 1
-fi
-
-echo '✅ All enhanced infrastructure prerequisites validated successfully'
+echo 'All infrastructure prerequisites validated successfully'
 """
 
     try {
@@ -778,175 +739,90 @@ def deployInfrastructure() {
 }
 
 def initializeOpenTofu() {
-    logInfo('Initializing OpenTofu with S3 backend - Enhanced Version')
+    logInfo('Initializing OpenTofu with S3 backend')
 
     def initScript = """
 cd ${env.QA_INFRA_WORK_PATH}
 
-echo 'Step 1: Clean any existing backend state to prevent conflicts...'
-rm -f tofu/aws/modules/airgap/.terraform/terraform.tfstate
-rm -rf tofu/aws/modules/airgap/.terraform/terraform.tfstate.d/
-rm -f tofu/aws/modules/airgap/.terraform.lock.hcl
-
-echo 'Step 2: Configure S3 backend with enhanced settings...'
+echo 'Configuring S3 backend for state storage (no DynamoDB locking)...'
 cat > tofu/aws/modules/airgap/backend.tf << 'EOF'
 terraform {
   backend "s3" {
     bucket  = "${env.TF_STATE_BUCKET}"
-    key     = "${env.TF_STATE_KEY_PREFIX}/terraform.tfstate"
+    key     = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
     region  = "${env.TF_STATE_REGION}"
     encrypt = true
-    
-    # Enhanced backend settings for reliability
-    skip_credentials_validation = false
-    skip_metadata_api_check     = false
-    skip_region_validation      = false
-    skip_requesting_account_id  = false
-    
-    # WARNING: No state locking available without DynamoDB
+
+    # WARNING: No state locking available
     # Manual coordination required to prevent concurrent operations
   }
 }
 EOF
 
-echo '✅ Backend configuration written:'
+echo '⚠️  WARNING: No state locking available - manual coordination required'
+echo 'Backend configuration without DynamoDB:'
 cat tofu/aws/modules/airgap/backend.tf
 
-echo 'Step 3: Initialize with forced reconfigure and enhanced validation...'
-if ! tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure -force-copy; then
-    echo '❌ ERROR: OpenTofu initialization failed'
-    echo 'Debugging backend state...'
-    ls -la tofu/aws/modules/airgap/.terraform/ || echo 'No .terraform directory found'
-    exit 1
-fi
+echo 'Backend configuration written:'
+cat tofu/aws/modules/airgap/backend.tf
 
-echo 'Step 4: Validate backend initialization with providers check...'
-if ! tofu -chdir=tofu/aws/modules/airgap providers; then
-    echo '❌ ERROR: Providers validation failed after init'
-    exit 1
-fi
+echo 'Initializing OpenTofu backend...'
+tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure
 
-echo 'Step 5: Test backend connectivity before workspace operations...'
-if ! tofu -chdir=tofu/aws/modules/airgap workspace list >/dev/null 2>&1; then
-    echo '❌ ERROR: Backend not ready for workspace operations'
-    echo 'Backend initialization completed but workspace access failed'
-    echo 'This suggests S3 connectivity or permissions issues'
-    
-    # Additional debugging
-    echo 'Checking AWS credentials...'
-    aws sts get-caller-identity || echo 'AWS credentials check failed'
-    
-    echo 'Checking S3 bucket access...'
-    aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} || echo 'S3 bucket access failed'
-    
-    exit 1
-fi
+echo 'Verifying initialization success...'
+tofu -chdir=tofu/aws/modules/airgap providers
 
-echo '🎉 SUCCESS: OpenTofu backend initialized and ready for workspace operations'
+echo 'OpenTofu initialization with S3 backend completed successfully'
 """
 
-    try {
-        executeScriptInContainer(initScript)
-    } catch (Exception e) {
-        logError("OpenTofu initialization failed: ${e.message}")
-        handleBackendInitializationFailure(e)
-        throw e
-    }
+    executeScriptInContainer(initScript)
 }
 
 def manageWorkspace() {
-    logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE} - Enhanced Version")
+    logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
 
     def workspaceScript = """
 cd ${env.QA_INFRA_WORK_PATH}
 
-echo 'Enhanced workspace management with proper error handling...'
-
-# Clear any existing TF_WORKSPACE to prevent conflicts
+echo 'Managing workspace state...'
 unset TF_WORKSPACE
 
-echo 'Step 1: Verify backend is ready for workspace operations...'
-if ! tofu -chdir=tofu/aws/modules/airgap workspace list >/dev/null 2>&1; then
-    echo '❌ ERROR: Backend not ready for workspace operations'
-    echo 'Backend initialization may have failed or S3 connectivity issues exist'
-    
-    # Re-run backend connectivity tests
-    echo 'Testing S3 backend connectivity...'
-    aws s3 ls s3://${env.TF_STATE_BUCKET}/${env.TF_STATE_KEY_PREFIX}/ --region ${env.TF_STATE_REGION} || echo 'S3 path not accessible'
-    
-    exit 1
-fi
-
-echo 'Step 2: List current workspaces...'
 echo 'Current workspaces:'
 tofu -chdir=tofu/aws/modules/airgap workspace list
 
-echo 'Step 3: Create or select target workspace: ${env.TF_WORKSPACE}'
+echo 'Creating or selecting workspace: ${env.TF_WORKSPACE}'
+if ! tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE} 2>/dev/null; then
+    echo 'Workspace does not exist, creating new workspace...'
+    tofu -chdir=tofu/aws/modules/airgap workspace new ${env.TF_WORKSPACE}
 
-# Attempt to select existing workspace
-if tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE} 2>/dev/null; then
-    echo '✅ Selected existing workspace: ${env.TF_WORKSPACE}'
-else
-    echo '🆕 Workspace does not exist, creating new workspace: ${env.TF_WORKSPACE}'
-    
-    # Create new workspace with error handling
-    if ! tofu -chdir=tofu/aws/modules/airgap workspace new ${env.TF_WORKSPACE}; then
-        echo '❌ ERROR: Failed to create new workspace'
-        echo 'This may indicate S3 permissions or connectivity issues'
-        
-        # Debug workspace creation failure
-        echo 'Debugging workspace creation failure...'
-        echo 'Available workspaces after failed creation:'
-        tofu -chdir=tofu/aws/modules/airgap workspace list
-        
-        # Check if S3 state path is writable
-        echo 'Testing S3 write permissions...'
-        echo 'test' | aws s3 cp - s3://${env.TF_STATE_BUCKET}/${env.TF_STATE_KEY_PREFIX}/test.txt --region ${env.TF_STATE_REGION} || echo 'S3 write test failed'
-        aws s3 rm s3://${env.TF_STATE_BUCKET}/${env.TF_STATE_KEY_PREFIX}/test.txt --region ${env.TF_STATE_REGION} || echo 'S3 cleanup failed'
-        
-        exit 1
-    fi
-    
-    # Select the newly created workspace
-    echo '🎯 Selecting newly created workspace...'
     if ! tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}; then
-        echo '❌ ERROR: Failed to select newly created workspace'
-        echo 'Available workspaces:'
-        tofu -chdir=tofu/aws/modules/airgap workspace list
+        echo 'ERROR: Failed to create and select workspace'
         exit 1
     fi
 fi
 
-echo 'Step 4: Verify workspace selection...'
+# Verify workspace selection
 CURRENT_WORKSPACE=\$(tofu -chdir=tofu/aws/modules/airgap workspace show)
-echo "Current workspace from 'workspace show': '\$CURRENT_WORKSPACE'"
+echo "Current workspace: \$CURRENT_WORKSPACE"
 
-# Clean up workspace name and handle edge cases
-CURRENT_WORKSPACE=\$(echo "\$CURRENT_WORKSPACE" | xargs | tr -d '\\n\\r')
+# Strip whitespace and handle empty responses
+CURRENT_WORKSPACE=\$(echo "\$CURRENT_WORKSPACE" | xargs)
 
-if [ -z "\$CURRENT_WORKSPACE" ]; then
-    echo '❌ ERROR: Workspace show command returned empty result'
-    echo 'This indicates a serious backend state issue'
-    echo 'Available workspaces:'
+if [ "\$CURRENT_WORKSPACE" = "" ]; then
+    echo 'ERROR: Workspace show command returned empty response'
     tofu -chdir=tofu/aws/modules/airgap workspace list
     exit 1
 fi
 
 if [ "\$CURRENT_WORKSPACE" != "${env.TF_WORKSPACE}" ]; then
-    echo "❌ ERROR: Workspace mismatch detected"
-    echo "Expected workspace: '${env.TF_WORKSPACE}'"
-    echo "Current workspace: '\$CURRENT_WORKSPACE'"
+    echo "ERROR: Expected workspace ${env.TF_WORKSPACE}, but got '\$CURRENT_WORKSPACE'"
     echo 'Available workspaces:'
     tofu -chdir=tofu/aws/modules/airgap workspace list
     exit 1
 fi
 
-# Restore TF_WORKSPACE environment variable for downstream operations
 export TF_WORKSPACE=${env.TF_WORKSPACE}
-
-echo "🎉 SUCCESS: Workspace management completed successfully"
-echo "Active workspace: \$CURRENT_WORKSPACE"
-echo "Backend: S3 (${env.TF_STATE_BUCKET}/${env.TF_STATE_KEY_PREFIX})"
+echo "Workspace management completed: \$TF_WORKSPACE"
 """
 
     executeScriptInContainer(workspaceScript)
@@ -1151,66 +1027,18 @@ echo 'Infrastructure state validation completed'
 }
 
 /**
- * ENHANCED LOGGING FUNCTIONS WITH CONTEXT
+ * LOGGING FUNCTIONS
  */
 
 def logInfo(message) {
-    echo "ℹ️ [INFO] ${new Date().format('yyyy-MM-dd HH:mm:ss')} [${env.TF_WORKSPACE ?: 'no-workspace'}] - ${message}"
+    echo "ℹ️ [INFO] ${new Date().format('HH:mm:ss')} - ${message}"
 }
 
 def logError(message) {
-    echo "❌ [ERROR] ${new Date().format('yyyy-MM-dd HH:mm:ss')} [${env.TF_WORKSPACE ?: 'no-workspace'}] - ${message}"
+    echo "❌ [ERROR] ${new Date().format('HH:mm:ss')} - ${message}"
 }
-
 def logWarning(message) {
-    echo "⚠️ [WARNING] ${new Date().format('yyyy-MM-dd HH:mm:ss')} [${env.TF_WORKSPACE ?: 'no-workspace'}] - ${message}"
-}
-
-/**
- * ENHANCED ERROR HANDLING AND RECOVERY
- */
-
-def handleBackendInitializationFailure(exception) {
-    logError("Backend initialization failure detected: ${exception.message}")
-    
-    def diagnosticScript = """
-cd ${env.QA_INFRA_WORK_PATH}
-
-echo '🔍 Running backend initialization diagnostics...'
-
-echo 'Step 1: Check OpenTofu configuration...'
-ls -la tofu/aws/modules/airgap/
-
-echo 'Step 2: Check backend configuration...'
-cat tofu/aws/modules/airgap/backend.tf || echo 'Backend config file missing'
-
-echo 'Step 3: Check AWS credentials...'
-aws sts get-caller-identity || echo 'AWS credentials failed'
-
-echo 'Step 4: Check S3 bucket access...'
-aws s3 ls s3://${env.TF_STATE_BUCKET}/ --region ${env.TF_STATE_REGION} || echo 'S3 access failed'
-
-echo 'Step 5: Check .terraform directory...'
-ls -la tofu/aws/modules/airgap/.terraform/ || echo 'No .terraform directory'
-
-echo 'Step 6: Check for lock files...'
-find tofu/aws/modules/airgap/ -name "*.lock*" -type f || echo 'No lock files found'
-
-echo '🔍 Diagnostic information collected'
-"""
-
-    try {
-        executeScriptInContainer(diagnosticScript)
-    } catch (Exception diagException) {
-        logError("Diagnostic script failed: ${diagException.message}")
-    }
-    
-    // Archive diagnostic information
-    try {
-        archiveArtifacts artifacts: 'diagnostic-*.txt', allowEmptyArchive: true
-    } catch (Exception archiveException) {
-        logError("Failed to archive diagnostics: ${archiveException.message}")
-    }
+    echo "⚠️ [WARNING] ${new Date().format('HH:mm:ss')} - ${message}"
 }
 
 /**
@@ -1301,3 +1129,5 @@ echo 'Cleanup completed'
         logWarning("Workspace ${env.TF_WORKSPACE} may need manual cleanup")
     }
 }
+
+
