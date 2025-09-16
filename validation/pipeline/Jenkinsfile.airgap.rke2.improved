@@ -642,23 +642,11 @@ def executeScriptInContainer(scriptContent, extraEnv = [:]) {
         docker run --rm \
             -v ${env.VALIDATION_VOLUME}:/root \
             -v ${pwd()}/${scriptFile}:/tmp/script.sh \
+            -v ${pwd()}/${env.ENV_FILE}:/tmp/env.file \
             --name ${containerName} \
-            -t \
+            -t --env-file /tmp/env.file \
             -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
             -e TF_WORKSPACE=${env.TF_WORKSPACE} \
-            -e TF_STATE_BUCKET=${env.TF_STATE_BUCKET} \
-            -e TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX} \
-            -e TF_STATE_REGION=${env.TF_STATE_REGION} \
-            -e BUILD_NUMBER=${env.BUILD_NUMBER} \
-            -e JOB_NAME=${env.JOB_NAME} \
-            -e TERRAFORM_TIMEOUT=${env.TERRAFORM_TIMEOUT} \
-            -e ANSIBLE_TIMEOUT=${env.ANSIBLE_TIMEOUT} \
-            -e AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID} \
-            -e AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY} \
-            -e AWS_REGION=${env.AWS_REGION} \
-            -e TF_VAR_aws_access_key=${env.AWS_ACCESS_KEY_ID} \
-            -e TF_VAR_aws_secret_access_key=${env.AWS_SECRET_ACCESS_KEY} \
-            -e TF_VAR_aws_region=${env.AWS_REGION} \
             ${envVars} \
             ${env.IMAGE_NAME} \
             sh /tmp/script.sh
