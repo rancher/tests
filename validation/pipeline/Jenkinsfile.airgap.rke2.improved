@@ -837,10 +837,16 @@ rm -rf tofu/aws/modules/airgap/.terraform/terraform.tfstate.d/
 rm -f tofu/aws/modules/airgap/.terraform.lock.hcl
 
 echo 'Initializing OpenTofu backend...'
-tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure
+if ! tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure; then
+    echo 'ERROR: OpenTofu initialization failed'
+    exit 1
+fi
 
 echo 'Verifying initialization success...'
-tofu -chdir=tofu/aws/modules/airgap providers
+if ! tofu -chdir=tofu/aws/modules/airgap providers; then
+    echo 'ERROR: OpenTofu provider verification failed'
+    exit 1
+fi
 
 echo 'OpenTofu initialization with S3 backend completed successfully'
 
@@ -973,10 +979,16 @@ rm -rf tofu/aws/modules/airgap/.terraform/terraform.tfstate.d/
 rm -f tofu/aws/modules/airgap/.terraform.lock.hcl
 
 echo 'Initializing OpenTofu backend...'
-tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure
+if ! tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure; then
+    echo 'ERROR: OpenTofu initialization failed'
+    exit 1
+fi
 
 echo 'Verifying initialization success...'
-tofu -chdir=tofu/aws/modules/airgap providers
+if ! tofu -chdir=tofu/aws/modules/airgap providers; then
+    echo 'ERROR: OpenTofu provider verification failed'
+    exit 1
+fi
 
 echo 'OpenTofu initialization with S3 backend completed successfully'
 
@@ -1158,10 +1170,16 @@ rm -rf tofu/aws/modules/airgap/.terraform/terraform.tfstate.d/
 rm -f tofu/aws/modules/airgap/.terraform.lock.hcl
 
 echo 'Initializing OpenTofu backend...'
-tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure
+if ! tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure; then
+    echo 'ERROR: OpenTofu initialization failed'
+    exit 1
+fi
 
 echo 'Verifying initialization success...'
-tofu -chdir=tofu/aws/modules/airgap providers
+if ! tofu -chdir=tofu/aws/modules/airgap providers; then
+    echo 'ERROR: OpenTofu provider verification failed'
+    exit 1
+fi
 
 echo 'OpenTofu initialization with S3 backend completed successfully'
 """
