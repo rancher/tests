@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
+	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
@@ -107,8 +108,6 @@ func (u *UpgradeKubernetesTestSuite) TestUpgradeKubernetes() {
 		{"Upgrading_K3S_cluster", u.k3sClusterID, u.k3sClusterConfig, extClusters.K3SClusterType.String()},
 	}
 
-	var params []upstream.Params
-
 	for _, tt := range tests {
 		version, err := kubernetesversions.Default(u.client, tt.clusterType, nil)
 		require.NoError(u.T(), err)
@@ -126,10 +125,10 @@ func (u *UpgradeKubernetesTestSuite) TestUpgradeKubernetes() {
 			upgrade.DownstreamCluster(&u.Suite, tt.name, u.client, clusterResp.Name, tt.clusterConfig, tt.clusterID, tt.clusterConfig.KubernetesVersion, false)
 		})
 
-		k8sParam := upstream.Params{Title: "K8sVersion", Values: []string{updatedCluster.Spec.KubernetesVersion}}
 		upgradedK8sParam := upstream.Params{Title: "UpgradedK8sVersion", Values: []string{tt.clusterConfig.KubernetesVersion}}
+		params := provisioning.GetProvisioningSchemaParams(u.client, u.cattleConfig)
+		params = append(params, upgradedK8sParam)
 
-		params = append(params, k8sParam, upgradedK8sParam)
 		err = qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
