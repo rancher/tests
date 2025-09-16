@@ -1,4 +1,4 @@
-//go:build validation || pit.weekly
+//go:build validation || pit.daily
 
 package upgrade
 

@@ -1,4 +1,4 @@
-//go:build validation || sanity || pit.event
+//go:build validation || sanity || pit.daily
 
 package fleet
 

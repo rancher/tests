@@ -19,14 +19,19 @@ node {
     def ansibleConfigPath = ""
     def terraformConfigPath = ""
 
-    if (jobName.contains('/')) { 
-      jobNames = jobName.split('/')
-      jobName = jobNames[jobNames.size() - 1] 
-    }
-
     def branch = "main"
-    def recurringRunJob = (jobName =~ /(go-recurring-[a-z]+)/)[0][1]
-    recurringRunJob = "${recurringRunJob}-job"
+    def recurringRunJob = ""
+
+    if ("${env.RECURRING_JOB}" != "null" && "${env.RECURRING_JOB}" != "") {
+      recurringRunJob = "${env.RECURRING_JOB}"
+    } else {
+      if (jobName.contains('/')) { 
+        jobNames = jobName.split('/')
+        jobName = jobNames[jobNames.size() - 1] 
+      }
+      recurringRunJob = (jobName =~ /(go-recurring-[a-z]+)/)[0][1]
+      recurringRunJob = "${recurringRunJob}-job"
+    }
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"

@@ -37,6 +37,9 @@ node {
     // def individualJob = (jobName =~ /(go-recurring-[a-z]+)/)[0][1]
     def individualJob = "go-recurring-daily"
     individualJob = "${individualJob}-individual-job"
+    if ("${env.INDIVIDUAL_JOB}" != "null" && "${env.INDIVIDUAL_JOB}" != "") {
+      individualJob = "${env.INDIVIDUAL_JOB}"
+    }
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"
@@ -219,8 +222,12 @@ node {
                       string(name: 'TAGS', value: "${env.VALIDATION_TEST_TAGS}"),
                     ]
 
-                    jobs["test-provisioning"] = { build job: individualJob, parameters: goProvisioningParams }
-                    jobs["test-validation"] = { build job: individualJob, parameters: goValidationParams }
+                    if ("${env.PROVISIONING_TAGS}" != "null" && "${env.PROVISIONING_TAGS}" != "") {
+                      jobs["test-provisioning"] = { build job: individualJob, parameters: goProvisioningParams }
+                    }
+                    if ("${env.VALIDATION_TEST_TAGS}" != "null" && "${env.VALIDATION_TEST_TAGS}" != "") {
+                      jobs["test-validation"] = { build job: individualJob, parameters: goValidationParams }
+                    }
                     parallel jobs
                   } catch(err) {
                     echo "Test validations had failures: " + err
