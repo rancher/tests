@@ -141,16 +141,12 @@ node {
                     sh 'grep -m 1 "Listening to events on cluster" <(docker logs -f imageCapturer)'
                   }
 
-                  sh "docker run --name ${testContainer} -t --env-file ${envFile} " +
-                  "${imageName} sh -c \"/root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
-                  "${rootPath}pipeline/scripts/${reporterScript}\""
-
-                  def reporterPresent = sh(script: '[ -f validation/reporter ] && echo "true" || echo "false"', returnStdout: true)
-                  if (reporterPresent == "true") {
-                    sh "${rootPath}reporter"
-                  } else {
-                    echo "Reporter binary not present"
-                  }
+                  sh """
+                    docker run --name ${testContainer} -t --env-file ${envFile} ${imageName} \
+                    sh -c "/root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v; \
+                    ${rootPath}pipeline/scripts/${reporterScript}; \
+                    if [ -f ${rootPath}reporter ]; then ${rootPath}reporter; else echo \\"Reporter script not present\\"; fi"
+                  """
 
                   if (env.CAPTURE_IMAGES == "true") {
                     stage('Showing images used on this run') {
