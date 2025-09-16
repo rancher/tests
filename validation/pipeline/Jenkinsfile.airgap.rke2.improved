@@ -129,7 +129,7 @@ pipeline {
         // State storage configuration (S3-only, no DynamoDB)
         TF_STATE_BUCKET = 'jenkins-terraform-state-storage'
         TF_STATE_KEY_PREFIX = 'jenkins-airgap-rke2'
-        TF_STATE_REGION = 'us-east-2'
+        TF_STATE_REGION = "${AWS_REGION}"
     }
 
     stages {
@@ -433,19 +433,11 @@ def generateConfigurationFiles() {
 def validateConfigurationEnvironmentVariables() {
     logInfo('Validating configuration environment variables')
 
-    // Debug: Check TF_STATE variables at validation time
-    logInfo("Debug - Validation time TF_STATE_BUCKET: '${env.TF_STATE_BUCKET}'")
-    logInfo("Debug - Validation time TF_STATE_KEY_PREFIX: '${env.TF_STATE_KEY_PREFIX}'")
-    logInfo("Debug - Validation time TF_STATE_REGION: '${env.TF_STATE_REGION}'")
-
     def requiredVars = [
         'TERRAFORM_CONFIG': 'Terraform configuration content',
         'ANSIBLE_CONFIG': 'Ansible configuration content',
         'RKE2_VERSION': 'RKE2 version for deployment',
-        'RANCHER_VERSION': 'Rancher version for deployment',
-        'TF_STATE_BUCKET': 'S3 bucket for Terraform state storage',
-        'TF_STATE_KEY_PREFIX': 'S3 key prefix for Terraform state files',
-        'TF_STATE_REGION': 'AWS region for S3 state bucket'
+        'RANCHER_VERSION': 'Rancher version for deployment'
     ]
 
     def missingVars = []
@@ -552,12 +544,6 @@ def generateEnvironmentFile() {
     envLines.add('TF_VAR_aws_region=' + env.AWS_REGION)
     envLines.add('')
     envLines.add('# S3 Backend State Storage Configuration')
-
-    // Debug: log the actual values before writing to file
-    logInfo("Debug - env.TF_STATE_BUCKET: '${env.TF_STATE_BUCKET}'")
-    logInfo("Debug - env.TF_STATE_KEY_PREFIX: '${env.TF_STATE_KEY_PREFIX}'")
-    logInfo("Debug - env.TF_STATE_REGION: '${env.TF_STATE_REGION}'")
-
     envLines.add("TF_STATE_BUCKET=" + env.TF_STATE_BUCKET)
     envLines.add("TF_STATE_KEY_PREFIX=" + env.TF_STATE_KEY_PREFIX)
     envLines.add("TF_STATE_REGION=" + env.TF_STATE_REGION)
@@ -565,11 +551,6 @@ def generateEnvironmentFile() {
     def envContent = envLines.join('\n')
     writeFile file: env.ENV_FILE, text: envContent
     logInfo("Environment file created: ${env.ENV_FILE}")
-
-    // Debug: show the actual file contents
-    logInfo("Environment file contents:")
-    def fileContents = readFile(env.ENV_FILE)
-    logInfo(fileContents)
 }
 
 def setupSSHKeys() {
