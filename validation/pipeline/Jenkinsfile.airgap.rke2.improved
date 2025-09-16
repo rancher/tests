@@ -277,7 +277,6 @@ pipeline {
                         archiveInfrastructureState()
                         // Additional immediate state backup for successful deployments
                         backupTerraformStateImmediately()
-                        // Note: tfvars upload to S3 happens during apply process
                     }
                 }
                 failure {
@@ -1087,20 +1086,20 @@ cp tofu/aws/modules/airgap/terraform.tfstate /root/terraform-state-primary.tfsta
 cp tofu/aws/modules/airgap/terraform.tfstate /root/terraform.tfstate
 
 echo 'Backing up terraform variables file for destruction pipeline...'
-# Upload tfvars to S3 and backup locally
-TFVARS_S3_KEY="\${TF_STATE_KEY_PREFIX}/\${TF_WORKSPACE}/\${TERRAFORM_VARS_FILENAME}"
-if [ -f tofu/aws/modules/airgap/\${TERRAFORM_VARS_FILENAME} ] && [ -s tofu/aws/modules/airgap/\${TERRAFORM_VARS_FILENAME} ]; then
-    echo "Uploading tfvars file to S3: s3://\${TF_STATE_BUCKET}/\$TFVARS_S3_KEY"
-    if aws s3 cp tofu/aws/modules/airgap/\${TERRAFORM_VARS_FILENAME} s3://\${TF_STATE_BUCKET}/\$TFVARS_S3_KEY --region \${TF_STATE_REGION} --no-progress; then
+# Upload tfvars to S3 for use by destruction pipeline
+TFVARS_S3_KEY="${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}"
+if [ -f tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ] && [ -s tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ]; then
+    echo "Uploading tfvars file to S3: s3://${env.TF_STATE_BUCKET}/$TFVARS_S3_KEY"
+    if aws s3 cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} s3://${env.TF_STATE_BUCKET}/$TFVARS_S3_KEY --region ${env.TF_STATE_REGION}; then
         echo "SUCCESS: tfvars file uploaded to S3 for destruction pipeline"
     else
         echo "WARNING: Failed to upload tfvars file to S3"
     fi
 
     # Also backup locally for archival
-    cp tofu/aws/modules/airgap/\${TERRAFORM_VARS_FILENAME} /root/\${TERRAFORM_VARS_FILENAME} || echo "Could not backup tfvars locally"
+    cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} /root/${env.TERRAFORM_VARS_FILENAME}
 else
-    echo "WARNING: tfvars file not found or empty: tofu/aws/modules/airgap/\${TERRAFORM_VARS_FILENAME}"
+    echo "WARNING: tfvars file not found or empty: tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
 fi
 
 # Verify state file exists and has content
@@ -1761,167 +1760,4 @@ echo 'Cleanup completed'
         logWarning("Workspace ${env.TF_WORKSPACE} may need manual cleanup")
     }
 }
-
-/**
- * STANDARDIZED S3 OPERATIONS FUNCTIONS
- *
- * These functions provide uniform S3 operations across all pipeline stages
- * with consistent error handling, logging, and path construction.
- */
-
-def s3UploadFile(localPath, s3Key, description = null) {
-    """
-    Upload a file to S3 with standardized error handling and logging
-
-    @param localPath: Local file path to upload
-    @param s3Key: S3 key (path within bucket)
-    @param description: Optional description for logging
-    @return: Boolean indicating success
-    """
-    def desc = description ?: "file"
-    logInfo("Uploading ${desc} to S3: s3://${env.TF_STATE_BUCKET}/${s3Key}")
-
-    // Validate local file exists and has content
-    if (!fileExists(localPath)) {
-        logError("Local file does not exist: ${localPath}")
-        return false
-    }
-
-    def fileSize = sh(script: "stat -c%s '${localPath}' 2>/dev/null || echo 0", returnStdout: true).trim()
-    if (fileSize == "0") {
-        logWarning("Local file is empty: ${localPath}")
-    }
-
-    try {
-        def uploadResult = sh(
-            script: """
-                aws s3 cp '${localPath}' 's3://${env.TF_STATE_BUCKET}/${s3Key}' \
-                    --region '${env.TF_STATE_REGION}' \
-                    --no-progress 2>&1
-            """,
-            returnStatus: true
-        )
-
-        if (uploadResult == 0) {
-            logInfo("✅ SUCCESS: ${desc} uploaded to S3 (${fileSize} bytes)")
-            return true
-        } else {
-            logError("❌ FAILED: ${desc} upload to S3 failed with exit code ${uploadResult}")
-            return false
-        }
-    } catch (Exception e) {
-        logError("❌ EXCEPTION: ${desc} upload failed: ${e.message}")
-        return false
-    }
-}
-
-def s3DownloadFile(s3Key, localPath, description = null) {
-    """
-    Download a file from S3 with standardized error handling and logging
-
-    @param s3Key: S3 key (path within bucket)
-    @param localPath: Local file path to download to
-    @param description: Optional description for logging
-    @return: Boolean indicating success
-    """
-    def desc = description ?: "file"
-    logInfo("Downloading ${desc} from S3: s3://${env.TF_STATE_BUCKET}/${s3Key}")
-
-    try {
-        def downloadResult = sh(
-            script: """
-                aws s3 cp 's3://${env.TF_STATE_BUCKET}/${s3Key}' '${localPath}' \
-                    --region '${env.TF_STATE_REGION}' \
-                    --no-progress 2>&1
-            """,
-            returnStatus: true
-        )
-
-        if (downloadResult == 0) {
-            def fileSize = sh(script: "stat -c%s '${localPath}' 2>/dev/null || echo 0", returnStdout: true).trim()
-            logInfo("✅ SUCCESS: ${desc} downloaded from S3 (${fileSize} bytes)")
-            return true
-        } else {
-            logError("❌ FAILED: ${desc} download from S3 failed with exit code ${downloadResult}")
-            return false
-        }
-    } catch (Exception e) {
-        logError("❌ EXCEPTION: ${desc} download failed: ${e.message}")
-        return false
-    }
-}
-
-def s3FileExists(s3Key, description = null) {
-    """
-    Check if a file exists in S3 with metadata
-
-    @param s3Key: S3 key (path within bucket)
-    @param description: Optional description for logging
-    @return: Map with [exists: Boolean, size: Integer, lastModified: String]
-    """
-    def desc = description ?: "file"
-    logInfo("Checking if ${desc} exists in S3: s3://${env.TF_STATE_BUCKET}/${s3Key}")
-
-    try {
-        def checkResult = sh(
-            script: """
-                aws s3api head-object \
-                    --bucket '${env.TF_STATE_BUCKET}' \
-                    --key '${s3Key}' \
-                    --region '${env.TF_STATE_REGION}' 2>&1
-            """,
-            returnStatus: true
-        )
-
-        if (checkResult == 0) {
-            // Get metadata if file exists
-            def metadata = sh(
-                script: """
-                    aws s3api head-object \
-                        --bucket '${env.TF_STATE_BUCKET}' \
-                        --key '${s3Key}' \
-                        --region '${env.TF_STATE_REGION}' \
-                        --output json 2>/dev/null || echo '{}'
-                """,
-                returnStdout: true
-            ).trim()
-
-            def size = 0
-            def lastModified = "unknown"
-
-            try {
-                def metadataJson = readJSON text: metadata
-                size = metadataJson.ContentLength ?: 0
-                lastModified = metadataJson.LastModified ?: "unknown"
-            } catch (Exception parseException) {
-                logWarning("Could not parse S3 metadata for ${desc}")
-            }
-
-            logInfo("✅ ${desc} exists in S3 (${size} bytes, modified: ${lastModified})")
-            return [exists: true, size: size, lastModified: lastModified]
-        } else {
-            logInfo("ℹ️ ${desc} does not exist in S3")
-            return [exists: false, size: 0, lastModified: "N/A"]
-        }
-    } catch (Exception e) {
-        logError("❌ EXCEPTION: Failed to check ${desc} in S3: ${e.message}")
-        return [exists: false, size: 0, lastModified: "error"]
-    }
-}
-
-def s3GenerateKey(workspace, filename, keyPrefix = null) {
-    """
-    Generate standardized S3 key paths
-
-    @param workspace: Workspace name
-    @param filename: File name
-    @param keyPrefix: Optional key prefix (defaults to TF_STATE_KEY_PREFIX)
-    @return: String S3 key path
-    """
-    def prefix = keyPrefix ?: env.TF_STATE_KEY_PREFIX
-    return "${prefix}/${workspace}/${filename}"
-}
-
-// Note: tfvars upload functionality moved to container script for better file access timing
-
 
