@@ -544,9 +544,9 @@ def generateEnvironmentFile() {
     envLines.add('TF_VAR_aws_region=' + env.AWS_REGION)
     envLines.add('')
     envLines.add('# S3 Backend State Storage Configuration')
-    envLines.add("TF_STATE_BUCKET=" + env.TF_STATE_BUCKET)
-    envLines.add("TF_STATE_KEY_PREFIX=" + env.TF_STATE_KEY_PREFIX)
-    envLines.add("TF_STATE_REGION=" + env.TF_STATE_REGION)
+    envLines.add("TF_STATE_BUCKET=${env.TF_STATE_BUCKET}")
+    envLines.add("TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX}")
+    envLines.add("TF_STATE_REGION=${env.TF_STATE_REGION}")
 
     def envContent = envLines.join('\n')
     writeFile file: env.ENV_FILE, text: envContent
