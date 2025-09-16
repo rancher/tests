@@ -767,9 +767,9 @@ echo 'Configuring S3 backend for state storage (no DynamoDB locking)...'
 cat > tofu/aws/modules/airgap/backend.tf << EOF
 terraform {
   backend "s3" {
-    bucket  = "\${TF_STATE_BUCKET}"
-    key     = "\${TF_STATE_KEY_PREFIX}/\${TF_WORKSPACE}/terraform.tfstate"
-    region  = "\${TF_STATE_REGION}"
+    bucket  = "${env.TF_STATE_BUCKET}"
+    key     = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
+    region  = "${env.TF_STATE_REGION}"
     encrypt = true
 
     # WARNING: No state locking available
@@ -932,19 +932,19 @@ cp tofu/aws/modules/airgap/terraform.tfstate /root/terraform.tfstate
 
 echo 'Backing up terraform variables file for destruction pipeline...'
 # Upload tfvars to S3 and backup locally
-TFVARS_S3_KEY="\${TF_STATE_KEY_PREFIX}/\${TF_WORKSPACE}/\${TERRAFORM_VARS_FILENAME}"
-if [ -f tofu/aws/modules/airgap/\${TERRAFORM_VARS_FILENAME} ] && [ -s tofu/aws/modules/airgap/\${TERRAFORM_VARS_FILENAME} ]; then
-    echo "Uploading tfvars file to S3: s3://\${TF_STATE_BUCKET}/\$TFVARS_S3_KEY"
-    if aws s3 cp tofu/aws/modules/airgap/\${TERRAFORM_VARS_FILENAME} s3://\${TF_STATE_BUCKET}/\$TFVARS_S3_KEY --region \${TF_STATE_REGION} --no-progress; then
+TFVARS_S3_KEY="${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}"
+if [ -f tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ] && [ -s tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ]; then
+    echo "Uploading tfvars file to S3: s3://${env.TF_STATE_BUCKET}/\$TFVARS_S3_KEY"
+    if aws s3 cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} s3://${env.TF_STATE_BUCKET}/\$TFVARS_S3_KEY --region ${env.TF_STATE_REGION} --no-progress; then
         echo "SUCCESS: tfvars file uploaded to S3 for destruction pipeline"
     else
         echo "WARNING: Failed to upload tfvars file to S3"
     fi
 
     # Also backup locally for archival
-    cp tofu/aws/modules/airgap/\${TERRAFORM_VARS_FILENAME} /root/\${TERRAFORM_VARS_FILENAME} || echo "Could not backup tfvars locally"
+    cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} /root/${env.TERRAFORM_VARS_FILENAME} || echo "Could not backup tfvars locally"
 else
-    echo "WARNING: tfvars file not found or empty: tofu/aws/modules/airgap/\${TERRAFORM_VARS_FILENAME}"
+    echo "WARNING: tfvars file not found or empty: tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
 fi
 
 # Verify state file exists and has content

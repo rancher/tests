@@ -494,7 +494,7 @@ echo 'Step 1: Using correct S3 key pattern...'
 mkdir -p tofu/aws/modules/airgap/
 
 # Use the correct S3 key pattern: prefix/workspace/terraform.tfstate
-ACTUAL_STATE_KEY="\${TF_STATE_KEY_PREFIX}/\${TARGET_WORKSPACE}/terraform.tfstate"
+ACTUAL_STATE_KEY="${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/terraform.tfstate"
 
 echo "🎯 Using confirmed S3 key pattern: \$ACTUAL_STATE_KEY"
 echo "Full S3 path: s3://${env.TF_STATE_BUCKET}/\$ACTUAL_STATE_KEY"
@@ -662,9 +662,9 @@ echo 'Step 2: Configuring backend with discovered S3 key...'
 cat > tofu/aws/modules/airgap/backend.tf << EOF
 terraform {
   backend "s3" {
-    bucket  = "\${TF_STATE_BUCKET}"
+    bucket  = "${env.TF_STATE_BUCKET}"
     key     = "\$ACTUAL_STATE_KEY"
-    region  = "\${TF_STATE_REGION}"
+    region  = "${env.TF_STATE_REGION}"
     encrypt = true
     
     # Enhanced backend settings for reliability
