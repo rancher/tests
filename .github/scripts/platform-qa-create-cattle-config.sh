@@ -71,7 +71,7 @@ awsEC2Configs:
       awsCICDInstanceTag: "platform-qa"
       awsIAMProfile: "${AWS_IAM_PROFILE}"
       awsUser: "${AWS_USER}"
-      volumeSize: "${AWS_ROOT_SIZE}"
+      volumeSize: ${AWS_ROOT_SIZE}
       roles: ["etcd", "controlplane", "worker"]
 sshPath: 
   sshPath: "${SSH_PRIVATE_KEY_PATH}"
