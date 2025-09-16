@@ -849,6 +849,9 @@ echo 'State validation completed successfully'
 def planDestruction() {
     logInfo('Creating destruction plan with proper workspace environment')
 
+    // Download terraform variables from S3 using standardized functions
+    downloadTfvarsFromS3()
+
     def planScript = """
 cd ${env.QA_INFRA_WORK_PATH}
 
@@ -883,36 +886,7 @@ if [ "\$CURRENT_WORKSPACE" != "${env.TARGET_WORKSPACE}" ]; then
 fi
 
 echo 'Step 1: Attempting to download original terraform variables from S3...'
-# Try to download the original tfvars file used during deployment
-TFVARS_S3_KEY="${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}"
-echo "Checking for original tfvars at: s3://${env.TF_STATE_BUCKET}/\$TFVARS_S3_KEY"
-
-if aws s3 cp s3://${env.TF_STATE_BUCKET}/\$TFVARS_S3_KEY tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} --region ${env.TF_STATE_REGION} 2>/dev/null; then
-    echo "✅ SUCCESS: Downloaded original terraform variables from S3"
-    echo "Original tfvars file contents:"
-    head -10 tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}
-else
-    echo "⚠️  WARNING: Could not download original tfvars from S3, creating minimal variables"
-    echo "This may cause destruction issues if custom variables were used during deployment"
-
-    cat > tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} << 'EOFVARS'
-# Minimal configuration for destruction
-# Values are read from state, so these are just placeholders
-aws_region = "${env.AWS_REGION}"
-aws_access_key = "placeholder-for-destroy"
-aws_secret_access_key = "placeholder-for-destroy"
-
-# Common variables that might be required by the configuration
-instance_type = "t3.medium"
-node_count = 1
-availability_zones = ["${env.AWS_REGION}a", "${env.AWS_REGION}b"]
-EOFVARS
-
-    echo "✅ Created minimal terraform variables as fallback"
-fi
-
-echo
-echo 'Step 2: Attempting destruction planning...'
+# Call function to download tfvars using standardized S3 operations
 
 # First try without tfvars (OpenTofu should read everything from state)
 if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -out=destroy-plan 2>/dev/null; then
@@ -1240,4 +1214,225 @@ def logDebug(message) {
     if (params.LOG_LEVEL == 'DEBUG' || params.LOG_LEVEL == 'VERBOSE') {
         echo "🔍 [DEBUG] ${new Date().format('HH:mm:ss')} - ${message}"
     }
+}
+
+/**
+ * STANDARDIZED S3 OPERATIONS FUNCTIONS
+ *
+ * These functions provide uniform S3 operations across all pipeline stages
+ * with consistent error handling, logging, and path construction.
+ */
+
+def s3UploadFile(localPath, s3Key, description = null) {
+    """
+    Upload a file to S3 with standardized error handling and logging
+
+    @param localPath: Local file path to upload
+    @param s3Key: S3 key (path within bucket)
+    @param description: Optional description for logging
+    @return: Boolean indicating success
+    """
+    def desc = description ?: "file"
+    logInfo("Uploading ${desc} to S3: s3://${env.TF_STATE_BUCKET}/${s3Key}")
+
+    // Validate local file exists and has content
+    if (!fileExists(localPath)) {
+        logError("Local file does not exist: ${localPath}")
+        return false
+    }
+
+    def fileSize = sh(script: "stat -c%s '${localPath}' 2>/dev/null || echo 0", returnStdout: true).trim()
+    if (fileSize == "0") {
+        logWarning("Local file is empty: ${localPath}")
+    }
+
+    try {
+        def uploadResult = sh(
+            script: """
+                aws s3 cp '${localPath}' 's3://${env.TF_STATE_BUCKET}/${s3Key}' \
+                    --region '${env.TF_STATE_REGION}' \
+                    --no-progress 2>&1
+            """,
+            returnStatus: true
+        )
+
+        if (uploadResult == 0) {
+            logInfo("✅ SUCCESS: ${desc} uploaded to S3 (${fileSize} bytes)")
+            return true
+        } else {
+            logError("❌ FAILED: ${desc} upload to S3 failed with exit code ${uploadResult}")
+            return false
+        }
+    } catch (Exception e) {
+        logError("❌ EXCEPTION: ${desc} upload failed: ${e.message}")
+        return false
+    }
+}
+
+def s3DownloadFile(s3Key, localPath, description = null) {
+    """
+    Download a file from S3 with standardized error handling and logging
+
+    @param s3Key: S3 key (path within bucket)
+    @param localPath: Local file path to download to
+    @param description: Optional description for logging
+    @return: Boolean indicating success
+    """
+    def desc = description ?: "file"
+    logInfo("Downloading ${desc} from S3: s3://${env.TF_STATE_BUCKET}/${s3Key}")
+
+    try {
+        def downloadResult = sh(
+            script: """
+                aws s3 cp 's3://${env.TF_STATE_BUCKET}/${s3Key}' '${localPath}' \
+                    --region '${env.TF_STATE_REGION}' \
+                    --no-progress 2>&1
+            """,
+            returnStatus: true
+        )
+
+        if (downloadResult == 0) {
+            def fileSize = sh(script: "stat -c%s '${localPath}' 2>/dev/null || echo 0", returnStdout: true).trim()
+            logInfo("✅ SUCCESS: ${desc} downloaded from S3 (${fileSize} bytes)")
+            return true
+        } else {
+            logError("❌ FAILED: ${desc} download from S3 failed with exit code ${downloadResult}")
+            return false
+        }
+    } catch (Exception e) {
+        logError("❌ EXCEPTION: ${desc} download failed: ${e.message}")
+        return false
+    }
+}
+
+def s3FileExists(s3Key, description = null) {
+    """
+    Check if a file exists in S3 with metadata
+
+    @param s3Key: S3 key (path within bucket)
+    @param description: Optional description for logging
+    @return: Map with [exists: Boolean, size: Integer, lastModified: String]
+    """
+    def desc = description ?: "file"
+    logInfo("Checking if ${desc} exists in S3: s3://${env.TF_STATE_BUCKET}/${s3Key}")
+
+    try {
+        def checkResult = sh(
+            script: """
+                aws s3api head-object \
+                    --bucket '${env.TF_STATE_BUCKET}' \
+                    --key '${s3Key}' \
+                    --region '${env.TF_STATE_REGION}' 2>&1
+            """,
+            returnStatus: true
+        )
+
+        if (checkResult == 0) {
+            // Get metadata if file exists
+            def metadata = sh(
+                script: """
+                    aws s3api head-object \
+                        --bucket '${env.TF_STATE_BUCKET}' \
+                        --key '${s3Key}' \
+                        --region '${env.TF_STATE_REGION}' \
+                        --output json 2>/dev/null || echo '{}'
+                """,
+                returnStdout: true
+            ).trim()
+
+            def size = 0
+            def lastModified = "unknown"
+
+            try {
+                def metadataJson = readJSON text: metadata
+                size = metadataJson.ContentLength ?: 0
+                lastModified = metadataJson.LastModified ?: "unknown"
+            } catch (Exception parseException) {
+                logWarning("Could not parse S3 metadata for ${desc}")
+            }
+
+            logInfo("✅ ${desc} exists in S3 (${size} bytes, modified: ${lastModified})")
+            return [exists: true, size: size, lastModified: lastModified]
+        } else {
+            logInfo("ℹ️ ${desc} does not exist in S3")
+            return [exists: false, size: 0, lastModified: "N/A"]
+        }
+    } catch (Exception e) {
+        logError("❌ EXCEPTION: Failed to check ${desc} in S3: ${e.message}")
+        return [exists: false, size: 0, lastModified: "error"]
+    }
+}
+
+def s3GenerateKey(workspace, filename, keyPrefix = null) {
+    """
+    Generate standardized S3 key paths
+
+    @param workspace: Workspace name
+    @param filename: File name
+    @param keyPrefix: Optional key prefix (defaults to TF_STATE_KEY_PREFIX)
+    @return: String S3 key path
+    """
+    def prefix = keyPrefix ?: env.TF_STATE_KEY_PREFIX
+    return "${prefix}/${workspace}/${filename}"
+}
+
+def downloadTfvarsFromS3() {
+    """
+    Download terraform variables from S3 with fallback to minimal variables
+    Uses standardized S3 functions for consistent operation
+    """
+    logInfo('Downloading original terraform variables from S3')
+
+    // Generate S3 key using standardized function
+    def tfvarsS3Key = s3GenerateKey(env.TARGET_WORKSPACE, env.TERRAFORM_VARS_FILENAME)
+    def localTfvarsPath = "tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+
+    // Check if file exists in S3 first
+    def s3Status = s3FileExists(tfvarsS3Key, "terraform variables")
+
+    if (s3Status.exists) {
+        logInfo("Found terraform variables in S3 (${s3Status.size} bytes, modified: ${s3Status.lastModified})")
+
+        // Attempt download using standardized function
+        def downloadSuccess = s3DownloadFile(tfvarsS3Key, localTfvarsPath, "terraform variables")
+
+        if (downloadSuccess) {
+            logInfo("✅ SUCCESS: Downloaded original terraform variables from S3")
+
+            // Show contents for verification
+            def contents = sh(
+                script: "head -10 '${localTfvarsPath}' 2>/dev/null || echo 'Could not read file contents'",
+                returnStdout: true
+            ).trim()
+            logInfo("Original tfvars file contents (first 10 lines):")
+            echo contents
+
+            return true
+        } else {
+            logWarning("Failed to download terraform variables despite S3 file existence")
+        }
+    } else {
+        logWarning("Terraform variables not found in S3 at: s3://${env.TF_STATE_BUCKET}/${tfvarsS3Key}")
+    }
+
+    // Create minimal fallback variables
+    logWarning("Creating minimal terraform variables as fallback")
+    logWarning("This may cause destruction issues if custom variables were used during deployment")
+
+    def minimalTfvars = '''# Minimal configuration for destruction
+# Values are read from state, so these are just placeholders
+aws_region = "''' + env.AWS_REGION + '''"
+aws_access_key = "placeholder-for-destroy"
+aws_secret_access_key = "placeholder-for-destroy"
+
+# Common variables that might be required by the configuration
+instance_type = "t3.medium"
+node_count = 1
+availability_zones = ["''' + env.AWS_REGION + '''a", "''' + env.AWS_REGION + '''b"]
+'''
+
+    writeFile file: localTfvarsPath, text: minimalTfvars
+    logInfo("✅ Created minimal terraform variables as fallback")
+
+    return false
 }
