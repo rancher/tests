@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/tfp-automation/framework/cleanup"
 	"github.com/rancher/tfp-automation/framework/set/resources/rancher2"
 	resources "github.com/rancher/tfp-automation/framework/set/resources/sanity"
-	"github.com/rancher/tfp-automation/tests/extensions/provisioning"
 	"github.com/rancher/tfp-automation/tests/infrastructure"
 	"github.com/sirupsen/logrus"
 )
@@ -41,7 +40,7 @@ func main() {
 
 func setupRancher(t *testing.T) (*rancher.Client, error) {
 	cattleConfig := shepherdConfig.LoadConfigFromFile(os.Getenv(shepherdConfig.ConfigEnvironmentKey))
-	rancherConfig, terraformConfig, terratestConfig, standaloneConfig := tfpConfig.LoadTFPConfigs(cattleConfig)
+	rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(cattleConfig)
 
 	_, keyPath := rancher2.SetKeyPath(keypath.SanityKeyPath, terratestConfig.PathToRepo, terraformConfig.Provider)
 	terraformOptions := framework.Setup(t, terraformConfig, terratestConfig, keyPath)
@@ -53,13 +52,9 @@ func setupRancher(t *testing.T) (*rancher.Client, error) {
 
 	testSession := session.NewSession()
 
-	client, err := infrastructure.PostRancherSetup(t, terraformOptions, rancherConfig, testSession, terraformConfig.Standalone.RancherHostname, keyPath, false)
+	client, err := infrastructure.PostRancherSetup(t, terraformOptions, rancherConfig, testSession, terraformConfig.Standalone.RancherHostname, keyPath, false, false)
 	if err != nil && *rancherConfig.Cleanup {
 		cleanup.Cleanup(nil, terraformOptions, keyPath)
-	}
-
-	if standaloneConfig.RancherTagVersion != "head" {
-		provisioning.VerifyRancherVersion(t, rancherConfig.Host, standaloneConfig.RancherTagVersion)
 	}
 
 	return client, err
