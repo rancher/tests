@@ -103,7 +103,7 @@ func (ra *RestrictedAdminTestSuite) TestRestrictedAdminCreateK3sCluster() {
 	clusterObject, err := provisioning.CreateProvisioningCluster(restrictedAdminClient, provider, credentialSpec, ra.clusterConfig, machineConfigSpec, nil)
 	require.NoError(ra.T(), err)
 
-	provisioning.VerifyCluster(ra.T(), ra.client, ra.clusterConfig, clusterObject)
+	provisioning.VerifyCluster(ra.T(), ra.client, clusterObject)
 }
 
 func (ra *RestrictedAdminTestSuite) TestRestrictedAdminGlobalSettings() {
