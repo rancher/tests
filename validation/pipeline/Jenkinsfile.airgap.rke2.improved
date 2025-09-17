@@ -790,6 +790,9 @@ def initializeOpenTofu() {
     def initScript = """
 cd ${env.QA_INFRA_WORK_PATH}
 
+echo 'Selecting default workspace before initialization...'
+tofu -chdir=tofu/aws/modules/airgap workspace select default || true
+
 echo 'Initializing OpenTofu backend with config file...'
 tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure -backend-config=backend.tfvars
 
