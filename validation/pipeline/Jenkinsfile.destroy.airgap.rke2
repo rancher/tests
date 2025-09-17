@@ -61,11 +61,6 @@ pipeline {
             defaultValue: '',
             description: 'Terraform workspace to destroy (e.g., jenkins_airgap_ansible_workspace_123)'
         )
-        choice(
-            name: 'STATE_SOURCE',
-            choices: ['S3_BACKEND'],
-            description: 'Terraform state source (S3 backend only)'
-        )
         booleanParam(
             name: 'FORCE_DESTROY',
             defaultValue: false,
