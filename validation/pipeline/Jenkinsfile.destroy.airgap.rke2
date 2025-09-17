@@ -71,11 +71,6 @@ pipeline {
             defaultValue: true,
             description: 'Perform dry run (plan only) without actual destruction'
         )
-        choice(
-            name: 'LOG_LEVEL',
-            choices: ['INFO', 'DEBUG', 'VERBOSE'],
-            description: 'Pipeline logging level'
-        )
     }
 
     environment {
