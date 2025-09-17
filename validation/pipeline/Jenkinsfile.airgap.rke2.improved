@@ -929,22 +929,9 @@ cp tofu/aws/modules/airgap/terraform.tfstate terraform-state-backup-\$(date +%Y%
 cp tofu/aws/modules/airgap/terraform.tfstate /root/terraform-state-primary.tfstate
 cp tofu/aws/modules/airgap/terraform.tfstate /root/terraform.tfstate
 
-echo 'Backing up terraform variables file for destruction pipeline...'
-# Upload tfvars to S3 for use by destruction pipeline
-TFVARS_S3_KEY="${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}"
-if [ -f tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ] && [ -s tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} ]; then
-    echo "Uploading tfvars file to S3: s3://${env.TF_STATE_BUCKET}/\$TFVARS_S3_KEY"
-    if aws s3 cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} s3://${env.TF_STATE_BUCKET}/\$TFVARS_S3_KEY --region ${env.TF_STATE_REGION}; then
-        echo "SUCCESS: tfvars file uploaded to S3 for destruction pipeline"
-    else
-        echo "WARNING: Failed to upload tfvars file to S3"
-    fi
-
-    # Also backup locally for archival
-    cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} /root/${env.TERRAFORM_VARS_FILENAME}
-else
-    echo "WARNING: tfvars file not found or empty: tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
-fi
+echo 'Backing up terraform variables file for archival...'
+# Backup locally for archival (no S3 upload needed with backend)
+cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} /root/${env.TERRAFORM_VARS_FILENAME}
 
 # Verify state file exists and has content
 if [ -f tofu/aws/modules/airgap/terraform.tfstate ] && [ -s tofu/aws/modules/airgap/terraform.tfstate ]; then
@@ -1351,8 +1338,6 @@ tofu -chdir=tofu/aws/modules/airgap workspace show
 
 echo 'Destroying infrastructure...'
 tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME} || echo 'Destroy command completed with warnings'
-
-echo 'Cleanup completed'
 """
             
             executeScriptInContainer(cleanupScript)
