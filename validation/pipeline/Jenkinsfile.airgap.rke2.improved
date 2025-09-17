@@ -348,6 +348,44 @@ pipeline {
  * These functions are adapted from both Jenkinsfile.recurring and Jenkinsfile.airgap.rke2.improved
  */
 
+// Logging utility functions
+def logInfo(msg) {
+    echo "[INFO] ${msg}"
+}
+
+def logError(msg) {
+    echo "[ERROR] ${msg}"
+}
+
+def logWarning(msg) {
+    echo "[WARNING] ${msg}"
+}
+
+// State extraction utility functions for backup
+def extractStateFromVolume() {
+    logInfo('Extracting terraform state from shared volume')
+    sh """
+    if [ -f /root/terraform.tfstate ]; then
+        cp /root/terraform.tfstate ./terraform.tfstate || echo 'No state file in volume or copy failed'
+        echo 'State extraction from volume attempted'
+    else
+        echo 'No state file found in shared volume'
+    fi
+    """
+}
+
+def extractStateFromContainer() {
+    logInfo('Extracting terraform state from container backup')
+    sh """
+    if [ -f /root/terraform-state-primary.tfstate ]; then
+        cp /root/terraform-state-primary.tfstate ./terraform-state.tfstate || echo 'Fallback state copy failed'
+        echo 'Fallback state extraction from container attempted'
+    else
+        echo 'No fallback state found in container'
+    fi
+    """
+}
+
 def getShortJobName() {
     def jobName = "${env.JOB_NAME}"
     if (jobName.contains('/')) {
