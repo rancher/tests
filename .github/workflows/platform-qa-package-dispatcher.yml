@@ -57,12 +57,10 @@ jobs:
       - name: Mask admin tokens
         shell: bash
         run: |
-          set +x
           IFS=',' read -ra TOKENS <<< "${{ github.event.inputs.admin_tokens }}"
           for token in "${TOKENS[@]}"; do
             echo "::add-mask::$token"
           done
-          set -x
 
       - name: Flatten package list (only if recursive)
         id: flatten-pkg

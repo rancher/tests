@@ -52,7 +52,7 @@ env:
   AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: ${{ secrets.AWS_REGION }}
-  RANCHER_ADMIN_PASSWORD: ${{ secrets.RANCHER_ADMIN_PASSWORD }}
+  RANCHER_ADMIN_PASSWORD: ${{ secrets.PQA_RANCHER_ADMIN_PASSWORD }}
   AWS_IAM_PROFILE: ${{ secrets.AWS_IAM_PROFILE }}
   AWS_AMI: ${{ secrets.AWS_AMI }}
   AWS_USER: ${{ secrets.AWS_USER }}
@@ -64,7 +64,6 @@ env:
   AWS_VOLUME_TYPE: ${{ vars.AWS_VOLUME_TYPE }}
   AWS_ZONE_LETTER: ${{ vars.AWS_ZONE_LETTER }}
   AWS_ROOT_SIZE: ${{ vars.AWS_ROOT_SIZE }}
-  SSH_PRIVATE_KEY_PATH: ${{ secrets.SSH_PRIVATE_KEY_PATH }}
   SSH_PRIVATE_KEY_NAME: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
   QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
 
@@ -98,15 +97,20 @@ jobs:
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
 
-      - name: Mask and set admin token
+      - name: Mask admin token
         shell: bash
         run: |
-          set +x
-          TOKEN="${{ github.event.inputs.admin_token }}"
-          echo "::add-mask::$TOKEN"
-          echo "RANCHER_ADMIN_TOKEN=$TOKEN" >> $GITHUB_ENV
-          set -x
-        
+          echo "::add-mask::${{ github.event.inputs.admin_token }}" && \
+          echo "RANCHER_ADMIN_TOKEN=${{ github.event.inputs.admin_token }}" >> $GITHUB_ENV
+
+      - name: Create SSH key file
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem
+          chmod 600 ~/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem
+          echo "SSH_PRIVATE_KEY_PATH=$HOME/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem" >> $GITHUB_ENV
+
       - name: Create cattle config
         run: bash .github/scripts/platform-qa-create-cattle-config.sh
 

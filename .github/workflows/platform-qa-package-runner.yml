@@ -64,14 +64,11 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Mask and set admin token
+      - name: Mask admin token
         shell: bash
         run: |
-          set +x
-          TOKEN="${{ github.event.inputs.admin_token }}"
-          echo "::add-mask::$TOKEN"
-          echo "RANCHER_ADMIN_TOKEN=$TOKEN" >> $GITHUB_ENV
-          set -x
+          echo "::add-mask::${{ github.event.inputs.admin_token }}" && \
+          echo "RANCHER_ADMIN_TOKEN=${{ github.event.inputs.admin_token }}" >> $GITHUB_ENV
 
       - name: Parse current and remaining packages
         id: parse
