@@ -492,9 +492,9 @@ def generateTerraformConfiguration() {
     def terraformConfig = env.TERRAFORM_CONFIG
 
     // Replace variables in config (similar to Jenkinsfile.recurring pattern)
-    terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
-    terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
-    terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION)
+    terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
     terraformConfig = terraformConfig.replace('${AWS_IAM_PROFILE}', env.AWS_IAM_PROFILE ?: '')
     terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC ?: '')
     terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS ?: '')
