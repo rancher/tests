@@ -882,20 +882,8 @@ if [ "\$CURRENT_WORKSPACE" != "${env.TARGET_WORKSPACE}" ]; then
     exit 1
 fi
 
-echo 'Step 1: Attempting to download original terraform variables from S3...'
-# Try to download the original tfvars file used during deployment
-TFVARS_S3_KEY="${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}"
-echo "Checking for original tfvars at: s3://${env.TF_STATE_BUCKET}/\$TFVARS_S3_KEY"
-
-if aws s3 cp s3://${env.TF_STATE_BUCKET}/\$TFVARS_S3_KEY tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} --region ${env.TF_STATE_REGION} 2>/dev/null; then
-    echo "✅ SUCCESS: Downloaded original terraform variables from S3"
-    echo "Original tfvars file contents:"
-    head -10 tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}
-else
-    echo "⚠️  WARNING: Could not download original tfvars from S3, creating minimal variables"
-    echo "This may cause destruction issues if custom variables were used during deployment"
-
-    cat > tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} << 'EOFVARS'
+echo 'Creating minimal terraform variables for destruction...'
+cat > tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} << 'EOFVARS'
 # Minimal configuration for destruction
 # Values are read from state, so these are just placeholders
 aws_region = "${env.AWS_REGION}"
@@ -908,8 +896,7 @@ node_count = 1
 availability_zones = ["${env.AWS_REGION}a", "${env.AWS_REGION}b"]
 EOFVARS
 
-    echo "✅ Created minimal terraform variables as fallback"
-fi
+echo "✅ Created minimal terraform variables for destruction"
 
 echo
 echo 'Step 2: Attempting destruction planning...'
