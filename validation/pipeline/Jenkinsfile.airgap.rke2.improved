@@ -1158,11 +1158,10 @@ def extractStateFromContainer() {
                     logInfo("Found running containers: ${containerIds}")
 
                     sh """
-                # Extract from the first matching container
                 CONTAINER_ID=$(echo "${containerIds}" | head -n1)
                 echo "Extracting from container: $CONTAINER_ID"
 
-                # Copy state files with multiple fallback paths
+                
                 docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/terraform.tfstate \
                     ./terraform-state.tfstate 2>/dev/null || \
                 docker cp $CONTAINER_ID:/root/terraform-state-primary.tfstate \
@@ -1177,7 +1176,7 @@ def extractStateFromContainer() {
                     ./infrastructure-outputs.json 2>/dev/null || \
                 echo "WARNING: Could not extract infrastructure-outputs.json from container"
 
-                # Copy terraform variables file with multiple fallback paths
+                
                 docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} \
                     ./terraform-vars.tfvars 2>/dev/null || \
                 docker cp $CONTAINER_ID:/root/${env.TERRAFORM_VARS_FILENAME} \
