@@ -102,6 +102,7 @@ pipeline {
         // Configuration files
         ANSIBLE_VARS_FILENAME = 'vars.yaml'
         TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
+        TERRAFORM_BACKEND_VARS_FILENAME = 'backend.tfvars'
         ENV_FILE = '.env'
 
         // Terraform workspace
@@ -111,15 +112,6 @@ pipeline {
         TERRAFORM_TIMEOUT = '30'
         ANSIBLE_TIMEOUT = '45'
         VALIDATION_TIMEOUT = '15'
-
-        // AWS Infrastructure defaults
-        AWS_REGION = 'us-east-2'
-        AWS_AMI = 'ami-0c2d3e23fb3adceb8'
-
-        // State storage configuration (S3-only, no DynamoDB)
-        TF_STATE_BUCKET = 'jenkins-terraform-state-storage'
-        TF_STATE_KEY_PREFIX = 'jenkins-airgap-rke2'
-        TF_STATE_REGION = "${AWS_REGION}"
     }
 
     stages {
@@ -222,6 +214,7 @@ pipeline {
                         'QA_INFRA_WORK_PATH',
                         'TF_WORKSPACE',
                         'TERRAFORM_VARS_FILENAME',
+                        'TERRAFORM_BACKEND_VARS_FILENAME',
                         'TERRAFORM_TIMEOUT'
                     ]
 
@@ -424,7 +417,8 @@ def validateConfigurationEnvironmentVariables() {
 
     def requiredVars = [
         'TERRAFORM_CONFIG': 'Terraform configuration content',
-        'ANSIBLE_CONFIG': 'Ansible configuration content',
+        'S3_BACKEND_CONFIG': 'S3 backend configuration content',
+        'ANSIBLE_VARIABLES': 'Ansible configuration content',
         'RKE2_VERSION': 'RKE2 version for deployment',
         'RANCHER_VERSION': 'Rancher version for deployment'
     ]
@@ -453,21 +447,33 @@ def generateTerraformConfiguration() {
         throw new RuntimeException('TERRAFORM_CONFIG environment variable is not set')
     }
 
-    def tofuConfig = env.TERRAFORM_CONFIG
+    if (!env.S3_BACKEND_CONFIG) {
+        throw new RuntimeException('S3_BACKEND_CONFIG environment variable is not set')
+    }
+
+    def terraformConfig = env.TERRAFORM_CONFIG
 
     // Replace variables in config (similar to Jenkinsfile.recurring pattern)
-    tofuConfig = tofuConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
-    tofuConfig = tofuConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
-    tofuConfig = tofuConfig.replace('${AWS_REGION}', env.AWS_REGION)
-    tofuConfig = tofuConfig.replace('${AWS_IAM_PROFILE}', env.AWS_IAM_PROFILE ?: '')
-    tofuConfig = tofuConfig.replace('${AWS_VPC}', env.AWS_VPC ?: '')
-    tofuConfig = tofuConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+    terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+    terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION)
+    terraformConfig = terraformConfig.replace('${AWS_IAM_PROFILE}', env.AWS_IAM_PROFILE ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS ?: '')
 
     // Write the configuration file
     dir('./qa-infra-automation') {
         dir('./tofu/aws/modules/airgap') {
-            writeFile file: env.TERRAFORM_VARS_FILENAME, text: tofuConfig
+            writeFile file: env.TERRAFORM_VARS_FILENAME, text: terraformConfig
             logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
+        }
+    }
+
+    // Write the S3 backend config file
+    dir('./qa-infra-automation') {
+        dir('./tofu/aws/modules/airgap') {
+            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: env.S3_BACKEND_CONFIG
+            logInfo("S3 backend configuration written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
         }
     }
 }
@@ -475,14 +481,14 @@ def generateTerraformConfiguration() {
 def generateAnsibleConfiguration() {
     logInfo('Generating Ansible configuration')
 
-    if (!env.ANSIBLE_CONFIG) {
-        throw new RuntimeException('ANSIBLE_CONFIG environment variable is not set')
+    if (!env.ANSIBLE_VARIABLES) {
+        throw new RuntimeException('ANSIBLE_VARIABLES environment variable is not set')
     }
 
-    def ansibleConfig = env.ANSIBLE_CONFIG
+    def ansibleVars = env.ANSIBLE_VARIABLES
 
     // Replace variables in config
-    ansibleConfig = ansibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD ?: '')
+    ansibleVars = ansibleVars.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD ?: '')
 
     // Write the Ansible configuration file to the correct location for airgap deployment
     dir('./qa-infra-automation') {
@@ -490,12 +496,12 @@ def generateAnsibleConfiguration() {
         sh 'mkdir -p ansible/rke2/airgap/inventory/group_vars'
 
         // Write the group_vars/all.yml file
-        writeFile file: 'ansible/rke2/airgap/inventory/group_vars/all.yml', text: ansibleConfig
+        writeFile file: 'ansible/rke2/airgap/inventory/group_vars/all.yml', text: ansibleVars
         logInfo('Ansible configuration written to: ansible/rke2/airgap/inventory/group_vars/all.yml')
 
         // Also create a copy in the original location for backward compatibility
         sh 'mkdir -p ansible'
-        writeFile file: "ansible/${env.ANSIBLE_VARS_FILENAME}", text: ansibleConfig
+        writeFile file: "ansible/${env.ANSIBLE_VARS_FILENAME}", text: ansibleVars
         logInfo("Ansible configuration also written to: ansible/${env.ANSIBLE_VARS_FILENAME} (backward compatibility)")
     }
 }
@@ -531,12 +537,6 @@ def generateEnvironmentFile() {
     envLines.add('TF_VAR_aws_access_key=' + env.AWS_ACCESS_KEY_ID)
     envLines.add('TF_VAR_aws_secret_access_key=' + env.AWS_SECRET_ACCESS_KEY)
     envLines.add('TF_VAR_aws_region=' + env.AWS_REGION)
-    envLines.add('')
-    envLines.add('# S3 Backend State Storage Configuration')
-    envLines.add("TF_STATE_BUCKET=${env.TF_STATE_BUCKET}")
-    envLines.add("TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX}")
-    envLines.add("TF_STATE_REGION=${env.TF_STATE_REGION}")
-
     def envContent = envLines.join('\n')
     writeFile file: env.ENV_FILE, text: envContent
     logInfo("Environment file created: ${env.ENV_FILE}")
@@ -752,30 +752,8 @@ def initializeOpenTofu() {
     def initScript = """
 cd ${env.QA_INFRA_WORK_PATH}
 
-echo 'Configuring S3 backend for state storage (no DynamoDB locking)...'
-cat > tofu/aws/modules/airgap/backend.tf << EOF
-terraform {
-  backend "s3" {
-    bucket  = "${env.TF_STATE_BUCKET}"
-    key     = "${env.TF_STATE_KEY_PREFIX}/${env.TF_WORKSPACE}/terraform.tfstate"
-    region  = "${env.TF_STATE_REGION}"
-    encrypt = true
-
-    # WARNING: No state locking available
-    # Manual coordination required to prevent concurrent operations
-  }
-}
-EOF
-
-echo '⚠️  WARNING: No state locking available - manual coordination required'
-echo 'Backend configuration without DynamoDB:'
-cat tofu/aws/modules/airgap/backend.tf
-
-echo 'Backend configuration written:'
-cat tofu/aws/modules/airgap/backend.tf
-
-echo 'Initializing OpenTofu backend...'
-tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure
+echo 'Initializing OpenTofu backend with config file...'
+tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure -backend-config=backend.tfvars
 
 echo 'Verifying initialization success...'
 tofu -chdir=tofu/aws/modules/airgap providers
@@ -1073,14 +1051,14 @@ def logWarning(message) {
 
 def archiveInfrastructureState() {
     logInfo('Archiving infrastructure state files')
-    
+
     try {
         // Extract state files from shared volume first (most reliable method)
         extractStateFromVolume()
-        
+
         // Fallback: try to extract from running container if volume extraction failed
         extractStateFromContainer()
-        
+
         // Archive all available infrastructure artifacts with comprehensive patterns
         def artifacts = [
             'terraform.tfstate',
@@ -1091,9 +1069,9 @@ def archiveInfrastructureState() {
             'ansible-inventory.yml',
             'tfstate-backup-*.tfstate'
         ]
-        
+
         archiveArtifacts artifacts: artifacts.join(','), allowEmptyArchive: true
-        
+
         logInfo('Infrastructure state archived successfully')
     } catch (Exception e) {
         logError("Failed to archive infrastructure state: ${e.message}")
@@ -1102,7 +1080,7 @@ def archiveInfrastructureState() {
 
 def extractStateFromVolume() {
     logInfo('Extracting terraform state from shared volume')
-    
+
     try {
         // Create a temporary container to extract files from the shared volume
         def extractorScript = """
@@ -1116,7 +1094,7 @@ docker run --rm \\
     ${env.IMAGE_NAME} \\
     sh -c '
         echo "Extracting state files from shared volume..."
-        
+
         # Copy terraform state file with timestamp
         if [ -f /shared/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ]; then
             cp /shared/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate /workspace/terraform.tfstate
@@ -1134,7 +1112,7 @@ docker run --rm \\
             echo "WARNING: terraform.tfstate not found in shared volume"
             find /shared -name "*.tfstate" -type f 2>/dev/null || echo "No tfstate files found in shared volume"
         fi
-        
+
         # Copy infrastructure outputs
         if [ -f /shared/go/src/github.com/rancher/qa-infra-automation/infrastructure-outputs.json ]; then
             cp /shared/go/src/github.com/rancher/qa-infra-automation/infrastructure-outputs.json /workspace/infrastructure-outputs.json
@@ -1155,10 +1133,10 @@ docker run --rm \\
             cp /shared/go/src/github.com/rancher/qa-infra-automation/ansible/rke2/airgap/inventory/inventory.yml /workspace/ansible-inventory.yml
             echo "SUCCESS: ansible-inventory.yml extracted"
         fi
-        
+
         echo "Volume extraction completed"
     '
-        
+
         sh(script: extractorScript, returnStdout: false)
         logInfo('State files extracted from shared volume successfully')
     } catch (Exception e) {
@@ -1168,29 +1146,29 @@ docker run --rm \\
 
 def extractStateFromContainer() {
     logInfo('Attempting container-based state extraction as fallback')
-    
+
     try {
         // Find any running containers matching our pattern
         def containerIds = sh(
             script: "docker ps -q --filter 'name=${env.BUILD_CONTAINER_NAME}' || true",
             returnStdout: true
         ).trim()
-        
+
         if (containerIds) {
             logInfo("Found running containers: ${containerIds}")
-            
+
             sh """
                 # Extract from the first matching container
                 CONTAINER_ID=\$(echo "${containerIds}" | head -n1)
                 echo "Extracting from container: \$CONTAINER_ID"
-                
+
                 # Copy state files with multiple fallback paths
                 docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/terraform.tfstate ./terraform-state.tfstate 2>/dev/null || \\
                 docker cp \$CONTAINER_ID:/root/terraform-state-primary.tfstate ./terraform-state.tfstate 2>/dev/null || \\
                 docker cp \$CONTAINER_ID:/root/terraform.tfstate ./terraform-state.tfstate 2>/dev/null || \\
                 docker cp \$CONTAINER_ID:/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ./terraform-state.tfstate 2>/dev/null || \\
                 echo "WARNING: Could not extract terraform.tfstate from container"
-                
+
                 docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/infrastructure-outputs.json ./infrastructure-outputs.json 2>/dev/null || \\
                 echo "WARNING: Could not extract infrastructure-outputs.json from container"
 
@@ -1212,16 +1190,16 @@ def extractStateFromContainer() {
 
 def backupTerraformStateImmediately() {
     logInfo('Creating immediate backup of terraform state after successful deployment')
-    
+
     try {
         // Extract state immediately for successful deployments
         extractStateFromVolume()
         extractStateFromContainer()
-        
+
         // Create timestamped backup with build information
         def timestamp = new Date().format('yyyyMMdd-HHmmss')
         def backupName = "terraform-state-build-${env.BUILD_NUMBER}-${timestamp}.tfstate"
-        
+
         sh """
             # Create backup with build metadata
             if [ -f terraform.tfstate ]; then
@@ -1234,10 +1212,10 @@ def backupTerraformStateImmediately() {
                 echo "WARNING: No state file found for immediate backup"
             fi
         """
-        
+
         // Archive the immediate backup
         archiveArtifacts artifacts: backupName, allowEmptyArchive: true
-        
+
         logInfo('Immediate terraform state backup completed')
     } catch (Exception e) {
         logError("Immediate backup failed: ${e.message}")
@@ -1246,17 +1224,17 @@ def backupTerraformStateImmediately() {
 
 def finalStateArchival() {
     logInfo('Performing final comprehensive state archival')
-    
+
     try {
         // One last attempt to get all possible state files
         extractStateFromVolume()
         extractStateFromContainer()
-        
+
         // List all potential state files in workspace
         sh 'find . -name "*.tfstate" -type f || true'
         sh 'find . -name "*terraform*" -type f || true'
         sh 'find . -name "*infrastructure*" -type f || true'
-        
+
         // Archive everything we can find
         def comprehensiveArtifacts = [
             '*.tfstate',
@@ -1268,9 +1246,9 @@ def finalStateArchival() {
             'state-list.txt',
             'terraform-show.txt'
         ]
-        
+
         archiveArtifacts artifacts: comprehensiveArtifacts.join(','), allowEmptyArchive: true
-        
+
         logInfo('Final state archival completed')
     } catch (Exception e) {
         logError("Final archival failed: ${e.message}")
@@ -1279,7 +1257,7 @@ def finalStateArchival() {
 
 def archiveInfrastructureFailureArtifacts() {
     logInfo('Archiving infrastructure failure artifacts for debugging')
-    
+
     try {
         // Create debugging artifacts
         def debugCommands = [
@@ -1290,9 +1268,9 @@ def archiveInfrastructureFailureArtifacts() {
             'ls -la tofu/aws/modules/airgap/ > directory-contents.txt 2>&1 || echo "Directory not accessible"',
             'echo "Infrastructure failure artifact collection completed"'
         ]
-        
+
         executeScriptInContainer(debugCommands.join(' && '))
-        
+
         // Copy debug files from container
         sh """
             docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./ || true
@@ -1300,10 +1278,10 @@ def archiveInfrastructureFailureArtifacts() {
             docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/terraform-show.txt ./ || true
             docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/directory-contents.txt ./ || true
         """
-        
+
         // Archive failure artifacts
         archiveArtifacts artifacts: 'workspace-list.txt,state-list.txt,terraform-show.txt,directory-contents.txt', allowEmptyArchive: true
-        
+
         logInfo('Infrastructure failure artifacts archived')
     } catch (Exception e) {
         logError("Failed to archive failure artifacts: ${e.message}")
@@ -1313,7 +1291,7 @@ def archiveInfrastructureFailureArtifacts() {
 def handleInfrastructureFailure(failureType, exception) {
     logError("Handling infrastructure failure: ${failureType}")
     logError("Exception: ${exception.message}")
-    
+
     if (env.DESTROY_ON_FAILURE == 'true') {
         logWarning('DESTROY_ON_FAILURE is enabled - cleaning up infrastructure')
         try {
@@ -1328,7 +1306,7 @@ tofu -chdir=tofu/aws/modules/airgap workspace show
 echo 'Destroying infrastructure...'
 tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve -var-file=${env.TERRAFORM_VARS_FILENAME} || echo 'Destroy command completed with warnings'
 """
-            
+
             executeScriptInContainer(cleanupScript)
             logInfo('Infrastructure cleanup completed')
         } catch (Exception cleanupException) {
