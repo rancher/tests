@@ -924,14 +924,24 @@ if [ -f ansible/rke2/airgap/inventory/inventory.yml ] && [ -s ansible/rke2/airga
 
     # Show specific lines that might have YAML syntax issues
     echo "=== Lines with potential YAML syntax issues ==="
-    grep -n ":" ansible/rke2/airgap/inventory/inventory.yml \\| grep ": [^']" \\| head -10
+    grep -n ":" ansible/rke2/airgap/inventory/inventory.yml | grep ": [^']" | head -10
     echo "=== End potential issues ==="
 
     # Fix the ProxyCommand quoting issue with a comprehensive approach
     # Create a backup first
     cp ansible/rke2/airgap/inventory/inventory.yml ansible/rke2/airgap/inventory/inventory.yml.backup
 
-    # Extract terraform.tfstate
+    echo 'Inventory file processing completed'
+else
+    echo 'WARNING: inventory.yml not found or empty after apply'
+fi
+
+echo 'Infrastructure apply completed successfully'
+    """
+
+    executeScriptInContainer(applyScript)
+
+    // Extract files to shared volume after successful apply
     def mountScript = """
 cp -f ${env.QA_INFRA_WORK_PATH}/terraform.tfstate /root/terraform.tfstate
 cp -f ${env.QA_INFRA_WORK_PATH}/infrastructure-outputs.json /root/infrastructure-outputs.json
@@ -939,7 +949,7 @@ cp -f ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FIL
 cp -f ${env.QA_INFRA_WORK_PATH}/ansible/rke2/airgap/inventory/inventory.yml /root/ansible-inventory.yml
     """
 
-    executeScriptInContainer(mountScript, [:], extraVolumes)
+    executeScriptInContainer(mountScript)
 }
 
 def backupTerraformStateImmediately() {
@@ -954,7 +964,7 @@ def backupTerraformStateImmediately() {
         def timestamp = new Date().format('yyyyMMdd-HHmmss')
         def backupName = "terraform-state-build-${env.BUILD_NUMBER}-${timestamp}.tfstate"
 
-        sh """
+        def backupScript = """
         if [ -f terraform.tfstate ]; then
             cp terraform.tfstate ${backupName}
             echo "SUCCESS: Immediate backup created: ${backupName}"
@@ -964,7 +974,9 @@ def backupTerraformStateImmediately() {
         else
             echo "WARNING: No state file found for immediate backup"
         fi
-        """
+        """.stripIndent()
+
+        executeScriptInContainer(backupScript)
 
         // Archive the immediate backup
         archiveArtifacts artifacts: backupName, allowEmptyArchive: true
