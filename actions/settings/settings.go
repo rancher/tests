@@ -15,6 +15,9 @@ const (
 	AutoscalerImage                      = "cluster-autoscaler-image"
 	AuthUserSessionIdleTTlMinutesSetting = "auth-user-session-idle-ttl-minutes"
 	AuthTokenMaxTTLMinutesSetting        = "auth-token-max-ttl-minutes"
+	AuthTokenMaxTTLMinutes               = "auth-token-max-ttl-minutes"
+	KubeconfigDefaultTTLMinutes          = "kubeconfig-default-token-ttl-minutes"
+	UserPasswordMinLength                = "password-min-length"
 )
 
 // GetGlobalSettingNames is a helper function to fetch a list of global setting names
@@ -44,6 +47,7 @@ func GetGlobalSettingNames(client *rancher.Client, clusterID string) ([]string, 
 	return globalSettings, nil
 }
 
+// SetGlobalSetting is a helper function to set the value of a Rancher global setting given its ID
 func SetGlobalSetting(client *rancher.Client, settingID, value string) error {
 	setting, err := client.Steve.SteveType(settings.ManagementSetting).ByID(settingID)
 	if err != nil {
@@ -56,10 +60,10 @@ func SetGlobalSetting(client *rancher.Client, settingID, value string) error {
 }
 
 // ResetGlobalSettingToDefaultValue is a helper function to reset a global setting by name to it's default value
-func ResetGlobalSettingToDefaultValue(client *rancher.Client, settingName string) (error) {
+func ResetGlobalSettingToDefaultValue(client *rancher.Client, settingName string) error {
 	setting, err := client.WranglerContext.Mgmt.Setting().Get(settingName, metav1.GetOptions{})
 	if err != nil {
-		return  err
+		return err
 	}
 
 	setting.Value = setting.Default
@@ -75,9 +79,19 @@ func ResetGlobalSettingToDefaultValue(client *rancher.Client, settingName string
 	}
 
 	if updatedSetting.Value != updatedSetting.Default {
-		return fmt.Errorf("failed to reset setting %q to default value; got: %s, expected: %s", 
+		return fmt.Errorf("failed to reset setting %q to default value; got: %s, expected: %s",
 			settingName, updatedSetting.Value, updatedSetting.Default)
 	}
 
 	return nil
+}
+
+// GetGlobalSettingDefaultValue is a helper function to retrieve the default value of a Rancher global setting given its ID
+func GetGlobalSettingDefaultValue(client *rancher.Client, settingName string) (string, error) {
+	setting, err := client.WranglerContext.Mgmt.Setting().Get(settingName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get setting %s: %w", settingName, err)
+	}
+
+	return setting.Default, nil
 }

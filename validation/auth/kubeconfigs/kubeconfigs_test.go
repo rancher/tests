@@ -14,10 +14,10 @@ import (
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
 	kubeconfigapi "github.com/rancher/tests/actions/kubeconfigs"
-	"github.com/rancher/tests/actions/workloads/pods"
-
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/rbac"
+	"github.com/rancher/tests/actions/settings"
+	"github.com/rancher/tests/actions/workloads/pods"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type KubeconfigTestSuite struct {
+type ExtKubeconfigTestSuite struct {
 	suite.Suite
 	client      *rancher.Client
 	session     *session.Session
@@ -35,14 +35,14 @@ type KubeconfigTestSuite struct {
 	cluster2    *management.Cluster
 }
 
-func (kc *KubeconfigTestSuite) SetupSuite() {
+func (kc *ExtKubeconfigTestSuite) SetupSuite() {
 	kc.session = session.NewSession()
 
 	client, err := rancher.NewClient("", kc.session)
 	require.NoError(kc.T(), err)
 	kc.client = client
 
-	log.Info("Getting cluster name from the config file and append cluster details in rbos")
+	log.Info("Getting cluster name from the config file and append cluster details in the struct")
 	clusterName := client.RancherConfig.ClusterName
 	require.NotEmptyf(kc.T(), clusterName, "Cluster name to install should be set")
 	clusterID, err := clusters.GetClusterIDByName(kc.client, clusterName)
@@ -72,16 +72,16 @@ func (kc *KubeconfigTestSuite) SetupSuite() {
 	cluster2ID, err := clusters.GetClusterIDByName(kc.client, clusterObject2.Name)
 	require.NoError(kc.T(), err)
 
-	provisioning.VerifyClusterReady(kc.T(), client, clusterObject2)
-	pods.VerifyClusterPods(kc.T(), client, clusterObject2)
-	provisioning.VerifyDynamicCluster(kc.T(), client, clusterObject2)
+	provisioning.VerifyClusterReady(kc.T(), client, aceClusterObject1)
+	pods.VerifyClusterPods(kc.T(), client, aceClusterObject1)
+	provisioning.VerifyDynamicCluster(kc.T(), client, aceClusterObject1)
 	kc.aceCluster1, err = kc.client.Management.Cluster.ByID(aceCluster1ID)
 	require.NoError(kc.T(), err)
 	log.Infof("ACE-enabled cluster created: %s (%s)", kc.aceCluster1.Name, aceCluster1ID)
 
-	provisioning.VerifyClusterReady(kc.T(), client, clusterObject2)
-	pods.VerifyClusterPods(kc.T(), client, clusterObject2)
-	provisioning.VerifyDynamicCluster(kc.T(), client, clusterObject2)
+	provisioning.VerifyClusterReady(kc.T(), client, aceClusterObject2)
+	pods.VerifyClusterPods(kc.T(), client, aceClusterObject2)
+	provisioning.VerifyDynamicCluster(kc.T(), client, aceClusterObject2)
 	kc.aceCluster2, err = kc.client.Management.Cluster.ByID(aceCluster2ID)
 	require.NoError(kc.T(), err)
 	log.Infof("ACE-enabled cluster created: %s (%s)", kc.aceCluster2.Name, aceCluster2ID)
@@ -94,11 +94,11 @@ func (kc *KubeconfigTestSuite) SetupSuite() {
 	log.Infof("ACE-disabled cluster created: %s (%s)", kc.cluster2.Name, cluster2ID)
 }
 
-func (kc *KubeconfigTestSuite) TearDownSuite() {
+func (kc *ExtKubeconfigTestSuite) TearDownSuite() {
 	kc.session.Cleanup()
 }
 
-func (kc *KubeconfigTestSuite) validateKubeconfigAndBackingResources(client *rancher.Client, userClient *rancher.Client, kubeconfigName string, expectedClusters []string, expectedUserID string,
+func (kc *ExtKubeconfigTestSuite) validateKubeconfigAndBackingResources(client *rancher.Client, userClient *rancher.Client, kubeconfigName string, expectedClusters []string, expectedUserID string,
 	expectedCurrentContext string, expectedTTL int64, clusterType string) {
 
 	log.Infof("GET the kubeconfig to validate the fields")
@@ -143,7 +143,7 @@ func (kc *KubeconfigTestSuite) validateKubeconfigAndBackingResources(client *ran
 	require.Equal(kc.T(), 1, len(backingConfigMap.Items))
 }
 
-func (kc *KubeconfigTestSuite) TestCreateKubeconfigAsAdmin() {
+func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigAsAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -160,7 +160,7 @@ func (kc *KubeconfigTestSuite) TestCreateKubeconfigAsAdmin() {
 	err = kubeconfigapi.VerifyKubeconfigContent(kc.client, kubeconfigapi.KubeconfigFile, []string{kc.cluster.ID}, kc.client.RancherConfig.Host, false, "")
 	require.NoError(kc.T(), err, "Kubeconfig content validation failed")
 
-	ttlStr, err := kubeconfigapi.GetKubeconfigDefaultTTLMinutes(kc.client)
+	ttlStr, err := settings.GetGlobalSettingDefaultValue(kc.client, settings.KubeconfigDefaultTTLMinutes)
 	require.NoError(kc.T(), err)
 	ttlInt, err := strconv.Atoi(ttlStr)
 	require.NoError(kc.T(), err)
@@ -177,7 +177,7 @@ func (kc *KubeconfigTestSuite) TestCreateKubeconfigAsAdmin() {
 	require.NoError(kc.T(), err)
 }
 
-func (kc *KubeconfigTestSuite) TestCreateKubeconfigAsClusterOwner() {
+func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigAsClusterOwner() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -198,7 +198,7 @@ func (kc *KubeconfigTestSuite) TestCreateKubeconfigAsClusterOwner() {
 	err = kubeconfigapi.VerifyKubeconfigContent(kc.client, kubeconfigapi.KubeconfigFile, []string{kc.cluster.ID}, kc.client.RancherConfig.Host, false, "")
 	require.NoError(kc.T(), err, "Kubeconfig content validation failed")
 
-	ttlStr, err := kubeconfigapi.GetKubeconfigDefaultTTLMinutes(kc.client)
+	ttlStr, err := settings.GetGlobalSettingDefaultValue(kc.client, settings.KubeconfigDefaultTTLMinutes)
 	require.NoError(kc.T(), err)
 	ttlInt, err := strconv.Atoi(ttlStr)
 	require.NoError(kc.T(), err)
@@ -213,7 +213,7 @@ func (kc *KubeconfigTestSuite) TestCreateKubeconfigAsClusterOwner() {
 	require.NoError(kc.T(), err)
 }
 
-func (kc *KubeconfigTestSuite) TestCreateKubeconfigForAceCluster() {
+func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigForAceCluster() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -230,7 +230,7 @@ func (kc *KubeconfigTestSuite) TestCreateKubeconfigForAceCluster() {
 	err = kubeconfigapi.VerifyKubeconfigContent(kc.client, kubeconfigapi.KubeconfigFile, []string{kc.aceCluster1.ID}, kc.client.RancherConfig.Host, true, "")
 	require.NoError(kc.T(), err, "Kubeconfig content validation failed")
 
-	ttlStr, err := kubeconfigapi.GetKubeconfigDefaultTTLMinutes(kc.client)
+	ttlStr, err := settings.GetGlobalSettingDefaultValue(kc.client, settings.KubeconfigDefaultTTLMinutes)
 	require.NoError(kc.T(), err)
 	ttlInt, err := strconv.Atoi(ttlStr)
 	require.NoError(kc.T(), err)
@@ -247,7 +247,7 @@ func (kc *KubeconfigTestSuite) TestCreateKubeconfigForAceCluster() {
 	require.NoError(kc.T(), err)
 }
 
-func (kc *KubeconfigTestSuite) TestCreateKubeconfigMultipleClusters() {
+func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigMultipleClusters() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -264,7 +264,7 @@ func (kc *KubeconfigTestSuite) TestCreateKubeconfigMultipleClusters() {
 	err = kubeconfigapi.VerifyKubeconfigContent(kc.client, kubeconfigapi.KubeconfigFile, []string{kc.cluster2.ID, kc.cluster.ID}, kc.client.RancherConfig.Host, false, "")
 	require.NoError(kc.T(), err, "Kubeconfig content validation failed")
 
-	ttlStr, err := kubeconfigapi.GetKubeconfigDefaultTTLMinutes(kc.client)
+	ttlStr, err := settings.GetGlobalSettingDefaultValue(kc.client, settings.KubeconfigDefaultTTLMinutes)
 	require.NoError(kc.T(), err)
 	ttlInt, err := strconv.Atoi(ttlStr)
 	require.NoError(kc.T(), err)
@@ -280,7 +280,7 @@ func (kc *KubeconfigTestSuite) TestCreateKubeconfigMultipleClusters() {
 	require.NoError(kc.T(), err)
 }
 
-func (kc *KubeconfigTestSuite) TestCreateKubeconfigMultipleAceClusters() {
+func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigMultipleAceClusters() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -297,7 +297,7 @@ func (kc *KubeconfigTestSuite) TestCreateKubeconfigMultipleAceClusters() {
 	err = kubeconfigapi.VerifyKubeconfigContentMixed(kc.client, kubeconfigapi.KubeconfigFile, []string{}, []string{kc.aceCluster1.ID, kc.aceCluster2.ID}, kc.client.RancherConfig.Host, "")
 	require.NoError(kc.T(), err, "Kubeconfig content validation failed")
 
-	ttlStr, err := kubeconfigapi.GetKubeconfigDefaultTTLMinutes(kc.client)
+	ttlStr, err := settings.GetGlobalSettingDefaultValue(kc.client, settings.KubeconfigDefaultTTLMinutes)
 	require.NoError(kc.T(), err)
 	ttlInt, err := strconv.Atoi(ttlStr)
 	require.NoError(kc.T(), err)
@@ -313,7 +313,7 @@ func (kc *KubeconfigTestSuite) TestCreateKubeconfigMultipleAceClusters() {
 	require.NoError(kc.T(), err)
 }
 
-func (kc *KubeconfigTestSuite) TestCreateKubeconfigForUnauthorizedUser() {
+func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigForUnauthorizedUser() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -331,7 +331,7 @@ func (kc *KubeconfigTestSuite) TestCreateKubeconfigForUnauthorizedUser() {
 	require.True(kc.T(), k8serrors.IsForbidden(err))
 }
 
-func (kc *KubeconfigTestSuite) TestGetKubeconfigAsAdmin() {
+func (kc *ExtKubeconfigTestSuite) TestGetKubeconfigAsAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -377,7 +377,7 @@ func (kc *KubeconfigTestSuite) TestGetKubeconfigAsAdmin() {
 	require.Equal(kc.T(), secondUserKubeconfig.Name, kcObjSecondUser.Name)
 }
 
-func (kc *KubeconfigTestSuite) TestGetKubeconfigAsNonAdmin() {
+func (kc *ExtKubeconfigTestSuite) TestGetKubeconfigAsNonAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -431,7 +431,7 @@ func (kc *KubeconfigTestSuite) TestGetKubeconfigAsNonAdmin() {
 	require.True(kc.T(), k8serrors.IsNotFound(err))
 }
 
-func (kc *KubeconfigTestSuite) TestListKubeconfigAsAdmin() {
+func (kc *ExtKubeconfigTestSuite) TestListKubeconfigAsAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -468,7 +468,7 @@ func (kc *KubeconfigTestSuite) TestListKubeconfigAsAdmin() {
 	require.Contains(kc.T(), names, secondUserKubeconfig.Name)
 }
 
-func (kc *KubeconfigTestSuite) TestListKubeconfigAsNonAdmin() {
+func (kc *ExtKubeconfigTestSuite) TestListKubeconfigAsNonAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -515,7 +515,7 @@ func (kc *KubeconfigTestSuite) TestListKubeconfigAsNonAdmin() {
 	require.Contains(kc.T(), names, secondUserKubeconfig.Name)
 }
 
-func (kc *KubeconfigTestSuite) TestUpdateKubeconfigAsAdmin() {
+func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -595,7 +595,7 @@ func (kc *KubeconfigTestSuite) TestUpdateKubeconfigAsAdmin() {
 	require.Contains(kc.T(), err.Error(), "spec.clusters is immutable")
 }
 
-func (kc *KubeconfigTestSuite) TestUpdateKubeconfigAsNonAdmin() {
+func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsNonAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -657,7 +657,7 @@ func (kc *KubeconfigTestSuite) TestUpdateKubeconfigAsNonAdmin() {
 	require.True(kc.T(), k8serrors.IsNotFound(err))
 }
 
-func (kc *KubeconfigTestSuite) TestDeleteKubeconfigAsAdmin() {
+func (kc *ExtKubeconfigTestSuite) TestDeleteKubeconfigAsAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -699,7 +699,7 @@ func (kc *KubeconfigTestSuite) TestDeleteKubeconfigAsAdmin() {
 	require.NoError(kc.T(), err, "Backing configmap %s should be deleted when kubeconfig is deleted", secondUserKc.Name)
 }
 
-func (kc *KubeconfigTestSuite) TestDeleteKubeconfigAsNonAdmin() {
+func (kc *ExtKubeconfigTestSuite) TestDeleteKubeconfigAsNonAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -743,7 +743,7 @@ func (kc *KubeconfigTestSuite) TestDeleteKubeconfigAsNonAdmin() {
 	require.NoError(kc.T(), err, "Backing configmap %s should be deleted when kubeconfig is deleted", secondUserKc.Name)
 }
 
-func (kc *KubeconfigTestSuite) TestKubeconfigAfterBackingTokensDeleted() {
+func (kc *ExtKubeconfigTestSuite) TestKubeconfigAfterBackingTokensDeleted() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -766,7 +766,7 @@ func (kc *KubeconfigTestSuite) TestKubeconfigAfterBackingTokensDeleted() {
 	require.NoError(kc.T(), err, "timed out waiting for kubeconfig %s to be deleted", adminKc.Name)
 }
 
-func (kc *KubeconfigTestSuite) TestKubeconfigCreationWithTTL() {
+func (kc *ExtKubeconfigTestSuite) TestKubeconfigCreationWithTTL() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -794,7 +794,7 @@ func (kc *KubeconfigTestSuite) TestKubeconfigCreationWithTTL() {
 	require.Equal(kc.T(), strconv.FormatInt(ttlSeconds, 10), backingConfigMap.Items[0].Data["ttl"], "Backing ConfigMap TTL should match requested TTL")
 }
 
-func (kc *KubeconfigTestSuite) TestKubeconfigWithCurrentContext() {
+func (kc *ExtKubeconfigTestSuite) TestKubeconfigWithCurrentContext() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -811,7 +811,7 @@ func (kc *KubeconfigTestSuite) TestKubeconfigWithCurrentContext() {
 	err = kubeconfigapi.VerifyKubeconfigContent(kc.client, kubeconfigapi.KubeconfigFile, []string{kc.cluster.ID, kc.cluster2.ID}, kc.client.RancherConfig.Host, false, kc.cluster2.Name)
 	require.NoError(kc.T(), err, "Kubeconfig content validation failed")
 
-	ttlStr, err := kubeconfigapi.GetKubeconfigDefaultTTLMinutes(kc.client)
+	ttlStr, err := settings.GetGlobalSettingDefaultValue(kc.client, settings.KubeconfigDefaultTTLMinutes)
 	require.NoError(kc.T(), err)
 	ttlInt, err := strconv.Atoi(ttlStr)
 	require.NoError(kc.T(), err)
@@ -832,6 +832,6 @@ func (kc *KubeconfigTestSuite) TestKubeconfigWithCurrentContext() {
 	require.NoError(kc.T(), err)
 }
 
-func TestKubeconfigTestSuite(t *testing.T) {
-	suite.Run(t, new(KubeconfigTestSuite))
+func TestExtKubeconfigTestSuite(t *testing.T) {
+	suite.Run(t, new(ExtKubeconfigTestSuite))
 }
