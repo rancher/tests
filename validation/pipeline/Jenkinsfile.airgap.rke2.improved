@@ -69,19 +69,9 @@ pipeline {
             description: 'Private registry password for airgap deployment'
         )
         booleanParam(
-            name: 'PARALLEL_EXECUTION',
-            defaultValue: true,
-            description: 'Enable parallel execution where possible'
-        )
-        booleanParam(
             name: 'DESTROY_ON_FAILURE',
             defaultValue: true,
             description: 'Destroy infrastructure when Ansible playbooks fail (automatic cleanup)'
-        )
-        choice(
-            name: 'LOG_LEVEL',
-            choices: ['INFO', 'DEBUG', 'VERBOSE'],
-            description: 'Pipeline logging level'
         )
     }
 
@@ -977,7 +967,7 @@ print("Original content:")
 print(content)
 
 # Find the exact problematic line and fix it
-# The specific issue is: ProxyCommand='ssh -W %h:%p -i {{ ssh_private_key_file }} {{ bastion_user }}@{{ bastion_host }}'
+# The specific issue is: ProxyCommand='ssh -W %h:%p -i {{ ssh_private_key_file }} {{ bastion_user }}@{{ bastion_host }}"'
 # We need to change the single quotes to double quotes
 
 # Pattern to match the exact problematic line
@@ -1168,7 +1158,6 @@ docker run --rm \\
         
         echo "Volume extraction completed"
     '
-"""
         
         sh(script: extractorScript, returnStdout: false)
         logInfo('State files extracted from shared volume successfully')
@@ -1350,5 +1339,3 @@ tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve -var-file=${env.TERRAF
         logWarning("Workspace ${env.TF_WORKSPACE} may need manual cleanup")
     }
 }
-
-
