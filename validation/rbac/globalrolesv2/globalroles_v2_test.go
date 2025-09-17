@@ -5,32 +5,37 @@ package globalrolesv2
 import (
 	"testing"
 
-	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 
-	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-
-	"github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	clusterapi "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/users"
-	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/shepherd/pkg/config"
+	clusterdefaults "github.com/rancher/tests/actions/config/defaults"
 
+	"github.com/rancher/tests/actions/clusters"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
+	"github.com/rancher/tests/actions/machinepools"
+	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/rbac"
+	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 type GlobalRolesV2TestSuite struct {
 	suite.Suite
-	client  *rancher.Client
-	session *session.Session
+	client        *rancher.Client
+	session       *session.Session
+	clusterConfig *clusters.ClusterConfig
 }
 
 func (gr *GlobalRolesV2TestSuite) TearDownSuite() {
@@ -40,6 +45,9 @@ func (gr *GlobalRolesV2TestSuite) TearDownSuite() {
 func (gr *GlobalRolesV2TestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	gr.session = testSession
+
+	gr.clusterConfig = new(clusters.ClusterConfig)
+	config.LoadConfig(clusterdefaults.ClusterConfigKey, gr.clusterConfig)
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(gr.T(), err)
@@ -55,7 +63,7 @@ func (gr *GlobalRolesV2TestSuite) validateRBACResources(createdUser *management.
 	grbName := grbOwner
 
 	log.Info("Verify that the cluster role template bindings are created for the downstream clusters.")
-	clusterNames, err := clusters.ListDownstreamClusters(gr.client)
+	clusterNames, err := clusterapi.ListDownstreamClusters(gr.client)
 	require.NoError(gr.T(), err)
 	clusterCount := len(clusterNames)
 	expectedCrtbCount := clusterCount * len(inheritedRoles)
@@ -139,7 +147,7 @@ func (gr *GlobalRolesV2TestSuite) TestCreateUserWithInheritedCustomClusterRole()
 	log.Info("Verify that the user can list all the downstream clusters.")
 	userClient, err := gr.client.AsUser(createdUser)
 	require.NoError(gr.T(), err)
-	clusterNames, err := clusters.ListDownstreamClusters(userClient)
+	clusterNames, err := clusterapi.ListDownstreamClusters(userClient)
 	require.NoError(gr.T(), err)
 	actualClusterCount := len(clusterNames)
 	require.Equal(gr.T(), expectedClusterCount, actualClusterCount, "Unexpected number of Clusters: Expected %d, Actual %d", expectedClusterCount, actualClusterCount)
@@ -163,18 +171,27 @@ func (gr *GlobalRolesV2TestSuite) TestClusterCreationAfterAddingGlobalRoleWithIn
 	log.Info("Verify that the user can list all the downstream clusters.")
 	userClient, err := gr.client.AsUser(createdUser)
 	require.NoError(gr.T(), err)
-	clusterNames, err := clusters.ListDownstreamClusters(userClient)
+	clusterNames, err := clusterapi.ListDownstreamClusters(userClient)
 	require.NoError(gr.T(), err)
 	actualClusterCount := len(clusterNames)
 	require.Equal(gr.T(), expectedClusterCount, actualClusterCount, "Unexpected number of Clusters: Expected %d, Actual %d", expectedClusterCount, actualClusterCount)
 
 	log.Info("As the new user, create new downstream clusters.")
-	clusterObject, _, testClusterConfig, err := createDownstreamCluster(userClient, "RKE1")
+	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
+	gr.clusterConfig.MachinePools = nodeRolesAll
+
+	log.Info("Setting up cluster config and provider for downstream k3s cluster")
+	provider := provisioning.CreateProvider(gr.clusterConfig.Provider)
+	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+	clusterObject, err := provisioning.CreateProvisioningCluster(userClient, provider, credentialSpec, gr.clusterConfig, machineConfigSpec, nil)
 	require.NoError(gr.T(), err)
-	provisioning.VerifyRKE1Cluster(gr.T(), userClient, testClusterConfig, clusterObject)
-	_, steveObject, testClusterConfig, err := createDownstreamCluster(userClient, "RKE2")
+	provisioning.VerifyCluster(gr.T(), gr.client, clusterObject)
+
+	log.Info("Setting up cluster config and provider for second downstream k3s cluster")
+	secondClusterObject, err := provisioning.CreateProvisioningCluster(userClient, provider, credentialSpec, gr.clusterConfig, machineConfigSpec, nil)
 	require.NoError(gr.T(), err)
-	provisioning.VerifyCluster(gr.T(), userClient, steveObject)
+	provisioning.VerifyCluster(gr.T(), gr.client, secondClusterObject)
 
 	gr.validateRBACResources(createdUser, createdGlobalRole, inheritedClusterRoles)
 }
@@ -209,7 +226,7 @@ func (gr *GlobalRolesV2TestSuite) TestUpdateExistingUserWithCustomGlobalRoleInhe
 	log.Info("Verify that the user can list all the downstream clusters.")
 	userClient, err := gr.client.AsUser(createdUser)
 	require.NoError(gr.T(), err)
-	clusterNames, err := clusters.ListDownstreamClusters(userClient)
+	clusterNames, err := clusterapi.ListDownstreamClusters(userClient)
 	require.NoError(gr.T(), err)
 	actualClusterCount := len(clusterNames)
 	require.Equal(gr.T(), expectedClusterCount, actualClusterCount, "Unexpected number of Clusters: Expected %d, Actual %d", expectedClusterCount, actualClusterCount)
@@ -295,7 +312,7 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromDel
 	log.Info("Verify that the user can list all the downstream clusters.")
 	userClient, err := gr.client.AsUser(createdUser)
 	require.NoError(gr.T(), err)
-	clusterNames, err := clusters.ListDownstreamClusters(userClient)
+	clusterNames, err := clusterapi.ListDownstreamClusters(userClient)
 	require.NoError(gr.T(), err)
 	actualClusterCount := len(clusterNames)
 	require.Equal(gr.T(), expectedClusterCount, actualClusterCount, "Unexpected number of Clusters: Expected %d, Actual %d", expectedClusterCount, actualClusterCount)
@@ -337,7 +354,7 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromDel
 	require.Equal(gr.T(), 0, actualRbCount, "Unexpected number of RoleBindings: Expected %d, Actual %d", 0, actualRbCount)
 
 	log.Infof("Verify that user %s cannot list the downstream clusters.", createdUser.ID)
-	clusterNames, err = clusters.ListDownstreamClusters(userClient)
+	clusterNames, err = clusterapi.ListDownstreamClusters(userClient)
 	require.NoError(gr.T(), err)
 	actualClusterCount = len(clusterNames)
 	require.Equal(gr.T(), 0, actualClusterCount, "Unexpected number of Clusters: Expected %d, Actual %d", 0, actualClusterCount)
@@ -368,7 +385,7 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromDel
 		log.Infof("Verify that user %s can list all the downstream clusters.", user.ID)
 		userClient, err := gr.client.AsUser(user)
 		require.NoError(gr.T(), err)
-		clusterNames, err := clusters.ListDownstreamClusters(userClient)
+		clusterNames, err := clusterapi.ListDownstreamClusters(userClient)
 		require.NoError(gr.T(), err)
 		actualClusterCount := len(clusterNames)
 		require.Equal(gr.T(), expectedClusterCount, actualClusterCount, "Unexpected number of Clusters for user %s. Expected %d, Actual %d.", user.ID, expectedClusterCount, actualClusterCount)
@@ -411,7 +428,7 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromDel
 		log.Infof("Verify that user %s cannot list the downstream clusters.", user.ID)
 		userClient, err := gr.client.AsUser(user)
 		require.NoError(gr.T(), err)
-		clusterNames, err := clusters.ListDownstreamClusters(userClient)
+		clusterNames, err := clusterapi.ListDownstreamClusters(userClient)
 		require.Error(gr.T(), err)
 		actualClusterCount := len(clusterNames)
 		require.Equal(gr.T(), 0, actualClusterCount, "Unexpected number of Clusters: Expected %d, Actual %d", 0, actualClusterCount)
@@ -441,13 +458,13 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromClu
 	log.Info("Verify that the user can list all the downstream clusters.")
 	userClient, err := gr.client.AsUser(createdUser)
 	require.NoError(gr.T(), err)
-	clusterNames, err := clusters.ListDownstreamClusters(userClient)
+	clusterNames, err := clusterapi.ListDownstreamClusters(userClient)
 	require.NoError(gr.T(), err)
 	actualClusterCount := len(clusterNames)
 	require.Equal(gr.T(), expectedClusterCount, actualClusterCount, "Unexpected number of Clusters: Expected %d, Actual %d", expectedClusterCount, actualClusterCount)
 
 	log.Info("Delete the RKE2 downstream cluster.")
-	err = clusters.DeleteK3SRKE2Cluster(userClient, rke2SteveObject.ID)
+	err = clusterapi.DeleteK3SRKE2Cluster(userClient, rke2SteveObject.ID)
 	require.NoError(gr.T(), err)
 
 	log.Info("Verify that the global role is not deleted.")
