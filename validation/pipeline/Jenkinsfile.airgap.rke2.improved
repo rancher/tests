@@ -573,6 +573,8 @@ def generateTerraformConfiguration() {
         throw new RuntimeException('S3_BACKEND_CONFIG environment variable is not set')
     }
 
+    sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
+
     def terraformConfig = env.TERRAFORM_CONFIG
 
     // Replace variables in config (similar to Jenkinsfile.recurring pattern)
@@ -588,6 +590,9 @@ def generateTerraformConfiguration() {
         dir('./tofu/aws/modules/airgap') {
             writeFile file: env.TERRAFORM_VARS_FILENAME, text: terraformConfig
             logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
+
+            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: env.S3_BACKEND_CONFIG
+            logInfo("S3 backend configuration written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
         }
     }
 }
@@ -929,13 +934,13 @@ unset TF_WORKSPACE
 echo 'Selecting default workspace before initialization...'
 tofu -chdir=tofu/aws/modules/airgap workspace select default || true
 
-echo 'Initializing OpenTofu backend with config file...'
-tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure -backend-config=backend.tfvars
+echo 'Initializing OpenTofu backend...'
+tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade
 
 echo 'Verifying initialization success...'
 tofu -chdir=tofu/aws/modules/airgap providers
 
-echo 'OpenTofu initialized successfully with S3 backend'
+echo 'OpenTofu initialization with S3 backend completed successfully'
     """
 
     executeScriptInContainer(initScript, [:], true)
