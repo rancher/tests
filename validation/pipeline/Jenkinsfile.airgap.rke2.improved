@@ -1025,9 +1025,72 @@ def backupTerraformStateImmediately() {
 
         // Archive the immediate backup
         archiveArtifacts artifacts: backupName, allowEmptyArchive: true
-
         logInfo('Immediate terraform state backup completed')
     } catch (Exception e) {
         logError("Immediate backup failed: ${e.message}")
+    }
+}
+
+// Infrastructure state archival functions
+def archiveInfrastructureState() {
+    logInfo('Archiving infrastructure state')
+    try {
+        // Extract current state
+        extractStateFromVolume()
+        extractStateFromContainer()
+
+        def timestamp = new Date().format('yyyyMMdd-HHmmss')
+        def stateName = "infrastructure-state-${env.BUILD_NUMBER}-${timestamp}.tfstate"
+
+        sh """
+            if [ -f terraform.tfstate ]; then
+                cp terraform.tfstate ${stateName}
+                echo "State archived: ${stateName}"
+            elif [ -f terraform-state.tfstate ]; then
+                cp terraform-state.tfstate ${stateName}
+                echo "State archived from fallback: ${stateName}"
+            else
+                echo "No state file available for archival"
+            fi
+        """
+
+        archiveArtifacts artifacts: stateName, allowEmptyArchive: true
+        logInfo('Infrastructure state archived successfully')
+    } catch (Exception e) {
+        logError("State archival failed: ${e.message}")
+    }
+}
+
+def archiveInfrastructureFailureArtifacts() {
+    logInfo('Archiving failure artifacts')
+    try {
+        // Archive partial state and logs
+        archiveInfrastructureState()
+        archiveBuildArtifacts([
+            'tfplan-backup',
+            '*.log',
+            'ansible-logs.txt',
+            'error-*.txt'
+        ])
+        logInfo('Failure artifacts archived')
+    } catch (Exception e) {
+        logError("Failure artifacts archival failed: ${e.message}")
+    }
+}
+
+def finalStateArchival() {
+    logInfo('Performing final comprehensive state archival')
+    try {
+        archiveInfrastructureState()
+        // Additional final artifacts
+        archiveBuildArtifacts([
+            'infrastructure-outputs.json',
+            '${env.TERRAFORM_VARS_FILENAME}',
+            'ansible-inventory.yml',
+            'deployment-summary.json'
+        ])
+        logInfo('Final state archival completed')
+    } catch (Exception e) {
+        logError("Final archival failed: ${e.message}")
     }
 }
