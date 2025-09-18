@@ -785,6 +785,38 @@ def deployInfrastructure() {
     logInfo('Infrastructure deployment completed successfully')
 }
 
+def validateInfrastructureState() {
+    logInfo('Validating infrastructure state after deployment')
+
+    def validationScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+export TF_WORKSPACE=${env.TF_WORKSPACE}
+
+echo 'Validating terraform state...'
+if [ ! -f tofu/aws/modules/airgap/terraform.tfstate ] || [ ! -s tofu/aws/modules/airgap/terraform.tfstate ]; then
+    echo 'ERROR: terraform.tfstate missing or empty after deployment'
+    exit 1
+fi
+echo 'State file validation passed'
+
+echo 'Generating and validating outputs...'
+tofu -chdir=tofu/aws/modules/airgap output -json > /dev/null
+if [ $? -ne 0 ]; then
+    echo 'ERROR: Failed to generate terraform outputs'
+    exit 1
+fi
+echo 'Outputs validation passed'
+
+echo 'Checking key infrastructure resources...'
+tofu -chdir=tofu/aws/modules/airgap state list
+
+echo 'Infrastructure state validation completed successfully'
+    """
+
+    executeScriptInContainer(validationScript)
+    logInfo('Infrastructure state validated successfully')
+}
+
 def initializeOpenTofu() {
     logInfo('Initializing OpenTofu with S3 backend')
 
@@ -1005,7 +1037,6 @@ def backupTerraformStateImmediately() {
         extractStateFromVolume()
         extractStateFromContainer()
 
-        // Create timestamped backup with build information
         def timestamp = new Date().format('yyyyMMdd-HHmmss')
         def backupName = "terraform-state-build-${env.BUILD_NUMBER}-${timestamp}.tfstate"
 
