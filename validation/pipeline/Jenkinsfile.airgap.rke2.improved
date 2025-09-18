@@ -790,7 +790,7 @@ def validateInfrastructureState() {
 
     def validationScript = """
 cd ${env.QA_INFRA_WORK_PATH}
-export TF_WORKSPACE=${env.TF_WORKSPACE}
+export TF_WORKSPACE="${env.TF_WORKSPACE}"
 
 echo 'Validating terraform state...'
 if [ ! -f tofu/aws/modules/airgap/terraform.tfstate ] || [ ! -s tofu/aws/modules/airgap/terraform.tfstate ]; then
@@ -801,7 +801,7 @@ echo 'State file validation passed'
 
 echo 'Generating and validating outputs...'
 tofu -chdir=tofu/aws/modules/airgap output -json > /dev/null
-if [ $? -ne 0 ]; then
+if [ \$? -ne 0 ]; then
     echo 'ERROR: Failed to generate terraform outputs'
     exit 1
 fi
@@ -854,11 +854,11 @@ echo 'Current workspaces:'
 tofu -chdir=tofu/aws/modules/airgap workspace list
 
 echo 'Creating or selecting workspace: ${env.TF_WORKSPACE}'
-if ! tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE} 2>/dev/null; then
+if ! tofu -chdir=tofu/aws/modules/airgap workspace select "${env.TF_WORKSPACE}" 2>/dev/null; then
     echo 'Workspace does not exist, creating new workspace...'
-    tofu -chdir=tofu/aws/modules/airgap workspace new ${env.TF_WORKSPACE}
+    tofu -chdir=tofu/aws/modules/airgap workspace new "${env.TF_WORKSPACE}"
 
-    if ! tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TF_WORKSPACE}; then
+    if ! tofu -chdir=tofu/aws/modules/airgap workspace select "${env.TF_WORKSPACE}"; then
         echo 'ERROR: Failed to create and select workspace'
         exit 1
     fi
@@ -884,9 +884,9 @@ if [ "\$CURRENT_WORKSPACE" != "${env.TF_WORKSPACE}" ]; then
     exit 1
 fi
 
-export TF_WORKSPACE=${env.TF_WORKSPACE}
+export TF_WORKSPACE="${env.TF_WORKSPACE}"
 echo "Workspace management completed: \$TF_WORKSPACE"
-"""
+    """
 
     executeScriptInContainer(workspaceScript)
 }
@@ -896,10 +896,10 @@ def planInfrastructure() {
 
     def planScript = """
 cd ${env.QA_INFRA_WORK_PATH}
-export TF_WORKSPACE=${env.TF_WORKSPACE}
+export TF_WORKSPACE="${env.TF_WORKSPACE}"
 
 echo 'Generating infrastructure plan for validation...'
-tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=tfplan
+tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file="${env.TERRAFORM_VARS_FILENAME}" -out=tfplan
 
 echo 'Checking if plan file was generated in the correct location...'
 if [ ! -f tofu/aws/modules/airgap/tfplan ]; then
@@ -923,7 +923,7 @@ cp tofu/aws/modules/airgap/tfplan /root/tfplan-backup
 echo 'Plan file backed up to shared volume'
 
 echo 'Infrastructure plan validation completed'
-"""
+    """
 
     executeScriptInContainer(planScript)
 }
@@ -933,7 +933,7 @@ def applyInfrastructure() {
 
     def applyScript = """
 cd ${env.QA_INFRA_WORK_PATH}
-export TF_WORKSPACE=${env.TF_WORKSPACE}
+export TF_WORKSPACE="${env.TF_WORKSPACE}"
 
 echo 'Restoring plan file from shared volume...'
 if [ -f /root/tfplan-backup ]; then
@@ -943,7 +943,7 @@ if [ -f /root/tfplan-backup ]; then
 else
     echo 'ERROR: No backup plan file found in shared volume'
     echo 'Generating new plan...'
-    tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=tfplan
+    tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file="${env.TERRAFORM_VARS_FILENAME}" -out=tfplan
 fi
 
 # Check if plan was restored/generated successfully in module directory
@@ -976,7 +976,7 @@ cp tofu/aws/modules/airgap/terraform.tfstate /root/terraform.tfstate
 
 echo 'Backing up terraform variables file for archival...'
 # Backup locally for archival (no S3 upload needed with backend)
-cp tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} /root/${env.TERRAFORM_VARS_FILENAME}
+cp tofu/aws/modules/airgap/"${env.TERRAFORM_VARS_FILENAME}" /root/"${env.TERRAFORM_VARS_FILENAME}"
 
 # Verify state file exists and has content
 if [ -f tofu/aws/modules/airgap/terraform.tfstate ] && [ -s tofu/aws/modules/airgap/terraform.tfstate ]; then
