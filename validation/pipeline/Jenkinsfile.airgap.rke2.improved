@@ -238,11 +238,55 @@ pipeline {
                             logInfo('Infrastructure provisioned and validated successfully')
                         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
                             logError("Infrastructure deployment timed out after ${timeoutMinutes} minutes")
-                            handleInfrastructureFailure('TIMEOUT', e)
+                            logError("Timeout exception details: ${e.message}")
+                            try {
+                                archiveInfrastructureFailureArtifacts()
+                                if (env.DESTROY_ON_FAILURE.toBoolean()) {
+                                    logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for timeout')
+                                    def cleanupScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+export TF_WORKSPACE="${env.TF_WORKSPACE}"
+
+echo 'Performing infrastructure cleanup due to timeout...'
+tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve -var-file="${env.TERRAFORM_VARS_FILENAME}" || echo 'Destroy command failed - manual cleanup may be required'
+echo 'Cleanup attempt completed'
+                                    """
+                                    executeScriptInContainer(cleanupScript)
+                                    logInfo('Infrastructure cleanup attempted for timeout')
+                                } else {
+                                    logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for timeout')
+                                    logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
+                                }
+                                cleanupContainersAndVolumes()
+                            } catch (cleanupException) {
+                                logError("Cleanup during timeout handling failed: ${cleanupException.message}")
+                            }
                             throw e
                         } catch (Exception e) {
                             logError("Infrastructure setup failed: ${e.message}")
-                            handleInfrastructureFailure('DEPLOYMENT_FAILED', e)
+                            logError("Deployment failure exception details: ${e.message}")
+                            try {
+                                archiveInfrastructureFailureArtifacts()
+                                if (env.DESTROY_ON_FAILURE.toBoolean()) {
+                                    logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for deployment failure')
+                                    def cleanupScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+export TF_WORKSPACE="${env.TF_WORKSPACE}"
+
+echo 'Performing infrastructure cleanup due to deployment failure...'
+tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve -var-file="${env.TERRAFORM_VARS_FILENAME}" || echo 'Destroy command failed - manual cleanup may be required'
+echo 'Cleanup attempt completed'
+                                    """
+                                    executeScriptInContainer(cleanupScript)
+                                    logInfo('Infrastructure cleanup attempted for deployment failure')
+                                } else {
+                                    logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for deployment failure')
+                                    logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
+                                }
+                                cleanupContainersAndVolumes()
+                            } catch (cleanupException) {
+                                logError("Cleanup during deployment failure handling failed: ${cleanupException.message}")
+                            }
                             throw e
                         }
                     }
