@@ -68,7 +68,7 @@ pipeline {
             defaultValue: '',
             description: 'Private registry password for airgap deployment'
         )
-        string(
+        text(
             name: 'S3_BACKEND_CONFIG',
             defaultValue: '',
             description: 'S3 backend configuration content (required for Terraform state storage)'
