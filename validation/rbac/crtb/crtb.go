@@ -96,8 +96,8 @@ func verifyClusterRoleTemplateBindingStatusField(crtb *v3.ClusterRoleTemplateBin
 		}
 	}
 
-	if status.ObservedGenerationRemote != 2 {
-		return fmt.Errorf("observedGenerationRemote is not 2, found: %d", status.ObservedGenerationRemote)
+	if status.ObservedGenerationRemote != 1 {
+		return fmt.Errorf("observedGenerationRemote is not 1, found: %d", status.ObservedGenerationRemote)
 	}
 
 	if status.SummaryRemote != completedSummary {
