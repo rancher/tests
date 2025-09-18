@@ -60,7 +60,7 @@ pipeline {
         )
         string(
             name: 'PRIVATE_REGISTRY_USERNAME',
-            defaultValue: '',
+            defaultValue: 'default-user',
             description: 'Private registry username for airgap deployment'
         )
         password(
@@ -72,6 +72,11 @@ pipeline {
             name: 'S3_BACKEND_CONFIG',
             defaultValue: '',
             description: 'S3 backend configuration content (required for Terraform state storage)'
+        )
+        string(
+            name: 'HOSTNAME_PREFIX',
+            defaultValue: 'ansible-airgap',
+            description: 'Hostname prefix for *.qa.rancher.space and other AWS resources'
         )
         booleanParam(
             name: 'DESTROY_ON_FAILURE',
@@ -88,7 +93,7 @@ pipeline {
 
         // Private registry configurations
         PRIVATE_REGISTRY_URL = "${params.PRIVATE_REGISTRY_URL ?: ''}"
-        PRIVATE_REGISTRY_USERNAME = "${params.PRIVATE_REGISTRY_USERNAME ?: ''}"
+        PRIVATE_REGISTRY_USERNAME = "${params.PRIVATE_REGISTRY_USERNAME ?: 'default-user'}"
         PRIVATE_REGISTRY_PASSWORD = "${params.PRIVATE_REGISTRY_PASSWORD ?: ''}"
 
         // Path configurations
@@ -120,6 +125,9 @@ pipeline {
 
         // Backend configuration
         S3_BACKEND_CONFIG = "${params.S3_BACKEND_CONFIG ?: ''}"
+
+        // Hostname prefix
+        HOSTNAME_PREFIX = "${params.HOSTNAME_PREFIX ?: 'ansible-airgap'}"
     }
 
     stages {
@@ -584,6 +592,7 @@ def generateTerraformConfiguration() {
     terraformConfig = terraformConfig.replace('${AWS_IAM_PROFILE}', env.AWS_IAM_PROFILE ?: '')
     terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC ?: '')
     terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS ?: '')
+    terraformConfig = terraformConfig.replace('${HOSTNAME_PREFIX}', env.HOSTNAME_PREFIX ?: '')
 
     // Write the configuration file
     dir('./qa-infra-automation') {
@@ -608,6 +617,9 @@ def generateAnsibleConfiguration() {
 
     // Replace variables in config
     ansibleVars = ansibleVars.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD ?: '')
+    ansibleVars = ansibleVars.replace('${HOSTNAME_PREFIX}', env.HOSTNAME_PREFIX ?: '')
+    ansibleVars = ansibleVars.replace('${PRIVATE_REGISTRY_USERNAME}', env.PRIVATE_REGISTRY_USERNAME ?: '')
+    ansibleVars = ansibleVars.replace('${PRIVATE_REGISTRY_PASSWORD}', env.PRIVATE_REGISTRY_PASSWORD ?: '')
 
     // Write the Ansible configuration file to the correct location for airgap deployment
     dir('./qa-infra-automation') {
