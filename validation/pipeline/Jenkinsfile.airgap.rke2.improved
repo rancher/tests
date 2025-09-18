@@ -68,6 +68,11 @@ pipeline {
             defaultValue: '',
             description: 'Private registry password for airgap deployment'
         )
+        string(
+            name: 'S3_BACKEND_CONFIG',
+            defaultValue: '',
+            description: 'S3 backend configuration content (required for Terraform state storage)'
+        )
         booleanParam(
             name: 'DESTROY_ON_FAILURE',
             defaultValue: true,
@@ -112,6 +117,9 @@ pipeline {
         TERRAFORM_TIMEOUT = '30'
         ANSIBLE_TIMEOUT = '45'
         VALIDATION_TIMEOUT = '15'
+
+        // Backend configuration
+        S3_BACKEND_CONFIG = "${params.S3_BACKEND_CONFIG ?: ''}"
     }
 
     stages {
@@ -479,6 +487,38 @@ def getCredentialsList() {
 def generateConfigurationFiles() {
     logInfo('Generating configuration files for infrastructure deployment')
 
+    // Load configuration templates if not already set
+    if (!env.TERRAFORM_CONFIG) {
+        try {
+            env.TERRAFORM_CONFIG = readFile('validation/pipeline/configs/airgap-rke2-terraform.tfvars.template')
+            logInfo('Loaded TERRAFORM_CONFIG from template file')
+        } catch (Exception e) {
+            logError("Failed to load TERRAFORM_CONFIG template: ${e.message}")
+            error('TERRAFORM_CONFIG is required - either set the environment variable or provide the template file')
+        }
+    }
+
+    if (!env.S3_BACKEND_CONFIG) {
+        try {
+            env.S3_BACKEND_CONFIG = readFile('validation/pipeline/configs/backend.tfvars.template')
+            logInfo('Loaded S3_BACKEND_CONFIG from template file')
+        } catch (Exception e) {
+            logError("Failed to load S3_BACKEND_CONFIG template: ${e.message}")
+            error('S3_BACKEND_CONFIG is required - either set the environment variable or provide the template file with valid S3 bucket/key')
+        }
+    }
+
+    if (!env.ANSIBLE_VARIABLES) {
+        try {
+            env.ANSIBLE_VARIABLES = readFile('validation/pipeline/configs/airgap-rke2-ansible-vars.yaml.template')
+            logInfo('Loaded ANSIBLE_VARIABLES from template file')
+        } catch (Exception e) {
+            logError("Failed to load ANSIBLE_VARIABLES template: ${e.message}")
+            error('ANSIBLE_VARIABLES is required - either set the environment variable or provide the template file')
+        }
+    }
+
+    // No interpolation for S3_BACKEND_CONFIG - assume user provides complete config in parameter
     // Validate required environment variables
     validateConfigurationEnvironmentVariables()
 
@@ -548,14 +588,6 @@ def generateTerraformConfiguration() {
         dir('./tofu/aws/modules/airgap') {
             writeFile file: env.TERRAFORM_VARS_FILENAME, text: terraformConfig
             logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
-        }
-    }
-
-    // Write the S3 backend config file
-    dir('./qa-infra-automation') {
-        dir('./tofu/aws/modules/airgap') {
-            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: env.S3_BACKEND_CONFIG
-            logInfo("S3 backend configuration written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
         }
     }
 }
@@ -837,23 +869,46 @@ def validateInfrastructureState() {
 cd ${env.QA_INFRA_WORK_PATH}
 export TF_WORKSPACE="${env.TF_WORKSPACE}"
 
-echo 'Validating terraform state...'
-if [ ! -f tofu/aws/modules/airgap/terraform.tfstate ] || [ ! -s tofu/aws/modules/airgap/terraform.tfstate ]; then
-    echo 'ERROR: terraform.tfstate missing or empty after deployment'
+echo 'Validating remote terraform state via tofu commands (S3 backend)...'
+
+echo 'Checking key infrastructure resources from remote state...'
+tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap state list > /root/state-list.txt 2>&1
+STATE_RC=\$?
+echo "State list command completed with return code: \$STATE_RC"
+if [ \$STATE_RC -ne 0 ]; then
+    echo 'ERROR: Failed to retrieve state from remote backend'
+    cat /root/state-list.txt
     exit 1
 fi
-echo 'State file validation passed'
 
-echo 'Generating and validating outputs...'
-tofu -chdir=tofu/aws/modules/airgap output -json > /dev/null
-if [ \$? -ne 0 ]; then
-    echo 'ERROR: Failed to generate terraform outputs'
+echo 'State retrieval passed'
+
+echo 'Checking if state has resources...'
+STATE_COUNT=\$(wc -l < /root/state-list.txt)
+if [ "\$STATE_COUNT" -eq 0 ] || [ "\$STATE_COUNT" -eq 1 ]; then  # 1 line for empty or header
+    echo 'WARNING: No resources found in state - this may indicate no changes were applied'
+    cat /root/state-list.txt
+else
+    echo "SUCCESS: State contains \$((STATE_COUNT - 1)) resources"
+    echo 'Sample state resources:'
+    head -5 /root/state-list.txt
+fi
+
+echo 'Generating and validating outputs from remote state...'
+tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap output -json > /root/infrastructure-outputs.json 2>&1
+OUTPUT_RC=\$?
+if [ \$OUTPUT_RC -ne 0 ]; then
+    echo 'ERROR: Failed to generate terraform outputs from remote state'
+    cat /root/infrastructure-outputs.json
     exit 1
 fi
-echo 'Outputs validation passed'
 
-echo 'Checking key infrastructure resources...'
-tofu -chdir=tofu/aws/modules/airgap state list
+OUTPUT_SIZE=\$(stat -c%s /root/infrastructure-outputs.json 2>/dev/null || echo 0)
+if [ "\$OUTPUT_SIZE" -eq 0 ]; then
+    echo 'WARNING: Outputs file is empty'
+else
+    echo 'SUCCESS: Outputs generated successfully (\$OUTPUT_SIZE bytes)'
+fi
 
 echo 'Infrastructure state validation completed successfully'
     """
@@ -880,8 +935,8 @@ tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure -bac
 echo 'Verifying initialization success...'
 tofu -chdir=tofu/aws/modules/airgap providers
 
-echo 'OpenTofu initialization with S3 backend completed successfully'
-"""
+echo 'OpenTofu initialized successfully with S3 backend'
+    """
 
     executeScriptInContainer(initScript, [:], true)
 }
@@ -980,80 +1035,85 @@ def applyInfrastructure() {
 cd ${env.QA_INFRA_WORK_PATH}
 export TF_WORKSPACE="${env.TF_WORKSPACE}"
 
+echo 'Debug: Listing current directory contents...'
+ls -la .
+
+echo 'Debug: Listing mounted qa-infra-automation/tofu/aws/modules/airgap contents...'
+ls -la /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/ || echo 'Mounted directory listing failed'
+
 echo 'Restoring plan file from shared volume...'
 if [ -f /root/tfplan-backup ]; then
     # Restore plan file to the correct module directory
-    cp /root/tfplan-backup tofu/aws/modules/airgap/tfplan
+    cp /root/tfplan-backup /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/tfplan
     echo 'Plan file restored from shared volume to module directory'
 else
-    echo 'ERROR: No backup plan file found in shared volume'
-    echo 'Generating new plan...'
-    tofu -chdir=tofu/aws/modules/airgap plan -input=false -var-file="${env.TERRAFORM_VARS_FILENAME}" -out=tfplan
+    echo 'WARNING: No backup plan file found in shared volume, generating new plan...'
+    tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap plan -input=false -var-file="${env.TERRAFORM_VARS_FILENAME}" -out=tfplan
+    if [ \$? -ne 0 ]; then
+        echo 'ERROR: Plan generation failed'
+        exit 1
+    fi
 fi
 
 # Check if plan was restored/generated successfully in module directory
-if [ ! -f tofu/aws/modules/airgap/tfplan ]; then
+if [ ! -f /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/tfplan ]; then
     echo 'ERROR: Plan file was not generated successfully in module directory'
+    ls -la /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/ || echo 'Cannot list module directory'
     exit 1
 fi
 
 # Verify the plan file is not empty
-PLAN_SIZE=\$(stat -c%s tofu/aws/modules/airgap/tfplan 2>/dev/null || echo 0)
+PLAN_SIZE=\$(stat -c%s /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/tfplan 2>/dev/null || echo 0)
 if [ "\$PLAN_SIZE" = "0" ]; then
     echo 'ERROR: Plan file is empty'
     exit 1
 fi
 
 echo 'Plan file restored successfully (\$PLAN_SIZE bytes), applying...'
-tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -input=false tfplan
+echo 'Starting tofu apply...'
+tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap apply -auto-approve -input=false tfplan
+APPLY_RC=\$?
+
+echo "Tofu apply completed with return code: \$APPLY_RC"
+if [ \$APPLY_RC -ne 0 ]; then
+    echo 'ERROR: Tofu apply failed'
+    exit 1
+fi
 
 # Clean up the plan file after successful application
-rm -f tofu/aws/modules/airgap/tfplan
+rm -f /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/tfplan
+
+echo 'Debug: Listing module directory after apply...'
+ls -la /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/
 
 echo 'Verifying state after apply...'
-tofu -chdir=tofu/aws/modules/airgap state list
+tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap state list
 
 echo 'Backing up terraform state immediately after apply...'
 # Create multiple backups of the state file for reliability
-cp tofu/aws/modules/airgap/terraform.tfstate terraform-state-backup-\$(date +%Y%m%d-%H%M%S).tfstate
-cp tofu/aws/modules/airgap/terraform.tfstate /root/terraform-state-primary.tfstate
-cp tofu/aws/modules/airgap/terraform.tfstate /root/terraform.tfstate
-
-echo 'Backing up terraform variables file for archival...'
-# Backup locally for archival (no S3 upload needed with backend)
-cp tofu/aws/modules/airgap/"${env.TERRAFORM_VARS_FILENAME}" /root/"${env.TERRAFORM_VARS_FILENAME}"
-
-# Verify state file exists and has content
-if [ -f tofu/aws/modules/airgap/terraform.tfstate ] && [ -s tofu/aws/modules/airgap/terraform.tfstate ]; then
-    echo "SUCCESS: terraform.tfstate backed up successfully (\$(stat -c%s tofu/aws/modules/airgap/terraform.tfstate) bytes)"
-    ls -la tofu/aws/modules/airgap/terraform.tfstate
+STATE_FILE="/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate"
+if [ -f "\$STATE_FILE" ]; then
+    cp "\$STATE_FILE" "\$STATE_FILE.backup-\$(date +%Y%m%d-%H%M%S)"
+    cp "\$STATE_FILE" /root/terraform-state-primary.tfstate
+    cp "\$STATE_FILE" /root/terraform.tfstate
+    STATE_SIZE=\$(stat -c%s "\$STATE_FILE" 2>/dev/null || echo 0)
+    echo "SUCCESS: terraform.tfstate backed up successfully (\$STATE_SIZE bytes)"
+    ls -la "\$STATE_FILE"
 else
-    echo "ERROR: terraform.tfstate is missing or empty after apply"
+    echo 'ERROR: Terraform state file not found after apply'
+    exit 1
 fi
 
+echo 'Backing up terraform variables file for archival...'
+cp /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"${env.TERRAFORM_VARS_FILENAME}" /root/"${env.TERRAFORM_VARS_FILENAME}"
+
 echo 'Generating outputs for downstream stages...'
-tofu -chdir=tofu/aws/modules/airgap output -json > ${env.QA_INFRA_WORK_PATH}/infrastructure-outputs.json
+tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap output -json > /root/infrastructure-outputs.json
 
 echo 'Verifying inventory file generation...'
-if [ -f ansible/rke2/airgap/inventory/inventory.yml ] && [ -s ansible/rke2/airgap/inventory/inventory.yml ]; then
+if [ -f /root/go/src/github.com/rancher/qa-infra-automation/ansible/rke2/airgap/inventory/inventory.yml ] && [ -s /root/go/src/github.com/rancher/qa-infra-automation/ansible/rke2/airgap/inventory/inventory.yml ]; then
     echo 'SUCCESS: inventory.yml generated by tofu apply exists and has content'
-    echo 'Fixing YAML syntax issues in inventory file...'
-
-    # Debug: Show the full inventory.yml content first
-    echo "=== Full inventory.yml content before fixing ==="
-    cat ansible/rke2/airgap/inventory/inventory.yml
-    echo "=== End inventory.yml content ==="
-
-    # Show specific lines that might have YAML syntax issues
-    echo "=== Lines with potential YAML syntax issues ==="
-    grep -n ":" ansible/rke2/airgap/inventory/inventory.yml | grep ": [^']" | head -10
-    echo "=== End potential issues ==="
-
-    # Fix the ProxyCommand quoting issue with a comprehensive approach
-    # Create a backup first
-    cp ansible/rke2/airgap/inventory/inventory.yml ansible/rke2/airgap/inventory/inventory.yml.backup
-
-    echo 'Inventory file processing completed'
+    cp /root/go/src/github.com/rancher/qa-infra-automation/ansible/rke2/airgap/inventory/inventory.yml /root/ansible-inventory.yml
 else
     echo 'WARNING: inventory.yml not found or empty after apply'
 fi
@@ -1063,15 +1123,13 @@ echo 'Infrastructure apply completed successfully'
 
     executeScriptInContainer(applyScript)
 
-    // Extract files to shared volume after successful apply
-    def mountScript = """
-cp -f ${env.QA_INFRA_WORK_PATH}/terraform.tfstate /root/terraform.tfstate
-cp -f ${env.QA_INFRA_WORK_PATH}/infrastructure-outputs.json /root/infrastructure-outputs.json
-cp -f ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} /root/${env.TERRAFORM_VARS_FILENAME}
-cp -f ${env.QA_INFRA_WORK_PATH}/ansible/rke2/airgap/inventory/inventory.yml /root/ansible-inventory.yml
+    // Extract files to shared volume after successful apply (redundant but ensuring)
+    logInfo('Extracting files after apply for persistence')
+    sh """
+    if [ -f qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ]; then
+        cp qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ./
+    fi
     """
-
-    executeScriptInContainer(mountScript)
 }
 
 def backupTerraformStateImmediately() {
