@@ -26,14 +26,16 @@ type AWSMachineConfig struct {
 	AMI                string   `json:"ami" yaml:"ami"`
 	IAMInstanceProfile string   `json:"iamInstanceProfile" yaml:"iamInstanceProfile"`
 	InstanceType       string   `json:"instanceType" yaml:"instanceType"`
-	SSHUser            string   `json:"sshUser" yaml:"sshUser"`
-	VPCID              string   `json:"vpcId" yaml:"vpcId"`
-	SubnetID           string   `json:"subnetId" yaml:"subnetId"`
-	VolumeType         string   `json:"volumeType" yaml:"volumeType"`
-	Zone               string   `json:"zone" yaml:"zone"`
+	PrivateAddressOnly bool     `json:"privateAddressOnly" yaml:"privateAddressOnly"`
 	Retries            string   `json:"retries" yaml:"retries"`
 	RootSize           string   `json:"rootSize" yaml:"rootSize"`
 	SecurityGroup      []string `json:"securityGroup" yaml:"securityGroup"`
+	SSHUser            string   `json:"sshUser" yaml:"sshUser"`
+	SubnetID           string   `json:"subnetId" yaml:"subnetId"`
+	UsePrivateAddress  bool     `json:"usePrivateAddress" yaml:"usePrivateAddress"`
+	VPCID              string   `json:"vpcId" yaml:"vpcId"`
+	VolumeType         string   `json:"volumeType" yaml:"volumeType"`
+	Zone               string   `json:"zone" yaml:"zone"`
 }
 
 // NewAWSMachineConfig is a constructor to set up rke-machine-config.cattle.io.amazonec2config. It returns an *unstructured.Unstructured
@@ -47,19 +49,21 @@ func NewAWSMachineConfig(machineConfigs MachineConfigs, generatedPoolName, names
 		machineConfig.SetGenerateName(generatedPoolName)
 		machineConfig.SetNamespace(namespace)
 
-		machineConfig.Object["region"] = machineConfigs.AmazonEC2MachineConfigs.Region
 		machineConfig.Object["ami"] = awsMachineConfig.AMI
 		machineConfig.Object["iamInstanceProfile"] = awsMachineConfig.IAMInstanceProfile
 		machineConfig.Object["instanceType"] = awsMachineConfig.InstanceType
-		machineConfig.Object["sshUser"] = awsMachineConfig.SSHUser
-		machineConfig.Object["type"] = AWSPoolType
-		machineConfig.Object["vpcId"] = awsMachineConfig.VPCID
-		machineConfig.Object["subnetId"] = awsMachineConfig.SubnetID
-		machineConfig.Object["volumeType"] = awsMachineConfig.VolumeType
-		machineConfig.Object["zone"] = awsMachineConfig.Zone
+		machineConfig.Object["privateAddressOnly"] = awsMachineConfig.PrivateAddressOnly
+		machineConfig.Object["region"] = machineConfigs.AmazonEC2MachineConfigs.Region
 		machineConfig.Object["retries"] = awsMachineConfig.Retries
 		machineConfig.Object["rootSize"] = awsMachineConfig.RootSize
 		machineConfig.Object["securityGroup"] = awsMachineConfig.SecurityGroup
+		machineConfig.Object["sshUser"] = awsMachineConfig.SSHUser
+		machineConfig.Object["subnetId"] = awsMachineConfig.SubnetID
+		machineConfig.Object["type"] = AWSPoolType
+		machineConfig.Object["usePrivateAddress"] = awsMachineConfig.UsePrivateAddress
+		machineConfig.Object["volumeType"] = awsMachineConfig.VolumeType
+		machineConfig.Object["vpcId"] = awsMachineConfig.VPCID
+		machineConfig.Object["zone"] = awsMachineConfig.Zone
 
 		multiConfig = append(multiConfig, machineConfig)
 	}
