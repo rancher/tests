@@ -973,7 +973,7 @@ else
                     # Determine placeholder based on variable type from variables.tf
                     VAR_TYPE=\$(awk -v var="^variable \"\$VAR\"" '
                       BEGIN { in_var=0; type_line="" }
-                      $0 ~ var { 
+                      \$0 ~ var { 
                         in_var=1;
                         if (gsub(/.*type[[:space:]]*=[[:space:]]*/, "")) {
                           type_line = $0;
