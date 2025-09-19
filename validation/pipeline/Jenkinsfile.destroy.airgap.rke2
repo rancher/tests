@@ -61,11 +61,6 @@ pipeline {
             defaultValue: '',
             description: 'Terraform workspace to destroy (e.g., jenkins_airgap_ansible_workspace_123)'
         )
-        booleanParam(
-            name: 'FORCE_DESTROY',
-            defaultValue: false,
-            description: 'Force destruction even if state validation fails'
-        )
     }
 
     environment {
@@ -113,7 +108,6 @@ pipeline {
                     env.TARGET_WORKSPACE = params.TARGET_WORKSPACE
                     logInfo("Target workspace: ${env.TARGET_WORKSPACE}")
                     logInfo('State source: S3 Backend')
-                    logInfo("Force destroy: ${params.FORCE_DESTROY}")
 
                     // Prepare Environment
                     logInfo('Preparing destruction environment')
@@ -140,24 +134,10 @@ pipeline {
                     // Retrieve Terraform State
                     logInfo('Retrieving Terraform state from S3 backend for destruction')
                     def stateRetrieved = retrieveStateFromS3()
-                    if (!stateRetrieved && !params.FORCE_DESTROY) {
-                        error('Could not retrieve Terraform state from S3 and FORCE_DESTROY is not enabled')
-                    } else if (!stateRetrieved && params.FORCE_DESTROY) {
-                        logWarning('S3 state retrieval failed but FORCE_DESTROY is enabled - proceeding with caution')
+                    if (!stateRetrieved) {
+                        error('Could not retrieve Terraform state from S3. Halting destruction.')
                     }
 
-                    // User confirmation before destruction
-                    if (!params.FORCE_DESTROY) {
-                        try {
-                            timeout(time: 5, unit: 'MINUTES') {
-                                input 'Proceed with infrastructure destruction?'
-                            }
-                        } catch (Exception e) {
-                            logWarning('Destruction cancelled by user or timeout.')
-                            currentBuild.result = 'ABORTED'
-                            return
-                        }
-                    }
 
                     // Execute the destruction
                     executeDestruction()
