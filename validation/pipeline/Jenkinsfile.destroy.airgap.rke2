@@ -969,8 +969,40 @@ else
         if [ -n "\$MISSING_VARS" ]; then
             echo "Discovered missing variables: \$MISSING_VARS"
             for VAR in \$MISSING_VARS; do
-                if ! grep -q "^\$VAR\\s*=\\s*" tofu/aws/modules/airgap/\$TFVARS; then
-                    echo "\$VAR = \"\"" >> tofu/aws/modules/airgap/\$TFVARS
+                if ! grep -q "^\$VAR\\s*=\\s*" "tofu/aws/modules/airgap/\$TFVARS"; then
+                    # Determine placeholder based on variable type from variables.tf
+                    VAR_TYPE=\$(awk -v var="^variable \"\$VAR\"" '
+                      BEGIN { in_var=0; type_line="" }
+                      $0 ~ var { 
+                        in_var=1;
+                        if (gsub(/.*type[[:space:]]*=[[:space:]]*/, "")) {
+                          type_line = $0;
+                          gsub(/[[:space:]}]*$/, "", type_line);
+                          print type_line;
+                          exit;
+                        }
+                        next;
+                      }
+                      in_var && /type[[:space:]]*=/ {
+                        gsub(/.*type[[:space:]]*=[[:space:]]*/, "");
+                        type_line = $0;
+                        gsub(/[[:space:]}]*$/, "", type_line);
+                        print type_line;
+                        exit;
+                      }
+                    ' "tofu/aws/modules/airgap/variables.tf")
+
+                    if [[ \$VAR_TYPE == *list* ]]; then
+                        echo "\$VAR = []" >> "tofu/aws/modules/airgap/\$TFVARS"
+                    elif [[ \$VAR_TYPE == *map* || \$VAR_TYPE == *object* ]]; then
+                        echo "\$VAR = {}" >> "tofu/aws/modules/airgap/\$TFVARS"
+                    elif [[ \$VAR_TYPE == *number* ]]; then
+                        echo "\$VAR = 0" >> "tofu/aws/modules/airgap/\$TFVARS"
+                    elif [[ \$VAR_TYPE == *bool* ]]; then
+                        echo "\$VAR = false" >> "tofu/aws/modules/airgap/\$TFVARS"
+                    else
+                        echo "\$VAR = \"\"" >> "tofu/aws/modules/airgap/\$TFVARS"
+                    fi
                 fi
             done
             echo "Updated tfvars with missing variables:" 
