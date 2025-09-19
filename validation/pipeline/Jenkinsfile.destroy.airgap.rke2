@@ -104,80 +104,55 @@ pipeline {
                     logWarning('⚠️ IMPORTANT: No concurrent state locking available')
                     logWarning('⚠️ Ensure only ONE destruction pipeline runs at a time for the same workspace')
                     logWarning('⚠️ Manual coordination required to prevent state conflicts')
-                }
 
                     // Validate Parameters
-                    script {
-                        logInfo('Validating destruction parameters')
+                    logInfo('Validating destruction parameters')
 
-                        if (!params.TARGET_WORKSPACE || params.TARGET_WORKSPACE.trim().isEmpty()) {
-                            error('TARGET_WORKSPACE parameter is required for destruction')
-                        }
-
-                        env.TARGET_WORKSPACE = params.TARGET_WORKSPACE
-
-                        logInfo("Target workspace: ${env.TARGET_WORKSPACE}")
-                        logInfo('State source: S3 Backend')
-                        logInfo("Dry run mode: ${params.DRY_RUN}")
-                        logInfo("Force destroy: ${params.FORCE_DESTROY}")
+                    if (!params.TARGET_WORKSPACE || params.TARGET_WORKSPACE.trim().isEmpty()) {
+                        error('TARGET_WORKSPACE parameter is required for destruction')
                     }
 
-                    // Prepare Environment
-                    script {
-                        logInfo('Preparing destruction environment')
+                    env.TARGET_WORKSPACE = params.TARGET_WORKSPACE
 
-                        // Clean workspace
-                        deleteDir()
+                    logInfo("Target workspace: ${env.TARGET_WORKSPACE}")
+                    logInfo('State source: S3 Backend')
+                    logInfo("Dry run mode: ${params.DRY_RUN}")
+                    logInfo("Force destroy: ${params.FORCE_DESTROY}")
+                }
 
-                        // Checkout QA infrastructure repository
-                        dir('./qa-infra-automation') {
-                            logInfo('Cloning qa-infra-automation repository')
-                            checkout([
-                                $class: 'GitSCM',
-                                branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
-                                extensions: [
-                                    [$class: 'CleanCheckout'],
-                                    [$class: 'CloneOption', depth: 1, shallow: true]
-                                ],
-                                userRemoteConfigs: [[url: env.QA_INFRA_REPO]]
-                            ])
-                        }
+                // Prepare Environment
+                script {
+                    logInfo('Preparing destruction environment')
 
-                        // Checkout Tests repository for Dockerfile access
-                        dir('./tests') {
-                            logInfo('Cloning tests repository for Docker build')
-                            checkout([
-                                $class: 'GitSCM',
-                                branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
-                                extensions: [
-                                    [$class: 'CleanCheckout'],
-                                    [$class: 'CloneOption', depth: 1, shallow: true]
-                                ],
-                                userRemoteConfigs: [[url: env.RANCHER_TEST_REPO_URL,]]
-                            ])
-                        }
+                    // Clean workspace
+                    deleteDir()
 
-                        // Configure credentials and build environment
-                        withCredentials(getCredentialsList()) {
-                            generateDestructionEnvironmentFile()
-                            setupSSHKeys()
-                            buildDestructionDockerImage()
-                            createSharedVolume()
-                        }
+                    // Checkout QA infrastructure repository
+                    dir('./qa-infra-automation') {
+                        logInfo('Cloning qa-infra-automation repository')
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
+                            extensions: [
+                                [$class: 'CleanCheckout'],
+                                [$class: 'CloneOption', depth: 1, shallow: true]
+                            ],
+                            userRemoteConfigs: [[url: env.QA_INFRA_REPO]]
+                        ])
                     }
 
-                    // Retrieve Terraform State
-                    script {
-                        logInfo('Retrieving Terraform state from S3 backend for destruction')
-
-                        def stateRetrieved = retrieveStateFromS3()
-
-                        if (!stateRetrieved && !params.FORCE_DESTROY) {
-                            error('Could not retrieve Terraform state from S3 and FORCE_DESTROY is not enabled')
-                        } else if (!stateRetrieved && params.FORCE_DESTROY) {
-                            logWarning('S3 state retrieval failed but FORCE_DESTROY is enabled - proceeding with caution')
-                        }
-
+                    // Checkout Tests repository for Dockerfile access
+                    dir('./tests') {
+                        logInfo('Cloning tests repository for Docker build')
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
+                            extensions: [
+                                [$class: 'CleanCheckout'],
+                                [$class: 'CloneOption', depth: 1, shallow: true]
+                            ],
+                            userRemoteConfigs: [[url: env.RANCHER_TEST_REPO_URL,]]
+                        ])
                     }
 
                     // Configure credentials and build environment
@@ -201,24 +176,47 @@ pipeline {
                         logWarning('S3 state retrieval failed but FORCE_DESTROY is enabled - proceeding with caution')
                     }
 
-                    // User confirmation before destruction
-                    if (!params.FORCE_DESTROY) {
-                        try {
-                            timeout(time: 5, unit: 'MINUTES') {
-                                input 'Proceed with infrastructure destruction?'
-                            }
-                        } catch (Exception e) {
-                            logWarning('Destruction cancelled by user or timeout.')
-                            currentBuild.result = 'ABORTED'
-                            return
-                        }
-                    }
+                }
 
-                    // Execute the destruction
-                    executeDestruction()
-                    validateDestruction()
-                    logInfo('Infrastructure destruction completed successfully')
-                    archiveDestructionResults()
+                // Configure credentials and build environment
+                withCredentials(getCredentialsList()) {
+                    generateDestructionEnvironmentFile()
+                    setupSSHKeys()
+                    buildDestructionDockerImage()
+                    createSharedVolume()
+                }
+            }
+
+            // Retrieve Terraform State
+            script {
+                logInfo('Retrieving Terraform state from S3 backend for destruction')
+
+                def stateRetrieved = retrieveStateFromS3()
+
+                if (!stateRetrieved && !params.FORCE_DESTROY) {
+                    error('Could not retrieve Terraform state from S3 and FORCE_DESTROY is not enabled')
+                } else if (!stateRetrieved && params.FORCE_DESTROY) {
+                    logWarning('S3 state retrieval failed but FORCE_DESTROY is enabled - proceeding with caution')
+                }
+
+                // User confirmation before destruction
+                if (!params.FORCE_DESTROY) {
+                    try {
+                        timeout(time: 5, unit: 'MINUTES') {
+                            input 'Proceed with infrastructure destruction?'
+                        }
+                    } catch (Exception e) {
+                        logWarning('Destruction cancelled by user or timeout.')
+                        currentBuild.result = 'ABORTED'
+                        return
+                    }
+                }
+
+                // Execute the destruction
+                executeDestruction()
+                validateDestruction()
+                logInfo('Infrastructure destruction completed successfully')
+                archiveDestructionResults()
             }
             post {
                 failure {
