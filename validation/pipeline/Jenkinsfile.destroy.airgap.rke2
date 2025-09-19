@@ -880,25 +880,59 @@ if [ "\$CURRENT_WORKSPACE" != "${env.TARGET_WORKSPACE}" ]; then
     exit 1
 fi
 
-echo 'Creating minimal terraform variables for destruction...'
-cat > tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} << 'EOFVARS'
-# Minimal configuration for destruction
-# Provide only declared required variables with safe placeholder values
+echo 'Creating minimal terraform variables for destruction (dynamic from variables.tf)...'
 
-# Common AWS/account variables
-user_id            = ""
-ssh_key            = ""
-ssh_key_name       = ""
-aws_secret_key     = ""
-aws_ami            = ""
-aws_hostname_prefix= ""
-aws_route53_zone   = ""
-aws_ssh_user       = ""
-aws_security_group = []
-aws_vpc            = ""
-aws_volume_size    = 20
-aws_subnet         = ""
-EOFVARS
+VARS_FILE="tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+TF_VARS_DEF_FILE="tofu/aws/modules/airgap/variables.tf"
+
+if [ ! -f "$TF_VARS_DEF_FILE" ]; then
+  echo "variables.tf not found at $TF_VARS_DEF_FILE"
+  echo "Cannot generate minimal tfvars dynamically."
+  exit 1
+fi
+
+echo "# Minimal configuration for destruction (auto-generated)" > "$VARS_FILE"
+echo "# Only required variables (without defaults) are included with safe placeholders" >> "$VARS_FILE"
+
+awk '
+  BEGIN {
+    in=0; name=""; type=""; has_default=0
+  }
+  /^variable[[:space:]]*\"/ {
+    in=1; has_default=0; type="";
+    name=$2; gsub(/\"/,"",name)
+  }
+  /type[[:space:]]*=/ {
+    if (in) {
+      type=$0
+    }
+  }
+  /default[[:space:]]*=/ {
+    if (in) { has_default=1 }
+  }
+  /}/ {
+    if (in) {
+      if (!has_default) {
+        # sanitize name for HCL output
+        if (type ~ /list\(/) {
+          printf("%s = []\n", name)
+        } else if (type ~ /map\(/ || type ~ /object\(/) {
+          printf("%s = {}\n", name)
+        } else if (type ~ /number/) {
+          printf("%s = 0\n", name)
+        } else if (type ~ /bool/) {
+          printf("%s = false\n", name)
+        } else {
+          # default to empty string for strings/any
+          printf("%s = \"\"\n", name)
+        }
+      }
+      in=0; name=""; type=""; has_default=0
+    }
+  }
+' "$TF_VARS_DEF_FILE" >> "$VARS_FILE"
+
+echo "✅ Created minimal terraform variables for destruction at $VARS_FILE"
 
 echo "✅ Created minimal terraform variables for destruction"
 
@@ -918,6 +952,35 @@ else
         echo "✅ Destruction plan created successfully (with minimal tfvars)"
     else
         echo "❌ ERROR: Destruction planning failed"
+        echo
+        echo "Attempting to auto-fill missing required variables and retry..."
+        PLAN_ERR=$(tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -var-file=${env.TERRAFORM_VARS_FILENAME} 2>&1 || true)
+        echo "$PLAN_ERR" | sed -n '1,120p'
+
+        # Extract missing variable names from error output
+        MISSING_VARS=$(echo "$PLAN_ERR" | grep -oE 'input variable "[^"]+" is not set' | awk -F'"' '{print $2}' | sort -u)
+
+        if [ -n "$MISSING_VARS" ]; then
+            echo "Discovered missing variables: $MISSING_VARS"
+            for VAR in $MISSING_VARS; do
+                if ! grep -q "^$VAR\s*=\s*" tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}; then
+                    echo "$VAR = \"\"" >> tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}
+                fi
+            done
+            echo "Updated tfvars with missing variables:" 
+            cat tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}
+
+            # Retry plan once
+            if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=destroy-plan; then
+                echo "✅ Destruction plan created successfully after auto-filling variables"
+            else
+                echo "❌ ERROR: Destruction planning still failed after auto-fill"
+                exit 1
+            fi
+        else
+            echo "No missing variable names were detected in the error output."
+            exit 1
+        fi
         echo
         echo "Debugging destruction planning failure:"
         echo "1. Checking current state resources:"
