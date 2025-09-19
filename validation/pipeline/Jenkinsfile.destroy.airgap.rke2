@@ -156,21 +156,15 @@ pipeline {
                             logWarning('Destruction cancelled by user or timeout.')
                             currentBuild.result = 'ABORTED'
                             return
-                        timeout(time: 5, unit: 'MINUTES') {
-                            input 'Proceed with infrastructure destruction?'
                         }
-                    } catch (Exception e) {
-                        logWarning('Destruction cancelled by user or timeout.')
-                        currentBuild.result = 'ABORTED'
-                        return
                     }
-                }
 
-                // Execute the destruction
-                executeDestruction()
-                validateDestruction()
-                logInfo('Infrastructure destruction completed successfully')
-                archiveDestructionResults()
+                    // Execute the destruction
+                    executeDestruction()
+                    validateDestruction()
+                    logInfo('Infrastructure destruction completed successfully')
+                    archiveDestructionResults()
+                }
             }
             post {
                 failure {
