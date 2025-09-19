@@ -30,8 +30,6 @@ provisioningInput:
      controlplane: true
      worker: true
      quantity: 1
- rke1KubernetesVersion:
-   - "v1.28.10-rancher1-1"
  rke2KubernetesVersion:
    - "v1.28.10+rke2r1"
  k3sKubernetesVersion:

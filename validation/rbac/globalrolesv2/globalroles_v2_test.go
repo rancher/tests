@@ -168,13 +168,13 @@ func (gr *GlobalRolesV2TestSuite) TestClusterCreationAfterAddingGlobalRoleWithIn
 	actualClusterCount := len(clusterNames)
 	require.Equal(gr.T(), expectedClusterCount, actualClusterCount, "Unexpected number of Clusters: Expected %d, Actual %d", expectedClusterCount, actualClusterCount)
 
-	log.Info("As the new user, create new downstream clusters.")
-	clusterObject, _, testClusterConfig, err := createDownstreamCluster(userClient, "RKE1")
+	log.Info("As the new user, create two new downstream  K3S clusters.")
+	_, firstClusterSteveObject, _, err := createDownstreamCluster(userClient, "K3S")
 	require.NoError(gr.T(), err)
-	provisioning.VerifyRKE1Cluster(gr.T(), userClient, testClusterConfig, clusterObject)
-	_, steveObject, testClusterConfig, err := createDownstreamCluster(userClient, "RKE2")
+	provisioning.VerifyCluster(gr.T(), userClient, firstClusterSteveObject)
+	_, secondClusterSteveObject, _, err := createDownstreamCluster(userClient, "K3S")
 	require.NoError(gr.T(), err)
-	provisioning.VerifyCluster(gr.T(), userClient, steveObject)
+	provisioning.VerifyCluster(gr.T(), userClient, secondClusterSteveObject)
 
 	gr.validateRBACResources(createdUser, createdGlobalRole, inheritedClusterRoles)
 }

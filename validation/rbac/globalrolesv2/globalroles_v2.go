@@ -95,20 +95,19 @@ func createDownstreamCluster(client *rancher.Client, clusterType string) (*manag
 	var err error
 
 	switch clusterType {
-	case "RKE1":
-		nodeAndRoles := []provisioninginput.NodePools{
-			provisioninginput.AllRolesNodePool,
+	case "K3S":
+		nodeAndRoles := []provisioninginput.MachinePools{
+			provisioninginput.AllRolesMachinePool,
 		}
-		testClusterConfig.NodePools = nodeAndRoles
-		testClusterConfig.KubernetesVersion = provisioningConfig.RKE1KubernetesVersions[0]
-		clusterObject, _, err = provisioning.CreateProvisioningRKE1CustomCluster(client, &externalNodeProvider, testClusterConfig, awsEC2Configs)
+		testClusterConfig.MachinePools = nodeAndRoles
+		testClusterConfig.KubernetesVersion = provisioningConfig.K3SKubernetesVersions[0]
+		steveObject, err = provisioning.CreateProvisioningCustomCluster(client, &externalNodeProvider, testClusterConfig, awsEC2Configs)
 	case "RKE2":
 		nodeAndRoles := []provisioninginput.MachinePools{
 			provisioninginput.AllRolesMachinePool,
 		}
 		testClusterConfig.MachinePools = nodeAndRoles
 		testClusterConfig.KubernetesVersion = provisioningConfig.RKE2KubernetesVersions[0]
-
 		steveObject, err = provisioning.CreateProvisioningCustomCluster(client, &externalNodeProvider, testClusterConfig, awsEC2Configs)
 	default:
 		return nil, nil, nil, fmt.Errorf("unsupported cluster type: %s", clusterType)
