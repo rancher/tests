@@ -964,7 +964,7 @@ else
         echo "\$PLAN_ERR" | sed -n '1,120p'
 
         # Extract missing variable names from error output
-        MISSING_VARS=\$(echo "\$PLAN_ERR" | grep -oE 'input variable "[^"]+" is not set' | awk -F'"' '{print $2}' | sort -u)
+        MISSING_VARS=\$(echo "\$PLAN_ERR" | grep -oE 'input variable "[^"]+" is not set' | awk -F'"' '{print \$2}' | sort -u)
 
         if [ -n "\$MISSING_VARS" ]; then
             echo "Discovered missing variables: \$MISSING_VARS"
