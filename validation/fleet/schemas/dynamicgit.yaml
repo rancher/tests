@@ -1,0 +1,9 @@
+gitRepo:
+    metadata:
+        name: "dynamic-test-1"
+        namespace: "fleet-default"
+    spec:
+        repo: https://github.com/rancher/fleet-examples
+        branch: master
+        paths:
+        - simple
