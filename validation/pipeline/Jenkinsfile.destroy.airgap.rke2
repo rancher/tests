@@ -944,8 +944,8 @@ echo 'Step 2: Attempting destruction planning...'
 # Re-export TF_WORKSPACE so subsequent operations use the correct workspace
 export TF_WORKSPACE="${env.TARGET_WORKSPACE}"
 
-# Local variable for tfvars filename to avoid Groovy interpolation conflicts
-TFVARS="${env.TERRAFORM_VARS_FILENAME}"
+# Local variable for tfvars filename (use container env to avoid Groovy interpolation)
+TFVARS="\$TERRAFORM_VARS_FILENAME"
 
 # First try without tfvars (OpenTofu should read everything from state)
 if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -out=destroy-plan 2>/dev/null; then
