@@ -942,7 +942,8 @@ echo
 echo 'Step 2: Attempting destruction planning...'
 
 # Re-export TF_WORKSPACE so subsequent operations use the correct workspace
-export TF_WORKSPACE="${env.TARGET_WORKSPACE}"
+# Use container env var to avoid Groovy interpolation issues
+export TF_WORKSPACE="$TARGET_WORKSPACE"
 
 # Local variable for tfvars filename (use container env to avoid Groovy interpolation)
 TFVARS="\$TERRAFORM_VARS_FILENAME"
