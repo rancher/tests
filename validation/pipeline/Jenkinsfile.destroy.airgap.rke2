@@ -977,7 +977,7 @@ else
                         in_var=1;
                         if (gsub(/.*type[[:space:]]*=[[:space:]]*/, "")) {
                           type_line = \$0;
-                          gsub(/[[:space:]}]*$/, "", type_line);
+                          gsub(/[[:space:]}]*\$/, "", type_line);
                           print type_line;
                           exit;
                         }
@@ -986,7 +986,7 @@ else
                       in_var && /type[[:space:]]*=/ {
                         gsub(/.*type[[:space:]]*=[[:space:]]*/, "");
                         type_line = \$0;
-                        gsub(/[[:space:]}]*$/, "", type_line);
+                        gsub(/[[:space:]}]*\$/, "", type_line);
                         print type_line;
                         exit;
                       }
