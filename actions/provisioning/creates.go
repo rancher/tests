@@ -223,7 +223,7 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 	clusterName := namegen.AppendRandomString(externalNodeProvider.Name)
 
 	logrus.Debug("Creating custom cluster nodes")
-	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, ec2Configs)
+	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, ec2Configs, clustersConfig.IPv6Cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -301,6 +301,7 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 			if clustersConfig.MachinePools[poolIndex].IsSecure {
 				command = fmt.Sprintf("%s %s", token.NodeCommand, poolRole)
 			}
+
 			command = createRegistrationCommand(command, node.PublicIPAddress, node.PrivateIPAddress, clustersConfig.MachinePools[poolIndex])
 			logrus.Tracef("Command: %s", command)
 
@@ -308,8 +309,10 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 			if err != nil {
 				return nil, err
 			}
+
 			logrus.Trace(output)
 		}
+
 		totalNodesObserved += int(quantityPerPool[poolIndex])
 	}
 
@@ -340,9 +343,11 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 				if err != nil {
 					return nil, err
 				}
+
 				logrus.Trace(output)
 			}
 		}
+
 		totalNodesObserved += int(quantityPerPool[poolIndex])
 	}
 
@@ -433,7 +438,7 @@ func CreateProvisioningRKE1CustomCluster(client *rancher.Client, externalNodePro
 		}
 	}
 
-	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, ec2Configs)
+	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, ec2Configs, false)
 	if err != nil {
 		return nil, nil, err
 	}

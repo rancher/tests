@@ -87,7 +87,7 @@ func ScalingRKE2K3SCustomClusterPools(t *testing.T, client *rancher.Client, clus
 	var externalNodeProvider provisioning.ExternalNodeProvider
 	externalNodeProvider = provisioning.ExternalNodeProviderSetup(nodeProvider)
 
-	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, awsEC2Configs)
+	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, awsEC2Configs, false)
 	require.NoError(t, err)
 
 	cluster, err := client.Steve.SteveType(ProvisioningSteveResourceType).ByID(clusterID)
@@ -160,7 +160,7 @@ func ScalingRKE1CustomClusterPools(t *testing.T, client *rancher.Client, cluster
 	awsEC2Configs := new(ec2.AWSEC2Configs)
 	config.LoadConfig(ec2.ConfigurationFileKey, awsEC2Configs)
 
-	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, awsEC2Configs)
+	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, awsEC2Configs, false)
 	require.NoError(t, err)
 
 	cluster, err := client.Management.Cluster.ByID(clusterID)
