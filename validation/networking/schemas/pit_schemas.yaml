@@ -1,0 +1,233 @@
+- projects: [RANCHERINT]
+  suite: Network
+  cases:
+  - title: "Test pod connectivity from control-plane node"
+    description: "Validate that pods deployed in a namespace can be pinged from a control-plane node"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create namespace"
+      expectedresult: "Namespace created successfully"
+      position: 3
+    - action: "Deploy DaemonSet with test container"
+      expectedresult: "DaemonSet created successfully"
+      position: 4
+    - action: "Wait for DaemonSet to be ready"
+      expectedresult: "DaemonSet pods available"
+      position: 5
+    - action: "List pods in namespace"
+      expectedresult: "Pods are available with valid IPs"
+      position: 6
+    - action: "List nodes"
+      data: "Nodes with label node-role.kubernetes.io/control-plane=true"
+      expectedresult: "At least one control-plane node found"
+      position: 7
+    - action: "Run ping command in all nodes"
+      data: "ping -c 1 <podIP>"
+      expectedresult: "Each ping should return '0% packet loss'"
+      position: 8
+    custom_field:
+      "15": "TestPingPodsFromCPNode"
+  - title: "Validate HostPort service exposure"
+    description: "Deploy DaemonSet with HostPort mapping and verify connectivity from nodes"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster with Policy Network enabled"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Deploy DaemonSet with HostPort mapping"
+      expectedresult: "DaemonSet created and pods running with HostPort"
+      position: 3
+    - action: "Wait for DaemonSet replicas to be ready"
+      expectedresult: "All replicas available"
+      position: 4
+    - action: "Validate DaemonSet HostPort connectivity via SSH"
+      expectedresult: "DaemonSet HostPort accessible from nodes"
+      position: 5
+    custom_field:
+      "15": "TestHostPort"
+  - title: "Validate NodePort service exposure"
+    description: "Deploy DaemonSet with NodePort service and verify connectivity"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster with Policy Network enabled"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Deploy DaemonSet"
+      expectedresult: "DaemonSet created successfully"
+      position: 3
+    - action: "Create Service with NodePort for DaemonSet"
+      expectedresult: "Service created with NodePort assigned"
+      position: 4
+    - action: "Validate Service NodePort connectivity via SSH"
+      expectedresult: "Service NodePort accessible from nodes"
+      position: 5
+    custom_field:
+      "15": "TestNodePort"
+  - title: "Validate ClusterIP service exposure"
+    description: "Deploy DaemonSet with ClusterIP service and verify internal connectivity"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Deploy DaemonSet"
+      expectedresult: "DaemonSet created successfully"
+      position: 3
+    - action: "Create ClusterIP service"
+      expectedresult: "ClusterIP service created successfully"
+      position: 4
+    - action: "Validate ClusterIP service connectivity via SSH"
+      expectedresult: "Service NodePort accessible from nodes"
+      position: 5
+    custom_field:
+      "15": "TestClusterIP"
+  - title: "Validate LoadBalancer service exposure"
+    description: "Deploy DaemonSet with LoadBalancer service and verify external connectivity"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster with cloud provider"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Deploy DaemonSet"
+      expectedresult: "DaemonSet created successfully"
+      position: 3
+    - action: "Create LoadBalancer service"
+      expectedresult: "LoadBalancer provisioned by cloud provider"
+      position: 4
+    - action: "Verify LoadBalancer connectivity"
+      expectedresult: "Service accessible via LoadBalancer endpoint"
+      position: 5
+    custom_field:
+      "15": "TestLoadBalancer"
+  - title: "ClusterIP scale and upgrade validation"
+    description: "Verify that ClusterIP services remain functional during workload scaling and upgrade"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Deploy initial Deployment with 2 replicas and ClusterIP service"
+      expectedresult: "Deployment created and service available"
+      position: 3
+    - action: "Scale up Deployment to 3 replicas"
+      expectedresult: "Workload scaled successfully, service still accessible"
+      position: 4
+    - action: "Scale down Deployment to 2 replicas"
+      expectedresult: "Workload scaled successfully, service still accessible"
+      position: 5
+    - action: "Upgrade Deployment container"
+      expectedresult: "Deployment updated, service remains functional"
+      position: 6
+    custom_field:
+      "15": "TestClusterIPScaleAndUpgrade"
+  - title: "HostPort scale and upgrade validation"
+    description: "Verify that HostPort remains functional during Deployment scaling and upgrade"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster with 3 worker nodes"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Deploy Deployment with HostPort mapping and 2 replicas"
+      expectedresult: "Deployment created and reachable on HostPort"
+      position: 3
+    - action: "Scale up Deployment to 3 replicas"
+      expectedresult: "All pods reachable on HostPort"
+      position: 4
+    - action: "Scale down Deployment to 2 replicas"
+      expectedresult: "Remaining pods reachable on HostPort"
+      position: 5
+    - action: "Upgrade Deployment container"
+      expectedresult: "Deployment updated, HostPort connectivity remains"
+      position: 6
+    custom_field:
+      "15": "TestHostPortScaleAndUpgrade"
+  - title: "NodePort scale and upgrade validation"
+    description: "Verify NodePort service functionality during workload scaling and upgrade"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster with project network enabled"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Deploy Deployment with 2 replicas and NodePort service"
+      expectedresult: "Deployment and service created successfully"
+      position: 3
+    - action: "Scale up Deployment to 3 replicas"
+      expectedresult: "NodePort service continues to work"
+      position: 4
+    - action: "Scale down Deployment to 2 replicas"
+      expectedresult: "NodePort service continues to work"
+      position: 5
+    - action: "Upgrade Deployment container"
+      expectedresult: "Deployment updated, NodePort connectivity remains"
+      position: 6
+    custom_field:
+      "15": "TestNodePortScaleAndUpgrade"
+  - title: "LoadBalancer scale and upgrade validation"
+    description: "Verify LoadBalancer service functionality during workload scaling and upgrade"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster with project network enabled"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Deploy Deployment with 2 replicas and LoadBalancer service"
+      expectedresult: "Deployment and service created successfully"
+      position: 3
+    - action: "Scale up Deployment to 3 replicas"
+      expectedresult: "LoadBalancer connectivity remains functional"
+      position: 4
+    - action: "Scale down Deployment to 2 replicas"
+      expectedresult: "LoadBalancer connectivity remains functional"
+      position: 5
+    - action: "Upgrade Deployment container"
+      expectedresult: "Deployment updated, LoadBalancer connectivity remains"
+      position: 6
+    custom_field:
+      "15": "TestLoadBalanceScaleAndUpgrade"

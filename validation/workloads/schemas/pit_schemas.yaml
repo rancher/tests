@@ -1,0 +1,222 @@
+- projects: [RANCHERINT]
+  suite: Workload
+  cases:
+  - title: "Create Deployment workload"
+    description: "Validate that a simple Deployment can be created and pods become ready"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create project and namespace"
+      expectedresult: "Namespace created successfully"
+      position: 3
+    - action: "Create Deployment with 1 replica"
+      expectedresult: "Deployment created successfully"
+      position: 4
+    - action: "Wait for pods to be running"
+      expectedresult: "Deployment pods available and ready"
+      position: 5
+    custom_field:
+      "15": "WorkloadDeploymentTest"
+  - title: "Create Deployment with SideKick container"
+    description: "Validate that a Deployment can be updated with a new sidekick container"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create project and namespace"
+      expectedresult: "Namespace created successfully"
+      position: 3
+    - action: "Create Deployment with 1 replica"
+      expectedresult: "Deployment created successfully"
+      position: 4
+    - action: "Add new container to Deployment"
+      expectedresult: "Deployment updated successfully"
+      position: 5
+    - action: "Wait for pods to be running"
+      expectedresult: "All containers available in pods"
+      position: 6
+    custom_field:
+      "15": "WorkloadSideKickTest"
+  - title: "Create DaemonSet workload"
+    description: "Validate that a DaemonSet can be created and pods run on all nodes"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create project and namespace"
+      expectedresult: "Namespace created successfully"
+      position: 3
+    - action: "Create DaemonSet"
+      expectedresult: "DaemonSet created successfully"
+      position: 4
+    - action: "Wait for pods to be running on all nodes"
+      expectedresult: "DaemonSet pods available"
+      position: 5
+    custom_field:
+      "15": "WorkloadDaemonSetTest"
+  - title: "Create CronJob workload"
+    description: "Validate that a CronJob can be created and executes scheduled jobs"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create project and namespace"
+      expectedresult: "Namespace created successfully"
+      position: 3
+    - action: "Create CronJob"
+      expectedresult: "CronJob created successfully"
+      position: 4
+    - action: "Verify job execution"
+      expectedresult: "CronJob runs and pods complete successfully"
+      position: 5
+    custom_field:
+      "15": "WorkloadCronjobTest"
+  - title: "Create StatefulSet workload"
+    description: "Validate that a StatefulSet can be created and pods become ready with stable identities"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create project and namespace"
+      expectedresult: "Namespace created successfully"
+      position: 3
+    - action: "Create StatefulSet"
+      expectedresult: "StatefulSet created successfully"
+      position: 4
+    - action: "Wait for pods to be running"
+      expectedresult: "StatefulSet pods available with persistent IDs"
+      position: 5
+    custom_field:
+      "15": "WorkloadStatefulsetTest"
+  - title: "Deployment upgrade and rollback"
+    description: "Validate that a Deployment can be upgraded multiple times and rolled back correctly"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create Deployment with 2 replicas"
+      expectedresult: "Deployment created successfully"
+      position: 3
+    - action: "Upgrade Deployment to new image"
+      expectedresult: "Pods updated to new image"
+      position: 4
+    - action: "Upgrade Deployment again"
+      expectedresult: "Pods updated successfully"
+      position: 5
+    - action: "Rollback Deployment to previous revision"
+      expectedresult: "Pods reverted to old image"
+      position: 6
+    - action: "Rollback Deployment to earlier revision"
+      expectedresult: "Deployment restored to previous state"
+      position: 7
+    custom_field:
+      "15": "WorkloadUpgradeTest"
+  - title: "Deployment pod scale up"
+    description: "Validate that a Deployment can scale up replicas and pods become ready"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create Deployment with 1 replica"
+      expectedresult: "Deployment created successfully"
+      position: 3
+    - action: "Scale Deployment to 2 replicas"
+      expectedresult: "Pods available and running"
+      position: 4
+    - action: "Scale Deployment to 3 replicas"
+      expectedresult: "Pods available and running"
+      position: 5
+    custom_field:
+      "15": "WorkloadPodScaleUpTest"
+  - title: "Deployment pod scale down"
+    description: "Validate that a Deployment can scale down replicas and pods are terminated correctly"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create Deployment with 3 replicas"
+      expectedresult: "Deployment created successfully"
+      position: 3
+    - action: "Scale Deployment to 2 replicas"
+      expectedresult: "Deployment scaled successfully"
+      position: 4
+    - action: "Scale Deployment to 1 replica"
+      expectedresult: "Deployment scaled successfully"
+      position: 5
+    custom_field:
+      "15": "WorkloadPodScaleDownTest"
+  - title: "Deployment pause and resume orchestration"
+    description: "Validate that a Deployment can be paused, updated without effect, then resumed successfully"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create Deployment with 2 replicas"
+      expectedresult: "Deployment created successfully"
+      position: 3
+    - action: "Pause Deployment orchestration"
+      expectedresult: "Deployment marked as paused"
+      position: 4
+    - action: "Update Deployment while paused"
+      expectedresult: "No changes applied while paused"
+      position: 5
+    - action: "Resume Deployment orchestration"
+      expectedresult: "Deployment updated successfully and pods reflect changes"
+      position: 6
+    custom_field:
+      "15": "WorkloadPauseOrchestrationTest"
