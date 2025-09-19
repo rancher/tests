@@ -715,8 +715,6 @@ EOF
         -backend-config="key=${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}.tfstate" \
         -backend-config="region=${env.TF_STATE_REGION}"
 
-    echo "--- Selecting Workspace: ${env.TARGET_WORKSPACE} ---"
-    tofu -chdir=tofu/aws/modules/airgap workspace select "${env.TARGET_WORKSPACE}"
 
     echo "--- Starting Direct Destruction ---"
     # Pass placeholder variables directly to the destroy command to satisfy required variables
