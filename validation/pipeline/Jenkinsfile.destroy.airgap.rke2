@@ -66,11 +66,6 @@ pipeline {
             defaultValue: false,
             description: 'Force destruction even if state validation fails'
         )
-        booleanParam(
-            name: 'DRY_RUN',
-            defaultValue: true,
-            description: 'Perform dry run (plan only) without actual destruction'
-        )
     }
 
     environment {
@@ -183,55 +178,27 @@ pipeline {
                             logWarning('S3 state retrieval failed but FORCE_DESTROY is enabled - proceeding with caution')
                         }
 
-                        // Validate state if retrieved
-                        if (stateRetrieved) {
-                            validateStateForDestruction()
-                        }
                     }
 
-                    // Plan Destruction
-                    script {
-                        logInfo('Planning infrastructure destruction')
-
-                        try {
-                            planDestruction()
-
-                            // Archive the destruction plan
-                            archiveDestructionPlan()
-
-                            if (params.DRY_RUN) {
-                                logInfo('DRY_RUN mode enabled - destruction plan completed without execution')
-                                currentBuild.result = 'SUCCESS'
-                                return
-                            }
-                        } catch (Exception e) {
-                            logError("Destruction planning failed: ${e.message}")
-                            throw e
-                        }
+                    // Configure credentials and build environment
+                    withCredentials(getCredentialsList()) {
+                        generateDestructionEnvironmentFile()
+                        setupSSHKeys()
+                        buildDestructionDockerImage()
+                        createSharedVolume()
                     }
+                }
 
-                    // Execute Destruction (only if not DRY_RUN)
-                    script {
-                        if (!params.DRY_RUN) {
-                            logInfo('Executing infrastructure destruction')
+                // Retrieve Terraform State
+                script {
+                    logInfo('Retrieving Terraform state from S3 backend for destruction')
 
-                            def proceedWithDestruction = true
+                    def stateRetrieved = retrieveStateFromS3()
 
-                            // Final confirmation step
-                            if (!params.FORCE_DESTROY) {
-                                timeout(time: 5, unit: 'MINUTES') {
-                                    try {
-                                        proceedWithDestruction = input(
-                                            message: "Proceed with destruction of workspace: ${env.TARGET_WORKSPACE}?",
-                                            ok: 'Destroy',
-                                            parameters: [
-                                                booleanParam(
-                                                    name: 'CONFIRM_DESTRUCTION',
-                                                    defaultValue: false,
-                                                    description: 'I understand this will permanently destroy the infrastructure'
-                                                )
-                                            ]
-                                        )
+                    if (!stateRetrieved && !params.FORCE_DESTROY) {
+                        error('Could not retrieve Terraform state from S3 and FORCE_DESTROY is not enabled')
+                    } else if (!stateRetrieved && params.FORCE_DESTROY) {
+                        logWarning('S3 state retrieval failed but FORCE_DESTROY is enabled - proceeding with caution')
                                     } catch (Exception e) {
                                         logWarning('Destruction cancelled by user or timeout')
                                         currentBuild.result = 'ABORTED'
