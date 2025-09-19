@@ -12,17 +12,16 @@ if [[ -n "${1:-}" && -f "$1" ]]; then
 fi
 
 : "${CONFIG_FILE:=/root/go/src/github.com/rancher/tests/validation/config.yaml}"
-: "${hostip:=rancher.10.115.5.35.sslip.io}"
-: "${API_KEY:=token-t7t2h:vtkt8rr88r724zb2xrtvrls5bqrn59g8tftbknc65hrtdjgw8gk6xn}"
+: "${EXISTING_RANCHER_HOST}"
+: "${RANCHER_API_KEY}"
 
 cd  /root/go/src/github.com/rancher/qa-infra-automation
 
 cat > ansible/rancher/default-ha/generated.tfvars <<EOF
-fqdn = "https://$hostip"
-api_key = "$API_KEY"
+fqdn = "https://$EXISTING_RANCHER_HOST"
+api_key = "$RANCHER_API_KEY"
 EOF
 
-yq e ".rancher.adminToken = \"$API_KEY\"" -i $CONFIG_FILE
-yq e ".rancher.host = \"$hostip\"" -i $CONFIG_FILE
-cat $CONFIG_FILE
-echo $hostip
+yq e ".rancher.adminToken = \"$RANCHERAPI_KEY\"" -i $CONFIG_FILE
+yq e ".rancher.host = \"$EXISTING_RANCHER_HOST\"" -i $CONFIG_FILE
+export hostip=$EXISTING_RANCHER_HOST
