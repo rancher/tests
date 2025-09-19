@@ -883,15 +883,21 @@ fi
 echo 'Creating minimal terraform variables for destruction...'
 cat > tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} << 'EOFVARS'
 # Minimal configuration for destruction
-# Values are read from state, so these are just placeholders
-aws_region = "${env.AWS_REGION}"
-aws_access_key = "placeholder-for-destroy"
-aws_secret_access_key = "placeholder-for-destroy"
+# Provide only declared required variables with safe placeholder values
 
-# Common variables that might be required by the configuration
-instance_type = "t3.medium"
-node_count = 1
-availability_zones = ["${env.AWS_REGION}a", "${env.AWS_REGION}b"]
+# Common AWS/account variables
+user_id            = ""
+ssh_key            = ""
+ssh_key_name       = ""
+aws_secret_key     = ""
+aws_ami            = ""
+aws_hostname_prefix= ""
+aws_route53_zone   = ""
+aws_ssh_user       = ""
+aws_security_group = []
+aws_vpc            = ""
+aws_volume_size    = 20
+aws_subnet         = ""
 EOFVARS
 
 echo "✅ Created minimal terraform variables for destruction"
@@ -903,12 +909,12 @@ echo 'Step 2: Attempting destruction planning...'
 export TF_WORKSPACE="${env.TARGET_WORKSPACE}"
 
 # First try without tfvars (OpenTofu should read everything from state)
-if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -out=destroy-plan 2>/dev/null; then
+if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -out=destroy-plan 2>/dev/null; then
     echo "✅ Destruction plan created successfully (no tfvars needed)"
 else
     echo "Planning without tfvars failed, trying with minimal tfvars..."
     
-    if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=destroy-plan; then
+    if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=destroy-plan; then
         echo "✅ Destruction plan created successfully (with minimal tfvars)"
     else
         echo "❌ ERROR: Destruction planning failed"
