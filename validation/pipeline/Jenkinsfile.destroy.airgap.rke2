@@ -697,7 +697,7 @@ echo "\$ACTUAL_STATE_KEY" > /tmp/actual_state_key.txt
 def executeDestruction() {
     logInfo('Executing direct infrastructure destruction')
 
-    def destructionScript = '''
+    def destructionScript = """
     set -e
     cd /root/go/src/github.com/rancher/qa-infra-automation/
 
@@ -748,7 +748,7 @@ def executeDestruction() {
         tofu -chdir=tofu/aws/modules/airgap state list
         exit 1
     fi
-    '''
+    """
 
     executeScriptInContainer(destructionScript)
 }
