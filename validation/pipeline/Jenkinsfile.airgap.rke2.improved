@@ -68,10 +68,20 @@ pipeline {
             defaultValue: '',
             description: 'Private registry password for airgap deployment'
         )
-        text(
-            name: 'S3_BACKEND_CONFIG',
-            defaultValue: '',
-            description: 'S3 backend configuration content (required for Terraform state storage)'
+        string(
+            name: 'S3_BUCKET_NAME',
+            defaultValue: 'jenkins-terraform-state-storage',
+            description: 'S3 bucket name where Terraform state is stored'
+        )
+        string(
+            name: 'S3_REGION',
+            defaultValue: 'us-east-2',
+            description: 'AWS region where the S3 bucket is located'
+        )
+        string(
+            name: 'S3_KEY_PREFIX',
+            defaultValue: 'jenkins-airgap-rke2',
+            description: 'S3 key prefix for the Terraform state files'
         )
         string(
             name: 'HOSTNAME_PREFIX',
@@ -123,8 +133,10 @@ pipeline {
         ANSIBLE_TIMEOUT = '45'
         VALIDATION_TIMEOUT = '15'
 
-        // Backend configuration
-        S3_BACKEND_CONFIG = "${params.S3_BACKEND_CONFIG ?: ''}"
+        // Backend configuration (S3 backend parameters)
+        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'}"
+        S3_REGION = "${params.S3_REGION ?: 'us-east-2'}"
+        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2'}"
 
         // Hostname prefix
         HOSTNAME_PREFIX = "${params.HOSTNAME_PREFIX ?: 'ansible-airgap'}"
@@ -511,16 +523,6 @@ def generateConfigurationFiles() {
         }
     }
 
-    if (!env.S3_BACKEND_CONFIG) {
-        try {
-            env.S3_BACKEND_CONFIG = readFile('validation/pipeline/configs/backend.tfvars.template')
-            logInfo('Loaded S3_BACKEND_CONFIG from template file')
-        } catch (Exception e) {
-            logError("Failed to load S3_BACKEND_CONFIG template: ${e.message}")
-            error('S3_BACKEND_CONFIG is required - either set the environment variable or provide the template file with valid S3 bucket/key')
-        }
-    }
-
     if (!env.ANSIBLE_VARIABLES) {
         try {
             env.ANSIBLE_VARIABLES = readFile('validation/pipeline/configs/airgap-rke2-ansible-vars.yaml.template')
@@ -531,7 +533,6 @@ def generateConfigurationFiles() {
         }
     }
 
-    // No interpolation for S3_BACKEND_CONFIG - assume user provides complete config in parameter
     // Validate required environment variables
     validateConfigurationEnvironmentVariables()
 
@@ -552,7 +553,9 @@ def validateConfigurationEnvironmentVariables() {
 
     def requiredVars = [
         'TERRAFORM_CONFIG': 'Terraform configuration content',
-        'S3_BACKEND_CONFIG': 'S3 backend configuration content',
+        'S3_BUCKET_NAME': 'S3 bucket name for backend',
+        'S3_REGION': 'S3 bucket region for backend',
+        'S3_KEY_PREFIX': 'S3 key prefix for backend state files',
         'ANSIBLE_VARIABLES': 'Ansible configuration content',
         'RKE2_VERSION': 'RKE2 version for deployment',
         'RANCHER_VERSION': 'Rancher version for deployment'
@@ -582,9 +585,10 @@ def generateTerraformConfiguration() {
         throw new RuntimeException('TERRAFORM_CONFIG environment variable is not set')
     }
 
-    if (!env.S3_BACKEND_CONFIG) {
-        throw new RuntimeException('S3_BACKEND_CONFIG environment variable is not set')
-    }
+    // Ensure S3 backend parameters are set
+    if (!env.S3_BUCKET_NAME) { throw new RuntimeException('S3_BUCKET_NAME environment variable is not set') }
+    if (!env.S3_REGION) { throw new RuntimeException('S3_REGION environment variable is not set') }
+    if (!env.S3_KEY_PREFIX) { throw new RuntimeException('S3_KEY_PREFIX environment variable is not set') }
 
     sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
 
@@ -605,7 +609,13 @@ def generateTerraformConfiguration() {
             writeFile file: env.TERRAFORM_VARS_FILENAME, text: terraformConfig
             logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
 
-            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: env.S3_BACKEND_CONFIG
+            // Generate backend.tfvars content from S3 parameters
+            def backendVars = """
+bucket = \"${env.S3_BUCKET_NAME}\"
+key    = \"${env.S3_KEY_PREFIX}/${env.TF_WORKSPACE}.tfstate\"
+region = \"${env.S3_REGION}\"
+"""
+            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
             logInfo("S3 backend configuration written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
         }
     }
