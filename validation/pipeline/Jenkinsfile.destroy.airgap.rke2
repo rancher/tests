@@ -894,43 +894,45 @@ fi
 echo "# Minimal configuration for destruction (auto-generated)" > "\$VARS_FILE"
 echo "# Only required variables (without defaults) are included with safe placeholders" >> "\$VARS_FILE"
 
-awk '
-  BEGIN {
+cat <<'AWK_SCRIPT' > /tmp/gen-destroy-tfvars.awk
+BEGIN {
+  in=0; name=""; type=""; has_default=0
+}
+/^variable[[:space:]]*"/ {
+  in=1; has_default=0; type="";
+  name=\$2; gsub(/"/,"",name)
+}
+/type[[:space:]]*=/ {
+  if (in) {
+    type=\$0
+  }
+}
+/default[[:space:]]*=/ {
+  if (in) { has_default=1 }
+}
+/}/ {
+  if (in) {
+    if (!has_default) {
+      # sanitize name for HCL output
+      if (index(type, "list(") > 0) {
+        printf("%s = []\n", name)
+      } else if (index(type, "map(") > 0 || index(type, "object(") > 0) {
+        printf("%s = {}\n", name)
+      } else if (index(type, "number") > 0) {
+        printf("%s = 0\n", name)
+      } else if (index(type, "bool") > 0) {
+        printf("%s = false\n", name)
+      } else {
+        # default to empty string for strings/any
+        printf("%s = \"\"\n", name)
+      }
+    }
     in=0; name=""; type=""; has_default=0
   }
-  /^variable[[:space:]]*\"/ {
-    in=1; has_default=0; type="";
-    name=\$2; gsub(/\"/,"",name)
-  }
-  /type[[:space:]]*=/ {
-    if (in) {
-      type=\$0
-    }
-  }
-  /default[[:space:]]*=/ {
-    if (in) { has_default=1 }
-  }
-  /}/ {
-    if (in) {
-      if (!has_default) {
-        # sanitize name for HCL output
-        if (type ~ /list\(/) {
-          printf("%s = []\n", name)
-        } else if (type ~ /map\(/ || type ~ /object\(/) {
-          printf("%s = {}\n", name)
-        } else if (type ~ /number/) {
-          printf("%s = 0\n", name)
-        } else if (type ~ /bool/) {
-          printf("%s = false\n", name)
-        } else {
-          # default to empty string for strings/any
-          printf("%s = \"\"\n", name)
-        }
-      }
-      in=0; name=""; type=""; has_default=0
-    }
-  }
-' "\$TF_VARS_DEF_FILE" >> "\$VARS_FILE"
+}
+AWK_SCRIPT
+
+awk -f /tmp/gen-destroy-tfvars.awk "\$TF_VARS_DEF_FILE" >> "\$VARS_FILE"
 
 echo "✅ Created minimal terraform variables for destruction at \$VARS_FILE"
 
