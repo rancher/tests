@@ -944,36 +944,39 @@ echo 'Step 2: Attempting destruction planning...'
 # Re-export TF_WORKSPACE so subsequent operations use the correct workspace
 export TF_WORKSPACE="${env.TARGET_WORKSPACE}"
 
+# Local variable for tfvars filename to avoid Groovy interpolation conflicts
+TFVARS="${env.TERRAFORM_VARS_FILENAME}"
+
 # First try without tfvars (OpenTofu should read everything from state)
 if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -out=destroy-plan 2>/dev/null; then
     echo "✅ Destruction plan created successfully (no tfvars needed)"
 else
     echo "Planning without tfvars failed, trying with minimal tfvars..."
     
-    if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=destroy-plan; then
+    if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -var-file=\$TFVARS -out=destroy-plan; then
         echo "✅ Destruction plan created successfully (with minimal tfvars)"
     else
         echo "❌ ERROR: Destruction planning failed"
         echo
         echo "Attempting to auto-fill missing required variables and retry..."
-        PLAN_ERR=$(tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -var-file=${env.TERRAFORM_VARS_FILENAME} 2>&1 || true)
-        echo "$PLAN_ERR" | sed -n '1,120p'
+        PLAN_ERR=\$(tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -var-file=\$TFVARS 2>&1 || true)
+        echo "\$PLAN_ERR" | sed -n '1,120p'
 
         # Extract missing variable names from error output
-        MISSING_VARS=$(echo "$PLAN_ERR" | grep -oE 'input variable "[^"]+" is not set' | awk -F'"' '{print $2}' | sort -u)
+        MISSING_VARS=\$(echo "\$PLAN_ERR" | grep -oE 'input variable "[^"]+" is not set' | awk -F'"' '{print $2}' | sort -u)
 
-        if [ -n "$MISSING_VARS" ]; then
-            echo "Discovered missing variables: $MISSING_VARS"
-            for VAR in $MISSING_VARS; do
-                if ! grep -q "^$VAR\s*=\s*" tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}; then
-                    echo "$VAR = \"\"" >> tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}
+        if [ -n "\$MISSING_VARS" ]; then
+            echo "Discovered missing variables: \$MISSING_VARS"
+            for VAR in \$MISSING_VARS; do
+                if ! grep -q "^\$VAR\\s*=\\s*" tofu/aws/modules/airgap/\$TFVARS; then
+                    echo "\$VAR = \"\"" >> tofu/aws/modules/airgap/\$TFVARS
                 fi
             done
             echo "Updated tfvars with missing variables:" 
-            cat tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}
+            cat tofu/aws/modules/airgap/\$TFVARS
 
             # Retry plan once
-            if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -var-file=${env.TERRAFORM_VARS_FILENAME} -out=destroy-plan; then
+            if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -var-file=\$TFVARS -out=destroy-plan; then
                 echo "✅ Destruction plan created successfully after auto-filling variables"
             else
                 echo "❌ ERROR: Destruction planning still failed after auto-fill"
@@ -992,10 +995,10 @@ else
         tofu -chdir=tofu/aws/modules/airgap validate || echo "Configuration validation failed"
         
         echo "3. Attempting plan without output file for detailed error:"
-        tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} 2>&1 | head -20 || echo "Plan generation failed"
+        tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=\$TFVARS 2>&1 | head -20 || echo "Plan generation failed"
         
         echo "4. Checking required variables:"
-        tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=${env.TERRAFORM_VARS_FILENAME} 2>&1 | grep -i "required" || echo "No specific variable requirements found"
+        tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=\$TFVARS 2>&1 | grep -i "required" || echo "No specific variable requirements found"
         
         exit 1
     fi
