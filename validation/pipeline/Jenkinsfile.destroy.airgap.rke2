@@ -710,7 +710,7 @@ def executeDestruction() {
 EOF
 
     echo "--- Initializing OpenTofu ---"
-    tofu -chdir=tofu/aws/modules/airgap init \
+    tofu -chdir=tofu/aws/modules/airgap init -reconfigure \
         -backend-config="bucket=${env.TF_STATE_BUCKET}" \
         -backend-config="key=${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}.tfstate" \
         -backend-config="region=${env.TF_STATE_REGION}"
