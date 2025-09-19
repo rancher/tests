@@ -707,7 +707,7 @@ def executeDestruction() {
     terraform {
       backend "s3" {}
     }
-    EOF
+EOF
 
     echo "--- Initializing OpenTofu ---"
     tofu -chdir=tofu/aws/modules/airgap init \
