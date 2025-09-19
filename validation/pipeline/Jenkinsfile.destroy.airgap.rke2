@@ -885,14 +885,14 @@ echo 'Creating minimal terraform variables for destruction (dynamic from variabl
 VARS_FILE="tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
 TF_VARS_DEF_FILE="tofu/aws/modules/airgap/variables.tf"
 
-if [ ! -f "$TF_VARS_DEF_FILE" ]; then
-  echo "variables.tf not found at $TF_VARS_DEF_FILE"
+if [ ! -f "${'$'}TF_VARS_DEF_FILE" ]; then
+  echo "variables.tf not found at ${'$'}TF_VARS_DEF_FILE"
   echo "Cannot generate minimal tfvars dynamically."
   exit 1
 fi
 
-echo "# Minimal configuration for destruction (auto-generated)" > "$VARS_FILE"
-echo "# Only required variables (without defaults) are included with safe placeholders" >> "$VARS_FILE"
+echo "# Minimal configuration for destruction (auto-generated)" > "${'$'}VARS_FILE"
+echo "# Only required variables (without defaults) are included with safe placeholders" >> "${'$'}VARS_FILE"
 
 awk '
   BEGIN {
@@ -900,7 +900,7 @@ awk '
   }
   /^variable[[:space:]]*\"/ {
     in=1; has_default=0; type="";
-    name=$2; gsub(/\"/,"",name)
+    name=${'$'}2; gsub(/\"/,"",name)
   }
   /type[[:space:]]*=/ {
     if (in) {
@@ -930,9 +930,9 @@ awk '
       in=0; name=""; type=""; has_default=0
     }
   }
-' "$TF_VARS_DEF_FILE" >> "$VARS_FILE"
+' "${'$'}TF_VARS_DEF_FILE" >> "${'$'}VARS_FILE"
 
-echo "✅ Created minimal terraform variables for destruction at $VARS_FILE"
+echo "✅ Created minimal terraform variables for destruction at ${'$'}VARS_FILE"
 
 echo "✅ Created minimal terraform variables for destruction"
 
