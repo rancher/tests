@@ -1115,18 +1115,46 @@ echo 'Verifying state after apply...'
 tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap state list
 
 echo 'Backing up terraform state immediately after apply...'
-# Create multiple backups of the state file for reliability
+# Handle both local and remote state backends
 STATE_FILE="/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate"
+BACKUP_TIMESTAMP=\$(date +%Y%m%d-%H%M%S)
+
+# Check if local state file exists (local backend)
 if [ -f "\$STATE_FILE" ]; then
-    cp "\$STATE_FILE" "\$STATE_FILE.backup-\$(date +%Y%m%d-%H%M%S)"
+    echo 'Local state file found, creating backups...'
+    cp "\$STATE_FILE" "\$STATE_FILE.backup-\$BACKUP_TIMESTAMP"
     cp "\$STATE_FILE" /root/terraform-state-primary.tfstate
     cp "\$STATE_FILE" /root/terraform.tfstate
     STATE_SIZE=\$(stat -c%s "\$STATE_FILE" 2>/dev/null || echo 0)
-    echo "SUCCESS: terraform.tfstate backed up successfully (\$STATE_SIZE bytes)"
+    echo "SUCCESS: Local terraform.tfstate backed up successfully (\$STATE_SIZE bytes)"
     ls -la "\$STATE_FILE"
 else
-    echo 'ERROR: Terraform state file not found after apply'
-    exit 1
+    echo 'Local state file not found, assuming remote backend. Pulling state...'
+    # Pull state from remote backend and create backups
+    cd /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap
+    
+    # Pull the current state from remote backend
+    if tofu state pull > /tmp/terraform.tfstate.tmp 2>/dev/null; then
+        # Verify the pulled state is not empty
+        if [ -s /tmp/terraform.tfstate.tmp ]; then
+            # Create backups with the pulled state
+            cp /tmp/terraform.tfstate.tmp "\$STATE_FILE.backup-\$BACKUP_TIMESTAMP"
+            cp /tmp/terraform.tfstate.tmp /root/terraform-state-primary.tfstate
+            cp /tmp/terraform.tfstate.tmp /root/terraform.tfstate
+            STATE_SIZE=\$(stat -c%s /tmp/terraform.tfstate.tmp 2>/dev/null || echo 0)
+            echo "SUCCESS: Remote terraform state pulled and backed up successfully (\$STATE_SIZE bytes)"
+            
+            # Clean up temporary file
+            rm -f /tmp/terraform.tfstate.tmp
+        else
+            echo 'ERROR: Pulled state file is empty'
+            rm -f /tmp/terraform.tfstate.tmp
+            exit 1
+        fi
+    else
+        echo 'ERROR: Failed to pull terraform state from remote backend'
+        exit 1
+    fi
 fi
 
 echo 'Backing up terraform variables file for archival...'
