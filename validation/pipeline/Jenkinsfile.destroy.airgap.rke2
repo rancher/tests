@@ -141,8 +141,7 @@ pipeline {
 
                     // Execute the destruction
                     executeDestruction()
-                    validateDestruction()
-                    logInfo('Infrastructure destruction completed successfully')
+                    logInfo('Infrastructure destruction process completed.')
                     archiveDestructionResults()
                 }
             }
@@ -695,394 +694,63 @@ echo "\$ACTUAL_STATE_KEY" > /tmp/actual_state_key.txt
     }
 }
 
-def validateStateForDestruction() {
-    logInfo('Validating state for destruction')
+def executeDestruction() {
+    logInfo('Executing direct infrastructure destruction')
 
-    try {
-        def validationScript = """
-cd ${env.QA_INFRA_WORK_PATH}
+    def destructionScript = '''
+    set -e
+    cd /root/go/src/github.com/rancher/qa-infra-automation/
 
-echo 'Validating Terraform configuration...'
-tofu -chdir=tofu/aws/modules/airgap validate
-
-echo 'Checking state resources...'
-RESOURCE_COUNT=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l)
-echo "Resources to be destroyed: \$RESOURCE_COUNT"
-
-if [ "\$RESOURCE_COUNT" -eq 0 ]; then
-    echo 'WARNING: No resources found in state'
-    exit 1
-fi
-
-echo 'Listing resources to be destroyed:'
-tofu -chdir=tofu/aws/modules/airgap state list
-
-echo 'State validation completed successfully'
-"""
-
-        executeScriptInContainer(validationScript)
-        logInfo('State validation completed')
-    } catch (Exception e) {
-        logWarning("State validation failed: ${e.message}")
-        if (!params.FORCE_DESTROY) {
-            throw new RuntimeException('State validation failed and FORCE_DESTROY is not enabled', e)
-        }
+    echo "--- Configuring Backend for Workspace: ${env.TARGET_WORKSPACE} ---"
+    # Use a backend.tf file to ensure OpenTofu initializes in s3 mode
+    cat <<EOF > tofu/aws/modules/airgap/backend.tf
+    terraform {
+      backend "s3" {}
     }
-}
+    EOF
 
-def planDestruction() {
-    logInfo('Creating destruction plan with proper workspace environment')
+    echo "--- Initializing OpenTofu ---"
+    tofu -chdir=tofu/aws/modules/airgap init \
+        -backend-config="bucket=${env.TF_STATE_BUCKET}" \
+        -backend-config="key=${env.TF_STATE_KEY_PREFIX}/${env.TARGET_WORKSPACE}.tfstate" \
+        -backend-config="region=${env.TF_STATE_REGION}"
 
-    def planScript = """
-cd ${env.QA_INFRA_WORK_PATH}
+    echo "--- Selecting Workspace: ${env.TARGET_WORKSPACE} ---"
+    tofu -chdir=tofu/aws/modules/airgap workspace select "${env.TARGET_WORKSPACE}"
 
-echo '🎯 Creating Destruction Plan'
-echo '=========================='
-echo "Target workspace: ${env.TARGET_WORKSPACE}"
+    echo "--- Starting Direct Destruction ---"
+    # Pass placeholder variables directly to the destroy command to satisfy required variables
+    tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve \
+        -var 'user_id=destroy' \
+        -var 'ssh_key=destroy' \
+        -var 'ssh_key_name=destroy' \
+        -var 'aws_secret_key=destroy' \
+        -var 'aws_ami=destroy' \
+        -var 'aws_hostname_prefix=destroy' \
+        -var 'aws_route53_zone=destroy' \
+        -var 'aws_ssh_user=destroy' \
+        -var 'aws_security_group=[]' \
+        -var 'aws_vpc=destroy' \
+        -var 'aws_volume_size=0' \
+        -var 'aws_subnet=destroy' \
+        -var 'instance_type=destroy'
 
-# Select the target workspace before attempting destruction
-echo "Selecting target workspace: ${env.TARGET_WORKSPACE}"
-
-# If TF_WORKSPACE is set in the environment, OpenTofu will override workspace commands.
-# Unset it temporarily to allow explicit workspace selection.
-if [ -n "${'$'}TF_WORKSPACE" ]; then
-    echo 'TF_WORKSPACE is set in environment; unsetting temporarily to allow workspace selection'
-    unset TF_WORKSPACE
-fi
-
-echo "Available workspaces:"
-tofu -chdir=tofu/aws/modules/airgap workspace list
-
-if tofu -chdir=tofu/aws/modules/airgap workspace select ${env.TARGET_WORKSPACE} 2>/dev/null; then
-    echo "✅ Successfully selected workspace: ${env.TARGET_WORKSPACE}"
-else
-    echo "❌ ERROR: Could not select workspace: ${env.TARGET_WORKSPACE}"
-    echo "This workspace may not exist or may have been deleted"
-    echo "Available workspaces:"
-    tofu -chdir=tofu/aws/modules/airgap workspace list
-    exit 1
-fi
-
-# Verify we're in the correct workspace
-CURRENT_WORKSPACE=\$(tofu -chdir=tofu/aws/modules/airgap workspace show | xargs)
-echo "Active workspace: \$CURRENT_WORKSPACE"
-
-if [ "\$CURRENT_WORKSPACE" != "${env.TARGET_WORKSPACE}" ]; then
-    echo "❌ ERROR: Workspace selection failed"
-    echo "Expected: ${env.TARGET_WORKSPACE}"
-    echo "Current: \$CURRENT_WORKSPACE"
-    exit 1
-fi
-
-echo 'Creating minimal terraform variables for destruction (dynamic from variables.tf)...'
-
-VARS_FILE="tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
-TF_VARS_DEF_FILE="tofu/aws/modules/airgap/variables.tf"
-
-if [ ! -f "\$TF_VARS_DEF_FILE" ]; then
-  echo "variables.tf not found at \$TF_VARS_DEF_FILE"
-  echo "Cannot generate minimal tfvars dynamically."
-  exit 1
-fi
-
-echo "# Minimal configuration for destruction (auto-generated)" > "\$VARS_FILE"
-echo "# Only required variables (without defaults) are included with safe placeholders" >> "\$VARS_FILE"
-
-cat <<'AWK_SCRIPT' > /tmp/gen-destroy-tfvars.awk
-BEGIN {
-  in=0; name=""; type=""; has_default=0
-}
-/^variable[[:space:]]*"/ {
-  in=1; has_default=0; type="";
-  name=\$2; gsub(/"/,"",name)
-}
-/type[[:space:]]*=/ {
-  if (in) {
-    type=\$0
-  }
-}
-/default[[:space:]]*=/ {
-  if (in) { has_default=1 }
-}
-/}/ {
-  if (in) {
-    if (!has_default) {
-      # sanitize name for HCL output
-      if (index(type, "list(") > 0) {
-        printf("%s = []\n", name)
-      } else if (index(type, "map(") > 0 || index(type, "object(") > 0) {
-        printf("%s = {}\n", name)
-      } else if (index(type, "number") > 0) {
-        printf("%s = 0\n", name)
-      } else if (index(type, "bool") > 0) {
-        printf("%s = false\n", name)
-      } else {
-        # default to empty string for strings/any
-        printf("%s = \"\"\n", name)
-      }
-    }
-    in=0; name=""; type=""; has_default=0
-  }
-}
-AWK_SCRIPT
-
-awk -f /tmp/gen-destroy-tfvars.awk "\$TF_VARS_DEF_FILE" >> "\$VARS_FILE"
-
-echo "✅ Created minimal terraform variables for destruction at \$VARS_FILE"
-
-echo "✅ Created minimal terraform variables for destruction"
-
-echo
-echo 'Step 2: Attempting destruction planning...'
-
-# Re-export TF_WORKSPACE so subsequent operations use the correct workspace
-# Use container env var to avoid Groovy interpolation issues
-export TF_WORKSPACE="$TARGET_WORKSPACE"
-
-# Local variable for tfvars filename (use container env to avoid Groovy interpolation)
-TFVARS="\$TERRAFORM_VARS_FILENAME"
-
-# First try without tfvars (OpenTofu should read everything from state)
-if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -out=destroy-plan 2>/dev/null; then
-    echo "✅ Destruction plan created successfully (no tfvars needed)"
-else
-    echo "Planning without tfvars failed, trying with minimal tfvars..."
-    
-    if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -var-file=\$TFVARS -out=destroy-plan; then
-        echo "✅ Destruction plan created successfully (with minimal tfvars)"
+    echo "--- Verifying Destruction ---"
+    REMAINING_RESOURCES=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l || echo 0)
+    if [ "\$REMAINING_RESOURCES" -eq 0 ]; then
+        echo "✅ Success: All resources have been destroyed."
+        # Clean up the workspace
+        echo "--- Cleaning up Terraform Workspace ---"
+        tofu -chdir=tofu/aws/modules/airgap workspace select default || echo "Could not switch to default workspace."
+        tofu -chdir=tofu/aws/modules/airgap workspace delete "${env.TARGET_WORKSPACE}" || echo "Could not delete workspace ${env.TARGET_WORKSPACE}."
     else
-        echo "❌ ERROR: Destruction planning failed"
-        echo
-        echo "Attempting to auto-fill missing required variables and retry..."
-        PLAN_ERR=\$(tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -var-file=\$TFVARS 2>&1 || true)
-        echo "\$PLAN_ERR" | sed -n '1,120p'
-
-        # Extract missing variable names from error output
-        MISSING_VARS=\$(echo "\$PLAN_ERR" | grep -oE 'input variable "[^"]+" is not set' | awk -F'"' '{print \$2}' | sort -u)
-
-        if [ -n "\$MISSING_VARS" ]; then
-            echo "Discovered missing variables: \$MISSING_VARS"
-            for VAR in \$MISSING_VARS; do
-                if ! grep -q "^\$VAR\\s*=\\s*" "tofu/aws/modules/airgap/\$TFVARS"; then
-                    # Determine placeholder based on variable type from variables.tf
-                    VAR_TYPE=\$(awk -v var="^variable \"\$VAR\"" '
-                      BEGIN { in_var=0; type_line="" }
-                      \$0 ~ var { 
-                        in_var=1;
-                        if (gsub(/.*type[[:space:]]*=[[:space:]]*/, "")) {
-                          type_line = \$0;
-                          gsub(/[[:space:]}]*\$/, "", type_line);
-                          print type_line;
-                          exit;
-                        }
-                        next;
-                      }
-                      in_var && /type[[:space:]]*=/ {
-                        gsub(/.*type[[:space:]]*=[[:space:]]*/, "");
-                        type_line = \$0;
-                        gsub(/[[:space:]}]*\$/, "", type_line);
-                        print type_line;
-                        exit;
-                      }
-                    ' "tofu/aws/modules/airgap/variables.tf")
-
-                    if [[ \$VAR_TYPE == *list* ]]; then
-                        echo "\$VAR = []" >> "tofu/aws/modules/airgap/\$TFVARS"
-                    elif [[ \$VAR_TYPE == *map* || \$VAR_TYPE == *object* ]]; then
-                        echo "\$VAR = {}" >> "tofu/aws/modules/airgap/\$TFVARS"
-                    elif [[ \$VAR_TYPE == *number* ]]; then
-                        echo "\$VAR = 0" >> "tofu/aws/modules/airgap/\$TFVARS"
-                    elif [[ \$VAR_TYPE == *bool* ]]; then
-                        echo "\$VAR = false" >> "tofu/aws/modules/airgap/\$TFVARS"
-                    else
-                        echo "\$VAR = \"\"" >> "tofu/aws/modules/airgap/\$TFVARS"
-                    fi
-                fi
-            done
-            echo "Updated tfvars with missing variables:" 
-            cat tofu/aws/modules/airgap/\$TFVARS
-
-            # Retry plan once
-            if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -refresh=false -var-file=\$TFVARS -out=destroy-plan; then
-                echo "✅ Destruction plan created successfully after auto-filling variables"
-            else
-                echo "❌ ERROR: Destruction planning still failed after auto-fill"
-                exit 1
-            fi
-        else
-            echo "No missing variable names were detected in the error output."
-            exit 1
-        fi
-        echo
-        echo "Debugging destruction planning failure:"
-        echo "1. Checking current state resources:"
-        tofu -chdir=tofu/aws/modules/airgap state list | head -10 || echo "Could not list state resources"
-        
-        echo "2. Checking configuration validation:"
-        tofu -chdir=tofu/aws/modules/airgap validate || echo "Configuration validation failed"
-        
-        echo "3. Attempting plan without output file for detailed error:"
-        tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=\$TFVARS 2>&1 | head -20 || echo "Plan generation failed"
-        
-        echo "4. Checking required variables:"
-        tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -var-file=\$TFVARS 2>&1 | grep -i "required" || echo "No specific variable requirements found"
-        
+        echo "❌ WARNING: \$REMAINING_RESOURCES resources still remain in state."
+        tofu -chdir=tofu/aws/modules/airgap state list
         exit 1
     fi
-fi
+    '''
 
-# Step 3: Verify plan file was created
-if [ ! -f tofu/aws/modules/airgap/destroy-plan ]; then
-    echo "❌ ERROR: destroy-plan file was not created"
-    echo "Contents of module directory:"
-    ls -la tofu/aws/modules/airgap/
-    exit 1
-fi
-
-PLAN_SIZE=\$(stat -c%s tofu/aws/modules/airgap/destroy-plan 2>/dev/null || echo 0)
-echo "Plan file size: \$PLAN_SIZE bytes"
-
-if [ "\$PLAN_SIZE" -eq 0 ]; then
-    echo "❌ ERROR: Plan file is empty"
-    exit 1
-fi
-
-echo
-echo 'Step 4: Generating destruction plan summary...'
-if tofu -chdir=tofu/aws/modules/airgap show -no-color destroy-plan > destruction-plan-summary.txt; then
-    echo "✅ Destruction plan summary generated successfully"
-    
-    echo "Plan summary (first 30 lines):"
-    head -30 destruction-plan-summary.txt
-    
-    echo
-    DESTROY_COUNT=\$(grep -c "will be destroyed" destruction-plan-summary.txt || echo 0)
-    echo "Resources to be destroyed: \$DESTROY_COUNT"
-    
-    if [ "\$DESTROY_COUNT" -eq 0 ]; then
-        echo "⚠️ WARNING: No resources marked for destruction in plan"
-        echo "This could indicate:"
-        echo "  1. Infrastructure was already destroyed"
-        echo "  2. State file issues"
-        echo "  3. Configuration mismatch"
-        
-        if [ "${params.FORCE_DESTROY ?: 'false'}" != "true" ]; then
-            echo "❌ No resources to destroy and FORCE_DESTROY not enabled"
-            exit 1
-        else
-            echo "⚠️ FORCE_DESTROY enabled, continuing despite no resources"
-        fi
-    else
-        echo "✅ Found \$DESTROY_COUNT resources scheduled for destruction"
-    fi
-    
-else
-    echo "❌ ERROR: Failed to generate destruction plan summary"
-    exit 1
-fi
-
-echo
-echo "✅ Destruction plan created and validated successfully"
-echo "   - Workspace: \$CURRENT_WORKSPACE"
-echo "   - Resources to destroy: \$DESTROY_COUNT"
-echo "   - Plan file size: \$PLAN_SIZE bytes"
-"""
-
-    executeScriptInContainerWithWorkspace(planScript)
-}
-
-def archiveDestructionPlan() {
-    logInfo('Archiving destruction plan')
-
-    try {
-        sh """
-            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/destruction-plan-summary.txt ./destruction-plan.txt || true
-        """
-
-        archiveArtifacts artifacts: 'destruction-plan.txt', allowEmptyArchive: true
-
-        logInfo('Destruction plan archived')
-    } catch (Exception e) {
-        logError("Failed to archive destruction plan: ${e.message}")
-    }
-}
-
-def executeDestruction() {
-    logInfo('Executing infrastructure destruction')
-
-    def destroyScript = """
-cd ${env.QA_INFRA_WORK_PATH}
-
-echo 'Starting infrastructure destruction...'
-echo "Target workspace: ${env.TARGET_WORKSPACE}"
-echo "Timestamp: \$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-# Execute the destruction
-tofu -chdir=tofu/aws/modules/airgap apply -auto-approve -input=false destroy-plan
-
-echo 'Verifying destruction completion...'
-REMAINING_RESOURCES=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l)
-
-if [ "\$REMAINING_RESOURCES" -eq 0 ]; then
-    echo 'SUCCESS: All resources have been destroyed'
-
-    # Clean up the workspace
-    echo 'Cleaning up Terraform workspace...'
-    tofu -chdir=tofu/aws/modules/airgap workspace select default || echo 'Could not switch to default workspace'
-    tofu -chdir=tofu/aws/modules/airgap workspace delete ${env.TARGET_WORKSPACE} || echo 'Could not delete workspace'
-
-else
-    echo "WARNING: \$REMAINING_RESOURCES resources still remain in state"
-    echo 'Remaining resources:'
-    tofu -chdir=tofu/aws/modules/airgap state list
-    exit 1
-fi
-
-echo 'Infrastructure destruction completed successfully'
-"""
-
-    executeScriptInContainer(destroyScript)
-}
-
-def validateDestruction() {
-    logInfo('Validating destruction results')
-
-    try {
-        def validationScript = """
-cd ${env.QA_INFRA_WORK_PATH}
-
-echo 'Final validation of destruction...'
-
-# Check if any resources remain
-RESOURCE_COUNT=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l || echo 0)
-
-if [ "\$RESOURCE_COUNT" -eq 0 ]; then
-    echo 'SUCCESS: Destruction validation passed - no resources remain'
-else
-    echo "WARNING: \$RESOURCE_COUNT resources still exist in state"
-    tofu -chdir=tofu/aws/modules/airgap state list
-fi
-
-# Generate destruction summary
-cat > destruction-summary.json << EOF
-{
-    "workspace": "${env.TARGET_WORKSPACE}",
-    "destruction_timestamp": "\$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-    "build_number": "${env.BUILD_NUMBER}",
-    "job_name": "${env.JOB_NAME}",
-    "remaining_resources": \$RESOURCE_COUNT,
-    "status": "\$([ \$RESOURCE_COUNT -eq 0 ] && echo 'COMPLETED' || echo 'INCOMPLETE')"
-}
-EOF
-
-echo 'Destruction validation completed'
-"""
-
-        executeScriptInContainer(validationScript)
-        logInfo('Destruction validation completed')
-    } catch (Exception e) {
-        logWarning("Destruction validation failed: ${e.message}")
-    }
+    executeScriptInContainer(destructionScript)
 }
 
 def archiveDestructionResults() {
