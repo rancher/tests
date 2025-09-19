@@ -219,8 +219,6 @@ pipeline {
                     validateDestruction()
                     logInfo('Infrastructure destruction completed successfully')
                     archiveDestructionResults()
-                        }
-                    }
             }
             post {
                 failure {
