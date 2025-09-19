@@ -848,6 +848,14 @@ echo "Target workspace: ${env.TARGET_WORKSPACE}"
 
 # Select the target workspace before attempting destruction
 echo "Selecting target workspace: ${env.TARGET_WORKSPACE}"
+
+# If TF_WORKSPACE is set in the environment, OpenTofu will override workspace commands.
+# Unset it temporarily to allow explicit workspace selection.
+if [ -n "${'$'}TF_WORKSPACE" ]; then
+    echo 'TF_WORKSPACE is set in environment; unsetting temporarily to allow workspace selection'
+    unset TF_WORKSPACE
+fi
+
 echo "Available workspaces:"
 tofu -chdir=tofu/aws/modules/airgap workspace list
 
@@ -890,6 +898,9 @@ echo "✅ Created minimal terraform variables for destruction"
 
 echo
 echo 'Step 2: Attempting destruction planning...'
+
+# Re-export TF_WORKSPACE so subsequent operations use the correct workspace
+export TF_WORKSPACE="${env.TARGET_WORKSPACE}"
 
 # First try without tfvars (OpenTofu should read everything from state)
 if tofu -chdir=tofu/aws/modules/airgap plan -destroy -input=false -out=destroy-plan 2>/dev/null; then
