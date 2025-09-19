@@ -17,7 +17,7 @@ const (
 	fromConfig          = "config"
 )
 
-type NodeCreationFunc func(client *rancher.Client, rolesPerPool []string, quantityPerPool []int32, ec2Configs *rancherEc2.AWSEC2Configs) (nodes []*nodes.Node, err error)
+type NodeCreationFunc func(client *rancher.Client, rolesPerPool []string, quantityPerPool []int32, ec2Configs *rancherEc2.AWSEC2Configs, ipv6Cluster bool) (nodes []*nodes.Node, err error)
 type NodeDeletionFunc func(client *rancher.Client, nodes []*nodes.Node) error
 type CustomOSNamesFunc func(client *rancher.Client, customConfig rancherEc2.AWSEC2Configs) ([]string, error)
 type GetCustomWindowsPools func(client *rancher.Client, customConfig rancherEc2.AWSEC2Configs) []rancherEc2.AWSEC2Config
@@ -45,7 +45,7 @@ func ExternalNodeProviderSetup(providerType string) ExternalNodeProvider {
 	case fromConfig:
 		return ExternalNodeProvider{
 			Name: providerType,
-			NodeCreationFunc: func(client *rancher.Client, rolesPerPool []string, quantityPerPool []int32, ec2Configs *rancherEc2.AWSEC2Configs) (nodesList []*nodes.Node, err error) {
+			NodeCreationFunc: func(client *rancher.Client, rolesPerPool []string, quantityPerPool []int32, ec2Configs *rancherEc2.AWSEC2Configs, ipv6Cluster bool) (nodesList []*nodes.Node, err error) {
 				var nodeConfig nodes.ExternalNodeConfig
 				config.LoadConfig(nodes.ExternalNodeConfigConfigurationFileKey, &nodeConfig)
 
