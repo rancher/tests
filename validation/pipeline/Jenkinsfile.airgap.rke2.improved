@@ -74,14 +74,14 @@ pipeline {
             description: 'S3 bucket name where Terraform state is stored'
         )
         string(
-            name: 'S3_REGION',
-            defaultValue: 'us-east-2',
-            description: 'AWS region where the S3 bucket is located'
-        )
-        string(
             name: 'S3_KEY_PREFIX',
             defaultValue: 'jenkins-airgap-rke2',
             description: 'S3 key prefix for the Terraform state files'
+        )
+        string(
+            name: 'S3_REGION',
+            defaultValue: 'us-east-2',
+            description: 'AWS region where the S3 bucket is located'
         )
         string(
             name: 'HOSTNAME_PREFIX',
