@@ -92,6 +92,9 @@ See below how to run the test:
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes"` \
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes"`
 
+## IPv6
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/ipv6 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeIPv6KubernetesTestSuite/TestUpgradeIPv6Kubernetes"` \
+
 ## Cloud Provider Migration
 Migrates a cluster's cloud provider from in-tree to out-of-tree
 

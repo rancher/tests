@@ -37,6 +37,7 @@ type ClusterConfig struct {
 	CRIDockerd                     bool                                              `json:"criDockerd" yaml:"criDockerd"`
 	RKE1CustomClusterDockerInstall *provisioningInput.RKE1CustomClusterDockerInstall `json:"rke1CustomClusterDockerInstall" yaml:"rke1CustomClusterDockerInstall"`
 	PathToRepo                     string                                            `json:"pathToRepo" yaml:"pathToRepo"`
+	IPv6Cluster                    bool                                              `json:"ipv6Cluster" yaml:"ipv6Cluster" default:"false"`
 }
 
 // ConvertConfigToClusterConfig converts the config from (user) provisioning input to a cluster config
@@ -67,6 +68,7 @@ func ConvertConfigToClusterConfig(provisioningConfig *provisioningInput.Config) 
 	newConfig.ClusterSSHTests = provisioningConfig.ClusterSSHTests
 	newConfig.RKE1CustomClusterDockerInstall = provisioningConfig.RKE1CustomClusterDockerInstall
 	newConfig.PathToRepo = provisioningConfig.PathToRepo
+	newConfig.IPv6Cluster = provisioningConfig.IPv6Cluster
 
 	return &newConfig
 }

@@ -97,6 +97,9 @@ These tests utilize Go build tags. Due to this, see the below examples on how to
 ### RKE2/K3S
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestDeleteClusterTestSuite/TestDeletingCluster"`
 
+### IPV6
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/ipv6 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestDeleteIPv6ClusterTestSuite/TestDeletingIPv6Cluster"`
+
 ### Delete Init Machine
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestDeleteInitMachineTestSuite/TestDeleteInitMachine"`
 

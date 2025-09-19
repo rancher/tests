@@ -1,6 +1,4 @@
-//go:build (validation || infra.rke2k3s || recurring || cluster.custom || stress) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke1 && !cluster.any && !cluster.nodedriver && !sanity && !extended
-
-package rke2k3s
+package ipv6
 
 import (
 	"os"
@@ -29,23 +27,21 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type CustomClusterNodeScalingTestSuite struct {
+type CustomIPv6ClusterNodeScalingTestSuite struct {
 	suite.Suite
 	client            *rancher.Client
 	session           *session.Session
 	rke2ClusterConfig *clusters.ClusterConfig
-	k3sClusterConfig  *clusters.ClusterConfig
 	scalingConfig     *scalinginput.Config
 	cattleConfig      map[string]any
 	rke2ClusterID     string
-	k3sClusterID      string
 }
 
-func (s *CustomClusterNodeScalingTestSuite) TearDownSuite() {
+func (s *CustomIPv6ClusterNodeScalingTestSuite) TearDownSuite() {
 	s.session.Cleanup()
 }
 
-func (s *CustomClusterNodeScalingTestSuite) SetupSuite() {
+func (s *CustomIPv6ClusterNodeScalingTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	s.session = testSession
 
@@ -68,8 +64,7 @@ func (s *CustomClusterNodeScalingTestSuite) SetupSuite() {
 	s.rke2ClusterConfig = new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, s.rke2ClusterConfig)
 
-	s.k3sClusterConfig = new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, s.k3sClusterConfig)
+	s.rke2ClusterConfig.IPv6Cluster = true
 
 	awsEC2Configs := new(ec2.AWSEC2Configs)
 	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, s.cattleConfig, awsEC2Configs)
@@ -88,18 +83,18 @@ func (s *CustomClusterNodeScalingTestSuite) SetupSuite() {
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	s.rke2ClusterConfig.MachinePools = nodeRolesStandard
-	s.k3sClusterConfig.MachinePools = nodeRolesStandard
+
+	for i := range s.rke2ClusterConfig.MachinePools {
+		s.rke2ClusterConfig.MachinePools[i].SpecifyCustomPublicIP = true
+		s.rke2ClusterConfig.MachinePools[i].SpecifyCustomPrivateIP = true
+	}
 
 	logrus.Info("Provisioning RKE2 cluster")
 	s.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), s.rke2ClusterConfig, awsEC2Configs, true, true)
 	require.NoError(s.T(), err)
-
-	logrus.Info("Provisioning K3S cluster")
-	s.k3sClusterID, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), s.k3sClusterConfig, awsEC2Configs, true, true)
-	require.NoError(s.T(), err)
 }
 
-func (s *CustomClusterNodeScalingTestSuite) TestScalingCustomClusterNodes() {
+func (s *CustomIPv6ClusterNodeScalingTestSuite) TestScalingCustomIPv6ClusterNodes() {
 	nodeRolesEtcd := machinepools.NodeRoles{
 		Etcd:     true,
 		Quantity: 1,
@@ -121,26 +116,16 @@ func (s *CustomClusterNodeScalingTestSuite) TestScalingCustomClusterNodes() {
 		Quantity: 1,
 	}
 
-	nodeRolesWindows := machinepools.NodeRoles{
-		Windows:  true,
-		Quantity: 1,
-	}
-
 	tests := []struct {
 		name          string
 		nodeRoles     machinepools.NodeRoles
 		clusterID     string
 		clusterConfig *clusters.ClusterConfig
 	}{
-		{"RKE2_Custom_Scale_Control_Plane", nodeRolesControlPlane, s.rke2ClusterID, s.rke2ClusterConfig},
-		{"RKE2_Custom_Scale_ETCD", nodeRolesEtcd, s.rke2ClusterID, s.rke2ClusterConfig},
-		{"RKE2_Custom_Scale_Control_Plane_ETCD", nodeRolesEtcdControlPlane, s.rke2ClusterID, s.rke2ClusterConfig},
-		{"RKE2_Custom_Scale_Worker", nodeRolesWorker, s.rke2ClusterID, s.rke2ClusterConfig},
-		{"RKE2_Custom_Scale_Windows", nodeRolesWindows, s.rke2ClusterID, s.rke2ClusterConfig},
-		{"K3S_Custom_Scale_Control_Plane", nodeRolesControlPlane, s.k3sClusterID, s.k3sClusterConfig},
-		{"K3S_Custom_Scale_ETCD", nodeRolesEtcd, s.k3sClusterID, s.k3sClusterConfig},
-		{"K3S_Custom_Scale_Control_Plane_ETCD", nodeRolesEtcdControlPlane, s.k3sClusterID, s.k3sClusterConfig},
-		{"K3S_Custom_Scale_Worker", nodeRolesWorker, s.k3sClusterID, s.k3sClusterConfig},
+		{"RKE2_IPv6_Custom_Scale_Control_Plane", nodeRolesControlPlane, s.rke2ClusterID, s.rke2ClusterConfig},
+		{"RKE2_IPv6_Custom_Scale_ETCD", nodeRolesEtcd, s.rke2ClusterID, s.rke2ClusterConfig},
+		{"RKE2_IPv6_Custom_Scale_Control_Plane_ETCD", nodeRolesEtcdControlPlane, s.rke2ClusterID, s.rke2ClusterConfig},
+		{"RKE2_IPv6_Custom_Scale_Worker", nodeRolesWorker, s.rke2ClusterID, s.rke2ClusterConfig},
 	}
 
 	for _, tt := range tests {
@@ -164,6 +149,6 @@ func (s *CustomClusterNodeScalingTestSuite) TestScalingCustomClusterNodes() {
 	}
 }
 
-func TestCustomClusterNodeScalingTestSuite(t *testing.T) {
-	suite.Run(t, new(CustomClusterNodeScalingTestSuite))
+func TestCustomIPv6ClusterNodeScalingTestSuite(t *testing.T) {
+	suite.Run(t, new(CustomIPv6ClusterNodeScalingTestSuite))
 }

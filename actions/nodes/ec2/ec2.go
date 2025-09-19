@@ -26,7 +26,7 @@ const (
 )
 
 // CreateNodes creates `quantityPerPool[n]` number of ec2 instances
-func CreateNodes(client *rancher.Client, rolesPerPool []string, quantityPerPool []int32, ec2Configs *rancherEc2.AWSEC2Configs) (ec2Nodes []*nodes.Node, err error) {
+func CreateNodes(client *rancher.Client, rolesPerPool []string, quantityPerPool []int32, ec2Configs *rancherEc2.AWSEC2Configs, ipv6Cluster bool) (ec2Nodes []*nodes.Node, err error) {
 	ec2Client, err := client.GetEC2Client()
 	if err != nil {
 		return nil, err
@@ -137,16 +137,30 @@ func CreateNodes(client *rancher.Client, rolesPerPool []string, quantityPerPool 
 			return nil, err
 		}
 
-		for _, readyInstance := range readyInstances {
-			ec2Node := &nodes.Node{
-				NodeID:           *readyInstance.InstanceId,
-				PublicIPAddress:  *readyInstance.PublicIpAddress,
-				PrivateIPAddress: *readyInstance.PrivateIpAddress,
-				SSHUser:          reservationConfigs[i].AWSUser,
-				SSHKey:           sshKey,
+		if ipv6Cluster {
+			for _, readyInstance := range readyInstances {
+				ec2Node := &nodes.Node{
+					NodeID:           *readyInstance.InstanceId,
+					PublicIPAddress:  *readyInstance.Ipv6Address,
+					PrivateIPAddress: *readyInstance.Ipv6Address,
+					SSHUser:          reservationConfigs[i].AWSUser,
+					SSHKey:           sshKey,
+				}
+				// re-reverse the list so that the order is corrected
+				ec2Nodes = append([]*nodes.Node{ec2Node}, ec2Nodes...)
 			}
-			// re-reverse the list so that the order is corrected
-			ec2Nodes = append([]*nodes.Node{ec2Node}, ec2Nodes...)
+		} else {
+			for _, readyInstance := range readyInstances {
+				ec2Node := &nodes.Node{
+					NodeID:           *readyInstance.InstanceId,
+					PublicIPAddress:  *readyInstance.PublicIpAddress,
+					PrivateIPAddress: *readyInstance.PrivateIpAddress,
+					SSHUser:          reservationConfigs[i].AWSUser,
+					SSHKey:           sshKey,
+				}
+				// re-reverse the list so that the order is corrected
+				ec2Nodes = append([]*nodes.Node{ec2Node}, ec2Nodes...)
+			}
 		}
 	}
 

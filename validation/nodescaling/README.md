@@ -166,9 +166,10 @@ These tests utilize Go build tags. Due to this, see the below examples on how to
 
 ### RKE2 | K3S
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestNodeScalingTestSuite/TestScalingNodePools"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestNodeScalingTestSuite/TestScalingNodePoolsDynamicInput"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodes"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodesDynamicInput"`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodes"`
+
+### IPv6
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/ipv6 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCustomIPv6ClusterNodeScalingTestSuite/TestScalingCustomIPv6ClusterNodes"`
 
 ### AKS
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/hosted --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestAKSNodeScalingTestSuite/TestScalingAKSNodePools"` \

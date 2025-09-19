@@ -233,6 +233,7 @@ type Config struct {
 	CRIDockerd                     bool                                     `json:"criDockerd,omitempty" yaml:"criDockerd,omitempty"`
 	RKE1CustomClusterDockerInstall *RKE1CustomClusterDockerInstall          `json:"rke1CustomClusterDockerInstall,omitempty" yaml:"rke1CustomClusterDockerInstall,omitempty"`
 	PathToRepo                     string                                   `json:"pathToRepo" yaml:"pathToRepo"`
+	IPv6Cluster                    bool                                     `json:"ipv6Cluster,omitempty" yaml:"ipv6Cluster,omitempty" default:"false"`
 }
 
 type TemplateConfig struct {

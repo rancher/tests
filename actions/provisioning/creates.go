@@ -223,7 +223,7 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 	clusterName := namegen.AppendRandomString(externalNodeProvider.Name)
 
 	logrus.Debug("Creating custom cluster nodes")
-	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, ec2Configs)
+	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, ec2Configs, clustersConfig.IPv6Cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -301,6 +301,7 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 			if clustersConfig.MachinePools[poolIndex].IsSecure {
 				command = fmt.Sprintf("%s %s", token.NodeCommand, poolRole)
 			}
+
 			command = createRegistrationCommand(command, node.PublicIPAddress, node.PrivateIPAddress, clustersConfig.MachinePools[poolIndex])
 			logrus.Tracef("Command: %s", command)
 
@@ -308,8 +309,10 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 			if err != nil {
 				return nil, err
 			}
+
 			logrus.Trace(output)
 		}
+
 		totalNodesObserved += int(quantityPerPool[poolIndex])
 	}
 
@@ -340,9 +343,11 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 				if err != nil {
 					return nil, err
 				}
+
 				logrus.Trace(output)
 			}
 		}
+
 		totalNodesObserved += int(quantityPerPool[poolIndex])
 	}
 
@@ -433,7 +438,7 @@ func CreateProvisioningRKE1CustomCluster(client *rancher.Client, externalNodePro
 		}
 	}
 
-	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, ec2Configs)
+	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, ec2Configs, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -859,7 +864,8 @@ func createWindowsRegistrationCommand(command, publicIP, privateIP string, machi
 }
 
 // AddRKE2K3SCustomClusterNodes is a helper method that will add nodes to the custom RKE2/K3S custom cluster.
-func AddRKE2K3SCustomClusterNodes(client *rancher.Client, cluster *v1.SteveAPIObject, nodes []*nodes.Node, rolesPerNode []string) error {
+func AddRKE2K3SCustomClusterNodes(client *rancher.Client, cluster *v1.SteveAPIObject, nodes []*nodes.Node, rolesPerNode []string,
+	clustersConfig *clusters.ClusterConfig) error {
 	clusterStatus := &apiv1.ClusterStatus{}
 	err := v1.ConvertToK8sType(cluster.Status, clusterStatus)
 	if err != nil {
@@ -875,17 +881,19 @@ func AddRKE2K3SCustomClusterNodes(client *rancher.Client, cluster *v1.SteveAPIOb
 	for key, node := range nodes {
 		logrus.Infof("Adding node %s to cluster %s", node.NodeID, cluster.Name)
 		if strings.Contains(rolesPerNode[key], "windows") {
-			command = fmt.Sprintf("powershell.exe %s -Address %s", token.InsecureWindowsNodeCommand, node.PublicIPAddress)
+			command = fmt.Sprintf("powershell.exe %s", token.InsecureWindowsNodeCommand)
 		} else {
-			command = fmt.Sprintf("%s %s --address %s", token.InsecureNodeCommand, rolesPerNode[key], node.PublicIPAddress)
+			command = fmt.Sprintf("%s %s", token.InsecureNodeCommand, rolesPerNode[key])
 		}
+
+		command = createRegistrationCommand(command, node.PublicIPAddress, node.PrivateIPAddress, clustersConfig.MachinePools[key])
 
 		output, err := node.ExecuteCommand(command)
 		if err != nil {
 			return err
 		}
 
-		logrus.Info(output)
+		logrus.Trace(output)
 	}
 
 	err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
