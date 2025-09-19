@@ -199,23 +199,26 @@ pipeline {
                         error('Could not retrieve Terraform state from S3 and FORCE_DESTROY is not enabled')
                     } else if (!stateRetrieved && params.FORCE_DESTROY) {
                         logWarning('S3 state retrieval failed but FORCE_DESTROY is enabled - proceeding with caution')
-                                    } catch (Exception e) {
-                                        logWarning('Destruction cancelled by user or timeout')
-                                        currentBuild.result = 'ABORTED'
-                                        return
-                                    }
-                                }
-                            }
+                    }
 
-                            if (proceedWithDestruction || params.FORCE_DESTROY) {
-                                executeDestruction()
-                                validateDestruction()
-                                logInfo('Infrastructure destruction completed successfully')
-                                archiveDestructionResults()
-                            } else {
-                                logInfo('Destruction cancelled by user')
-                                currentBuild.result = 'ABORTED'
+                    // User confirmation before destruction
+                    if (!params.FORCE_DESTROY) {
+                        try {
+                            timeout(time: 5, unit: 'MINUTES') {
+                                input 'Proceed with infrastructure destruction?'
                             }
+                        } catch (Exception e) {
+                            logWarning('Destruction cancelled by user or timeout.')
+                            currentBuild.result = 'ABORTED'
+                            return
+                        }
+                    }
+
+                    // Execute the destruction
+                    executeDestruction()
+                    validateDestruction()
+                    logInfo('Infrastructure destruction completed successfully')
+                    archiveDestructionResults()
                         }
                     }
             }
