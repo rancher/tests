@@ -146,10 +146,7 @@ pipeline {
         stage('Initialize Pipeline') {
             steps {
                 script {
-                    logWarning('⚠️ IMPORTANT: No concurrent state locking available')
-                    logWarning('⚠️ Ensure only ONE instance of this pipeline runs at a time')
-                    logWarning('⚠️ Manual coordination required to prevent state conflicts')
-
+                    logInfo('Initializing pipeline')
                     // Validate parameters and environment
                     validateParameters()
 
@@ -216,8 +213,6 @@ pipeline {
 
                     // Configure credentials and environment files
                     withCredentials(getCredentialsList()) {
-                        // Generate configuration files
-                        generateConfigurationFiles()
 
                         // Setup SSH keys securely
                         setupSSHKeys()
@@ -507,45 +502,6 @@ def getCredentialsList() {
         string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
         string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')
     ]
-}
-
-def generateConfigurationFiles() {
-    logInfo('Generating configuration files for infrastructure deployment')
-
-    // Load configuration templates if not already set
-    if (!env.TERRAFORM_CONFIG) {
-        try {
-            env.TERRAFORM_CONFIG = readFile('validation/pipeline/configs/airgap-rke2-terraform.tfvars.template')
-            logInfo('Loaded TERRAFORM_CONFIG from template file')
-        } catch (Exception e) {
-            logError("Failed to load TERRAFORM_CONFIG template: ${e.message}")
-            error('TERRAFORM_CONFIG is required - either set the environment variable or provide the template file')
-        }
-    }
-
-    if (!env.ANSIBLE_VARIABLES) {
-        try {
-            env.ANSIBLE_VARIABLES = readFile('validation/pipeline/configs/airgap-rke2-ansible-vars.yaml.template')
-            logInfo('Loaded ANSIBLE_VARIABLES from template file')
-        } catch (Exception e) {
-            logError("Failed to load ANSIBLE_VARIABLES template: ${e.message}")
-            error('ANSIBLE_VARIABLES is required - either set the environment variable or provide the template file')
-        }
-    }
-
-    // Validate required environment variables
-    validateConfigurationEnvironmentVariables()
-
-    // Generate Terraform configuration
-    generateTerraformConfiguration()
-
-    // Generate Ansible configuration
-    generateAnsibleConfiguration()
-
-    // Generate environment file for containers
-    generateEnvironmentFile()
-
-    logInfo('Configuration files generated successfully')
 }
 
 def validateConfigurationEnvironmentVariables() {
@@ -879,11 +835,13 @@ echo 'All infrastructure prerequisites validated successfully'
 def deployInfrastructure() {
     logInfo('Starting infrastructure deployment process')
 
-    // Step 1: Initialize OpenTofu
+
+    // Step 1: Manage workspace
+    manageWorkspace()
+
+    // Step 2: Initialize OpenTofu
     initializeOpenTofu()
 
-    // Step 2: Manage workspace
-    manageWorkspace()
 
     // Step 3: Plan infrastructure changes
     planInfrastructure()
@@ -955,20 +913,27 @@ def initializeOpenTofu() {
     def initScript = """
 cd ${env.QA_INFRA_WORK_PATH}
 
-echo 'Unsetting TF_WORKSPACE to allow default workspace selection...'
-unset TF_WORKSPACE
-
-echo 'Selecting default workspace before initialization...'
-tofu -chdir=tofu/aws/modules/airgap workspace select default || true
-
-echo 'Initializing OpenTofu backend...'
-tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade
+echo 'Initializing OpenTofu with S3 backend configuration...'
+tofu -chdir=tofu/aws/modules/airgap init -backend-config="${env.TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade
 
 echo 'Verifying initialization success...'
 tofu -chdir=tofu/aws/modules/airgap providers
 
-echo 'OpenTofu initialization with S3 backend completed successfully'
-tofu -chdir=tofu/aws/modules/airgap init -backend-config="${env.TERRAFORM_BACKEND_VARS_FILENAME}" -input=false
+echo 'Creating/selecting target workspace: ${env.TF_WORKSPACE}'
+tofu -chdir=tofu/aws/modules/airgap workspace select "${env.TF_WORKSPACE}" || tofu -chdir=tofu/aws/modules/airgap workspace new "${env.TF_WORKSPACE}"
+
+echo 'Verifying workspace selection...'
+CURRENT_WORKSPACE=\$(tofu -chdir=tofu/aws/modules/airgap workspace show)
+echo "Current workspace: \$CURRENT_WORKSPACE"
+
+if [ "\$CURRENT_WORKSPACE" != "${env.TF_WORKSPACE}" ]; then
+    echo "ERROR: Expected workspace ${env.TF_WORKSPACE}, but got '\$CURRENT_WORKSPACE'"
+    echo 'Available workspaces:'
+    tofu -chdir=tofu/aws/modules/airgap workspace list
+    exit 1
+fi
+
+echo 'OpenTofu initialization and workspace setup completed successfully'
     """
 
     executeScriptInContainer(initScript, [:], true)
