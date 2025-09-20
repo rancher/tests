@@ -835,13 +835,11 @@ echo 'All infrastructure prerequisites validated successfully'
 def deployInfrastructure() {
     logInfo('Starting infrastructure deployment process')
 
-
-    // Step 1: Manage workspace
-    manageWorkspace()
-
-    // Step 2: Initialize OpenTofu
+    // Step 1: Initialize OpenTofu
     initializeOpenTofu()
 
+    // Step 2: Manage workspace
+    manageWorkspace()
 
     // Step 3: Plan infrastructure changes
     planInfrastructure()
