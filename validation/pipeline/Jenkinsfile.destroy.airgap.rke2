@@ -501,10 +501,10 @@ def createSharedVolume() {
     sh "docker volume create --name ${env.VALIDATION_VOLUME}"
 }
 
-def executeScriptInContainer(scriptContent, extraEnv = [:]) {
+def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = false) {
     def timestamp = System.currentTimeMillis()
-    def containerName = "${env.BUILD_CONTAINER_NAME}-${timestamp}"
-    def scriptFile = "destroy-script-${timestamp}.sh"
+    def containerName = "${env.BUILD_CONTAINER_NAME}-script-${timestamp}"
+    def scriptFile = "docker-script-${timestamp}.sh"
 
     writeFile file: scriptFile, text: scriptContent
 
@@ -515,8 +515,6 @@ def executeScriptInContainer(scriptContent, extraEnv = [:]) {
 
     def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE}"
 
-    // Note: TF_WORKSPACE is intentionally NOT set here to avoid workspace conflicts during init
-    // The script itself will manage workspace selection after backend initialization
     sh """
         docker run --rm \
             -v ${env.VALIDATION_VOLUME}:/root \
