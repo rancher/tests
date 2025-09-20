@@ -91,7 +91,7 @@ pipeline {
         // Configuration files
         TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
         TERRAFORM_BACKEND_VARS_FILENAME = 'backend.tfvars'
-        ENV_FILE = '.env-destroy'
+        ENV_FILE = '.env'
     }
 
     stages {
