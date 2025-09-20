@@ -375,20 +375,7 @@ EOF
 
     echo "--- Starting Direct Destruction ---"
     # Pass placeholder variables directly to the destroy command to satisfy required variables
-    tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve \
-        -var 'user_id=destroy' \
-        -var 'ssh_key=destroy' \
-        -var 'ssh_key_name=destroy' \
-        -var 'aws_secret_key=destroy' \
-        -var 'aws_ami=destroy' \
-        -var 'aws_hostname_prefix=destroy' \
-        -var 'aws_route53_zone=destroy' \
-        -var 'aws_ssh_user=destroy' \
-        -var 'aws_security_group=[]' \
-        -var 'aws_vpc=destroy' \
-        -var 'aws_volume_size=0' \
-        -var 'aws_subnet=destroy' \
-        -var 'instance_type=destroy'
+    tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve
 
     echo "--- Verifying Destruction ---"
     REMAINING_RESOURCES=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l || echo 0)
