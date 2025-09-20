@@ -83,6 +83,10 @@ pipeline {
 
         // Target workspace from parameters
         TARGET_WORKSPACE = "${params.TARGET_WORKSPACE}"
+        TF_WORKSPACE = "${params.TARGET_WORKSPACE}"
+
+        // Timeouts (in minutes)
+        TERRAFORM_TIMEOUT = '30'
 
         // Configuration files
         TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
