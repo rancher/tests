@@ -369,7 +369,7 @@ EOF
     echo "--- Initializing OpenTofu ---"
     tofu -chdir=tofu/aws/modules/airgap init -reconfigure \
         -backend-config="bucket=${env.TF_STATE_BUCKET}" \
-        -backend-config="key=${env.TARGET_WORKSPACE}/terraform.tfstate" \
+        -backend-config="key=${env.TF_STATE_KEY_PREFIX}/terraform.tfstate" \
         -backend-config="region=${env.TF_STATE_REGION}"
 
 
