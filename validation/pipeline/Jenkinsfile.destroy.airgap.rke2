@@ -22,6 +22,11 @@ pipeline {
 
     parameters {
         string(
+            name: 'TARGET_WORKSPACE',
+            defaultValue: '',
+            description: 'Terraform workspace to destroy (e.g., jenkins_airgap_ansible_workspace_123)'
+        )
+        string(
             name: 'RANCHER_TEST_REPO_URL',
             defaultValue: 'https://github.com/rancher/tests',
             description: 'URL of rancher/tests repository'
@@ -41,33 +46,13 @@ pipeline {
             defaultValue: 'main',
             description: 'Branch of qa-infra-automation repository'
         )
-        string(
-            name: 'S3_BUCKET_NAME',
-            defaultValue: 'jenkins-terraform-state-storage',
-            description: 'S3 bucket name where Terraform state is stored'
-        )
-        string(
-            name: 'S3_KEY_PREFIX',
-            defaultValue: 'jenkins-airgap-rke2',
-            description: 'S3 key prefix for the Terraform state files'
-        )
-        string(
-            name: 'S3_REGION',
-            defaultValue: 'us-east-2',
-            description: 'AWS region where the S3 bucket is located'
-        )
-        string(
-            name: 'TARGET_WORKSPACE',
-            defaultValue: '',
-            description: 'Terraform workspace to destroy (e.g., jenkins_airgap_ansible_workspace_123)'
-        )
     }
 
     environment {
-        // Dynamic state storage configuration from parameters
-        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'}"
-        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2'}"
-        S3_REGION = "${params.S3_REGION ?: 'us-east-2'}"
+        // Default S3 configuration - will be auto-detected from workspace config
+        S3_BUCKET_NAME = 'jenkins-terraform-state-storage'
+        S3_KEY_PREFIX = 'jenkins-airgap-rke2'
+        S3_REGION = 'us-east-2'
 
         // Repository configurations
         RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
@@ -288,26 +273,18 @@ pipeline {
 
 def validateParameters() {
     // Validate required parameters
+    if (!params.TARGET_WORKSPACE || params.TARGET_WORKSPACE.trim().isEmpty()) {
+        error('TARGET_WORKSPACE parameter is required for destruction')
+    }
     if (!params.RANCHER_TEST_REPO_URL) {
         error('RANCHER_TEST_REPO_URL parameter is required')
     }
     if (!params.QA_INFRA_REPO_URL) {
         error('QA_INFRA_REPO_URL parameter is required')
     }
-    if (!params.S3_BUCKET_NAME) {
-        error('S3_BUCKET_NAME parameter is required')
-    }
-    if (!params.S3_KEY_PREFIX) {
-        error('S3_KEY_PREFIX parameter is required')
-    }
-    if (!params.S3_REGION) {
-        error('S3_REGION parameter is required')
-    }
-    if (!params.TARGET_WORKSPACE) {
-        error('TARGET_WORKSPACE parameter is required')
-    }
 
     logInfo('Parameters validated successfully')
+    logInfo("Target workspace: ${params.TARGET_WORKSPACE}")
 }
 
 def validateRequiredVariables(requiredVars) {
@@ -531,8 +508,56 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
     sh "rm -f ${scriptFile}"
 }
 
+def downloadConfigurationFromS3() {
+    logInfo('Downloading configuration files from S3')
+
+    def downloadScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+
+echo 'Creating configuration directory...'
+mkdir -p tofu/aws/modules/airgap
+
+echo 'Downloading cluster.tfvars from S3...'
+aws s3 cp s3://"${env.S3_BUCKET_NAME}"/"${env.TF_WORKSPACE}"/"${env.S3_KEY_PREFIX}"/config/"${env.TERRAFORM_VARS_FILENAME}" \
+    tofu/aws/modules/airgap/"${env.TERRAFORM_VARS_FILENAME}" \
+    --region "${env.S3_REGION}"
+
+if [ \$? -eq 0 ]; then
+    echo 'SUCCESS: cluster.tfvars downloaded from S3'
+    ls -la tofu/aws/modules/airgap/"${env.TERRAFORM_VARS_FILENAME}"
+else
+    echo 'ERROR: Failed to download cluster.tfvars from S3'
+    echo 'Available files in S3 config directory:'
+    aws s3 ls s3://"${env.S3_BUCKET_NAME}"/"${env.TF_WORKSPACE}"/"${env.S3_KEY_PREFIX}"/config/ --region "${env.S3_REGION}" || echo 'Failed to list S3 contents'
+    exit 1
+fi
+
+echo 'Downloading backend.tfvars from S3...'
+aws s3 cp s3://"${env.S3_BUCKET_NAME}"/"${env.TF_WORKSPACE}"/"${env.S3_KEY_PREFIX}"/config/"${env.TERRAFORM_BACKEND_VARS_FILENAME}" \
+    tofu/aws/modules/airgap/"${env.TERRAFORM_BACKEND_VARS_FILENAME}" \
+    --region "${env.S3_REGION}"
+
+if [ \$? -eq 0 ]; then
+    echo 'SUCCESS: backend.tfvars downloaded from S3'
+    ls -la tofu/aws/modules/airgap/"${env.TERRAFORM_BACKEND_VARS_FILENAME}"
+else
+    echo 'ERROR: Failed to download backend.tfvars from S3'
+    echo 'Available files in S3 config directory:'
+    aws s3 ls s3://"${env.S3_BUCKET_NAME}"/"${env.TF_WORKSPACE}"/"${env.S3_KEY_PREFIX}"/config/ --region "${env.S3_REGION}" || echo 'Failed to list S3 contents'
+    exit 1
+fi
+
+echo 'Configuration files downloaded successfully'
+echo 'Verifying downloaded files:'
+ls -la tofu/aws/modules/airgap/*.tfvars
+    """
+
+    executeScriptInContainer(downloadScript)
+    logInfo('Configuration files downloaded from S3 successfully')
+}
+
 def performInfrastructureDestruction() {
-    generateTofuBackendConfiguration()
+    downloadConfigurationFromS3()
     initializeOpenTofu()
     manageWorkspace()
     executeDestruction()
@@ -624,31 +649,6 @@ tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade
     executeScriptInContainer(workspaceScript)
 }
 
-def generateTofuBackendConfiguration() {
-    logInfo('Generating Tofu configuration')
-
-    // Ensure S3 backend parameters are set
-    if (!env.S3_BUCKET_NAME) { throw new RuntimeException('S3_BUCKET_NAME environment variable is not set') }
-    if (!env.S3_REGION) { throw new RuntimeException('S3_REGION environment variable is not set') }
-    if (!env.S3_KEY_PREFIX) { throw new RuntimeException('S3_KEY_PREFIX environment variable is not set') }
-
-    sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
-
-     // Write the configuration file
-    dir('./qa-infra-automation') {
-        dir('./tofu/aws/modules/airgap') {
-
-            // Generate backend.tfvars content from S3 parameters
-            def backendVars = """
-bucket = \"${env.S3_BUCKET_NAME}\"
-key    = \"${env.S3_KEY_PREFIX}"
-region = \"${env.S3_REGION}\"
-"""
-            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
-            logInfo("S3 backend configuration written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
-        }
-    }
-}
 
 def executeDestruction() {
     logInfo('Executing direct infrastructure destruction')
