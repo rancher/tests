@@ -534,7 +534,7 @@ def validateConfigurationEnvironmentVariables() {
     logInfo('All required environment variables validated successfully')
 }
 
-def generateTerraformConfiguration() {
+def generateTofuConfiguration() {
     logInfo('Generating Terraform configuration')
 
     if (!env.TERRAFORM_CONFIG) {
@@ -835,18 +835,19 @@ echo 'All infrastructure prerequisites validated successfully'
 def deployInfrastructure() {
     logInfo('Starting infrastructure deployment process')
 
-    generateTerraformConfiguration()
+    // Step 1: Generate Tofu config
+    generateTofuConfiguration()
 
-    // Step 1: Initialize OpenTofu
+    // Step 2: Initialize OpenTofu
     initializeOpenTofu()
 
-    // Step 2: Manage workspace
+    // Step 3: Manage workspace
     manageWorkspace()
 
-    // Step 3: Plan infrastructure changes
+    // Step 4: Plan infrastructure changes
     planInfrastructure()
 
-    // Step 4: Apply infrastructure
+    // Step 5: Apply infrastructure
     applyInfrastructure()
 
     logInfo('Infrastructure deployment completed successfully')

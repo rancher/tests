@@ -86,53 +86,135 @@ pipeline {
 
         // Configuration files
         TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
+        TERRAFORM_BACKEND_VARS_FILENAME = 'backend.tfvars'
         ENV_FILE = '.env-destroy'
-
-        // AWS defaults
-        AWS_REGION = 'us-east-2'
     }
 
     stages {
+        stage('Initialize Pipeline') {
+            steps {
+                script {
+                    logInfo('Initializing pipeline')
+                    // Validate parameters and environment
+                    validateParameters()
+
+                    // Set up dynamic variables
+                    setupDynamicEnvironment()
+
+                    // Clean workspace
+                    deleteDir()
+
+                    logInfo('Pipeline initialized successfully')
+                    logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
+                    logInfo("Docker image: ${env.IMAGE_NAME}")
+                    logInfo("Volume: ${env.VALIDATION_VOLUME}")
+                }
+            }
+        }
+
+        stage('Checkout Repositories') {
+            steps {
+                script {
+                    logInfo('Checking out source repositories')
+
+                    // Checkout Rancher Tests Repository
+                    dir('./tests') {
+                        logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
+                            extensions: [
+                                [$class: 'CleanCheckout'],
+                                [$class: 'CloneOption', depth: 1, shallow: true]
+                            ],
+                            userRemoteConfigs: [[
+                                url: env.RANCHER_TEST_REPO_URL,
+                            ]]
+                        ])
+                    }
+
+                    // Checkout QA Infrastructure Repository
+                    dir('./qa-infra-automation') {
+                        logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
+                            extensions: [
+                                [$class: 'CleanCheckout'],
+                                [$class: 'CloneOption', depth: 1, shallow: true]
+                            ],
+                            userRemoteConfigs: [[
+                                url: env.QA_INFRA_REPO,
+                            ]]
+                        ])
+                    }
+
+                    logInfo('Repository checkout completed successfully')
+                }
+            }
+        }
+
+        stage('Configure Environment') {
+            steps {
+                script {
+                    logInfo('Configuring deployment environment')
+
+                    // Configure credentials and environment files
+                    withCredentials(getCredentialsList()) {
+
+                        // Setup SSH keys securely
+                        setupSSHKeys()
+
+                        // Build Docker image with proper tagging
+                        buildDockerImage()
+
+                        // Create shared volume
+                        createSharedVolume()
+                    }
+                }
+            }
+        }
+
         stage('Infrastructure Destruction Operations') {
             steps {
                 script {
-                    logWarning('⚠️ IMPORTANT: No concurrent state locking available')
-                    logWarning('⚠️ Ensure only ONE destruction pipeline runs at a time for the same workspace')
-                    logWarning('⚠️ Manual coordination required to prevent state conflicts')
+                    logInfo('Perfom infrastructure destruction with OpenTofu')
 
-                    // Validate Parameters
-                    logInfo('Validating destruction parameters')
-                    if (!params.TARGET_WORKSPACE || params.TARGET_WORKSPACE.trim().isEmpty()) {
-                        error('TARGET_WORKSPACE parameter is required for destruction')
+                    // Configuration validation
+                    def requiredVars = [
+                        'QA_INFRA_WORK_PATH',
+                        'TF_WORKSPACE',
+                        'TERRAFORM_VARS_FILENAME',
+                        'TERRAFORM_BACKEND_VARS_FILENAME',
+                        'TERRAFORM_TIMEOUT'
+                    ]
+                    validateRequiredVariables(requiredVars)
+
+                    // Enhanced timeout with reasonable defaults
+                    def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
+                        Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
+
+                    timeout(time: timeoutMinutes, unit: 'MINUTES') {
+                        try {
+                            // Pre-flight checks
+                            validateInfrastructurePrerequisites()
+
+                            // Infrastructure destruction with enhanced error handling
+                            performInfrastructureDestruction()
+
+                            // Post-destruction validation
+                            validateInfrastructureState()
+                        }
+                        catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+                        logError("Infrastructure destruction timed out after ${timeoutMinutes} minutes")
+                        logError("Timeout exception details: ${e.message}")
+                        try {
+                            archiveDestructionFailureArtifacts()   
+                        } catch (Exception cleanupException) {
+                            logError("Failed to perform infrastructure cleanup: ${cleanupException.message}")
+                        }
                     }
-                    env.TARGET_WORKSPACE = params.TARGET_WORKSPACE
-                    logInfo("Target workspace: ${env.TARGET_WORKSPACE}")
-                    logInfo('State source: S3 Backend')
 
-                    // Prepare Environment
-                    logInfo('Preparing destruction environment')
-                    deleteDir()
-
-                    // Checkout repositories
-                    dir('./qa-infra-automation') {
-                        logInfo('Cloning qa-infra-automation repository')
-                        checkout([$class: 'GitSCM', branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]], extensions: [[$class: 'CleanCheckout'], [$class: 'CloneOption', depth: 1, shallow: true]], userRemoteConfigs: [[url: env.QA_INFRA_REPO]]])
-                    }
-                    dir('./tests') {
-                        logInfo('Cloning tests repository for Docker build')
-                        checkout([$class: 'GitSCM', branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]], extensions: [[$class: 'CleanCheckout'], [$class: 'CloneOption', depth: 1, shallow: true]], userRemoteConfigs: [[url: env.RANCHER_TEST_REPO_URL,]]])
-                    }
-
-                    // Configure credentials and build environment
-                    withCredentials(getCredentialsList()) {
-                        generateDestructionEnvironmentFile()
-                        setupSSHKeys()
-                        buildDestructionDockerImage()
-                        createSharedVolume()
-
-                        // Execute the destruction
-                        executeDestruction()
-                    }
                     logInfo('Infrastructure destruction process completed.')
                     archiveDestructionResults()
                 }
@@ -201,6 +283,109 @@ pipeline {
  * DESTRUCTION-SPECIFIC HELPER FUNCTIONS
  */
 
+ def validateRequiredVariables(requiredVars) {
+    logInfo('Validating required environment variables')
+
+    def missingVars = []
+    requiredVars.each { varName ->
+        def varValue = env."${varName}"
+        if (!varValue || varValue.trim().isEmpty()) {
+            missingVars.add(varName)
+        }
+    }
+
+    if (!missingVars.isEmpty()) {
+        def errorMsg = "Missing required environment variables: ${missingVars.join(', ')}"
+        logError(errorMsg)
+        throw new IllegalArgumentException(errorMsg)
+    }
+
+    logInfo('All required variables validated successfully')
+}
+
+def validateInfrastructurePrerequisites() {
+    logInfo('Validating infrastructure prerequisites')
+
+    def prerequisiteScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+
+echo 'Checking OpenTofu installation...'
+tofu version
+
+echo 'Checking workspace directory...'
+test -d ${env.QA_INFRA_WORK_PATH}
+
+echo 'Validating terraform vars file...'
+test -f ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}
+
+echo 'All infrastructure prerequisites validated successfully'
+"""
+
+    try {
+        executeScriptInContainer(prerequisiteScript)
+        logInfo('All infrastructure prerequisites validated')
+    } catch (Exception e) {
+        def errorMsg = "Infrastructure prerequisites validation failed: ${e.message}"
+        logError(errorMsg)
+        throw new RuntimeException(errorMsg, e)
+    }
+}
+
+def validateInfrastructureState() {
+    logInfo('Validating infrastructure state after deployment')
+
+    def validationScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+export TF_WORKSPACE="${env.TF_WORKSPACE}"
+
+echo 'Validating remote terraform state via tofu commands (S3 backend)...'
+
+echo 'Checking key infrastructure resources from remote state...'
+tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap state list > /root/state-list.txt 2>&1
+STATE_RC=\$?
+echo "State list command completed with return code: \$STATE_RC"
+if [ \$STATE_RC -ne 0 ]; then
+    echo 'ERROR: Failed to retrieve state from remote backend'
+    cat /root/state-list.txt
+    exit 1
+fi
+
+echo 'State retrieval passed'
+
+echo 'Checking if state has no resources...'
+STATE_COUNT=\$(wc -l < /root/state-list.txt)
+if [ "\$STATE_COUNT" -gt 0 ]; then 
+    echo 'WARNING: Resources found in state - this may indicate infrastructure was not destroyed successfully'
+    cat /root/state-list.txt
+else
+    echo "SUCCESS: State contains \$(STATE_COUNT) resources"
+    echo 'Sample state resources:'
+    head -5 /root/state-list.txt
+fi
+
+echo 'Generating and validating outputs from remote state...'
+tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap output -json > /root/infrastructure-outputs.json 2>&1
+OUTPUT_RC=\$?
+if [ \$OUTPUT_RC -gt 0 ]; then
+    echo 'ERROR: Failed to generate terraform outputs from remote state'
+    cat /root/infrastructure-outputs.json
+    exit 1
+fi
+
+OUTPUT_SIZE=\$(stat -c%s /root/infrastructure-outputs.json 2>/dev/null || echo 0)
+if [ "\$OUTPUT_SIZE" -gt 0 ]; then
+    echo 'ERROR: Outputs file is not empty (\$OUTPUT_SIZE bytes)'
+else
+    echo 'SUCCESS: Outputs file is empty'
+fi
+
+echo 'Infrastructure state validation completed successfully'
+    """
+
+    executeScriptInContainer(validationScript)
+    logInfo('Infrastructure state validated successfully')
+}
+
 def getShortJobName() {
     def jobName = "${env.JOB_NAME}"
     if (jobName.contains('/')) {
@@ -265,25 +450,23 @@ def setupSSHKeys() {
     }
 }
 
-def buildDestructionDockerImage() {
-    logInfo("Building destruction Docker image: ${env.IMAGE_NAME}")
+def buildDockerImage() {
+    logInfo("Building Docker image: ${env.IMAGE_NAME}")
 
     dir('./') {
-        sh './tests/validation/configure.sh || echo "Configure script not found, continuing..."'
+        sh './tests/validation/configure.sh'
         sh """
-            # Use the same Dockerfile as the main pipeline for consistency
             docker build . \
                 -f ./tests/validation/Dockerfile.tofu.e2e \
                 -t ${env.IMAGE_NAME} \
                 --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
-                --build-arg VCS_REF=\$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') \
+                --build-arg VCS_REF=\$(git rev-parse --short HEAD) \
                 --label "pipeline.build.number=${env.BUILD_NUMBER}" \
-                --label "pipeline.job.name=${env.JOB_NAME}" \
-                --label "pipeline.purpose=destruction"
+                --label "pipeline.job.name=${env.JOB_NAME}"
         """
     }
 
-    logInfo('Destruction Docker image built successfully')
+    logInfo('Docker image built successfully')
 }
 
 def createSharedVolume() {
@@ -303,15 +486,18 @@ def executeScriptInContainer(scriptContent, extraEnv = [:]) {
         envVars += " -e ${key}=${value}"
     }
 
+    def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE}"
+
     // Note: TF_WORKSPACE is intentionally NOT set here to avoid workspace conflicts during init
     // The script itself will manage workspace selection after backend initialization
     sh """
         docker run --rm \
             -v ${env.VALIDATION_VOLUME}:/root \
+            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \
             -v ${pwd()}/${scriptFile}:/tmp/script.sh \
             --name ${containerName} \
             -t --env-file ${env.ENV_FILE} \
-            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
+            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \
             ${envVars} \
             ${env.IMAGE_NAME} \
             sh /tmp/script.sh
@@ -320,65 +506,152 @@ def executeScriptInContainer(scriptContent, extraEnv = [:]) {
     sh "rm -f ${scriptFile}"
 }
 
-def executeScriptInContainerWithWorkspace(scriptContent, extraEnv = [:]) {
-    def timestamp = System.currentTimeMillis()
-    def containerName = "${env.BUILD_CONTAINER_NAME}-${timestamp}"
-    def scriptFile = "destroy-script-${timestamp}.sh"
+def performInfrastructureDestruction() {
+    generateTofuBackendConfiguration()
+    initializeOpenTofu()
+    manageWorkspace()
+    executeDestruction()
 
-    writeFile file: scriptFile, text: scriptContent
+    logInfo('Infrastructure destruction completed successfully')
+}
 
-    def envVars = ''
-    extraEnv.each { key, value ->
-        envVars += " -e ${key}=${value}"
-    }
+def initializeOpenTofu() {
+    logInfo('Initializing OpenTofu with S3 backend')
 
-    // This version sets TF_WORKSPACE for operations that need it (like planning and applying)
-    sh """
-        docker run --rm \
-            -v ${env.VALIDATION_VOLUME}:/root \
-            -v ${pwd()}/${scriptFile}:/tmp/script.sh \
-            --name ${containerName} \
-            -t --env-file ${env.ENV_FILE} \
-            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \
-            -e TF_WORKSPACE=${env.TARGET_WORKSPACE} \
-            ${envVars} \
-            ${env.IMAGE_NAME} \
-            sh /tmp/script.sh
+    def initScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+
+echo 'Initializing OpenTofu with S3 backend configuration...'
+tofu -chdir=tofu/aws/modules/airgap init -backend-config="${env.TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade
+
+echo 'Verifying initialization success...'
+tofu -chdir=tofu/aws/modules/airgap providers
+
+echo 'Creating/selecting target workspace: ${env.TF_WORKSPACE}'
+tofu -chdir=tofu/aws/modules/airgap workspace select "${env.TF_WORKSPACE}" || tofu -chdir=tofu/aws/modules/airgap workspace new "${env.TF_WORKSPACE}"
+
+echo 'Verifying workspace selection...'
+CURRENT_WORKSPACE=\$(tofu -chdir=tofu/aws/modules/airgap workspace show)
+echo "Current workspace: \$CURRENT_WORKSPACE"
+
+if [ "\$CURRENT_WORKSPACE" != "${env.TF_WORKSPACE}" ]; then
+    echo "ERROR: Expected workspace ${env.TF_WORKSPACE}, but got '\$CURRENT_WORKSPACE'"
+    echo 'Available workspaces:'
+    tofu -chdir=tofu/aws/modules/airgap workspace list
+    exit 1
+fi
+
+echo 'OpenTofu initialization and workspace setup completed successfully'
     """
 
-    sh "rm -f ${scriptFile}"
+    executeScriptInContainer(initScript, [:], true)
+}
+
+def manageWorkspace() {
+    logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
+
+    def workspaceScript = """
+cd ${env.QA_INFRA_WORK_PATH}
+
+echo 'Managing workspace state...'
+unset TF_WORKSPACE
+
+echo 'Current workspaces:'
+tofu -chdir=tofu/aws/modules/airgap workspace list
+
+echo 'Creating or selecting workspace: ${env.TF_WORKSPACE}'
+if ! tofu -chdir=tofu/aws/modules/airgap workspace select "${env.TF_WORKSPACE}" 2>/dev/null; then
+    echo 'Workspace does not exist, creating new workspace...'
+    tofu -chdir=tofu/aws/modules/airgap workspace new "${env.TF_WORKSPACE}"
+
+    if ! tofu -chdir=tofu/aws/modules/airgap workspace select "${env.TF_WORKSPACE}"; then
+        echo 'ERROR: Failed to create and select workspace'
+        exit 1
+    fi
+fi
+
+# Verify workspace selection
+CURRENT_WORKSPACE=\$(tofu -chdir=tofu/aws/modules/airgap workspace show)
+echo "Current workspace: \$CURRENT_WORKSPACE"
+
+# Strip whitespace and handle empty responses
+CURRENT_WORKSPACE=\$(echo "\$CURRENT_WORKSPACE" | xargs)
+
+if [ "\$CURRENT_WORKSPACE" = "" ]; then
+    echo 'ERROR: Workspace show command returned empty response'
+    tofu -chdir=tofu/aws/modules/airgap workspace list
+    exit 1
+fi
+
+if [ "\$CURRENT_WORKSPACE" != "${env.TF_WORKSPACE}" ]; then
+    echo "ERROR: Expected workspace ${env.TF_WORKSPACE}, but got '\$CURRENT_WORKSPACE'"
+    echo 'Available workspaces:'
+    tofu -chdir=tofu/aws/modules/airgap workspace list
+    exit 1
+fi
+
+export TF_WORKSPACE="${env.TF_WORKSPACE}"
+echo "Workspace management completed: \$TF_WORKSPACE"
+
+tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade
+    """
+
+    executeScriptInContainer(workspaceScript)
+}
+
+def generateTofuBackendConfiguration() {
+    logInfo('Generating Tofu configuration')
+
+    // Ensure S3 backend parameters are set
+    if (!env.S3_BUCKET_NAME) { throw new RuntimeException('S3_BUCKET_NAME environment variable is not set') }
+    if (!env.S3_REGION) { throw new RuntimeException('S3_REGION environment variable is not set') }
+    if (!env.S3_KEY_PREFIX) { throw new RuntimeException('S3_KEY_PREFIX environment variable is not set') }
+
+    sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
+
+     // Write the configuration file
+    dir('./qa-infra-automation') {
+        dir('./tofu/aws/modules/airgap') {
+
+            // Generate backend.tfvars content from S3 parameters
+            def backendVars = """
+bucket = \"${env.S3_BUCKET_NAME}\"
+key    = \"${env.S3_KEY_PREFIX}"
+region = \"${env.S3_REGION}\"
+"""
+            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
+            logInfo("S3 backend configuration written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
+        }
 }
 
 def executeDestruction() {
     logInfo('Executing direct infrastructure destruction')
 
     def destructionScript = """
-    set -e
-    cd /root/go/src/github.com/rancher/qa-infra-automation/
+    cd ${env.QA_INFRA_WORK_PATH}
+    export TF_WORKSPACE="${env.TF_WORKSPACE}"
 
-    echo "--- Configuring Backend for Workspace: ${env.TARGET_WORKSPACE} ---"
+    echo 'Debug: Listing current directory contents...'
+    ls -la .
 
-    echo "--- Initializing OpenTofu ---"
-    tofu -chdir=tofu/aws/modules/airgap init -reconfigure \
-        -backend-config="bucket=${env.S3_BUCKET_NAME}" \
-        -backend-config="key=${env.S3_KEY_PREFIX}" \
-        -backend-config="region=${env.S3_REGION}"
+    echo 'Debug: Listing mounted qa-infra-automation/tofu/aws/modules/airgap contents...'
+    ls -la /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/ || echo 'Mounted directory listing failed'
 
     echo "--- Starting Direct Destruction ---"
     # Pass placeholder variables directly to the destroy command to satisfy required variables
-    tofu -chdir=tofu/aws/modules/airgap destroy -auto-approve
+    tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap destroy -auto-approve -input=false
 
     echo "--- Verifying Destruction ---"
-    REMAINING_RESOURCES=\$(tofu -chdir=tofu/aws/modules/airgap state list | wc -l || echo 0)
+    REMAINING_RESOURCES=\$(tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap state list | wc -l || echo 0)
     if [ "\$REMAINING_RESOURCES" -eq 0 ]; then
         echo "✅ Success: All resources have been destroyed."
         # Clean up the workspace
         echo "--- Cleaning up Terraform Workspace ---"
-        tofu -chdir=tofu/aws/modules/airgap workspace select default || echo "Could not switch to default workspace."
-        tofu -chdir=tofu/aws/modules/airgap workspace delete "${env.TARGET_WORKSPACE}" || echo "Could not delete workspace ${env.TARGET_WORKSPACE}."
+        tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap workspace select default || echo "Could not switch to default workspace."
+        tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap workspace delete "${env.TARGET_WORKSPACE}" || echo "Could not delete workspace ${env.TARGET_WORKSPACE}."
     else
         echo "❌ WARNING: \$REMAINING_RESOURCES resources still remain in state."
-        tofu -chdir=tofu/aws/modules/airgap state list
+        tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap state list
         exit 1
     fi
     """
