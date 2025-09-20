@@ -622,6 +622,7 @@ region = \"${env.S3_REGION}\"
             writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
             logInfo("S3 backend configuration written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
         }
+    }
 }
 
 def executeDestruction() {
