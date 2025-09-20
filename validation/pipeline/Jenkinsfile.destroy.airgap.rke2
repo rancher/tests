@@ -91,139 +91,140 @@ pipeline {
     }
 
     stages {
-        stage('Initialize Pipeline') {
-            steps {
-                script {
-                    logInfo('Initializing pipeline')
-                    // Validate parameters and environment
-                    validateParameters()
-
-                    // Set up dynamic variables
-                    setupDynamicEnvironment()
-
-                    // Clean workspace
-                    deleteDir()
-
-                    logInfo('Pipeline initialized successfully')
-                    logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
-                    logInfo("Docker image: ${env.IMAGE_NAME}")
-                    logInfo("Volume: ${env.VALIDATION_VOLUME}")
-                }
-            }
-        }
-
-        stage('Checkout Repositories') {
-            steps {
-                script {
-                    logInfo('Checking out source repositories')
-
-                    // Checkout Rancher Tests Repository
-                    dir('./tests') {
-                        logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
-                        checkout([
-                            $class: 'GitSCM',
-                            branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
-                            extensions: [
-                                [$class: 'CleanCheckout'],
-                                [$class: 'CloneOption', depth: 1, shallow: true]
-                            ],
-                            userRemoteConfigs: [[
-                                url: env.RANCHER_TEST_REPO_URL,
-                            ]]
-                        ])
-                    }
-
-                    // Checkout QA Infrastructure Repository
-                    dir('./qa-infra-automation') {
-                        logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
-                        checkout([
-                            $class: 'GitSCM',
-                            branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
-                            extensions: [
-                                [$class: 'CleanCheckout'],
-                                [$class: 'CloneOption', depth: 1, shallow: true]
-                            ],
-                            userRemoteConfigs: [[
-                                url: env.QA_INFRA_REPO,
-                            ]]
-                        ])
-                    }
-
-                    logInfo('Repository checkout completed successfully')
-                }
-            }
-        }
-
-        stage('Configure Environment') {
-            steps {
-                script {
-                    logInfo('Configuring deployment environment')
-
-                    // Configure credentials and environment files
-                    withCredentials(getCredentialsList()) {
-
-                        // Setup SSH keys securely
-                        setupSSHKeys()
-
-                        // Build Docker image with proper tagging
-                        buildDockerImage()
-
-                        // Create shared volume
-                        createSharedVolume()
-                    }
-                }
-            }
-        }
-
-        stage('Infrastructure Destruction Operations') {
-            steps {
-                script {
-                    logInfo('Perfom infrastructure destruction with OpenTofu')
-
-                    // Configuration validation
-                    def requiredVars = [
-                        'QA_INFRA_WORK_PATH',
-                        'TF_WORKSPACE',
-                        'TERRAFORM_VARS_FILENAME',
-                        'TERRAFORM_BACKEND_VARS_FILENAME',
-                        'TERRAFORM_TIMEOUT'
-                    ]
-                    validateRequiredVariables(requiredVars)
-
-                    // Enhanced timeout with reasonable defaults
-                    def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
-                        Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
-
-                    timeout(time: timeoutMinutes, unit: 'MINUTES') {
-                        try {
-                            // Pre-flight checks
-                            validateInfrastructurePrerequisites()
-
-                            // Infrastructure destruction with enhanced error handling
-                            performInfrastructureDestruction()
-
-                            // Post-destruction validation
-                            validateInfrastructureState()
-                        }
-                        catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
-                        logError("Infrastructure destruction timed out after ${timeoutMinutes} minutes")
-                        logError("Timeout exception details: ${e.message}")
-                        try {
-                            archiveDestructionFailureArtifacts()   
-                        } catch (Exception cleanupException) {
-                            logError("Failed to perform infrastructure cleanup: ${cleanupException.message}")
-                        }
-                    }
-
-                    logInfo('Infrastructure destruction process completed.')
-                    archiveDestructionResults()
-                }
-            }
-            post {
-                failure {
+            stage('Initialize Pipeline') {
+                steps {
                     script {
-                        logError('Infrastructure destruction operations failed')
-                        archiveDestructionFailureArtifacts()
+                        logInfo('Initializing pipeline')
+                        // Validate parameters and environment
+                        validateParameters()
+
+                        // Set up dynamic variables
+                        setupDynamicEnvironment()
+
+                        // Clean workspace
+                        deleteDir()
+
+                        logInfo('Pipeline initialized successfully')
+                        logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
+                        logInfo("Docker image: ${env.IMAGE_NAME}")
+                        logInfo("Volume: ${env.VALIDATION_VOLUME}")
+                    }
+                }
+            }
+
+            stage('Checkout Repositories') {
+                steps {
+                    script {
+                        logInfo('Checking out source repositories')
+
+                        // Checkout Rancher Tests Repository
+                        dir('./tests') {
+                            logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
+                                extensions: [
+                                    [$class: 'CleanCheckout'],
+                                    [$class: 'CloneOption', depth: 1, shallow: true]
+                                ],
+                                userRemoteConfigs: [[
+                                    url: env.RANCHER_TEST_REPO_URL,
+                                ]]
+                            ])
+                        }
+
+                        // Checkout QA Infrastructure Repository
+                        dir('./qa-infra-automation') {
+                            logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
+                                extensions: [
+                                    [$class: 'CleanCheckout'],
+                                    [$class: 'CloneOption', depth: 1, shallow: true]
+                                ],
+                                userRemoteConfigs: [[
+                                    url: env.QA_INFRA_REPO,
+                                ]]
+                            ])
+                        }
+
+                        logInfo('Repository checkout completed successfully')
+                    }
+                }
+            }
+
+            stage('Configure Environment') {
+                steps {
+                    script {
+                        logInfo('Configuring deployment environment')
+
+                        // Configure credentials and environment files
+                        withCredentials(getCredentialsList()) {
+
+                            // Setup SSH keys securely
+                            setupSSHKeys()
+
+                            // Build Docker image with proper tagging
+                            buildDockerImage()
+
+                            // Create shared volume
+                            createSharedVolume()
+                        }
+                    }
+                }
+            }
+
+            stage('Infrastructure Destruction Operations') {
+                steps {
+                    script {
+                        logInfo('Perfom infrastructure destruction with OpenTofu')
+
+                        // Configuration validation
+                        def requiredVars = [
+                            'QA_INFRA_WORK_PATH',
+                            'TF_WORKSPACE',
+                            'TERRAFORM_VARS_FILENAME',
+                            'TERRAFORM_BACKEND_VARS_FILENAME',
+                            'TERRAFORM_TIMEOUT'
+                        ]
+                        validateRequiredVariables(requiredVars)
+
+                        // Enhanced timeout with reasonable defaults
+                        def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
+                            Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
+
+                        timeout(time: timeoutMinutes, unit: 'MINUTES') {
+                            try {
+                                // Pre-flight checks
+                                validateInfrastructurePrerequisites()
+
+                                // Infrastructure destruction with enhanced error handling
+                                performInfrastructureDestruction()
+
+                                // Post-destruction validation
+                                validateInfrastructureState()
+                            }
+                            catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+                            logError("Infrastructure destruction timed out after ${timeoutMinutes} minutes")
+                            logError("Timeout exception details: ${e.message}")
+                            try {
+                                archiveDestructionFailureArtifacts()   
+                            } catch (Exception cleanupException) {
+                                logError("Failed to perform infrastructure cleanup: ${cleanupException.message}")
+                            }
+                        }
+
+                        logInfo('Infrastructure destruction process completed.')
+                        archiveDestructionResults()
+                    }
+                }
+                post {
+                    failure {
+                        script {
+                            logError('Infrastructure destruction operations failed')
+                            archiveDestructionFailureArtifacts()
+                        }
                     }
                 }
             }
@@ -277,6 +278,7 @@ pipeline {
             }
         }
     }
+    
 }
 
 /**
