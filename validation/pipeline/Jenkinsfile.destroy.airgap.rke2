@@ -65,9 +65,9 @@ pipeline {
 
     environment {
         // Dynamic state storage configuration from parameters
-        TF_STATE_BUCKET = "${params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'}"
-        TF_STATE_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2'}"
-        TF_STATE_REGION = "${params.S3_REGION ?: 'us-east-2'}"
+        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'}"
+        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2'}"
+        S3_REGION = "${params.S3_REGION ?: 'us-east-2'}"
 
         // Repository configurations
         RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
@@ -229,9 +229,9 @@ def generateDestructionEnvironmentFile() {
         "JOB_NAME=${env.JOB_NAME}",
         "QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}",
         "TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}",
-        "TF_STATE_BUCKET=${env.TF_STATE_BUCKET}",
-        "TF_STATE_KEY_PREFIX=${env.TF_STATE_KEY_PREFIX}",
-        "TF_STATE_REGION=${env.TF_STATE_REGION}",
+        "S3_BUCKET_NAME=${env.S3_BUCKET_NAME}",
+        "S3_KEY_PREFIX=${env.S3_KEY_PREFIX}",
+        "S3_REGION=${env.S3_REGION}",
         "AWS_REGION=${env.AWS_REGION}",
         '',
         '# AWS Credentials for OpenTofu'
@@ -360,9 +360,9 @@ def executeDestruction() {
 
     echo "--- Initializing OpenTofu ---"
     tofu -chdir=tofu/aws/modules/airgap init -reconfigure \
-        -backend-config="bucket=${env.TF_STATE_BUCKET}" \
-        -backend-config="key=${env.TF_STATE_KEY_PREFIX}/terraform.tfstate" \
-        -backend-config="region=${env.TF_STATE_REGION}"
+        -backend-config="bucket=${env.S3_BUCKET_NAME}" \
+        -backend-config="key=${env.S3_KEY_PREFIX}" \
+        -backend-config="region=${env.S3_REGION}"
 
     echo "--- Starting Direct Destruction ---"
     # Pass placeholder variables directly to the destroy command to satisfy required variables
