@@ -612,7 +612,7 @@ def generateTerraformConfiguration() {
             // Generate backend.tfvars content from S3 parameters
             def backendVars = """
 bucket = \"${env.S3_BUCKET_NAME}\"
-key    = "${env.TF_WORKSPACE}/terraform.tfstate"
+key    = \"${env.S3_KEY_PREFIX}\"
 region = \"${env.S3_REGION}\"
 """
             writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
