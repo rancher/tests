@@ -98,9 +98,6 @@ pipeline {
                         // Validate parameters and environment
                         validateParameters()
 
-                        // Set up dynamic variables
-                        setupDynamicEnvironment()
-
                         // Clean workspace
                         deleteDir()
 
@@ -285,7 +282,31 @@ pipeline {
  * DESTRUCTION-SPECIFIC HELPER FUNCTIONS
  */
 
- def validateRequiredVariables(requiredVars) {
+def validateParameters() {
+    // Validate required parameters
+    if (!params.RANCHER_TEST_REPO_URL) {
+        error('RANCHER_TEST_REPO_URL parameter is required')
+    }
+    if (!params.QA_INFRA_REPO_URL) {
+        error('QA_INFRA_REPO_URL parameter is required')
+    }
+    if (!params.S3_BUCKET_NAME) {
+        error('S3_BUCKET_NAME parameter is required')
+    }
+    if (!params.S3_KEY_PREFIX) {
+        error('S3_KEY_PREFIX parameter is required')
+    }
+    if (!params.S3_REGION) {
+        error('S3_REGION parameter is required')
+    }
+    if (!params.TARGET_WORKSPACE) {
+        error('TARGET_WORKSPACE parameter is required')
+    }
+
+    logInfo('Parameters validated successfully')
+}
+
+def validateRequiredVariables(requiredVars) {
     logInfo('Validating required environment variables')
 
     def missingVars = []
