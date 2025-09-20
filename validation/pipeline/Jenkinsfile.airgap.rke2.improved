@@ -835,6 +835,8 @@ echo 'All infrastructure prerequisites validated successfully'
 def deployInfrastructure() {
     logInfo('Starting infrastructure deployment process')
 
+    generateTerraformConfiguration()
+
     // Step 1: Initialize OpenTofu
     initializeOpenTofu()
 
