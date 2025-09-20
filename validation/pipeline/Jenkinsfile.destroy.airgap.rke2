@@ -129,12 +129,10 @@ pipeline {
                         setupSSHKeys()
                         buildDestructionDockerImage()
                         createSharedVolume()
+
+                        // Execute the destruction
+                        executeDestruction()
                     }
-
-
-
-                    // Execute the destruction
-                    executeDestruction()
                     logInfo('Infrastructure destruction process completed.')
                     archiveDestructionResults()
                 }
