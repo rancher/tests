@@ -75,7 +75,7 @@ pipeline {
         )
         string(
             name: 'S3_KEY_PREFIX',
-            defaultValue: 'jenkins-airgap-rke2',
+            defaultValue: 'jenkins-airgap-rke2/terraform.tfstate',
             description: 'S3 key prefix for the Terraform state files'
         )
         string(
