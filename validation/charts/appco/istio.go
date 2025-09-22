@@ -22,7 +22,7 @@ const (
 	expectedDeployLog                                  = "deployed"
 	istioCanaryRevisionApp                             = "istiod-canary"
 	rancherIstioSecretName                      string = `application-collection`
-	istioAmbientModeSet                         string = `--set cni.enabled=true,ztunnel.enabled=true --set istiod.cni.enabled=false --set cni.profile=ambient,istiod.profile=ambient,ztunnel.profile=ambient`
+	istioAmbientModeSet                         string = `--set cni.enabled=true,ztunnel.enabled=true --set istiod.cni.enabled=true --set cni.profile=ambient,istiod.profile=ambient,ztunnel.profile=ambient`
 	istioGatewayModeSet                         string = `--set base.enabled=false,istiod.enabled=false --set gateway.enabled=true,gateway.namespaceOverride=%s`
 	istioGatewayDiffNamespaceModeSet            string = `--set gateway.enabled=true,gateway.namespaceOverride=%s`
 	istioCanaryUpgradeSet                       string = `--set istiod.revision=canary,base.defaultRevision=canary,gateway.namespaceOverride=%s`
