@@ -46,13 +46,28 @@ pipeline {
             defaultValue: 'main',
             description: 'Branch of qa-infra-automation repository'
         )
+        string(
+            name: 'S3_BUCKET_NAME',
+            defaultValue: 'jenkins-terraform-state-storage',
+            description: 'S3 bucket name where Terraform state is stored'
+        )
+        string(
+            name: 'S3_KEY_PREFIX',
+            defaultValue: 'jenkins-airgap-rke2/terraform.tfstate',
+            description: 'S3 key prefix for the Terraform state files'
+        )
+        string(
+            name: 'S3_REGION',
+            defaultValue: 'us-east-2',
+            description: 'AWS region where the S3 bucket is located'
+        )
     }
 
     environment {
         // Default S3 configuration - will be auto-detected from workspace config
-        S3_BUCKET_NAME = 'jenkins-terraform-state-storage'
-        S3_KEY_PREFIX = 'jenkins-airgap-rke2'
-        S3_REGION = 'us-east-2'
+        S3_BUCKET_NAME = "${params.S3_BUCKET ?: ''}"
+        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: ''}"
+        S3_REGION = "${params.S3_REGION ?: ''}"
 
         // Repository configurations
         RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
