@@ -549,22 +549,6 @@ else
     aws s3 ls s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/" --region "${env.S3_REGION}" || echo 'Failed to list S3 contents'
     exit 1
 fi
-
-echo 'Downloading backend.tfvars from S3...'
-aws s3 cp s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/"${env.TERRAFORM_BACKEND_VARS_FILENAME}" \
-    tofu/aws/modules/airgap/"${env.TERRAFORM_BACKEND_VARS_FILENAME}" \
-    --region "${env.S3_REGION}"
-
-if [ \$? -eq 0 ]; then
-    echo 'SUCCESS: backend.tfvars downloaded from S3'
-    ls -la tofu/aws/modules/airgap/"${env.TERRAFORM_BACKEND_VARS_FILENAME}"
-else
-    echo 'ERROR: Failed to download backend.tfvars from S3'
-    echo 'Available files in S3 config directory:'
-    aws s3 ls s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/" --region "${env.S3_REGION}" || echo 'Failed to list S3 contents'
-    exit 1
-fi
-
 echo 'Configuration files downloaded successfully'
 echo 'Verifying downloaded files:'
 ls -la tofu/aws/modules/airgap/*.tfvars
@@ -591,9 +575,36 @@ def generateTofuConfiguration() {
     }
 }
 
+def generateTofuBackendConfiguration() {
+    logInfo('Generating Tofu configuration')
+
+    // Ensure S3 backend parameters are set
+    if (!env.S3_BUCKET_NAME) { throw new RuntimeException('S3_BUCKET_NAME environment variable is not set') }
+    if (!env.S3_REGION) { throw new RuntimeException('S3_REGION environment variable is not set') }
+    if (!env.S3_KEY_PREFIX) { throw new RuntimeException('S3_KEY_PREFIX environment variable is not set') }
+
+    sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
+
+     // Write the configuration file
+    dir('./qa-infra-automation') {
+        dir('./tofu/aws/modules/airgap') {
+
+            // Generate backend.tfvars content from S3 parameters
+            def backendVars = """
+bucket = \"${env.S3_BUCKET_NAME}\"
+key    = \"${env.S3_KEY_PREFIX}"
+region = \"${env.S3_REGION}\"
+"""
+            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
+            logInfo("S3 backend configuration written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
+        }
+    }
+}
+
 def performInfrastructureDestruction() {
     downloadConfigurationFromS3()
     generateTofuConfiguration()
+    generateTofuBackendConfiguration()
     initializeOpenTofu()
     manageWorkspace()
     executeDestruction()
