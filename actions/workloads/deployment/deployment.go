@@ -26,9 +26,9 @@ const (
 	defaultNamespace    = "default"
 	port                = "port"
 	DeploymentSteveType = "apps.deployment"
-	nginxImageName      = "public.ecr.aws/docker/library/nginx"
+	nginxImageName      = "nginx"
 	ubuntuImageName     = "ubuntu"
-	redisImageName      = "public.ecr.aws/docker/library/redis"
+	redisImageName      = "redis"
 	podSteveType        = "pod"
 	restartAnnotation   = "kubectl.kubernetes.io/restartedAt"
 )

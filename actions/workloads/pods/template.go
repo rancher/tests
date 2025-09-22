@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	nginxImageName = "public.ecr.aws/docker/library/nginx"
+	nginxImageName = "nginx"
 )
 
 // CreateContainerAndPodTemplate creates both the container and pod templates
