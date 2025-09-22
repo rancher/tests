@@ -538,9 +538,9 @@ mkdir -p tofu/aws/modules/airgap
 
 # cspell:ignore tfvars
 echo 'Downloading cluster.tfvars from S3...'
-aws s3 cp \\
-    s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/"${env.TERRAFORM_VARS_FILENAME}" \\
-    tofu/aws/modules/airgap/"${env.TERRAFORM_VARS_FILENAME}" \\
+aws s3 cp \
+    s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/"${env.TERRAFORM_VARS_FILENAME}" \
+    tofu/aws/modules/airgap/"${env.TERRAFORM_VARS_FILENAME}" \
     --region "${env.S3_REGION}"
 
 if [ \$? -eq 0 ]; then
@@ -549,8 +549,8 @@ if [ \$? -eq 0 ]; then
 else
     echo 'ERROR: Failed to download cluster.tfvars from S3'
     echo 'Available files in S3 config directory:'
-    aws s3 ls \\
-        s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/" \\
+    aws s3 ls \
+        s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/" \
         --region "${env.S3_REGION}" || echo 'Failed to list S3 contents'
     exit 1
 fi
