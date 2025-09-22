@@ -518,7 +518,7 @@ echo 'Creating configuration directory...'
 mkdir -p tofu/aws/modules/airgap
 
 echo 'Downloading cluster.tfvars from S3...'
-aws s3 cp s3://"${env.S3_BUCKET_NAME}"/"${env.TF_WORKSPACE}"/"${env.S3_KEY_PREFIX}"/config/"${env.TERRAFORM_VARS_FILENAME}" \
+aws s3 cp s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/"${env.TERRAFORM_VARS_FILENAME}" \
     tofu/aws/modules/airgap/"${env.TERRAFORM_VARS_FILENAME}" \
     --region "${env.S3_REGION}"
 
@@ -528,12 +528,12 @@ if [ \$? -eq 0 ]; then
 else
     echo 'ERROR: Failed to download cluster.tfvars from S3'
     echo 'Available files in S3 config directory:'
-    aws s3 ls s3://"${env.S3_BUCKET_NAME}"/"${env.TF_WORKSPACE}"/"${env.S3_KEY_PREFIX}"/config/ --region "${env.S3_REGION}" || echo 'Failed to list S3 contents'
+    aws s3 ls s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/" --region "${env.S3_REGION}" || echo 'Failed to list S3 contents'
     exit 1
 fi
 
 echo 'Downloading backend.tfvars from S3...'
-aws s3 cp s3://"${env.S3_BUCKET_NAME}"/"${env.TF_WORKSPACE}"/"${env.S3_KEY_PREFIX}"/config/"${env.TERRAFORM_BACKEND_VARS_FILENAME}" \
+aws s3 cp s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/"${env.TERRAFORM_BACKEND_VARS_FILENAME}" \
     tofu/aws/modules/airgap/"${env.TERRAFORM_BACKEND_VARS_FILENAME}" \
     --region "${env.S3_REGION}"
 
@@ -543,7 +543,7 @@ if [ \$? -eq 0 ]; then
 else
     echo 'ERROR: Failed to download backend.tfvars from S3'
     echo 'Available files in S3 config directory:'
-    aws s3 ls s3://"${env.S3_BUCKET_NAME}"/"${env.TF_WORKSPACE}"/"${env.S3_KEY_PREFIX}"/config/ --region "${env.S3_REGION}" || echo 'Failed to list S3 contents'
+    aws s3 ls s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/" --region "${env.S3_REGION}" || echo 'Failed to list S3 contents'
     exit 1
 fi
 
@@ -556,8 +556,26 @@ ls -la tofu/aws/modules/airgap/*.tfvars
     logInfo('Configuration files downloaded from S3 successfully')
 }
 
+def generateTofuConfiguration() {
+    logInfo('Generating OpenTofu configuration files')
+
+    def terraformConfig = readFile file: "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+    logInfo("Terraform configuration loaded from ${env.TERRAFORM_VARS_FILENAME}")
+
+    terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
+
+    dir('./qa-infra-automation') {
+        dir('./tofu/aws/modules/airgap') {
+            writeFile file: env.TERRAFORM_VARS_FILENAME, text: terraformConfig
+            logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
+        }
+    }
+}
+
 def performInfrastructureDestruction() {
     downloadConfigurationFromS3()
+    generateTofuConfiguration()
     initializeOpenTofu()
     manageWorkspace()
     executeDestruction()
@@ -665,7 +683,7 @@ def executeDestruction() {
 
     echo "--- Starting Direct Destruction ---"
     # Pass placeholder variables directly to the destroy command to satisfy required variables
-    tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap destroy -auto-approve -input=false
+    tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap destroy -auto-approve -input=false -var-file="${env.TERRAFORM_VARS_FILENAME}"
 
     echo "--- Verifying Destruction ---"
     REMAINING_RESOURCES=\$(tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap state list | wc -l || echo 0)
