@@ -1140,7 +1140,7 @@ echo 'Uploading configuration files to S3 bucket...'
 # Upload cluster.tfvars to S3
 echo 'Uploading cluster.tfvars to S3...'
 aws s3 cp /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"${env.TERRAFORM_VARS_FILENAME}" \
-    s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/"${env.S3_KEY_PREFIX}"/config/"${env.TERRAFORM_VARS_FILENAME}" \
+    s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/"${env.TERRAFORM_VARS_FILENAME}" \
     --region "${env.S3_REGION}"
 
 if [ \$? -eq 0 ]; then
@@ -1152,7 +1152,7 @@ fi
 # Upload backend.tfvars to S3
 echo 'Uploading backend.tfvars to S3...'
 aws s3 cp /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"${env.TERRAFORM_BACKEND_VARS_FILENAME}" \
-    s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/"${env.S3_KEY_PREFIX}"/config/"${env.TERRAFORM_BACKEND_VARS_FILENAME}" \
+    s3://"${env.S3_BUCKET_NAME}"/env:/"${env.TF_WORKSPACE}"/config/"${env.TERRAFORM_BACKEND_VARS_FILENAME}" \
     --region "${env.S3_REGION}"
 
 if [ \$? -eq 0 ]; then
