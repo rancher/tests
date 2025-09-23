@@ -317,7 +317,7 @@ def validateRequiredVariables(requiredVars) {
     if (!missingVars.isEmpty()) {
         def errorMsg = "Missing required environment variables: ${missingVars.join(', ')}"
         logError(errorMsg)
-        throw new IllegalArgumentException(errorMsg)
+        error(errorMsg)
     }
 
     logInfo('All required variables validated successfully')
@@ -334,7 +334,7 @@ def validateInfrastructurePrerequisites() {
     } catch (Exception e) {
         def errorMsg = "Infrastructure prerequisites validation failed: ${e.message}"
         logError(errorMsg)
-        throw new RuntimeException(errorMsg, e)
+        error(errorMsg)
     }
 }
 
@@ -496,9 +496,9 @@ def generateTofuBackendConfiguration() {
     logInfo('Generating Tofu configuration')
 
     // Ensure S3 backend parameters are set
-    if (!env.S3_BUCKET_NAME) { throw new RuntimeException('S3_BUCKET_NAME environment variable is not set') }
-    if (!env.S3_REGION) { throw new RuntimeException('S3_REGION environment variable is not set') }
-    if (!env.S3_KEY_PREFIX) { throw new RuntimeException('S3_KEY_PREFIX environment variable is not set') }
+    if (!env.S3_BUCKET_NAME) { error('S3_BUCKET_NAME environment variable is not set') }
+    if (!env.S3_REGION) { error('S3_REGION environment variable is not set') }
+    if (!env.S3_KEY_PREFIX) { error('S3_KEY_PREFIX environment variable is not set') }
 
     sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
 

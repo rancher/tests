@@ -521,7 +521,7 @@ def validateConfigurationEnvironmentVariables() {
     if (!missingVars.isEmpty()) {
         def errorMsg = "Missing required environment variables for configuration:\n- ${missingVars.join('\n- ')}"
         logError(errorMsg)
-        throw new IllegalArgumentException(errorMsg)
+        error(errorMsg)
     }
 
     logInfo('All required environment variables validated successfully')
@@ -531,13 +531,13 @@ def generateTofuConfiguration() {
     logInfo('Generating Terraform configuration')
 
     if (!env.TERRAFORM_CONFIG) {
-        throw new RuntimeException('TERRAFORM_CONFIG environment variable is not set')
+        error('TERRAFORM_CONFIG environment variable is not set')
     }
 
     // Ensure S3 backend parameters are set
-    if (!env.S3_BUCKET_NAME) { throw new RuntimeException('S3_BUCKET_NAME environment variable is not set') }
-    if (!env.S3_REGION) { throw new RuntimeException('S3_REGION environment variable is not set') }
-    if (!env.S3_KEY_PREFIX) { throw new RuntimeException('S3_KEY_PREFIX environment variable is not set') }
+    if (!env.S3_BUCKET_NAME) { error('S3_BUCKET_NAME environment variable is not set') }
+    if (!env.S3_REGION) { error('S3_REGION environment variable is not set') }
+    if (!env.S3_KEY_PREFIX) { error('S3_KEY_PREFIX environment variable is not set') }
 
     sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
 
@@ -574,7 +574,7 @@ def generateAnsibleConfiguration() {
     logInfo('Generating Ansible configuration')
 
     if (!env.ANSIBLE_VARIABLES) {
-        throw new RuntimeException('ANSIBLE_VARIABLES environment variable is not set')
+        error('ANSIBLE_VARIABLES environment variable is not set')
     }
 
     def ansibleVars = env.ANSIBLE_VARIABLES
@@ -791,7 +791,7 @@ def validateRequiredVariables(requiredVars) {
     if (!missingVars.isEmpty()) {
         def errorMsg = "Missing required environment variables: ${missingVars.join(', ')}"
         logError(errorMsg)
-        throw new IllegalArgumentException(errorMsg)
+        error(errorMsg)
     }
 
     logInfo('All required variables validated successfully')
@@ -814,7 +814,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
     } catch (Exception e) {
         def errorMsg = "Infrastructure prerequisites validation failed: ${e.message}"
         logError(errorMsg)
-        throw new RuntimeException(errorMsg, e)
+        error(errorMsg)
     }
 }
 
