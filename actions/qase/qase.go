@@ -22,8 +22,10 @@ type Service struct {
 }
 
 const (
-	schemas      = "schemas.yaml"
-	requestLimit = 100
+	schemas        = "schemas.yaml"
+	requestLimit   = 100
+	runSourceID    = 16
+	recurringRunID = 1
 )
 
 // SetupQaseClient creates a new Qase client from the api token environment variable QASE_AUTOMATION_TOKEN
@@ -191,4 +193,17 @@ func (q *Service) getTestCase(project string, test upstream.TestCaseCreate) (*up
 	}
 
 	return nil, fmt.Errorf("test case \"%s\" not found in project %s", test.Title, project)
+}
+
+func (q *Service) CreateTestRun(testRunName string, projectID string) (*upstream.IdResponse, error) {
+	runCreateBody := upstream.RunCreate{
+		Title: testRunName,
+	}
+
+	idResponse, _, err := q.Client.RunsApi.CreateRun(context.TODO(), runCreateBody, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &idResponse, nil
 }

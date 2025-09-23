@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -104,6 +105,10 @@ func GetTestSchema(testName string, suiteSchemas []TestSuiteSchema) (*upstream.T
 	for _, suiteSchema := range suiteSchemas {
 		for _, testCase := range suiteSchema.Cases {
 			if testCase.Title == testName {
+				return &testCase, nil
+			}
+			automationTestName, ok := testCase.CustomField[strconv.Itoa(AutomationTestNameID)]
+			if ok && automationTestName == testName {
 				return &testCase, nil
 			}
 		}
