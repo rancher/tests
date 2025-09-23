@@ -635,6 +635,16 @@ def generateEnvironmentFile() {
     def envContent = envLines.join('\n')
     writeFile file: env.ENV_FILE, text: envContent
     logInfo("Environment file created: ${env.ENV_FILE}")
+
+    // Debug: Log the environment file content (without secrets)
+    logInfo("Environment file contents (non-sensitive variables only):")
+    envLines.each { line ->
+        if (!line.contains('SECRET') && !line.contains('PASSWORD') && !line.contains('KEY')) {
+            logInfo("  ${line}")
+        } else {
+            logInfo("  [REDACTED - contains sensitive data]")
+        }
+    }
 }
 
 def setupSSHKeys() {
@@ -803,6 +813,10 @@ def validateInfrastructurePrerequisites() {
     def prerequisiteScript = """
 #!/bin/bash
 set -e
+
+# Debug: Print environment variables
+echo "Debug: QA_INFRA_WORK_PATH=\${QA_INFRA_WORK_PATH}"
+echo "Debug: TERRAFORM_VARS_FILENAME=\${TERRAFORM_VARS_FILENAME}"
 
 # Source the external prerequisites validation script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_validate_prerequisites.sh
