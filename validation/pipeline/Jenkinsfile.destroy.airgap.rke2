@@ -373,7 +373,7 @@ fi
 echo 'State retrieval passed'
 
 echo 'Checking if state has no resources...'
-STATE_COUNT=$(wc -l < /root/state-list.txt)
+STATE_COUNT=\$(wc -l < /root/state-list.txt)
 if [ "\$STATE_COUNT" -gt 0 ]; then 
     echo 'WARNING: Resources found in state - this may indicate infrastructure was not destroyed successfully'
     cat /root/state-list.txt
