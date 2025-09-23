@@ -234,9 +234,7 @@ pipeline {
                 }
             }
         }
-    }
-
-    post {
+        post {
         always {
             script {
                 logInfo('Starting post-destruction cleanup')
@@ -283,6 +281,7 @@ pipeline {
             }
         }
     }
+}
 
 /**
  * DESTRUCTION-SPECIFIC HELPER FUNCTIONS
