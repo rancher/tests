@@ -23,7 +23,7 @@ import (
 var (
 	runIDEnvVar             = os.Getenv(qase.TestRunEnvVar)
 	projectIDEnvVar         = os.Getenv(qase.ProjectIDEnvVar)
-	testRunName             = "Daily Test Run"
+	testRunName             = os.Getenv(qase.TestRunNameEnvVar)
 	_, callerFilePath, _, _ = runtime.Caller(0)
 	basepath                = filepath.Join(filepath.Dir(callerFilePath), "..", "..", "..", "..")
 )
@@ -35,15 +35,20 @@ func main() {
 		projectIDEnvVar = qaseactions.RancherManagerProjectID
 	}
 
-	client := qase.SetupQaseClient()
-	resp, err := client.CreateTestRun(testRunName, projectIDEnvVar)
-	if err != nil {
-		logrus.Error("error creating test run: ", err)
-	}
-
-	runID := resp.Result.Id
 	if runIDEnvVar != "" {
 		client := qase.SetupQaseClient()
+
+		runID, err := strconv.ParseInt(runIDEnvVar, 10, 64)
+
+		if testRunName != "" {
+			resp, err := client.CreateTestRun(testRunName, projectIDEnvVar)
+			if err != nil {
+				logrus.Error("error creating test run: ", err)
+			} else {
+				runID = resp.Result.Id
+			}
+		}
+
 		if err != nil {
 			logrus.Fatalf("error reporting converting string to int64: %v", err)
 		}
@@ -241,13 +246,6 @@ func updateTestInRun(client *upstream.APIClient, testResult testresult.GoTestRes
 		Comment: testResult.StackTrace,
 	}
 
-	logrus.Infof("resultBody %v", resultBody.CaseId)
-	logrus.Infof("resultBody %v", resultBody.Status)
-	logrus.Infof("resultBody %v", resultBody.Time)
-	logrus.Infof("resultBody %v", resultBody.Param)
-	logrus.Infof("resultBody %v", resultBody.Comment)
-	logrus.Infof("projectIDEnvVar %v", projectIDEnvVar)
-	logrus.Infof("testRunID %v", testRunID)
 	_, _, err := client.ResultsApi.CreateResult(context.TODO(), resultBody, projectIDEnvVar, testRunID)
 	if err != nil {
 		return err

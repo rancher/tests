@@ -200,6 +200,15 @@ func (q *Service) CreateTestRun(testRunName string, projectID string) (*upstream
 		Title: testRunName,
 	}
 
+	if projectID == RancherManagerProjectID {
+		runCreateBody = upstream.RunCreate{
+			Title: testRunName,
+			CustomField: map[string]string{
+				fmt.Sprintf("%d", runSourceID): fmt.Sprintf("%d", recurringRunID),
+			},
+		}
+	}
+
 	idResponse, _, err := q.Client.RunsApi.CreateRun(context.TODO(), runCreateBody, projectID)
 	if err != nil {
 		return nil, err
