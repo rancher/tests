@@ -217,6 +217,9 @@ pipeline {
                         // Setup SSH keys securely
                         setupSSHKeys()
 
+                        // Generate environment file for container execution
+                        generateEnvironmentFile()
+
                         // Build Docker image with proper tagging
                         buildDockerImage()
 
