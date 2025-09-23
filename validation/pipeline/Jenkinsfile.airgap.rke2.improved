@@ -219,6 +219,18 @@ pipeline {
 
                         // Generate environment file for container execution
                         generateEnvironmentFile()
+                    }
+                }
+            }
+        }
+
+        stage('Prepare Infrastructure') {
+            steps {
+                script {
+                    logInfo('Preparing infrastructure components')
+
+                    // Configure credentials for Docker operations
+                    withCredentials(getCredentialsList()) {
 
                         // Build Docker image with proper tagging
                         buildDockerImage()
@@ -665,6 +677,11 @@ def generateEnvironmentFile() {
             logInfo("  [REDACTED - contains sensitive data]")
         }
     }
+
+    // Debug: Check if TERRAFORM_VARS_FILENAME is in the envLines
+    def terraformVarsLine = envLines.find { it.startsWith('TERRAFORM_VARS_FILENAME=') }
+    logInfo("TERRAFORM_VARS_FILENAME line in env file: ${terraformVarsLine ?: 'NOT FOUND'}")
+    logInfo("TERRAFORM_VARS_FILENAME env var value: ${env.TERRAFORM_VARS_FILENAME ?: 'NULL'}")
 
     // Debug: Also log the raw environment variable values
     logInfo("Raw environment variable values:")
