@@ -210,12 +210,13 @@ pipeline {
                                 validateInfrastructureState()
                             }
                             catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
-                            logError("Infrastructure destruction timed out after ${timeoutMinutes} minutes")
-                            logError("Timeout exception details: ${e.message}")
-                            try {
-                                archiveDestructionFailureArtifacts()   
-                            } catch (Exception cleanupException) {
-                                logError("Failed to perform infrastructure cleanup: ${cleanupException.message}")
+                                logError("Infrastructure destruction timed out after ${timeoutMinutes} minutes")
+                                logError("Timeout exception details: ${e.message}")
+                                try {
+                                    archiveDestructionFailureArtifacts()
+                                } catch (Exception cleanupException) {
+                                    logError("Failed to perform infrastructure cleanup: ${cleanupException.message}")
+                                }
                             }
                         }
 
@@ -282,8 +283,6 @@ pipeline {
             }
         }
     }
-    
-}
 
 /**
  * DESTRUCTION-SPECIFIC HELPER FUNCTIONS
