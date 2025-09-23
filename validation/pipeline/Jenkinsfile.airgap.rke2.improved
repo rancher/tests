@@ -645,6 +645,11 @@ def generateEnvironmentFile() {
             logInfo("  [REDACTED - contains sensitive data]")
         }
     }
+
+    // Debug: Also log the raw environment variable values
+    logInfo("Raw environment variable values:")
+    logInfo("  TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}")
+    logInfo("  QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}")
 }
 
 def setupSSHKeys() {
