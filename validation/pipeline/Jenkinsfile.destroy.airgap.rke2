@@ -561,7 +561,8 @@ ls -la ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/*.tfvars
 def generateTofuConfiguration() {
     logInfo('Generating OpenTofu configuration files')
 
-    def terraformConfig = readFile file: "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+    // Read from the host-mounted path (not container path)
+    def terraformConfig = readFile file: "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
     logInfo("Terraform configuration loaded from ${env.TERRAFORM_VARS_FILENAME}")
 
     terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
