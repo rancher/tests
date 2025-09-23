@@ -9,76 +9,123 @@
    using: composite
    steps:
      - name: Run Selected Test Suite
+       id: run-tests
        run: |
          set +e
          case "${{ inputs.suite }}" in
            rancher-server-one)
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCertRotationTestSuite/TestCertRotation";
+             cert_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteClusterTestSuite/TestDeletingCluster";
+             delete_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteInitMachineTestSuite/TestDeleteInitMachine";
+             delete_init_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestNodeReplacingTestSuite/TestReplacingNodes";
+             replace_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodes";
+             custom_scale_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestNodeScalingTestSuite/TestScalingNodePools";
+             node_scale_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
              ;;
            rancher-server-two)
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
+             k3s_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
+             rke2_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
                --junitfile resultst.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRestoreTestSuite/TestSnapshotRestore";
+             snap_restore_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows";
+             snap_restore_win_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRecurringTestSuite/TestSnapshotRecurringRestores";
+             snap_recurring_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes";
+             upgrade_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes";
+             upgrade_win_exit=$?;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
              ;;
          esac
        shell: bash
        continue-on-error: true
+
+     - name: Show failed tests
+       if: steps.run-tests.outcome == 'failure'
+       run: |
+         declare -A suites=(
+           [cert_exit]="Cert Rotation"
+           [delete_exit]="Delete Cluster"
+           [delete_init_exit]="Delete Init Machine"
+           [replace_exit]="Node Replacing"
+           [custom_scale_exit]="Custom Cluster Node Scaling"
+           [node_scale_exit]="Node Scaling"
+           [k3s_exit]="K3S"
+           [rke2_exit]="RKE2"
+           [snap_restore_exit]="Snapshot Restore"
+           [snap_restore_win_exit]="Snapshot Restore Windows"
+           [snap_recurring_exit]="Snapshot Recurring"
+           [upgrade_exit]="Kubernetes Upgrade"
+           [upgrade_win_exit]="Windows Kubernetes Upgrade"
+         )
+
+         for exit_code in "${!suites[@]}"; do
+           exit_val="${!exit_code}"
+
+           if [ "$exit_val" != "" ] && [ "$exit_val" -ne 0 ]; then
+             echo "Failed ${suites[$exit_code]} tests:"
+             jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
+             echo ""
+           fi
+         done
+
+         echo "One or more test suites failed. Failing workflow."
+         exit 1
+       shell: bash
