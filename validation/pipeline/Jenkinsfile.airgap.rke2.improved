@@ -821,19 +821,22 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
 def deployInfrastructure() {
     logInfo('Starting infrastructure deployment process')
 
-    // Step 1: Generate Tofu config
+    // Step 1: Generate Tofu config (must be first to create required files)
     generateTofuConfiguration()
 
-    // Step 2: Initialize OpenTofu
+    // Step 2: Validate infrastructure prerequisites (now files exist)
+    validateInfrastructurePrerequisites()
+
+    // Step 3: Initialize OpenTofu
     initializeOpenTofu()
 
-    // Step 3: Manage workspace
+    // Step 4: Manage workspace
     manageWorkspace()
 
-    // Step 4: Plan infrastructure changes
+    // Step 5: Plan infrastructure changes
     planInfrastructure()
 
-    // Step 5: Apply infrastructure
+    // Step 6: Apply infrastructure
     applyInfrastructure()
 
     logInfo('Infrastructure deployment completed successfully')
