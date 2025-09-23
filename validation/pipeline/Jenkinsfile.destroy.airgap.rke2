@@ -326,23 +326,10 @@ def validateRequiredVariables(requiredVars) {
 def validateInfrastructurePrerequisites() {
     logInfo('Validating infrastructure prerequisites')
 
-    def prerequisiteScript = """
-cd ${env.QA_INFRA_WORK_PATH}
-
-echo 'Checking OpenTofu installation...'
-tofu version
-
-echo 'Checking workspace directory...'
-test -d ${env.QA_INFRA_WORK_PATH}
-
-echo 'Validating terraform vars file...'
-test -f ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}
-
-echo 'All infrastructure prerequisites validated successfully'
-"""
-
     try {
-        executeScriptInContainer(prerequisiteScript)
+        def scriptPath = "${env.ROOT_PATH}validation/pipeline/scripts/destroy_validate_prerequisites.sh"
+        def scriptContent = readFile(file: scriptPath)
+        executeScriptInContainer(scriptContent)
         logInfo('All infrastructure prerequisites validated')
     } catch (Exception e) {
         def errorMsg = "Infrastructure prerequisites validation failed: ${e.message}"
@@ -354,55 +341,9 @@ echo 'All infrastructure prerequisites validated successfully'
 def validateInfrastructureState() {
     logInfo('Validating infrastructure state after deployment')
 
-    def validationScript = """
-cd ${env.QA_INFRA_WORK_PATH}
-export TF_WORKSPACE="${env.TF_WORKSPACE}"
-
-echo 'Validating remote terraform state via tofu commands (S3 backend)...'
-
-echo 'Checking key infrastructure resources from remote state...'
-tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap state list > /root/state-list.txt 2>&1
-STATE_RC=\$?
-echo "State list command completed with return code: \$STATE_RC"
-if [ \$STATE_RC -ne 0 ]; then
-    echo 'ERROR: Failed to retrieve state from remote backend'
-    cat /root/state-list.txt
-    exit 1
-fi
-
-echo 'State retrieval passed'
-
-echo 'Checking if state has no resources...'
-STATE_COUNT=\$(wc -l < /root/state-list.txt)
-if [ "\$STATE_COUNT" -gt 0 ]; then 
-    echo 'WARNING: Resources found in state - this may indicate infrastructure was not destroyed successfully'
-    cat /root/state-list.txt
-else
-    echo "SUCCESS: State contains \$(STATE_COUNT) resources"
-    echo 'Sample state resources:'
-    head -5 /root/state-list.txt
-fi
-
-echo 'Generating and validating outputs from remote state...'
-tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap output -json > /root/infrastructure-outputs.json 2>&1
-OUTPUT_RC=\$?
-if [ \$OUTPUT_RC -gt 0 ]; then
-    echo 'ERROR: Failed to generate terraform outputs from remote state'
-    cat /root/infrastructure-outputs.json
-    exit 1
-fi
-
-OUTPUT_SIZE=\$(stat -c%s /root/infrastructure-outputs.json 2>/dev/null || echo 0)
-if [ "\$OUTPUT_SIZE" -gt 0 ]; then
-    echo 'ERROR: Outputs file is not empty (\$OUTPUT_SIZE bytes)'
-else
-    echo 'SUCCESS: Outputs file is empty'
-fi
-
-echo 'Infrastructure state validation completed successfully'
-    """
-
-    executeScriptInContainer(validationScript)
+    def scriptPath = "${env.ROOT_PATH}validation/pipeline/scripts/destroy_validate_state.sh"
+    def scriptContent = readFile(file: scriptPath)
+    executeScriptInContainer(scriptContent)
     logInfo('Infrastructure state validated successfully')
 }
 
@@ -527,32 +468,9 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 def downloadConfigurationFromS3() {
     logInfo('Downloading configuration files from S3')
 
-    def downloadScript = """
-cd ${env.QA_INFRA_WORK_PATH}
-
-echo 'Creating configuration directory...'
-# cspell:ignore airgap
-mkdir -p tofu/aws/modules/airgap
-
-# cspell:ignore tfvars
-echo 'Downloading cluster.tfvars from S3...'
-aws s3 cp s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/config/${env.TERRAFORM_VARS_FILENAME} ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} --region ${env.S3_REGION}
-
-if [ \$? -eq 0 ]; then
-    echo 'SUCCESS: cluster.tfvars downloaded from S3'
-    ls -la tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}
-else
-    echo 'ERROR: Failed to download cluster.tfvars from S3'
-    echo 'Available files in S3 config directory:'
-    aws s3 ls s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/config/ --region ${env.S3_REGION} || echo 'Failed to list S3 contents'
-    exit 1
-fi
-echo 'Configuration files downloaded successfully'
-echo 'Verifying downloaded files:'
-ls -la ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/*.tfvars
-    """
-
-    executeScriptInContainer(downloadScript)
+    def scriptPath = "${env.ROOT_PATH}validation/pipeline/scripts/destroy_download_config.sh"
+    def scriptContent = readFile(file: scriptPath)
+    executeScriptInContainer(scriptContent)
     logInfo('Configuration files downloaded from S3 successfully')
 }
 
@@ -614,122 +532,26 @@ def performInfrastructureDestruction() {
 def initializeOpenTofu() {
     logInfo('Initializing OpenTofu with S3 backend')
 
-    def initScript = """
-cd ${env.QA_INFRA_WORK_PATH}
-
-echo 'Initializing OpenTofu with S3 backend configuration...'
-tofu -chdir=tofu/aws/modules/airgap init -backend-config="${env.TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade
-
-echo 'Verifying initialization success...'
-tofu -chdir=tofu/aws/modules/airgap providers
-
-echo 'Creating/selecting target workspace: ${env.TF_WORKSPACE}'
-tofu -chdir=tofu/aws/modules/airgap workspace select "${env.TF_WORKSPACE}" || tofu -chdir=tofu/aws/modules/airgap workspace new "${env.TF_WORKSPACE}"
-
-echo 'Verifying workspace selection...'
-CURRENT_WORKSPACE=\$(tofu -chdir=tofu/aws/modules/airgap workspace show)
-echo "Current workspace: \$CURRENT_WORKSPACE"
-
-if [ "\$CURRENT_WORKSPACE" != "${env.TF_WORKSPACE}" ]; then
-    echo "ERROR: Expected workspace ${env.TF_WORKSPACE}, but got '\$CURRENT_WORKSPACE'"
-    echo 'Available workspaces:'
-    tofu -chdir=tofu/aws/modules/airgap workspace list
-    exit 1
-fi
-
-echo 'OpenTofu initialization and workspace setup completed successfully'
-    """
-
-    executeScriptInContainer(initScript, [:], true)
+    def scriptPath = "${env.ROOT_PATH}validation/pipeline/scripts/destroy_initialize_tofu.sh"
+    def scriptContent = readFile(file: scriptPath)
+    executeScriptInContainer(scriptContent, [:], true)
 }
 
 def manageWorkspace() {
     logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
 
-    def workspaceScript = """
-cd ${env.QA_INFRA_WORK_PATH}
-
-echo 'Managing workspace state...'
-unset TF_WORKSPACE
-
-echo 'Current workspaces:'
-tofu -chdir=tofu/aws/modules/airgap workspace list
-
-echo 'Creating or selecting workspace: ${env.TF_WORKSPACE}'
-if ! tofu -chdir=tofu/aws/modules/airgap workspace select "${env.TF_WORKSPACE}" 2>/dev/null; then
-    echo 'Workspace does not exist, creating new workspace...'
-    tofu -chdir=tofu/aws/modules/airgap workspace new "${env.TF_WORKSPACE}"
-
-    if ! tofu -chdir=tofu/aws/modules/airgap workspace select "${env.TF_WORKSPACE}"; then
-        echo 'ERROR: Failed to create and select workspace'
-        exit 1
-    fi
-fi
-
-# Verify workspace selection
-CURRENT_WORKSPACE=\$(tofu -chdir=tofu/aws/modules/airgap workspace show)
-echo "Current workspace: \$CURRENT_WORKSPACE"
-
-# Strip whitespace and handle empty responses
-CURRENT_WORKSPACE=\$(echo "\$CURRENT_WORKSPACE" | xargs)
-
-if [ "\$CURRENT_WORKSPACE" = "" ]; then
-    echo 'ERROR: Workspace show command returned empty response'
-    tofu -chdir=tofu/aws/modules/airgap workspace list
-    exit 1
-fi
-
-if [ "\$CURRENT_WORKSPACE" != "${env.TF_WORKSPACE}" ]; then
-    echo "ERROR: Expected workspace ${env.TF_WORKSPACE}, but got '\$CURRENT_WORKSPACE'"
-    echo 'Available workspaces:'
-    tofu -chdir=tofu/aws/modules/airgap workspace list
-    exit 1
-fi
-
-export TF_WORKSPACE="${env.TF_WORKSPACE}"
-echo "Workspace management completed: \$TF_WORKSPACE"
-
-tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade
-    """
-
-    executeScriptInContainer(workspaceScript)
+    def scriptPath = "${env.ROOT_PATH}validation/pipeline/scripts/destroy_manage_workspace.sh"
+    def scriptContent = readFile(file: scriptPath)
+    executeScriptInContainer(scriptContent)
 }
 
 
 def executeDestruction() {
     logInfo('Executing direct infrastructure destruction')
 
-    def destructionScript = """
-    cd ${env.QA_INFRA_WORK_PATH}
-    export TF_WORKSPACE="${env.TF_WORKSPACE}"
-
-    echo 'Debug: Listing current directory contents...'
-    ls -la .
-
-    echo 'Debug: Listing mounted qa-infra-automation/tofu/aws/modules/airgap contents...'
-    ls -la /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/ || echo 'Mounted directory listing failed'
-
-    echo "--- Starting Direct Destruction ---"
-    # Pass placeholder variables directly to the destroy command to satisfy required variables
-    tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap destroy -auto-approve -input=false -var-file="${env.TERRAFORM_VARS_FILENAME}"
-
-    echo "--- Verifying Destruction ---"
-    REMAINING_RESOURCES=\$(tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap state list | wc -l || echo 0)
-    if [ "\$REMAINING_RESOURCES" -eq 0 ]; then
-        echo "✅ Success: All resources have been destroyed."
-        # Clean up the workspace
-        echo "--- Cleaning up Terraform Workspace ---"
-        unset TF_WORKSPACE
-        tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap workspace select default || echo "Could not switch to default workspace."
-        tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap workspace delete "${env.TARGET_WORKSPACE}" || echo "Could not delete workspace ${env.TARGET_WORKSPACE}."
-    else
-        echo "❌ WARNING: \$REMAINING_RESOURCES resources still remain in state."
-        tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap state list
-        exit 1
-    fi
-    """
-
-    executeScriptInContainer(destructionScript)
+    def scriptPath = "${env.ROOT_PATH}validation/pipeline/scripts/destroy_execute.sh"
+    def scriptContent = readFile(file: scriptPath)
+    executeScriptInContainer(scriptContent)
 }
 
 def archiveDestructionResults() {
