@@ -719,6 +719,7 @@ def executeDestruction() {
         echo "✅ Success: All resources have been destroyed."
         # Clean up the workspace
         echo "--- Cleaning up Terraform Workspace ---"
+        unset TF_WORKSPACE
         tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap workspace select default || echo "Could not switch to default workspace."
         tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap workspace delete "${env.TARGET_WORKSPACE}" || echo "Could not delete workspace ${env.TARGET_WORKSPACE}."
     else
@@ -821,37 +822,6 @@ def archiveBuildArtifacts(artifacts) {
         logInfo("Artifacts archived: ${artifacts.join(', ')}")
     } catch (Exception e) {
         logError("Failed to archive artifacts: ${e.message}")
-    }
-}
-
-def sendSlackNotification(config) {
-    if (env.SLACK_WEBHOOK) {
-        try {
-            def payload = [
-                channel: '#rancher-qa',
-                username: 'Jenkins-Destroyer',
-                color: config.color,
-                title: 'Infrastructure Destruction Pipeline',
-                message: config.message,
-                fields: [
-                    [title: 'Job', value: env.JOB_NAME, short: true],
-                    [title: 'Build', value: env.BUILD_NUMBER, short: true],
-                    [title: 'Workspace', value: env.TARGET_WORKSPACE, short: true],
-                    [title: 'State Source', value: 'S3 Backend', short: true]
-                ]
-            ]
-
-            httpRequest(
-                httpMode: 'POST',
-                url: env.SLACK_WEBHOOK,
-                contentType: 'APPLICATION_JSON',
-                requestBody: groovy.json.JsonOutput.toJson(payload)
-            )
-
-            logInfo('Slack notification sent successfully')
-        } catch (Exception e) {
-            logError("Failed to send Slack notification: ${e.message}")
-        }
     }
 }
 
