@@ -724,13 +724,31 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 
     def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE}"
 
+    // Debug: Check if environment file exists right before docker command
+    def envFileExistsBeforeDocker = fileExists(env.ENV_FILE)
+    def envFilePathBeforeDocker = "${pwd()}/${env.ENV_FILE}"
+    logInfo("Environment file check before Docker command:")
+    logInfo("  File exists: ${envFileExistsBeforeDocker}")
+    logInfo("  File path: ${envFilePathBeforeDocker}")
+
+    if (envFileExistsBeforeDocker) {
+        try {
+            def fileContent = readFile file: env.ENV_FILE
+            def fileSize = fileContent.length()
+            logInfo("  File size: ${fileSize} bytes")
+            logInfo("  File contains TERRAFORM_VARS_FILENAME: ${fileContent.contains('TERRAFORM_VARS_FILENAME')}")
+        } catch (Exception e) {
+            logInfo("  Could not read file: ${e.message}")
+        }
+    }
+
     // Debug: Show the exact docker command being executed
     def dockerCmd = """
         docker run --rm \\
             -v ${env.VALIDATION_VOLUME}:/root \\
             -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
             -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-            -v ${pwd()}/${env.ENV_FILE}:/tmp/.env \\
+            -v ${envFilePathBeforeDocker}:/tmp/.env \\
             --name ${containerName} \\
             -t --env-file /tmp/.env \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
