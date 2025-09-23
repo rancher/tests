@@ -641,13 +641,19 @@ def generateEnvironmentFile() {
     logInfo("Environment file created: ${env.ENV_FILE}")
     logInfo("Full path to environment file: ${envFilePath}")
 
-    // Debug: Check if file exists
+    // Debug: Check if file exists (using Jenkins built-in method)
     def envFileExists = fileExists(env.ENV_FILE)
     logInfo("Environment file exists: ${envFileExists}")
 
     if (envFileExists) {
-        def envFileSize = new File(env.ENV_FILE).length()
-        logInfo("Environment file size: ${envFileSize} bytes")
+        // Use Jenkins readFile to get file size instead of File constructor
+        try {
+            def fileContent = readFile file: env.ENV_FILE
+            def envFileSize = fileContent.length()
+            logInfo("Environment file size: ${envFileSize} bytes")
+        } catch (Exception e) {
+            logInfo("Could not read environment file: ${e.message}")
+        }
     }
 
     // Debug: Log the environment file content (without secrets)
