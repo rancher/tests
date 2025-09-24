@@ -752,6 +752,7 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
     // Alternative approach: Pass environment variables directly instead of mounting file
     // This avoids potential mounting permission issues
     def directEnvVars = ''
+    def envFileExistsBeforeDocker = fileExists(env.ENV_FILE)
     if (envFileExistsBeforeDocker) {
         try {
             def fileContent = readFile file: env.ENV_FILE
