@@ -93,6 +93,16 @@ pipeline {
             defaultValue: true,
             description: 'Destroy infrastructure when Ansible playbooks fail (automatic cleanup)'
         )
+        text(
+            name: 'TERRAFORM_CONFIG',
+            defaultValue: '',
+            description: 'Terraform variables configuration for OpenTofu deployment'
+        )
+        text(
+            name: 'ANSIBLE_CONFIG',
+            defaultValue: '',
+            description: 'Ansible variables configuration for infrastructure deployment'
+        )
     }
 
     // Global environment variables
@@ -140,6 +150,10 @@ pipeline {
 
         // Hostname prefix
         HOSTNAME_PREFIX = "${params.HOSTNAME_PREFIX ?: 'ansible-airgap'}"
+
+        // Configuration content from parameters
+        TERRAFORM_CONFIG = "${params.TERRAFORM_CONFIG ?: ''}"
+        ANSIBLE_CONFIG = "${params.ANSIBLE_CONFIG ?: ''}"
     }
 
     stages {
@@ -264,9 +278,6 @@ pipeline {
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
-                            // Pre-flight checks
-                            validateInfrastructurePrerequisites()
-
                             // Infrastructure deployment with enhanced error handling
                             deployInfrastructure()
 
