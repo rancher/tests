@@ -111,7 +111,6 @@
        continue-on-error: true
 
      - name: Show failed tests
-       if: steps.run-tests.outcome == 'failure'
        run: |
          declare -A suites=(
            [cert_exit]="Cert Rotation"
@@ -136,9 +135,7 @@
              echo "Failed ${suites[$exit_code]} tests:"
              jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
              echo ""
+             exit 1
            fi
          done
-
-         echo "One or more test suites failed. Failing workflow."
-         exit 1
        shell: bash

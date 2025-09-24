@@ -31,17 +31,21 @@ runs:
       continue-on-error: true
 
     - name: Show failed tests
-      if: steps.k3s.outcome == 'failure' || steps.rke2.outcome == 'failure'
       run: |
+        failed=0
         if [ "$k3s_exit" -ne 0 ]; then
           echo "Failed K3S tests:"
           jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
+          failed=1
         fi
 
         if [ "$rke2_exit" -ne 0 ]; then
           echo "Failed RKE2 tests:"
           jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
+          failed=1
         fi
 
-        exit 1
+        if [ "$failed" -eq 1 ]; then
+          exit 1
+        fi
       shell: bash
