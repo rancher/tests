@@ -653,6 +653,12 @@ def generateEnvironmentFile() {
     logInfo("Environment file created: ${env.ENV_FILE}")
     logInfo("Full path to environment file: ${envFilePath}")
 
+    // Ensure the file was actually created
+    def fileCreated = fileExists(env.ENV_FILE)
+    if (!fileCreated) {
+        error("Environment file was not created successfully at: ${envFilePath}")
+    }
+
     // Debug: Check if file exists (using Jenkins built-in method)
     def envFileExists = fileExists(env.ENV_FILE)
     logInfo("Environment file exists: ${envFileExists}")
@@ -751,6 +757,17 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
     logInfo("Environment file check before Docker command:")
     logInfo("  File exists: ${envFileExistsBeforeDocker}")
     logInfo("  File path: ${envFilePathBeforeDocker}")
+
+    // If environment file doesn't exist, regenerate it
+    if (!envFileExistsBeforeDocker) {
+        logWarning("Environment file missing before Docker command, regenerating...")
+        generateEnvironmentFile()
+        envFileExistsBeforeDocker = fileExists(env.ENV_FILE)
+        if (!envFileExistsBeforeDocker) {
+            error("Failed to create environment file even after regeneration")
+        }
+        logInfo("Environment file regenerated successfully")
+    }
 
     if (envFileExistsBeforeDocker) {
         try {
