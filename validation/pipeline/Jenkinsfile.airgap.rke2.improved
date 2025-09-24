@@ -587,6 +587,19 @@ def generateTofuConfiguration() {
             writeFile file: env.TERRAFORM_VARS_FILENAME, text: terraformConfig
             logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
 
+            // Generate backend.tf file with S3 backend configuration
+            def backendTf = """
+terraform {
+  backend "s3" {
+    bucket = var.bucket
+    key    = var.key
+    region = var.region
+  }
+}
+"""
+            writeFile file: 'backend.tf', text: backendTf
+            logInfo("S3 backend configuration written to: backend.tf")
+
             // Generate backend.tfvars content from S3 parameters
             def backendVars = """
 bucket = \"${env.S3_BUCKET_NAME}\"
@@ -594,7 +607,7 @@ key    = \"${env.S3_KEY_PREFIX}\"
 region = \"${env.S3_REGION}\"
 """
             writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
-            logInfo("S3 backend configuration written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
+            logInfo("S3 backend variables written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
         }
     }
 }
