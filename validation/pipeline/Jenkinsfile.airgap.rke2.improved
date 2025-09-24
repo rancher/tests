@@ -507,10 +507,12 @@ def validateParameters() {
 def setupDynamicEnvironment() {
     env.RKE2_VERSION = params.RKE2_VERSION
     env.RANCHER_VERSION = params.RANCHER_VERSION
+    env.TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
 
     logInfo('Dynamic environment configured')
     logInfo("RKE2 Version: ${env.RKE2_VERSION}")
     logInfo("Rancher Version: ${env.RANCHER_VERSION}")
+    logInfo("Terraform Vars Filename: ${env.TERRAFORM_VARS_FILENAME}")
 }
 
 def getCredentialsList() {
@@ -587,7 +589,7 @@ def generateTofuConfiguration() {
             // Generate backend.tfvars content from S3 parameters
             def backendVars = """
 bucket = \"${env.S3_BUCKET_NAME}\"
-key    = \"${env.S3_KEY_PREFIX}"
+key    = \"${env.S3_KEY_PREFIX}\"
 region = \"${env.S3_REGION}\"
 """
             writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
@@ -1057,7 +1059,7 @@ echo "Debug: TERRAFORM_VARS_FILENAME=\${TERRAFORM_VARS_FILENAME}"
 
 # Source the external prerequisites validation script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_validate_prerequisites.sh
- """
+  """
 
     try {
         executeScriptInContainer(prerequisiteScript)
@@ -1102,7 +1104,7 @@ set -e
 
 # Source the external infrastructure validation script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_validate_infrastructure.sh
-     """
+      """
 
     executeScriptInContainer(validationScript)
     logInfo('Infrastructure state validated successfully')
@@ -1117,7 +1119,7 @@ set -e
 
 # Source the external OpenTofu initialization script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_initialize_tofu.sh
-     """
+      """
 
     executeScriptInContainer(initScript, [:], true)
 }
@@ -1131,7 +1133,7 @@ set -e
 
 # Source the external workspace management script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_manage_workspace.sh
-     """
+      """
 
     executeScriptInContainer(workspaceScript)
 }
@@ -1145,7 +1147,7 @@ set -e
 
 # Source the external plan infrastructure script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_plan_infrastructure.sh
-     """
+      """
 
     executeScriptInContainer(planScript)
 }
@@ -1159,7 +1161,7 @@ set -e
 
 # Source the external apply infrastructure script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_apply_infrastructure.sh
-     """
+      """
 
     executeScriptInContainer(applyScript)
 
