@@ -749,6 +749,31 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
         envVars += " -e ${key}=${value}"
     }
 
+    // Alternative approach: Pass environment variables directly instead of mounting file
+    // This avoids potential mounting permission issues
+    def directEnvVars = ''
+    if (envFileExistsBeforeDocker) {
+        try {
+            def fileContent = readFile file: env.ENV_FILE
+            fileContent.split('\n').each { line ->
+                line = line.trim()
+                if (line && !line.startsWith('#') && line.contains('=')) {
+                    def parts = line.split('=', 2)
+                    if (parts.length == 2) {
+                        def key = parts[0].trim()
+                        def value = parts[1].trim()
+                        // Only pass non-sensitive variables directly
+                        if (!key.contains('SECRET') && !key.contains('PASSWORD') && !key.contains('KEY')) {
+                            directEnvVars += " -e \"${key}=${value}\""
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logWarning("Could not read environment file for direct variable passing: ${e.message}")
+        }
+    }
+
     def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE}"
 
     // Debug: Check if environment file exists right before docker command
@@ -775,6 +800,14 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
             def fileSize = fileContent.length()
             logInfo("  File size: ${fileSize} bytes")
             logInfo("  File contains TERRAFORM_VARS_FILENAME: ${fileContent.contains('TERRAFORM_VARS_FILENAME')}")
+
+            // Additional debugging: Check file permissions and ownership
+            sh "ls -la ${envFilePathBeforeDocker}"
+            sh "stat ${envFilePathBeforeDocker}"
+
+            // Ensure the file has correct permissions for Docker access
+            sh "chmod 644 ${envFilePathBeforeDocker}"
+            logInfo("  Set file permissions to 644 for Docker access")
         } catch (Exception e) {
             logInfo("  Could not read file: ${e.message}")
         }
@@ -791,8 +824,41 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
             -t --env-file /tmp/.env \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
             ${envVars} \\
+            ${directEnvVars} \\
             ${env.IMAGE_NAME} \\
-            sh /tmp/script.sh
+            sh -c 'echo "=== DEBUG: Container started ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment file location: /tmp/.env"; echo "Checking if /tmp/.env exists:"; ls -la /tmp/.env || echo "FILE NOT FOUND"; echo "Directory contents of /tmp:"; ls -la /tmp/; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
+    """
+
+    // Alternative Docker command without environment file mounting (fallback)
+    def fallbackDockerCmd = """
+        docker run --rm \\
+            -v ${env.VALIDATION_VOLUME}:/root \\
+            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+            --name ${containerName} \\
+            -t \\
+            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
+            ${envVars} \\
+            ${directEnvVars} \\
+            ${env.IMAGE_NAME} \\
+            sh -c 'echo "=== DEBUG: Container started (FALLBACK MODE) ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment variables passed directly"; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
+    """
+
+    // Third option: Try running as root user to bypass permission issues
+    def rootUserDockerCmd = """
+        docker run --rm \\
+            --user 0:0 \\
+            -v ${env.VALIDATION_VOLUME}:/root \\
+            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+            -v ${envFilePathBeforeDocker}:/tmp/.env \\
+            --name ${containerName} \\
+            -t --env-file /tmp/.env \\
+            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
+            ${envVars} \\
+            ${directEnvVars} \\
+            ${env.IMAGE_NAME} \\
+            sh -c 'echo "=== DEBUG: Container started (ROOT USER) ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment file location: /tmp/.env"; echo "Checking if /tmp/.env exists:"; ls -la /tmp/.env || echo "FILE NOT FOUND"; echo "Directory contents of /tmp:"; ls -la /tmp/; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
     """
 
     // Final verification: Ensure the environment file exists right before Docker execution
@@ -819,7 +885,58 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
     logInfo("Executing docker command:")
     logInfo(dockerCmd)
 
-    sh dockerCmd
+    // Try multiple approaches to handle the Docker mounting issue
+    def dockerSuccess = false
+
+    // Approach 1: Try the primary command first (with environment file mounting)
+    try {
+        logInfo("Attempting Docker execution with environment file mounting...")
+        sh dockerCmd
+        logInfo("✅ Docker command executed successfully with environment file mounting")
+        dockerSuccess = true
+    } catch (Exception primaryException) {
+        logWarning("Primary Docker command failed: ${primaryException.message}")
+
+        // Check if it's the environment file mounting issue
+        if (primaryException.message.contains('no such file or directory') && primaryException.message.contains('.env')) {
+            logWarning("Environment file mounting failed - trying fallback approaches...")
+
+            // Approach 2: Try running as root user
+            try {
+                logInfo("Attempting Docker execution as root user...")
+                logInfo("Executing root user docker command:")
+                logInfo(rootUserDockerCmd)
+                sh rootUserDockerCmd
+                logInfo("✅ Docker command executed successfully as root user")
+                dockerSuccess = true
+            } catch (Exception rootException) {
+                logWarning("Root user Docker command also failed: ${rootException.message}")
+
+                // Approach 3: Try fallback with direct environment variables
+                try {
+                    logInfo("Attempting Docker execution with direct environment variables...")
+                    logInfo("Executing fallback docker command:")
+                    logInfo(fallbackDockerCmd)
+                    sh fallbackDockerCmd
+                    logInfo("✅ Fallback Docker command executed successfully with direct environment variables")
+                    dockerSuccess = true
+                } catch (Exception fallbackException) {
+                    logError("All Docker execution approaches failed:")
+                    logError("  Primary (env file): ${primaryException.message}")
+                    logError("  Root user: ${rootException.message}")
+                    logError("  Fallback (direct env): ${fallbackException.message}")
+                    throw fallbackException
+                }
+            }
+        } else {
+            // If it's not the environment file issue, re-throw the original exception
+            throw primaryException
+        }
+    }
+
+    if (!dockerSuccess) {
+        error("All Docker execution attempts failed")
+    }
 
     sh "rm -f ${scriptFile}"
 }
