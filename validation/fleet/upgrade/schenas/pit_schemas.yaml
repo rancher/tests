@@ -1,0 +1,109 @@
+- projects: [RANCHERINT]
+  suite: Fleet
+  cases:
+  - title: "Test deploying Fleet repo with new commit"
+    description: "Validate that a new commit pushed to a Fleet GitRepo is detected and applied on the downstream cluster"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision a kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create new project and namespace"
+      data: "Generated project and namespace"
+      expectedresult: "Namespace created successfully"
+      position: 3
+    - action: "Clone Git repository on SSH node"
+      data: "git clone https://github.com/rancher/fleet-examples into new folder"
+      expectedresult: "Repo cloned successfully"
+      position: 4
+    - action: "Create local Fleet GitRepo object"
+      data: "Repo: ExampleRepo, Cluster: target cluster"
+      expectedresult: "Fleet GitRepo created successfully"
+      position: 5
+    - action: "Push new commit to Git repo"
+      data: "Commit pushed from SSH node"
+      expectedresult: "Commit applied on downstream cluster"
+      position: 6
+    - action: "Verify Fleet GitRepo status"
+      data: "Check commit applied in namespace"
+      expectedresult: "GitRepo active and commit verified"
+      position: 7
+    custom_field:
+      "15": "TestNewCommitFleetRepo"
+  - title: "Test forcing update of Fleet repo"
+    description: "Validate that a Fleet GitRepo can be forced to update without changing the commit"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision a kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create new project and namespace"
+      data: "Generated project and namespace"
+      expectedresult: "Namespace created successfully"
+      position: 3
+    - action: "Clone Git repository on SSH node"
+      data: "git clone https://github.com/rancher/fleet-examples into new folder"
+      expectedresult: "Repo cloned successfully"
+      position: 4
+    - action: "Create local Fleet GitRepo object"
+      data: "Repo: ExampleRepo, Cluster: target cluster"
+      expectedresult: "Fleet GitRepo created successfully"
+      position: 5
+    - action: "Force update GitRepo"
+      expectedresult: "GitRepo updates but commit remains the same"
+      position: 6
+    - action: "Verify GitRepo after force update"
+      data: "Check conditions, commit hash, update time"
+      expectedresult: "Commit unchanged but repo verified successfully"
+      position: 7
+    custom_field:
+      "15": "TestGitRepoForceUpdate"
+  - title: "Test pausing and resuming Fleet repo"
+    description: "Validate that a Fleet GitRepo can be paused, ignores new commits, and resumes correctly when unpaused"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Provision a kubernetes cluster"
+      data: "cluster name: testcluster1"
+      expectedresult: ""
+      position: 2
+    - action: "Create new project and namespace"
+      data: "Generated project and namespace"
+      expectedresult: "Namespace created successfully"
+      position: 3
+    - action: "Clone Git repository on SSH node"
+      data: "git clone https://github.com/rancher/fleet-examples into new folder"
+      expectedresult: "Repo cloned successfully"
+      position: 4
+    - action: "Create local Fleet GitRepo object"
+      data: "Repo: ExampleRepo, Cluster: target cluster"
+      expectedresult: "Fleet GitRepo created successfully"
+      position: 5
+    - action: "Pause GitRepo"
+      expectedresult: "GitRepo paused successfully"
+      position: 6
+    - action: "Push new commit to paused GitRepo"
+      data: "Commit pushed to repo"
+      expectedresult: "Commit ignored while GitRepo paused"
+      position: 7
+    - action: "Unpause GitRepo"
+      expectedresult: "GitRepo resumes syncing"
+      position: 8
+    - action: "Verify GitRepo after unpause"
+      expectedresult: "GitRepo active and commit verified"
+      position: 9
+    custom_field:
+      "15": "TestPauseFleetRepo"
