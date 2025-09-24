@@ -17,36 +17,42 @@
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCertRotationTestSuite/TestCertRotation";
              cert_exit=$?;
+             echo "cert_exit=$cert_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteClusterTestSuite/TestDeletingCluster";
              delete_exit=$?;
+             echo "delete_exit=$delete_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteInitMachineTestSuite/TestDeleteInitMachine";
              delete_init_exit=$?;
+             echo "delete_init_exit=$delete_init_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestNodeReplacingTestSuite/TestReplacingNodes";
              replace_exit=$?;
+             echo "replace_exit=$replace_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCustomClusterNodeScalingTestSuite/TestScalingCustomClusterNodes";
              custom_scale_exit=$?;
+             echo "custom_scale_exit=$custom_scale_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestNodeScalingTestSuite/TestScalingNodePools";
              node_scale_exit=$?;
+             echo "node_scale_exit=$node_scale_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
              ;;
@@ -54,42 +60,49 @@
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
              k3s_exit=$?;
+             echo "k3s_exit=$k3s_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
              rke2_exit=$?;
+             echo "rke2_exit=$rke2_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
                --junitfile resultst.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRestoreTestSuite/TestSnapshotRestore";
              snap_restore_exit=$?;
+             echo "snap_restore_exit=$snap_restore_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows";
              snap_restore_win_exit=$?;
+             echo "snap_restore_win_exit=$snap_restore_win_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRecurringTestSuite/TestSnapshotRecurringRestores";
              snap_recurring_exit=$?;
+             echo "snap_recurring_exit=$snap_recurring_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes";
              upgrade_exit=$?;
+             echo "upgrade_exit=$upgrade_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
                --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes";
              upgrade_win_exit=$?;
+             echo "upgrade_win_exit=$upgrade_win_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
              ;;
