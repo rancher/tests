@@ -778,7 +778,6 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
     def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE}"
 
     // Debug: Check if environment file exists right before docker command
-    def envFileExistsBeforeDocker = fileExists(env.ENV_FILE)
     def envFilePathBeforeDocker = "${pwd()}/${env.ENV_FILE}"
     logInfo("Environment file check before Docker command:")
     logInfo("  File exists: ${envFileExistsBeforeDocker}")
