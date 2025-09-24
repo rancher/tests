@@ -821,7 +821,7 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
             -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
             -v ${envFilePathBeforeDocker}:/tmp/.env \\
             --name ${containerName} \\
-            -t --env-file /tmp/.env \\
+            -t \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
             ${envVars} \\
             ${directEnvVars} \\
