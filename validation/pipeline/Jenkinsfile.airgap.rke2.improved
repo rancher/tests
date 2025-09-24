@@ -795,6 +795,22 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
             sh /tmp/script.sh
     """
 
+    // Final verification: Ensure the environment file exists right before Docker execution
+    logInfo("Final environment file verification before Docker execution:")
+    logInfo("  Checking if file exists at: ${envFilePathBeforeDocker}")
+    def finalFileCheck = new File(envFilePathBeforeDocker)
+    if (!finalFileCheck.exists()) {
+        logError("CRITICAL: Environment file missing at final check: ${envFilePathBeforeDocker}")
+        logError("File absolute path: ${finalFileCheck.absolutePath}")
+        logError("File parent directory exists: ${finalFileCheck.parentFile.exists()}")
+        logError("Parent directory contents: ${finalFileCheck.parentFile.listFiles().join(', ')}")
+        error("Environment file disappeared before Docker execution")
+    } else {
+        logInfo("✓ Environment file confirmed to exist at: ${envFilePathBeforeDocker}")
+        logInfo("  File size: ${finalFileCheck.length()} bytes")
+        logInfo("  Last modified: ${new Date(finalFileCheck.lastModified())}")
+    }
+
     logInfo("Executing docker command:")
     logInfo(dockerCmd)
 
