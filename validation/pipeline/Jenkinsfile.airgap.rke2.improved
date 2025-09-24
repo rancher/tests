@@ -707,7 +707,10 @@ def buildDockerImage() {
     logInfo("Building Docker image: ${env.IMAGE_NAME}")
 
     dir('./') {
-        sh './tests/validation/configure.sh'
+        // Run configure script silently
+        sh './tests/validation/configure.sh > /dev/null 2>&1'
+
+        // Build Docker image with minimal output
         sh """
             docker build . \
                 -f ./tests/validation/Dockerfile.tofu.e2e \
@@ -715,7 +718,8 @@ def buildDockerImage() {
                 --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
                 --build-arg VCS_REF=\$(git rev-parse --short HEAD) \
                 --label "pipeline.build.number=${env.BUILD_NUMBER}" \
-                --label "pipeline.job.name=${env.JOB_NAME}"
+                --label "pipeline.job.name=${env.JOB_NAME}" \
+                --quiet
         """
     }
 
