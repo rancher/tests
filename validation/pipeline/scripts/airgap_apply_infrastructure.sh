@@ -4,6 +4,26 @@ set -e
 cd ${QA_INFRA_WORK_PATH}
 export TF_WORKSPACE="${TF_WORKSPACE}"
 
+echo 'Debug: Environment variables for S3 operations...'
+echo "S3_BUCKET_NAME=${S3_BUCKET_NAME}"
+echo "S3_REGION=${S3_REGION}"
+echo "TF_WORKSPACE=${TF_WORKSPACE}"
+echo "TERRAFORM_VARS_FILENAME=${TERRAFORM_VARS_FILENAME}"
+echo "TERRAFORM_BACKEND_VARS_FILENAME=${TERRAFORM_BACKEND_VARS_FILENAME}"
+
+# Validate required S3 variables
+if [ -z "${S3_BUCKET_NAME}" ]; then
+    echo 'ERROR: S3_BUCKET_NAME environment variable is not set or empty'
+    exit 1
+fi
+
+if [ -z "${S3_REGION}" ]; then
+    echo 'ERROR: S3_REGION environment variable is not set or empty'
+    exit 1
+fi
+
+echo 'S3 environment variables validated successfully'
+
 echo 'Debug: Listing current directory contents...'
 ls -la .
 
@@ -104,28 +124,36 @@ echo 'Backing up terraform variables file for archival...'
 cp /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"${TERRAFORM_VARS_FILENAME}" /root/"${TERRAFORM_VARS_FILENAME}"
 
 echo 'Uploading configuration files to S3 bucket...'
-# Upload cluster.tfvars to S3
-echo 'Uploading cluster.tfvars to S3...'
-aws s3 cp /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"${TERRAFORM_VARS_FILENAME}" \
-    s3://"${S3_BUCKET_NAME}"/env:/"${TF_WORKSPACE}"/config/"${TERRAFORM_VARS_FILENAME}" \
-    --region "${S3_REGION}"
-
-if [ $? -eq 0 ]; then
-    echo 'SUCCESS: cluster.tfvars uploaded to S3'
+# Check if S3_BUCKET_NAME is set before attempting uploads
+if [ -z "${S3_BUCKET_NAME}" ]; then
+    echo 'WARNING: S3_BUCKET_NAME is not set, skipping S3 uploads'
+    echo 'Configuration files will remain local only'
 else
-    echo 'WARNING: Failed to upload cluster.tfvars to S3'
-fi
+    # Upload cluster.tfvars to S3
+    echo 'Uploading cluster.tfvars to S3...'
+    S3_TARGET="s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/config/${TERRAFORM_VARS_FILENAME}"
+    echo "S3 target URL: ${S3_TARGET}"
 
-# Upload backend.tfvars to S3
-echo 'Uploading backend.tfvars to S3...'
-aws s3 cp /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"${TERRAFORM_BACKEND_VARS_FILENAME}" \
-    s3://"${S3_BUCKET_NAME}"/env:/"${TF_WORKSPACE}"/config/"${TERRAFORM_BACKEND_VARS_FILENAME}" \
-    --region "${S3_REGION}"
+    if aws s3 cp /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"${TERRAFORM_VARS_FILENAME}" \
+        "${S3_TARGET}" \
+        --region "${S3_REGION}"; then
+        echo 'SUCCESS: cluster.tfvars uploaded to S3'
+    else
+        echo 'WARNING: Failed to upload cluster.tfvars to S3'
+    fi
 
-if [ $? -eq 0 ]; then
-    echo 'SUCCESS: backend.tfvars uploaded to S3'
-else
-    echo 'WARNING: Failed to upload backend.tfvars to S3'
+    # Upload backend.tfvars to S3
+    echo 'Uploading backend.tfvars to S3...'
+    S3_TARGET="s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/config/${TERRAFORM_BACKEND_VARS_FILENAME}"
+    echo "S3 target URL: ${S3_TARGET}"
+
+    if aws s3 cp /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"${TERRAFORM_BACKEND_VARS_FILENAME}" \
+        "${S3_TARGET}" \
+        --region "${S3_REGION}"; then
+        echo 'SUCCESS: backend.tfvars uploaded to S3'
+    else
+        echo 'WARNING: Failed to upload backend.tfvars to S3'
+    fi
 fi
 
 echo 'Configuration files upload completed'
