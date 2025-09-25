@@ -665,6 +665,11 @@ def generateEnvironmentFile() {
     envLines.add('TF_VAR_aws_access_key=' + env.AWS_ACCESS_KEY_ID)
     envLines.add('TF_VAR_aws_secret_access_key=' + env.AWS_SECRET_ACCESS_KEY)
     envLines.add('TF_VAR_aws_region=' + env.AWS_REGION)
+    envLines.add('')
+    envLines.add('# S3 Backend Configuration for OpenTofu')
+    envLines.add('S3_BUCKET_NAME=' + env.S3_BUCKET_NAME)
+    envLines.add('S3_REGION=' + env.S3_REGION)
+    envLines.add('S3_KEY_PREFIX=' + env.S3_KEY_PREFIX)
     def envContent = envLines.join('\n')
     def envFilePath = "${pwd()}/${env.ENV_FILE}"
     writeFile file: env.ENV_FILE, text: envContent
