@@ -921,8 +921,11 @@ def handleTimeoutFailure() {
         if (env.DESTROY_ON_FAILURE.toBoolean()) {
             logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for timeout')
             def cleanupScript = """
-            # Source the external cleanup script
-            source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_timeout_cleanup.sh
+#!/bin/bash
+set -e
+
+# Source the external cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_timeout_cleanup.sh
             """
             executeScriptInContainer(cleanupScript)
             logInfo('Infrastructure cleanup attempted for timeout')
@@ -934,7 +937,8 @@ def handleTimeoutFailure() {
     } catch (cleanupException) {
         logError("Cleanup during timeout handling failed: ${cleanupException.message}")
     }
-    throw new FlowInterruptedException("Pipeline timed out")
+    // Use Jenkins built-in timeout exception instead of custom FlowInterruptedException
+    error("Pipeline timed out after ${env.TERRAFORM_TIMEOUT} minutes")
 }
 
 def handleDeploymentFailure() {
