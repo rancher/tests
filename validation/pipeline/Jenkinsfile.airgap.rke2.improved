@@ -781,8 +781,9 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
                     if (parts.length == 2) {
                         def key = parts[0].trim()
                         def value = parts[1].trim()
-                        // Only pass non-sensitive variables directly
-                        if (!key.contains('SECRET') && !key.contains('PASSWORD') && !key.contains('KEY')) {
+                        // Pass specific AWS variables needed for Terraform, but filter other sensitive variables
+                        if (key == 'AWS_ACCESS_KEY_ID' || key == 'AWS_SECRET_ACCESS_KEY' || key == 'AWS_REGION' ||
+                            (!key.contains('SECRET') && !key.contains('PASSWORD') && !key.contains('_KEY') && !key.contains('PEM'))) {
                             directEnvVars += " -e \"${key}=${value}\""
                         }
                     }
