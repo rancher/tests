@@ -4,7 +4,6 @@ set -e
 cd ${QA_INFRA_WORK_PATH}
 
 echo 'Managing workspace state...'
-unset TF_WORKSPACE
 
 echo 'Current workspaces:'
 tofu -chdir=tofu/aws/modules/airgap workspace list
