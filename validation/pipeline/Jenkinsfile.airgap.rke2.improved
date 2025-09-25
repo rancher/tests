@@ -188,10 +188,10 @@ pipeline {
         VALIDATION_VOLUME = "${PipelineConfig.SHARED_VOLUME_PREFIX}-${env.JOB_SHORT_NAME}${env.BUILD_NUMBER}"
 
         // Configuration files
-        ANSIBLE_VARS_FILENAME = PipelineConfig.ANSIBLE_VARS_FILE
-        TERRAFORM_VARS_FILENAME = PipelineConfig.TERRAFORM_VARS_FILE
-        TERRAFORM_BACKEND_VARS_FILENAME = PipelineConfig.TERRAFORM_BACKEND_VARS_FILE
-        ENV_FILE = PipelineConfig.ENVIRONMENT_FILE
+        ANSIBLE_VARS_FILENAME = 'vars.yaml'
+        TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
+        TERRAFORM_BACKEND_VARS_FILENAME = 'backend.tfvars'
+        ENV_FILE = '.env'
 
         // Terraform workspace
         TF_WORKSPACE = "jenkins_airgap_ansible_workspace_${env.BUILD_NUMBER}"
@@ -552,7 +552,7 @@ def validateRequiredVariables(requiredVars) {
 def setupDynamicEnvironment() {
     env.RKE2_VERSION = params.RKE2_VERSION
     env.RANCHER_VERSION = params.RANCHER_VERSION
-    env.TERRAFORM_VARS_FILENAME = PipelineConfig.TERRAFORM_VARS_FILE
+    env.TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
 
     logInfo('Dynamic environment configured')
     logInfo("RKE2 Version: ${env.RKE2_VERSION}")
