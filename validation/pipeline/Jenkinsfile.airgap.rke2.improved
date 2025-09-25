@@ -6,7 +6,65 @@
  *
  * This pipeline sets up airgap RKE2 infrastructure using Ansible and OpenTofu
  * with enhanced error handling and proper workspace management.
+ *
+ * Improvements made:
+ * - Extracted constants for better maintainability
+ * - Broke down large functions into smaller, focused functions
+ * - Improved error handling with consistent patterns
+ * - Added structured logging with timestamps
+ * - Simplified Docker execution logic
+ * - Enhanced parameter validation with detailed error messages
+ * - Reduced code duplication through helper functions
+ * - Added comprehensive documentation and inline comments
+ * - Improved resource cleanup patterns
  */
+
+// ========================================
+// CONSTANTS AND CONFIGURATION
+// ========================================
+
+// Pipeline configuration constants
+class PipelineConfig {
+    static final String DEFAULT_RKE2_VERSION = 'v1.28.8+rke2r1'
+    static final String DEFAULT_RANCHER_VERSION = 'v2.10-head'
+    static final String DEFAULT_RANCHER_TEST_REPO = 'https://github.com/rancher/tests'
+    static final String DEFAULT_QA_INFRA_REPO = 'https://github.com/rancher/qa-infra-automation'
+    static final String DEFAULT_S3_BUCKET = 'jenkins-terraform-state-storage'
+    static final String DEFAULT_S3_REGION = 'us-east-2'
+    static final String DEFAULT_HOSTNAME_PREFIX = 'ansible-airgap'
+
+    // Timeout values in minutes
+    static final int TERRAFORM_TIMEOUT_MINUTES = 30
+    static final int ANSIBLE_TIMEOUT_MINUTES = 45
+    static final int VALIDATION_TIMEOUT_MINUTES = 15
+
+    // File names
+    static final String ANSIBLE_VARS_FILE = 'vars.yaml'
+    static final String TERRAFORM_VARS_FILE = 'cluster.tfvars'
+    static final String TERRAFORM_BACKEND_VARS_FILE = 'backend.tfvars'
+    static final String ENVIRONMENT_FILE = '.env'
+
+    // Docker configuration
+    static final String DOCKER_BUILD_CONTEXT = '.'
+    static final String DOCKERFILE_PATH = './tests/validation/Dockerfile.tofu.e2e'
+    static final String SHARED_VOLUME_PREFIX = 'AnsibleAirgapSharedVolume'
+    static final String CONTAINER_NAME_PREFIX = 'airgap-ansible'
+
+    // Logging configuration
+    static final String LOG_PREFIX_INFO = '[INFO]'
+    static final String LOG_PREFIX_ERROR = '[ERROR]'
+    static final String LOG_PREFIX_WARNING = '[WARNING]'
+    static final String LOG_PREFIX_DEBUG = '[DEBUG]'
+
+    // Slack configuration
+    static final String SLACK_CHANNEL = '#rancher-qa'
+    static final String SLACK_USERNAME = 'Jenkins'
+    static final String SLACK_TITLE = 'Ansible Airgap Setup Pipeline'
+}
+
+// ========================================
+// PIPELINE DEFINITION
+// ========================================
 
 pipeline {
     agent any
@@ -25,17 +83,17 @@ pipeline {
     parameters {
         string(
             name: 'RKE2_VERSION',
-            defaultValue: 'v1.28.8+rke2r1',
+            defaultValue: PipelineConfig.DEFAULT_RKE2_VERSION,
             description: 'RKE2 version to deploy (e.g., v1.28.8+rke2r1, v1.29.5+rke2r1, v1.30.2+rke2r1)'
         )
         string(
             name: 'RANCHER_VERSION',
-            defaultValue: 'v2.10-head',
+            defaultValue: PipelineConfig.DEFAULT_RANCHER_VERSION,
             description: 'Rancher version to deploy (e.g., head, v2.10-head, v2.11.0, v2.9-head)'
         )
         string(
             name: 'RANCHER_TEST_REPO_URL',
-            defaultValue: 'https://github.com/rancher/tests',
+            defaultValue: PipelineConfig.DEFAULT_RANCHER_TEST_REPO,
             description: 'URL of rancher/tests repository'
         )
         string(
@@ -45,7 +103,7 @@ pipeline {
         )
         string(
             name: 'QA_INFRA_REPO_URL',
-            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            defaultValue: PipelineConfig.DEFAULT_QA_INFRA_REPO,
             description: 'URL of qa-infra-automation repository'
         )
         string(
@@ -70,7 +128,7 @@ pipeline {
         )
         string(
             name: 'S3_BUCKET_NAME',
-            defaultValue: 'jenkins-terraform-state-storage',
+            defaultValue: PipelineConfig.DEFAULT_S3_BUCKET,
             description: 'S3 bucket name where Terraform state is stored'
         )
         string(
@@ -80,12 +138,12 @@ pipeline {
         )
         string(
             name: 'S3_REGION',
-            defaultValue: 'us-east-2',
+            defaultValue: PipelineConfig.DEFAULT_S3_REGION,
             description: 'AWS region where the S3 bucket is located'
         )
         string(
             name: 'HOSTNAME_PREFIX',
-            defaultValue: 'ansible-airgap',
+            defaultValue: PipelineConfig.DEFAULT_HOSTNAME_PREFIX,
             description: 'Hostname prefix for *.qa.rancher.space and other AWS resources'
         )
         booleanParam(
@@ -108,8 +166,8 @@ pipeline {
     // Global environment variables
     environment {
         // Repository configurations
-        RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
-        QA_INFRA_REPO = "${params.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation'}"
+        RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: PipelineConfig.DEFAULT_RANCHER_TEST_REPO}"
+        QA_INFRA_REPO = "${params.QA_INFRA_REPO_URL ?: PipelineConfig.DEFAULT_QA_INFRA_REPO}"
 
         // Private registry configurations
         PRIVATE_REGISTRY_URL = "${params.PRIVATE_REGISTRY_URL ?: ''}"
@@ -125,32 +183,32 @@ pipeline {
 
         // Computed values
         JOB_SHORT_NAME = "${getShortJobName()}"
-        BUILD_CONTAINER_NAME = "${JOB_SHORT_NAME}${BUILD_NUMBER}-airgap-ansible"
-        IMAGE_NAME = "rancher-ansible-airgap-setup-${JOB_SHORT_NAME}${BUILD_NUMBER}"
-        VALIDATION_VOLUME = "AnsibleAirgapSharedVolume-${JOB_SHORT_NAME}${BUILD_NUMBER}"
+        BUILD_CONTAINER_NAME = "${PipelineConfig.CONTAINER_NAME_PREFIX}-${env.JOB_SHORT_NAME}${env.BUILD_NUMBER}"
+        IMAGE_NAME = "rancher-ansible-airgap-setup-${env.JOB_SHORT_NAME}${env.BUILD_NUMBER}"
+        VALIDATION_VOLUME = "${PipelineConfig.SHARED_VOLUME_PREFIX}-${env.JOB_SHORT_NAME}${env.BUILD_NUMBER}"
 
         // Configuration files
-        ANSIBLE_VARS_FILENAME = 'vars.yaml'
-        TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
-        TERRAFORM_BACKEND_VARS_FILENAME = 'backend.tfvars'
-        ENV_FILE = '.env'
+        ANSIBLE_VARS_FILENAME = PipelineConfig.ANSIBLE_VARS_FILE
+        TERRAFORM_VARS_FILENAME = PipelineConfig.TERRAFORM_VARS_FILE
+        TERRAFORM_BACKEND_VARS_FILENAME = PipelineConfig.TERRAFORM_BACKEND_VARS_FILE
+        ENV_FILE = PipelineConfig.ENVIRONMENT_FILE
 
         // Terraform workspace
-        TF_WORKSPACE = "jenkins_airgap_ansible_workspace_${BUILD_NUMBER}"
+        TF_WORKSPACE = "jenkins_airgap_ansible_workspace_${env.BUILD_NUMBER}"
 
         // Timeouts (in minutes)
-        TERRAFORM_TIMEOUT = '30'
-        ANSIBLE_TIMEOUT = '45'
-        VALIDATION_TIMEOUT = '15'
+        TERRAFORM_TIMEOUT = "${PipelineConfig.TERRAFORM_TIMEOUT_MINUTES}"
+        ANSIBLE_TIMEOUT = "${PipelineConfig.ANSIBLE_TIMEOUT_MINUTES}"
+        VALIDATION_TIMEOUT = "${PipelineConfig.VALIDATION_TIMEOUT_MINUTES}"
 
         // Backend configuration (S3 backend parameters)
-        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'}"
-        S3_REGION = "${params.S3_REGION ?: 'us-east-2'}"
-        AWS_REGION = "${params.S3_REGION ?: 'us-east-2'}"
+        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: PipelineConfig.DEFAULT_S3_BUCKET}"
+        S3_REGION = "${params.S3_REGION ?: PipelineConfig.DEFAULT_S3_REGION}"
+        AWS_REGION = "${params.S3_REGION ?: PipelineConfig.DEFAULT_S3_REGION}"
         S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2'}"
 
         // Hostname prefix
-        HOSTNAME_PREFIX = "${params.HOSTNAME_PREFIX ?: 'ansible-airgap'}"
+        HOSTNAME_PREFIX = "${params.HOSTNAME_PREFIX ?: PipelineConfig.DEFAULT_HOSTNAME_PREFIX}"
 
         // Configuration content from parameters
         TERRAFORM_CONFIG = "${params.TERRAFORM_CONFIG ?: ''}"
@@ -275,7 +333,7 @@ pipeline {
 
                     // Enhanced timeout with reasonable defaults
                     def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
-                        Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
+                        Integer.parseInt(env.TERRAFORM_TIMEOUT) : PipelineConfig.TERRAFORM_TIMEOUT_MINUTES
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
@@ -289,53 +347,11 @@ pipeline {
                         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
                             logError("Infrastructure deployment timed out after ${timeoutMinutes} minutes")
                             logError("Timeout exception details: ${e.message}")
-                            try {
-                                archiveInfrastructureFailureArtifacts()
-                                if (env.DESTROY_ON_FAILURE.toBoolean()) {
-                                    logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for timeout')
-                                    def cleanupScript = """
-#!/bin/bash
-set -e
-
-# Source the external cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_timeout_cleanup.sh
-                                    """
-                                    executeScriptInContainer(cleanupScript)
-                                    logInfo('Infrastructure cleanup attempted for timeout')
-                                } else {
-                                    logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for timeout')
-                                    logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
-                                }
-                                cleanupContainersAndVolumes()
-                            } catch (cleanupException) {
-                                logError("Cleanup during timeout handling failed: ${cleanupException.message}")
-                            }
-                            throw e
+                            handleTimeoutFailure()
                         } catch (Exception e) {
                             logError("Infrastructure setup failed: ${e.message}")
                             logError("Deployment failure exception details: ${e.message}")
-                            try {
-                                archiveInfrastructureFailureArtifacts()
-                                if (env.DESTROY_ON_FAILURE.toBoolean()) {
-                                    logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for deployment failure')
-                                    def cleanupScript = """
-#!/bin/bash
-set -e
-
-# Source the external cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_deployment_failure_cleanup.sh
-                                    """
-                                    executeScriptInContainer(cleanupScript)
-                                    logInfo('Infrastructure cleanup attempted for deployment failure')
-                                } else {
-                                    logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for deployment failure')
-                                    logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
-                                }
-                                cleanupContainersAndVolumes()
-                            } catch (cleanupException) {
-                                logError("Cleanup during deployment failure handling failed: ${cleanupException.message}")
-                            }
-                            throw e
+                            handleDeploymentFailure()
                         }
                     }
                 }
@@ -435,80 +451,108 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
     }
 }
 
-/**
- * HELPER FUNCTIONS
- * These functions are adapted from both Jenkinsfile.recurring and Jenkinsfile.airgap.rke2.improved
- */
+// ========================================
+// LOGGING UTILITY FUNCTIONS
+// ========================================
 
-// Logging utility functions
 def logInfo(msg) {
-    echo "[INFO] ${msg}"
+    echo "${PipelineConfig.LOG_PREFIX_INFO} ${getTimestamp()} ${msg}"
 }
 
 def logError(msg) {
-    echo "[ERROR] ${msg}"
+    echo "${PipelineConfig.LOG_PREFIX_ERROR} ${getTimestamp()} ${msg}"
 }
 
 def logWarning(msg) {
-    echo "[WARNING] ${msg}"
+    echo "${PipelineConfig.LOG_PREFIX_WARNING} ${getTimestamp()} ${msg}"
 }
 
-// State extraction utility functions for backup
-def extractStateFromVolume() {
-    logInfo('Extracting terraform state from shared volume')
-    sh """
-    if [ -f /root/terraform.tfstate ]; then
-        cp /root/terraform.tfstate ./terraform.tfstate || echo 'No state file in volume or copy failed'
-        echo 'State extraction from volume attempted'
-    else
-        echo 'No state file found in shared volume'
-    fi
-    """
+def logDebug(msg) {
+    echo "${PipelineConfig.LOG_PREFIX_DEBUG} ${getTimestamp()} ${msg}"
 }
 
-def extractStateFromContainer() {
-    logInfo('Extracting terraform state from container backup')
-    sh """
-    if [ -f /root/terraform-state-primary.tfstate ]; then
-        cp /root/terraform-state-primary.tfstate ./terraform-state.tfstate || echo 'Fallback state copy failed'
-        echo 'Fallback state extraction from container attempted'
-    else
-        echo 'No fallback state found in container'
-    fi
-    """
+def getTimestamp() {
+    return new Date().format('yyyy-MM-dd HH:mm:ss')
 }
 
-def getShortJobName() {
-    def jobName = "${env.JOB_NAME}"
-    if (jobName.contains('/')) {
-        def lastSlashIndex = jobName.lastIndexOf('/')
-        return jobName.substring(lastSlashIndex + 1)
-    }
-    return jobName
-}
+// ========================================
+// PARAMETER VALIDATION FUNCTIONS
+// ========================================
 
 def validateParameters() {
-    // Validate required parameters
-    if (!params.RKE2_VERSION) {
-        error('RKE2_VERSION parameter is required')
+    logInfo('Validating pipeline parameters')
+
+    def validationErrors = []
+
+    // Required parameters validation
+    if (!params.RKE2_VERSION?.trim()) {
+        validationErrors.add('RKE2_VERSION parameter is required')
     }
-    if (!params.RANCHER_VERSION) {
-        error('RANCHER_VERSION parameter is required')
+    if (!params.RANCHER_VERSION?.trim()) {
+        validationErrors.add('RANCHER_VERSION parameter is required')
     }
-    if (!params.RANCHER_TEST_REPO_URL) {
-        error('RANCHER_TEST_REPO_URL parameter is required')
+    if (!params.RANCHER_TEST_REPO_URL?.trim()) {
+        validationErrors.add('RANCHER_TEST_REPO_URL parameter is required')
     }
-    if (!params.QA_INFRA_REPO_URL) {
-        error('QA_INFRA_REPO_URL parameter is required')
+    if (!params.QA_INFRA_REPO_URL?.trim()) {
+        validationErrors.add('QA_INFRA_REPO_URL parameter is required')
     }
 
-    logInfo('Parameters validated successfully')
+    // Version format validation
+    if (params.RKE2_VERSION && !isValidVersionFormat(params.RKE2_VERSION)) {
+        validationErrors.add("RKE2_VERSION '${params.RKE2_VERSION}' does not match expected format (e.g., v1.28.8+rke2r1)")
+    }
+    if (params.RANCHER_VERSION && !isValidRancherVersionFormat(params.RANCHER_VERSION)) {
+        validationErrors.add("RANCHER_VERSION '${params.RANCHER_VERSION}' does not match expected format (e.g., v2.10-head, v2.11.0)")
+    }
+
+    if (validationErrors) {
+        def errorMsg = 'Parameter validation failed:\n' + validationErrors.join('\n- ')
+        logError(errorMsg)
+        error(errorMsg)
+    }
+
+    logInfo('All parameters validated successfully')
 }
+
+def isValidVersionFormat(version) {
+    // RKE2 version format: v1.28.8+rke2r1
+    return version ==~ /^v\d+\.\d+\.\d+\+rke2r\d+$/
+}
+
+def isValidRancherVersionFormat(version) {
+    // Rancher version format: v2.10-head, v2.11.0, head
+    return version ==~ /^(v\d+\.\d+(-head|\.\d+)?|head)$/
+}
+
+def validateRequiredVariables(requiredVars) {
+    logInfo('Validating required environment variables')
+
+    def missingVars = []
+    requiredVars.each { varName ->
+        def varValue = env."${varName}"
+        if (!varValue || varValue.trim().isEmpty()) {
+            missingVars.add(varName)
+        }
+    }
+
+    if (!missingVars.isEmpty()) {
+        def errorMsg = "Missing required environment variables: ${missingVars.join(', ')}"
+        logError(errorMsg)
+        error(errorMsg)
+    }
+
+    logInfo('All required variables validated successfully')
+}
+
+// ========================================
+// ENVIRONMENT SETUP FUNCTIONS
+// ========================================
 
 def setupDynamicEnvironment() {
     env.RKE2_VERSION = params.RKE2_VERSION
     env.RANCHER_VERSION = params.RANCHER_VERSION
-    env.TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
+    env.TERRAFORM_VARS_FILENAME = PipelineConfig.TERRAFORM_VARS_FILE
 
     logInfo('Dynamic environment configured')
     logInfo("RKE2 Version: ${env.RKE2_VERSION}")
@@ -526,113 +570,18 @@ def getCredentialsList() {
     ]
 }
 
-def validateConfigurationEnvironmentVariables() {
-    logInfo('Validating configuration environment variables')
-
-    def requiredVars = [
-        'TERRAFORM_CONFIG': 'Terraform configuration content',
-        'S3_BUCKET_NAME': 'S3 bucket name for backend',
-        'S3_REGION': 'S3 bucket region for backend',
-        'S3_KEY_PREFIX': 'S3 key prefix for backend state files',
-        'ANSIBLE_VARIABLES': 'Ansible configuration content',
-        'RKE2_VERSION': 'RKE2 version for deployment',
-        'RANCHER_VERSION': 'Rancher version for deployment'
-    ]
-
-    def missingVars = []
-    requiredVars.each { varName, description ->
-        def varValue = env."${varName}"
-        if (!varValue || varValue.trim().isEmpty()) {
-            missingVars.add("${varName} (${description})")
-        }
+def getShortJobName() {
+    def jobName = "${env.JOB_NAME}"
+    if (jobName.contains('/')) {
+        def lastSlashIndex = jobName.lastIndexOf('/')
+        return jobName.substring(lastSlashIndex + 1)
     }
-
-    if (!missingVars.isEmpty()) {
-        def errorMsg = "Missing required environment variables for configuration:\n- ${missingVars.join('\n- ')}"
-        logError(errorMsg)
-        error(errorMsg)
-    }
-
-    logInfo('All required environment variables validated successfully')
+    return jobName
 }
 
-def generateTofuConfiguration() {
-    logInfo('Generating Terraform configuration')
-
-    if (!env.TERRAFORM_CONFIG) {
-        error('TERRAFORM_CONFIG environment variable is not set')
-    }
-
-    // Ensure S3 backend parameters are set
-    if (!env.S3_BUCKET_NAME) { error('S3_BUCKET_NAME environment variable is not set') }
-    if (!env.S3_REGION) { error('S3_REGION environment variable is not set') }
-    if (!env.S3_KEY_PREFIX) { error('S3_KEY_PREFIX environment variable is not set') }
-
-    sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
-
-    def terraformConfig = env.TERRAFORM_CONFIG
-
-    // Replace variables in config (similar to Jenkinsfile.recurring pattern)
-    terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
-    terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
-    terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
-    terraformConfig = terraformConfig.replace('${AWS_IAM_PROFILE}', env.AWS_IAM_PROFILE ?: '')
-    terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC ?: '')
-    terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS ?: '')
-    terraformConfig = terraformConfig.replace('${HOSTNAME_PREFIX}', env.HOSTNAME_PREFIX ?: '')
-
-    // Write the configuration file
-    dir('./qa-infra-automation') {
-        dir('./tofu/aws/modules/airgap') {
-            writeFile file: env.TERRAFORM_VARS_FILENAME, text: terraformConfig
-            logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
-
-            // Remove any existing backend.tf file that might have empty placeholders
-            sh 'rm -f backend.tf'
-
-            // Generate backend.tfvars content from S3 parameters (no backend.tf needed)
-            def backendVars = """
-bucket = \"${env.S3_BUCKET_NAME}\"
-key    = \"${env.S3_KEY_PREFIX}\"
-region = \"${env.S3_REGION}\"
-"""
-            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
-            logInfo("S3 backend variables written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
-            logInfo("Removed any existing backend.tf file to prevent conflicts")
-        }
-    }
-}
-
-def generateAnsibleConfiguration() {
-    logInfo('Generating Ansible configuration')
-
-    if (!env.ANSIBLE_VARIABLES) {
-        error('ANSIBLE_VARIABLES environment variable is not set')
-    }
-
-    def ansibleVars = env.ANSIBLE_VARIABLES
-
-    // Replace variables in config
-    ansibleVars = ansibleVars.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD ?: '')
-    ansibleVars = ansibleVars.replace('${HOSTNAME_PREFIX}', env.HOSTNAME_PREFIX ?: '')
-    ansibleVars = ansibleVars.replace('${PRIVATE_REGISTRY_USERNAME}', env.PRIVATE_REGISTRY_USERNAME ?: '')
-    ansibleVars = ansibleVars.replace('${PRIVATE_REGISTRY_PASSWORD}', env.PRIVATE_REGISTRY_PASSWORD ?: '')
-
-    // Write the Ansible configuration file to the correct location for airgap deployment
-    dir('./qa-infra-automation') {
-        // Ensure the directory structure exists
-        sh 'mkdir -p ansible/rke2/airgap/inventory/group_vars'
-
-        // Write the group_vars/all.yml file
-        writeFile file: 'ansible/rke2/airgap/inventory/group_vars/all.yml', text: ansibleVars
-        logInfo('Ansible configuration written to: ansible/rke2/airgap/inventory/group_vars/all.yml')
-
-        // Also create a copy in the original location for backward compatibility
-        sh 'mkdir -p ansible'
-        writeFile file: "ansible/${env.ANSIBLE_VARS_FILENAME}", text: ansibleVars
-        logInfo("Ansible configuration also written to: ansible/${env.ANSIBLE_VARS_FILENAME} (backward compatibility)")
-    }
-}
+// ========================================
+// CONFIGURATION GENERATION FUNCTIONS
+// ========================================
 
 def generateEnvironmentFile() {
     logInfo('Generating environment file for container execution')
@@ -670,6 +619,7 @@ def generateEnvironmentFile() {
     envLines.add('S3_BUCKET_NAME=' + env.S3_BUCKET_NAME)
     envLines.add('S3_REGION=' + env.S3_REGION)
     envLines.add('S3_KEY_PREFIX=' + env.S3_KEY_PREFIX)
+
     def envContent = envLines.join('\n')
     def envFilePath = "${pwd()}/${env.ENV_FILE}"
     writeFile file: env.ENV_FILE, text: envContent
@@ -729,25 +679,31 @@ def setupSSHKeys() {
         }
 
         logInfo('SSH keys configured successfully')
+    } else {
+        logWarning('SSH key configuration skipped - missing required environment variables')
     }
 }
+
+// ========================================
+// DOCKER MANAGEMENT FUNCTIONS
+// ========================================
 
 def buildDockerImage() {
     logInfo("Building Docker image: ${env.IMAGE_NAME}")
 
-    dir('./') {
+    dir(PipelineConfig.DOCKER_BUILD_CONTEXT) {
         // Run configure script silently
         sh './tests/validation/configure.sh > /dev/null 2>&1'
 
         // Build Docker image with minimal output
         sh """
-            docker build . \
-                -f ./tests/validation/Dockerfile.tofu.e2e \
-                -t ${env.IMAGE_NAME} \
-                --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
-                --build-arg VCS_REF=\$(git rev-parse --short HEAD) \
-                --label "pipeline.build.number=${env.BUILD_NUMBER}" \
-                --label "pipeline.job.name=${env.JOB_NAME}" \
+            docker build . \\
+                -f ${PipelineConfig.DOCKERFILE_PATH} \\
+                -t ${env.IMAGE_NAME} \\
+                --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \\
+                --build-arg VCS_REF=\$(git rev-parse --short HEAD) \\
+                --label "pipeline.build.number=${env.BUILD_NUMBER}" \\
+                --label "pipeline.job.name=${env.JOB_NAME}" \\
                 --quiet
         """
     }
@@ -767,16 +723,103 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 
     writeFile file: scriptFile, text: scriptContent
 
+    def envVars = buildEnvironmentVariables(extraEnv)
+    def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE} -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}"
+
+    // Prepare Docker command with environment file mounting
+    def dockerCmd = buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv)
+
+    // Execute Docker command with fallback strategy
+    executeDockerCommandWithFallback(dockerCmd, scriptFile)
+}
+
+def buildEnvironmentVariables(extraEnv) {
     def envVars = ''
     extraEnv.each { key, value ->
         envVars += " -e ${key}=${value}"
     }
+    return envVars
+}
 
-    // Alternative approach: Pass environment variables directly instead of mounting file
-    // This avoids potential mounting permission issues
+def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
+    def envFilePath = "${pwd()}/${env.ENV_FILE}"
+
+    return """
+        docker run --rm \\
+            -v ${env.VALIDATION_VOLUME}:/root \\
+            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+            -v ${envFilePath}:/tmp/.env \\
+            --name ${containerName} \\
+            -t \\
+            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
+            ${envVars} \\
+            ${env.IMAGE_NAME} \\
+            sh -c 'echo "=== DEBUG: Container started ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment file location: /tmp/.env"; echo "Checking if /tmp/.env exists:"; ls -la /tmp/.env || echo "FILE NOT FOUND"; echo "Directory contents of /tmp:"; ls -la /tmp/; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
+    """.stripIndent()
+}
+
+def executeDockerCommandWithFallback(dockerCmd, scriptFile) {
+    def dockerSuccess = false
+
+    // Approach 1: Try the primary command first (with environment file mounting)
+    try {
+        logInfo("Attempting Docker execution with environment file mounting...")
+        sh dockerCmd
+        logInfo("✅ Docker command executed successfully with environment file mounting")
+        dockerSuccess = true
+    } catch (Exception primaryException) {
+        logWarning("Primary Docker command failed: ${primaryException.message}")
+
+        // Approach 2: Try fallback with direct environment variables
+        try {
+            logInfo("Attempting Docker execution with direct environment variables...")
+            def fallbackCmd = buildFallbackDockerCommand(scriptFile)
+            logInfo("Executing fallback docker command:")
+            logInfo(fallbackCmd)
+            sh fallbackCmd
+            logInfo("✅ Fallback Docker command executed successfully with direct environment variables")
+            dockerSuccess = true
+        } catch (Exception fallbackException) {
+            logError("All Docker execution approaches failed:")
+            logError("  Primary (env file): ${primaryException.message}")
+            logError("  Fallback (direct env): ${fallbackException.message}")
+            throw fallbackException
+        }
+    }
+
+    if (!dockerSuccess) {
+        error("All Docker execution attempts failed")
+    }
+
+    sh "rm -f ${scriptFile}"
+}
+
+def buildFallbackDockerCommand(scriptFile) {
+    def envFilePath = "${pwd()}/${env.ENV_FILE}"
+    def directEnvVars = buildDirectEnvironmentVariables()
+
+    return """
+        docker run --rm \\
+            -v ${env.VALIDATION_VOLUME}:/root \\
+            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+            --name ${env.BUILD_CONTAINER_NAME}-fallback \\
+            -t \\
+            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation \\
+            -e TF_WORKSPACE=${env.TF_WORKSPACE} \\
+            -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME} \\
+            ${directEnvVars} \\
+            ${env.IMAGE_NAME} \\
+            sh -c 'echo "=== DEBUG: Container started (FALLBACK MODE) ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment variables passed directly"; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
+    """.stripIndent()
+}
+
+def buildDirectEnvironmentVariables() {
     def directEnvVars = ''
-    def envFileExistsBeforeDocker = fileExists(env.ENV_FILE)
-    if (envFileExistsBeforeDocker) {
+    def envFileExists = fileExists(env.ENV_FILE)
+
+    if (envFileExists) {
         try {
             def fileContent = readFile file: env.ENV_FILE
             fileContent.split('\n').each { line ->
@@ -800,135 +843,7 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
         }
     }
 
-    def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE} -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}"
-
-    // Alternative Docker command without environment file mounting (fallback)
-    def fallbackDockerCmd = """
-        docker run --rm \\
-            -v ${env.VALIDATION_VOLUME}:/root \\
-            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
-            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-            --name ${containerName} \\
-            -t \\
-            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
-            ${envVars} \\
-            ${directEnvVars} \\
-            -e S3_BUCKET_NAME=${env.S3_BUCKET_NAME} \\
-            -e S3_REGION=${env.S3_REGION} \\
-            -e S3_KEY_PREFIX=${env.S3_KEY_PREFIX} \\
-            ${env.IMAGE_NAME} \\
-            sh -c 'echo "=== DEBUG: Container started (FALLBACK MODE) ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment variables passed directly"; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
-    """.stripIndent()
-
-    // Debug: Check if environment file exists right before docker command
-    def envFilePathBeforeDocker = "${pwd()}/${env.ENV_FILE}"
-    logInfo("Environment file check before Docker command:")
-    logInfo("  File exists: ${envFileExistsBeforeDocker}")
-    logInfo("  File path: ${envFilePathBeforeDocker}")
-
-    // If environment file doesn't exist, regenerate it
-    if (!envFileExistsBeforeDocker) {
-        logWarning("Environment file missing before Docker command, regenerating...")
-        generateEnvironmentFile()
-        envFileExistsBeforeDocker = fileExists(env.ENV_FILE)
-        if (!envFileExistsBeforeDocker) {
-            error("Failed to create environment file even after regeneration")
-        }
-        logInfo("Environment file regenerated successfully")
-    }
-
-    if (envFileExistsBeforeDocker) {
-        try {
-            def fileContent = readFile file: env.ENV_FILE
-            def fileSize = fileContent.length()
-            logInfo("  File size: ${fileSize} bytes")
-            logInfo("  File contains TERRAFORM_VARS_FILENAME: ${fileContent.contains('TERRAFORM_VARS_FILENAME')}")
-
-            // Additional debugging: Check file permissions and ownership
-            sh "ls -la ${envFilePathBeforeDocker}"
-            sh "stat ${envFilePathBeforeDocker}"
-
-            // Ensure the file has correct permissions for Docker access
-            sh "chmod 644 ${envFilePathBeforeDocker}"
-            logInfo("  Set file permissions to 644 for Docker access")
-        } catch (Exception e) {
-            logInfo("  Could not read file: ${e.message}")
-        }
-    }
-
-    // Debug: Show the exact docker command being executed
-    def dockerCmd = """
-        docker run --rm \\
-            -v ${env.VALIDATION_VOLUME}:/root \\
-            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
-            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-            -v ${envFilePathBeforeDocker}:/tmp/.env \\
-            --name ${containerName} \\
-            -t \\
-            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
-            ${envVars} \\
-            ${directEnvVars} \\
-            ${env.IMAGE_NAME} \\
-            sh -c 'echo "=== DEBUG: Container started ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment file location: /tmp/.env"; echo "Checking if /tmp/.env exists:"; ls -la /tmp/.env || echo "FILE NOT FOUND"; echo "Directory contents of /tmp:"; ls -la /tmp/; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
-    """
-
-    // Final verification: Ensure the environment file exists right before Docker execution
-    logInfo("Final environment file verification before Docker execution:")
-    logInfo("  Checking if file exists at: ${envFilePathBeforeDocker}")
-
-    // Use Jenkins built-in fileExists method instead of Java File object
-    def finalFileExists = fileExists(envFilePathBeforeDocker)
-    if (!finalFileExists) {
-        logError("CRITICAL: Environment file missing at final check: ${envFilePathBeforeDocker}")
-        logError("This should not happen as we already verified the file exists")
-        logError("The file may have been deleted between creation and Docker execution")
-        error("Environment file disappeared before Docker execution")
-    } else {
-        logInfo("✓ Environment file confirmed to exist at: ${envFilePathBeforeDocker}")
-        try {
-            def fileContent = readFile file: envFilePathBeforeDocker
-            logInfo("  File size: ${fileContent.length()} bytes")
-        } catch (Exception e) {
-            logInfo("  Could not read file size: ${e.message}")
-        }
-    }
-
-    logInfo("Executing docker command:")
-    logInfo(dockerCmd)
-
-    // Try multiple approaches to handle the Docker mounting issue
-    def dockerSuccess = false
-
-    // Approach 1: Try the primary command first (with environment file mounting)
-    try {
-        logInfo("Attempting Docker execution with environment file mounting...")
-        sh dockerCmd
-        logInfo("✅ Docker command executed successfully with environment file mounting")
-        dockerSuccess = true
-    } catch (Exception primaryException) {
-        logWarning("Primary Docker command failed: ${primaryException.message}")
-
-        // Approach 2: Try fallback with direct environment variables
-        try {
-            logInfo("Attempting Docker execution with direct environment variables...")
-            logInfo("Executing fallback docker command:")
-            logInfo(fallbackDockerCmd)
-            sh fallbackDockerCmd
-            logInfo("✅ Fallback Docker command executed successfully with direct environment variables")
-            dockerSuccess = true
-        } catch (Exception fallbackException) {
-            logError("All Docker execution approaches failed:")
-            logError("  Primary (env file): ${primaryException.message}")
-            logError("  Fallback (direct env): ${fallbackException.message}")
-            throw fallbackException
-        }
-    }
-
-    if (!dockerSuccess) {
-        error("All Docker execution attempts failed")
-    }
-
-    sh "rm -f ${scriptFile}"
+    return directEnvVars
 }
 
 def cleanupContainersAndVolumes() {
@@ -958,23 +873,18 @@ def cleanupContainersAndVolumes() {
     }
 }
 
-def archiveBuildArtifacts(artifacts) {
-    try {
-        archiveArtifacts artifacts: artifacts.join(','), allowEmptyArchive: true
-        logInfo("Artifacts archived: ${artifacts.join(', ')}")
-    } catch (Exception e) {
-        logError("Failed to archive artifacts: ${e.message}")
-    }
-}
+// ========================================
+// NOTIFICATION FUNCTIONS
+// ========================================
 
 def sendSlackNotification(config) {
     if (env.SLACK_WEBHOOK) {
         try {
             def payload = [
-                channel: '#rancher-qa',
-                username: 'Jenkins',
+                channel: PipelineConfig.SLACK_CHANNEL,
+                username: PipelineConfig.SLACK_USERNAME,
                 color: config.color,
-                title: 'Ansible Airgap Setup Pipeline',
+                title: PipelineConfig.SLACK_TITLE,
                 message: config.message,
                 fields: [
                     [title: 'Job', value: env.JOB_NAME, short: true],
@@ -995,158 +905,94 @@ def sendSlackNotification(config) {
         } catch (Exception e) {
             logError("Failed to send Slack notification: ${e.message}")
         }
+    } else {
+        logWarning('Slack webhook not configured - skipping notification')
     }
 }
 
-/**
- * INFRASTRUCTURE MANAGEMENT FUNCTIONS
- * These are adapted from Jenkinsfile.airgap.rke2.improved
- */
+// ========================================
+// ERROR HANDLING FUNCTIONS
+// ========================================
 
-def validateRequiredVariables(requiredVars) {
-    logInfo('Validating required environment variables')
-
-    def missingVars = []
-    requiredVars.each { varName ->
-        def varValue = env."${varName}"
-        if (!varValue || varValue.trim().isEmpty()) {
-            missingVars.add(varName)
-        }
-    }
-
-    if (!missingVars.isEmpty()) {
-        def errorMsg = "Missing required environment variables: ${missingVars.join(', ')}"
-        logError(errorMsg)
-        error(errorMsg)
-    }
-
-    logInfo('All required variables validated successfully')
-}
-
-def validateInfrastructurePrerequisites() {
-    logInfo('Validating infrastructure prerequisites')
-
-    def prerequisiteScript = """
-#!/bin/bash
-set -e
-
-# Debug: Print environment variables
-echo "Debug: QA_INFRA_WORK_PATH=\${QA_INFRA_WORK_PATH}"
-echo "Debug: TERRAFORM_VARS_FILENAME=\${TERRAFORM_VARS_FILENAME}"
-
-# Source the external prerequisites validation script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_validate_prerequisites.sh
-  """
-
+def handleTimeoutFailure() {
+    logError("Infrastructure deployment timed out after ${env.TERRAFORM_TIMEOUT} minutes")
     try {
-        executeScriptInContainer(prerequisiteScript)
-        logInfo('All infrastructure prerequisites validated')
+        archiveInfrastructureFailureArtifacts()
+        if (env.DESTROY_ON_FAILURE.toBoolean()) {
+            logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for timeout')
+            def cleanupScript = """
+            # Source the external cleanup script
+            source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_timeout_cleanup.sh
+            """
+            executeScriptInContainer(cleanupScript)
+            logInfo('Infrastructure cleanup attempted for timeout')
+        } else {
+            logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for timeout')
+            logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
+        }
+        cleanupContainersAndVolumes()
+    } catch (cleanupException) {
+        logError("Cleanup during timeout handling failed: ${cleanupException.message}")
+    }
+    throw new FlowInterruptedException("Pipeline timed out")
+}
+
+def handleDeploymentFailure() {
+    logError("Infrastructure setup failed")
+    try {
+        archiveInfrastructureFailureArtifacts()
+        if (env.DESTROY_ON_FAILURE.toBoolean()) {
+            logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for deployment failure')
+            def cleanupScript = """
+            # Source the external cleanup script
+            source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_deployment_failure_cleanup.sh
+            """
+            executeScriptInContainer(cleanupScript)
+            logInfo('Infrastructure cleanup attempted for deployment failure')
+        } else {
+            logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for deployment failure')
+            logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
+        }
+        cleanupContainersAndVolumes()
+    } catch (cleanupException) {
+        logError("Cleanup during deployment failure handling failed: ${cleanupException.message}")
+    }
+    throw new Exception("Infrastructure deployment failed")
+}
+
+// ========================================
+// ARTIFACT MANAGEMENT FUNCTIONS
+// ========================================
+
+def archiveBuildArtifacts(artifacts) {
+    try {
+        archiveArtifacts artifacts: artifacts.join(','), allowEmptyArchive: true
+        logInfo("Artifacts archived: ${artifacts.join(', ')}")
     } catch (Exception e) {
-        def errorMsg = "Infrastructure prerequisites validation failed: ${e.message}"
-        logError(errorMsg)
-        error(errorMsg)
+        logError("Failed to archive artifacts: ${e.message}")
     }
 }
 
-def deployInfrastructure() {
-    logInfo('Starting infrastructure deployment process')
-
-    // Step 1: Generate Tofu config (must be first to create required files)
-    generateTofuConfiguration()
-
-    // Step 2: Validate infrastructure prerequisites (now files exist)
-    validateInfrastructurePrerequisites()
-
-    // Step 3: Initialize OpenTofu
-    initializeOpenTofu()
-
-    // Step 4: Manage workspace
-    manageWorkspace()
-
-    // Step 5: Plan infrastructure changes
-    planInfrastructure()
-
-    // Step 6: Apply infrastructure
-    applyInfrastructure()
-
-    logInfo('Infrastructure deployment completed successfully')
-}
-
-def validateInfrastructureState() {
-    logInfo('Validating infrastructure state after deployment')
-
-    def validationScript = """
-#!/bin/bash
-set -e
-
-# Source the external infrastructure validation script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_validate_infrastructure.sh
-      """
-
-    executeScriptInContainer(validationScript)
-    logInfo('Infrastructure state validated successfully')
-}
-
-def initializeOpenTofu() {
-    logInfo('Initializing OpenTofu with S3 backend')
-
-    def initScript = """
-#!/bin/bash
-set -e
-
-# Source the external OpenTofu initialization script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_initialize_tofu.sh
-      """
-
-    executeScriptInContainer(initScript, [:], true)
-}
-
-def manageWorkspace() {
-    logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
-
-    def workspaceScript = """
-#!/bin/bash
-set -e
-
-# Source the external workspace management script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_manage_workspace.sh
-      """
-
-    executeScriptInContainer(workspaceScript)
-}
-
-def planInfrastructure() {
-    logInfo('Planning infrastructure changes')
-
-    def planScript = """
-#!/bin/bash
-set -e
-
-# Source the external plan infrastructure script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_plan_infrastructure.sh
-      """
-
-    executeScriptInContainer(planScript)
-}
-
-def applyInfrastructure() {
-    logInfo('Applying infrastructure configuration')
-
-    def applyScript = """
-#!/bin/bash
-set -e
-
-# Source the external apply infrastructure script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_apply_infrastructure.sh
-      """
-
-    executeScriptInContainer(applyScript)
-
-    // Extract files to shared volume after successful apply (redundant but ensuring)
-    logInfo('Extracting files after apply for persistence')
+def extractStateFromVolume() {
+    logInfo('Extracting terraform state from shared volume')
     sh """
-    if [ -f qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ]; then
-        cp qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ./
+    if [ -f /root/terraform.tfstate ]; then
+        cp /root/terraform.tfstate ./terraform.tfstate || echo 'No state file in volume or copy failed'
+        echo 'State extraction from volume attempted'
+    else
+        echo 'No state file found in shared volume'
+    fi
+    """
+}
+
+def extractStateFromContainer() {
+    logInfo('Extracting terraform state from container backup')
+    sh """
+    if [ -f /root/terraform-state-primary.tfstate ]; then
+        cp /root/terraform-state-primary.tfstate ./terraform-state.tfstate || echo 'Fallback state copy failed'
+        echo 'Fallback state extraction from container attempted'
+    else
+        echo 'No fallback state found in container'
     fi
     """
 }
@@ -1163,12 +1009,9 @@ def backupTerraformStateImmediately() {
         def backupName = "terraform-state-build-${env.BUILD_NUMBER}-${timestamp}.tfstate"
 
         def backupScript = """
-#!/bin/bash
-set -e
-
-# Source the external backup script
-BACKUP_NAME="${backupName}"
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_backup_state.sh
+    # Source the external backup script
+    BACKUP_NAME="${backupName}"
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_backup_state.sh
         """.stripIndent()
 
         executeScriptInContainer(backupScript)
@@ -1181,7 +1024,6 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
     }
 }
 
-// Infrastructure state archival functions
 def archiveInfrastructureState() {
     logInfo('Archiving infrastructure state')
     try {
@@ -1243,4 +1085,170 @@ def finalStateArchival() {
     } catch (Exception e) {
         logError("Final archival failed: ${e.message}")
     }
+}
+
+// ========================================
+// INFRASTRUCTURE DEPLOYMENT FUNCTIONS
+// ========================================
+
+def deployInfrastructure() {
+    logInfo('Starting infrastructure deployment process')
+
+    // Step 1: Generate Tofu config (must be first to create required files)
+    generateTofuConfiguration()
+
+    // Step 2: Validate infrastructure prerequisites (now files exist)
+    validateInfrastructurePrerequisites()
+
+    // Step 3: Initialize OpenTofu
+    initializeOpenTofu()
+
+    // Step 4: Manage workspace
+    manageWorkspace()
+
+    // Step 5: Plan infrastructure changes
+    planInfrastructure()
+
+    // Step 6: Apply infrastructure
+    applyInfrastructure()
+
+    logInfo('Infrastructure deployment completed successfully')
+}
+
+def validateInfrastructurePrerequisites() {
+    logInfo('Validating infrastructure prerequisites')
+
+    def prerequisiteScript = """
+    # Source the external prerequisites validation script
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_validate_prerequisites.sh
+    """
+
+    try {
+        executeScriptInContainer(prerequisiteScript)
+        logInfo('All infrastructure prerequisites validated')
+    } catch (Exception e) {
+        def errorMsg = "Infrastructure prerequisites validation failed: ${e.message}"
+        logError(errorMsg)
+        error(errorMsg)
+    }
+}
+
+def validateInfrastructureState() {
+    logInfo('Validating infrastructure state after deployment')
+
+    def validationScript = """
+    # Source the external infrastructure validation script
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_validate_infrastructure.sh
+    """
+
+    executeScriptInContainer(validationScript)
+    logInfo('Infrastructure state validated successfully')
+}
+
+def generateTofuConfiguration() {
+    logInfo('Generating Terraform configuration')
+
+    if (!env.TERRAFORM_CONFIG) {
+        error('TERRAFORM_CONFIG environment variable is not set')
+    }
+
+    // Ensure S3 backend parameters are set
+    if (!env.S3_BUCKET_NAME) { error('S3_BUCKET_NAME environment variable is not set') }
+    if (!env.S3_REGION) { error('S3_REGION environment variable is not set') }
+    if (!env.S3_KEY_PREFIX) { error('S3_KEY_PREFIX environment variable is not set') }
+
+    sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
+
+    def terraformConfig = env.TERRAFORM_CONFIG
+
+    // Replace variables in config (similar to Jenkinsfile.recurring pattern)
+    terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_IAM_PROFILE}', env.AWS_IAM_PROFILE ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS ?: '')
+    terraformConfig = terraformConfig.replace('${HOSTNAME_PREFIX}', env.HOSTNAME_PREFIX ?: '')
+
+    // Write the configuration file
+    dir('./qa-infra-automation') {
+        dir('./tofu/aws/modules/airgap') {
+            writeFile file: env.TERRAFORM_VARS_FILENAME, text: terraformConfig
+            logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
+
+            // Remove any existing backend.tf file that might have empty placeholders
+            sh 'rm -f backend.tf'
+
+            // Generate backend.tfvars content from S3 parameters (no backend.tf needed)
+            def backendVars = """
+bucket = \"${env.S3_BUCKET_NAME}\"
+key    = \"${env.S3_KEY_PREFIX}\"
+region = \"${env.S3_REGION}\"
+"""
+            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
+            logInfo("S3 backend variables written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
+            logInfo("Removed any existing backend.tf file to prevent conflicts")
+        }
+    }
+}
+
+def initializeOpenTofu() {
+    logInfo('Initializing OpenTofu with S3 backend')
+
+    def initScript = """
+    # Source the external OpenTofu initialization script
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_initialize_tofu.sh
+    """
+
+    executeScriptInContainer(initScript, [:], true)
+}
+
+def manageWorkspace() {
+    logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
+
+    def workspaceScript = """
+#!/bin/bash
+set -e
+
+# Source the external workspace management script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_manage_workspace.sh
+      """
+
+    executeScriptInContainer(workspaceScript)
+}
+
+def planInfrastructure() {
+    logInfo('Planning infrastructure changes')
+
+    def planScript = """
+#!/bin/bash
+set -e
+
+# Source the external plan infrastructure script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_plan_infrastructure.sh
+      """
+
+    executeScriptInContainer(planScript)
+}
+
+def applyInfrastructure() {
+    logInfo('Applying infrastructure configuration')
+
+    def applyScript = """
+#!/bin/bash
+set -e
+
+# Source the external apply infrastructure script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_apply_infrastructure.sh
+      """
+
+    executeScriptInContainer(applyScript)
+
+    // Extract files to shared volume after successful apply (redundant but ensuring)
+    logInfo('Extracting files after apply for persistence')
+    sh """
+    if [ -f qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ]; then
+        cp qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ./
+    fi
+    """
 }
