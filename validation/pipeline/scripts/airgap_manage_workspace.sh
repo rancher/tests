@@ -9,7 +9,7 @@ echo 'Managing workspace state...'
 echo 'Current workspaces:'
 tofu -chdir=tofu/aws/modules/airgap workspace list
 
-echo 'Creating or selecting workspace: ${TF_WORKSPACE}'
+echo "Creating or selecting workspace: ${TF_WORKSPACE}"
 if ! tofu -chdir=tofu/aws/modules/airgap workspace select "${TF_WORKSPACE}" 2>/dev/null; then
     echo 'Workspace does not exist, creating new workspace...'
     tofu -chdir=tofu/aws/modules/airgap workspace new "${TF_WORKSPACE}"
