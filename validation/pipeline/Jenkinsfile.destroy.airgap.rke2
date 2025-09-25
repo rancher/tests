@@ -415,7 +415,7 @@ def buildDockerImage() {
     logInfo("Building Docker image: ${env.IMAGE_NAME}")
 
     dir('./') {
-        sh './tests/validation/configure.sh'
+        sh './tests/validation/configure.sh > /dev/null 2>&1'
         sh """
             docker build . \
                 -f ./tests/validation/Dockerfile.tofu.e2e \
