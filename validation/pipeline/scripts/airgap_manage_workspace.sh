@@ -10,37 +10,37 @@ echo 'Current workspaces:'
 tofu -chdir=tofu/aws/modules/airgap workspace list
 
 echo "Creating or selecting workspace: ${TF_WORKSPACE}"
-if ! tofu -chdir=tofu/aws/modules/airgap workspace select "${TF_WORKSPACE}" 2>/dev/null; then
+
+# Store the workspace name for operations
+WORKSPACE_NAME="${TF_WORKSPACE}"
+
+# Check if workspace exists and create if needed
+# When TF_WORKSPACE is set, we cannot manually select workspaces, so we only create if needed
+if ! tofu -chdir=tofu/aws/modules/airgap workspace list | grep -q "^[[:space:]]*${WORKSPACE_NAME}[[:space:]]*$"; then
     echo 'Workspace does not exist, creating new workspace...'
-    tofu -chdir=tofu/aws/modules/airgap workspace new "${TF_WORKSPACE}"
-
-    if ! tofu -chdir=tofu/aws/modules/airgap workspace select "${TF_WORKSPACE}"; then
-        echo 'ERROR: Failed to create and select workspace'
-        exit 1
-    fi
+    # Temporarily unset TF_WORKSPACE to allow workspace creation
+    unset TF_WORKSPACE
+    tofu -chdir=tofu/aws/modules/airgap workspace new "${WORKSPACE_NAME}"
+    echo "Workspace '${WORKSPACE_NAME}' created successfully"
+    # Re-export TF_WORKSPACE - this automatically activates the workspace for all subsequent operations
+    export TF_WORKSPACE="${WORKSPACE_NAME}"
+else
+    echo "Workspace '${WORKSPACE_NAME}' already exists and will be used automatically"
 fi
 
-# Verify workspace selection
-CURRENT_WORKSPACE=$(tofu -chdir=tofu/aws/modules/airgap workspace show)
-echo "Current workspace: $CURRENT_WORKSPACE"
-
-# Strip whitespace and handle empty responses
-CURRENT_WORKSPACE=$(echo "$CURRENT_WORKSPACE" | xargs)
-
-if [ "$CURRENT_WORKSPACE" = "" ]; then
-    echo 'ERROR: Workspace show command returned empty response'
-    tofu -chdir=tofu/aws/modules/airgap workspace list
-    exit 1
-fi
-
-if [ "$CURRENT_WORKSPACE" != "${TF_WORKSPACE}" ]; then
-    echo "ERROR: Expected workspace ${TF_WORKSPACE}, but got '$CURRENT_WORKSPACE'"
+# Final verification that workspace exists
+echo "Final workspace verification..."
+if tofu -chdir=tofu/aws/modules/airgap workspace list | grep -q "${WORKSPACE_NAME}"; then
+    echo "✓ Workspace '${WORKSPACE_NAME}' confirmed to exist"
+    echo "✓ TF_WORKSPACE environment variable: ${TF_WORKSPACE}"
+else
+    echo "ERROR: Workspace '${WORKSPACE_NAME}' not found"
     echo 'Available workspaces:'
     tofu -chdir=tofu/aws/modules/airgap workspace list
     exit 1
 fi
 
-export TF_WORKSPACE="${TF_WORKSPACE}"
-echo "Workspace management completed: $TF_WORKSPACE"
+echo "Workspace management completed successfully for: ${WORKSPACE_NAME}"
 
+# Re-initialize to ensure workspace is properly configured
 tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade
