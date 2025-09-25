@@ -20,9 +20,11 @@ Options:
   -h, --help                   Show this help message and exit
 
 Examples:
-  CLEANUP=true RANCHER_CLUSTER_MODULE_DIR=./modules/rancher/cluster \\
+  CLEANUP=true \\
+  RANCHER_CLUSTER_MODULE_DIR=./modules/rancher/cluster \\
   TERRAFORM_DIR=./infra TFVARS_FILE=vars.tfvars \\
-  DOWNSTREAM_TFVARS_FILE=downstream.tfvars GENERATED_TFVARS_FILE=generated.tfvars \\
+  DOWNSTREAM_TFVARS_FILE=downstream.tfvars \\
+  GENERATED_TFVARS_FILE=generated.tfvars \\
   CONFIG_FILE=config.yaml ./deploy-rancher.sh
 
 EOF
@@ -32,6 +34,30 @@ EOF
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     help
     exit 0
+fi
+
+
+
+: "${QAINFRA_SCRIPT_PATH:=/root/go/src/github.com/rancher/qa-infra-automation}"
+
+cd "$QAINFRA_SCRIPT_PATH"
+REPO_ROOT=$(pwd)
+
+: "${CLEANUP:=true}"
+: "${TERRAFORM_DIR:=tofu/aws/modules/cluster_nodes}"
+: "${CONFIG_FILE:=/root/go/src/github.com/rancher/tests/validation/config.yaml}"
+: "${KUBECONFIG_FILE:=$REPO_ROOT/ansible/rke2/default/kubeconfig.yaml}"
+: "${GENERATED_TFVARS_FILE:=$REPO_ROOT/ansible/rancher/default-ha/generated.tfvars}"
+: "${RANCHER_CLUSTER_MODULE_DIR:=tofu/rancher/cluster}"
+
+: "${TFVARS_FILE:=cluster.tfvars}"
+
+# If first argument is an env file, load it
+if [[ -n "${1:-}" && -f "$1" ]]; then
+    echo "Loading overrides from $1"
+    set -a 
+    source "$1"
+    set +a
 fi
 
 # Init the Rancher downstream cluster module
@@ -48,10 +74,10 @@ if [ $? -ne 0 ] && [[ $CLEANUP == "true" ]]; then
 fi
 
 # Apply the Rancher downstream cluster module
-tofu -chdir="$RANCHER_CLUSTER_MODULE_DIR" apply -auto-approve -var-file="$DOWNSTREAM_TFVARS_FILE" -var-file="$GENERATED_TFVARS_FILE"
+tofu -chdir="$RANCHER_CLUSTER_MODULE_DIR" apply -auto-approve -var-file="$TFVARS_FILE" -var-file="$GENERATED_TFVARS_FILE"
 if [ $? -ne 0 ] && [[ $CLEANUP == "true" ]]; then
     echo "Error: Terraform apply for rancher/cluster module failed. Destroying infrastructure..."
-    tofu -chdir="$RANCHER_CLUSTER_MODULE_DIR" destroy -auto-approve -var-file="$DOWNSTREAM_TFVARS_FILE" -var-file="$GENERATED_TFVARS_FILE"
+    tofu -chdir="$RANCHER_CLUSTER_MODULE_DIR" destroy -auto-approve -var-file="$TFVARS_FILE" -var-file="$GENERATED_TFVARS_FILE"
     if [ $? -ne 0 ]; then
         echo "Warning: Terraform destroy for rancher/cluster module failed. Continuing with main infrastructure cleanup."
     fi

@@ -38,18 +38,24 @@ Defaults:
   PRIVATE_KEY_FILE="/root/.ssh/jenkins-elliptic-validation.pem"
   TERRAFORM_NODE_SOURCE="tofu/aws/modules/cluster_nodes"
   CONFIG_FILE="/root/go/src/github.com/rancher/tests/validation/config.yaml"
+  DOWNSTREAM_CLUSTER_SCRIPT_PATH="/root/go/src/github.com/rancher/tests/validation/pipeline/scripts"
+  QAINFRA_SCRIPT_PATH="/root/go/src/github.com/rancher/qa-infra-automation"
 EOF
 }
 
 
-if command -v terraform >/dev/null 2>&1; then
-    echo "tofu not found, falling back to terraform"
+if command -v tofu >/dev/null 2>&1; then
+    echo "tofu found"
+    alias terraform="$(command -v tofu)"
+else
+    echo "Falling back to Terraform"
     alias tofu="$(command -v terraform)"
 fi
 
-cd  /root/go/src/github.com/rancher/qa-infra-automation
 
-# Set variables
+: "${QAINFRA_SCRIPT_PATH:=/root/go/src/github.com/rancher/qa-infra-automation}"
+
+cd "$QAINFRA_SCRIPT_PATH"
 REPO_ROOT=$(pwd)
 
 # If first argument is an env file, load it
@@ -74,9 +80,8 @@ fi
 : "${RANCHER_PLAYBOOK_PATH:=ansible/rancher/default-ha/rancher-playbook.yml}"
 
 : "${TFVARS_FILE:=cluster.tfvars}"
-: "${DOWNSTREAM_TFVARS_FILE:=downstream-cluster.tfvars}"
 
-: "${KUBECONFIG_FILE:=$REPO_ROOT/ansible/rke2/default/kubeconfig.yaml}"
+: "${KUBECONFIG_FILE:=$REPO_ROOT/ansible/rke2/kubeconfig.yaml}"
 : "${GENERATED_TFVARS_FILE:=$REPO_ROOT/ansible/rancher/default-ha/generated.tfvars}"
 : "${RANCHER_CLUSTER_MODULE_DIR:=tofu/rancher/cluster}"
 
@@ -86,6 +91,7 @@ fi
 : "${TERRAFORM_NODE_SOURCE:=tofu/aws/modules/cluster_nodes}"
 : "${CONFIG_FILE:=/root/go/src/github.com/rancher/tests/validation/config.yaml}"
 
+: "${DOWNSTREAM_CLUSTER_SCRIPT_PATH:=/root/go/src/github.com/rancher/tests/validation/pipeline/scripts}"
 # --- Terraform Steps ---
 tofu -chdir="$TERRAFORM_DIR" init -input=false
 
@@ -151,7 +157,7 @@ fi
 
 # Export KUBECONFIG
 export KUBECONFIG="$KUBECONFIG_FILE"
-echo $KUBECONFIG
+cat $KUBECONFIG
 
 # --- Rancher Playbook ---
 
@@ -184,7 +190,20 @@ fi
 
 # --- Rancher Cluster Module ---
 if [[ "$BUILD_DOWNSTREAM_CLUSTER" == "true" ]]; then
-    ./root/go/src/github.com/rancher/tests/validation/pipeline/scripts/build_downstream_cluster.sh
+    tofu -chdir="tofu/rancher/cluster" init
+    tofu -chdir="tofu/rancher/cluster" apply -auto-approve -var-file=$TFVARS_FILE -var-file=$GENERATED_TFVARS_FILE
+    DOWNSTREAM_CLUSTER_NAME=$(tofu -chdir="tofu/rancher/cluster" output -raw name)
+    if [ $? -ne 0 ] && [[ $CLEANUP == "true" ]]; then
+        echo "Error: Rancher playbook failed."
+        tofu -chdir="tofu/rancher/cluster" destroy -auto-approve -var-file="$TFVARS_FILE" -var-file=$GENERATED_TFVARS_FILE
+        if [ $? -ne 0 ]; then
+            echo "Error: Terraform destroy failed."
+            exit 1
+        fi
+        echo "Terraform infrastructure destroyed successfully!"
+        exit 1
+    fi
+    yq e ".rancher.clusterName = \"$DOWNSTREAM_CLUSTER_NAME\"" -i "$CONFIG_FILE"
 fi
 
 
