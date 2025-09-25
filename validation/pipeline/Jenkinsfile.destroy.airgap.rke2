@@ -254,30 +254,18 @@ pipeline {
         success {
             script {
                 logInfo('Destruction pipeline completed successfully')
-                sendSlackNotification([
-                    color: 'good',
-                    message: "✅ Infrastructure destruction succeeded for workspace: ${env.TARGET_WORKSPACE}"
-                ])
             }
         }
 
         failure {
             script {
                 logError('Destruction pipeline failed')
-                sendSlackNotification([
-                    color: 'danger',
-                    message: "❌ Infrastructure destruction failed for workspace: ${env.TARGET_WORKSPACE}"
-                ])
             }
         }
 
         aborted {
             script {
                 logWarning('Destruction pipeline was aborted')
-                sendSlackNotification([
-                    color: 'warning',
-                    message: "⚠️ Infrastructure destruction aborted for workspace: ${env.TARGET_WORKSPACE}"
-                ])
             }
         }
     }
