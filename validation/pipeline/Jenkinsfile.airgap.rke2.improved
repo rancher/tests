@@ -802,6 +802,24 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 
     def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE} -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}"
 
+    // Alternative Docker command without environment file mounting (fallback)
+    def fallbackDockerCmd = """
+        docker run --rm \\
+            -v ${env.VALIDATION_VOLUME}:/root \\
+            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+            --name ${containerName} \\
+            -t \\
+            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
+            ${envVars} \\
+            ${directEnvVars} \\
+            -e S3_BUCKET_NAME=${env.S3_BUCKET_NAME} \\
+            -e S3_REGION=${env.S3_REGION} \\
+            -e S3_KEY_PREFIX=${env.S3_KEY_PREFIX} \\
+            ${env.IMAGE_NAME} \\
+            sh -c 'echo "=== DEBUG: Container started (FALLBACK MODE) ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment variables passed directly"; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
+    """.stripIndent()
+
     // Debug: Check if environment file exists right before docker command
     def envFilePathBeforeDocker = "${pwd()}/${env.ENV_FILE}"
     logInfo("Environment file check before Docker command:")
@@ -852,21 +870,6 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
             ${directEnvVars} \\
             ${env.IMAGE_NAME} \\
             sh -c 'echo "=== DEBUG: Container started ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment file location: /tmp/.env"; echo "Checking if /tmp/.env exists:"; ls -la /tmp/.env || echo "FILE NOT FOUND"; echo "Directory contents of /tmp:"; ls -la /tmp/; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
-    """
-
-    // Alternative Docker command without environment file mounting (fallback)
-    def fallbackDockerCmd = """
-        docker run --rm \\
-            -v ${env.VALIDATION_VOLUME}:/root \\
-            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
-            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-            --name ${containerName} \\
-            -t \\
-            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
-            ${envVars} \\
-            ${directEnvVars} \\
-            ${env.IMAGE_NAME} \\
-            sh -c 'echo "=== DEBUG: Container started (FALLBACK MODE) ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment variables passed directly"; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
     """
 
     // Final verification: Ensure the environment file exists right before Docker execution
