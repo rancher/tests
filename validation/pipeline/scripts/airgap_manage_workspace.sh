@@ -2,6 +2,7 @@
 set -e
 
 cd ${QA_INFRA_WORK_PATH}
+export TF_WORKSPACE="${TF_WORKSPACE}"
 
 echo 'Managing workspace state...'
 
