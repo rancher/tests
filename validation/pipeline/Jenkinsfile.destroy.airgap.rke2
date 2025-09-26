@@ -567,16 +567,16 @@ def archiveDestructionResults() {
     logInfo('Archiving destruction results')
 
     try {
-        sh """
+        sh '''
             # Try to copy destruction results if container exists
-            CONTAINER_ID=$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}") 
+            CONTAINER_ID=$(docker ps -aqf "name=''' + env.BUILD_CONTAINER_NAME + '''") 
             if [ -n "$CONTAINER_ID" ]; then
-                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/destruction-summary.json ./ || echo "No destruction results to archive"
+                docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/destruction-summary.json ./ || echo "No destruction results to archive"
                 echo "Destruction results archived successfully"
             else
                 echo "No container found to archive results from"
             fi
-        """
+        '''
     } catch (Exception e) {
         logError("Failed to archive destruction results: ${e.message}")
     }
@@ -595,16 +595,16 @@ def archiveDestructionFailureArtifacts() {
 
         executeInContainer(debugCommands)
 
-        sh """
+        sh '''
             # Try to copy failure artifacts if container exists
-            CONTAINER_ID=$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}")
+            CONTAINER_ID=$(docker ps -aqf "name=''' + env.BUILD_CONTAINER_NAME + '''$")
             if [ -n "$CONTAINER_ID" ]; then
-                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./ || echo "No workspace list to archive"
-                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./ || echo "No remaining resources to archive"
+                docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/workspace-list.txt ./ || echo "No workspace list to archive"
+                docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/remaining-resources.txt ./ || echo "No remaining resources to archive"
             else
                 echo "No container found to archive failure artifacts from"
             fi
-        """
+        '''
 
         archiveArtifacts artifacts: 'workspace-list.txt,remaining-resources.txt', allowEmptyArchive: true
     } catch (Exception e) {
