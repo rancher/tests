@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+# Source environment file to load variables
+if [ -f /tmp/.env ]; then
+    echo "Sourcing environment file: /tmp/.env"
+    source /tmp/.env
+else
+    echo "WARNING: Environment file not found at /tmp/.env"
+fi
+
 # Export AWS credentials for OpenTofu
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
