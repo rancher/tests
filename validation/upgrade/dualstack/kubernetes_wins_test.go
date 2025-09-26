@@ -1,6 +1,6 @@
 //go:build validation || recurring
 
-package ipv6
+package dualstack
 
 import (
 	"os"
@@ -22,6 +22,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/upgradeinput"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/rancher/tests/validation/upgrade"
@@ -31,20 +32,23 @@ import (
 	upstream "go.qase.io/client"
 )
 
-type UpgradeIPv6KubernetesTestSuite struct {
+type UpgradeDualstackWindowsKubernetesTestSuite struct {
 	suite.Suite
-	session           *session.Session
-	client            *rancher.Client
-	cattleConfig      map[string]any
-	rke2ClusterConfig *clusters.ClusterConfig
-	rke2ClusterID     string
+	session                    *session.Session
+	client                     *rancher.Client
+	cattleConfig               map[string]any
+	rke2IPv4ClusterConfig      *clusters.ClusterConfig
+	rke2DualstackClusterConfig *clusters.ClusterConfig
+	rke2IPv4ClusterID          string
+	rke2DualstackClusterID     string
+	clusters                   []upgradeinput.Cluster
 }
 
-func (u *UpgradeIPv6KubernetesTestSuite) TearDownSuite() {
+func (u *UpgradeDualstackWindowsKubernetesTestSuite) TearDownSuite() {
 	u.session.Cleanup()
 }
 
-func (u *UpgradeIPv6KubernetesTestSuite) SetupSuite() {
+func (u *UpgradeDualstackWindowsKubernetesTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	u.session = testSession
 
@@ -64,12 +68,18 @@ func (u *UpgradeIPv6KubernetesTestSuite) SetupSuite() {
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(u.T(), err)
 
-	u.rke2ClusterConfig = new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.rke2ClusterConfig)
+	u.rke2IPv4ClusterConfig = new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.rke2IPv4ClusterConfig)
 
-	u.rke2ClusterConfig.IPv6Cluster = true
-	u.rke2ClusterConfig.Networking = &provisioninginput.Networking{
-		StackPreference: "ipv6",
+	u.rke2IPv4ClusterConfig.Networking = &provisioninginput.Networking{
+		StackPreference: "ipv4",
+	}
+
+	u.rke2DualstackClusterConfig = new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.rke2DualstackClusterConfig)
+
+	u.rke2DualstackClusterConfig.Networking = &provisioninginput.Networking{
+		StackPreference: "dual",
 	}
 
 	awsEC2Configs := new(ec2.AWSEC2Configs)
@@ -79,32 +89,40 @@ func (u *UpgradeIPv6KubernetesTestSuite) SetupSuite() {
 		provisioninginput.EtcdMachinePool,
 		provisioninginput.ControlPlaneMachinePool,
 		provisioninginput.WorkerMachinePool,
+		provisioninginput.WindowsMachinePool,
 	}
 
 	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
 	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
+	nodeRolesStandard[3].MachinePoolConfig.Quantity = 1
 
-	u.rke2ClusterConfig.MachinePools = nodeRolesStandard
+	u.rke2IPv4ClusterConfig.MachinePools = nodeRolesStandard
+	u.rke2DualstackClusterConfig.MachinePools = nodeRolesStandard
 
-	for i := range u.rke2ClusterConfig.MachinePools {
-		u.rke2ClusterConfig.MachinePools[i].SpecifyCustomPublicIP = true
-		u.rke2ClusterConfig.MachinePools[i].SpecifyCustomPrivateIP = true
-	}
-
-	logrus.Info("Provisioning RKE2 cluster")
-	u.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), u.rke2ClusterConfig, awsEC2Configs, false, true)
+	logrus.Info("Provisioning RKE2 Windows cluster w/ipv4 stack preference")
+	u.rke2IPv4ClusterID, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), u.rke2IPv4ClusterConfig, awsEC2Configs, false, true)
 	require.NoError(u.T(), err)
+
+	logrus.Info("Provisioning RKE2 Windows cluster w/dual stack preference")
+	u.rke2DualstackClusterID, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), u.rke2DualstackClusterConfig, awsEC2Configs, false, true)
+	require.NoError(u.T(), err)
+
+	clusters, err := upgradeinput.LoadUpgradeKubernetesConfig(u.client)
+	require.NoError(u.T(), err)
+
+	u.clusters = clusters
 }
 
-func (u *UpgradeIPv6KubernetesTestSuite) TestUpgradeIPv6Kubernetes() {
+func (u *UpgradeDualstackWindowsKubernetesTestSuite) TestUpgradeDualstackWindowsKubernetes() {
 	tests := []struct {
 		name          string
 		clusterID     string
 		clusterConfig *clusters.ClusterConfig
 		clusterType   string
 	}{
-		{"Upgrading_RKE2_IPv6_cluster", u.rke2ClusterID, u.rke2ClusterConfig, extClusters.RKE2ClusterType.String()},
+		{"Upgrading_RKE2_IPv4_Windows_cluster", u.rke2IPv4ClusterID, u.rke2IPv4ClusterConfig, extClusters.RKE2ClusterType.String()},
+		{"Upgrading_RKE2_Dualstack_Windows_cluster", u.rke2DualstackClusterID, u.rke2DualstackClusterConfig, extClusters.RKE2ClusterType.String()},
 	}
 
 	for _, tt := range tests {
@@ -135,6 +153,6 @@ func (u *UpgradeIPv6KubernetesTestSuite) TestUpgradeIPv6Kubernetes() {
 	}
 }
 
-func TestUpgradeIPv6KubernetesTestSuite(t *testing.T) {
-	suite.Run(t, new(UpgradeIPv6KubernetesTestSuite))
+func TestUpgradeDualstackWindowsKubernetesTestSuite(t *testing.T) {
+	suite.Run(t, new(UpgradeDualstackWindowsKubernetesTestSuite))
 }

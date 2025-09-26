@@ -1,3 +1,5 @@
+//go:build validation || recurring
+
 package ipv6
 
 import (
@@ -66,6 +68,9 @@ func (s *SnapshotIPv6RestoreTestSuite) SetupSuite() {
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, rke2ClusterConfig)
 
 	rke2ClusterConfig.IPv6Cluster = true
+	rke2ClusterConfig.Networking = &provisioninginput.Networking{
+		StackPreference: "ipv6",
+	}
 
 	awsEC2Configs := new(ec2.AWSEC2Configs)
 	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, s.cattleConfig, awsEC2Configs)

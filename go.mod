@@ -70,10 +70,10 @@ require (
 require (
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/rancher/rancher v0.0.0-20250806201723-9a7af3779b9d
-	github.com/rancher/shepherd v0.0.0-20250926172531-1009274fd982
+	github.com/rancher/shepherd v0.0.0-20250930150356-0687c0e2375d
 	github.com/rancher/tests/actions v0.0.0-20250912201502-f3fc74d763e3
 	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
-	github.com/rancher/tfp-automation v0.0.0-20250917221002-70a21b9b79f1
+	github.com/rancher/tfp-automation v0.0.0-20250926183218-1454b20eb26b
 )
 
 require (

@@ -302,7 +302,12 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 				command = fmt.Sprintf("%s %s", token.NodeCommand, poolRole)
 			}
 
-			command = createRegistrationCommand(command, node.PublicIPAddress, node.PrivateIPAddress, clustersConfig.MachinePools[poolIndex])
+			if clustersConfig.IPv6Cluster {
+				command = createRegistrationCommand(command, node.PublicIPv6Address, node.PrivateIPv6Address, clustersConfig.MachinePools[poolIndex])
+			} else {
+				command = createRegistrationCommand(command, node.PrivateIPAddress, node.PrivateIPAddress, clustersConfig.MachinePools[poolIndex])
+			}
+
 			logrus.Tracef("Command: %s", command)
 
 			output, err := node.ExecuteCommand(command)

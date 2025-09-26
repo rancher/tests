@@ -1,6 +1,6 @@
 //go:build validation || recurring
 
-package ipv6
+package dualstack
 
 import (
 	"os"
@@ -22,15 +22,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type customIPv6Test struct {
+type customRKE2DualstackTest struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
 }
 
-func customIPv6Setup(t *testing.T) customIPv6Test {
-	var r customIPv6Test
+func customRKE2DualstackSetup(t *testing.T) customRKE2DualstackTest {
+	var r customRKE2DualstackTest
 
 	testSession := session.NewSession()
 	r.session = testSession
@@ -60,9 +60,9 @@ func customIPv6Setup(t *testing.T) customIPv6Test {
 	return r
 }
 
-func TestCustomIPv6(t *testing.T) {
+func TestCustomRKE2Dualstack(t *testing.T) {
 	t.Parallel()
-	r := customIPv6Setup(t)
+	r := customRKE2DualstackSetup(t)
 
 	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
 	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
@@ -74,15 +74,24 @@ func TestCustomIPv6(t *testing.T) {
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	tests := []struct {
-		name         string
-		client       *rancher.Client
-		machinePools []provisioninginput.MachinePools
+		name            string
+		client          *rancher.Client
+		machinePools    []provisioninginput.MachinePools
+		isWindows       bool
+		stackPreference string
 	}{
-		{"RKE2_IPv6_Custom|etcd_cp_worker", r.standardUserClient, nodeRolesAll},
-		{"RKE2_IPv6_Custom|etcd_cp|worker", r.standardUserClient, nodeRolesShared},
-		{"RKE2_IPv6_Custom|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated},
-		{"RKE2_IPv6_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard},
+		{"RKE2_IPv4_Custom|etcd_cp_worker", r.standardUserClient, nodeRolesAll, false, "ipv4"},
+		{"RKE2_IPv4_Custom|etcd_cp|worker", r.standardUserClient, nodeRolesShared, false, "ipv4"},
+		{"RKE2_IPv4_Custom|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated, false, "ipv4"},
+		{"RKE2_IPv4_Custom|etcd|cp|worker|windows", r.standardUserClient, nodeRolesDedicated, true, "ipv4"},
+		{"RKE2_IPv4_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard, false, "ipv4"},
+		{"RKE2_Dualstack_Custom|etcd_cp_worker", r.standardUserClient, nodeRolesAll, false, "dual"},
+		{"RKE2_Dualstack_Custom|etcd_cp|worker", r.standardUserClient, nodeRolesShared, false, "dual"},
+		{"RKE2_Dualstack_Custom|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated, false, "dual"},
+		{"RKE2_Dualstack_Custom|etcd|cp|worker|windows", r.standardUserClient, nodeRolesDedicated, true, "dual"},
+		{"RKE2_Dualstack_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard, false, "dual"},
 	}
+
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
@@ -92,15 +101,9 @@ func TestCustomIPv6(t *testing.T) {
 		clusterConfig := new(clusters.ClusterConfig)
 		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
-		clusterConfig.IPv6Cluster = true
 		clusterConfig.MachinePools = tt.machinePools
 		clusterConfig.Networking = &provisioninginput.Networking{
-			StackPreference: "ipv6",
-		}
-
-		for i := range clusterConfig.MachinePools {
-			clusterConfig.MachinePools[i].SpecifyCustomPublicIP = true
-			clusterConfig.MachinePools[i].SpecifyCustomPrivateIP = true
+			StackPreference: tt.stackPreference,
 		}
 
 		t.Run(tt.name, func(t *testing.T) {

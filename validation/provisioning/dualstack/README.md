@@ -1,4 +1,4 @@
-# IPv6 Provisioning Configs
+# Dualstack Provisioning Configs
 
 ## Table of Contents
 1. [Prerequisites](../README.md)
@@ -23,14 +23,62 @@ Custom test verfies that various custom cluster configurations provision properl
 3. [Custom Cluster Config](#custom-cluster)
 
 #### Table Tests
-1. `RKE2_IPv6_Custom|etcd_cp_worker`
-2. `RKE2_IPv6_Custom|etcd_cp|worker`
-3. `RKE2_IPv6_Custom|etcd|cp|worker`
-4. `RKE2_IPv6_Custom|etcd|cp|worker|windows`
-5. `RKE2_IPv6_Custom|3_etcd|2_cp|3_worker`
+1. `RKE2_IPv4_Custom|etcd_cp_worker`
+2. `RKE2_IPv4_Custom|etcd_cp|worker`
+3. `RKE2_IPv4_Custom|etcd|cp|worker`
+4. `RKE2_IPv4_Custom|etcd|cp|worker|windows`
+5. `RKE2_IPv4_Custom|3_etcd|2_cp|3_worker`
+6. `RKE2_Dualstack_Custom|etcd_cp_worker`
+7. `RKE2_Dualstack_Custom|etcd_cp|worker`
+8. `RKE2_Dualstack_Custom|etcd|cp|worker`
+9. `RKE2_Dualstack_Custom|etcd|cp|worker|windows`
+10. `RKE2_Dualstack_Custom|3_etcd|2_cp|3_worker`
+11. `K3S_IPv4_Custom|etcd_cp_worker`
+12. `K3S_IPv4_Custom|etcd_cp|worker`
+13. `K3S_IPv4_Custom|etcd|cp|worker`
+14. `K3S_IPv4_Custom|3_etcd|2_cp|3_worker`
+15. `K3S_Dualstack_Custom|etcd_cp_worker`
+16. `K3S_Dualstack_Custom|etcd_cp|worker`
+17. `K3S_Dualstack_Custom|etcd|cp|worker`
+18. `K3S_Dualstack_Custom|3_etcd|2_cp|3_worker`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCustom -timeout=1h -v`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/dualstack --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCustomRKE2 -timeout=1h -v` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/dualstack --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCustomK3S -timeout=1h -v`
+
+### Node Driver Test
+
+#### Description: 
+Node driver test verfies that various node driver cluster configurations provision properly.
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Machine Config](#machine-config)
+
+#### Table Tests
+1. `RKE2_IPv4_Node_Driver|etcd_cp_worker`
+2. `RKE2_IPv4_Node_Driver|etcd_cp|worker`
+3. `RKE2_IPv4_Node_Driver|etcd|cp|worker`
+4. `RKE2_IPv4_Node_Driver|etcd|cp|worker|windows`
+5. `RKE2_IPv4_Node_Driver|3_etcd|2_cp|3_worker`
+6. `RKE2_Dualstack_Node_Driver|etcd_cp_worker`
+7. `RKE2_Dualstack_Node_Driver|etcd_cp|worker`
+8. `RKE2_Dualstack_Node_Driver|etcd|cp|worker`
+9. `RKE2_Dualstack_Node_Driver|etcd|cp|worker|windows`
+10. `RKE2_Dualstack_Node_Driver|3_etcd|2_cp|3_worker`
+11. `K3S_IPv4_Node_Driver|etcd_cp_worker`
+12. `K3S_IPv4_Node_Driver|etcd_cp|worker`
+13. `K3S_IPv4_Node_Driver|etcd|cp|worker`
+14. `K3S_IPv4_Node_Driver|3_etcd|2_cp|3_worker`
+15. `K3S_Dualstack_Node_Driver|etcd_cp_worker`
+16. `K3S_Dualstack_Node_Driver|etcd_cp|worker`
+17. `K3S_Dualstack_Node_Driver|etcd|cp|worker`
+18. `K3S_Dualstack_Node_Driver|3_etcd|2_cp|3_worker`
+
+#### Run Commands:
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/dualstack --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestNodeDriverRKE2 -timeout=1h -v` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/dualstack --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestNodeDriverK3S -timeout=1h -v`
 
 ## Configurations
 
@@ -154,7 +202,6 @@ doMachineConfigs:                              #required (all)
   - roles: ["etcd","controlplane","worker"]
     image: "ubuntu-20-04-x64"
     backups: false
-    ipv6: true
     monitoring: false
     privateNetworking: false
     size: "s-2vcpu-4gb"

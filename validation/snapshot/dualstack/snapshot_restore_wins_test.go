@@ -1,4 +1,6 @@
-package ipv6
+//go:build validation || recurring
+
+package dualstack
 
 import (
 	"os"
@@ -25,19 +27,20 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type SnapshotIPv6RecurringTestSuite struct {
+type SnapshotDualstackRestoreWindowsTestSuite struct {
 	suite.Suite
-	session       *session.Session
-	client        *rancher.Client
-	cattleConfig  map[string]any
-	rke2ClusterID string
+	session                *session.Session
+	client                 *rancher.Client
+	cattleConfig           map[string]any
+	rke2IPv4ClusterID      string
+	rke2DualstackClusterID string
 }
 
-func (s *SnapshotIPv6RecurringTestSuite) TearDownSuite() {
+func (s *SnapshotDualstackRestoreWindowsTestSuite) TearDownSuite() {
 	s.session.Cleanup()
 }
 
-func (s *SnapshotIPv6RecurringTestSuite) SetupSuite() {
+func (s *SnapshotDualstackRestoreWindowsTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	s.session = testSession
 
@@ -57,10 +60,20 @@ func (s *SnapshotIPv6RecurringTestSuite) SetupSuite() {
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(s.T(), err)
 
-	rke2ClusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, rke2ClusterConfig)
+	rke2IPv4ClusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, rke2IPv4ClusterConfig)
 
-	rke2ClusterConfig.IPv6Cluster = true
+	rke2IPv4ClusterConfig.Networking = &provisioninginput.Networking{
+		StackPreference: "ipv4",
+	}
+
+	rke2DualstackClusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, rke2DualstackClusterConfig)
+
+	rke2DualstackClusterConfig.IPv6Cluster = true
+	rke2DualstackClusterConfig.Networking = &provisioninginput.Networking{
+		StackPreference: "dual",
+	}
 
 	awsEC2Configs := new(ec2.AWSEC2Configs)
 	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, s.cattleConfig, awsEC2Configs)
@@ -69,29 +82,31 @@ func (s *SnapshotIPv6RecurringTestSuite) SetupSuite() {
 		provisioninginput.EtcdMachinePool,
 		provisioninginput.ControlPlaneMachinePool,
 		provisioninginput.WorkerMachinePool,
+		provisioninginput.WindowsMachinePool,
 	}
 
 	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
 	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
+	nodeRolesStandard[3].MachinePoolConfig.Quantity = 1
 
-	rke2ClusterConfig.MachinePools = nodeRolesStandard
+	rke2IPv4ClusterConfig.MachinePools = nodeRolesStandard
+	rke2DualstackClusterConfig.MachinePools = nodeRolesStandard
 
-	for i := range rke2ClusterConfig.MachinePools {
-		rke2ClusterConfig.MachinePools[i].SpecifyCustomPublicIP = true
-		rke2ClusterConfig.MachinePools[i].SpecifyCustomPrivateIP = true
-	}
+	logrus.Info("Provisioning RKE2 Windows cluster w/ipv4 stack preference")
+	s.rke2IPv4ClusterID, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2IPv4ClusterConfig, awsEC2Configs, true, true)
+	require.NoError(s.T(), err)
 
-	logrus.Info("Provisioning RKE2 cluster")
-	s.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2ClusterConfig, awsEC2Configs, true, true)
+	logrus.Info("Provisioning RKE2 Windows cluster w/dual stack preference")
+	s.rke2DualstackClusterID, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2DualstackClusterConfig, awsEC2Configs, true, true)
 	require.NoError(s.T(), err)
 }
 
-func (s *SnapshotIPv6RecurringTestSuite) TestSnapshotIPv6RecurringRestores() {
-	snapshotRestoreFiveTimes := &etcdsnapshot.Config{
+func (s *SnapshotDualstackRestoreWindowsTestSuite) TestSnapshotDualstackRestoreWindows() {
+	snapshotRestoreNone := &etcdsnapshot.Config{
 		UpgradeKubernetesVersion: "",
 		SnapshotRestore:          "none",
-		RecurringRestores:        5,
+		RecurringRestores:        1,
 	}
 
 	tests := []struct {
@@ -99,7 +114,8 @@ func (s *SnapshotIPv6RecurringTestSuite) TestSnapshotIPv6RecurringRestores() {
 		etcdSnapshot *etcdsnapshot.Config
 		clusterID    string
 	}{
-		{"RKE2_IPv6_Recurring_Restores", snapshotRestoreFiveTimes, s.rke2ClusterID},
+		{"RKE2_IPv4_Windows_Restore", snapshotRestoreNone, s.rke2IPv4ClusterID},
+		{"RKE2_Dualstack_Windows_Restore", snapshotRestoreNone, s.rke2DualstackClusterID},
 	}
 
 	for _, tt := range tests {
@@ -107,7 +123,7 @@ func (s *SnapshotIPv6RecurringTestSuite) TestSnapshotIPv6RecurringRestores() {
 		require.NoError(s.T(), err)
 
 		s.Run(tt.name, func() {
-			err := etcdsnapshot.CreateAndValidateSnapshotRestore(s.client, cluster.Name, tt.etcdSnapshot, containerImage)
+			err := etcdsnapshot.CreateAndValidateSnapshotRestore(s.client, cluster.Name, tt.etcdSnapshot, windowsContainerImage)
 			require.NoError(s.T(), err)
 		})
 
@@ -119,6 +135,6 @@ func (s *SnapshotIPv6RecurringTestSuite) TestSnapshotIPv6RecurringRestores() {
 	}
 }
 
-func TestSnapshotIPv6RecurringTestSuite(t *testing.T) {
-	suite.Run(t, new(SnapshotIPv6RecurringTestSuite))
+func TestSnapshotDualstackRestoreWindowsTestSuite(t *testing.T) {
+	suite.Run(t, new(SnapshotDualstackRestoreWindowsTestSuite))
 }

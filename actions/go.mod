@@ -60,7 +60,7 @@ replace (
 
 require (
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20250926172531-1009274fd982
+	github.com/rancher/shepherd v0.0.0-20250930150356-0687c0e2375d
 )
 
 require (

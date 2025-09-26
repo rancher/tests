@@ -1,0 +1,77 @@
+---
+ name: Run IPv6 Test Suite
+ description: "Runs a specific test suite based on input"
+ inputs:
+   suite:
+     description: "The test suite to run"
+     required: true
+ runs:
+   using: composite
+   steps:
+     - name: Run Selected Test Suite
+       id: run-tests
+       run: |
+         set +e
+         case "${{ inputs.suite }}" in
+           rancher-server-one)
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/ipv6 \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteIPv6ClusterTestSuite/TestDeletingIPv6Cluster";
+             delete_exit=$?;
+             echo "delete_exit=$delete_exit" >> $GITHUB_ENV;
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/ipv6 \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCustomIPv6ClusterNodeScalingTestSuite/TestScalingCustomIPv6ClusterNodes";
+             custom_scale_exit=$?;
+             echo "custom_scale_exit=$custom_scale_exit" >> $GITHUB_ENV;
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+             ;;
+           rancher-server-two)
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
+             rke2_exit=$?;
+             echo "rke2_exit=$rke2_exit" >> $GITHUB_ENV;
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/ipv6 \
+               --junitfile resultst.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotIPv6RestoreTestSuite/TestSnapshotIPv6Restore";
+             snap_restore_exit=$?;
+             echo "snap_restore_exit=$snap_restore_exit" >> $GITHUB_ENV;
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/ipv6 \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestUpgradeIPv6KubernetesTestSuite/TestUpgradeIPv6Kubernetes";
+             upgrade_exit=$?;
+             echo "upgrade_exit=$upgrade_exit" >> $GITHUB_ENV;
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+             ;;
+         esac
+       shell: bash
+       continue-on-error: true
+
+     - name: Show failed tests
+       run: |
+         declare -A suites=(
+           [delete_exit]="Delete Cluster"
+           [custom_scale_exit]="Custom Cluster Node Scaling"
+           [rke2_exit]="RKE2"
+           [snap_restore_exit]="Snapshot Restore"
+           [upgrade_exit]="Kubernetes Upgrade"
+         )
+
+         for exit_code in "${!suites[@]}"; do
+           exit_val="${!exit_code}"
+
+           if [ "$exit_val" != "" ] && [ "$exit_val" -ne 0 ]; then
+             echo "Failed ${suites[$exit_code]} tests:"
+             jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
+             echo ""
+             exit 1
+           fi
+         done
+       shell: bash

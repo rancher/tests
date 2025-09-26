@@ -136,5 +136,8 @@ These tests utilize Go build tags. Due to this, see the below examples on how to
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRecurringTestSuite/TestSnapshotRecurringRestores"`
 
 ### IPv6
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/ipv6 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotIPv6RestoreTestSuite/TestSnapshotIPv6Restore"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/ipv6 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotIPv6RecurringTestSuite/TestSnapshotIPv6RecurringRestores"`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/ipv6 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotIPv6RestoreTestSuite/TestSnapshotIPv6Restore"`
+
+### Dualstack
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/dualstack --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotDualstackRestoreTestSuite/TestSnapshotDualstackRestore"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/dualstack --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotDualstackRestoreWindowsTestSuite/TestSnapshotDualstackRestoreWindows"`

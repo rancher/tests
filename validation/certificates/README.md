@@ -212,4 +212,7 @@ gotestsum --format standard-verbose --packages=github.com/rancher/tests/validati
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationTestSuite/TestCertRotation"` \
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationWindowsTestSuite/TestCertRotationWindows"`
 
+### Dualstack
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationDualstackTestSuite/TestCertRotationDualstack"`
+
 If the specified test passes immediately without warning, try adding the `-count=1` flag to get around this issue. This will avoid previous results from interfering with the new test run.
