@@ -15,13 +15,31 @@ mkdir -p tofu/aws/modules/airgap
 echo 'Downloading cluster.tfvars from S3...'
 
 # Validate S3 parameters
-if [ -z "${S3_BUCKET_NAME}" ] || [ -z "${S3_KEY_PREFIX}" ]; then
-    echo 'ERROR: S3_BUCKET_NAME and S3_KEY_PREFIX must be set'
-    echo "Current values:"
-    echo "S3_BUCKET_NAME=${S3_BUCKET_NAME}"
-    echo "S3_KEY_PREFIX=${S3_KEY_PREFIX}"
+if [ -z "${S3_BUCKET_NAME}" ]; then
+    echo 'ERROR: S3_BUCKET_NAME must be set'
+    echo 'This parameter should be provided in the Jenkins job configuration'
+    echo 'Default value: jenkins-terraform-state-storage'
     exit 1
 fi
+
+if [ -z "${S3_KEY_PREFIX}" ]; then
+    echo 'ERROR: S3_KEY_PREFIX must be set'
+    echo 'This parameter should be provided in the Jenkins job configuration'
+    echo 'Default value: jenkins-airgap-rke2/terraform.tfstate'
+    exit 1
+fi
+
+if [ -z "${AWS_REGION}" ]; then
+    echo 'ERROR: AWS_REGION must be set'
+    echo 'This parameter should be provided in the Jenkins job configuration'
+    echo 'Default value: us-east-2'
+    exit 1
+fi
+
+echo "Using S3 configuration:"
+echo "  Bucket: ${S3_BUCKET_NAME}"
+echo "  Key Prefix: ${S3_KEY_PREFIX}"
+echo "  Region: ${AWS_REGION}"
 
 # Extract S3 directory path and filename from KEY_PREFIX
 S3_DIR="${S3_KEY_PREFIX%/*}"
@@ -31,10 +49,16 @@ S3_FILE="${S3_KEY_PREFIX##*/}"
 if [ -z "${S3_DIR}" ] || [ -z "${S3_FILE}" ]; then
     echo "ERROR: Invalid S3_KEY_PREFIX format: ${S3_KEY_PREFIX}"
     echo "Expected format: path/to/file.tfvars"
+    echo "Example: jenkins-airgap-rke2/terraform.tfstate"
     exit 1
 fi
 
+echo "Parsed S3 path:"
+echo "  Directory: ${S3_DIR}"
+echo "  File: ${S3_FILE}"
+
 # Download from S3 with explicit path
+echo "Downloading s3://${S3_BUCKET_NAME}/${S3_DIR}/${S3_FILE}..."
 aws s3 cp \
     "s3://${S3_BUCKET_NAME}/${S3_DIR}" \
     --region "${AWS_REGION}" \
