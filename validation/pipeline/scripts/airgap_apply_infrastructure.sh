@@ -133,20 +133,10 @@ fi
 echo 'Backing up terraform variables file for archival...'
 cp /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"${TERRAFORM_VARS_FILENAME}" /root/"${TERRAFORM_VARS_FILENAME}"
 
-# Upload cluster.tfvars to S3
-if [ -z "${S3_BUCKET_NAME}" ]; then
-    echo 'WARNING: S3_BUCKET_NAME is not set, skipping S3 uploads'
-else
-    echo 'Uploading cluster.tfvars to S3...'
-    S3_TARGET="s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/config/${TERRAFORM_VARS_FILENAME}"
-    if aws s3 cp /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"${TERRAFORM_VARS_FILENAME}" "$S3_TARGET" --region "$S3_REGION"; then
-        echo 'SUCCESS: cluster.tfvars uploaded to S3'
-    else
-        echo 'WARNING: Failed to upload cluster.tfvars to S3'
-    fi
-fi
+# Note: cluster.tfvars S3 upload is now handled in the Jenkinsfile
+# This was moved from the bash script to provide better error handling and logging
 
-echo 'Configuration files upload completed'
+echo 'Configuration files backup completed'
 
 echo 'Generating outputs for downstream stages...'
 tofu -chdir=/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap output -json > /root/infrastructure-outputs.json
