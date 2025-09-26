@@ -140,11 +140,13 @@ func CreateNodes(client *rancher.Client, rolesPerPool []string, quantityPerPool 
 		if ipv6Cluster {
 			for _, readyInstance := range readyInstances {
 				ec2Node := &nodes.Node{
-					NodeID:           *readyInstance.InstanceId,
-					PublicIPAddress:  *readyInstance.Ipv6Address,
-					PrivateIPAddress: *readyInstance.Ipv6Address,
-					SSHUser:          reservationConfigs[i].AWSUser,
-					SSHKey:           sshKey,
+					NodeID:             *readyInstance.InstanceId,
+					PublicIPAddress:    *readyInstance.PublicIpAddress,
+					PrivateIPAddress:   *readyInstance.PrivateIpAddress,
+					PublicIPv6Address:  *readyInstance.Ipv6Address,
+					PrivateIPv6Address: *readyInstance.Ipv6Address,
+					SSHUser:            reservationConfigs[i].AWSUser,
+					SSHKey:             sshKey,
 				}
 				// re-reverse the list so that the order is corrected
 				ec2Nodes = append([]*nodes.Node{ec2Node}, ec2Nodes...)
