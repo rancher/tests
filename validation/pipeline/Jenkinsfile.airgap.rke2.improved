@@ -1338,34 +1338,57 @@ def uploadClusterTfvarsToS3() {
     def requiredS3Vars = ['S3_BUCKET_NAME', 'S3_REGION', 'TF_WORKSPACE', 'TERRAFORM_VARS_FILENAME']
     validateRequiredVariables(requiredS3Vars)
     
-    // Construct S3 target path
-    def s3Target = "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/config/${env.TERRAFORM_VARS_FILENAME}"
-    def localFilePath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+    def uploadScript = """
+#!/bin/bash
+set -e
+
+# Source environment file to load variables (if available)
+if [ -f /tmp/.env ]; then
+    echo "Sourcing environment file for S3 upload: /tmp/.env"
+    source /tmp/.env
+fi
+
+# Export AWS credentials for AWS CLI
+export AWS_ACCESS_KEY_ID="\${AWS_ACCESS_KEY_ID}"
+export AWS_SECRET_ACCESS_KEY="\${AWS_SECRET_ACCESS_KEY}"
+export AWS_REGION="\${AWS_REGION:-\${S3_REGION}}"
+export AWS_DEFAULT_REGION="\${AWS_REGION:-\${S3_REGION}}"
+
+# Navigate to the qa-infra-automation working directory
+cd \${QA_INFRA_WORK_PATH}
+
+# Construct S3 target path
+S3_TARGET="s3://\${S3_BUCKET_NAME}/env:/\${TF_WORKSPACE}/config/\${TERRAFORM_VARS_FILENAME}"
+LOCAL_FILE_PATH="tofu/aws/modules/airgap/\${TERRAFORM_VARS_FILENAME}"
+
+echo "Uploading cluster.tfvars to S3..."
+echo "Local file: \${LOCAL_FILE_PATH}"
+echo "S3 target: \${S3_TARGET}"
+echo "S3 region: \${S3_REGION}"
+
+# Check if local file exists
+if [ ! -f "\${LOCAL_FILE_PATH}" ]; then
+    echo "ERROR: Local cluster.tfvars file not found at: \${LOCAL_FILE_PATH}"
+    echo "Contents of tofu/aws/modules/airgap/:"
+    ls -la "tofu/aws/modules/airgap/" || echo "Directory not found"
+    exit 1
+fi
+
+# Upload to S3 using AWS CLI
+if aws s3 cp "\${LOCAL_FILE_PATH}" "\${S3_TARGET}" --region "\${S3_REGION}" --no-cli-pager; then
+    echo "✅ SUCCESS: cluster.tfvars uploaded to S3: \${S3_TARGET}"
+else
+    echo "⚠️ WARNING: Failed to upload cluster.tfvars to S3: \${S3_TARGET}"
+    echo "S3 upload failed, but continuing with deployment..."
+    # Don't exit with error to avoid failing the entire deployment
+fi
+
+echo "S3 upload operation completed"
+    """.stripIndent()
     
     try {
-        // Check if the local file exists
-        if (!fileExists(localFilePath)) {
-            logError("Local cluster.tfvars file not found at: ${localFilePath}")
-            error("Cannot upload cluster.tfvars to S3 - file does not exist")
-        }
-        
-        // Upload using AWS CLI via Jenkins sh step
-        def uploadResult = sh(
-            script: """
-                aws s3 cp "${localFilePath}" "${s3Target}" \
-                    --region "${env.S3_REGION}" \
-                    --no-cli-pager
-            """,
-            returnStatus: true
-        )
-        
-        if (uploadResult == 0) {
-            logInfo("✅ Successfully uploaded cluster.tfvars to S3: ${s3Target}")
-        } else {
-            logWarning("⚠️ Failed to upload cluster.tfvars to S3: ${s3Target}")
-            // Don't fail the build, just log the warning
-        }
-        
+        executeScriptInContainer(uploadScript)
+        logInfo('S3 upload script executed successfully')
     } catch (Exception e) {
         logError("S3 upload failed with exception: ${e.message}")
         logWarning("Continuing build despite S3 upload failure")
