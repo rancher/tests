@@ -316,7 +316,7 @@ def validateInfrastructurePrerequisites() {
     logInfo('Validating infrastructure prerequisites')
 
     try {
-        def scriptPath = "validation/pipeline/scripts/destroy_validate_prerequisites.sh"
+        def scriptPath = "tests/validation/pipeline/scripts/destroy_validate_prerequisites.sh"
         def scriptContent = readFile(file: scriptPath)
         executeScriptInContainer(scriptContent)
         logInfo('All infrastructure prerequisites validated')
@@ -330,7 +330,7 @@ def validateInfrastructurePrerequisites() {
 def validateInfrastructureState() {
     logInfo('Validating infrastructure state after deployment')
 
-    def scriptPath = "validation/pipeline/scripts/destroy_validate_state.sh"
+    def scriptPath = "tests/validation/pipeline/scripts/destroy_validate_state.sh"
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent)
     logInfo('Infrastructure state validated successfully')
@@ -478,7 +478,7 @@ def performInfrastructureDestruction() {
 def downloadConfigurationFromS3() {
     logInfo('Downloading configuration files from S3')
 
-    def scriptPath = "validation/pipeline/scripts/destroy_download_config.sh"
+    def scriptPath = "tests/validation/pipeline/scripts/destroy_download_config.sh"
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent)
     logInfo('Configuration files downloaded from S3 successfully')
@@ -539,7 +539,7 @@ region = "${env.S3_REGION}"
 def initializeOpenTofu() {
     logInfo('Initializing OpenTofu with S3 backend')
 
-    def scriptPath = "validation/pipeline/scripts/destroy_initialize_tofu.sh"
+    def scriptPath = "tests/validation/pipeline/scripts/destroy_initialize_tofu.sh"
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent, [:], true)
 }
@@ -547,7 +547,7 @@ def initializeOpenTofu() {
 def manageWorkspace() {
     logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
 
-    def scriptPath = "validation/pipeline/scripts/destroy_manage_workspace.sh"
+    def scriptPath = "tests/validation/pipeline/scripts/destroy_manage_workspace.sh"
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent)
 }
@@ -555,7 +555,7 @@ def manageWorkspace() {
 def executeDestruction() {
     logInfo('Executing direct infrastructure destruction')
 
-    def scriptPath = "validation/pipeline/scripts/destroy_execute.sh"
+    def scriptPath = "tests/validation/pipeline/scripts/destroy_execute.sh"
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent)
 }
