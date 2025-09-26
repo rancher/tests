@@ -419,8 +419,7 @@ def buildDockerImage() {
                 --build-arg VCS_REF=\$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') \\
                 --label "pipeline.build.number=${env.BUILD_NUMBER}" \\
                 --label "pipeline.job.name=${env.JOB_NAME}" \\
-                --quiet \\
-                --progress=plain
+                --quiet
         """
     }
 
