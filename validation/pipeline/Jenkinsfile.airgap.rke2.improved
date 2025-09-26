@@ -133,7 +133,7 @@ pipeline {
         )
         string(
             name: 'S3_KEY_PREFIX',
-            defaultValue: 'jenkins-airgap-rke2/terraform.tfstate',
+            defaultValue: 'jenkins-airgap-rke2/',
             description: 'S3 key prefix for the Terraform state files'
         )
         string(
@@ -1170,7 +1170,7 @@ def generateTofuConfiguration() {
 terraform {
   backend "s3" {
     bucket = "${env.S3_BUCKET_NAME}"
-    key    = "${env.S3_KEY_PREFIX}/terraform.tfstate"
+    key    = "${env.S3_KEY_PREFIX}"
     region = "${env.S3_REGION}"
   }
 }
@@ -1181,7 +1181,7 @@ terraform {
             // Generate backend.tfvars content from S3 parameters for compatibility
             def backendVars = """
 bucket = "${env.S3_BUCKET_NAME}"
-key    = "${env.S3_KEY_PREFIX}/terraform.tfstate"
+key    = "${env.S3_KEY_PREFIX}"
 region = "${env.S3_REGION}"
 """
             writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
