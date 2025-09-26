@@ -1342,12 +1342,35 @@ def uploadClusterTfvarsToS3() {
 #!/bin/bash
 set -e
 
+# Debug: Show environment variables passed to container
+echo "=== DEBUG: S3 Environment Variables in Container ==="
+echo "S3_BUCKET_NAME=\${S3_BUCKET_NAME}"
+echo "S3_REGION=\${S3_REGION}"
+echo "S3_KEY_PREFIX=\${S3_KEY_PREFIX}"
+echo "TF_WORKSPACE=\${TF_WORKSPACE}"
+echo "TERRAFORM_VARS_FILENAME=\${TERRAFORM_VARS_FILENAME}"
+echo "AWS_REGION=\${AWS_REGION}"
+echo "=== END DEBUG ==="
+
 # Source the external S3 upload script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_upload_tfvars_to_s3.sh
     """.stripIndent()
     
+    // Explicitly pass S3 variables as environment variables to the container
+    def s3EnvVars = [
+        'S3_BUCKET_NAME': env.S3_BUCKET_NAME,
+        'S3_REGION': env.S3_REGION,
+        'S3_KEY_PREFIX': env.S3_KEY_PREFIX,
+        'AWS_REGION': env.AWS_REGION
+    ]
+    
+    logInfo("Passing S3 environment variables to container:")
+    s3EnvVars.each { key, value ->
+        logInfo("  ${key}=${value}")
+    }
+    
     try {
-        executeScriptInContainer(uploadScript)
+        executeScriptInContainer(uploadScript, s3EnvVars)
         logInfo('S3 upload script executed successfully')
     } catch (Exception e) {
         logError("S3 upload failed with exception: ${e.message}")
