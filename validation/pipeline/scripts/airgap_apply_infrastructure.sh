@@ -146,19 +146,6 @@ else
     fi
 fi
 
-# Upload backend.tfvars to S3
-if [ -z "${S3_BUCKET_NAME}" ]; then
-    echo 'WARNING: S3_BUCKET_NAME is not set, skipping S3 uploads'
-else
-    echo 'Uploading backend.tfvars to S3...'
-    S3_TARGET="s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/config/${TERRAFORM_BACKEND_VARS_FILENAME}"
-    if aws s3 cp /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"${TERRAFORM_BACKEND_VARS_FILENAME}" "$S3_TARGET" --region "$S3_REGION"; then
-        echo 'SUCCESS: backend.tfvars uploaded to S3'
-    else
-        echo 'WARNING: Failed to upload backend.tfvars to S3'
-    fi
-fi
-
 echo 'Configuration files upload completed'
 
 echo 'Generating outputs for downstream stages...'
