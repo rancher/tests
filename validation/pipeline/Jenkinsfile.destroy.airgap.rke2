@@ -411,8 +411,9 @@ def buildDockerImage() {
                 --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
                 --build-arg VCS_REF=\$(git rev-parse --short HEAD) \
                 --label "pipeline.build.number=${env.BUILD_NUMBER}" \
-                --label "pipeline.job.name=${env.JOB_NAME}"
-                --quiet
+                --label "pipeline.job.name=${env.JOB_NAME}" \
+                --quiet \
+                > /dev/null 2>&1
         """
     }
 
@@ -498,7 +499,7 @@ def generateTofuBackendConfiguration() {
             // Generate backend.tfvars content from S3 parameters
             def backendVars = """
 bucket = \"${env.S3_BUCKET_NAME}\"
-key    = \"${env.S3_KEY_PREFIX}"
+key    = \"${env.S3_KEY_PREFIX}\"
 region = \"${env.S3_REGION}\"
 """
             writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
@@ -548,7 +549,7 @@ def archiveDestructionResults() {
 
     try {
         sh """
-            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/destruction-summary.json ./ || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/destruction-summary.json ./
         """
 
         logInfo('Destruction results archived')
@@ -571,8 +572,8 @@ def archiveDestructionFailureArtifacts() {
         executeInContainer(debugCommands)
 
         sh """
-            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./ || true
-            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./ || true
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./
+            docker cp \$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./
         """
 
         archiveArtifacts artifacts: 'workspace-list.txt,remaining-resources.txt', allowEmptyArchive: true
