@@ -412,16 +412,17 @@ def buildDockerImage() {
 
     dir('./') {
         sh './tests/validation/configure.sh > /dev/null 2>&1'
-        sh """
-            docker build . \\
-                -f ./tests/validation/Dockerfile.tofu.e2e \\
-                -t """ + env.IMAGE_NAME + """ \\
-                --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \\
-                --build-arg VCS_REF=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') \\
-                --label "pipeline.build.number='""" + env.BUILD_NUMBER + """'" \\
-                --label "pipeline.job.name='""" + env.JOB_NAME + """'" \\
-                --quiet
-        """
+        
+        def dockerCmd = """docker build . \\
+            -f ./tests/validation/Dockerfile.tofu.e2e \\
+            -t ${env.IMAGE_NAME} \\
+            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \\
+            --build-arg VCS_REF=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') \\
+            --label "pipeline.build.number=${env.BUILD_NUMBER}" \\
+            --label "pipeline.job.name=${env.JOB_NAME}" \\
+            --quiet"""
+        
+        sh dockerCmd
     }
 
     logInfo('Docker image built successfully')
