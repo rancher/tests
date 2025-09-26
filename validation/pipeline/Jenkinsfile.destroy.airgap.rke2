@@ -68,7 +68,7 @@ pipeline {
         S3_BUCKET_NAME = "${getS3BucketName()}"
         S3_KEY_PREFIX = "${getS3KeyPrefix()}"
         S3_REGION = "${getS3Region()}"
-        AWS_REGION = "${getAwsRegion()"
+        AWS_REGION = "${getAwsRegion()}"
 
         // Repository configurations
         RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
