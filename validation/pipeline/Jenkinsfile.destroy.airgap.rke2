@@ -200,6 +200,11 @@ pipeline {
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
+                            // Download configuration files first
+                            downloadConfigurationFromS3()
+                            generateTofuConfiguration()
+                            generateTofuBackendConfiguration()
+                            
                             // Pre-flight checks after configuration is ready
                             validateInfrastructurePrerequisites()
 
@@ -456,9 +461,9 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
             -v ${env.VALIDATION_VOLUME}:/root \\
             -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
             -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-            --name ${containerName} \\
-            -t --env-file ${env.ENV_FILE} \\
-            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}${workspaceEnv} \\
+            --name ${containerName} \\  
+            -t --env-file ${env.ENV_FILE} \\ 
+            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}${workspaceEnv} \\ 
             ${envVars} \\
             ${env.IMAGE_NAME} \\
             sh /tmp/script.sh
