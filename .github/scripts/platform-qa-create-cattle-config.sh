@@ -16,8 +16,8 @@ registryInput:
   password: "${QUAY_REGISTRY_PASSWORD}"
 
 awsCredentials:
-  accessKey: "${AWS_ACCESS_KEY_ID}"
-  secretKey: "${AWS_SECRET_ACCESS_KEY}"
+  accessKey: "${AWS_ACCESS_KEY}"
+  secretKey: "${AWS_SECRET_KEY}"
   defaultRegion: "${AWS_REGION}"
 
 clusterConfig:
@@ -60,8 +60,8 @@ awsMachineConfigs:
 
 awsEC2Configs:
   region: "${AWS_REGION}"
-  awsSecretAccessKey: "${AWS_SECRET_ACCESS_KEY}"
-  awsAccessKeyID: "${AWS_ACCESS_KEY_ID}"
+  awsSecretAccessKey: "${AWS_SECRET_KEY}"
+  awsAccessKeyID: "${AWS_ACCESS_KEY}"
   awsEC2Config:
     - instanceType: "${AWS_INSTANCE_TYPE}"
       awsRegionAZ: "${AWS_REGION}${AWS_ZONE_LETTER}"
@@ -73,6 +73,24 @@ awsEC2Configs:
       awsUser: "${AWS_USER}"
       volumeSize: ${AWS_ROOT_SIZE}
       roles: ["etcd", "controlplane", "worker"]
+
 sshPath: 
   sshPath: "${SSH_PRIVATE_KEY_PATH}"
+
+openLDAP:
+  hostname: "${OPENLDAP_HOSTNAME}"
+  insecure: true
+  users:
+    searchBase: "ou=users,dc=qa,dc=rancher,dc=space"
+    admin:
+      username: "${OPENLDAP_ADMIN_USERNAME}"
+      password: "${OPENLDAP_ADMIN_PASSWORD}"
+  serviceAccount:
+    distinguishedName: "cn=admin,dc=qa,dc=rancher,dc=space"
+    password: "${OPENLDAP_SA_PASSWORD}"
+  group:
+    groupSearchBase: "ou=groups,dc=qa,dc=rancher,dc=space"
+    objectClass: "groupOfNames"
+    memberMappingAttribute: "member"
+    nestedGroupMembershipEnabled: true
 EOF
