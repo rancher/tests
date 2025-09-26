@@ -65,9 +65,9 @@ pipeline {
 
     environment {
         // Default S3 configuration - will be auto-detected from workspace config
-        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: ''}"
-        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: ''}"
-        S3_REGION = "${params.S3_REGION ?: ''}"
+        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'}"
+        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'}"
+        S3_REGION = "${params.S3_REGION ?: 'us-east-2'}"
         AWS_REGION = "${params.S3_REGION ?: 'us-east-2'}"
 
         // Repository configurations
@@ -204,7 +204,7 @@ pipeline {
                             downloadConfigurationFromS3()
                             generateTofuConfiguration()
                             generateTofuBackendConfiguration()
-                            
+
                             // Pre-flight checks after configuration is ready
                             validateInfrastructurePrerequisites()
 
@@ -417,11 +417,11 @@ def buildDockerImage() {
 
     dir('./') {
         sh './tests/validation/configure.sh > /dev/null 2>&1'
-        
+
         // Execute shell commands separately to avoid Jenkins parsing issues
         def buildDate = sh(script: "date -u +'%Y-%m-%dT%H:%M:%SZ'", returnStdout: true).trim()
         def vcsRef = sh(script: 'git rev-parse --short HEAD 2>/dev/null || echo "unknown"', returnStdout: true).trim()
-        
+
         sh """
             docker build . \\
                 -f ./tests/validation/Dockerfile.tofu.e2e \\
@@ -448,15 +448,15 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
     def scriptFile = "docker-script-${timestamp}.sh"
 
     writeFile file: scriptFile, text: scriptContent
-    
+
     try {
         def envVars = ''
         extraEnv.each { key, value ->
             envVars += " -e ${key}=${value}"
         }
-        
+
         def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE}"
-        
+
         sh """
             docker run --rm \\
                 -v ${env.VALIDATION_VOLUME}:/root \\
@@ -580,7 +580,7 @@ def archiveDestructionResults() {
 
 def archiveDestructionFailureArtifacts() {
     logInfo('Archiving destruction failure artifacts')
-    
+
     try {
         def debugCommands = [
             "cd ${env.QA_INFRA_WORK_PATH}",
@@ -588,9 +588,9 @@ def archiveDestructionFailureArtifacts() {
             "tofu -chdir=tofu/aws/modules/airgap state list > remaining-resources.txt 2>&1 || echo 'No state available'",
             "echo 'Destruction failure artifact collection completed'"
         ]
-        
+
         executeInContainer(debugCommands)
-        
+
         sh '''
             # Try to copy failure artifacts if container exists
             CONTAINER_ID=$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}\$")
@@ -601,7 +601,7 @@ def archiveDestructionFailureArtifacts() {
                 echo "No container found to archive failure artifacts from"
             fi
         '''
-        
+
         archiveArtifacts artifacts: 'workspace-list.txt,remaining-resources.txt', allowEmptyArchive: true
     } catch (Exception e) {
         logError("Failed to archive failure artifacts: ${e.message}")
