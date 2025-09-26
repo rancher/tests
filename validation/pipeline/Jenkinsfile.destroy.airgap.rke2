@@ -536,7 +536,6 @@ def manageWorkspace() {
     executeScriptInContainer(scriptContent)
 }
 
-
 def executeDestruction() {
     logInfo('Executing direct infrastructure destruction')
 
@@ -550,10 +549,15 @@ def archiveDestructionResults() {
 
     try {
         sh """
-            docker cp $(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/destruction-summary.json ./
+            # Try to copy destruction results if container exists
+            CONTAINER_ID=\$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}")
+            if [ -n "\$CONTAINER_ID" ]; then
+                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/destruction-summary.json ./ || echo "No destruction results to archive"
+                echo "Destruction results archived successfully"
+            else
+                echo "No container found to archive results from"
+            fi
         """
-
-        logInfo('Destruction results archived')
     } catch (Exception e) {
         logError("Failed to archive destruction results: ${e.message}")
     }
@@ -573,8 +577,14 @@ def archiveDestructionFailureArtifacts() {
         executeInContainer(debugCommands)
 
         sh """
-            docker cp $(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./
-            docker cp $(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}"):${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./
+            # Try to copy failure artifacts if container exists
+            CONTAINER_ID=\$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}")
+            if [ -n "\$CONTAINER_ID" ]; then
+                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./ || echo "No workspace list to archive"
+                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./ || echo "No remaining resources to archive"
+            else
+                echo "No container found to archive failure artifacts from"
+            fi
         """
 
         archiveArtifacts artifacts: 'workspace-list.txt,remaining-resources.txt', allowEmptyArchive: true
