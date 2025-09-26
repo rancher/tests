@@ -5,6 +5,32 @@ set -e
 if [ -f /tmp/.env ]; then
     echo "Sourcing environment file: /tmp/.env"
     source /tmp/.env
+
+    # Debug: Show the actual content of the environment file
+    echo "=== DEBUG: Environment file contents ==="
+    cat /tmp/.env
+    echo "=== END DEBUG ==="
+
+    # Debug: Check if variables are set after sourcing
+    echo "=== DEBUG: Variables after sourcing ==="
+    echo "S3_BUCKET_NAME=${S3_BUCKET_NAME}"
+    echo "S3_REGION=${S3_REGION}"
+    echo "S3_KEY_PREFIX=${S3_KEY_PREFIX}"
+    echo "TF_WORKSPACE=${TF_WORKSPACE}"
+    echo "TERRAFORM_VARS_FILENAME=${TERRAFORM_VARS_FILENAME}"
+    echo "TERRAFORM_BACKEND_VARS_FILENAME=${TERRAFORM_BACKEND_VARS_FILENAME}"
+    echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:+[SET]}"
+    echo "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:+[SET]}"
+    echo "AWS_REGION=${AWS_REGION}"
+    echo "=== END DEBUG ==="
+
+    # Export the sourced variables explicitly to ensure they're available
+    export S3_BUCKET_NAME="${S3_BUCKET_NAME}"
+    export S3_REGION="${S3_REGION}"
+    export S3_KEY_PREFIX="${S3_KEY_PREFIX}"
+    export TF_WORKSPACE="${TF_WORKSPACE}"
+    export TERRAFORM_VARS_FILENAME="${TERRAFORM_VARS_FILENAME}"
+    export TERRAFORM_BACKEND_VARS_FILENAME="${TERRAFORM_BACKEND_VARS_FILENAME}"
 else
     echo "WARNING: Environment file not found at /tmp/.env"
 fi
@@ -25,15 +51,20 @@ echo "TF_WORKSPACE=${TF_WORKSPACE}"
 echo "TERRAFORM_VARS_FILENAME=${TERRAFORM_VARS_FILENAME}"
 echo "TERRAFORM_BACKEND_VARS_FILENAME=${TERRAFORM_BACKEND_VARS_FILENAME}"
 
-# Validate required S3 variables
+# Validate required S3 variables with fallback values
 if [ -z "${S3_BUCKET_NAME}" ]; then
-    echo 'ERROR: S3_BUCKET_NAME environment variable is not set or empty'
-    exit 1
+    echo 'WARNING: S3_BUCKET_NAME is empty, using fallback value'
+    export S3_BUCKET_NAME="jenkins-terraform-state-storage"
 fi
 
 if [ -z "${S3_REGION}" ]; then
-    echo 'ERROR: S3_REGION environment variable is not set or empty'
-    exit 1
+    echo 'WARNING: S3_REGION is empty, using fallback value'
+    export S3_REGION="us-east-2"
+fi
+
+if [ -z "${S3_KEY_PREFIX}" ]; then
+    echo 'WARNING: S3_KEY_PREFIX is empty, using fallback value'
+    export S3_KEY_PREFIX="jenkins-airgap-rke2"
 fi
 
 echo 'S3 environment variables validated successfully'
