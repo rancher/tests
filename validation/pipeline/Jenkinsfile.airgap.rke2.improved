@@ -396,7 +396,7 @@ pipeline {
                     'terraform-state-backup-*.tfstate',
                     'tfstate-backup-*.tfstate',
                     'terraform-state-build-*.tfstate',
-                    'terraform-vars.tfvars',
+                    'terraform_VARS.tfvars',
                     'infrastructure-outputs.json',
                     'ansible-inventory.yml',
                     'ansible-logs.txt',
@@ -586,6 +586,18 @@ def getShortJobName() {
 def generateEnvironmentFile() {
     logInfo('Generating environment file for container execution')
 
+    // Debug: Log the current environment variable values before generating the file
+    logInfo('=== DEBUG: Environment variables before file generation ===')
+    logInfo("S3_BUCKET_NAME: '${env.S3_BUCKET_NAME}'")
+    logInfo("S3_REGION: '${env.S3_REGION}'")
+    logInfo("AWS_REGION: '${env.AWS_REGION}'")
+    logInfo("S3_KEY_PREFIX: '${env.S3_KEY_PREFIX}'")
+    logInfo("TF_WORKSPACE: '${env.TF_WORKSPACE}'")
+    logInfo("TERRAFORM_VARS_FILENAME: '${env.TERRAFORM_VARS_FILENAME}'")
+    logInfo("AWS_ACCESS_KEY_ID: '${env.AWS_ACCESS_KEY_ID ? '[REDACTED]' : 'NULL'}'")
+    logInfo("AWS_SECRET_ACCESS_KEY: '${env.AWS_SECRET_ACCESS_KEY ? '[REDACTED]' : 'NULL'}'")
+    logInfo('=== END DEBUG ===')
+
     // Build environment content securely without direct interpolation of secrets
     def envLines = [
         '# Environment variables for infrastructure deployment containers',
@@ -609,11 +621,6 @@ def generateEnvironmentFile() {
     envLines.add('AWS_ACCESS_KEY_ID=' + env.AWS_ACCESS_KEY_ID)
     envLines.add('AWS_SECRET_ACCESS_KEY=' + env.AWS_SECRET_ACCESS_KEY)
     envLines.add('AWS_REGION=' + env.AWS_REGION)
-    envLines.add('')
-    envLines.add('# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)')
-    envLines.add('TF_VAR_aws_access_key=' + env.AWS_ACCESS_KEY_ID)
-    envLines.add('TF_VAR_aws_secret_access_key=' + env.AWS_SECRET_ACCESS_KEY)
-    envLines.add('TF_VAR_aws_region=' + env.AWS_REGION)
     envLines.add('')
     envLines.add('# S3 Backend Configuration for OpenTofu')
     envLines.add('S3_BUCKET_NAME=' + env.S3_BUCKET_NAME)
@@ -642,18 +649,19 @@ def generateEnvironmentFile() {
             def fileContent = readFile file: env.ENV_FILE
             def envFileSize = fileContent.length()
             logInfo("Environment file size: ${envFileSize} bytes")
+
+            // Debug: Log the actual content of the environment file
+            logInfo('=== DEBUG: Environment file content ===')
+            fileContent.split('\n').each { line ->
+                if (line.contains('SECRET') || line.contains('KEY') || line.contains('PASSWORD')) {
+                    logInfo("  [REDACTED - contains sensitive data]")
+                } else {
+                    logInfo("  ${line}")
+                }
+            }
+            logInfo('=== END DEBUG ===')
         } catch (Exception e) {
             logInfo("Could not read environment file: ${e.message}")
-        }
-    }
-
-    // Debug: Log the environment file content (without secrets)
-    logInfo("Environment file contents (non-sensitive variables only):")
-    envLines.each { line ->
-        if (!line.contains('SECRET') && !line.contains('PASSWORD') && !line.contains('KEY')) {
-            logInfo("  ${line}")
-        } else {
-            logInfo("  [REDACTED - contains sensitive data]")
         }
     }
 
@@ -666,6 +674,8 @@ def generateEnvironmentFile() {
     logInfo("Raw environment variable values:")
     logInfo("  TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}")
     logInfo("  QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}")
+    logInfo("  S3_BUCKET_NAME=${env.S3_BUCKET_NAME}")
+    logInfo("  S3_REGION=${env.S3_REGION}")
 }
 
 def setupSSHKeys() {
