@@ -96,179 +96,179 @@ pipeline {
     }
 
     stages {
-            stage('Initialize Pipeline') {
-                steps {
-                    script {
-                        logInfo('Initializing pipeline')
-                        // Validate parameters and environment
-                        validateParameters()
+        stage('Initialize Pipeline') {
+            steps {
+                script {
+                    logInfo('Initializing pipeline')
+                    // Validate parameters and environment
+                    validateParameters()
 
-                        // Clean workspace
-                        deleteDir()
+                    // Clean workspace
+                    deleteDir()
 
-                        logInfo('Pipeline initialized successfully')
-                        logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
-                        logInfo("Docker image: ${env.IMAGE_NAME}")
-                        logInfo("Volume: ${env.VALIDATION_VOLUME}")
+                    logInfo('Pipeline initialized successfully')
+                    logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
+                    logInfo("Docker image: ${env.IMAGE_NAME}")
+                    logInfo("Volume: ${env.VALIDATION_VOLUME}")
+                }
+            }
+        }
+
+        stage('Checkout Repositories') {
+            steps {
+                script {
+                    logInfo('Checking out source repositories')
+
+                    // Checkout Rancher Tests Repository
+                    dir('./tests') {
+                        logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
+                            extensions: [
+                                [$class: 'CleanCheckout'],
+                                [$class: 'CloneOption', depth: 1, shallow: true]
+                            ],
+                            userRemoteConfigs: [[
+                                url: env.RANCHER_TEST_REPO_URL,
+                            ]]
+                        ])
+                    }
+
+                    // Checkout QA Infrastructure Repository
+                    dir('./qa-infra-automation') {
+                        logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
+                            extensions: [
+                                [$class: 'CleanCheckout'],
+                                [$class: 'CloneOption', depth: 1, shallow: true]
+                            ],
+                            userRemoteConfigs: [[
+                                url: env.QA_INFRA_REPO,
+                            ]]
+                        ])
+                    }
+
+                    logInfo('Repository checkout completed successfully')
+                }
+            }
+        }
+
+        stage('Configure Environment') {
+            steps {
+                script {
+                    logInfo('Configuring deployment environment')
+
+                    // Configure credentials and environment files
+                    withCredentials(getCredentialsList()) {
+                        // Generate environment file with AWS credentials
+                        generateDestructionEnvironmentFile()
+
+                        // Setup SSH keys securely
+                        setupSSHKeys()
+
+                        // Build Docker image with proper tagging
+                        buildDockerImage()
+
+                        // Create shared volume
+                        createSharedVolume()
                     }
                 }
             }
+        }
 
-            stage('Checkout Repositories') {
-                steps {
-                    script {
-                        logInfo('Checking out source repositories')
+        stage('Infrastructure Destruction Operations') {
+            steps {
+                script {
+                    logInfo('Perfom infrastructure destruction with OpenTofu')
 
-                        // Checkout Rancher Tests Repository
-                        dir('./tests') {
-                            logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
-                            checkout([
-                                $class: 'GitSCM',
-                                branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
-                                extensions: [
-                                    [$class: 'CleanCheckout'],
-                                    [$class: 'CloneOption', depth: 1, shallow: true]
-                                ],
-                                userRemoteConfigs: [[
-                                    url: env.RANCHER_TEST_REPO_URL,
-                                ]]
-                            ])
+                    // Configuration validation
+                    def requiredVars = [
+                        'QA_INFRA_WORK_PATH',
+                        'TF_WORKSPACE',
+                        'TERRAFORM_VARS_FILENAME',
+                        'TERRAFORM_BACKEND_VARS_FILENAME',
+                        'TERRAFORM_TIMEOUT'
+                    ]
+                    validateRequiredVariables(requiredVars)
+
+                    // Enhanced timeout with reasonable defaults
+                    def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
+                        Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
+
+                    timeout(time: timeoutMinutes, unit: 'MINUTES') {
+                        try {
+                            // Pre-flight checks
+                            validateInfrastructurePrerequisites()
+
+                            // Infrastructure destruction with enhanced error handling
+                            performInfrastructureDestruction()
+
+                            // Post-destruction validation
+                            validateInfrastructureState()
                         }
-
-                        // Checkout QA Infrastructure Repository
-                        dir('./qa-infra-automation') {
-                            logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
-                            checkout([
-                                $class: 'GitSCM',
-                                branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
-                                extensions: [
-                                    [$class: 'CleanCheckout'],
-                                    [$class: 'CloneOption', depth: 1, shallow: true]
-                                ],
-                                userRemoteConfigs: [[
-                                    url: env.QA_INFRA_REPO,
-                                ]]
-                            ])
-                        }
-
-                        logInfo('Repository checkout completed successfully')
-                    }
-                }
-            }
-
-            stage('Configure Environment') {
-                steps {
-                    script {
-                        logInfo('Configuring deployment environment')
-
-                        // Configure credentials and environment files
-                        withCredentials(getCredentialsList()) {
-                            // Generate environment file with AWS credentials
-                            generateDestructionEnvironmentFile()
-
-                            // Setup SSH keys securely
-                            setupSSHKeys()
-
-                            // Build Docker image with proper tagging
-                            buildDockerImage()
-
-                            // Create shared volume
-                            createSharedVolume()
-                        }
-                    }
-                }
-            }
-
-            stage('Infrastructure Destruction Operations') {
-                steps {
-                    script {
-                        logInfo('Perfom infrastructure destruction with OpenTofu')
-
-                        // Configuration validation
-                        def requiredVars = [
-                            'QA_INFRA_WORK_PATH',
-                            'TF_WORKSPACE',
-                            'TERRAFORM_VARS_FILENAME',
-                            'TERRAFORM_BACKEND_VARS_FILENAME',
-                            'TERRAFORM_TIMEOUT'
-                        ]
-                        validateRequiredVariables(requiredVars)
-
-                        // Enhanced timeout with reasonable defaults
-                        def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
-                            Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
-
-                        timeout(time: timeoutMinutes, unit: 'MINUTES') {
+                        catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+                            logError("Infrastructure destruction timed out after ${timeoutMinutes} minutes")
+                            logError("Timeout exception details: ${e.message}")
                             try {
-                                // Pre-flight checks
-                                validateInfrastructurePrerequisites()
-
-                                // Infrastructure destruction with enhanced error handling
-                                performInfrastructureDestruction()
-
-                                // Post-destruction validation
-                                validateInfrastructureState()
-                            }
-                            catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
-                                logError("Infrastructure destruction timed out after ${timeoutMinutes} minutes")
-                                logError("Timeout exception details: ${e.message}")
-                                try {
-                                    archiveDestructionFailureArtifacts()
-                                } catch (Exception cleanupException) {
-                                    logError("Failed to perform infrastructure cleanup: ${cleanupException.message}")
-                                }
+                                archiveDestructionFailureArtifacts()
+                            } catch (Exception cleanupException) {
+                                logError("Failed to perform infrastructure cleanup: ${cleanupException.message}")
                             }
                         }
+                    }
 
-                        logInfo('Infrastructure destruction process completed.')
-                        archiveDestructionResults()
-                    }
-                }
-                post {
-                    failure {
-                        script {
-                            logError('Infrastructure destruction operations failed')
-                            archiveDestructionFailureArtifacts()
-                        }
-                    }
+                    logInfo('Infrastructure destruction process completed.')
+                    archiveDestructionResults()
                 }
             }
-        }
-        post {
-        always {
-            script {
-                logInfo('Starting post-destruction cleanup')
-
-                // Archive important artifacts
-                archiveBuildArtifacts([
-                    'destruction-plan.txt',
-                    'destruction-summary.json',
-                    'destruction-logs.txt'
-                ])
-
-                // Cleanup containers and volumes
-                cleanupContainersAndVolumes()
-            }
-        }
-
-        success {
-            script {
-                logInfo('Destruction pipeline completed successfully')
-            }
-        }
-
-        failure {
-            script {
-                logError('Destruction pipeline failed')
-            }
-        }
-
-        aborted {
-            script {
-                logWarning('Destruction pipeline was aborted')
+            post {
+                failure {
+                    script {
+                        logError('Infrastructure destruction operations failed')
+                        archiveDestructionFailureArtifacts()
+                    }
+                }
             }
         }
     }
+    post {
+    always {
+        script {
+            logInfo('Starting post-destruction cleanup')
+
+            // Archive important artifacts
+            archiveBuildArtifacts([
+                'destruction-plan.txt',
+                'destruction-summary.json',
+                'destruction-logs.txt'
+            ])
+
+            // Cleanup containers and volumes
+            cleanupContainersAndVolumes()
+        }
+    }
+
+    success {
+        script {
+            logInfo('Destruction pipeline completed successfully')
+        }
+    }
+
+    failure {
+        script {
+            logError('Destruction pipeline failed')
+        }
+    }
+
+    aborted {
+        script {
+            logWarning('Destruction pipeline was aborted')
+        }
+    }
+}
 }
 
 /**
@@ -329,7 +329,7 @@ def validateInfrastructurePrerequisites() {
 def validateInfrastructureState() {
     logInfo('Validating infrastructure state after deployment')
 
-    def scriptPath = "${env.ROOT_PATH}validation/pipeline/scripts/destroy_validate_state.sh"
+    def scriptPath = "validation/pipeline/scripts/destroy_validate_state.sh"
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent)
     logInfo('Infrastructure state validated successfully')
@@ -415,8 +415,8 @@ def buildDockerImage() {
             docker build . \\
                 -f ./tests/validation/Dockerfile.tofu.e2e \\
                 -t ${env.IMAGE_NAME} \\
-                --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \\
-                --build-arg VCS_REF=\$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') \\
+                --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \\
+                --build-arg VCS_REF=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') \\
                 --label "pipeline.build.number=${env.BUILD_NUMBER}" \\
                 --label "pipeline.job.name=${env.JOB_NAME}" \\
                 --quiet
@@ -464,7 +464,7 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 def downloadConfigurationFromS3() {
     logInfo('Downloading configuration files from S3')
 
-    def scriptPath = "${env.ROOT_PATH}validation/pipeline/scripts/destroy_download_config.sh"
+    def scriptPath = "validation/pipeline/scripts/destroy_download_config.sh"
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent)
     logInfo('Configuration files downloaded from S3 successfully')
@@ -479,6 +479,14 @@ def generateTofuConfiguration() {
 
     terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
     terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
+
+    def terraformFileText = new File("./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}").text
+    println terraformFileText
+    terraformFileText = terraformFileText.replace('\${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+    terraformFileText = terraformFileText.replace('\${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+    terraformFileText = terraformFileText.replace('\${AWS_REGION}', env.AWS_REGION)
+    println terraformFileText
+    new File("./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}").write(terraformFileText)
 
     dir('./qa-infra-automation') {
         dir('./tofu/aws/modules/airgap') {
@@ -528,7 +536,7 @@ def performInfrastructureDestruction() {
 def initializeOpenTofu() {
     logInfo('Initializing OpenTofu with S3 backend')
 
-    def scriptPath = "${env.ROOT_PATH}validation/pipeline/scripts/destroy_initialize_tofu.sh"
+    def scriptPath = "validation/pipeline/scripts/destroy_initialize_tofu.sh"
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent, [:], true)
 }
@@ -536,7 +544,7 @@ def initializeOpenTofu() {
 def manageWorkspace() {
     logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
 
-    def scriptPath = "${env.ROOT_PATH}validation/pipeline/scripts/destroy_manage_workspace.sh"
+    def scriptPath = "validation/pipeline/scripts/destroy_manage_workspace.sh"
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent)
 }
@@ -544,7 +552,7 @@ def manageWorkspace() {
 def executeDestruction() {
     logInfo('Executing direct infrastructure destruction')
 
-    def scriptPath = "${env.ROOT_PATH}validation/pipeline/scripts/destroy_execute.sh"
+    def scriptPath = "validation/pipeline/scripts/destroy_execute.sh"
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent)
 }
@@ -555,9 +563,9 @@ def archiveDestructionResults() {
     try {
         sh """
             # Try to copy destruction results if container exists
-            CONTAINER_ID=\$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}")
-            if [ -n "\$CONTAINER_ID" ]; then
-                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/destruction-summary.json ./ || echo "No destruction results to archive"
+            CONTAINER_ID=$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}") 
+            if [ -n "$CONTAINER_ID" ]; then
+                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/destruction-summary.json ./ || echo "No destruction results to archive"
                 echo "Destruction results archived successfully"
             else
                 echo "No container found to archive results from"
@@ -583,10 +591,10 @@ def archiveDestructionFailureArtifacts() {
 
         sh """
             # Try to copy failure artifacts if container exists
-            CONTAINER_ID=\$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}")
-            if [ -n "\$CONTAINER_ID" ]; then
-                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./ || echo "No workspace list to archive"
-                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./ || echo "No remaining resources to archive"
+            CONTAINER_ID=$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}")
+            if [ -n "$CONTAINER_ID" ]; then
+                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./ || echo "No workspace list to archive"
+                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./ || echo "No remaining resources to archive"
             else
                 echo "No container found to archive failure artifacts from"
             fi
