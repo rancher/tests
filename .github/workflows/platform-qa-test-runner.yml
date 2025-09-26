@@ -64,8 +64,17 @@ env:
   AWS_VOLUME_TYPE: ${{ vars.AWS_VOLUME_TYPE }}
   AWS_ZONE_LETTER: ${{ vars.AWS_ZONE_LETTER }}
   AWS_ROOT_SIZE: ${{ vars.AWS_ROOT_SIZE }}
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
   SSH_PRIVATE_KEY_NAME: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
   QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+  OPENLDAP_HOSTNAME: ${{ secrets.OPENLDAP_HOSTNAME }}
+  OPENLDAP_ADMIN_USERNAME: ${{ secrets.OPENLDAP_ADMIN_USERNAME }}
+  OPENLDAP_ADMIN_PASSWORD: ${{ secrets.OPENLDAP_ADMIN_PASSWORD }}
+  OPENLDAP_USER_PASSWORD: ${{ secrets.OPENLDAP_USER_PASSWORD }}
+  OPENLDAP_SA_PASSWORD: ${{ secrets.OPENLDAP_SA_PASSWORD }}
+  OPENLDAP_SA_DN_NAME: ${{ vars.OPENLDAP_SA_DN_NAME }}
+  OPENLDAP_USERS_SEARCHBASE: ${{ vars.OPENLDAP_USERS_SEARCHBASE }}
+  OPENLDAP_GROUPS_SEARCHBASE: ${{ vars.OPENLDAP_GROUPS_SEARCHBASE }}
 
 jobs:
   run-tests:
@@ -107,9 +116,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem
-          chmod 600 ~/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem
-          echo "SSH_PRIVATE_KEY_PATH=$HOME/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem" >> $GITHUB_ENV
+          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/$SSH_PRIVATE_KEY_NAME.pem
+          chmod 600 ~/.ssh/$SSH_PRIVATE_KEY_NAME.pem
+          echo "SSH_PRIVATE_KEY_PATH=$HOME/.ssh/$SSH_PRIVATE_KEY_NAME.pem" >> $GITHUB_ENV
 
       - name: Create cattle config
         run: bash .github/scripts/platform-qa-create-cattle-config.sh
@@ -174,6 +183,9 @@ jobs:
             --jsonfile "$GITHUB_WORKSPACE/results-${PACKAGE//\//-}.json" \
             -- -v -tags="$TAGS" -timeout 6h $FILES_TO_COMPILE_AND_RUN || echo "$(date +'%T') ⚠️ Test failed in $PACKAGE"
 
+          echo "✅ Finished tests for package $PACKAGE on cluster $RANCHER_HOST"
+          echo "   Results: $GITHUB_WORKSPACE/results-${PACKAGE//\//-}.json"
+          
       - name: Run single test with selector
         if: github.event.inputs.run_all_tests == 'false'
         env:
@@ -197,6 +209,9 @@ jobs:
             --packages="github.com/rancher/tests/$PACKAGE" \
             -- -v -tags="$TAGS" -timeout 6h -run "$TEST_SELECTOR" || echo "$(date +'%T')  ⚠️ Test failed in $PACKAGE"
 
+          echo "✅ Finished tests for package $PACKAGE on cluster $RANCHER_HOST"
+          echo "   Results: $GITHUB_WORKSPACE/results-${PACKAGE//\//-}.json"
+          
       - name: Report results to Qase
         if: github.event.inputs.report_to_qase == 'true'
         run: |

@@ -82,6 +82,9 @@ jobs:
             REMAINING=$(IFS=,; echo "${REMAINING_PKGS[*]}")
           fi
 
+          echo "Current package: $CURRENT"
+          echo "Remaining packages: $REMAINING"
+
           echo "current_pkg=$CURRENT" >> $GITHUB_OUTPUT
           echo "remaining_packages=$REMAINING" >> $GITHUB_OUTPUT
 
