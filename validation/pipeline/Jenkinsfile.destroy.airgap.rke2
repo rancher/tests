@@ -271,6 +271,7 @@ pipeline {
 }
 }
 
+
 /**
  * DESTRUCTION-SPECIFIC HELPER FUNCTIONS
  */
@@ -414,11 +415,11 @@ def buildDockerImage() {
         sh """
             docker build . \\
                 -f ./tests/validation/Dockerfile.tofu.e2e \\
-                -t ${env.IMAGE_NAME} \\
+                -t """ + env.IMAGE_NAME + """ \\
                 --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \\
                 --build-arg VCS_REF=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') \\
-                --label "pipeline.build.number=${env.BUILD_NUMBER}" \\
-                --label "pipeline.job.name=${env.JOB_NAME}" \\
+                --label "pipeline.build.number='""" + env.BUILD_NUMBER + """'" \\
+                --label "pipeline.job.name='""" + env.JOB_NAME + """'" \\
                 --quiet
         """
     }
@@ -563,9 +564,9 @@ def archiveDestructionResults() {
     try {
         sh """
             # Try to copy destruction results if container exists
-            CONTAINER_ID=$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}") 
-            if [ -n "$CONTAINER_ID" ]; then
-                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/destruction-summary.json ./ || echo "No destruction results to archive"
+            CONTAINER_ID=\$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}") 
+            if [ -n "\$CONTAINER_ID" ]; then
+                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/destruction-summary.json ./ || echo "No destruction results to archive"
                 echo "Destruction results archived successfully"
             else
                 echo "No container found to archive results from"
@@ -591,10 +592,10 @@ def archiveDestructionFailureArtifacts() {
 
         sh """
             # Try to copy failure artifacts if container exists
-            CONTAINER_ID=$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}")
-            if [ -n "$CONTAINER_ID" ]; then
-                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./ || echo "No workspace list to archive"
-                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./ || echo "No remaining resources to archive"
+            CONTAINER_ID=\$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}")
+            if [ -n "\$CONTAINER_ID" ]; then
+                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./ || echo "No workspace list to archive"
+                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./ || echo "No remaining resources to archive"
             else
                 echo "No container found to archive failure artifacts from"
             fi
