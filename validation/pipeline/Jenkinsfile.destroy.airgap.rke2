@@ -316,7 +316,7 @@ def validateInfrastructurePrerequisites() {
     logInfo('Validating infrastructure prerequisites')
 
     try {
-        def scriptPath = "${env.ROOT_PATH}validation/pipeline/scripts/destroy_validate_prerequisites.sh"
+        def scriptPath = "tests/validation/pipeline/scripts/destroy_validate_prerequisites.sh"
         def scriptContent = readFile(file: scriptPath)
         executeScriptInContainer(scriptContent)
         logInfo('All infrastructure prerequisites validated')
@@ -330,7 +330,7 @@ def validateInfrastructurePrerequisites() {
 def validateInfrastructureState() {
     logInfo('Validating infrastructure state after deployment')
 
-    def scriptPath = "validation/pipeline/scripts/destroy_validate_state.sh"
+    def scriptPath = "tests/validation/pipeline/scripts/destroy_validate_state.sh"
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent)
     logInfo('Infrastructure state validated successfully')
@@ -569,7 +569,7 @@ def archiveDestructionResults() {
     try {
         sh '''
             # Try to copy destruction results if container exists
-            CONTAINER_ID=$(docker ps -aqf "name=''' + env.BUILD_CONTAINER_NAME + '''") 
+            CONTAINER_ID=$(docker ps -aqf "name=''' + env.BUILD_CONTAINER_NAME + '''")
             if [ -n "$CONTAINER_ID" ]; then
                 docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/destruction-summary.json ./ || echo "No destruction results to archive"
                 echo "Destruction results archived successfully"
