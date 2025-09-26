@@ -65,10 +65,10 @@ pipeline {
 
     environment {
         // Default S3 configuration - will be auto-detected from workspace config
-        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'}"
-        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'}"
-        S3_REGION = "${params.S3_REGION ?: 'us-east-2'}"
-        AWS_REGION = "${params.S3_REGION ?: 'us-east-2'}"
+        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME?.trim() ? params.S3_BUCKET_NAME : 'jenkins-terraform-state-storage'}"
+        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX?.trim() ? params.S3_KEY_PREFIX : 'jenkins-airgap-rke2/terraform.tfstate'}"
+        S3_REGION = "${params.S3_REGION?.trim() ? params.S3_REGION : 'us-east-2'}"
+        AWS_REGION = "${params.S3_REGION?.trim() ? params.S3_REGION : 'us-east-2'}"
 
         // Repository configurations
         RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
