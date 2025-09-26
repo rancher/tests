@@ -402,6 +402,13 @@ def setupSSHKeys() {
 def buildDockerImage() {
     logInfo("Building Docker image: ${env.IMAGE_NAME}")
 
+    // Ensure required directories exist before Docker build
+    sh 'ls -la ./tests || echo "tests directory not found"'
+    sh 'ls -la ./qa-infra-automation || echo "qa-infra-automation directory not found"'
+
+    // Verify the Dockerfile exists
+    sh 'ls -la ./tests/validation/Dockerfile.tofu.e2e || echo "Dockerfile not found"'
+
     dir('./') {
         sh './tests/validation/configure.sh > /dev/null 2>&1'
         sh """
@@ -413,8 +420,7 @@ def buildDockerImage() {
                 --label "pipeline.build.number=${env.BUILD_NUMBER}" \\
                 --label "pipeline.job.name=${env.JOB_NAME}" \\
                 --quiet \\
-                --progress=plain \\
-                > /dev/null 2>&1
+                --progress=plain
         """
     }
 
