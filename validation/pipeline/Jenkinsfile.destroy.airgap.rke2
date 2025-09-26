@@ -65,10 +65,10 @@ pipeline {
 
     environment {
         // Default S3 configuration - will be auto-detected from workspace config
-        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME?.trim() ? params.S3_BUCKET_NAME : 'jenkins-terraform-state-storage'}"
-        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX?.trim() ? params.S3_KEY_PREFIX : 'jenkins-airgap-rke2/terraform.tfstate'}"
-        S3_REGION = "${params.S3_REGION?.trim() ? params.S3_REGION : 'us-east-2'}"
-        AWS_REGION = "${params.S3_REGION?.trim() ? params.S3_REGION : 'us-east-2'}"
+        S3_BUCKET_NAME = "${getS3BucketName()}"
+        S3_KEY_PREFIX = "${getS3KeyPrefix()}"
+        S3_REGION = "${getS3Region()}"
+        AWS_REGION = "${getAwsRegion()"
 
         // Repository configurations
         RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
@@ -360,6 +360,12 @@ def getCredentialsList() {
 
 def generateDestructionEnvironmentFile() {
     logInfo('Generating environment file for destruction containers')
+
+    // Debug logging for S3 variables
+    logInfo("S3_BUCKET_NAME: '${env.S3_BUCKET_NAME}'")
+    logInfo("S3_KEY_PREFIX: '${env.S3_KEY_PREFIX}'")
+    logInfo("S3_REGION: '${env.S3_REGION}'")
+    logInfo("AWS_REGION: '${env.AWS_REGION}'")
 
     // Build environment content securely without direct interpolation of secrets
     def envLines = [
@@ -683,4 +689,40 @@ def logDebug(message) {
     if (params.LOG_LEVEL == 'DEBUG' || params.LOG_LEVEL == 'VERBOSE') {
         echo "🔍 [DEBUG] ${new Date().format('HH:mm:ss')} - ${message}"
     }
+}
+
+/**
+ * Helper functions for robust environment variable assignment
+ */
+
+def getS3BucketName() {
+    def paramValue = params.S3_BUCKET_NAME
+    if (paramValue && paramValue.trim()) {
+        return paramValue.trim()
+    }
+    return 'jenkins-terraform-state-storage'
+}
+
+def getS3KeyPrefix() {
+    def paramValue = params.S3_KEY_PREFIX
+    if (paramValue && paramValue.trim()) {
+        return paramValue.trim()
+    }
+    return 'jenkins-airgap-rke2/terraform.tfstate'
+}
+
+def getS3Region() {
+    def paramValue = params.S3_REGION
+    if (paramValue && paramValue.trim()) {
+        return paramValue.trim()
+    }
+    return 'us-east-2'
+}
+
+def getAwsRegion() {
+    def paramValue = params.S3_REGION
+    if (paramValue && paramValue.trim()) {
+        return paramValue.trim()
+    }
+    return 'us-east-2'
 }
