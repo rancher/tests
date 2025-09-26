@@ -713,3 +713,51 @@ func CreateGlobalRoleWithInheritedClusterRolesWrangler(client *rancher.Client, i
 
 	return createdGlobalRole, nil
 }
+
+// CreateGroupClusterRoleTemplateBinding creates Cluster Role Template bindings
+func CreateGroupClusterRoleTemplateBinding(client *rancher.Client, clusterID string, groupPrincipalID string, roleTemplateID string) (*v3.ClusterRoleTemplateBinding, error) {
+	crtbObj := &v3.ClusterRoleTemplateBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:    clusterID,
+			GenerateName: "crtb-",
+			Annotations: map[string]string{
+				"field.cattle.io/creatorId": client.UserID,
+			},
+		},
+		ClusterName:        clusterID,
+		GroupPrincipalName: groupPrincipalID,
+		RoleTemplateName:   roleTemplateID,
+	}
+
+	crtb, err := client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Create(crtbObj)
+	if err != nil {
+		return nil, err
+	}
+
+	err = WaitForCrtbStatus(client, crtb.Namespace, crtb.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	return crtb, nil
+}
+
+// CreateGroupProjectRoleTemplateBinding creates Project Role Template bindings for groups
+func CreateGroupProjectRoleTemplateBinding(client *rancher.Client, projectID string, projectNamespace string, groupPrincipalID string, roleTemplateID string) (*v3.ProjectRoleTemplateBinding, error) {
+	prtbObj := &v3.ProjectRoleTemplateBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:    projectNamespace,
+			GenerateName: "prtb-",
+		},
+		ProjectName:        projectID,
+		GroupPrincipalName: groupPrincipalID,
+		RoleTemplateName:   roleTemplateID,
+	}
+
+	prtb, err := client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Create(prtbObj)
+	if err != nil {
+		return nil, err
+	}
+
+	return prtb, nil
+}
