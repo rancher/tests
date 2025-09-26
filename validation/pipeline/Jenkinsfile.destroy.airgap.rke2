@@ -4,7 +4,7 @@
  * Infrastructure Destruction Jenkinsfile for Airgap RKE2
  *
  * This pipeline is designed to safely destroy infrastructure created by
- * the main airgap RKE2 deployment pipeline. It retrieves Terraform state
+ * the main airgap RKE2 deployment pipeline. It retrives Terraform state
  * from S3 backend and performs controlled destruction.
  */
 
@@ -200,7 +200,7 @@ pipeline {
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
-                            // Pre-flight checks
+                            // Pre-flight checks after configuration is ready
                             validateInfrastructurePrerequisites()
 
                             // Infrastructure destruction with enhanced error handling
@@ -316,7 +316,7 @@ def validateInfrastructurePrerequisites() {
     logInfo('Validating infrastructure prerequisites')
 
     try {
-        def scriptPath = "tests/validation/pipeline/scripts/destroy_validate_prerequisites.sh"
+        def scriptPath = "validation/pipeline/scripts/destroy_validate_prerequisites.sh"
         def scriptContent = readFile(file: scriptPath)
         executeScriptInContainer(scriptContent)
         logInfo('All infrastructure prerequisites validated')
@@ -330,7 +330,7 @@ def validateInfrastructurePrerequisites() {
 def validateInfrastructureState() {
     logInfo('Validating infrastructure state after deployment')
 
-    def scriptPath = "tests/validation/pipeline/scripts/destroy_validate_state.sh"
+    def scriptPath = "validation/pipeline/scripts/destroy_validate_state.sh"
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent)
     logInfo('Infrastructure state validated successfully')
@@ -458,13 +458,21 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
             -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
             --name ${containerName} \\
             -t --env-file ${env.ENV_FILE} \\
-            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
+            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}${workspaceEnv} \\
             ${envVars} \\
             ${env.IMAGE_NAME} \\
             sh /tmp/script.sh
     """
 
     sh "rm -f ${scriptFile}"
+}
+
+def performInfrastructureDestruction() {
+    initializeOpenTofu()
+    manageWorkspace()
+    executeDestruction()
+
+    logInfo('Infrastructure destruction completed successfully')
 }
 
 def downloadConfigurationFromS3() {
@@ -528,17 +536,6 @@ region = "${env.S3_REGION}"
     }
 }
 
-def performInfrastructureDestruction() {
-    downloadConfigurationFromS3()
-    generateTofuConfiguration()
-    generateTofuBackendConfiguration()
-    initializeOpenTofu()
-    manageWorkspace()
-    executeDestruction()
-
-    logInfo('Infrastructure destruction completed successfully')
-}
-
 def initializeOpenTofu() {
     logInfo('Initializing OpenTofu with S3 backend')
 
@@ -571,7 +568,7 @@ def archiveDestructionResults() {
             # Try to copy destruction results if container exists
             CONTAINER_ID=$(docker ps -aqf "name=''' + env.BUILD_CONTAINER_NAME + '''")
             if [ -n "$CONTAINER_ID" ]; then
-                docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/destruction-summary.json ./ || echo "No destruction results to archive"
+                docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/destruction-summary.json ./
                 echo "Destruction results archived successfully"
             else
                 echo "No container found to archive results from"
@@ -599,8 +596,8 @@ def archiveDestructionFailureArtifacts() {
             # Try to copy failure artifacts if container exists
             CONTAINER_ID=$(docker ps -aqf "name=''' + env.BUILD_CONTAINER_NAME + '''$")
             if [ -n "$CONTAINER_ID" ]; then
-                docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/workspace-list.txt ./ || echo "No workspace list to archive"
-                docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/remaining-resources.txt ./ || echo "No remaining resources to archive"
+                docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/workspace-list.txt ./
+                docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/remaining-resources.txt ./
             else
                 echo "No container found to archive failure artifacts from"
             fi
