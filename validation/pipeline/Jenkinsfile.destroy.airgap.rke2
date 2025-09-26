@@ -448,27 +448,32 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
     def scriptFile = "docker-script-${timestamp}.sh"
 
     writeFile file: scriptFile, text: scriptContent
-
-    def envVars = ''
-    extraEnv.each { key, value ->
-        envVars += " -e ${key}=${value}"
+    
+    try {
+        def envVars = ''
+        extraEnv.each { key, value ->
+            envVars += " -e ${key}=${value}"
+        }
+        
+        def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE}"
+        
+        sh """
+            docker run --rm \\
+                -v ${env.VALIDATION_VOLUME}:/root \\
+                -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+                --name ${containerName} \\
+                -t --env-file ${env.ENV_FILE} \\
+                -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \\
+                -e TF_WORKSPACE=${env.TF_WORKSPACE} ${envVars} \\
+                ${env.IMAGE_NAME} \\
+                sh /tmp/script.sh
+        """
+    } catch (Exception e) {
+        logError("Script execution failed: ${e.message}")
+        throw e
+    } finally {
+        sh "rm -f ${scriptFile}"
     }
-
-    def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE}"
-
-    sh """
-        docker run --rm \\
-            -v ${env.VALIDATION_VOLUME}:/root \\
-            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
-            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-            --name ${containerName} \\
-            -t --env-file ${env.ENV_FILE} \\
-            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}${workspaceEnv}${envVars} \\
-            ${env.IMAGE_NAME} \\
-            sh /tmp/script.sh
-    """
-
-    sh "rm -f ${scriptFile}"
 }
 
 def performInfrastructureDestruction() {
@@ -497,21 +502,11 @@ def generateTofuConfiguration() {
 
     terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
     terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
 
-    def terraformFileText = new File("./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}").text
-    println terraformFileText
-    terraformFileText = terraformFileText.replace('\${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
-    terraformFileText = terraformFileText.replace('\${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
-    terraformFileText = terraformFileText.replace('\${AWS_REGION}', env.AWS_REGION)
-    println terraformFileText
-    new File("./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}").write(terraformFileText)
-
-    dir('./qa-infra-automation') {
-        dir('./tofu/aws/modules/airgap') {
-            writeFile file: env.TERRAFORM_VARS_FILENAME, text: terraformConfig
-            logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
-        }
-    }
+    // Write the configuration file
+    new File("./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}").write(terraformConfig)
+    logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
 }
 
 def generateTofuBackendConfiguration() {
@@ -585,7 +580,7 @@ def archiveDestructionResults() {
 
 def archiveDestructionFailureArtifacts() {
     logInfo('Archiving destruction failure artifacts')
-
+    
     try {
         def debugCommands = [
             "cd ${env.QA_INFRA_WORK_PATH}",
@@ -593,20 +588,20 @@ def archiveDestructionFailureArtifacts() {
             "tofu -chdir=tofu/aws/modules/airgap state list > remaining-resources.txt 2>&1 || echo 'No state available'",
             "echo 'Destruction failure artifact collection completed'"
         ]
-
+        
         executeInContainer(debugCommands)
-
+        
         sh '''
             # Try to copy failure artifacts if container exists
-            CONTAINER_ID=$(docker ps -aqf "name=''' + env.BUILD_CONTAINER_NAME + '''$")
+            CONTAINER_ID=$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}\$")
             if [ -n "$CONTAINER_ID" ]; then
-                docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/workspace-list.txt ./
-                docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/remaining-resources.txt ./
+                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./
+                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./
             else
                 echo "No container found to archive failure artifacts from"
             fi
         '''
-
+        
         archiveArtifacts artifacts: 'workspace-list.txt,remaining-resources.txt', allowEmptyArchive: true
     } catch (Exception e) {
         logError("Failed to archive failure artifacts: ${e.message}")
