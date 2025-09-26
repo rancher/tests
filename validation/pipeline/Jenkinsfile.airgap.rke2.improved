@@ -1218,6 +1218,119 @@ def generateDeploymentSummary() {
 // INFRASTRUCTURE DEPLOYMENT FUNCTIONS
 // ========================================
 
+def generateTofuConfiguration() {
+    logInfo('Generating Terraform configuration')
+
+    if (!env.TERRAFORM_CONFIG) {
+        error('TERRAFORM_CONFIG environment variable is not set')
+    }
+
+    // Ensure S3 backend parameters are set
+    if (!env.S3_BUCKET_NAME) { error('S3_BUCKET_NAME environment variable is not set') }
+    if (!env.S3_REGION) { error('S3_REGION environment variable is not set') }
+    if (!env.S3_KEY_PREFIX) { error('S3_KEY_PREFIX environment variable is not set') }
+
+    sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
+
+    def terraformConfig = env.TERRAFORM_CONFIG
+
+    // Replace variables in config (similar to Jenkinsfile.recurring pattern)
+    terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_IAM_PROFILE}', env.AWS_IAM_PROFILE ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS ?: '')
+    terraformConfig = terraformConfig.replace('${HOSTNAME_PREFIX}', env.HOSTNAME_PREFIX ?: '')
+
+    // Write the configuration file
+    dir('./qa-infra-automation') {
+        dir('./tofu/aws/modules/airgap') {
+            writeFile file: env.TERRAFORM_VARS_FILENAME, text: terraformConfig
+            logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
+
+            // Create proper backend.tf file with S3 configuration
+            def backendConfig = """
+terraform {
+  backend "s3" {
+    bucket = "${env.S3_BUCKET_NAME}"
+    key    = "${env.S3_KEY_PREFIX}"
+    region = "${env.S3_REGION}"
+  }
+}
+"""
+            writeFile file: 'backend.tf', text: backendConfig
+            logInfo("S3 backend configuration written to: backend.tf")
+
+            // Generate backend.tfvars content from S3 parameters for compatibility
+            def backendVars = """
+bucket = "${env.S3_BUCKET_NAME}"
+key    = "${env.S3_KEY_PREFIX}"
+region = "${env.S3_REGION}"
+"""
+            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
+            logInfo("S3 backend variables written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
+        }
+    }
+}
+
+def deployInfrastructure() {
+    logInfo('Starting infrastructure deployment process')
+
+    // Step 1: Generate Tofu config (must be first to create required files)
+    generateTofuConfiguration()
+    
+    // Step 2: Upload cluster.tfvars to S3 immediately after generation
+    uploadClusterTfvarsToS3()
+
+    // Step 3: Validate infrastructure prerequisites (now files exist)
+    validateInfrastructurePrerequisites()
+
+    // Step 4: Initialize OpenTofu
+    initializeOpenTofu()
+
+    // Step 5: Manage workspace
+    manageWorkspace()
+
+    // Step 6: Plan infrastructure changes
+    planInfrastructure()
+
+    // Step 7: Apply infrastructure
+    applyInfrastructure()
+
+    logInfo('Infrastructure deployment completed successfully')
+}
+
+def validateInfrastructurePrerequisites() {
+    logInfo('Validating infrastructure prerequisites')
+
+    def prerequisiteScript = """
+    # Source the external prerequisites validation script
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_validate_prerequisites.sh
+    """
+
+    try {
+        executeScriptInContainer(prerequisiteScript)
+        logInfo('All infrastructure prerequisites validated')
+    } catch (Exception e) {
+        def errorMsg = "Infrastructure prerequisites validation failed: ${e.message}"
+        logError(errorMsg)
+        error(errorMsg)
+    }
+}
+
+def validateInfrastructureState() {
+    logInfo('Validating infrastructure state after deployment')
+
+    def validationScript = """
+    # Source the external infrastructure validation script
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_validate_infrastructure.sh
+    """
+
+    executeScriptInContainer(validationScript)
+    logInfo('Infrastructure state validated successfully')
+}
+
 def uploadClusterTfvarsToS3() {
     logInfo('Uploading cluster.tfvars to S3')
     
@@ -1260,29 +1373,63 @@ def uploadClusterTfvarsToS3() {
     }
 }
 
-def deployInfrastructure() {
-    logInfo('Starting infrastructure deployment process')
+def initializeOpenTofu() {
+    logInfo('Initializing OpenTofu with S3 backend')
 
-    // Step 1: Generate Tofu config (must be first to create required files)
-    generateTofuConfiguration()
-    
-    // Step 2: Upload cluster.tfvars to S3 immediately after generation
-    uploadClusterTfvarsToS3()
+    def initScript = """
+    # Source the external OpenTofu initialization script
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_initialize_tofu.sh
+    """
 
-    // Step 3: Validate infrastructure prerequisites (now files exist)
-    validateInfrastructurePrerequisites()
+    executeScriptInContainer(initScript, [:], true)
+}
 
-    // Step 4: Initialize OpenTofu
-    initializeOpenTofu()
+def manageWorkspace() {
+    logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
 
-    // Step 5: Manage workspace
-    manageWorkspace()
+    def workspaceScript = """
+#!/bin/bash
+set -e
 
-    // Step 6: Plan infrastructure changes
-    planInfrastructure()
+# Source the external workspace management script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_manage_workspace.sh
+      """
 
-    // Step 7: Apply infrastructure
-    applyInfrastructure()
+    executeScriptInContainer(workspaceScript)
+}
 
-    logInfo('Infrastructure deployment completed successfully')
+def planInfrastructure() {
+    logInfo('Planning infrastructure changes')
+
+    def planScript = """
+#!/bin/bash
+set -e
+
+# Source the external plan infrastructure script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_plan_infrastructure.sh
+      """
+
+    executeScriptInContainer(planScript)
+}
+
+def applyInfrastructure() {
+    logInfo('Applying infrastructure configuration')
+
+    def applyScript = """
+#!/bin/bash
+set -e
+
+# Source the external apply infrastructure script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_apply_infrastructure.sh
+      """
+
+    executeScriptInContainer(applyScript)
+
+    // Extract files to shared volume after successful apply (redundant but ensuring)
+    logInfo('Extracting files after apply for persistence')
+    sh """
+    if [ -f qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ]; then
+        cp qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ./
+    fi
+    """
 }
