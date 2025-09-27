@@ -360,10 +360,9 @@ pipeline {
             post {
                 success {
                     script {
-                        logInfo('Infrastructure deployment succeeded - archiving state')
-                        archiveInfrastructureState()
-                        // Additional immediate state backup for successful deployments
-                        backupTerraformStateImmediately()
+                        logInfo('Infrastructure deployment succeeded')
+                        // Extract artifacts for successful deployment
+                        extractArtifactsFromDockerVolume()
                     }
                 }
                 failure {
@@ -372,15 +371,13 @@ pipeline {
                         // Extract artifacts even on failure for debugging
                         extractArtifactsFromDockerVolume()
                         archiveInfrastructureFailureArtifacts()
-                        // Still try to archive any partial state
-                        archiveInfrastructureState()
                     }
                 }
                 always {
                     script {
                         // Ensure artifacts are extracted before final archival
                         extractArtifactsFromDockerVolume()
-                        // Final comprehensive state archival attempt
+                        // Final comprehensive state archival attempt (handles both success and failure)
                         finalStateArchival()
                     }
                 }
@@ -1069,7 +1066,14 @@ def archiveInfrastructureFailureArtifacts() {
 def finalStateArchival() {
     logInfo('Performing final comprehensive state archival')
     try {
+        // Archive infrastructure state (creates infrastructure-state-* files)
         archiveInfrastructureState()
+        
+        // Create immediate backup for successful deployments (creates terraform-state-build-* files)
+        if (currentBuild.currentResult == 'SUCCESS') {
+            backupTerraformStateImmediately()
+        }
+        
         // Additional final artifacts - fix variable expansion issue
         def artifactsList = [
             'infrastructure-outputs.json',
