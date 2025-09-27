@@ -517,8 +517,12 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 def performInfrastructureDestruction() {
   initializeOpenTofu()
   executeDestruction()
+  
+  // Delete the workspace after successful infrastructure destruction
+  logInfo("Deleting workspace ${env.TF_WORKSPACE} after infrastructure destruction")
+  manageWorkspace()
 
-  logInfo('Infrastructure destruction completed successfully')
+  logInfo('Infrastructure destruction and workspace cleanup completed successfully')
 }
 
 def downloadConfigurationFromS3() {
@@ -737,9 +741,9 @@ def initializeOpenTofu() {
 }
 
 def manageWorkspace() {
-  logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
+  logInfo("Deleting OpenTofu workspace: ${env.TF_WORKSPACE}")
 
-  def scriptPath = 'tests/validation/pipeline/scripts/tofu_manage_workspace.sh'
+  def scriptPath = 'tests/validation/pipeline/scripts/tofu_delete_workspace.sh'
   def scriptContent = readFile(file: scriptPath)
   executeScriptInContainer(scriptContent)
 }
