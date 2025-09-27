@@ -1,7 +1,43 @@
 #!/bin/bash
 set -e
 
+echo '=== DEBUG: OpenTofu Initialization ==='
+echo "DEBUG: QA_INFRA_WORK_PATH='${QA_INFRA_WORK_PATH}'"
+echo "DEBUG: TERRAFORM_BACKEND_VARS_FILENAME='${TERRAFORM_BACKEND_VARS_FILENAME}'"
+echo "DEBUG: TF_WORKSPACE='${TF_WORKSPACE}'"
+
 cd ${QA_INFRA_WORK_PATH}
+
+echo 'DEBUG: Current working directory:'
+pwd
+
+echo 'DEBUG: Contents of tofu/aws/modules/airgap directory:'
+ls -la tofu/aws/modules/airgap/
+
+echo 'DEBUG: Checking if backend.tfvars file exists:'
+if [ -f "tofu/aws/modules/airgap/${TERRAFORM_BACKEND_VARS_FILENAME}" ]; then
+    echo "DEBUG: backend.tfvars file exists, contents:"
+    cat "tofu/aws/modules/airgap/${TERRAFORM_BACKEND_VARS_FILENAME}"
+else
+    echo "DEBUG: backend.tfvars file does NOT exist"
+fi
+
+echo 'DEBUG: Checking if backend.tf file exists:'
+if [ -f "tofu/aws/modules/airgap/backend.tf" ]; then
+    echo "DEBUG: backend.tf file exists, contents:"
+    cat "tofu/aws/modules/airgap/backend.tf"
+else
+    echo "DEBUG: backend.tf file does NOT exist"
+fi
+
+echo 'DEBUG: All .tf and .tfvars files in directory:'
+find tofu/aws/modules/airgap/ -name "*.tf" -o -name "*.tfvars" | while read file; do
+    echo "=== $file ==="
+    cat "$file"
+    echo
+done
+
+echo '=== END DEBUG ==='
 
 echo 'Initializing OpenTofu with S3 backend configuration...'
 tofu -chdir=tofu/aws/modules/airgap init -backend-config="${TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade
