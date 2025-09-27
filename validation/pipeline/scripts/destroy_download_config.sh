@@ -55,19 +55,15 @@ echo "  Bucket: ${S3_BUCKET_NAME}"
 echo "  Key Prefix: ${S3_KEY_PREFIX}"
 echo "  Region: ${AWS_REGION}"
 
-# For cluster.tfvars, we need to derive the path from the S3_KEY_PREFIX
-# If S3_KEY_PREFIX is "jenkins-airgap-rke2/terraform.tfstate", then cluster.tfvars should be in "jenkins-airgap-rke2/"
-S3_DIR="env:/${S3_KEY_PREFIX}"
 CLUSTER_TFVARS_FILE="cluster.tfvars"
 
 echo "Parsed S3 path:"
-echo "  Directory: ${S3_DIR}"
 echo "  File to download: ${CLUSTER_TFVARS_FILE}"
 
 # Download cluster.tfvars from S3
-echo "Downloading s3://${S3_BUCKET_NAME}/${S3_DIR}/${TF_WORKSPACE}/config/${CLUSTER_TFVARS_FILE}..."
+echo "Downloading s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/config/${CLUSTER_TFVARS_FILE}..."
 aws s3 cp \
-    "s3://${S3_BUCKET_NAME}/${S3_DIR}/${TF_WORKSPACE}/config/${CLUSTER_TFVARS_FILE}" \
+    "s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/config/${CLUSTER_TFVARS_FILE}" \
     "tofu/aws/modules/airgap/${CLUSTER_TFVARS_FILE}" \
     --region "${AWS_REGION}"
 
@@ -77,7 +73,7 @@ if [ $? -eq 0 ]; then
 else
     echo 'ERROR: Failed to download cluster.tfvars from S3'
     echo 'Available files in S3 config directory:'
-    aws s3 ls "s3://${S3_BUCKET_NAME}/${S3_DIR}/${TF_WORKSPACE}/config" --region "${AWS_REGION}" || echo 'Failed to list S3 contents'
+    aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/config" --region "${AWS_REGION}" || echo 'Failed to list S3 contents'
     exit 1
 fi
 
