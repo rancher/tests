@@ -868,49 +868,61 @@ def cleanupS3WorkspaceDirectory() {
     logInfo("S3 Bucket: ${env.S3_BUCKET_NAME}")
     logInfo("S3 Region: ${env.S3_REGION}")
     
-    def cleanupScript = """
-#!/bin/bash
-set -e
-
-echo '=== S3 Workspace Cleanup ==='
-echo "Target workspace: \${TF_WORKSPACE}"
-echo "S3 bucket: \${S3_BUCKET_NAME}"
-echo "S3 region: \${AWS_REGION}"
-
-# Check if the workspace directory exists in S3
-echo 'Checking if workspace directory exists...'
-if aws s3 ls "s3://\${S3_BUCKET_NAME}/env:/\${TF_WORKSPACE}/" --region "\${AWS_REGION}" 2>/dev/null; then
-    echo "Workspace directory found: s3://\${S3_BUCKET_NAME}/env:/\${TF_WORKSPACE}/"
-    
-    # List contents before deletion for logging
-    echo 'Contents to be deleted:'
-    aws s3 ls "s3://\${S3_BUCKET_NAME}/env:/\${TF_WORKSPACE}/" --recursive --region "\${AWS_REGION}" || echo 'No contents found'
-    
-    # Delete the entire workspace directory
-    echo 'Deleting workspace directory...'
-    aws s3 rm "s3://\${S3_BUCKET_NAME}/env:/\${TF_WORKSPACE}/" --recursive --region "\${AWS_REGION}"
-    
-    # Verify deletion
-    echo 'Verifying deletion...'
-    if aws s3 ls "s3://\${S3_BUCKET_NAME}/env:/\${TF_WORKSPACE}/" --region "\${AWS_REGION}" 2>/dev/null; then
-        echo 'ERROR: Failed to delete workspace directory'
-        exit 1
-    else
-        echo '✅ Successfully deleted workspace directory'
-    fi
-else
-    echo 'ℹ️ Workspace directory does not exist in S3 - nothing to clean up'
-fi
-
-echo '=== S3 Workspace Cleanup Complete ==='
-"""
-    
-    // Execute S3 cleanup script with proper AWS credentials
-    withCredentials(getCredentialsList()) {
-      executeScriptInContainer(cleanupScript, [
-        'AWS_REGION': env.AWS_REGION,
-        'S3_BUCKET_NAME': env.S3_BUCKET_NAME
-      ])
+    // Execute S3 cleanup using official AWS CLI Docker image
+    withCredentials([
+      string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+      string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+    ]) {
+      sh """
+        echo '=== S3 Workspace Cleanup ==='
+        echo "Target workspace: ${env.TF_WORKSPACE}"
+        echo "S3 bucket: ${env.S3_BUCKET_NAME}"
+        echo "S3 region: ${env.S3_REGION}"
+        
+        # Create cleanup script with proper escaping
+        cat > s3_cleanup.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        echo "Checking if workspace directory exists..."
+        if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --region "${env.S3_REGION}" 2>/dev/null; then
+            echo "Workspace directory found: s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/"
+            
+            # List contents before deletion for logging
+            echo "Contents to be deleted:"
+            aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_REGION}" || echo "No contents found"
+            
+            # Delete entire workspace directory
+            echo "Deleting workspace directory..."
+            aws s3 rm "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_REGION}"
+            
+            # Verify deletion
+            echo "Verifying deletion..."
+            if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --region "${env.S3_REGION}" 2>/dev/null; then
+                echo "ERROR: Failed to delete workspace directory"
+                exit 1
+            else
+                echo "✅ Successfully deleted workspace directory"
+            fi
+        else
+            echo "ℹ️ Workspace directory does not exist in S3 - nothing to clean up"
+        fi
+        EOF
+        
+        # Run AWS CLI in Docker container to execute cleanup script
+        docker run --rm \\
+          -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \\
+          -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \\
+          -e AWS_DEFAULT_REGION="${env.S3_REGION}" \\
+          -v \$(pwd)/s3_cleanup.sh:/tmp/s3_cleanup.sh \\
+          amazon/aws-cli:latest \\
+          sh /tmp/s3_cleanup.sh
+        
+        # Cleanup local script
+        rm -f s3_cleanup.sh
+        
+        echo '=== S3 Workspace Cleanup Complete ==='
+      """
     }
     
     logInfo('S3 workspace directory cleanup completed successfully')
