@@ -367,6 +367,17 @@ def generateDestructionEnvironmentFile() {
     logInfo("S3_REGION: '${env.S3_REGION}'")
     logInfo("AWS_REGION: '${env.AWS_REGION}'")
 
+    // Ensure S3 variables have values by using parameter fallbacks
+    def s3BucketName = env.S3_BUCKET_NAME ?: params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'
+    def s3KeyPrefix = env.S3_KEY_PREFIX ?: params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'
+    def s3Region = env.S3_REGION ?: params.S3_REGION ?: 'us-east-2'
+    def awsRegion = env.AWS_REGION ?: params.S3_REGION ?: 'us-east-2'
+
+    logInfo("Using S3_BUCKET_NAME: '${s3BucketName}'")
+    logInfo("Using S3_KEY_PREFIX: '${s3KeyPrefix}'")
+    logInfo("Using S3_REGION: '${s3Region}'")
+    logInfo("Using AWS_REGION: '${awsRegion}'")
+
     // Build environment content securely without direct interpolation of secrets
     def envLines = [
         '# Environment variables for infrastructure destruction containers',
@@ -375,10 +386,10 @@ def generateDestructionEnvironmentFile() {
         "JOB_NAME=${env.JOB_NAME}",
         "QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}",
         "TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}",
-        "S3_BUCKET_NAME=${env.S3_BUCKET_NAME}",
-        "S3_KEY_PREFIX=${env.S3_KEY_PREFIX}",
-        "S3_REGION=${env.S3_REGION}",
-        "AWS_REGION=${env.AWS_REGION}",
+        "S3_BUCKET_NAME=${s3BucketName}",
+        "S3_KEY_PREFIX=${s3KeyPrefix}",
+        "S3_REGION=${s3Region}",
+        "AWS_REGION=${awsRegion}",
         '',
         '# AWS Credentials for OpenTofu'
     ]
@@ -390,11 +401,16 @@ def generateDestructionEnvironmentFile() {
     envLines.add('# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)')
     envLines.add('TF_VAR_aws_access_key=' + env.AWS_ACCESS_KEY_ID)
     envLines.add('TF_VAR_aws_secret_access_key=' + env.AWS_SECRET_ACCESS_KEY)
-    envLines.add('TF_VAR_aws_region=' + env.AWS_REGION)
+    envLines.add('TF_VAR_aws_region=' + awsRegion)
 
     def envContent = envLines.join('\n')
     writeFile file: env.ENV_FILE, text: envContent
     logInfo("Environment file created: ${env.ENV_FILE}")
+    
+    // Verify the file was created correctly
+    def fileContent = readFile file: env.ENV_FILE
+    logInfo("Environment file content preview:")
+    logInfo(fileContent.split('\n').take(10).join('\n'))
 }
 
 def setupSSHKeys() {
@@ -462,6 +478,12 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
         }
 
         def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE}"
+        
+        // Ensure S3 variables are explicitly passed to container
+        def s3BucketName = env.S3_BUCKET_NAME ?: params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'
+        def s3KeyPrefix = env.S3_KEY_PREFIX ?: params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'
+        def s3Region = env.S3_REGION ?: params.S3_REGION ?: 'us-east-2'
+        def awsRegion = env.AWS_REGION ?: params.S3_REGION ?: 'us-east-2'
 
         sh """
             docker run --rm \\
@@ -470,7 +492,11 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
                 --name ${containerName} \\
                 -t --env-file ${env.ENV_FILE} \\
                 -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \\
-                -e TF_WORKSPACE=${env.TF_WORKSPACE} ${envVars} \\
+                -e TF_WORKSPACE=${env.TF_WORKSPACE} \\
+                -e S3_BUCKET_NAME="${s3BucketName}" \\
+                -e S3_KEY_PREFIX="${s3KeyPrefix}" \\
+                -e S3_REGION="${s3Region}" \\
+                -e AWS_REGION="${awsRegion}" ${envVars} \\
                 ${env.IMAGE_NAME} \\
                 sh /tmp/script.sh
         """
