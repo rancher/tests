@@ -64,11 +64,11 @@ pipeline {
     }
 
     environment {
-        // Default S3 configuration - will be auto-detected from workspace config
-        S3_BUCKET_NAME = "${getS3BucketName()}"
-        S3_KEY_PREFIX = "${getS3KeyPrefix()}"
-        S3_REGION = "${getS3Region()}"
-        AWS_REGION = "${getAwsRegion()}"
+        // Default S3 configuration - use parameters with fallbacks
+        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'}"
+        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'}"
+        S3_REGION = "${params.S3_REGION ?: 'us-east-2'}"
+        AWS_REGION = "${params.S3_REGION ?: 'us-east-2'}"
 
         // Repository configurations
         RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
@@ -182,7 +182,7 @@ pipeline {
         stage('Infrastructure Destruction Operations') {
             steps {
                 script {
-                    logInfo('Perfom infrastructure destruction with OpenTofu')
+                    logInfo('Perform infrastructure destruction with OpenTofu')
 
                     // Configuration validation
                     def requiredVars = [
@@ -492,6 +492,12 @@ def performInfrastructureDestruction() {
 
 def downloadConfigurationFromS3() {
     logInfo('Downloading configuration files from S3')
+    
+    // Add debug logging before execution
+    logInfo("S3 Bucket: ${env.S3_BUCKET_NAME}")
+    logInfo("S3 Key Prefix: ${env.S3_KEY_PREFIX}")
+    logInfo("S3 Region: ${env.S3_REGION}")
+    logInfo("AWS Region: ${env.AWS_REGION}")
 
     def scriptPath = "tests/validation/pipeline/scripts/destroy_download_config.sh"
     def scriptContent = readFile(file: scriptPath)

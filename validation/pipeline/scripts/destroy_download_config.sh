@@ -3,10 +3,6 @@
 set -e
 set -o pipefail
 
-# Remove carriage returns from the script
-tr -d '\r' < validation/pipeline/scripts/destroy_download_config.sh > /tmp/destroy_download_config.sh
-chmod +x /tmp/destroy_download_config.sh
-
 cd "${QA_INFRA_WORK_PATH}"
 
 echo 'Creating configuration directory...'
@@ -15,10 +11,16 @@ mkdir -p tofu/aws/modules/airgap
 echo 'Downloading cluster.tfvars from S3...'
 
 # Validate S3 parameters
+echo "DEBUG: Checking S3 parameters..."
+echo "DEBUG: S3_BUCKET_NAME='${S3_BUCKET_NAME}'"
+echo "DEBUG: S3_KEY_PREFIX='${S3_KEY_PREFIX}'"
+echo "DEBUG: AWS_REGION='${AWS_REGION}'"
+
 if [ -z "${S3_BUCKET_NAME}" ]; then
     echo 'ERROR: S3_BUCKET_NAME must be set'
     echo 'This parameter should be provided in the Jenkins job configuration'
     echo 'Default value: jenkins-terraform-state-storage'
+    echo 'Please check the Jenkins job parameters or environment variables'
     exit 1
 fi
 
@@ -26,6 +28,7 @@ if [ -z "${S3_KEY_PREFIX}" ]; then
     echo 'ERROR: S3_KEY_PREFIX must be set'
     echo 'This parameter should be provided in the Jenkins job configuration'
     echo 'Default value: jenkins-airgap-rke2/terraform.tfstate'
+    echo 'Please check the Jenkins job parameters or environment variables'
     exit 1
 fi
 
@@ -33,8 +36,11 @@ if [ -z "${AWS_REGION}" ]; then
     echo 'ERROR: AWS_REGION must be set'
     echo 'This parameter should be provided in the Jenkins job configuration'
     echo 'Default value: us-east-2'
+    echo 'Please check the Jenkins job parameters or environment variables'
     exit 1
 fi
+
+echo "DEBUG: All S3 parameters are valid"
 
 echo "Using S3 configuration:"
 echo "  Bucket: ${S3_BUCKET_NAME}"
