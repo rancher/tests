@@ -536,17 +536,44 @@ def downloadConfigurationFromS3() {
 def generateTofuConfiguration() {
   logInfo('Generating OpenTofu configuration files')
 
-  // Read from the host-mounted path (not container path)
-  def terraformConfig = readFile file: "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
-  logInfo("Terraform configuration loaded from ${env.TERRAFORM_VARS_FILENAME}")
+  // The cluster.tfvars file was downloaded to the shared volume, read it from there
+  def configPath = "${env.VALIDATION_VOLUME}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+  logInfo("Looking for terraform config at: ${configPath}")
+  
+  // Check if the file exists in the shared volume first
+  try {
+    def terraformConfig = readFile file: configPath
+    logInfo("Terraform configuration loaded from shared volume: ${env.TERRAFORM_VARS_FILENAME}")
 
-  terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
-  terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
-  terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
+    // Replace any placeholder variables with actual values
+    terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
 
-  // Write the configuration file
-  new File("./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}").write(terraformConfig)
-  logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
+    // Write the configuration file to the expected location
+    new File("./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}").write(terraformConfig)
+    logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
+  } catch (Exception e) {
+    logError("Failed to read terraform config from shared volume: ${e.message}")
+    logInfo("Falling back to checking host path...")
+    
+    // Fallback to host path if shared volume doesn't have the file
+    def hostConfigPath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+    try {
+      def terraformConfig = readFile file: hostConfigPath
+      logInfo("Terraform configuration loaded from host path: ${env.TERRAFORM_VARS_FILENAME}")
+      
+      terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
+      terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
+      terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
+      
+      new File("./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}").write(terraformConfig)
+      logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
+    } catch (Exception e2) {
+      logError("Failed to read terraform config from host path: ${e2.message}")
+      error("Unable to find terraform configuration file ${env.TERRAFORM_VARS_FILENAME}")
+    }
+  }
 }
 
 def generateTofuBackendConfiguration() {
@@ -630,16 +657,16 @@ def archiveDestructionFailureArtifacts() {
 
     executeInContainer(debugCommands)
 
-    sh '''
+    sh """
             # Try to copy failure artifacts if container exists
-            CONTAINER_ID=$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}\$")
-            if [ -n "$CONTAINER_ID" ]; then
-                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./
-                docker cp $CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./
+            CONTAINER_ID=\$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}\$")
+            if [ -n \"\$CONTAINER_ID\" ]; then
+                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./
+                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./
             else
-                echo "No container found to archive failure artifacts from"
+                echo \"No container found to archive failure artifacts from\"
             fi
-        '''
+        """
 
     archiveArtifacts artifacts: 'workspace-list.txt,remaining-resources.txt', allowEmptyArchive: true
     } catch (Exception e) {
