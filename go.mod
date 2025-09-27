@@ -12,6 +12,7 @@ replace (
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20191219222812-2987a591a72c
 	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20250806201723-9a7af3779b9d
 	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20250806201723-9a7af3779b9d
+	github.com/rancher/shepherd => github.com/markusewalker/shepherd v0.0.0-20250926231447-5736b4a2c2d0
 
 	github.com/rancher/tests/actions => ./actions
 	github.com/rancher/tests/interoperability => ./interoperability
@@ -73,7 +74,7 @@ require (
 	github.com/rancher/shepherd v0.0.0-20250926172531-1009274fd982
 	github.com/rancher/tests/actions v0.0.0-20250912201502-f3fc74d763e3
 	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
-	github.com/rancher/tfp-automation v0.0.0-20250917221002-70a21b9b79f1
+	github.com/rancher/tfp-automation v0.0.0-20250926183218-1454b20eb26b
 )
 
 require (

@@ -10,9 +10,6 @@ on:
         description: "Rancher tag version"
       rancher_chart_version:
         description: "Rancher chart version"
-      rancher-version-head:
-        description: "Rancher version for head"
-        default: "head"
   workflow_call:
     inputs:
       rancher_version:
