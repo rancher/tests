@@ -45,8 +45,8 @@ tofu -chdir=tofu/aws/modules/airgap init -backend-config="${TERRAFORM_BACKEND_VA
 echo 'Verifying initialization success...'
 tofu -chdir=tofu/aws/modules/airgap providers
 
-echo 'Creating/selecting target workspace: ${TF_WORKSPACE}'
-tofu -chdir=tofu/aws/modules/airgap workspace select "${TF_WORKSPACE}" || tofu -chdir=tofu/aws/modules/airgap workspace new "${TF_WORKSPACE}"
+echo 'Selecting target workspace: ${TF_WORKSPACE}'
+tofu -chdir=tofu/aws/modules/airgap workspace select "${TF_WORKSPACE}"
 
 echo 'Verifying workspace selection...'
 CURRENT_WORKSPACE=$(tofu -chdir=tofu/aws/modules/airgap workspace show)
