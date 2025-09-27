@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Consolidated prerequisites validation script for both airgap and destroy operations
+# Validates environment, OpenTofu installation, and required files
+
 echo '=== DEBUG: Environment Variables ==='
 echo "DEBUG: QA_INFRA_WORK_PATH='${QA_INFRA_WORK_PATH}'"
 echo "DEBUG: TF_WORKSPACE='${TF_WORKSPACE}'"

@@ -1306,7 +1306,7 @@ def validateInfrastructurePrerequisites() {
 
     def prerequisiteScript = """
     # Source the external prerequisites validation script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_validate_prerequisites.sh
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/tofu_validate_prerequisites.sh
     """
 
     try {
@@ -1384,7 +1384,7 @@ def initializeOpenTofu() {
 
     def initScript = """
     # Source the external OpenTofu initialization script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_initialize_tofu.sh
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/tofu_initialize.sh
     """
 
     executeScriptInContainer(initScript, [:], true)
@@ -1398,7 +1398,7 @@ def manageWorkspace() {
 set -e
 
 # Source the external workspace management script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_manage_workspace.sh
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/tofu_manage_workspace.sh
       """
 
     executeScriptInContainer(workspaceScript)

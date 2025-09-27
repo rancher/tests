@@ -320,7 +320,7 @@ def validateInfrastructurePrerequisites() {
   logInfo('Validating infrastructure prerequisites')
 
   try {
-    def scriptPath = 'tests/validation/pipeline/scripts/destroy_validate_prerequisites.sh'
+    def scriptPath = 'tests/validation/pipeline/scripts/tofu_validate_prerequisites.sh'
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent)
     logInfo('All infrastructure prerequisites validated')
@@ -728,7 +728,7 @@ region = "${env.S3_REGION}"
 def initializeOpenTofu() {
   logInfo('Initializing OpenTofu with S3 backend')
 
-  def scriptPath = 'tests/validation/pipeline/scripts/destroy_initialize_tofu.sh'
+  def scriptPath = 'tests/validation/pipeline/scripts/tofu_initialize.sh'
   def scriptContent = readFile(file: scriptPath)
   executeScriptInContainer(scriptContent, [:], true)
 }
@@ -736,7 +736,7 @@ def initializeOpenTofu() {
 def manageWorkspace() {
   logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
 
-  def scriptPath = 'tests/validation/pipeline/scripts/destroy_manage_workspace.sh'
+  def scriptPath = 'tests/validation/pipeline/scripts/tofu_manage_workspace.sh'
   def scriptContent = readFile(file: scriptPath)
   executeScriptInContainer(scriptContent)
 }
