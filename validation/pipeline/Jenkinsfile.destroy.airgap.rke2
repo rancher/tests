@@ -410,7 +410,10 @@ def generateDestructionEnvironmentFile() {
     // Verify the file was created correctly
     def fileContent = readFile file: env.ENV_FILE
     logInfo("Environment file content preview:")
-    logInfo(fileContent.split('\n').take(10).join('\n'))
+    def lines = fileContent.split('\n')
+    for (int i = 0; i < Math.min(10, lines.size()); i++) {
+        logInfo(lines[i])
+    }
 }
 
 def setupSSHKeys() {
