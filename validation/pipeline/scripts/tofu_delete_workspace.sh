@@ -45,6 +45,9 @@ echo "Checking current workspace..."
 CURRENT_WORKSPACE=$(tofu -chdir=tofu/aws/modules/airgap workspace show)
 echo "Current workspace: $CURRENT_WORKSPACE"
 
+# Store the target workspace name before potentially unsetting TF_WORKSPACE
+TARGET_WORKSPACE="${TF_WORKSPACE}"
+
 if [ "$CURRENT_WORKSPACE" = "${TF_WORKSPACE}" ]; then
     echo "Current workspace is the target workspace, switching to 'default'..."
     unset TF_WORKSPACE  # Temporarily unset to allow workspace switch
@@ -52,18 +55,18 @@ if [ "$CURRENT_WORKSPACE" = "${TF_WORKSPACE}" ]; then
     echo "Switched to default workspace"
 fi
 
-# Now delete the target workspace
-echo "Deleting workspace '${TF_WORKSPACE}'..."
-tofu -chdir=tofu/aws/modules/airgap workspace delete -force "${TF_WORKSPACE}"
+# Now delete the target workspace using the stored name
+echo "Deleting workspace '${TARGET_WORKSPACE}'..."
+tofu -chdir=tofu/aws/modules/airgap workspace delete -force "${TARGET_WORKSPACE}"
 
 # Verify deletion
 echo "Verifying workspace deletion..."
-WORKSPACE_STILL_EXISTS=$(tofu -chdir=tofu/aws/modules/airgap workspace list | grep -w "${TF_WORKSPACE}" || true)
+WORKSPACE_STILL_EXISTS=$(tofu -chdir=tofu/aws/modules/airgap workspace list | grep -w "${TARGET_WORKSPACE}" || true)
 
 if [ -z "$WORKSPACE_STILL_EXISTS" ]; then
-    echo "✅ Workspace '${TF_WORKSPACE}' deleted successfully"
+    echo "✅ Workspace '${TARGET_WORKSPACE}' deleted successfully"
 else
-    echo "ERROR: Workspace '${TF_WORKSPACE}' still exists after deletion attempt"
+    echo "ERROR: Workspace '${TARGET_WORKSPACE}' still exists after deletion attempt"
     exit 1
 fi
 
