@@ -634,53 +634,85 @@ def generateTofuBackendConfiguration() {
 
   sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
 
-  // Write the configuration file to host
-  def hostBackendPath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_BACKEND_VARS_FILENAME}"
-  def containerBackendPath = "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_BACKEND_VARS_FILENAME}"
+  // Write both backend.tf and backend.tfvars files to host
+  def hostBackendPath = "./qa-infra-automation/tofu/aws/modules/airgap/backend.tf"
+  def hostBackendVarsPath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_BACKEND_VARS_FILENAME}"
+  def containerBackendPath = "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/backend.tf"
+  def containerBackendVarsPath = "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_BACKEND_VARS_FILENAME}"
   
   dir('./qa-infra-automation') {
         dir('./tofu/aws/modules/airgap') {
-      // Generate backend.tfvars content from S3 parameters
+      // Generate backend.tf content with S3 backend configuration
+      def backendTf = """
+terraform {
+  backend "s3" {
+    bucket = "${env.S3_BUCKET_NAME}"
+    key    = "${env.S3_KEY_PREFIX}"
+    region = "${env.S3_REGION}"
+  }
+}
+"""
+      writeFile file: 'backend.tf', text: backendTf
+      logInfo("S3 backend.tf configuration written to host")
+      
+      // Also generate backend.tfvars for backward compatibility
       def backendVars = """
 bucket = "${env.S3_BUCKET_NAME}"
 key    = "${env.S3_KEY_PREFIX}"
 region = "${env.S3_REGION}"
 """
       writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
-      logInfo("S3 backend configuration written to host: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
+      logInfo("S3 backend.tfvars configuration written to host")
       
       // Show the content for debugging
-      def fileContent = readFile file: env.TERRAFORM_BACKEND_VARS_FILENAME
-      logInfo("Backend configuration content:")
-      logInfo(fileContent)
+      logInfo("Backend.tf content:")
+      logInfo(backendTf)
+      logInfo("Backend.tfvars content:")
+      logInfo(backendVars)
         }
   }
   
-  // Now copy the backend configuration file from host to container
-  logInfo("Copying backend configuration from host to container...")
-  logInfo("Host path: ${hostBackendPath}")
-  logInfo("Container path: ${containerBackendPath}")
+  // Now copy both backend configuration files from host to container
+  logInfo("Copying backend configuration files from host to container...")
   
   try {
+    // Copy backend.tf
     sh """
       docker run --rm \
         -v ${env.VALIDATION_VOLUME}:/root \
         -v ${pwd()}/qa-infra-automation/tofu/aws/modules/airgap:/host_input \
         ${env.IMAGE_NAME} \
-        cp /host_input/${env.TERRAFORM_BACKEND_VARS_FILENAME} ${containerBackendPath}
+        cp /host_input/backend.tf ${containerBackendPath}
     """
     
-    logInfo("Backend configuration copied to container")
+    // Copy backend.tfvars
+    sh """
+      docker run --rm \
+        -v ${env.VALIDATION_VOLUME}:/root \
+        -v ${pwd()}/qa-infra-automation/tofu/aws/modules/airgap:/host_input \
+        ${env.IMAGE_NAME} \
+        cp /host_input/${env.TERRAFORM_BACKEND_VARS_FILENAME} ${containerBackendVarsPath}
+    """
     
-    // Verify the file was copied to container
+    logInfo("Backend configuration files copied to container")
+    
+    // Verify the files were copied to container
     sh """
       docker run --rm \
         -v ${env.VALIDATION_VOLUME}:/root \
         ${env.IMAGE_NAME} \
-        test -f ${containerBackendPath} && echo "Backend file exists in container" || echo "Backend file does NOT exist in container"
+        test -f ${containerBackendPath} && echo "backend.tf exists in container" || echo "backend.tf does NOT exist in container"
+    """
+    
+    sh """
+      docker run --rm \
+        -v ${env.VALIDATION_VOLUME}:/root \
+        ${env.IMAGE_NAME} \
+        test -f ${containerBackendVarsPath} && echo "backend.tfvars exists in container" || echo "backend.tfvars does NOT exist in container"
     """
     
     // Show the file content in container
+    logInfo("Backend.tf content in container:")
     sh """
       docker run --rm \
         -v ${env.VALIDATION_VOLUME}:/root \
@@ -690,7 +722,7 @@ region = "${env.S3_REGION}"
     
   } catch (Exception e) {
     logError("Failed to copy backend configuration to container: ${e.message}")
-    error("Unable to copy backend configuration file to container")
+    error("Unable to copy backend configuration files to container")
   }
 }
 
