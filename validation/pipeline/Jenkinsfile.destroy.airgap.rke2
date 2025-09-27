@@ -259,6 +259,9 @@ pipeline {
         success {
       script {
         logInfo('Destruction pipeline completed successfully')
+        
+        // Clean up S3 workspace directory after successful destruction
+        cleanupS3WorkspaceDirectory()
       }
         }
 
@@ -850,6 +853,72 @@ def archiveBuildArtifacts(artifacts) {
     logInfo("Artifacts archived: ${artifacts.join(', ')}")
     } catch (Exception e) {
     logError("Failed to archive artifacts: ${e.message}")
+  }
+}
+
+def cleanupS3WorkspaceDirectory() {
+  logInfo('Cleaning up S3 workspace directory after successful destruction')
+  
+  try {
+    // Validate required S3 variables are available
+    def requiredS3Vars = ['S3_BUCKET_NAME', 'S3_REGION', 'TF_WORKSPACE']
+    validateRequiredVariables(requiredS3Vars)
+    
+    logInfo("Preparing to clean up S3 directory: env:/${env.TF_WORKSPACE}")
+    logInfo("S3 Bucket: ${env.S3_BUCKET_NAME}")
+    logInfo("S3 Region: ${env.S3_REGION}")
+    
+    def cleanupScript = """
+#!/bin/bash
+set -e
+
+echo '=== S3 Workspace Cleanup ==='
+echo "Target workspace: \${TF_WORKSPACE}"
+echo "S3 bucket: \${S3_BUCKET_NAME}"
+echo "S3 region: \${AWS_REGION}"
+
+# Check if the workspace directory exists in S3
+echo 'Checking if workspace directory exists...'
+if aws s3 ls "s3://\${S3_BUCKET_NAME}/env:/\${TF_WORKSPACE}/" --region "\${AWS_REGION}" 2>/dev/null; then
+    echo "Workspace directory found: s3://\${S3_BUCKET_NAME}/env:/\${TF_WORKSPACE}/"
+    
+    # List contents before deletion for logging
+    echo 'Contents to be deleted:'
+    aws s3 ls "s3://\${S3_BUCKET_NAME}/env:/\${TF_WORKSPACE}/" --recursive --region "\${AWS_REGION}" || echo 'No contents found'
+    
+    # Delete the entire workspace directory
+    echo 'Deleting workspace directory...'
+    aws s3 rm "s3://\${S3_BUCKET_NAME}/env:/\${TF_WORKSPACE}/" --recursive --region "\${AWS_REGION}"
+    
+    # Verify deletion
+    echo 'Verifying deletion...'
+    if aws s3 ls "s3://\${S3_BUCKET_NAME}/env:/\${TF_WORKSPACE}/" --region "\${AWS_REGION}" 2>/dev/null; then
+        echo 'ERROR: Failed to delete workspace directory'
+        exit 1
+    else
+        echo '✅ Successfully deleted workspace directory'
+    fi
+else
+    echo 'ℹ️ Workspace directory does not exist in S3 - nothing to clean up'
+fi
+
+echo '=== S3 Workspace Cleanup Complete ==='
+"""
+    
+    // Execute S3 cleanup script with proper AWS credentials
+    withCredentials(getCredentialsList()) {
+      executeScriptInContainer(cleanupScript, [
+        'AWS_REGION': env.AWS_REGION,
+        'S3_BUCKET_NAME': env.S3_BUCKET_NAME
+      ])
+    }
+    
+    logInfo('S3 workspace directory cleanup completed successfully')
+    
+  } catch (Exception e) {
+    logError("S3 workspace directory cleanup failed: ${e.message}")
+    logWarning('Manual cleanup may be required for S3 directory: env:/${env.TF_WORKSPACE}')
+    // Don't fail the build, just log the warning
   }
 }
 
