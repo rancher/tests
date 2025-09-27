@@ -47,32 +47,25 @@ echo "  Bucket: ${S3_BUCKET_NAME}"
 echo "  Key Prefix: ${S3_KEY_PREFIX}"
 echo "  Region: ${AWS_REGION}"
 
-# Extract S3 directory path and filename from KEY_PREFIX
+# For cluster.tfvars, we need to derive the path from the S3_KEY_PREFIX
+# If S3_KEY_PREFIX is "jenkins-airgap-rke2/terraform.tfstate", then cluster.tfvars should be in "jenkins-airgap-rke2/"
 S3_DIR="${S3_KEY_PREFIX%/*}"
-S3_FILE="${S3_KEY_PREFIX##*/}"
-
-# Validate extraction
-if [ -z "${S3_DIR}" ] || [ -z "${S3_FILE}" ]; then
-    echo "ERROR: Invalid S3_KEY_PREFIX format: ${S3_KEY_PREFIX}"
-    echo "Expected format: path/to/file.tfvars"
-    echo "Example: jenkins-airgap-rke2/terraform.tfstate"
-    exit 1
-fi
+CLUSTER_TFVARS_FILE="cluster.tfvars"
 
 echo "Parsed S3 path:"
 echo "  Directory: ${S3_DIR}"
-echo "  File: ${S3_FILE}"
+echo "  File to download: ${CLUSTER_TFVARS_FILE}"
 
-# Download from S3 with explicit path
-echo "Downloading s3://${S3_BUCKET_NAME}/${S3_DIR}/${S3_FILE}..."
+# Download cluster.tfvars from S3
+echo "Downloading s3://${S3_BUCKET_NAME}/${S3_DIR}/${CLUSTER_TFVARS_FILE}..."
 aws s3 cp \
-    "s3://${S3_BUCKET_NAME}/${S3_DIR}/${S3_FILE}" \
-    "tofu/aws/modules/airgap/${S3_FILE}" \
+    "s3://${S3_BUCKET_NAME}/${S3_DIR}/${CLUSTER_TFVARS_FILE}" \
+    "tofu/aws/modules/airgap/${CLUSTER_TFVARS_FILE}" \
     --region "${AWS_REGION}"
 
 if [ $? -eq 0 ]; then
     echo 'SUCCESS: cluster.tfvars downloaded from S3'
-    ls -la "tofu/aws/modules/airgap/${S3_FILE}"
+    ls -la "tofu/aws/modules/airgap/${CLUSTER_TFVARS_FILE}"
 else
     echo 'ERROR: Failed to download cluster.tfvars from S3'
     echo 'Available files in S3 config directory:'
