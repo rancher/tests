@@ -536,42 +536,60 @@ def downloadConfigurationFromS3() {
 def generateTofuConfiguration() {
   logInfo('Generating OpenTofu configuration files')
 
-  // The cluster.tfvars file was downloaded to the shared volume, read it from there
-  def configPath = "${env.VALIDATION_VOLUME}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
-  logInfo("Looking for terraform config at: ${configPath}")
+  // The cluster.tfvars file was downloaded to the container's shared volume
+  // We need to copy it from the container to the host filesystem
+  def containerConfigPath = "/root/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+  def hostConfigPath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
   
-  // Check if the file exists in the shared volume first
+  logInfo("Copying terraform config from container to host...")
+  logInfo("Container path: ${containerConfigPath}")
+  logInfo("Host path: ${hostConfigPath}")
+  
   try {
-    def terraformConfig = readFile file: configPath
-    logInfo("Terraform configuration loaded from shared volume: ${env.TERRAFORM_VARS_FILENAME}")
+    // Create the directory structure on host if it doesn't exist
+    sh "mkdir -p ./qa-infra-automation/tofu/aws/modules/airgap"
+    
+    // Copy the file from the container to the host using a temporary container
+    sh """
+      docker run --rm \
+        -v ${env.VALIDATION_VOLUME}:/root \
+        -v ${pwd()}/qa-infra-automation/tofu/aws/modules/airgap:/host_output \
+        ${env.IMAGE_NAME} \
+        cp ${containerConfigPath} /host_output/${env.TERRAFORM_VARS_FILENAME}
+    """
+    
+    logInfo("Terraform configuration copied from container to host")
+    
+    // Now read the file from the host path
+    def terraformConfig = readFile file: hostConfigPath
+    logInfo("Terraform configuration loaded from: ${hostConfigPath}")
 
     // Replace any placeholder variables with actual values
     terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
     terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
     terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
 
-    // Write the configuration file to the expected location
-    new File("./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}").write(terraformConfig)
-    logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
-  } catch (Exception e) {
-    logError("Failed to read terraform config from shared volume: ${e.message}")
-    logInfo("Falling back to checking host path...")
+    // Write the configuration file back to the expected location
+    new File(hostConfigPath).write(terraformConfig)
+    logInfo("Terraform configuration processed and written to: ${hostConfigPath}")
     
-    // Fallback to host path if shared volume doesn't have the file
-    def hostConfigPath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+  } catch (Exception e) {
+    logError("Failed to copy terraform config from container: ${e.message}")
+    
+    // Fallback: try to read directly from host path if it exists
     try {
       def terraformConfig = readFile file: hostConfigPath
-      logInfo("Terraform configuration loaded from host path: ${env.TERRAFORM_VARS_FILENAME}")
+      logInfo("Terraform configuration found on host at: ${hostConfigPath}")
       
       terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
       terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
       terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
       
-      new File("./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}").write(terraformConfig)
-      logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
+      new File(hostConfigPath).write(terraformConfig)
+      logInfo("Terraform configuration processed from host path")
     } catch (Exception e2) {
       logError("Failed to read terraform config from host path: ${e2.message}")
-      error("Unable to find terraform configuration file ${env.TERRAFORM_VARS_FILENAME}")
+      error("Unable to find or copy terraform configuration file ${env.TERRAFORM_VARS_FILENAME}")
     }
   }
 }
