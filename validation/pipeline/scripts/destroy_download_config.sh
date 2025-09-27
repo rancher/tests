@@ -66,12 +66,9 @@ echo "  File: ${S3_FILE}"
 # Download from S3 with explicit path
 echo "Downloading s3://${S3_BUCKET_NAME}/${S3_DIR}/${S3_FILE}..."
 aws s3 cp \
-    "s3://${S3_BUCKET_NAME}/${S3_DIR}" \
-    --region "${AWS_REGION}" \
-    --recursive \
-    --exclude "*" \
-    --include "${S3_FILE}" \
-    tofu/aws/modules/airgap/
+    "s3://${S3_BUCKET_NAME}/${S3_DIR}/${S3_FILE}" \
+    "tofu/aws/modules/airgap/${S3_FILE}" \
+    --region "${AWS_REGION}"
 
 if [ $? -eq 0 ]; then
     echo 'SUCCESS: cluster.tfvars downloaded from S3'
