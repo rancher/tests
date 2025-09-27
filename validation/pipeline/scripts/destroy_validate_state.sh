@@ -24,9 +24,7 @@ if [ "$STATE_COUNT" -gt 0 ]; then
     echo 'WARNING: Resources found in state - this may indicate infrastructure was not destroyed successfully'
     cat /root/state-list.txt
 else
-    echo "SUCCESS: State contains $(STATE_COUNT) resources"
-    echo 'Sample state resources:'
-    head -5 /root/state-list.txt
+    echo "SUCCESS: State contains $STATE_COUNT resources"
 fi
 
 echo 'Generating and validating outputs from remote state...'
@@ -40,7 +38,7 @@ fi
 
 OUTPUT_SIZE=$(stat -c%s /root/infrastructure-outputs.json 2>/dev/null || echo 0)
 if [ "$OUTPUT_SIZE" -gt 0 ]; then
-    echo 'ERROR: Outputs file is not empty ($OUTPUT_SIZE bytes)'
+    echo "ERROR: Outputs file is not empty ($OUTPUT_SIZE bytes)"
 else
     echo 'SUCCESS: Outputs file is empty'
 fi
