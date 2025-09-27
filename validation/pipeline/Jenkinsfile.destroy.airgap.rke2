@@ -569,7 +569,7 @@ def generateTofuConfiguration() {
     terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
 
     // Write the configuration file back to the expected location
-    new File(hostConfigPath).write(terraformConfig)
+    writeFile file: hostConfigPath, text: terraformConfig
     logInfo("Terraform configuration processed and written to: ${hostConfigPath}")
     
   } catch (Exception e) {
@@ -584,7 +584,7 @@ def generateTofuConfiguration() {
       terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
       terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
       
-      new File(hostConfigPath).write(terraformConfig)
+      writeFile file: hostConfigPath, text: terraformConfig
       logInfo("Terraform configuration processed from host path")
     } catch (Exception e2) {
       logError("Failed to read terraform config from host path: ${e2.message}")
