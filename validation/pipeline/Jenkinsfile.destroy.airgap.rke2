@@ -513,7 +513,6 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 
 def performInfrastructureDestruction() {
   initializeOpenTofu()
-  manageWorkspace()
   executeDestruction()
 
   logInfo('Infrastructure destruction completed successfully')

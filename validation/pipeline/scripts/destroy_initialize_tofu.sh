@@ -45,8 +45,24 @@ tofu -chdir=tofu/aws/modules/airgap init -backend-config="${TERRAFORM_BACKEND_VA
 echo 'Verifying initialization success...'
 tofu -chdir=tofu/aws/modules/airgap providers
 
-echo 'Selecting target workspace: ${TF_WORKSPACE}'
-tofu -chdir=tofu/aws/modules/airgap workspace select "${TF_WORKSPACE}"
+echo 'Checking target workspace: ${TF_WORKSPACE}'
+
+# When TF_WORKSPACE is set, OpenTofu automatically uses it
+# We just need to verify the workspace exists or create it if it doesn't
+echo 'Checking if workspace exists...'
+WORKSPACE_EXISTS=$(tofu -chdir=tofu/aws/modules/airgap workspace list | grep -w "${TF_WORKSPACE}" || true)
+
+if [ -z "$WORKSPACE_EXISTS" ]; then
+    echo "Workspace ${TF_WORKSPACE} does not exist, creating it..."
+    # Temporarily unset TF_WORKSPACE to allow workspace creation
+    unset TF_WORKSPACE
+    tofu -chdir=tofu/aws/modules/airgap workspace new "${TF_WORKSPACE}"
+    # Set TF_WORKSPACE back for subsequent operations
+    export TF_WORKSPACE="${TF_WORKSPACE}"
+    echo "Workspace ${TF_WORKSPACE} created successfully"
+else
+    echo "Workspace ${TF_WORKSPACE} already exists"
+fi
 
 echo 'Verifying workspace selection...'
 CURRENT_WORKSPACE=$(tofu -chdir=tofu/aws/modules/airgap workspace show)
