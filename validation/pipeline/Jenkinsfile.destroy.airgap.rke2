@@ -538,11 +538,9 @@ def generateTofuConfiguration() {
 
   // The cluster.tfvars file was downloaded to the container's shared volume
   // We need to copy it from the container to the host filesystem
-  def containerConfigPath = "/root/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
   def hostConfigPath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
   
   logInfo("Copying terraform config from container to host...")
-  logInfo("Container path: ${containerConfigPath}")
   logInfo("Host path: ${hostConfigPath}")
   
   try {
@@ -550,12 +548,13 @@ def generateTofuConfiguration() {
     sh "mkdir -p ./qa-infra-automation/tofu/aws/modules/airgap"
     
     // Copy the file from the container to the host using a temporary container
+    // The file is at: ${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/cluster.tfvars
     sh """
       docker run --rm \
         -v ${env.VALIDATION_VOLUME}:/root \
         -v ${pwd()}/qa-infra-automation/tofu/aws/modules/airgap:/host_output \
         ${env.IMAGE_NAME} \
-        cp ${containerConfigPath} /host_output/${env.TERRAFORM_VARS_FILENAME}
+        cp ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME} /host_output/${env.TERRAFORM_VARS_FILENAME}
     """
     
     logInfo("Terraform configuration copied from container to host")
