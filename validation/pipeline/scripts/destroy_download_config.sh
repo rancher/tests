@@ -15,10 +15,10 @@ echo "DEBUG: Checking S3 parameters..."
 echo "DEBUG: S3_BUCKET_NAME='${S3_BUCKET_NAME}'"
 echo "DEBUG: S3_KEY_PREFIX='${S3_KEY_PREFIX}'"
 echo "DEBUG: AWS_REGION='${AWS_REGION}'"
-echo "DEBUG: TARGET_WORKSPACE='${TARGET_WORKSPACE}'"
+echo "DEBUG: TF_WORKSPACE='${TF_WORKSPACE}'"
 
-if [ -z "${TARGET_WORKSPACE}" ]; then
-    echo 'ERROR: TARGET_WORKSPACE must be set'
+if [ -z "${TF_WORKSPACE}" ]; then
+    echo 'ERROR: TF_WORKSPACE must be set'
     echo 'This parameter should be provided in the Jenkins job configuration'
     echo 'Please check the Jenkins job parameters or environment variables'
     exit 1
@@ -65,9 +65,9 @@ echo "  Directory: ${S3_DIR}"
 echo "  File to download: ${CLUSTER_TFVARS_FILE}"
 
 # Download cluster.tfvars from S3
-echo "Downloading s3://${S3_BUCKET_NAME}/${S3_DIR}/${TARGET_WORKSPACE}/config/${CLUSTER_TFVARS_FILE}..."
+echo "Downloading s3://${S3_BUCKET_NAME}/${S3_DIR}/${TF_WORKSPACE}/config/${CLUSTER_TFVARS_FILE}..."
 aws s3 cp \
-    "s3://${S3_BUCKET_NAME}/${S3_DIR}/${TARGET_WORKSPACE}/config/${CLUSTER_TFVARS_FILE}" \
+    "s3://${S3_BUCKET_NAME}/${S3_DIR}/${TF_WORKSPACE}/config/${CLUSTER_TFVARS_FILE}" \
     "tofu/aws/modules/airgap/${CLUSTER_TFVARS_FILE}" \
     --region "${AWS_REGION}"
 
@@ -77,7 +77,7 @@ if [ $? -eq 0 ]; then
 else
     echo 'ERROR: Failed to download cluster.tfvars from S3'
     echo 'Available files in S3 config directory:'
-    aws s3 ls "s3://${S3_BUCKET_NAME}/${S3_DIR}/${TARGET_WORKSPACE}/config" --region "${AWS_REGION}" || echo 'Failed to list S3 contents'
+    aws s3 ls "s3://${S3_BUCKET_NAME}/${S3_DIR}/${TF_WORKSPACE}/config" --region "${AWS_REGION}" || echo 'Failed to list S3 contents'
     exit 1
 fi
 
