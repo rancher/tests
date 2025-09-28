@@ -383,6 +383,115 @@ pipeline {
                 }
             }
         }
+
+        stage('Setup Ansible Environment') {
+            steps {
+                script {
+                    logInfo('Setting up Ansible environment for RKE2 deployment')
+
+                    // Configuration validation for Ansible
+                    def requiredAnsibleVars = [
+                        'QA_INFRA_WORK_PATH',
+                        'ANSIBLE_VARS_FILENAME',
+                        'ANSIBLE_TIMEOUT'
+                    ]
+
+                    validateRequiredVariables(requiredAnsibleVars)
+
+                    // Enhanced timeout with reasonable defaults
+                    def timeoutMinutes = env.ANSIBLE_TIMEOUT ?
+                        Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
+
+                    timeout(time: timeoutMinutes, unit: 'MINUTES') {
+                        try {
+                            // Generate Ansible inventory from Terraform outputs
+                            generateAnsibleInventory()
+
+                            // Generate Ansible group_vars/all.yml from ANSIBLE_CONFIG parameter
+                            generateAnsibleGroupVars()
+
+                            // Setup SSH keys for Ansible connectivity
+                            setupAnsibleSSHKeys()
+
+                            logInfo('Ansible environment setup completed successfully')
+                        } catch (Exception e) {
+                            logError("Ansible environment setup failed: ${e.message}")
+                            throw e
+                        }
+                    }
+                }
+            }
+            post {
+                failure {
+                    script {
+                        logError('Ansible environment setup failed')
+                        // Archive failure artifacts for debugging
+                        archiveAnsibleFailureArtifacts()
+                    }
+                }
+            }
+        }
+
+        stage('Deploy RKE2 with Ansible') {
+            steps {
+                script {
+                    logInfo('Deploying RKE2 cluster using Ansible playbooks')
+
+                    // Configuration validation
+                    def requiredAnsibleVars = [
+                        'QA_INFRA_WORK_PATH',
+                        'ANSIBLE_VARS_FILENAME',
+                        'ANSIBLE_TIMEOUT'
+                    ]
+
+                    validateRequiredVariables(requiredAnsibleVars)
+
+                    // Enhanced timeout with reasonable defaults
+                    def timeoutMinutes = env.ANSIBLE_TIMEOUT ?
+                        Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
+
+                    timeout(time: timeoutMinutes, unit: 'MINUTES') {
+                        try {
+                            // Run SSH key setup playbook
+                            runAnsibleSSHSetup()
+
+                            // Run main RKE2 tarball deployment playbook
+                            runRKE2TarballDeployment()
+
+                            // Setup kubectl access on bastion
+                            setupKubectlAccess()
+
+                            logInfo('RKE2 deployment completed successfully')
+                        } catch (Exception e) {
+                            logError("RKE2 Ansible deployment failed: ${e.message}")
+                            handleAnsibleDeploymentFailure()
+                        }
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
+                        logInfo('RKE2 Ansible deployment succeeded')
+                        // Archive Ansible deployment artifacts
+                        archiveAnsibleDeploymentArtifacts()
+                    }
+                }
+                failure {
+                    script {
+                        logError('RKE2 Ansible deployment failed')
+                        // Archive failure artifacts for debugging
+                        archiveAnsibleFailureArtifacts()
+                        
+                        // Trigger infrastructure cleanup if enabled
+                        if (env.DESTROY_ON_FAILURE.toBoolean()) {
+                            logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup')
+                            handleAnsibleDeploymentFailure()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     post {
@@ -1442,4 +1551,209 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
         cp qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ./
     fi
     """
+}
+
+// ========================================
+// ANSIBLE DEPLOYMENT FUNCTIONS
+// ========================================
+
+def generateAnsibleInventory() {
+    logInfo('Generating Ansible inventory from Terraform outputs')
+    
+    def inventoryScript = """
+#!/bin/bash
+set -e
+
+# Source the external Ansible inventory generation script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_generate_inventory.sh
+    """
+    
+    try {
+        executeScriptInContainer(inventoryScript)
+        logInfo('Ansible inventory generated successfully')
+    } catch (Exception e) {
+        def errorMsg = "Ansible inventory generation failed: ${e.message}"
+        logError(errorMsg)
+        error(errorMsg)
+    }
+}
+
+def generateAnsibleGroupVars() {
+    logInfo('Generating Ansible group_vars/all.yml from ANSIBLE_CONFIG parameter')
+    
+    if (!env.ANSIBLE_CONFIG) {
+        logWarning('ANSIBLE_CONFIG parameter is empty - using default configuration')
+        // Create a minimal default configuration
+        def defaultConfig = """
+# Default Ansible configuration for RKE2 airgap deployment
+rke2_version: "${env.RKE2_VERSION}"
+rancher_version: "${env.RANCHER_VERSION}"
+private_registry_url: "${env.PRIVATE_REGISTRY_URL}"
+private_registry_username: "${env.PRIVATE_REGISTRY_USERNAME}"
+airgap_deployment: true
+"""
+        env.ANSIBLE_CONFIG = defaultConfig
+    }
+    
+    def groupVarsScript = """
+#!/bin/bash
+set -e
+
+# Source the external Ansible group_vars generation script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_generate_group_vars.sh
+    """
+    
+    try {
+        executeScriptInContainer(groupVarsScript)
+        logInfo('Ansible group_vars generated successfully')
+    } catch (Exception e) {
+        def errorMsg = "Ansible group_vars generation failed: ${e.message}"
+        logError(errorMsg)
+        error(errorMsg)
+    }
+}
+
+def setupAnsibleSSHKeys() {
+    logInfo('Setting up SSH keys for Ansible connectivity')
+    
+    def sshSetupScript = """
+#!/bin/bash
+set -e
+
+# Source the external Ansible SSH key setup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_setup_ssh_keys.sh
+    """
+    
+    try {
+        executeScriptInContainer(sshSetupScript)
+        logInfo('Ansible SSH keys setup completed successfully')
+    } catch (Exception e) {
+        def errorMsg = "Ansible SSH key setup failed: ${e.message}"
+        logError(errorMsg)
+        error(errorMsg)
+    }
+}
+
+def runAnsibleSSHSetup() {
+    logInfo('Running Ansible SSH key setup playbook')
+    
+    def sshSetupPlaybookScript = """
+#!/bin/bash
+set -e
+
+# Source the external Ansible SSH setup playbook script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_run_ssh_setup.sh
+    """
+    
+    try {
+        executeScriptInContainer(sshSetupPlaybookScript)
+        logInfo('Ansible SSH setup playbook executed successfully')
+    } catch (Exception e) {
+        def errorMsg = "Ansible SSH setup playbook failed: ${e.message}"
+        logError(errorMsg)
+        error(errorMsg)
+    }
+}
+
+def runRKE2TarballDeployment() {
+    logInfo('Running RKE2 tarball deployment playbook')
+    
+    def rke2DeploymentScript = """
+#!/bin/bash
+set -e
+
+# Source the external RKE2 tarball deployment script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_run_rke2_deployment.sh
+    """
+    
+    try {
+        executeScriptInContainer(rke2DeploymentScript)
+        logInfo('RKE2 tarball deployment playbook executed successfully')
+    } catch (Exception e) {
+        def errorMsg = "RKE2 tarball deployment playbook failed: ${e.message}"
+        logError(errorMsg)
+        error(errorMsg)
+    }
+}
+
+def setupKubectlAccess() {
+    logInfo('Setting up kubectl access on bastion host')
+    
+    def kubectlSetupScript = """
+#!/bin/bash
+set -e
+
+# Source the external kubectl access setup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_setup_kubectl.sh
+    """
+    
+    try {
+        executeScriptInContainer(kubectlSetupScript)
+        logInfo('kubectl access setup completed successfully')
+    } catch (Exception e) {
+        def errorMsg = "kubectl access setup failed: ${e.message}"
+        logError(errorMsg)
+        error(errorMsg)
+    }
+}
+
+def handleAnsibleDeploymentFailure() {
+    logError("Ansible deployment failed - initiating cleanup")
+    try {
+        archiveAnsibleFailureArtifacts()
+        if (env.DESTROY_ON_FAILURE.toBoolean()) {
+            logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for Ansible failure')
+            def cleanupScript = """
+#!/bin/bash
+set -e
+
+# Source the external Ansible failure cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_failure_cleanup.sh
+            """
+            executeScriptInContainer(cleanupScript)
+            logInfo('Infrastructure cleanup attempted for Ansible failure')
+        } else {
+            logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for Ansible failure')
+            logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
+        }
+        cleanupContainersAndVolumes()
+    } catch (cleanupException) {
+        logError("Cleanup during Ansible failure handling failed: ${cleanupException.message}")
+    }
+    throw new Exception("Ansible deployment failed")
+}
+
+def archiveAnsibleDeploymentArtifacts() {
+    logInfo('Archiving Ansible deployment artifacts')
+    try {
+        archiveBuildArtifacts([
+            'ansible-inventory.yml',
+            'group_vars/all.yml',
+            'ansible-logs.txt',
+            'rke2-deployment-logs.txt',
+            'kubectl-setup-logs.txt',
+            'deployment-summary.json'
+        ])
+        logInfo('Ansible deployment artifacts archived successfully')
+    } catch (Exception e) {
+        logError("Ansible deployment artifacts archival failed: ${e.message}")
+    }
+}
+
+def archiveAnsibleFailureArtifacts() {
+    logInfo('Archiving Ansible failure artifacts')
+    try {
+        archiveBuildArtifacts([
+            'ansible-inventory.yml',
+            'group_vars/all.yml',
+            'ansible-error-logs.txt',
+            'ssh-setup-error-logs.txt',
+            'rke2-deployment-error-logs.txt',
+            'kubectl-setup-error-logs.txt',
+            'ansible-debug-info.txt'
+        ])
+        logInfo('Ansible failure artifacts archived successfully')
+    } catch (Exception e) {
+        logError("Ansible failure artifacts archival failed: ${e.message}")
+    }
 }
