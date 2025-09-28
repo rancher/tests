@@ -7,8 +7,8 @@ set -e
 echo "=== Ansible RKE2 Tarball Deployment Started ==="
 
 # Validate required files
-if [[ ! -f "/root/ansible-inventory.yml" ]]; then
-    echo "ERROR: Ansible inventory file not found at /root/ansible-inventory.yml"
+if [[ ! -f "/root/ansible/rke2/airgap/inventory.yml" ]]; then
+    echo "ERROR: Ansible inventory file not found at /root/ansible/rke2/airgap/inventory.yml"
     exit 1
 fi
 
@@ -294,7 +294,7 @@ echo "RKE2 tarball deployment playbook created successfully"
 
 # Run the RKE2 deployment playbook
 echo "Running RKE2 tarball deployment playbook..."
-ansible-playbook -i /root/ansible-inventory.yml rke2_tarball_deployment.yml -v
+ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml rke2_tarball_deployment.yml -v
 
 echo "RKE2 tarball deployment playbook execution completed"
 
