@@ -7,8 +7,8 @@ set -e
 echo "=== Ansible Group Vars Generation Started ==="
 
 # Validate required environment variables
-if [[ -z "${ANSIBLE_CONFIG}" ]]; then
-    echo "ERROR: ANSIBLE_CONFIG environment variable is not set"
+if [[ -z "${ANSIBLE_VARIABLES}" ]]; then
+    echo "ERROR: ANSIBLE_VARIABLES environment variable is not set"
     exit 1
 fi
 
@@ -20,15 +20,15 @@ fi
 # Create group_vars directory structure
 mkdir -p /root/group_vars
 
-echo "Creating group_vars/all.yml from ANSIBLE_CONFIG parameter"
+echo "Creating group_vars/all.yml from ANSIBLE_VARIABLES parameter"
 
-# Write the ANSIBLE_CONFIG content to group_vars/all.yml
+# Write the ANSIBLE_VARIABLES content to group_vars/all.yml
 cat > /root/group_vars/all.yml << EOF
-# Ansible Group Variables Generated from ANSIBLE_CONFIG Parameter
+# Ansible Group Variables Generated from ANSIBLE_VARIABLES Parameter
 # Generated on: $(date)
 # Workspace: ${TF_WORKSPACE}
 
-${ANSIBLE_CONFIG}
+${ANSIBLE_VARIABLES}
 
 # Additional system-generated variables
 ansible_python_interpreter: /usr/bin/python3
