@@ -861,16 +861,17 @@ def archiveBuildArtifacts(artifacts) {
 }
 
 def cleanupS3WorkspaceDirectory() {
-  logInfo('Cleaning up S3 workspace directory after successful destruction')
+  logInfo('Cleaning up S3 workspace directory and terraform state after successful destruction')
   
   try {
     // Validate required S3 variables are available
-    def requiredS3Vars = ['S3_BUCKET_NAME', 'S3_REGION', 'TF_WORKSPACE']
+    def requiredS3Vars = ['S3_BUCKET_NAME', 'S3_REGION', 'S3_KEY_PREFIX', 'TF_WORKSPACE']
     validateRequiredVariables(requiredS3Vars)
     
     logInfo("Preparing to clean up S3 directory: env:/${env.TF_WORKSPACE}")
     logInfo("S3 Bucket: ${env.S3_BUCKET_NAME}")
     logInfo("S3 Region: ${env.S3_REGION}")
+    logInfo("S3 Key Prefix (terraform.tfstate): ${env.S3_KEY_PREFIX}")
     
     // Execute S3 cleanup using official AWS CLI Docker image
     withCredentials([
@@ -878,22 +879,24 @@ def cleanupS3WorkspaceDirectory() {
       string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
     ]) {
       sh """
-        echo '=== S3 Workspace Cleanup ==='
+        echo '=== S3 Cleanup Complete ==='
         echo "Target workspace: ${env.TF_WORKSPACE}"
         echo "S3 bucket: ${env.S3_BUCKET_NAME}"
         echo "S3 region: ${env.S3_REGION}"
+        echo "Terraform state file: ${env.S3_KEY_PREFIX}"
         
         # Create cleanup script with proper escaping
         cat > s3_cleanup.sh << 'EOF'
         #!/bin/bash
         set -e
         
+        # Clean up workspace directory (contains cluster.tfvars and other config files)
         echo "Checking if workspace directory exists..."
         if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --region "${env.S3_REGION}" 2>/dev/null; then
             echo "Workspace directory found: s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/"
             
             # List contents before deletion for logging
-            echo "Contents to be deleted:"
+            echo "Workspace contents to be deleted:"
             aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_REGION}" || echo "No contents found"
             
             # Delete entire workspace directory
@@ -901,7 +904,7 @@ def cleanupS3WorkspaceDirectory() {
             aws s3 rm "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_REGION}"
             
             # Verify deletion
-            echo "Verifying deletion..."
+            echo "Verifying workspace deletion..."
             if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --region "${env.S3_REGION}" 2>/dev/null; then
                 echo "ERROR: Failed to delete workspace directory"
                 exit 1
@@ -911,6 +914,30 @@ def cleanupS3WorkspaceDirectory() {
         else
             echo "ℹ️ Workspace directory does not exist in S3 - nothing to clean up"
         fi
+        
+        # Clean up terraform state file (stored at S3_KEY_PREFIX)
+        echo ""
+        echo "Checking if terraform state file exists..."
+        if aws s3 ls "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_REGION}" 2>/dev/null; then
+            echo "Terraform state file found: s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}"
+            
+            # Delete terraform state file
+            echo "Deleting terraform state file..."
+            aws s3 rm "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_REGION}"
+            
+            # Verify deletion
+            echo "Verifying terraform state deletion..."
+            if aws s3 ls "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_REGION}" 2>/dev/null; then
+                echo "ERROR: Failed to delete terraform state file"
+                exit 1
+            else
+                echo "✅ Successfully deleted terraform state file"
+            fi
+        else
+            echo "ℹ️ Terraform state file does not exist in S3 - nothing to clean up"
+        fi
+        
+        echo "=== S3 Cleanup Complete ==="
         EOF
         
         # Run AWS CLI in Docker container to execute cleanup script
@@ -918,6 +945,9 @@ def cleanupS3WorkspaceDirectory() {
           -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \\
           -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \\
           -e AWS_DEFAULT_REGION="${env.S3_REGION}" \\
+          -e S3_BUCKET_NAME="${env.S3_BUCKET_NAME}" \\
+          -e S3_KEY_PREFIX="${env.S3_KEY_PREFIX}" \\
+          -e TF_WORKSPACE="${env.TF_WORKSPACE}" \\
           -v \$(pwd)/s3_cleanup.sh:/tmp/s3_cleanup.sh \\
           amazon/aws-cli:latest \\
           sh /tmp/s3_cleanup.sh
@@ -925,15 +955,15 @@ def cleanupS3WorkspaceDirectory() {
         # Cleanup local script
         rm -f s3_cleanup.sh
         
-        echo '=== S3 Workspace Cleanup Complete ==='
+        echo '=== S3 Cleanup Complete ==='
       """
     }
     
-    logInfo('S3 workspace directory cleanup completed successfully')
+    logInfo('S3 cleanup completed successfully')
     
   } catch (Exception e) {
-    logError("S3 workspace directory cleanup failed: ${e.message}")
-    logWarning('Manual cleanup may be required for S3 directory: env:/${env.TF_WORKSPACE}')
+    logError("S3 cleanup failed: ${e.message}")
+    logWarning('Manual cleanup may be required for S3 resources')
     // Don't fail the build, just log the warning
   }
 }
