@@ -7,8 +7,8 @@ set -e
 echo "=== Ansible Kubectl Access Setup Started ==="
 
 # Validate required files
-if [[ ! -f "/root/ansible-inventory.yml" ]]; then
-    echo "ERROR: Ansible inventory file not found at /root/ansible-inventory.yml"
+if [[ ! -f "/root/ansible/rke2/airgap/inventory.yml" ]]; then
+    echo "ERROR: Ansible inventory file not found at /root/ansible/rke2/airgap/inventory.yml"
     exit 1
 fi
 
@@ -195,7 +195,7 @@ echo "Kubectl access setup playbook created successfully"
 
 # Run the kubectl access setup playbook
 echo "Running kubectl access setup playbook..."
-ansible-playbook -i /root/ansible-inventory.yml kubectl_access_setup.yml -v
+ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml kubectl_access_setup.yml -v
 
 echo "Kubectl access setup playbook execution completed"
 

@@ -7,8 +7,8 @@ set -e
 echo "=== Ansible SSH Setup Playbook Started ==="
 
 # Validate required files
-if [[ ! -f "/root/ansible-inventory.yml" ]]; then
-    echo "ERROR: Ansible inventory file not found at /root/ansible-inventory.yml"
+if [[ ! -f "/root/ansible/rke2/airgap/inventory.yml" ]]; then
+    echo "ERROR: Ansible inventory file not found at /root/ansible/rke2/airgap/inventory.yml"
     exit 1
 fi
 
@@ -120,7 +120,7 @@ echo "SSH setup playbook created successfully"
 
 # Run the SSH setup playbook
 echo "Running SSH setup playbook..."
-ansible-playbook -i /root/ansible-inventory.yml ssh_setup.yml -v
+ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml ssh_setup.yml -v
 
 echo "SSH setup playbook execution completed"
 
