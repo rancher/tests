@@ -2,28 +2,30 @@
 set -e
 
 # Ansible Group Vars Generation Script
-# This script generates Ansible group_vars/all.yml from ANSIBLE_CONFIG parameter
+# This script generates Ansible group_vars/all.yml from ANSIBLE_VARIABLES parameter
 
 echo "=== Ansible Group Vars Generation Started ==="
 
 # Validate required environment variables
-if [[ -z "${ANSIBLE_VARIABLES}" ]]; then
-    echo "ERROR: ANSIBLE_VARIABLES environment variable is not set"
-    exit 1
-fi
-
 if [[ -z "${QA_INFRA_WORK_PATH}" ]]; then
     echo "ERROR: QA_INFRA_WORK_PATH environment variable is not set"
     exit 1
 fi
 
+# Handle empty ANSIBLE_VARIABLES - use default configuration
+if [[ -z "${ANSIBLE_VARIABLES}" ]]; then
+    echo "WARNING: ANSIBLE_VARIABLES environment variable is not set or empty"
+    echo "Using default Ansible configuration"
+    ANSIBLE_VARIABLES="# Default Ansible configuration - no custom variables provided"
+fi
+
 # Create group_vars directory structure
-mkdir -p /root/group_vars
+mkdir -p /tmp/group_vars
 
 echo "Creating group_vars/all.yml from ANSIBLE_VARIABLES parameter"
 
 # Write the ANSIBLE_VARIABLES content to group_vars/all.yml
-cat > /root/group_vars/all.yml << EOF
+cat > /tmp/group_vars/all.yml << EOF
 # Ansible Group Variables Generated from ANSIBLE_VARIABLES Parameter
 # Generated on: $(date)
 # Workspace: ${TF_WORKSPACE}
@@ -59,7 +61,7 @@ EOF
 
 # Add private registry configuration if URL is provided
 if [[ -n "${PRIVATE_REGISTRY_URL}" ]]; then
-    cat >> /root/group_vars/all.yml << EOF
+    cat >> /tmp/group_vars/all.yml << EOF
 private_registry:
   enabled: true
   url: "${PRIVATE_REGISTRY_URL}"
@@ -85,7 +87,7 @@ rke2_registry:
           - "${PRIVATE_REGISTRY_URL}"
 EOF
 else
-    cat >> /root/group_vars/all.yml << EOF
+    cat >> /tmp/group_vars/all.yml << EOF
 private_registry:
   enabled: false
 
@@ -96,7 +98,7 @@ EOF
 fi
 
 # Add version-specific configurations
-cat >> /root/group_vars/all.yml << EOF
+cat >> /tmp/group_vars/all.yml << EOF
 
 # Version-specific configurations
 rke2_version: "${RKE2_VERSION}"
@@ -170,14 +172,14 @@ health_check:
 EOF
 
 echo "Ansible group_vars/all.yml generated successfully:"
-echo "Group vars file location: /root/group_vars/all.yml"
+echo "Group vars file location: /tmp/group_vars/all.yml"
 
 # Display group_vars for verification (excluding sensitive data)
 echo "=== Generated Group Vars (sanitized) ==="
-grep -v "password\|secret\|key" /root/group_vars/all.yml | head -50
+grep -v "password\|secret\|key" /tmp/group_vars/all.yml | head -50
 echo "=== End Group Vars (sanitized) ==="
 
 # Copy group_vars to shared volume for persistence
-cp -r /root/group_vars /root/group_vars.backup
+cp -r /tmp/group_vars /tmp/group_vars.backup
 
 echo "=== Ansible Group Vars Generation Completed ==="
