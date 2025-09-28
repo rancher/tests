@@ -7,6 +7,9 @@
  * This pipeline sets up airgap RKE2 infrastructure using Ansible and OpenTofu
  * with enhanced error handling and proper workspace management.
  *
+ * The pipeline uses the ANSIBLE_VARIABLES parameter to provide the complete
+ * group_vars/all.yml content for Ansible configuration.
+ *
  * Improvements made:
  * - Extracted constants for better maintainability
  * - Broke down large functions into smaller, focused functions
@@ -17,6 +20,7 @@
  * - Reduced code duplication through helper functions
  * - Added comprehensive documentation and inline comments
  * - Improved resource cleanup patterns
+ * - Complete Ansible integration for RKE2 airgap deployment
  */
 
 // ========================================
@@ -157,9 +161,9 @@ pipeline {
             description: 'Terraform variables configuration for OpenTofu deployment'
         )
         text(
-            name: 'ANSIBLE_CONFIG',
+            name: 'ANSIBLE_VARIABLES',
             defaultValue: '',
-            description: 'Ansible variables configuration for infrastructure deployment'
+            description: 'Ansible group_vars/all.yml content for infrastructure deployment'
         )
     }
 
@@ -212,7 +216,7 @@ pipeline {
 
         // Configuration content from parameters
         TERRAFORM_CONFIG = "${params.TERRAFORM_CONFIG ?: ''}"
-        ANSIBLE_CONFIG = "${params.ANSIBLE_CONFIG ?: ''}"
+        ANSIBLE_VARIABLES = "${params.ANSIBLE_VARIABLES ?: ''}"
     }
 
     stages {
@@ -713,6 +717,9 @@ def generateEnvironmentFile() {
         "PRIVATE_REGISTRY_URL=${env.PRIVATE_REGISTRY_URL}",
         "PRIVATE_REGISTRY_USERNAME=${env.PRIVATE_REGISTRY_USERNAME}",
         '',
+        '# Ansible Configuration',
+        "ANSIBLE_VARIABLES=${env.ANSIBLE_VARIABLES}",
+        '',
         '# AWS Credentials for OpenTofu (Standard AWS environment variables)'
     ]
 
@@ -930,6 +937,7 @@ def buildDirectEnvironmentVariables() {
                         // Pass specific AWS variables needed for Terraform, but filter other sensitive variables
                         if (key == 'AWS_ACCESS_KEY_ID' || key == 'AWS_SECRET_ACCESS_KEY' || key == 'AWS_REGION' ||
                             key == 'S3_BUCKET_NAME' || key == 'S3_REGION' || key == 'S3_KEY_PREFIX' ||
+                            key == 'ANSIBLE_VARIABLES' ||
                             (!key.contains('SECRET') && !key.contains('PASSWORD') && !key.contains('PEM'))) {
                             directEnvVars += " -e \"${key}=${value}\""
                         }
@@ -1284,7 +1292,7 @@ def generateDeploymentSummary() {
     logInfo('Generating deployment summary')
     
     try {
-        def timestamp = new Date().format('yyyy-MM-dd HH:mm:ss UTC')
+        def timestamp = new Date().format('yyyy-MM-dd HH:mm:ss')
         def summary = [
             deployment_info: [
                 timestamp: timestamp,
@@ -1324,6 +1332,7 @@ def generateDeploymentSummary() {
         
     } catch (Exception e) {
         logError("Failed to generate deployment summary: ${e.message}")
+        logError("Exception details: ${e.toString()}")
     }
 }
 
@@ -1579,10 +1588,10 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
 }
 
 def generateAnsibleGroupVars() {
-    logInfo('Generating Ansible group_vars/all.yml from ANSIBLE_CONFIG parameter')
+    logInfo('Generating Ansible group_vars/all.yml from ANSIBLE_VARIABLES parameter')
     
-    if (!env.ANSIBLE_CONFIG) {
-        logWarning('ANSIBLE_CONFIG parameter is empty - using default configuration')
+    if (!env.ANSIBLE_VARIABLES) {
+        logWarning('ANSIBLE_VARIABLES parameter is empty - using default configuration')
         // Create a minimal default configuration
         def defaultConfig = """
 # Default Ansible configuration for RKE2 airgap deployment
@@ -1592,7 +1601,7 @@ private_registry_url: "${env.PRIVATE_REGISTRY_URL}"
 private_registry_username: "${env.PRIVATE_REGISTRY_USERNAME}"
 airgap_deployment: true
 """
-        env.ANSIBLE_CONFIG = defaultConfig
+        env.ANSIBLE_VARIABLES = defaultConfig
     }
     
     def groupVarsScript = """
