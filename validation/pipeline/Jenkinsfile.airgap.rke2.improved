@@ -408,6 +408,9 @@ pipeline {
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
+                            // Load infrastructure outputs to get BASTION_IP and BASTION_PRIVATE_IP
+                            loadInfrastructureOutputs()
+
                             // Generate Ansible group_vars/all.yml from ANSIBLE_VARIABLES parameter
                             generateAnsibleGroupVars()
 
@@ -1598,6 +1601,40 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
         logInfo('Ansible group_vars generated successfully')
     } catch (Exception e) {
         def errorMsg = "Ansible group_vars generation failed: ${e.message}"
+        logError(errorMsg)
+        error(errorMsg)
+    }
+}
+
+def loadInfrastructureOutputs() {
+    logInfo('Loading infrastructure outputs from Terraform')
+    
+    try {
+        // Check if infrastructure-outputs.json exists
+        if (fileExists('infrastructure-outputs.json')) {
+            def outputs = readJSON file: 'infrastructure-outputs.json'
+            
+            // Set environment variables from Terraform outputs
+            if (outputs.bastion_ip && outputs.bastion_ip.value) {
+                env.BASTION_IP = outputs.bastion_ip.value
+                logInfo("BASTION_IP set to: ${env.BASTION_IP}")
+            } else {
+                logWarning("bastion_ip not found in infrastructure outputs")
+            }
+            
+            if (outputs.bastion_private_ip && outputs.bastion_private_ip.value) {
+                env.BASTION_PRIVATE_IP = outputs.bastion_private_ip.value
+                logInfo("BASTION_PRIVATE_IP set to: ${env.BASTION_PRIVATE_IP}")
+            } else {
+                logWarning("bastion_private_ip not found in infrastructure outputs")
+            }
+            
+            logInfo('Infrastructure outputs loaded successfully')
+        } else {
+            error("infrastructure-outputs.json not found in workspace")
+        }
+    } catch (Exception e) {
+        def errorMsg = "Failed to load infrastructure outputs: ${e.message}"
         logError(errorMsg)
         error(errorMsg)
     }
