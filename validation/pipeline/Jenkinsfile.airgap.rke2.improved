@@ -1614,8 +1614,16 @@ set -e
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_setup_ssh_keys.sh
     """
     
+    // Pass SSH key environment variables to the container
+    def sshEnvVars = [
+        'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
+        'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME,
+        'BASTION_IP': env.BASTION_IP,
+        'BASTION_PRIVATE_IP': env.BASTION_PRIVATE_IP
+    ]
+    
     try {
-        executeScriptInContainer(sshSetupScript)
+        executeScriptInContainer(sshSetupScript, sshEnvVars)
         logInfo('Ansible SSH keys setup completed successfully')
     } catch (Exception e) {
         def errorMsg = "Ansible SSH key setup failed: ${e.message}"
