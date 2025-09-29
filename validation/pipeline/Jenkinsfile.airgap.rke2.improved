@@ -1612,7 +1612,12 @@ def loadInfrastructureOutputs() {
     try {
         // Check if infrastructure-outputs.json exists
         if (fileExists('infrastructure-outputs.json')) {
-            def outputs = readJSON file: 'infrastructure-outputs.json'
+            // Read JSON file using shell command and parse it
+            def jsonOutput = sh(script: 'cat infrastructure-outputs.json', returnStdout: true).trim()
+            
+            // Parse JSON using Groovy's JsonSlurper
+            def jsonSlurper = new groovy.json.JsonSlurper()
+            def outputs = jsonSlurper.parseText(jsonOutput)
             
             // Set environment variables from Terraform outputs
             if (outputs.bastion_ip && outputs.bastion_ip.value) {
