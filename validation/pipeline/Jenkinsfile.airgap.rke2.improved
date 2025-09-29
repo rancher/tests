@@ -1684,30 +1684,34 @@ def loadInfrastructureOutputs() {
                 logInfo("Available keys in outputs: ${outputs.keySet()}")
             }
             
-            // Handle different possible JSON structures
+            // Handle the actual Terraform output structure with metadata
             def bastionPublicDns = null
             def rancherPrivateIps = []
             
-            // Try direct structure first (e.g., {"bastion_public_dns": "value", "rancher_servers_private_ips": ["ip1", "ip2"]})
-            if (outputs.containsKey('bastion_public_dns')) {
-                bastionPublicDns = outputs.bastion_public_dns
-                logInfo("Found bastion_public_dns (direct): ${bastionPublicDns}")
+            // Extract bastion public DNS from nested structure
+            if (outputs.containsKey('bastion_public_dns') && outputs.bastion_public_dns instanceof Map) {
+                def bastionOutput = outputs.bastion_public_dns
+                if (bastionOutput.containsKey('value')) {
+                    bastionPublicDns = bastionOutput.value
+                    logInfo("Found bastion_public_dns.value: ${bastionPublicDns}")
+                } else {
+                    logWarning("bastion_public_dns found but no 'value' field")
+                }
+            } else {
+                logWarning("bastion_public_dns not found or not a Map")
             }
             
-            if (outputs.containsKey('rancher_servers_private_ips')) {
-                rancherPrivateIps = outputs.rancher_servers_private_ips
-                logInfo("Found rancher_servers_private_ips (direct): ${rancherPrivateIps}")
-            }
-            
-            // Try nested structure (e.g., {"bastion_public_dns": {"value": "dns"}, "rancher_servers_private_ips": {"value": ["ip1", "ip2"]})
-            if (!bastionPublicDns && outputs.containsKey('bastion_public_dns') && outputs.bastion_public_dns instanceof Map) {
-                bastionPublicDns = outputs.bastion_public_dns.value
-                logInfo("Found bastion_public_dns (nested): ${bastionPublicDns}")
-            }
-            
-            if (rancherPrivateIps.isEmpty() && outputs.containsKey('rancher_servers_private_ips') && outputs.rancher_servers_private_ips instanceof Map) {
-                rancherPrivateIps = outputs.rancher_servers_private_ips.value
-                logInfo("Found rancher_servers_private_ips (nested): ${rancherPrivateIps}")
+            // Extract rancher servers private IPs from nested structure
+            if (outputs.containsKey('rancher_servers_private_ips') && outputs.rancher_servers_private_ips instanceof Map) {
+                def rancherIpsOutput = outputs.rancher_servers_private_ips
+                if (rancherIpsOutput.containsKey('value')) {
+                    rancherPrivateIps = rancherIpsOutput.value
+                    logInfo("Found rancher_servers_private_ips.value: ${rancherPrivateIps}")
+                } else {
+                    logWarning("rancher_servers_private_ips found but no 'value' field")
+                }
+            } else {
+                logWarning("rancher_servers_private_ips not found or not a Map")
             }
             
             // Set environment variables based on available data
@@ -1715,16 +1719,17 @@ def loadInfrastructureOutputs() {
                 env.BASTION_IP = bastionPublicDns
                 logInfo("BASTION_IP set to bastion public DNS: ${env.BASTION_IP}")
             } else {
-                logWarning("BASTION_IP could not be set - bastion_public_dns not found in outputs")
+                logWarning("BASTION_IP could not be set - bastion_public_dns.value not found")
                 logWarning("Available keys: ${outputs.keySet()}")
             }
             
             // Use first rancher server private IP as bastion private IP
-            if (rancherPrivateIps && rancherPrivateIps.size() > 0) {
+            if (rancherPrivateIps && rancherPrivateIps instanceof List && rancherPrivateIps.size() > 0) {
                 env.BASTION_PRIVATE_IP = rancherPrivateIps[0]
                 logInfo("BASTION_PRIVATE_IP set to first rancher server IP: ${env.BASTION_PRIVATE_IP}")
             } else {
-                logWarning("BASTION_PRIVATE_IP could not be set - no rancher servers private IPs found")
+                logWarning("BASTION_PRIVATE_IP could not be set - no valid rancher servers private IPs found")
+                logWarning("rancherPrivateIps type: ${rancherPrivateIps?.getClass()?.name}, size: ${rancherPrivateIps?.size()}")
             }
             
             logInfo('Infrastructure outputs loaded successfully')
@@ -1766,6 +1771,11 @@ def setupAnsibleSSHKeys() {
     // Validate that we have the required credentials
     if (!awsSshPemKey || !awsSshKeyName) {
         error("Required SSH credentials are not available. Check that AWS_SSH_PEM_KEY and AWS_SSH_KEY_NAME credentials are properly configured in Jenkins.")
+    }
+    
+    // Validate that we have the required infrastructure outputs
+    if (!env.BASTION_IP || !env.BASTION_PRIVATE_IP) {
+        error("Required infrastructure outputs are not available. BASTION_IP=${env.BASTION_IP}, BASTION_PRIVATE_IP=${env.BASTION_PRIVATE_IP}")
     }
     
     def sshSetupScript = """
