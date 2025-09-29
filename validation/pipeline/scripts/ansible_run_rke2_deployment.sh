@@ -125,7 +125,15 @@ echo "Playbook path: $RKE2_TARBALL_PLAYBOOK"
 # Run the RKE2 deployment playbook from qa-infra-automation
 echo "Running RKE2 tarball deployment playbook..."
 cd /root/qa-infra-automation/ansible/rke2/airgap
-ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml playbooks/deploy/rke2-tarball-playbook.yml -v
+
+# Pass RKE2_VERSION as an extra variable to ensure it's available during pre_tasks
+EXTRA_VARS=""
+if [[ -n "${RKE2_VERSION}" ]]; then
+    EXTRA_VARS="-e rke2_version=${RKE2_VERSION}"
+    echo "Passing RKE2_VERSION as extra variable: ${RKE2_VERSION}"
+fi
+
+ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml playbooks/deploy/rke2-tarball-playbook.yml -v ${EXTRA_VARS}
 
 echo "RKE2 tarball deployment playbook execution completed"
 
