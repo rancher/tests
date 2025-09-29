@@ -103,20 +103,54 @@ fi
 
 # Copy group_vars to the qa-infra-automation structure if needed
 mkdir -p /root/qa-infra-automation/ansible/rke2/airgap/group_vars
-cp /root/group_vars/all.yml /root/qa-infra-automation/ansible/rke2/airgap/group_vars/
+
+# Ensure the group_vars file exists and has basic structure
+GROUP_VARS_FILE="/root/qa-infra-automation/ansible/rke2/airgap/group_vars/all.yml"
+if [[ ! -f "/root/group_vars/all.yml" ]]; then
+    echo "ERROR: Source group_vars file not found at /root/group_vars/all.yml"
+    exit 1
+fi
+
+cp /root/group_vars/all.yml "$GROUP_VARS_FILE"
+echo "Copied group_vars to qa-infra-automation structure"
 
 # Ensure RKE2_VERSION is set in the group_vars file
 if [[ -n "${RKE2_VERSION}" ]]; then
     echo "Ensuring RKE2_VERSION is set in group_vars: ${RKE2_VERSION}"
-    # Replace or add the rke2_version line in the group_vars file
-    sed -i "s/rke2_version:.*/rke2_version: \"${RKE2_VERSION}\"/" /root/qa-infra-automation/ansible/rke2/airgap/group_vars/all.yml
-    if ! grep -q "rke2_version:" /root/qa-infra-automation/ansible/rke2/airgap/group_vars/all.yml; then
-        echo "rke2_version: \"${RKE2_VERSION}\"" >> /root/qa-infra-automation/ansible/rke2/airgap/group_vars/all.yml
+
+    # Check if rke2_version is already in the file
+    if grep -q "^rke2_version:" "$GROUP_VARS_FILE"; then
+        # Replace existing line
+        sed -i "s/^rke2_version:.*/rke2_version: \"${RKE2_VERSION}\"/" "$GROUP_VARS_FILE"
+        echo "Updated existing rke2_version in group_vars"
+    else
+        # Add new line
+        echo "rke2_version: \"${RKE2_VERSION}\"" >> "$GROUP_VARS_FILE"
+        echo "Added rke2_version to group_vars"
     fi
 else
     echo "WARNING: RKE2_VERSION environment variable is not set"
     echo "Setting default RKE2 version"
-    sed -i "s/rke2_version:.*/rke2_version: \"v1.28.8+rke2r1\"/" /root/qa-infra-automation/ansible/rke2/airgap/group_vars/all.yml
+
+    # Check if rke2_version is already in the file
+    if grep -q "^rke2_version:" "$GROUP_VARS_FILE"; then
+        # Replace existing line
+        sed -i "s/^rke2_version:.*/rke2_version: \"v1.28.8+rke2r1\"/" "$GROUP_VARS_FILE"
+    else
+        # Add new line
+        echo "rke2_version: \"v1.28.8+rke2r1\"" >> "$GROUP_VARS_FILE"
+    fi
+fi
+
+# Verify the variable is set
+if grep -q "^rke2_version:" "$GROUP_VARS_FILE"; then
+    echo "✓ rke2_version successfully set in group_vars:"
+    grep "^rke2_version:" "$GROUP_VARS_FILE"
+else
+    echo "ERROR: Failed to set rke2_version in group_vars file"
+    echo "Group_vars file contents:"
+    cat "$GROUP_VARS_FILE"
+    exit 1
 fi
 
 echo "Using RKE2 tarball deployment playbook from qa-infra-automation repository"
