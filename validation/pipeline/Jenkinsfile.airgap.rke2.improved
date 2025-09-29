@@ -701,6 +701,30 @@ def getShortJobName() {
 def generateEnvironmentFile() {
     logInfo('Generating environment file for container execution')
 
+    // Get credentials within withCredentials block to ensure they're available
+    def awsAccessKeyId = null
+    def awsSecretAccessKey = null
+    def awsSshPemKey = null
+    def awsSshKeyName = null
+    
+    withCredentials([
+        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
+    ]) {
+        awsAccessKeyId = env.AWS_ACCESS_KEY_ID
+        awsSecretAccessKey = env.AWS_SECRET_ACCESS_KEY
+        awsSshPemKey = env.AWS_SSH_PEM_KEY
+        awsSshKeyName = env.AWS_SSH_KEY_NAME
+        
+        // Set environment variables for use in other functions
+        env.AWS_ACCESS_KEY_ID = awsAccessKeyId
+        env.AWS_SECRET_ACCESS_KEY = awsSecretAccessKey
+        env.AWS_SSH_PEM_KEY = awsSshPemKey
+        env.AWS_SSH_KEY_NAME = awsSshKeyName
+    }
+
     // Build environment content securely without direct interpolation of secrets
     def envLines = [
         '# Environment variables for infrastructure deployment containers',
@@ -724,9 +748,21 @@ def generateEnvironmentFile() {
     ]
 
     // Add credentials securely
-    envLines.add('AWS_ACCESS_KEY_ID=' + env.AWS_ACCESS_KEY_ID)
-    envLines.add('AWS_SECRET_ACCESS_KEY=' + env.AWS_SECRET_ACCESS_KEY)
+    if (awsAccessKeyId) {
+        envLines.add('AWS_ACCESS_KEY_ID=' + awsAccessKeyId)
+    }
+    if (awsSecretAccessKey) {
+        envLines.add('AWS_SECRET_ACCESS_KEY=' + awsSecretAccessKey)
+    }
     envLines.add('AWS_REGION=' + env.AWS_REGION)
+    envLines.add('')
+    envLines.add('# SSH Credentials for Ansible')
+    if (awsSshPemKey) {
+        envLines.add('AWS_SSH_PEM_KEY=' + awsSshPemKey)
+    }
+    if (awsSshKeyName) {
+        envLines.add('AWS_SSH_KEY_NAME=' + awsSshKeyName)
+    }
     envLines.add('')
     envLines.add('# S3 Backend Configuration for OpenTofu')
     envLines.add('S3_BUCKET_NAME=' + env.S3_BUCKET_NAME)
@@ -771,21 +807,41 @@ def generateEnvironmentFile() {
     logInfo("  QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}")
     logInfo("  S3_BUCKET_NAME=${env.S3_BUCKET_NAME}")
     logInfo("  S3_REGION=${env.S3_REGION}")
+    logInfo("  AWS_SSH_PEM_KEY=${awsSshPemKey ? 'SET' : 'NULL'}")
+    logInfo("  AWS_SSH_KEY_NAME=${awsSshKeyName ? 'SET' : 'NULL'}")
 }
 
 def setupSSHKeys() {
-    if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
+    // Get credentials within withCredentials block to ensure they're available
+    def awsSshPemKey = null
+    def awsSshKeyName = null
+    
+    withCredentials([
+        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
+    ]) {
+        awsSshPemKey = env.AWS_SSH_PEM_KEY
+        awsSshKeyName = env.AWS_SSH_KEY_NAME
+        
+        // Set environment variables for use in other functions
+        env.AWS_SSH_PEM_KEY = awsSshPemKey
+        env.AWS_SSH_KEY_NAME = awsSshKeyName
+    }
+    
+    if (awsSshPemKey && awsSshKeyName) {
         logInfo('Setting up SSH keys')
 
         dir('./tests/.ssh') {
-            def decodedKey = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
-            writeFile file: env.AWS_SSH_KEY_NAME, text: decodedKey
-            sh "chmod 600 ${env.AWS_SSH_KEY_NAME}"
+            def decodedKey = new String(awsSshPemKey.decodeBase64())
+            writeFile file: awsSshKeyName, text: decodedKey
+            sh "chmod 600 ${awsSshKeyName}"
         }
 
         logInfo('SSH keys configured successfully')
     } else {
         logWarning('SSH key configuration skipped - missing required environment variables')
+        logWarning("AWS_SSH_PEM_KEY: ${awsSshPemKey ? 'SET' : 'NULL'}")
+        logWarning("AWS_SSH_KEY_NAME: ${awsSshKeyName ? 'SET' : 'NULL'}")
     }
 }
 
@@ -1628,60 +1684,47 @@ def loadInfrastructureOutputs() {
                 logInfo("Available keys in outputs: ${outputs.keySet()}")
             }
             
-            // Try different possible structures for bastion_ip
-            def bastionIp = null
-            def bastionPrivateIp = null
+            // Handle different possible JSON structures
+            def bastionPublicDns = null
+            def rancherPrivateIps = []
             
-            // Try structure 1: outputs.bastion_ip.value
-            if (outputs.bastion_ip && outputs.bastion_ip.value) {
-                bastionIp = outputs.bastion_ip.value
-                logInfo("Found bastion_ip using structure 1: ${bastionIp}")
+            // Try direct structure first (e.g., {"bastion_public_dns": "value", "rancher_servers_private_ips": ["ip1", "ip2"]})
+            if (outputs.containsKey('bastion_public_dns')) {
+                bastionPublicDns = outputs.bastion_public_dns
+                logInfo("Found bastion_public_dns (direct): ${bastionPublicDns}")
             }
-            // Try structure 2: outputs.bastion_ip (direct value)
-            else if (outputs.bastion_ip) {
-                bastionIp = outputs.bastion_ip
-                logInfo("Found bastion_ip using structure 2: ${bastionIp}")
+            
+            if (outputs.containsKey('rancher_servers_private_ips')) {
+                rancherPrivateIps = outputs.rancher_servers_private_ips
+                logInfo("Found rancher_servers_private_ips (direct): ${rancherPrivateIps}")
             }
-            // Try structure 3: outputs.bastion_ip.sensitive_value
-            else if (outputs.bastion_ip && outputs.bastion_ip.sensitive_value) {
-                bastionIp = outputs.bastion_ip.sensitive_value
-                logInfo("Found bastion_ip using structure 3: ${bastionIp}")
+            
+            // Try nested structure (e.g., {"bastion_public_dns": {"value": "dns"}, "rancher_servers_private_ips": {"value": ["ip1", "ip2"]})
+            if (!bastionPublicDns && outputs.containsKey('bastion_public_dns') && outputs.bastion_public_dns instanceof Map) {
+                bastionPublicDns = outputs.bastion_public_dns.value
+                logInfo("Found bastion_public_dns (nested): ${bastionPublicDns}")
             }
-            else {
-                logWarning("bastion_ip not found in any expected structure")
+            
+            if (rancherPrivateIps.isEmpty() && outputs.containsKey('rancher_servers_private_ips') && outputs.rancher_servers_private_ips instanceof Map) {
+                rancherPrivateIps = outputs.rancher_servers_private_ips.value
+                logInfo("Found rancher_servers_private_ips (nested): ${rancherPrivateIps}")
+            }
+            
+            // Set environment variables based on available data
+            if (bastionPublicDns) {
+                env.BASTION_IP = bastionPublicDns
+                logInfo("BASTION_IP set to bastion public DNS: ${env.BASTION_IP}")
+            } else {
+                logWarning("BASTION_IP could not be set - bastion_public_dns not found in outputs")
                 logWarning("Available keys: ${outputs.keySet()}")
             }
             
-            // Try different possible structures for bastion_private_ip
-            if (outputs.bastion_private_ip && outputs.bastion_private_ip.value) {
-                bastionPrivateIp = outputs.bastion_private_ip.value
-                logInfo("Found bastion_private_ip using structure 1: ${bastionPrivateIp}")
-            }
-            else if (outputs.bastion_private_ip) {
-                bastionPrivateIp = outputs.bastion_private_ip
-                logInfo("Found bastion_private_ip using structure 2: ${bastionPrivateIp}")
-            }
-            else if (outputs.bastion_private_ip && outputs.bastion_private_ip.sensitive_value) {
-                bastionPrivateIp = outputs.bastion_private_ip.sensitive_value
-                logInfo("Found bastion_private_ip using structure 3: ${bastionPrivateIp}")
-            }
-            else {
-                logWarning("bastion_private_ip not found in any expected structure")
-            }
-            
-            // Set environment variables if found
-            if (bastionIp) {
-                env.BASTION_IP = bastionIp
-                logInfo("BASTION_IP set to: ${env.BASTION_IP}")
+            // Use first rancher server private IP as bastion private IP
+            if (rancherPrivateIps && rancherPrivateIps.size() > 0) {
+                env.BASTION_PRIVATE_IP = rancherPrivateIps[0]
+                logInfo("BASTION_PRIVATE_IP set to first rancher server IP: ${env.BASTION_PRIVATE_IP}")
             } else {
-                logWarning("BASTION_IP could not be set - value not found")
-            }
-            
-            if (bastionPrivateIp) {
-                env.BASTION_PRIVATE_IP = bastionPrivateIp
-                logInfo("BASTION_PRIVATE_IP set to: ${env.BASTION_PRIVATE_IP}")
-            } else {
-                logWarning("BASTION_PRIVATE_IP could not be set - value not found")
+                logWarning("BASTION_PRIVATE_IP could not be set - no rancher servers private IPs found")
             }
             
             logInfo('Infrastructure outputs loaded successfully')
@@ -1698,11 +1741,32 @@ def loadInfrastructureOutputs() {
 def setupAnsibleSSHKeys() {
     logInfo('Setting up SSH keys for Ansible connectivity')
     
+    // Get credentials within withCredentials block to ensure they're available
+    def awsSshPemKey = null
+    def awsSshKeyName = null
+    
+    withCredentials([
+        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
+    ]) {
+        awsSshPemKey = env.AWS_SSH_PEM_KEY
+        awsSshKeyName = env.AWS_SSH_KEY_NAME
+        
+        // Set environment variables for use in other functions
+        env.AWS_SSH_PEM_KEY = awsSshPemKey
+        env.AWS_SSH_KEY_NAME = awsSshKeyName
+    }
+    
     // Debug: Show current environment variables
-    logInfo("DEBUG: AWS_SSH_PEM_KEY = ${env.AWS_SSH_PEM_KEY}")
-    logInfo("DEBUG: AWS_SSH_KEY_NAME = ${env.AWS_SSH_KEY_NAME}")
+    logInfo("DEBUG: AWS_SSH_PEM_KEY = ${awsSshPemKey ? 'SET' : 'NULL'}")
+    logInfo("DEBUG: AWS_SSH_KEY_NAME = ${awsSshKeyName ? 'SET' : 'NULL'}")
     logInfo("DEBUG: BASTION_IP = ${env.BASTION_IP}")
     logInfo("DEBUG: BASTION_PRIVATE_IP = ${env.BASTION_PRIVATE_IP}")
+    
+    // Validate that we have the required credentials
+    if (!awsSshPemKey || !awsSshKeyName) {
+        error("Required SSH credentials are not available. Check that AWS_SSH_PEM_KEY and AWS_SSH_KEY_NAME credentials are properly configured in Jenkins.")
+    }
     
     def sshSetupScript = """
 #!/bin/bash
@@ -1714,8 +1778,8 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
     
     // Pass SSH key environment variables to the container
     def sshEnvVars = [
-        'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
-        'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME,
+        'AWS_SSH_PEM_KEY': awsSshPemKey,
+        'AWS_SSH_KEY_NAME': awsSshKeyName,
         'BASTION_IP': env.BASTION_IP,
         'BASTION_PRIVATE_IP': env.BASTION_PRIVATE_IP
     ]
@@ -1723,7 +1787,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
     // Debug: Show what we're passing to container
     logInfo("DEBUG: Passing environment variables to container:")
     sshEnvVars.each { key, value ->
-        logInfo("  ${key} = ${value}")
+        logInfo("  ${key} = ${value ? 'SET' : 'NULL'}")
     }
     
     try {
