@@ -1615,23 +1615,73 @@ def loadInfrastructureOutputs() {
             // Read JSON file using shell command and parse it
             def jsonOutput = sh(script: 'cat infrastructure-outputs.json', returnStdout: true).trim()
             
+            // Debug: Show the actual JSON content
+            logInfo("Raw infrastructure outputs content: ${jsonOutput}")
+            
             // Parse JSON using Groovy's JsonSlurper
             def jsonSlurper = new groovy.json.JsonSlurper()
             def outputs = jsonSlurper.parseText(jsonOutput)
             
-            // Set environment variables from Terraform outputs
-            if (outputs.bastion_ip && outputs.bastion_ip.value) {
-                env.BASTION_IP = outputs.bastion_ip.value
-                logInfo("BASTION_IP set to: ${env.BASTION_IP}")
-            } else {
-                logWarning("bastion_ip not found in infrastructure outputs")
+            // Debug: Show the parsed structure
+            logInfo("Parsed outputs type: ${outputs.getClass().name}")
+            if (outputs instanceof Map) {
+                logInfo("Available keys in outputs: ${outputs.keySet()}")
             }
             
+            // Try different possible structures for bastion_ip
+            def bastionIp = null
+            def bastionPrivateIp = null
+            
+            // Try structure 1: outputs.bastion_ip.value
+            if (outputs.bastion_ip && outputs.bastion_ip.value) {
+                bastionIp = outputs.bastion_ip.value
+                logInfo("Found bastion_ip using structure 1: ${bastionIp}")
+            }
+            // Try structure 2: outputs.bastion_ip (direct value)
+            else if (outputs.bastion_ip) {
+                bastionIp = outputs.bastion_ip
+                logInfo("Found bastion_ip using structure 2: ${bastionIp}")
+            }
+            // Try structure 3: outputs.bastion_ip.sensitive_value
+            else if (outputs.bastion_ip && outputs.bastion_ip.sensitive_value) {
+                bastionIp = outputs.bastion_ip.sensitive_value
+                logInfo("Found bastion_ip using structure 3: ${bastionIp}")
+            }
+            else {
+                logWarning("bastion_ip not found in any expected structure")
+                logWarning("Available keys: ${outputs.keySet()}")
+            }
+            
+            // Try different possible structures for bastion_private_ip
             if (outputs.bastion_private_ip && outputs.bastion_private_ip.value) {
-                env.BASTION_PRIVATE_IP = outputs.bastion_private_ip.value
+                bastionPrivateIp = outputs.bastion_private_ip.value
+                logInfo("Found bastion_private_ip using structure 1: ${bastionPrivateIp}")
+            }
+            else if (outputs.bastion_private_ip) {
+                bastionPrivateIp = outputs.bastion_private_ip
+                logInfo("Found bastion_private_ip using structure 2: ${bastionPrivateIp}")
+            }
+            else if (outputs.bastion_private_ip && outputs.bastion_private_ip.sensitive_value) {
+                bastionPrivateIp = outputs.bastion_private_ip.sensitive_value
+                logInfo("Found bastion_private_ip using structure 3: ${bastionPrivateIp}")
+            }
+            else {
+                logWarning("bastion_private_ip not found in any expected structure")
+            }
+            
+            // Set environment variables if found
+            if (bastionIp) {
+                env.BASTION_IP = bastionIp
+                logInfo("BASTION_IP set to: ${env.BASTION_IP}")
+            } else {
+                logWarning("BASTION_IP could not be set - value not found")
+            }
+            
+            if (bastionPrivateIp) {
+                env.BASTION_PRIVATE_IP = bastionPrivateIp
                 logInfo("BASTION_PRIVATE_IP set to: ${env.BASTION_PRIVATE_IP}")
             } else {
-                logWarning("bastion_private_ip not found in infrastructure outputs")
+                logWarning("BASTION_PRIVATE_IP could not be set - value not found")
             }
             
             logInfo('Infrastructure outputs loaded successfully')
@@ -1648,6 +1698,12 @@ def loadInfrastructureOutputs() {
 def setupAnsibleSSHKeys() {
     logInfo('Setting up SSH keys for Ansible connectivity')
     
+    // Debug: Show current environment variables
+    logInfo("DEBUG: AWS_SSH_PEM_KEY = ${env.AWS_SSH_PEM_KEY}")
+    logInfo("DEBUG: AWS_SSH_KEY_NAME = ${env.AWS_SSH_KEY_NAME}")
+    logInfo("DEBUG: BASTION_IP = ${env.BASTION_IP}")
+    logInfo("DEBUG: BASTION_PRIVATE_IP = ${env.BASTION_PRIVATE_IP}")
+    
     def sshSetupScript = """
 #!/bin/bash
 set -e
@@ -1663,6 +1719,12 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
         'BASTION_IP': env.BASTION_IP,
         'BASTION_PRIVATE_IP': env.BASTION_PRIVATE_IP
     ]
+    
+    // Debug: Show what we're passing to container
+    logInfo("DEBUG: Passing environment variables to container:")
+    sshEnvVars.each { key, value ->
+        logInfo("  ${key} = ${value}")
+    }
     
     try {
         executeScriptInContainer(sshSetupScript, sshEnvVars)
