@@ -1089,7 +1089,11 @@ set -e
 # Source the external cleanup script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_timeout_cleanup.sh
             """
-            executeScriptInContainer(cleanupScript)
+            // Pass DESTROY_ON_FAILURE environment variable to container
+            def cleanupEnvVars = [
+                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE
+            ]
+            executeScriptInContainer(cleanupScript, cleanupEnvVars)
             logInfo('Infrastructure cleanup attempted for timeout')
         } else {
             logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for timeout')
@@ -1113,7 +1117,11 @@ def handleDeploymentFailure() {
             # Source the external cleanup script
             source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_deployment_failure_cleanup.sh
             """
-            executeScriptInContainer(cleanupScript)
+            // Pass DESTROY_ON_FAILURE environment variable to container
+            def cleanupEnvVars = [
+                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE
+            ]
+            executeScriptInContainer(cleanupScript, cleanupEnvVars)
             logInfo('Infrastructure cleanup attempted for deployment failure')
         } else {
             logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for deployment failure')
@@ -1886,7 +1894,11 @@ set -e
 # Source the external Ansible failure cleanup script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_failure_cleanup.sh
             """
-            executeScriptInContainer(cleanupScript)
+            // Pass DESTROY_ON_FAILURE environment variable to container
+            def cleanupEnvVars = [
+                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE
+            ]
+            executeScriptInContainer(cleanupScript, cleanupEnvVars)
             logInfo('Infrastructure cleanup attempted for Ansible failure')
         } else {
             logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for Ansible failure')
