@@ -349,7 +349,7 @@ pipeline {
                             extractArtifactsFromDockerVolume()
 
                             logInfo('Infrastructure provisioned and validated successfully')
-                        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+                        } catch (InterruptedException e) {
                             logError("Infrastructure deployment timed out after ${timeoutMinutes} minutes")
                             logError("Timeout exception details: ${e.message}")
                             handleTimeoutFailure()
@@ -1829,8 +1829,26 @@ set -e
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_run_ssh_setup.sh
     """
     
+    // Get SSH credentials and pass them to container
+    def awsSshPemKey = null
+    def awsSshKeyName = null
+    
+    withCredentials([
+        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
+    ]) {
+        awsSshPemKey = env.AWS_SSH_PEM_KEY
+        awsSshKeyName = env.AWS_SSH_KEY_NAME
+    }
+    
+    // Pass SSH credentials to container
+    def sshEnvVars = [
+        'AWS_SSH_PEM_KEY': awsSshPemKey,
+        'AWS_SSH_KEY_NAME': awsSshKeyName
+    ]
+    
     try {
-        executeScriptInContainer(sshSetupPlaybookScript)
+        executeScriptInContainer(sshSetupPlaybookScript, sshEnvVars)
         logInfo('Ansible SSH setup playbook executed successfully')
     } catch (Exception e) {
         def errorMsg = "Ansible SSH setup playbook failed: ${e.message}"
@@ -1850,8 +1868,26 @@ set -e
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_run_rke2_deployment.sh
     """
     
+    // Get SSH credentials and pass them to container
+    def awsSshPemKey = null
+    def awsSshKeyName = null
+    
+    withCredentials([
+        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
+    ]) {
+        awsSshPemKey = env.AWS_SSH_PEM_KEY
+        awsSshKeyName = env.AWS_SSH_KEY_NAME
+    }
+    
+    // Pass SSH credentials to container
+    def sshEnvVars = [
+        'AWS_SSH_PEM_KEY': awsSshPemKey,
+        'AWS_SSH_KEY_NAME': awsSshKeyName
+    ]
+    
     try {
-        executeScriptInContainer(rke2DeploymentScript)
+        executeScriptInContainer(rke2DeploymentScript, sshEnvVars)
         logInfo('RKE2 tarball deployment playbook executed successfully')
     } catch (Exception e) {
         def errorMsg = "RKE2 tarball deployment playbook failed: ${e.message}"
@@ -1898,15 +1934,23 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
             def cleanupEnvVars = [
                 'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE
             ]
+            // Note: Don't cleanup containers yet - we need them for cleanup script
             executeScriptInContainer(cleanupScript, cleanupEnvVars)
             logInfo('Infrastructure cleanup attempted for Ansible failure')
         } else {
             logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for Ansible failure')
             logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
         }
+        // Only cleanup containers after infrastructure cleanup is attempted
         cleanupContainersAndVolumes()
     } catch (cleanupException) {
         logError("Cleanup during Ansible failure handling failed: ${cleanupException.message}")
+        // Still try to cleanup containers even if infrastructure cleanup fails
+        try {
+            cleanupContainersAndVolumes()
+        } catch (containerCleanupException) {
+            logError("Container cleanup also failed: ${containerCleanupException.message}")
+        }
     }
     throw new Exception("Ansible deployment failed")
 }
