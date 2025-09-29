@@ -6,10 +6,28 @@ set -e
 
 echo "=== Ansible RKE2 Tarball Deployment Started ==="
 
-# Validate required files
+# Ensure Ansible directory structure exists
+mkdir -p /root/ansible/rke2/airgap/inventory/
+
+# Check if inventory file exists at the expected Terraform location
 if [[ ! -f "/root/ansible/rke2/airgap/inventory.yml" ]]; then
-    echo "ERROR: Ansible inventory file not found at /root/ansible/rke2/airgap/inventory.yml"
-    exit 1
+    echo "Ansible inventory file not found at /root/ansible/rke2/airgap/inventory.yml"
+    
+    # Check if inventory file exists in the shared volume (legacy location)
+    if [[ -f "/root/ansible-inventory.yml" ]]; then
+        echo "Found inventory file at shared volume location, copying to expected location..."
+        cp /root/ansible-inventory.yml /root/ansible/rke2/airgap/inventory.yml
+        echo "Inventory file copied successfully"
+    else
+        echo "ERROR: Ansible inventory file not found at either:"
+        echo "  - /root/ansible/rke2/airgap/inventory.yml (Terraform location)"
+        echo "  - /root/ansible-inventory.yml (Shared volume location)"
+        echo "Available files in /root/:"
+        ls -la /root/ | grep -E "(inventory|ansible)" || echo "No inventory/ansible files found"
+        echo "Available files in /root/ansible/ (if exists):"
+        ls -la /root/ansible/ 2>/dev/null || echo "Directory /root/ansible/ does not exist"
+        exit 1
+    fi
 fi
 
 if [[ ! -f "/root/group_vars/all.yml" ]]; then
