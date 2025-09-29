@@ -35,6 +35,21 @@ if [[ ! -f "/root/group_vars/all.yml" ]]; then
     exit 1
 fi
 
+# Create SSH directory and authorized_keys file from AWS_SSH_PEM_KEY environment variable
+mkdir -p /root/.ssh
+if [[ -n "$AWS_SSH_PEM_KEY" ]]; then
+    echo "Creating SSH authorized_keys file from AWS_SSH_PEM_KEY environment variable"
+    # Extract the public key from the private key
+    ssh-keygen -y -f /dev/stdin <<< "$AWS_SSH_PEM_KEY" > /root/.ssh/authorized_keys
+    chmod 600 /root/.ssh/authorized_keys
+    echo "SSH authorized_keys file created successfully"
+else
+    echo "WARNING: AWS_SSH_PEM_KEY environment variable is not set"
+    # Create an empty authorized_keys file to prevent Ansible errors
+    touch /root/.ssh/authorized_keys
+    chmod 600 /root/.ssh/authorized_keys
+fi
+
 # Clone or update the qa-infra-automation repository
 if [[ ! -d "/root/qa-infra-automation" ]]; then
     echo "Cloning qa-infra-automation repository..."
