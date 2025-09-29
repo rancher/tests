@@ -64,6 +64,39 @@ if [[ ! -f "/root/.ssh/config" ]]; then
     exit 1
 fi
 
+# Generate SSH public key from private key if it doesn't exist
+if [[ -n "$AWS_SSH_PEM_KEY" ]]; then
+    echo "Generating SSH public key from AWS_SSH_PEM_KEY environment variable"
+
+    # First, decode the base64 key if it's encoded
+    if echo "$AWS_SSH_PEM_KEY" | grep -q "^LS0t"; then
+        echo "SSH key appears to be base64 encoded, decoding..."
+        echo "$AWS_SSH_PEM_KEY" | base64 -d > /tmp/ssh_key.pem
+    else
+        echo "$AWS_SSH_PEM_KEY" > /tmp/ssh_key.pem
+    fi
+
+    # Ensure the key file has proper permissions
+    chmod 600 /tmp/ssh_key.pem
+
+    # Extract the public key from the private key
+    if ssh-keygen -y -f /tmp/ssh_key.pem > /root/.ssh/jenkins-elliptic-validation.pub 2>/dev/null; then
+        chmod 644 /root/.ssh/jenkins-elliptic-validation.pub
+        echo "SSH public key generated successfully"
+        echo "Public key contents:"
+        cat /root/.ssh/jenkins-elliptic-validation.pub
+    else
+        echo "ERROR: Failed to generate public key from SSH private key"
+        exit 1
+    fi
+
+    # Clean up temporary key file
+    rm -f /tmp/ssh_key.pem
+else
+    echo "WARNING: AWS_SSH_PEM_KEY environment variable is not set"
+    exit 1
+fi
+
 # Clone or update the qa-infra-automation repository for SSH setup playbook
 if [[ ! -d "/root/qa-infra-automation" ]]; then
     echo "Cloning qa-infra-automation repository..."
