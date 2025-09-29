@@ -37,9 +37,26 @@ if [[ ! -f "/root/ansible/rke2/airgap/inventory.yml" ]]; then
     fi
 fi
 
+# Check if group_vars file exists at expected location
 if [[ ! -f "/root/group_vars/all.yml" ]]; then
-    echo "ERROR: Ansible group_vars file not found at /root/group_vars/all.yml"
-    exit 1
+    echo "Ansible group_vars file not found at /root/group_vars/all.yml"
+    
+    # Check if group_vars file exists in /tmp/ (where it's generated)
+    if [[ -f "/tmp/group_vars/all.yml" ]]; then
+        echo "Found group_vars file at /tmp/group_vars/all.yml, copying to expected location..."
+        mkdir -p /root/group_vars
+        cp /tmp/group_vars/all.yml /root/group_vars/all.yml
+        echo "Group_vars file copied successfully"
+    else
+        echo "ERROR: Ansible group_vars file not found at either:"
+        echo "  - /root/group_vars/all.yml (expected location)"
+        echo "  - /tmp/group_vars/all.yml (generation location)"
+        echo "Available files in /tmp/:"
+        ls -la /tmp/ | grep -E "(group|vars)" || echo "No group_vars files found in /tmp/"
+        echo "Available files in /root/:"
+        ls -la /root/ | grep -E "(group|vars)" || echo "No group_vars files found in /root/"
+        exit 1
+    fi
 fi
 
 if [[ ! -f "/root/.ssh/config" ]]; then

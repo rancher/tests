@@ -182,4 +182,9 @@ echo "=== End Group Vars (sanitized) ==="
 # Copy group_vars to shared volume for persistence
 cp -r /tmp/group_vars /tmp/group_vars.backup
 
+# Also copy group_vars to /root/ for Ansible playbook compatibility
+mkdir -p /root/group_vars
+cp /tmp/group_vars/all.yml /root/group_vars/all.yml
+echo "Group_vars file also copied to /root/group_vars/all.yml for Ansible compatibility"
+
 echo "=== Ansible Group Vars Generation Completed ==="
