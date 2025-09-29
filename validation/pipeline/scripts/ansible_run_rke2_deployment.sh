@@ -68,11 +68,13 @@ if [[ ! -d "$QA_INFRA_PLAYBOOKS_DIR" ]]; then
 fi
 
 # Check for the main RKE2 tarball deployment playbook
-RKE2_TARBALL_PLAYBOOK="$QA_INFRA_PLAYBOOKS_DIR/rke2_tarball_install.yml"
+RKE2_TARBALL_PLAYBOOK="$QA_INFRA_PLAYBOOKS_DIR/deploy/rke2-tarball-playbook.yml"
 if [[ ! -f "$RKE2_TARBALL_PLAYBOOK" ]]; then
     echo "ERROR: RKE2 tarball deployment playbook not found at $RKE2_TARBALL_PLAYBOOK"
     echo "Available playbooks:"
     ls -la "$QA_INFRA_PLAYBOOKS_DIR/"
+    echo "Available subdirectories:"
+    find "$QA_INFRA_PLAYBOOKS_DIR" -type d -name "*" | head -10
     exit 1
 fi
 
@@ -86,7 +88,7 @@ echo "Playbook path: $RKE2_TARBALL_PLAYBOOK"
 # Run the RKE2 deployment playbook from qa-infra-automation
 echo "Running RKE2 tarball deployment playbook..."
 cd /root/qa-infra-automation/ansible/rke2/airgap
-ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml playbooks/rke2_tarball_install.yml -v
+ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml playbooks/deploy/rke2-tarball-playbook.yml -v
 
 echo "RKE2 tarball deployment playbook execution completed"
 
