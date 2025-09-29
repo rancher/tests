@@ -101,18 +101,19 @@ if [[ ! -f "$RKE2_TARBALL_PLAYBOOK" ]]; then
     exit 1
 fi
 
-# Copy group_vars to the qa-infra-automation structure if needed
-mkdir -p /root/qa-infra-automation/ansible/rke2/airgap/group_vars
+# Copy group_vars to the correct location relative to inventory file
+# Ansible loads group_vars relative to the inventory file location
+mkdir -p /root/ansible/rke2/airgap/group_vars
 
 # Ensure the group_vars file exists and has basic structure
-GROUP_VARS_FILE="/root/qa-infra-automation/ansible/rke2/airgap/group_vars/all.yml"
+GROUP_VARS_FILE="/root/ansible/rke2/airgap/group_vars/all.yml"
 if [[ ! -f "/root/group_vars/all.yml" ]]; then
     echo "ERROR: Source group_vars file not found at /root/group_vars/all.yml"
     exit 1
 fi
 
 cp /root/group_vars/all.yml "$GROUP_VARS_FILE"
-echo "Copied group_vars to qa-infra-automation structure"
+echo "Copied group_vars to inventory-relative location: $GROUP_VARS_FILE"
 
 # Ensure RKE2_VERSION is set in the group_vars file
 if [[ -n "${RKE2_VERSION}" ]]; then
