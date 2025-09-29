@@ -1841,10 +1841,11 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
         awsSshKeyName = env.AWS_SSH_KEY_NAME
     }
     
-    // Pass SSH credentials to container
+    // Pass SSH credentials and RKE2 version to container
     def sshEnvVars = [
         'AWS_SSH_PEM_KEY': awsSshPemKey,
-        'AWS_SSH_KEY_NAME': awsSshKeyName
+        'AWS_SSH_KEY_NAME': awsSshKeyName,
+        'RKE2_VERSION': env.RKE2_VERSION
     ]
     
     try {
@@ -1871,7 +1872,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
     // Get SSH credentials and pass them to container
     def awsSshPemKey = null
     def awsSshKeyName = null
-    
+
     withCredentials([
         string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
         string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
@@ -1879,11 +1880,12 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
         awsSshPemKey = env.AWS_SSH_PEM_KEY
         awsSshKeyName = env.AWS_SSH_KEY_NAME
     }
-    
-    // Pass SSH credentials to container
+
+    // Pass SSH credentials and RKE2 version to container
     def sshEnvVars = [
         'AWS_SSH_PEM_KEY': awsSshPemKey,
-        'AWS_SSH_KEY_NAME': awsSshKeyName
+        'AWS_SSH_KEY_NAME': awsSshKeyName,
+        'RKE2_VERSION': env.RKE2_VERSION
     ]
     
     try {

@@ -39,10 +39,33 @@ fi
 mkdir -p /root/.ssh
 if [[ -n "$AWS_SSH_PEM_KEY" ]]; then
     echo "Creating SSH authorized_keys file from AWS_SSH_PEM_KEY environment variable"
+    
+    # First, decode the base64 key if it's encoded
+    if echo "$AWS_SSH_PEM_KEY" | grep -q "^LS0t"; then
+        echo "SSH key appears to be base64 encoded, decoding..."
+        echo "$AWS_SSH_PEM_KEY" | base64 -d > /tmp/ssh_key.pem
+    else
+        echo "$AWS_SSH_PEM_KEY" > /tmp/ssh_key.pem
+    fi
+    
+    # Ensure the key file has proper permissions
+    chmod 600 /tmp/ssh_key.pem
+    
     # Extract the public key from the private key
-    ssh-keygen -y -f /dev/stdin <<< "$AWS_SSH_PEM_KEY" > /root/.ssh/authorized_keys
-    chmod 600 /root/.ssh/authorized_keys
-    echo "SSH authorized_keys file created successfully"
+    if ssh-keygen -y -f /tmp/ssh_key.pem > /root/.ssh/authorized_keys 2>/dev/null; then
+        chmod 600 /root/.ssh/authorized_keys
+        echo "SSH authorized_keys file created successfully"
+        echo "Public key extracted:"
+        cat /root/.ssh/authorized_keys
+    else
+        echo "ERROR: Failed to extract public key from SSH private key"
+        echo "Creating empty authorized_keys file to prevent Ansible errors"
+        touch /root/.ssh/authorized_keys
+        chmod 600 /root/.ssh/authorized_keys
+    fi
+    
+    # Clean up temporary key file
+    rm -f /tmp/ssh_key.pem
 else
     echo "WARNING: AWS_SSH_PEM_KEY environment variable is not set"
     # Create an empty authorized_keys file to prevent Ansible errors
@@ -81,6 +104,20 @@ fi
 # Copy group_vars to the qa-infra-automation structure if needed
 mkdir -p /root/qa-infra-automation/ansible/rke2/airgap/group_vars
 cp /root/group_vars/all.yml /root/qa-infra-automation/ansible/rke2/airgap/group_vars/
+
+# Ensure RKE2_VERSION is set in the group_vars file
+if [[ -n "${RKE2_VERSION}" ]]; then
+    echo "Ensuring RKE2_VERSION is set in group_vars: ${RKE2_VERSION}"
+    # Replace or add the rke2_version line in the group_vars file
+    sed -i "s/rke2_version:.*/rke2_version: \"${RKE2_VERSION}\"/" /root/qa-infra-automation/ansible/rke2/airgap/group_vars/all.yml
+    if ! grep -q "rke2_version:" /root/qa-infra-automation/ansible/rke2/airgap/group_vars/all.yml; then
+        echo "rke2_version: \"${RKE2_VERSION}\"" >> /root/qa-infra-automation/ansible/rke2/airgap/group_vars/all.yml
+    fi
+else
+    echo "WARNING: RKE2_VERSION environment variable is not set"
+    echo "Setting default RKE2 version"
+    sed -i "s/rke2_version:.*/rke2_version: \"v1.28.8+rke2r1\"/" /root/qa-infra-automation/ansible/rke2/airgap/group_vars/all.yml
+fi
 
 echo "Using RKE2 tarball deployment playbook from qa-infra-automation repository"
 echo "Playbook path: $RKE2_TARBALL_PLAYBOOK"
