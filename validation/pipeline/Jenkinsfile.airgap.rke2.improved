@@ -496,6 +496,61 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy Rancher with Ansible') {
+            steps {
+                script {
+                    logInfo('Deploying Rancher to RKE2 cluster using Ansible playbooks')
+
+                    // Configuration validation
+                    def requiredAnsibleVars = [
+                        'QA_INFRA_WORK_PATH',
+                        'ANSIBLE_VARS_FILENAME',
+                        'ANSIBLE_TIMEOUT'
+                    ]
+
+                    validateRequiredVariables(requiredAnsibleVars)
+
+                    // Enhanced timeout with reasonable defaults
+                    def timeoutMinutes = env.ANSIBLE_TIMEOUT ?
+                        Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
+
+                    timeout(time: timeoutMinutes, unit: 'MINUTES') {
+                        try {
+                            // Run Rancher deployment playbook from qa-infra-automation
+                            runRancherDeployment()
+
+                            logInfo('Rancher deployment completed successfully')
+                        } catch (Exception e) {
+                            logError("Rancher Ansible deployment failed: ${e.message}")
+                            handleRancherDeploymentFailure()
+                        }
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
+                        logInfo('Rancher Ansible deployment succeeded')
+                        // Archive Rancher deployment artifacts
+                        archiveRancherDeploymentArtifacts()
+                    }
+                }
+                failure {
+                    script {
+                        logError('Rancher Ansible deployment failed')
+                        // Archive failure artifacts for debugging
+                        archiveRancherFailureArtifacts()
+                        
+                        // Trigger infrastructure cleanup if enabled
+                        if (env.DESTROY_ON_FAILURE.toBoolean()) {
+                            logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup')
+                            handleRancherDeploymentFailure()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     post {
@@ -2039,5 +2094,167 @@ def archiveAnsibleFailureArtifacts() {
         logInfo('Ansible failure artifacts archived successfully')
     } catch (Exception e) {
         logError("Ansible failure artifacts archival failed: ${e.message}")
+    }
+}
+
+// ========================================
+// RANCHER DEPLOYMENT FUNCTIONS
+// ========================================
+
+def runRancherDeployment() {
+    logInfo('Running Rancher deployment playbook from qa-infra-automation repository')
+
+    def rancherDeploymentScript = """
+    #!/bin/bash
+    set -e
+
+    # Source the external Rancher deployment script
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_run_rancher_deployment.sh
+    """
+
+    // Get SSH credentials and pass them to container
+    def awsSshPemKey = null
+    def awsSshKeyName = null
+
+    withCredentials([
+        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
+    ]) {
+        awsSshPemKey = env.AWS_SSH_PEM_KEY
+        awsSshKeyName = env.AWS_SSH_KEY_NAME
+    }
+
+    // Pass SSH credentials, RKE2 version, and Rancher version to container
+    def rancherEnvVars = [
+        'AWS_SSH_PEM_KEY': awsSshPemKey,
+        'AWS_SSH_KEY_NAME': awsSshKeyName,
+        'RKE2_VERSION': env.RKE2_VERSION,
+        'RANCHER_VERSION': env.RANCHER_VERSION,
+        'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
+        'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
+        'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD
+    ]
+
+    try {
+        executeScriptInContainer(rancherDeploymentScript, rancherEnvVars)
+        logInfo('Rancher deployment playbook executed successfully')
+    } catch (Exception e) {
+        def errorMsg = "Rancher deployment playbook failed: ${e.message}"
+        logError(errorMsg)
+
+        // Check if this is an Ansible exit code 2 (failed tasks) but deployment might still be successful
+        if (e.message.contains("script returned exit code 2")) {
+            logWarning("Ansible returned exit code 2 (failed tasks), checking if Rancher deployment actually succeeded...")
+
+            // Give a moment for any async operations to complete
+            sleep(10)
+
+            // Check if Rancher is accessible
+            try {
+                validateRancherDeployment()
+                logInfo("Rancher appears to be operational despite Ansible task failures")
+                logInfo("Continuing with deployment...")
+                return // Don't fail the deployment
+            } catch (rancherException) {
+                logError("Rancher validation also failed: ${rancherException.message}")
+                logError("Rancher deployment genuinely failed")
+                error(errorMsg)
+            }
+        } else {
+            // Critical failure, not just Ansible task failures
+            error(errorMsg)
+        }
+    }
+}
+
+def validateRancherDeployment() {
+    logInfo('Validating Rancher deployment')
+    
+    def validationScript = """
+    #!/bin/bash
+    set -e
+
+    # Source the external Rancher validation script
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_validate_rancher.sh
+    """
+    
+    try {
+        executeScriptInContainer(validationScript)
+        logInfo('Rancher deployment validation completed successfully')
+    } catch (Exception e) {
+        def errorMsg = "Rancher deployment validation failed: ${e.message}"
+        logError(errorMsg)
+        error(errorMsg)
+    }
+}
+
+def handleRancherDeploymentFailure() {
+    logError("Rancher deployment failed - initiating cleanup")
+    try {
+        archiveRancherFailureArtifacts()
+        if (env.DESTROY_ON_FAILURE.toBoolean()) {
+            logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for Rancher failure')
+            def cleanupScript = """
+#!/bin/bash
+set -e
+
+# Source the external Rancher failure cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/rancher_failure_cleanup.sh
+            """
+            // Pass DESTROY_ON_FAILURE environment variable to container
+            def cleanupEnvVars = [
+                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE
+            ]
+            // Note: Don't cleanup containers yet - we need them for cleanup script
+            executeScriptInContainer(cleanupScript, cleanupEnvVars)
+            logInfo('Infrastructure cleanup attempted for Rancher failure')
+        } else {
+            logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for Rancher failure')
+            logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
+        }
+        // Only cleanup containers after infrastructure cleanup is attempted
+        cleanupContainersAndVolumes()
+    } catch (cleanupException) {
+        logError("Cleanup during Rancher failure handling failed: ${cleanupException.message}")
+        // Still try to cleanup containers even if infrastructure cleanup fails
+        try {
+            cleanupContainersAndVolumes()
+        } catch (containerCleanupException) {
+            logError("Container cleanup also failed: ${containerCleanupException.message}")
+        }
+    }
+    throw new Exception("Rancher deployment failed")
+}
+
+def archiveRancherDeploymentArtifacts() {
+    logInfo('Archiving Rancher deployment artifacts')
+    try {
+        archiveBuildArtifacts([
+            'ansible-inventory.yml',
+            'group_vars/all.yml',
+            'kubeconfig.yaml',
+            'rancher-deployment-logs.txt',
+            'rancher-validation-logs.txt',
+            'deployment-summary.json'
+        ])
+        logInfo('Rancher deployment artifacts archived successfully')
+    } catch (Exception e) {
+        logError("Rancher deployment artifacts archival failed: ${e.message}")
+    }
+}
+
+def archiveRancherFailureArtifacts() {
+    logInfo('Archiving Rancher failure artifacts')
+    try {
+        archiveBuildArtifacts([
+            'ansible-inventory.yml',
+            'group_vars/all.yml',
+            'rancher-deployment-error-logs.txt',
+            'rancher-validation-error-logs.txt',
+            'rancher-debug-info.txt'
+        ])
+        logInfo('Rancher failure artifacts archived successfully')
+    } catch (Exception e) {
+        logError("Rancher failure artifacts archival failed: ${e.message}")
     }
 }
