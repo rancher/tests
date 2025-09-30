@@ -946,15 +946,21 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
     def dockerCmd = buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv)
 
     // Execute Docker command with fallback strategy
-    executeDockerCommandWithFallback(dockerCmd, scriptFile)
+    executeDockerCommandWithFallback(dockerCmd, scriptFile, extraEnv)
 }
 
 def buildEnvironmentVariables(extraEnv) {
     def envVars = ''
     extraEnv.each { key, value ->
-        // Properly escape the value to prevent command injection
-        def escapedValue = value.toString().replace('"', '\\"').replace('$', '\\$')
-        envVars += " -e \"${key}=${escapedValue}\""
+        // Skip null/empty values to avoid passing literal "null" or blanks
+        if (value != null) {
+            def strVal = value.toString()
+            if (strVal.trim()) {
+                // Properly escape the value to prevent command injection
+                def escapedValue = strVal.replace('"', '\\"').replace('$', '\\$')
+                envVars += " -e \"${key}=${escapedValue}\""
+            }
+        }
     }
     return envVars
 }
@@ -977,7 +983,7 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     """.stripIndent()
 }
 
-def executeDockerCommandWithFallback(dockerCmd, scriptFile) {
+def executeDockerCommandWithFallback(dockerCmd, scriptFile, extraEnv = [:]) {
     def dockerSuccess = false
 
     // Approach 1: Try the primary command first (with environment file mounting)
@@ -992,7 +998,7 @@ def executeDockerCommandWithFallback(dockerCmd, scriptFile) {
         // Approach 2: Try fallback with direct environment variables
         try {
             logInfo("Attempting Docker execution with direct environment variables...")
-            def fallbackCmd = buildFallbackDockerCommand(scriptFile)
+            def fallbackCmd = buildFallbackDockerCommand(scriptFile, extraEnv)
             logInfo("Executing fallback docker command:")
             logInfo(fallbackCmd)
             sh fallbackCmd
@@ -1013,9 +1019,10 @@ def executeDockerCommandWithFallback(dockerCmd, scriptFile) {
     sh "rm -f ${scriptFile}"
 }
 
-def buildFallbackDockerCommand(scriptFile) {
+def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
     def envFilePath = "${pwd()}/${env.ENV_FILE}"
     def directEnvVars = buildDirectEnvironmentVariables()
+    def explicitEnvVars = buildEnvironmentVariables(extraEnv)
 
     return """
         docker run --rm \\
@@ -1028,6 +1035,7 @@ def buildFallbackDockerCommand(scriptFile) {
             -e TF_WORKSPACE=${env.TF_WORKSPACE} \\
             -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME} \\
             ${directEnvVars} \\
+            ${explicitEnvVars} \\
             ${env.IMAGE_NAME} \\
             sh -c 'echo "=== DEBUG: Container started (FALLBACK MODE) ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment variables passed directly"; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
     """.stripIndent()
