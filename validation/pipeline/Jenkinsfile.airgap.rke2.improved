@@ -1048,7 +1048,8 @@ def buildDirectEnvironmentVariables() {
                         // Pass specific AWS variables needed for Terraform, but filter other sensitive variables
                         if (key == 'AWS_ACCESS_KEY_ID' || key == 'AWS_SECRET_ACCESS_KEY' || key == 'AWS_REGION' ||
                             key == 'S3_BUCKET_NAME' || key == 'S3_REGION' || key == 'S3_KEY_PREFIX' ||
-                            key == 'ANSIBLE_VARIABLES' || key == 'RKE2_VERSION' ||
+                            key == 'ANSIBLE_VARIABLES' || key == 'RKE2_VERSION' || key == 'RANCHER_VERSION' ||
+                            key == 'PRIVATE_REGISTRY_URL' || key == 'PRIVATE_REGISTRY_USERNAME' ||
                             (key.startsWith('AWS_SSH_') && !key.contains('SECRET') && !key.contains('PASSWORD'))) {
                             directEnvVars += " -e \"${key}=${value}\""
                         }
