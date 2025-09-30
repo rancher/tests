@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/config"
 	shepherdConfig "github.com/rancher/shepherd/pkg/config"
@@ -17,7 +18,6 @@ import (
 	"github.com/rancher/tfp-automation/framework/set/resources/dualstack"
 	"github.com/rancher/tfp-automation/framework/set/resources/ipv6"
 	"github.com/rancher/tfp-automation/framework/set/resources/rancher2"
-	"github.com/rancher/tfp-automation/framework/set/resources/sanity"
 	"github.com/rancher/tfp-automation/tests/infrastructure"
 	"github.com/sirupsen/logrus"
 )
@@ -43,7 +43,7 @@ func main() {
 			logrus.Fatalf("Failed to setup Rancher: %v", err)
 		}
 	default:
-		client, err = setupRancher(t, rancherConfig, terraformConfig, terratestConfig)
+		client, _, _, _, _, err = setupRancher(t)
 		if err != nil {
 			logrus.Fatalf("Failed to setup Rancher: %v", err)
 		}
@@ -57,24 +57,11 @@ func main() {
 	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
 }
 
-func setupRancher(t *testing.T, rancherConfig *rancher.Config, terraformConfig *tfpConfig.TerraformConfig,
-	terratestConfig *tfpConfig.TerratestConfig) (*rancher.Client, error) {
-	_, keyPath := rancher2.SetKeyPath(keypath.SanityKeyPath, terratestConfig.PathToRepo, terraformConfig.Provider)
-	terraformOptions := framework.Setup(t, terraformConfig, terratestConfig, keyPath)
-
-	_, err := sanity.CreateMainTF(t, terraformOptions, keyPath, rancherConfig, terraformConfig, terratestConfig)
-	if err != nil {
-		return nil, err
-	}
-
+func setupRancher(t *testing.T) (*rancher.Client, string, *terraform.Options, *terraform.Options, map[string]any, error) {
 	testSession := session.NewSession()
+	client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig := infrastructure.SetupRancher(t, testSession, keypath.SanityKeyPath)
 
-	client, err := infrastructure.PostRancherSetup(t, terraformOptions, rancherConfig, testSession, terraformConfig.Standalone.RancherHostname, keyPath, false, false)
-	if err != nil && *rancherConfig.Cleanup {
-		cleanup.Cleanup(nil, terraformOptions, keyPath)
-	}
-
-	return client, nil
+	return client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig, nil
 }
 
 func setupIPv6Rancher(t *testing.T, rancherConfig *rancher.Config, terraformConfig *tfpConfig.TerraformConfig,

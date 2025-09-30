@@ -68,6 +68,7 @@ require (
 )
 
 require (
+	github.com/gruntwork-io/terratest v0.49.0
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/rancher/rancher v0.0.0-20250806201723-9a7af3779b9d
 	github.com/rancher/shepherd v0.0.0-20250930150356-0687c0e2375d
@@ -163,7 +164,6 @@ require (
 	github.com/containerd/cgroups/v3 v3.0.2 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
-	github.com/gruntwork-io/terratest v0.49.0 // indirect
 	github.com/harvester/harvester v1.5.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-getter/v2 v2.2.3 // indirect
