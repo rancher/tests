@@ -79,7 +79,7 @@ cat > kubectl_access_setup.yml << EOF
       replace:
         path: "{{ kube_config_dir }}/config"
         regexp: 'server: https://127.0.0.1:6443'
-        replace: 'server: https://{{ hostvars[groups['rke2_servers'][0]].ansible_private_ip }}:6443'
+        replace: "server: https://{{ hostvars[groups['rke2_servers'][0]].ansible_private_ip }}:6443"
       when: groups['rke2_servers'] is defined and groups['rke2_servers'] | length > 0
       ignore_errors: true
     
