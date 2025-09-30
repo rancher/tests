@@ -952,7 +952,9 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 def buildEnvironmentVariables(extraEnv) {
     def envVars = ''
     extraEnv.each { key, value ->
-        envVars += " -e ${key}=${value}"
+        // Properly escape the value to prevent command injection
+        def escapedValue = value.toString().replace('"', '\\"').replace('$', '\\$')
+        envVars += " -e \"${key}=${escapedValue}\""
     }
     return envVars
 }
@@ -1045,13 +1047,16 @@ def buildDirectEnvironmentVariables() {
                     if (parts.length == 2) {
                         def key = parts[0].trim()
                         def value = parts[1].trim()
-                        // Pass specific AWS variables needed for Terraform, but filter other sensitive variables
+                        // Pass all required variables for Rancher deployment
                         if (key == 'AWS_ACCESS_KEY_ID' || key == 'AWS_SECRET_ACCESS_KEY' || key == 'AWS_REGION' ||
                             key == 'S3_BUCKET_NAME' || key == 'S3_REGION' || key == 'S3_KEY_PREFIX' ||
                             key == 'ANSIBLE_VARIABLES' || key == 'RKE2_VERSION' || key == 'RANCHER_VERSION' ||
-                            key == 'PRIVATE_REGISTRY_URL' || key == 'PRIVATE_REGISTRY_USERNAME' ||
+                            key == 'PRIVATE_REGISTRY_URL' || key == 'PRIVATE_REGISTRY_USERNAME' || key == 'PRIVATE_REGISTRY_PASSWORD' ||
+                            key == 'QA_INFRA_WORK_PATH' || key == 'TF_WORKSPACE' || key == 'TERRAFORM_VARS_FILENAME' ||
                             (key.startsWith('AWS_SSH_') && !key.contains('SECRET') && !key.contains('PASSWORD'))) {
-                            directEnvVars += " -e \"${key}=${value}\""
+                            // Properly escape the value to prevent command injection
+                            def escapedValue = value.replace('"', '\\"').replace('$', '\\$')
+                            directEnvVars += " -e \"${key}=${escapedValue}\""
                         }
                     }
                 }
@@ -2105,11 +2110,31 @@ def archiveAnsibleFailureArtifacts() {
 def runRancherDeployment() {
     logInfo('Running Rancher deployment playbook from qa-infra-automation repository')
 
+    // Validate required environment variables first
+    def requiredRancherVars = [
+        'RKE2_VERSION',
+        'RANCHER_VERSION',
+        'QA_INFRA_WORK_PATH',
+        'TF_WORKSPACE',
+        'TERRAFORM_VARS_FILENAME'
+    ]
+    
+    validateRequiredVariables(requiredRancherVars)
+
     def rancherDeploymentScript = """
     #!/bin/bash
     set -e
 
-    # Source the external Rancher deployment script
+    # Debug: Show environment variables in container
+    echo "=== DEBUG: Rancher Deployment Environment Variables ==="
+    echo "RKE2_VERSION=\${RKE2_VERSION}"
+    echo "RANCHER_VERSION=\${RANCHER_VERSION}"
+    echo "QA_INFRA_WORK_PATH=\${QA_INFRA_WORK_PATH}"
+    echo "TF_WORKSPACE=\${TF_WORKSPACE}"
+    echo "TERRAFORM_VARS_FILENAME=\${TERRAFORM_VARS_FILENAME}"
+    echo "=== END DEBUG ==="
+
+    # Source external Rancher deployment script
     source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_run_rancher_deployment.sh
     """
 
@@ -2125,7 +2150,7 @@ def runRancherDeployment() {
         awsSshKeyName = env.AWS_SSH_KEY_NAME
     }
 
-    // Pass SSH credentials, RKE2 version, and Rancher version to container
+    // Pass all required environment variables to container
     def rancherEnvVars = [
         'AWS_SSH_PEM_KEY': awsSshPemKey,
         'AWS_SSH_KEY_NAME': awsSshKeyName,
@@ -2133,8 +2158,16 @@ def runRancherDeployment() {
         'RANCHER_VERSION': env.RANCHER_VERSION,
         'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
         'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
-        'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD
+        'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD,
+        'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
+        'TF_WORKSPACE': env.TF_WORKSPACE,
+        'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
     ]
+
+    logInfo("Passing environment variables to Rancher deployment:")
+    rancherEnvVars.each { key, value ->
+        logInfo("  ${key} = ${value ? 'SET' : 'NULL'}")
+    }
 
     try {
         executeScriptInContainer(rancherDeploymentScript, rancherEnvVars)
@@ -2155,7 +2188,7 @@ def runRancherDeployment() {
                 validateRancherDeployment()
                 logInfo("Rancher appears to be operational despite Ansible task failures")
                 logInfo("Continuing with deployment...")
-                return // Don't fail the deployment
+                return // Don't fail deployment
             } catch (rancherException) {
                 logError("Rancher validation also failed: ${rancherException.message}")
                 logError("Rancher deployment genuinely failed")
