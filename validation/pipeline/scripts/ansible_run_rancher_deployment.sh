@@ -152,12 +152,49 @@ echo "=== Updated group_vars/all.yml ==="
 cat "${GROUP_VARS_DIR}/all.yml"
 echo "================================="
 
-# Check if Rancher deployment playbook exists (from repo root)
-RANCHER_PLAYBOOK="playbooks/deploy/rancher-helm-deployment.yml"
-if [[ ! -f "${RANCHER_PLAYBOOK}" ]]; then
-    echo "ERROR: Rancher deployment playbook not found at ${RANCHER_PLAYBOOK}"
-    echo "Available playbooks in playbooks/deploy:"
-    ls -la playbooks/deploy/ || echo "playbooks/deploy directory not found"
+# Check for Rancher deployment playbook in multiple locations
+RANCHER_PLAYBOOK=""
+
+# Try common locations for Rancher playbooks
+PLAYBOOK_LOCATIONS=(
+  "ansible/rancher/playbooks/deploy-rancher.yml"
+  "ansible/rancher/playbooks/rancher-deployment.yml"
+  "ansible/rancher/deploy-rancher.yml"
+  "ansible/rke2/airgap/playbooks/deploy-rancher.yml"
+  "ansible/rke2/airgap/playbooks/rancher-deployment.yml"
+  "playbooks/deploy/rancher-helm-deployment.yml"
+  "playbooks/rancher-deployment.yml"
+)
+
+echo "=== Searching for Rancher deployment playbook ==="
+for playbook in "${PLAYBOOK_LOCATIONS[@]}"; do
+  echo "Checking: ${playbook}"
+  if [[ -f "${playbook}" ]]; then
+    RANCHER_PLAYBOOK="${playbook}"
+    echo "Found Rancher playbook at: ${RANCHER_PLAYBOOK}"
+    break
+  fi
+done
+
+if [[ -z "${RANCHER_PLAYBOOK}" ]]; then
+    echo "ERROR: Rancher deployment playbook not found in any expected location"
+    echo "Tried the following locations:"
+    for playbook in "${PLAYBOOK_LOCATIONS[@]}"; do
+      echo "  - ${playbook}"
+    done
+    echo ""
+    echo "Available directories structure:"
+    echo "Contents of ansible/:"
+    ls -la ansible/ 2>/dev/null || echo "ansible/ directory not found"
+    echo ""
+    echo "Contents of ansible/rancher/:"
+    ls -la ansible/rancher/ 2>/dev/null || echo "ansible/rancher/ directory not found"
+    echo ""
+    echo "Contents of ansible/rancher/playbooks/:"
+    ls -la ansible/rancher/playbooks/ 2>/dev/null || echo "ansible/rancher/playbooks/ directory not found"
+    echo ""
+    echo "Contents of ansible/rke2/airgap/playbooks/:"
+    ls -la ansible/rke2/airgap/playbooks/ 2>/dev/null || echo "ansible/rke2/airgap/playbooks/ directory not found"
     exit 1
 fi
 
