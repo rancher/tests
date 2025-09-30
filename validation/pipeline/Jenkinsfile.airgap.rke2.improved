@@ -1353,6 +1353,17 @@ def extractArtifactsFromDockerVolume() {
                         fi
                     done
                     
+                    # Copy kubeconfig if it exists
+                    if [ -f /source/kubeconfig.yaml ]; then
+                        cp /source/kubeconfig.yaml /dest/
+                        echo "✓ Copied kubeconfig.yaml"
+                    elif [ -f /source/group_vars/kubeconfig.yaml ]; then
+                        cp /source/group_vars/kubeconfig.yaml /dest/
+                        echo "✓ Copied kubeconfig.yaml from group_vars"
+                    else
+                        echo "⚠ kubeconfig.yaml not found in shared volume"
+                    fi
+                    
                     # List what we successfully copied
                     echo "Files successfully copied to Jenkins workspace:"
                     ls -la /dest/*.json /dest/*.yml /dest/*.tfvars /dest/*.tfstate 2>/dev/null || echo "No matching files found"
@@ -2001,6 +2012,7 @@ def archiveAnsibleDeploymentArtifacts() {
         archiveBuildArtifacts([
             'ansible-inventory.yml',
             'group_vars/all.yml',
+            'kubeconfig.yaml',
             'ansible-logs.txt',
             'rke2-deployment-logs.txt',
             'kubectl-setup-logs.txt',
