@@ -968,13 +968,15 @@ def buildEnvironmentVariables(extraEnv) {
 def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     def envFilePath = "${pwd()}/${env.ENV_FILE}"
     def inventoryMount = buildInventoryMount()
+    def inventoryLine = inventoryMount ? "${inventoryMount} \\\\" : ""
 
     return """
         docker run --rm \\
             -v ${env.VALIDATION_VOLUME}:/root \\
             -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
             -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-            -v ${envFilePath}:/tmp/.env${inventoryMount} \\
+            -v ${envFilePath}:/tmp/.env \\
+            ${inventoryLine}
             --name ${containerName} \\
             -t \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
@@ -1025,12 +1027,14 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
     def directEnvVars = buildDirectEnvironmentVariables()
     def explicitEnvVars = buildEnvironmentVariables(extraEnv)
     def inventoryMount = buildInventoryMount()
+    def inventoryLine = inventoryMount ? "${inventoryMount} \\\\" : ""
 
     return """
         docker run --rm \\
             -v ${env.VALIDATION_VOLUME}:/root \\
             -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
-            -v ${pwd()}/${scriptFile}:/tmp/script.sh${inventoryMount} \\
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+            ${inventoryLine}
             --name ${env.BUILD_CONTAINER_NAME}-fallback \\
             -t \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation \\
@@ -1048,7 +1052,7 @@ def buildInventoryMount() {
     def inventoryFile = 'ansible-inventory.yml'
     if (fileExists(inventoryFile)) {
         logInfo("Mounting inventory file from Jenkins workspace: ${inventoryFile}")
-        return " \\\\\\\\\n            -v ${pwd()}/${inventoryFile}:/root/go/src/github.com/rancher/qa-infra-automation/inventory/inventory.yml"
+        return " -v ${pwd()}/${inventoryFile}:/root/go/src/github.com/rancher/qa-infra-automation/inventory/inventory.yml"
     } else {
         logWarning("Inventory file not found in Jenkins workspace: ${inventoryFile}")
     }
