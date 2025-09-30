@@ -1876,15 +1876,15 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
 
 def runRKE2TarballDeployment() {
     logInfo('Running RKE2 tarball deployment playbook')
-    
-    def rke2DeploymentScript = """
-#!/bin/bash
-set -e
 
-# Source the external RKE2 tarball deployment script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_run_rke2_deployment.sh
-    """
-    
+    def rke2DeploymentScript = """
+    #!/bin/bash
+    set -e
+
+    # Source the external RKE2 tarball deployment script
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_run_rke2_deployment.sh
+        """
+
     // Get SSH credentials and pass them to container
     def awsSshPemKey = null
     def awsSshKeyName = null
@@ -1903,14 +1903,36 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
         'AWS_SSH_KEY_NAME': awsSshKeyName,
         'RKE2_VERSION': env.RKE2_VERSION
     ]
-    
+
     try {
         executeScriptInContainer(rke2DeploymentScript, sshEnvVars)
         logInfo('RKE2 tarball deployment playbook executed successfully')
     } catch (Exception e) {
         def errorMsg = "RKE2 tarball deployment playbook failed: ${e.message}"
         logError(errorMsg)
-        error(errorMsg)
+
+        // Check if this is an Ansible exit code 2 (failed tasks) but deployment might still be successful
+        if (e.message.contains("script returned exit code 2")) {
+            logWarning("Ansible returned exit code 2 (failed tasks), checking if deployment actually succeeded...")
+
+            // Give a moment for any async operations to complete
+            sleep(10)
+
+            // Check if kubectl access setup has run and cluster is working
+            try {
+                setupKubectlAccess()
+                logInfo("Cluster appears to be operational despite Ansible task failures")
+                logInfo("Continuing with deployment...")
+                return // Don't fail the deployment
+            } catch (kubectlException) {
+                logError("kubectl setup also failed: ${kubectlException.message}")
+                logError("Deployment genuinely failed")
+                error(errorMsg)
+            }
+        } else {
+            // Critical failure, not just Ansible task failures
+            error(errorMsg)
+        }
     }
 }
 
