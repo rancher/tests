@@ -967,13 +967,14 @@ def buildEnvironmentVariables(extraEnv) {
 
 def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     def envFilePath = "${pwd()}/${env.ENV_FILE}"
+    def inventoryMount = buildInventoryMount()
 
     return """
         docker run --rm \\
             -v ${env.VALIDATION_VOLUME}:/root \\
             -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
             -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-            -v ${envFilePath}:/tmp/.env \\
+            -v ${envFilePath}:/tmp/.env${inventoryMount} \\
             --name ${containerName} \\
             -t \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
@@ -1023,12 +1024,13 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
     def envFilePath = "${pwd()}/${env.ENV_FILE}"
     def directEnvVars = buildDirectEnvironmentVariables()
     def explicitEnvVars = buildEnvironmentVariables(extraEnv)
+    def inventoryMount = buildInventoryMount()
 
     return """
         docker run --rm \\
             -v ${env.VALIDATION_VOLUME}:/root \\
             -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
-            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh${inventoryMount} \\
             --name ${env.BUILD_CONTAINER_NAME}-fallback \\
             -t \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation \\
@@ -1039,6 +1041,18 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
             ${env.IMAGE_NAME} \\
             sh -c 'echo "=== DEBUG: Container started (FALLBACK MODE) ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment variables passed directly"; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
     """.stripIndent()
+}
+
+def buildInventoryMount() {
+    // Mount ansible-inventory.yml if it exists in Jenkins workspace
+    def inventoryFile = 'ansible-inventory.yml'
+    if (fileExists(inventoryFile)) {
+        logInfo("Mounting inventory file from Jenkins workspace: ${inventoryFile}")
+        return " \\\\\\\\\n            -v ${pwd()}/${inventoryFile}:/root/go/src/github.com/rancher/qa-infra-automation/inventory/inventory.yml"
+    } else {
+        logWarning("Inventory file not found in Jenkins workspace: ${inventoryFile}")
+    }
+    return ''
 }
 
 def buildDirectEnvironmentVariables() {
