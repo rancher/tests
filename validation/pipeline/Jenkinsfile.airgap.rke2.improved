@@ -968,15 +968,20 @@ def buildEnvironmentVariables(extraEnv) {
 def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     def envFilePath = "${pwd()}/${env.ENV_FILE}"
     def inventoryMount = buildInventoryMount()
-    def inventoryLine = inventoryMount ? "${inventoryMount} \\\\" : ""
+    
+    def volumeMounts = "-v ${env.VALIDATION_VOLUME}:/root \\\\
+            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\\\
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\\\
+            -v ${envFilePath}:/tmp/.env"
+    
+    if (inventoryMount) {
+        volumeMounts += " \\\\
+            ${inventoryMount}"
+    }
 
     return """
         docker run --rm \\
-            -v ${env.VALIDATION_VOLUME}:/root \\
-            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
-            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-            -v ${envFilePath}:/tmp/.env \\
-            ${inventoryLine}
+            ${volumeMounts} \\
             --name ${containerName} \\
             -t \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
@@ -1027,14 +1032,19 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
     def directEnvVars = buildDirectEnvironmentVariables()
     def explicitEnvVars = buildEnvironmentVariables(extraEnv)
     def inventoryMount = buildInventoryMount()
-    def inventoryLine = inventoryMount ? "${inventoryMount} \\\\" : ""
+    
+    def volumeMounts = "-v ${env.VALIDATION_VOLUME}:/root \\\\
+            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\\\
+            -v ${pwd()}/${scriptFile}:/tmp/script.sh"
+    
+    if (inventoryMount) {
+        volumeMounts += " \\\\
+            ${inventoryMount}"
+    }
 
     return """
         docker run --rm \\
-            -v ${env.VALIDATION_VOLUME}:/root \\
-            -v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation \\
-            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-            ${inventoryLine}
+            ${volumeMounts} \\
             --name ${env.BUILD_CONTAINER_NAME}-fallback \\
             -t \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation \\
