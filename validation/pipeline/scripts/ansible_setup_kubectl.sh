@@ -52,7 +52,7 @@ cp /root/group_vars/all.yml /root/ansible/rke2/airgap/group_vars/all.yml
 echo "Copied group_vars to inventory-relative location"
 
 # Ensure the kubectl setup playbook exists
-KUBECTL_SETUP_PLAYBOOK="/root/qa-infra-automation/ansible/rke2/airgap/playbooks/setup/kubectl-access-setup.yml"
+KUBECTL_SETUP_PLAYBOOK="/root/qa-infra-automation/ansible/rke2/airgap/playbooks/setup/setup-kubectl-access.yml"
 if [[ ! -f "$KUBECTL_SETUP_PLAYBOOK" ]]; then
     echo "ERROR: Kubectl setup playbook not found at $KUBECTL_SETUP_PLAYBOOK"
     echo "Available setup playbooks:"
@@ -66,7 +66,7 @@ echo "Playbook path: $KUBECTL_SETUP_PLAYBOOK"
 # Run the kubectl access setup playbook from qa-infra-automation
 echo "Running kubectl access setup playbook..."
 cd /root/qa-infra-automation/ansible/rke2/airgap
-ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml playbooks/setup/kubectl-access-setup.yml -v
+ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml playbooks/setup/setup-kubectl-access.yml -v
 
 echo "Kubectl access setup playbook execution completed"
 
