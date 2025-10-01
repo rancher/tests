@@ -204,9 +204,36 @@ echo "=== Rancher Playbook Content ==="
 cat "${RANCHER_PLAYBOOK}"
 echo "================================="
 
-# Run the Rancher deployment playbook from repository root with detected inventory
-echo "=== Running Rancher Deployment Playbook ==="
-ansible-playbook -i "${INVENTORY_PATH}" "${RANCHER_PLAYBOOK}" -v
+# Determine the working directory for ansible-playbook
+# The playbook should be run from ansible/rke2/airgap/ where ansible.cfg is located
+ANSIBLE_WORKDIR=""
+if [[ "${RANCHER_PLAYBOOK}" == ansible/rke2/airgap/* ]]; then
+    ANSIBLE_WORKDIR="ansible/rke2/airgap"
+    # Convert absolute paths to relative paths from the airgap directory
+    RELATIVE_PLAYBOOK="${RANCHER_PLAYBOOK#ansible/rke2/airgap/}"
+    
+    # Convert inventory path to be relative from airgap directory
+    if [[ "${INVENTORY_PATH}" == ansible/rke2/airgap/* ]]; then
+        RELATIVE_INVENTORY="${INVENTORY_PATH#ansible/rke2/airgap/}"
+    elif [[ "${INVENTORY_PATH}" == inventory/* ]]; then
+        # inventory/ is at repo root, so we need to go up 3 levels from airgap
+        RELATIVE_INVENTORY="../../../${INVENTORY_PATH}"
+    else
+        RELATIVE_INVENTORY="${INVENTORY_PATH}"
+    fi
+    
+    echo "=== Running Rancher Deployment Playbook from ${ANSIBLE_WORKDIR} ==="
+    echo "Working directory: ${ANSIBLE_WORKDIR}"
+    echo "Playbook (relative): ${RELATIVE_PLAYBOOK}"
+    echo "Inventory (relative): ${RELATIVE_INVENTORY}"
+    
+    cd "${ANSIBLE_WORKDIR}"
+    ansible-playbook -i "${RELATIVE_INVENTORY}" "${RELATIVE_PLAYBOOK}" -v
+else
+    # Run from repository root for other playbook locations
+    echo "=== Running Rancher Deployment Playbook from repository root ==="
+    ansible-playbook -i "${INVENTORY_PATH}" "${RANCHER_PLAYBOOK}" -v
+fi
 
 # Capture the exit code
 ANSIBLE_EXIT_CODE=$?
