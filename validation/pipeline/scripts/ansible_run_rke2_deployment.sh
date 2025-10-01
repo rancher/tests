@@ -192,9 +192,6 @@ elif [[ $ANSIBLE_EXIT_CODE -ne 0 ]]; then
     echo "ERROR: Ansible playbook failed with exit code $ANSIBLE_EXIT_CODE"
 fi
 
-# Exit with the determined exit code
-exit $ANSIBLE_EXIT_CODE
-
 echo "RKE2 tarball deployment playbook execution completed"
 
 # Copy playbook execution logs to shared volume
@@ -202,4 +199,33 @@ if [[ -f "ansible-playbook.log" ]]; then
     cp ansible-playbook.log /root/rke2_tarball_deployment_execution.log
 fi
 
+# Copy kubeconfig to shared volume for Jenkins archival if deployment succeeded
+if [[ $ANSIBLE_EXIT_CODE -eq 0 ]]; then
+    echo "Copying kubeconfig to shared volume for archival..."
+    KUBECONFIG_LOCATIONS=(
+        "/root/.kube/config"
+        "/etc/rancher/rke2/rke2.yaml"
+        "/root/ansible/rke2/airgap/kubeconfig"
+    )
+
+    KUBECONFIG_FOUND=false
+    for config_path in "${KUBECONFIG_LOCATIONS[@]}"; do
+        if [[ -f "$config_path" ]]; then
+            echo "Found kubeconfig at: $config_path"
+            cp "$config_path" /root/kubeconfig.yaml
+            chmod 644 /root/kubeconfig.yaml
+            echo "✓ Kubeconfig copied to /root/kubeconfig.yaml for archival"
+            KUBECONFIG_FOUND=true
+            break
+        fi
+    done
+
+    if [[ "$KUBECONFIG_FOUND" == false ]]; then
+        echo "⚠ WARNING: Kubeconfig not found after successful RKE2 deployment"
+    fi
+fi
+
 echo "=== Ansible RKE2 Tarball Deployment Completed ==="
+
+# Exit with the determined exit code
+exit $ANSIBLE_EXIT_CODE
