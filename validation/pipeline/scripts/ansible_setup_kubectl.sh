@@ -66,7 +66,15 @@ echo "Playbook path: $KUBECTL_SETUP_PLAYBOOK"
 # Run the kubectl access setup playbook from qa-infra-automation
 echo "Running kubectl access setup playbook..."
 cd /root/qa-infra-automation/ansible/rke2/airgap
-ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml playbooks/setup/setup-kubectl-access.yml -v
+
+# Pass RKE2_VERSION as an extra variable to ensure it's available
+EXTRA_VARS=""
+if [[ -n "${RKE2_VERSION}" ]]; then
+    EXTRA_VARS="-e rke2_version=${RKE2_VERSION}"
+    echo "Passing RKE2_VERSION as extra variable: ${RKE2_VERSION}"
+fi
+
+ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml playbooks/setup/setup-kubectl-access.yml -v ${EXTRA_VARS}
 
 echo "Kubectl access setup playbook execution completed"
 

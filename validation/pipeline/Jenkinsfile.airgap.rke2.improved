@@ -2047,7 +2047,7 @@ def runRKE2TarballDeployment() {
 
 def setupKubectlAccess() {
     logInfo('Setting up kubectl access on bastion host')
-    
+
     def kubectlSetupScript = """
 #!/bin/bash
 set -e
@@ -2055,9 +2055,14 @@ set -e
 # Source the external kubectl access setup script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_setup_kubectl.sh
     """
-    
+
+    // Pass RKE2_VERSION to container
+    def kubectlEnvVars = [
+        'RKE2_VERSION': env.RKE2_VERSION
+    ]
+
     try {
-        executeScriptInContainer(kubectlSetupScript)
+        executeScriptInContainer(kubectlSetupScript, kubectlEnvVars)
         logInfo('kubectl access setup completed successfully')
     } catch (Exception e) {
         def errorMsg = "kubectl access setup failed: ${e.message}"
