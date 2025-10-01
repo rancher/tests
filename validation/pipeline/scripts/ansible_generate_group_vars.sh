@@ -34,9 +34,24 @@ mkdir -p /tmp/group_vars
 echo "Creating group_vars/all.yml from ANSIBLE_VARIABLES parameter"
 echo "Using user-provided configuration directly"
 
-# Write the ANSIBLE_VARIABLES content and expand environment variables
-# Use envsubst to replace ${VAR} patterns with actual environment variable values
-echo "${ANSIBLE_VARIABLES}" | envsubst > /tmp/group_vars/all.yml
+# Write the ANSIBLE_VARIABLES content to a temporary file
+cat > /tmp/group_vars/all.yml.template << 'ANSIBLE_EOF'
+${ANSIBLE_VARIABLES}
+ANSIBLE_EOF
+
+# Manually substitute environment variables using sed
+# This replaces ${VAR} with the actual value of $VAR
+sed \
+  -e "s|\${RKE2_VERSION}|${RKE2_VERSION}|g" \
+  -e "s|\${RANCHER_VERSION}|${RANCHER_VERSION}|g" \
+  -e "s|\${HOSTNAME_PREFIX}|${HOSTNAME_PREFIX}|g" \
+  -e "s|\${PRIVATE_REGISTRY_URL}|${PRIVATE_REGISTRY_URL}|g" \
+  -e "s|\${PRIVATE_REGISTRY_USERNAME}|${PRIVATE_REGISTRY_USERNAME}|g" \
+  -e "s|\${PRIVATE_REGISTRY_PASSWORD}|${PRIVATE_REGISTRY_PASSWORD}|g" \
+  /tmp/group_vars/all.yml.template > /tmp/group_vars/all.yml
+
+# Clean up template file
+rm -f /tmp/group_vars/all.yml.template
 
 echo "Ansible group_vars/all.yml created successfully from user-provided content"
 echo "Group vars file location: /tmp/group_vars/all.yml"
