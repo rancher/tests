@@ -106,13 +106,9 @@ EOF
   echo "Created: ${GROUP_VARS_DIR}/all.yml"
 fi
 
-# Update group_vars/all.yml with Rancher version if not already set
-echo "Updating group_vars/all.yml with Rancher configuration..."
-if grep -q "^rancher_version:" "${GROUP_VARS_DIR}/all.yml"; then
-    sed -i "s/^rancher_version:.*/rancher_version: \"${RANCHER_VERSION}\"/" "${GROUP_VARS_DIR}/all.yml"
-else
-    echo "rancher_version: \"${RANCHER_VERSION}\"" >> "${GROUP_VARS_DIR}/all.yml"
-fi
+# Note: group_vars/all.yml is provided by user via ANSIBLE_VARIABLES parameter
+# The script no longer modifies user-provided configuration
+echo "Using group_vars/all.yml provided by user via ANSIBLE_VARIABLES parameter"
 
 # Add private registry configuration if provided
 if [[ -n "${PRIVATE_REGISTRY_URL}" ]]; then
