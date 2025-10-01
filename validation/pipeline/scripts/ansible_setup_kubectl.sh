@@ -83,4 +83,34 @@ if [[ -f "ansible-playbook.log" ]]; then
     cp ansible-playbook.log /root/kubectl_access_setup_execution.log
 fi
 
+# Copy kubeconfig to shared volume for Jenkins archival
+echo "Copying kubeconfig to shared volume for archival..."
+KUBECONFIG_LOCATIONS=(
+    "/root/.kube/config"
+    "/etc/rancher/rke2/rke2.yaml"
+    "/root/ansible/rke2/airgap/kubeconfig"
+    "/tmp/kubeconfig.yaml"
+)
+
+KUBECONFIG_FOUND=false
+for config_path in "${KUBECONFIG_LOCATIONS[@]}"; do
+    if [[ -f "$config_path" ]]; then
+        echo "Found kubeconfig at: $config_path"
+        cp "$config_path" /root/kubeconfig.yaml
+        chmod 644 /root/kubeconfig.yaml
+        echo "✓ Kubeconfig copied to /root/kubeconfig.yaml for archival"
+        KUBECONFIG_FOUND=true
+        break
+    fi
+done
+
+if [[ "$KUBECONFIG_FOUND" == false ]]; then
+    echo "⚠ WARNING: Kubeconfig not found in any expected location:"
+    for config_path in "${KUBECONFIG_LOCATIONS[@]}"; do
+        echo "  - $config_path"
+    done
+    echo "Available files in /root/.kube/:"
+    ls -la /root/.kube/ 2>/dev/null || echo "Directory /root/.kube/ does not exist"
+fi
+
 echo "=== Ansible Kubectl Access Setup Completed ==="
