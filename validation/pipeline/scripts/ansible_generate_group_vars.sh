@@ -34,10 +34,9 @@ mkdir -p /tmp/group_vars
 echo "Creating group_vars/all.yml from ANSIBLE_VARIABLES parameter"
 echo "Using user-provided configuration directly"
 
-# Write the ANSIBLE_VARIABLES content directly to group_vars/all.yml
-cat > /tmp/group_vars/all.yml << EOF
-${ANSIBLE_VARIABLES}
-EOF
+# Write the ANSIBLE_VARIABLES content and expand environment variables
+# Use envsubst to replace ${VAR} patterns with actual environment variable values
+echo "${ANSIBLE_VARIABLES}" | envsubst > /tmp/group_vars/all.yml
 
 echo "Ansible group_vars/all.yml created successfully from user-provided content"
 echo "Group vars file location: /tmp/group_vars/all.yml"
