@@ -796,6 +796,7 @@ def generateEnvironmentFile() {
         "HOSTNAME_PREFIX=${env.HOSTNAME_PREFIX}",
         "PRIVATE_REGISTRY_URL=${env.PRIVATE_REGISTRY_URL}",
         "PRIVATE_REGISTRY_USERNAME=${env.PRIVATE_REGISTRY_USERNAME}",
+        "PRIVATE_REGISTRY_PASSWORD=${env.PRIVATE_REGISTRY_PASSWORD}",
         '',
         '# Ansible Configuration',
         "ANSIBLE_VARIABLES=${env.ANSIBLE_VARIABLES}",
