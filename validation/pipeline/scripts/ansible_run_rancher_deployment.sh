@@ -117,28 +117,28 @@ fi
 # Add private registry configuration if provided
 if [[ -n "${PRIVATE_REGISTRY_URL}" ]]; then
     echo "Configuring private registry settings..."
-    
+
     # Update private registry URL
     if grep -q "^private_registry_url:" "${GROUP_VARS_DIR}/all.yml"; then
         sed -i "s|^private_registry_url:.*|private_registry_url: \"${PRIVATE_REGISTRY_URL}\"|" "${GROUP_VARS_DIR}/all.yml"
     else
         echo "private_registry_url: \"${PRIVATE_REGISTRY_URL}\"" >> "${GROUP_VARS_DIR}/all.yml"
     fi
-    
+
     # Update private registry username
     if grep -q "^private_registry_username:" "${GROUP_VARS_DIR}/all.yml"; then
         sed -i "s/^private_registry_username:.*/private_registry_username: \"${PRIVATE_REGISTRY_USERNAME}\"/" "${GROUP_VARS_DIR}/all.yml"
     else
         echo "private_registry_username: \"${PRIVATE_REGISTRY_USERNAME}\"" >> "${GROUP_VARS_DIR}/all.yml"
     fi
-    
+
     # Update private registry password
     if grep -q "^private_registry_password:" "${GROUP_VARS_DIR}/all.yml"; then
         sed -i "s/^private_registry_password:.*/private_registry_password: \"${PRIVATE_REGISTRY_PASSWORD}\"/" "${GROUP_VARS_DIR}/all.yml"
     else
         echo "private_registry_password: \"${PRIVATE_REGISTRY_PASSWORD}\"" >> "${GROUP_VARS_DIR}/all.yml"
     fi
-    
+
     # Enable private registry
     if grep -q "^enable_private_registry:" "${GROUP_VARS_DIR}/all.yml"; then
         sed -i "s/^enable_private_registry:.*/enable_private_registry: true/" "${GROUP_VARS_DIR}/all.yml"
@@ -151,17 +151,18 @@ fi
 echo "=== Updated group_vars/all.yml ==="
 cat "${GROUP_VARS_DIR}/all.yml"
 echo "================================="
-
 # Check for Rancher deployment playbook in multiple locations
 RANCHER_PLAYBOOK=""
 
 # Try common locations for Rancher playbooks
 PLAYBOOK_LOCATIONS=(
+  "ansible/rke2/airgap/playbooks/deploy/rancher-helm-deploy-playbook.yml"
   "ansible/rancher/playbooks/deploy-rancher.yml"
   "ansible/rancher/playbooks/rancher-deployment.yml"
   "ansible/rancher/deploy-rancher.yml"
   "ansible/rke2/airgap/playbooks/deploy-rancher.yml"
   "ansible/rke2/airgap/playbooks/rancher-deployment.yml"
+  "ansible/rke2/airgap/playbooks/rancher-helm-deployment.yml"
   "playbooks/deploy/rancher-helm-deployment.yml"
   "playbooks/rancher-deployment.yml"
 )
