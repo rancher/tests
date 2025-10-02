@@ -58,8 +58,19 @@ echo "Group vars file location: /tmp/group_vars/all.yml"
 
 # Display group_vars for verification (excluding sensitive data)
 echo "=== Generated Group Vars (sanitized) ==="
-grep -v "password\|secret\|key" /tmp/group_vars/all.yml | head -50
+grep -v "password\|secret\|key" /tmp/group_vars/all.yml | head -100
 echo "=== End Group Vars (sanitized) ==="
+
+# Validate YAML syntax
+echo "=== Validating YAML syntax ==="
+if command -v python3 &> /dev/null; then
+    python3 -c "import yaml, sys; yaml.safe_load(open('/tmp/group_vars/all.yml'))" 2>&1 && echo "✓ YAML is valid" || echo "✗ YAML has syntax errors (see above)"
+elif command -v yamllint &> /dev/null; then
+    yamllint /tmp/group_vars/all.yml || echo "✗ YAML has validation errors"
+else
+    echo "⚠ No YAML validation tool available (python3 or yamllint)"
+fi
+echo "=== End YAML validation ==="
 
 # Copy group_vars to shared volume for persistence
 cp -r /tmp/group_vars /tmp/group_vars.backup
