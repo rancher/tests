@@ -200,6 +200,31 @@ echo "=== Rancher Playbook Content ==="
 cat "${RANCHER_PLAYBOOK}"
 echo "================================="
 
+# Build extra variables to pass to ansible-playbook
+EXTRA_VARS=""
+
+if [[ -n "${HOSTNAME_PREFIX}" ]]; then
+    EXTRA_VARS="${EXTRA_VARS} -e hostname_prefix=${HOSTNAME_PREFIX}"
+    echo "Passing HOSTNAME_PREFIX as extra variable: ${HOSTNAME_PREFIX}"
+fi
+
+if [[ -n "${RANCHER_VERSION}" ]]; then
+    EXTRA_VARS="${EXTRA_VARS} -e rancher_version=${RANCHER_VERSION}"
+    echo "Passing RANCHER_VERSION as extra variable: ${RANCHER_VERSION}"
+fi
+
+if [[ -n "${RKE2_VERSION}" ]]; then
+    EXTRA_VARS="${EXTRA_VARS} -e rke2_version=${RKE2_VERSION}"
+    echo "Passing RKE2_VERSION as extra variable: ${RKE2_VERSION}"
+fi
+
+if [[ -n "${PRIVATE_REGISTRY_URL}" ]]; then
+    EXTRA_VARS="${EXTRA_VARS} -e private_registry_url=${PRIVATE_REGISTRY_URL}"
+    echo "Passing PRIVATE_REGISTRY_URL as extra variable: ${PRIVATE_REGISTRY_URL}"
+fi
+
+echo "Extra variables for ansible-playbook: ${EXTRA_VARS}"
+
 # Determine the working directory for ansible-playbook
 # The playbook should be run from ansible/rke2/airgap/ where ansible.cfg is located
 ANSIBLE_WORKDIR=""
@@ -222,13 +247,13 @@ if [[ "${RANCHER_PLAYBOOK}" == ansible/rke2/airgap/* ]]; then
     echo "Working directory: ${ANSIBLE_WORKDIR}"
     echo "Playbook (relative): ${RELATIVE_PLAYBOOK}"
     echo "Inventory (relative): ${RELATIVE_INVENTORY}"
-    
+
     cd "${ANSIBLE_WORKDIR}"
-    ansible-playbook -i "${RELATIVE_INVENTORY}" "${RELATIVE_PLAYBOOK}" -v
+    ansible-playbook -i "${RELATIVE_INVENTORY}" "${RELATIVE_PLAYBOOK}" -v ${EXTRA_VARS}
 else
     # Run from repository root for other playbook locations
     echo "=== Running Rancher Deployment Playbook from repository root ==="
-    ansible-playbook -i "${INVENTORY_PATH}" "${RANCHER_PLAYBOOK}" -v
+    ansible-playbook -i "${INVENTORY_PATH}" "${RANCHER_PLAYBOOK}" -v ${EXTRA_VARS}
 fi
 
 # Capture the exit code
