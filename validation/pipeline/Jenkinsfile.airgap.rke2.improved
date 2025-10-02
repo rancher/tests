@@ -2230,6 +2230,7 @@ def runRancherDeployment() {
     def rancherEnvVars = [
         'AWS_SSH_PEM_KEY': awsSshPemKey,
         'AWS_SSH_KEY_NAME': awsSshKeyName,
+        'ANSIBLE_VARIABLES': env.ANSIBLE_VARIABLES,
         'RKE2_VERSION': env.RKE2_VERSION,
         'RANCHER_VERSION': env.RANCHER_VERSION,
         'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
