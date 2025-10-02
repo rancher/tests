@@ -35,23 +35,46 @@ echo "Creating group_vars/all.yml from ANSIBLE_VARIABLES parameter"
 echo "Using user-provided configuration directly"
 
 # Write the ANSIBLE_VARIABLES content to a temporary file
-cat > /tmp/group_vars/all.yml.template << 'ANSIBLE_EOF'
-${ANSIBLE_VARIABLES}
-ANSIBLE_EOF
+# First, ensure it has Unix line endings (remove any CR characters)
+echo "${ANSIBLE_VARIABLES}" | tr -d '\r' > /tmp/group_vars/all.yml.template
 
-# Manually substitute environment variables using sed
-# This replaces ${VAR} with the actual value of $VAR
+# Use a more robust substitution method with proper escaping
+# Create a temporary script to do the substitutions safely
+cat > /tmp/substitute_vars.sh << 'SUBST_EOF'
+#!/bin/bash
+# Read the template file
+INPUT_FILE="$1"
+OUTPUT_FILE="$2"
+
+# Function to escape special characters for sed
+escape_for_sed() {
+    printf '%s\n' "$1" | sed -e 's/[\/&]/\\&/g'
+}
+
+# Escape all values
+RKE2_VERSION_ESC=$(escape_for_sed "${RKE2_VERSION}")
+RANCHER_VERSION_ESC=$(escape_for_sed "${RANCHER_VERSION}")
+HOSTNAME_PREFIX_ESC=$(escape_for_sed "${HOSTNAME_PREFIX}")
+PRIVATE_REGISTRY_URL_ESC=$(escape_for_sed "${PRIVATE_REGISTRY_URL}")
+PRIVATE_REGISTRY_USERNAME_ESC=$(escape_for_sed "${PRIVATE_REGISTRY_USERNAME}")
+PRIVATE_REGISTRY_PASSWORD_ESC=$(escape_for_sed "${PRIVATE_REGISTRY_PASSWORD}")
+
+# Perform substitutions
 sed \
-  -e "s|\${RKE2_VERSION}|${RKE2_VERSION}|g" \
-  -e "s|\${RANCHER_VERSION}|${RANCHER_VERSION}|g" \
-  -e "s|\${HOSTNAME_PREFIX}|${HOSTNAME_PREFIX}|g" \
-  -e "s|\${PRIVATE_REGISTRY_URL}|${PRIVATE_REGISTRY_URL}|g" \
-  -e "s|\${PRIVATE_REGISTRY_USERNAME}|${PRIVATE_REGISTRY_USERNAME}|g" \
-  -e "s|\${PRIVATE_REGISTRY_PASSWORD}|${PRIVATE_REGISTRY_PASSWORD}|g" \
-  /tmp/group_vars/all.yml.template > /tmp/group_vars/all.yml
+  -e "s|\\\${RKE2_VERSION}|${RKE2_VERSION_ESC}|g" \
+  -e "s|\\\${RANCHER_VERSION}|${RANCHER_VERSION_ESC}|g" \
+  -e "s|\\\${HOSTNAME_PREFIX}|${HOSTNAME_PREFIX_ESC}|g" \
+  -e "s|\\\${PRIVATE_REGISTRY_URL}|${PRIVATE_REGISTRY_URL_ESC}|g" \
+  -e "s|\\\${PRIVATE_REGISTRY_USERNAME}|${PRIVATE_REGISTRY_USERNAME_ESC}|g" \
+  -e "s|\\\${PRIVATE_REGISTRY_PASSWORD}|${PRIVATE_REGISTRY_PASSWORD_ESC}|g" \
+  "${INPUT_FILE}" > "${OUTPUT_FILE}"
+SUBST_EOF
 
-# Clean up template file
-rm -f /tmp/group_vars/all.yml.template
+chmod +x /tmp/substitute_vars.sh
+/tmp/substitute_vars.sh /tmp/group_vars/all.yml.template /tmp/group_vars/all.yml
+
+# Clean up
+rm -f /tmp/group_vars/all.yml.template /tmp/substitute_vars.sh
 
 echo "Ansible group_vars/all.yml created successfully from user-provided content"
 echo "Group vars file location: /tmp/group_vars/all.yml"
