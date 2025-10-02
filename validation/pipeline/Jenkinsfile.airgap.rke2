@@ -160,9 +160,9 @@ pipeline {
             defaultValue: '',
             description: 'Terraform variables configuration for OpenTofu deployment'
         )
-        file(
-            name: 'ANSIBLE_VARIABLES_FILE',
-            description: 'Upload Ansible group_vars/all.yml file for infrastructure deployment (YAML format)'
+        text(
+            name: 'ANSIBLE_VARIABLES',
+            description: 'These config values are for the rancher instance use for the recurring runs.'
         )
     }
 
@@ -489,7 +489,7 @@ pipeline {
                         logError('RKE2 Ansible deployment failed')
                         // Archive failure artifacts for debugging
                         archiveAnsibleFailureArtifacts()
-                        
+
                         // Trigger infrastructure cleanup if enabled
                         if (env.DESTROY_ON_FAILURE.toBoolean()) {
                             logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup')
@@ -544,7 +544,7 @@ pipeline {
                         logError('Rancher Ansible deployment failed')
                         // Archive failure artifacts for debugging
                         archiveRancherFailureArtifacts()
-                        
+
                         // Trigger infrastructure cleanup if enabled
                         if (env.DESTROY_ON_FAILURE.toBoolean()) {
                             logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup')
@@ -734,16 +734,16 @@ def setupDynamicEnvironment() {
 }
 
 def readAnsibleVariablesFile() {
-    logInfo('Reading Ansible variables file')
+    logInfo('Reading Ansible variables from textbox parameter')
 
     def ansibleVarsContent = ''
 
-    if (params.ANSIBLE_VARIABLES_FILE && fileExists(params.ANSIBLE_VARIABLES_FILE)) {
-        logInfo("Reading uploaded Ansible variables file: ${params.ANSIBLE_VARIABLES_FILE}")
-        ansibleVarsContent = readFile(file: params.ANSIBLE_VARIABLES_FILE)
-        logInfo("Ansible variables file size: ${ansibleVarsContent.length()} bytes")
+    if (params.ANSIBLE_VARIABLES && params.ANSIBLE_VARIABLES.trim()) {
+        logInfo("Reading Ansible variables from textbox parameter")
+        ansibleVarsContent = params.ANSIBLE_VARIABLES.trim()
+        logInfo("Ansible variables content size: ${ansibleVarsContent.length()} bytes")
     } else {
-        logWarning('No Ansible variables file uploaded - will use default configuration later')
+        logWarning('No Ansible variables provided in textbox - will use default configuration later')
         // Create a minimal default configuration
         ansibleVarsContent = """---
 # Default Ansible configuration for RKE2 airgap deployment
@@ -793,7 +793,7 @@ def generateEnvironmentFile() {
     def awsSecretAccessKey = null
     def awsSshPemKey = null
     def awsSshKeyName = null
-    
+
     withCredentials([
         string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
         string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
@@ -804,7 +804,7 @@ def generateEnvironmentFile() {
         awsSecretAccessKey = env.AWS_SECRET_ACCESS_KEY
         awsSshPemKey = env.AWS_SSH_PEM_KEY
         awsSshKeyName = env.AWS_SSH_KEY_NAME
-        
+
         // Set environment variables for use in other functions
         env.AWS_ACCESS_KEY_ID = awsAccessKeyId
         env.AWS_SECRET_ACCESS_KEY = awsSecretAccessKey
@@ -904,19 +904,19 @@ def setupSSHKeys() {
     // Get credentials within withCredentials block to ensure they're available
     def awsSshPemKey = null
     def awsSshKeyName = null
-    
+
     withCredentials([
         string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
         string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
     ]) {
         awsSshPemKey = env.AWS_SSH_PEM_KEY
         awsSshKeyName = env.AWS_SSH_KEY_NAME
-        
+
         // Set environment variables for use in other functions
         env.AWS_SSH_PEM_KEY = awsSshPemKey
         env.AWS_SSH_KEY_NAME = awsSshKeyName
     }
-    
+
     if (awsSshPemKey && awsSshKeyName) {
         logInfo('Setting up SSH keys')
 
@@ -1002,12 +1002,12 @@ def buildEnvironmentVariables(extraEnv) {
 def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     def envFilePath = "${pwd()}/${env.ENV_FILE}"
     def inventoryMount = buildInventoryMount()
-    
+
     def volumeMounts = "-v ${env.VALIDATION_VOLUME}:/root " +
                        "-v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation " +
                        "-v ${pwd()}/${scriptFile}:/tmp/script.sh " +
                        "-v ${envFilePath}:/tmp/.env"
-    
+
     if (inventoryMount) {
         volumeMounts += " ${inventoryMount}"
     }
@@ -1065,11 +1065,11 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
     def directEnvVars = buildDirectEnvironmentVariables()
     def explicitEnvVars = buildEnvironmentVariables(extraEnv)
     def inventoryMount = buildInventoryMount()
-    
+
     def volumeMounts = "-v ${env.VALIDATION_VOLUME}:/root " +
                        "-v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation " +
                        "-v ${pwd()}/${scriptFile}:/tmp/script.sh"
-    
+
     if (inventoryMount) {
         volumeMounts += " ${inventoryMount}"
     }
@@ -1395,12 +1395,12 @@ def finalStateArchival() {
     try {
         // Archive infrastructure state (creates infrastructure-state-* files)
         archiveInfrastructureState()
-        
+
         // Create immediate backup for successful deployments (creates terraform-state-build-* files)
         if (currentBuild.currentResult == 'SUCCESS') {
             backupTerraformStateImmediately()
         }
-        
+
         // Additional final artifacts - fix variable expansion issue
         def artifactsList = [
             'infrastructure-outputs.json',
@@ -1421,12 +1421,12 @@ def finalStateArchival() {
 
 def extractArtifactsFromDockerVolume() {
     logInfo('Extracting artifacts from Docker shared volume to Jenkins workspace')
-    
+
     try {
         // Create a temporary container to copy files from the shared volume
         def timestamp = System.currentTimeMillis()
         def extractorContainerName = "${env.BUILD_CONTAINER_NAME}-extractor-${timestamp}"
-        
+
         sh """
             # Create extractor container to copy files from shared volume
             docker run --rm \\
@@ -1436,15 +1436,15 @@ def extractArtifactsFromDockerVolume() {
                 alpine:latest \\
                 sh -c '
                     echo "Copying artifacts from shared volume to Jenkins workspace..."
-                    
+
                     # Copy infrastructure outputs if exists
                     if [ -f /source/infrastructure-outputs.json ]; then
-                        cp /source/infrastructure-outputs.json /dest/ 
+                        cp /source/infrastructure-outputs.json /dest/
                         echo "✓ Copied infrastructure-outputs.json"
                     else
                         echo "⚠ infrastructure-outputs.json not found in shared volume"
                     fi
-                    
+
                     # Copy ansible inventory if exists (generated by Terraform)
                     if [ -f /source/ansible/rke2/airgap/inventory.yml ]; then
                         cp /source/ansible/rke2/airgap/inventory.yml /dest/ansible-inventory.yml
@@ -1455,7 +1455,7 @@ def extractArtifactsFromDockerVolume() {
                     else
                         echo "⚠ ansible-inventory.yml not found in shared volume"
                     fi
-                    
+
                     # Copy terraform vars file if exists
                     if [ -f /source/${env.TERRAFORM_VARS_FILENAME} ]; then
                         cp /source/${env.TERRAFORM_VARS_FILENAME} /dest/
@@ -1463,18 +1463,18 @@ def extractArtifactsFromDockerVolume() {
                     else
                         echo "⚠ ${env.TERRAFORM_VARS_FILENAME} not found in shared volume"
                     fi
-                    
+
                     # Copy terraform state files if they exist
                     if [ -f /source/terraform.tfstate ]; then
                         cp /source/terraform.tfstate /dest/
                         echo "✓ Copied terraform.tfstate"
                     fi
-                    
+
                     if [ -f /source/terraform-state-primary.tfstate ]; then
                         cp /source/terraform-state-primary.tfstate /dest/
                         echo "✓ Copied terraform-state-primary.tfstate"
                     fi
-                    
+
                     # Copy any backup state files
                     for backup_file in /source/terraform-state-backup-*.tfstate /source/tfstate-backup-*.tfstate; do
                         if [ -f "\$backup_file" ]; then
@@ -1482,7 +1482,7 @@ def extractArtifactsFromDockerVolume() {
                             echo "✓ Copied \$(basename \$backup_file)"
                         fi
                     done
-                    
+
                     # Copy kubeconfig if it exists
                     if [ -f /source/kubeconfig.yaml ]; then
                         cp /source/kubeconfig.yaml /dest/
@@ -1493,18 +1493,18 @@ def extractArtifactsFromDockerVolume() {
                     else
                         echo "⚠ kubeconfig.yaml not found in shared volume"
                     fi
-                    
+
                     # List what we successfully copied
                     echo "Files successfully copied to Jenkins workspace:"
                     ls -la /dest/*.json /dest/*.yml /dest/*.tfvars /dest/*.tfstate 2>/dev/null || echo "No matching files found"
                 '
         """
-        
+
         // Generate deployment summary if it doesn't exist
         generateDeploymentSummary()
-        
+
         logInfo('Artifact extraction completed successfully')
-        
+
     } catch (Exception e) {
         logError("Artifact extraction failed: ${e.message}")
         // Don't fail the build, just log the issue
@@ -1514,7 +1514,7 @@ def extractArtifactsFromDockerVolume() {
 
 def generateDeploymentSummary() {
     logInfo('Generating deployment summary')
-    
+
     try {
         def timestamp = new Date().format('yyyy-MM-dd HH:mm:ss')
         def summary = [
@@ -1534,7 +1534,7 @@ def generateDeploymentSummary() {
             ],
             artifacts_generated: []
         ]
-        
+
         // Check which artifacts were successfully generated
         def artifactFiles = [
             'infrastructure-outputs.json',
@@ -1542,18 +1542,18 @@ def generateDeploymentSummary() {
             env.TERRAFORM_VARS_FILENAME,
             'terraform.tfstate'
         ]
-        
+
         artifactFiles.each { fileName ->
             if (fileExists(fileName)) {
                 summary.artifacts_generated.add(fileName)
             }
         }
-        
+
         def summaryJson = groovy.json.JsonOutput.toJson(summary)
         writeFile file: 'deployment-summary.json', text: groovy.json.JsonOutput.prettyPrint(summaryJson)
-        
+
         logInfo('Deployment summary generated successfully')
-        
+
     } catch (Exception e) {
         logError("Failed to generate deployment summary: ${e.message}")
         logError("Exception details: ${e.toString()}")
@@ -1625,7 +1625,7 @@ def deployInfrastructure() {
 
     // Step 1: Generate Tofu config (must be first to create required files)
     generateTofuConfiguration()
-    
+
     // Step 2: Upload cluster.tfvars to S3 immediately after generation
     uploadClusterTfvarsToS3()
 
@@ -1679,11 +1679,11 @@ def validateInfrastructureState() {
 
 def uploadClusterTfvarsToS3() {
     logInfo('Uploading cluster.tfvars to S3')
-    
+
     // Validate required S3 variables
     def requiredS3Vars = ['S3_BUCKET_NAME', 'S3_REGION', 'TF_WORKSPACE', 'TERRAFORM_VARS_FILENAME']
     validateRequiredVariables(requiredS3Vars)
-    
+
     def uploadScript = """
 #!/bin/bash
 set -e
@@ -1701,7 +1701,7 @@ echo "=== END DEBUG ==="
 # Source the external S3 upload script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_upload_tfvars_to_s3.sh
     """.stripIndent()
-    
+
     // Explicitly pass S3 variables as environment variables to the container
     def s3EnvVars = [
         'S3_BUCKET_NAME': env.S3_BUCKET_NAME,
@@ -1709,12 +1709,12 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
         'S3_KEY_PREFIX': env.S3_KEY_PREFIX,
         'AWS_REGION': env.AWS_REGION
     ]
-    
+
     logInfo("Passing S3 environment variables to container:")
     s3EnvVars.each { key, value ->
         logInfo("  ${key}=${value}")
     }
-    
+
     try {
         executeScriptInContainer(uploadScript, s3EnvVars)
         logInfo('S3 upload script executed successfully')
@@ -1799,7 +1799,7 @@ def generateAnsibleGroupVars() {
     if (!env.ANSIBLE_VARIABLES) {
         error('ANSIBLE_VARIABLES not loaded - this should have been set in readAnsibleVariablesFile()')
     }
-    
+
     def groupVarsScript = """
 #!/bin/bash
 set -e
@@ -1831,30 +1831,30 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
 
 def loadInfrastructureOutputs() {
     logInfo('Loading infrastructure outputs from Terraform')
-    
+
     try {
         // Check if infrastructure-outputs.json exists
         if (fileExists('infrastructure-outputs.json')) {
             // Read JSON file using shell command and parse it
             def jsonOutput = sh(script: 'cat infrastructure-outputs.json', returnStdout: true).trim()
-            
+
             // Debug: Show the actual JSON content
             logInfo("Raw infrastructure outputs content: ${jsonOutput}")
-            
+
             // Parse JSON using Groovy's JsonSlurper
             def jsonSlurper = new groovy.json.JsonSlurper()
             def outputs = jsonSlurper.parseText(jsonOutput)
-            
+
             // Debug: Show the parsed structure
             logInfo("Parsed outputs type: ${outputs.getClass().name}")
             if (outputs instanceof Map) {
                 logInfo("Available keys in outputs: ${outputs.keySet()}")
             }
-            
+
             // Handle the actual Terraform output structure with metadata
             def bastionPublicDns = null
             def rancherPrivateIps = []
-            
+
             // Extract bastion public DNS from nested structure
             if (outputs.containsKey('bastion_public_dns') && outputs.bastion_public_dns instanceof Map) {
                 def bastionOutput = outputs.bastion_public_dns
@@ -1867,7 +1867,7 @@ def loadInfrastructureOutputs() {
             } else {
                 logWarning("bastion_public_dns not found or not a Map")
             }
-            
+
             // Extract rancher servers private IPs from nested structure
             if (outputs.containsKey('rancher_servers_private_ips') && outputs.rancher_servers_private_ips instanceof Map) {
                 def rancherIpsOutput = outputs.rancher_servers_private_ips
@@ -1880,7 +1880,7 @@ def loadInfrastructureOutputs() {
             } else {
                 logWarning("rancher_servers_private_ips not found or not a Map")
             }
-            
+
             // Set environment variables based on available data
             if (bastionPublicDns) {
                 env.BASTION_IP = bastionPublicDns
@@ -1889,7 +1889,7 @@ def loadInfrastructureOutputs() {
                 logWarning("BASTION_IP could not be set - bastion_public_dns.value not found")
                 logWarning("Available keys: ${outputs.keySet()}")
             }
-            
+
             // Use first rancher server private IP as bastion private IP
             if (rancherPrivateIps && rancherPrivateIps instanceof List && rancherPrivateIps.size() > 0) {
                 env.BASTION_PRIVATE_IP = rancherPrivateIps[0]
@@ -1898,7 +1898,7 @@ def loadInfrastructureOutputs() {
                 logWarning("BASTION_PRIVATE_IP could not be set - no valid rancher servers private IPs found")
                 logWarning("rancherPrivateIps type: ${rancherPrivateIps?.getClass()?.name}, size: ${rancherPrivateIps?.size()}")
             }
-            
+
             logInfo('Infrastructure outputs loaded successfully')
         } else {
             error("infrastructure-outputs.json not found in workspace")
@@ -1912,39 +1912,39 @@ def loadInfrastructureOutputs() {
 
 def setupAnsibleSSHKeys() {
     logInfo('Setting up SSH keys for Ansible connectivity')
-    
+
     // Get credentials within withCredentials block to ensure they're available
     def awsSshPemKey = null
     def awsSshKeyName = null
-    
+
     withCredentials([
         string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
         string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
     ]) {
         awsSshPemKey = env.AWS_SSH_PEM_KEY
         awsSshKeyName = env.AWS_SSH_KEY_NAME
-        
+
         // Set environment variables for use in other functions
         env.AWS_SSH_PEM_KEY = awsSshPemKey
         env.AWS_SSH_KEY_NAME = awsSshKeyName
     }
-    
+
     // Debug: Show current environment variables
     logInfo("DEBUG: AWS_SSH_PEM_KEY = ${awsSshPemKey ? 'SET' : 'NULL'}")
     logInfo("DEBUG: AWS_SSH_KEY_NAME = ${awsSshKeyName ? 'SET' : 'NULL'}")
     logInfo("DEBUG: BASTION_IP = ${env.BASTION_IP}")
     logInfo("DEBUG: BASTION_PRIVATE_IP = ${env.BASTION_PRIVATE_IP}")
-    
+
     // Validate that we have the required credentials
     if (!awsSshPemKey || !awsSshKeyName) {
         error("Required SSH credentials are not available. Check that AWS_SSH_PEM_KEY and AWS_SSH_KEY_NAME credentials are properly configured in Jenkins.")
     }
-    
+
     // Validate that we have the required infrastructure outputs
     if (!env.BASTION_IP || !env.BASTION_PRIVATE_IP) {
         error("Required infrastructure outputs are not available. BASTION_IP=${env.BASTION_IP}, BASTION_PRIVATE_IP=${env.BASTION_PRIVATE_IP}")
     }
-    
+
     def sshSetupScript = """
 #!/bin/bash
 set -e
@@ -1952,7 +1952,7 @@ set -e
 # Source the external Ansible SSH key setup script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_setup_ssh_keys.sh
     """
-    
+
     // Pass SSH key environment variables to the container
     def sshEnvVars = [
         'AWS_SSH_PEM_KEY': awsSshPemKey,
@@ -1960,13 +1960,13 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
         'BASTION_IP': env.BASTION_IP,
         'BASTION_PRIVATE_IP': env.BASTION_PRIVATE_IP
     ]
-    
+
     // Debug: Show what we're passing to container
     logInfo("DEBUG: Passing environment variables to container:")
     sshEnvVars.each { key, value ->
         logInfo("  ${key} = ${value ? 'SET' : 'NULL'}")
     }
-    
+
     try {
         executeScriptInContainer(sshSetupScript, sshEnvVars)
         logInfo('Ansible SSH keys setup completed successfully')
@@ -1979,7 +1979,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
 
 def runAnsibleSSHSetup() {
     logInfo('Running Ansible SSH key setup playbook')
-    
+
     def sshSetupPlaybookScript = """
 #!/bin/bash
 set -e
@@ -1987,11 +1987,11 @@ set -e
 # Source the external Ansible SSH setup playbook script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_run_ssh_setup.sh
     """
-    
+
     // Get SSH credentials and pass them to container
     def awsSshPemKey = null
     def awsSshKeyName = null
-    
+
     withCredentials([
         string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
         string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
@@ -1999,14 +1999,14 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
         awsSshPemKey = env.AWS_SSH_PEM_KEY
         awsSshKeyName = env.AWS_SSH_KEY_NAME
     }
-    
+
     // Pass SSH credentials and RKE2 version to container
     def sshEnvVars = [
         'AWS_SSH_PEM_KEY': awsSshPemKey,
         'AWS_SSH_KEY_NAME': awsSshKeyName,
         'RKE2_VERSION': env.RKE2_VERSION
     ]
-    
+
     try {
         executeScriptInContainer(sshSetupPlaybookScript, sshEnvVars)
         logInfo('Ansible SSH setup playbook executed successfully')
@@ -2194,7 +2194,7 @@ def runRancherDeployment() {
         'TF_WORKSPACE',
         'TERRAFORM_VARS_FILENAME'
     ]
-    
+
     validateRequiredVariables(requiredRancherVars)
 
     def rancherDeploymentScript = """
@@ -2281,7 +2281,7 @@ def runRancherDeployment() {
 
 def validateRancherDeployment() {
     logInfo('Validating Rancher deployment')
-    
+
     def validationScript = """
     #!/bin/bash
     set -e
@@ -2289,7 +2289,7 @@ def validateRancherDeployment() {
     # Source the external Rancher validation script
     source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_validate_rancher.sh
     """
-    
+
     try {
         executeScriptInContainer(validationScript)
         logInfo('Rancher deployment validation completed successfully')
