@@ -2290,8 +2290,22 @@ def validateRancherDeployment() {
     source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_validate_rancher.sh
     """
 
+    // Pass required environment variables to validation container
+    def validationEnvVars = [
+        'KUBECONFIG': '/root/.kube/config',
+        'RKE2_VERSION': env.RKE2_VERSION,
+        'RANCHER_VERSION': env.RANCHER_VERSION,
+        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
+        'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH
+    ]
+
+    logInfo("Passing environment variables to Rancher validation:")
+    validationEnvVars.each { key, value ->
+        logInfo("  ${key} = ${value ? 'SET' : 'NULL'}")
+    }
+
     try {
-        executeScriptInContainer(validationScript)
+        executeScriptInContainer(validationScript, validationEnvVars)
         logInfo('Rancher deployment validation completed successfully')
     } catch (Exception e) {
         def errorMsg = "Rancher deployment validation failed: ${e.message}"
