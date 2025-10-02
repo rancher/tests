@@ -154,6 +154,34 @@ else
     exit 1
 fi
 
+# Display the full group_vars file for debugging
+echo "=== Full group_vars/all.yml content (for debugging) ==="
+cat "$GROUP_VARS_FILE"
+echo "=== End group_vars/all.yml ==="
+
+# Validate YAML syntax before running playbook
+echo "=== Validating group_vars YAML syntax ==="
+if command -v python3 &> /dev/null; then
+    if python3 -c "import yaml, sys; yaml.safe_load(open('$GROUP_VARS_FILE'))" 2>&1; then
+        echo "✓ group_vars/all.yml YAML is valid"
+    else
+        echo "✗ group_vars/all.yml has YAML syntax errors (see above)"
+        echo "This will cause Ansible to fail. Please fix the YAML syntax in your uploaded file."
+        exit 1
+    fi
+elif command -v yamllint &> /dev/null; then
+    if yamllint "$GROUP_VARS_FILE"; then
+        echo "✓ group_vars/all.yml YAML is valid"
+    else
+        echo "✗ group_vars/all.yml has YAML validation errors"
+        exit 1
+    fi
+else
+    echo "⚠ No YAML validation tool available (python3 or yamllint)"
+    echo "Proceeding without validation - errors may occur during playbook execution"
+fi
+echo "=== End YAML validation ==="
+
 echo "Using RKE2 tarball deployment playbook from qa-infra-automation repository"
 echo "Playbook path: $RKE2_TARBALL_PLAYBOOK"
 
