@@ -122,6 +122,9 @@ echo "Using group_vars/all.yml for Rancher deployment"
 if [[ -n "${PRIVATE_REGISTRY_URL}" ]]; then
     echo "Configuring private registry settings..."
 
+    # Ensure file ends with newline before appending
+    [[ -n $(tail -c1 "${GROUP_VARS_DIR}/all.yml") ]] && echo "" >> "${GROUP_VARS_DIR}/all.yml"
+
     # Update private registry URL
     if grep -q "^private_registry_url:" "${GROUP_VARS_DIR}/all.yml"; then
         sed -i "s|^private_registry_url:.*|private_registry_url: \"${PRIVATE_REGISTRY_URL}\"|" "${GROUP_VARS_DIR}/all.yml"
