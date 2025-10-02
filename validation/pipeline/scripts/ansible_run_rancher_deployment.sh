@@ -211,12 +211,80 @@ echo "=== Rancher Playbook Content ==="
 cat "${RANCHER_PLAYBOOK}"
 echo "================================="
 
+# Wait for cert-manager webhook to be ready before deploying Rancher
+echo "=== Waiting for cert-manager webhook to be ready ==="
+# This prevents the "no endpoints available for service cert-manager-webhook" error
+
+# Set KUBECONFIG if not already set (should be at /root/.kube/config from kubectl setup)
+export KUBECONFIG=${KUBECONFIG:-/root/.kube/config}
+
+if [[ ! -f "${KUBECONFIG}" ]]; then
+    echo "WARNING: KUBECONFIG not found at ${KUBECONFIG}"
+    echo "Attempting to locate kubeconfig..."
+    if [[ -f "/home/ubuntu/.kube/config" ]]; then
+        export KUBECONFIG="/home/ubuntu/.kube/config"
+        echo "Using kubeconfig from /home/ubuntu/.kube/config"
+    elif [[ -f "/root/kubeconfig.yaml" ]]; then
+        export KUBECONFIG="/root/kubeconfig.yaml"
+        echo "Using kubeconfig from /root/kubeconfig.yaml"
+    else
+        echo "ERROR: Cannot find kubeconfig file"
+        exit 1
+    fi
+fi
+
+# Wait up to 5 minutes for cert-manager webhook to have endpoints
+WAIT_TIMEOUT=300  # 5 minutes
+WAIT_INTERVAL=10  # Check every 10 seconds
+ELAPSED=0
+
+echo "Checking for cert-manager webhook endpoints..."
+while [[ ${ELAPSED} -lt ${WAIT_TIMEOUT} ]]; do
+    # Check if cert-manager-webhook service has endpoints
+    if kubectl get endpoints cert-manager-webhook -n cert-manager &>/dev/null; then
+        ENDPOINT_COUNT=$(kubectl get endpoints cert-manager-webhook -n cert-manager -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null | wc -w)
+
+        if [[ ${ENDPOINT_COUNT} -gt 0 ]]; then
+            echo "✓ cert-manager webhook has ${ENDPOINT_COUNT} endpoint(s) available"
+
+            # Additional check: verify webhook pods are running
+            WEBHOOK_PODS_READY=$(kubectl get pods -n cert-manager -l app.kubernetes.io/name=webhook --field-selector=status.phase=Running 2>/dev/null | grep -c "Running" || echo "0")
+            if [[ ${WEBHOOK_PODS_READY} -gt 0 ]]; then
+                echo "✓ cert-manager webhook pod(s) are running"
+                break
+            else
+                echo "Waiting for cert-manager webhook pods to be Running... (${ELAPSED}s/${WAIT_TIMEOUT}s)"
+            fi
+        else
+            echo "Waiting for cert-manager webhook endpoints... (${ELAPSED}s/${WAIT_TIMEOUT}s)"
+        fi
+    else
+        echo "Waiting for cert-manager webhook service... (${ELAPSED}s/${WAIT_TIMEOUT}s)"
+    fi
+
+    sleep ${WAIT_INTERVAL}
+    ELAPSED=$((ELAPSED + WAIT_INTERVAL))
+done
+
+if [[ ${ELAPSED} -ge ${WAIT_TIMEOUT} ]]; then
+    echo "WARNING: Timed out waiting for cert-manager webhook to be ready"
+    echo "Checking cert-manager status for debugging..."
+    kubectl get pods -n cert-manager || echo "Failed to get cert-manager pods"
+    kubectl get endpoints -n cert-manager || echo "Failed to get cert-manager endpoints"
+    echo "Proceeding with Rancher deployment anyway..."
+else
+    echo "✓ cert-manager webhook is ready for Rancher installation"
+fi
+
 # Build extra variables to pass to ansible-playbook
 EXTRA_VARS=""
 
 if [[ -n "${HOSTNAME_PREFIX}" ]]; then
     EXTRA_VARS="${EXTRA_VARS} -e hostname_prefix=${HOSTNAME_PREFIX}"
+    # Also pass as rancher_hostname with .qa.rancher.space suffix for Rancher Helm chart
+    EXTRA_VARS="${EXTRA_VARS} -e rancher_hostname=${HOSTNAME_PREFIX}.qa.rancher.space"
     echo "Passing HOSTNAME_PREFIX as extra variable: ${HOSTNAME_PREFIX}"
+    echo "Passing rancher_hostname as extra variable: ${HOSTNAME_PREFIX}.qa.rancher.space"
 fi
 
 if [[ -n "${RANCHER_VERSION}" ]]; then
