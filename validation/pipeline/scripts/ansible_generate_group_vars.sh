@@ -35,46 +35,64 @@ echo "Creating group_vars/all.yml from ANSIBLE_VARIABLES parameter"
 echo "Using user-provided configuration directly"
 
 # Write the ANSIBLE_VARIABLES content to a temporary file
-# First, ensure it has Unix line endings (remove any CR characters)
-echo "${ANSIBLE_VARIABLES}" | tr -d '\r' > /tmp/group_vars/all.yml.template
+# Use printf to avoid bash variable expansion
+printf '%s' "${ANSIBLE_VARIABLES}" | tr -d '\r' > /tmp/group_vars/all.yml.template
 
-# Use a more robust substitution method with proper escaping
-# Create a temporary script to do the substitutions safely
-cat > /tmp/substitute_vars.sh << 'SUBST_EOF'
-#!/bin/bash
-# Read the template file
-INPUT_FILE="$1"
-OUTPUT_FILE="$2"
+# Debug: Show what we're starting with
+echo "=== Template file before substitution (first 50 lines) ==="
+head -50 /tmp/group_vars/all.yml.template
+echo "=== End template preview ==="
 
-# Function to escape special characters for sed
-escape_for_sed() {
-    printf '%s\n' "$1" | sed -e 's/[\/&]/\\&/g'
+# Perform variable substitution
+# Note: We expect ${VAR} format in the template (not \${VAR})
+cp /tmp/group_vars/all.yml.template /tmp/group_vars/all.yml.working
+
+# Function to safely replace a variable in the file
+replace_var() {
+    local var_name="$1"
+    local var_value="$2"
+    local temp_file="/tmp/group_vars/all.yml.tmp"
+
+    # Escape special characters in the value for use in sed
+    # Escape: / & \ and newlines
+    local escaped_value=$(printf '%s\n' "$var_value" | sed -e 's/[\/&]/\\&/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+
+    # Replace ${VAR_NAME} with value
+    sed "s|\${${var_name}}|${escaped_value}|g" /tmp/group_vars/all.yml.working > "$temp_file"
+    mv "$temp_file" /tmp/group_vars/all.yml.working
 }
 
-# Escape all values
-RKE2_VERSION_ESC=$(escape_for_sed "${RKE2_VERSION}")
-RANCHER_VERSION_ESC=$(escape_for_sed "${RANCHER_VERSION}")
-HOSTNAME_PREFIX_ESC=$(escape_for_sed "${HOSTNAME_PREFIX}")
-PRIVATE_REGISTRY_URL_ESC=$(escape_for_sed "${PRIVATE_REGISTRY_URL}")
-PRIVATE_REGISTRY_USERNAME_ESC=$(escape_for_sed "${PRIVATE_REGISTRY_USERNAME}")
-PRIVATE_REGISTRY_PASSWORD_ESC=$(escape_for_sed "${PRIVATE_REGISTRY_PASSWORD}")
+# Perform substitutions in order
+echo "Substituting variables..."
+echo "  RKE2_VERSION=${RKE2_VERSION}"
+replace_var "RKE2_VERSION" "${RKE2_VERSION}"
 
-# Perform substitutions
-sed \
-  -e "s|\\\${RKE2_VERSION}|${RKE2_VERSION_ESC}|g" \
-  -e "s|\\\${RANCHER_VERSION}|${RANCHER_VERSION_ESC}|g" \
-  -e "s|\\\${HOSTNAME_PREFIX}|${HOSTNAME_PREFIX_ESC}|g" \
-  -e "s|\\\${PRIVATE_REGISTRY_URL}|${PRIVATE_REGISTRY_URL_ESC}|g" \
-  -e "s|\\\${PRIVATE_REGISTRY_USERNAME}|${PRIVATE_REGISTRY_USERNAME_ESC}|g" \
-  -e "s|\\\${PRIVATE_REGISTRY_PASSWORD}|${PRIVATE_REGISTRY_PASSWORD_ESC}|g" \
-  "${INPUT_FILE}" > "${OUTPUT_FILE}"
-SUBST_EOF
+echo "  RANCHER_VERSION=${RANCHER_VERSION}"
+replace_var "RANCHER_VERSION" "${RANCHER_VERSION}"
 
-chmod +x /tmp/substitute_vars.sh
-/tmp/substitute_vars.sh /tmp/group_vars/all.yml.template /tmp/group_vars/all.yml
+echo "  HOSTNAME_PREFIX=${HOSTNAME_PREFIX}"
+replace_var "HOSTNAME_PREFIX" "${HOSTNAME_PREFIX}"
+
+if [[ -n "${PRIVATE_REGISTRY_URL}" ]]; then
+    echo "  PRIVATE_REGISTRY_URL=${PRIVATE_REGISTRY_URL}"
+    replace_var "PRIVATE_REGISTRY_URL" "${PRIVATE_REGISTRY_URL}"
+fi
+
+if [[ -n "${PRIVATE_REGISTRY_USERNAME}" ]]; then
+    echo "  PRIVATE_REGISTRY_USERNAME=${PRIVATE_REGISTRY_USERNAME}"
+    replace_var "PRIVATE_REGISTRY_USERNAME" "${PRIVATE_REGISTRY_USERNAME}"
+fi
+
+if [[ -n "${PRIVATE_REGISTRY_PASSWORD}" ]]; then
+    echo "  PRIVATE_REGISTRY_PASSWORD=***"
+    replace_var "PRIVATE_REGISTRY_PASSWORD" "${PRIVATE_REGISTRY_PASSWORD}"
+fi
+
+# Move final result
+mv /tmp/group_vars/all.yml.working /tmp/group_vars/all.yml
 
 # Clean up
-rm -f /tmp/group_vars/all.yml.template /tmp/substitute_vars.sh
+rm -f /tmp/group_vars/all.yml.template
 
 echo "Ansible group_vars/all.yml created successfully from user-provided content"
 echo "Group vars file location: /tmp/group_vars/all.yml"
