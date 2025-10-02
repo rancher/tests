@@ -160,10 +160,9 @@ pipeline {
             defaultValue: '',
             description: 'Terraform variables configuration for OpenTofu deployment'
         )
-        text(
-            name: 'ANSIBLE_VARIABLES',
-            defaultValue: '',
-            description: 'Ansible group_vars/all.yml content for infrastructure deployment'
+        file(
+            name: 'ANSIBLE_VARIABLES_FILE',
+            description: 'Upload Ansible group_vars/all.yml file for infrastructure deployment (YAML format)'
         )
     }
 
@@ -216,13 +215,17 @@ pipeline {
 
         // Configuration content from parameters
         TERRAFORM_CONFIG = "${params.TERRAFORM_CONFIG ?: ''}"
-        ANSIBLE_VARIABLES = "${params.ANSIBLE_VARIABLES ?: ''}"
+        // ANSIBLE_VARIABLES will be read from uploaded file in pipeline stages
     }
 
     stages {
         stage('Initialize Pipeline') {
             steps {
                 script {
+                    // Read uploaded Ansible variables file BEFORE cleaning workspace
+                    // (deleteDir will delete the uploaded file)
+                    readAnsibleVariablesFile()
+
                     // Validate parameters and environment
                     validateParameters()
 
@@ -728,6 +731,35 @@ def setupDynamicEnvironment() {
     logInfo("RKE2 Version: ${env.RKE2_VERSION}")
     logInfo("Rancher Version: ${env.RANCHER_VERSION}")
     logInfo("Terraform Vars Filename: ${env.TERRAFORM_VARS_FILENAME}")
+}
+
+def readAnsibleVariablesFile() {
+    logInfo('Reading Ansible variables file')
+
+    def ansibleVarsContent = ''
+
+    if (params.ANSIBLE_VARIABLES_FILE && fileExists(params.ANSIBLE_VARIABLES_FILE)) {
+        logInfo("Reading uploaded Ansible variables file: ${params.ANSIBLE_VARIABLES_FILE}")
+        ansibleVarsContent = readFile(file: params.ANSIBLE_VARIABLES_FILE)
+        logInfo("Ansible variables file size: ${ansibleVarsContent.length()} bytes")
+    } else {
+        logWarning('No Ansible variables file uploaded - will use default configuration later')
+        // Create a minimal default configuration
+        ansibleVarsContent = """---
+# Default Ansible configuration for RKE2 airgap deployment
+rke2_version: "\${RKE2_VERSION}"
+rancher_version: "\${RANCHER_VERSION}"
+hostname_prefix: "\${HOSTNAME_PREFIX}"
+rancher_hostname: "\${HOSTNAME_PREFIX}.qa.rancher.space"
+private_registry_url: "\${PRIVATE_REGISTRY_URL}"
+private_registry_username: "\${PRIVATE_REGISTRY_USERNAME}"
+airgap_deployment: true
+"""
+    }
+
+    // Store in environment for passing to containers
+    env.ANSIBLE_VARIABLES = ansibleVarsContent
+    logInfo('Ansible variables loaded successfully')
 }
 
 def getCredentialsList() {
@@ -1761,20 +1793,11 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
 
 
 def generateAnsibleGroupVars() {
-    logInfo('Generating Ansible group_vars/all.yml from ANSIBLE_VARIABLES parameter')
-    
+    logInfo('Generating Ansible group_vars/all.yml in container')
+
+    // Validate that ANSIBLE_VARIABLES was loaded
     if (!env.ANSIBLE_VARIABLES) {
-        logWarning('ANSIBLE_VARIABLES parameter is empty - using default configuration')
-        // Create a minimal default configuration
-        def defaultConfig = """
-# Default Ansible configuration for RKE2 airgap deployment
-rke2_version: "${env.RKE2_VERSION}"
-rancher_version: "${env.RANCHER_VERSION}"
-private_registry_url: "${env.PRIVATE_REGISTRY_URL}"
-private_registry_username: "${env.PRIVATE_REGISTRY_USERNAME}"
-airgap_deployment: true
-"""
-        env.ANSIBLE_VARIABLES = defaultConfig
+        error('ANSIBLE_VARIABLES not loaded - this should have been set in readAnsibleVariablesFile()')
     }
     
     def groupVarsScript = """
