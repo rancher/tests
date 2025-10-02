@@ -115,6 +115,9 @@ fi
 cp /root/group_vars/all.yml "$GROUP_VARS_FILE"
 echo "Copied group_vars to inventory-relative location: $GROUP_VARS_FILE"
 
+# Ensure file ends with newline before any appends
+[[ -n $(tail -c1 "$GROUP_VARS_FILE") ]] && echo "" >> "$GROUP_VARS_FILE"
+
 # Ensure RKE2_VERSION is set in the group_vars file
 if [[ -n "${RKE2_VERSION}" ]]; then
     echo "Ensuring RKE2_VERSION is set in group_vars: ${RKE2_VERSION}"
