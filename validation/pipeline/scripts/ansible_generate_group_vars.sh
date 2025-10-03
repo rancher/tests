@@ -99,7 +99,23 @@ echo "Group vars file location: /tmp/group_vars/all.yml"
 
 # Display group_vars for verification (excluding sensitive data)
 echo "=== Generated Group Vars (sanitized) ==="
-grep -v "password\|secret\|key" /tmp/group_vars/all.yml | head -100
+TOTAL_LINES=$(wc -l < /tmp/group_vars/all.yml)
+echo "Total lines in group_vars/all.yml: ${TOTAL_LINES}"
+echo ""
+
+# Show first 80 lines
+echo "--- First 80 lines ---"
+grep -v "password\|secret\|key" /tmp/group_vars/all.yml | head -80
+
+# If file has more than 100 lines, show the last 20 to verify it's complete
+if [[ ${TOTAL_LINES} -gt 100 ]]; then
+    echo ""
+    echo "... (lines omitted) ..."
+    echo ""
+    echo "--- Last 20 lines ---"
+    grep -v "password\|secret\|key" /tmp/group_vars/all.yml | tail -20
+fi
+
 echo "=== End Group Vars (sanitized) ==="
 
 # Validate YAML syntax
