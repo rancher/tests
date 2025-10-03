@@ -103,27 +103,56 @@ for config_path in "${KUBECONFIG_LOCATIONS[@]}"; do
         # This is critical for Docker container access to the cluster
         echo "Updating kubeconfig to use bastion IP instead of localhost..."
 
-        # Extract bastion node IP from inventory
-        BASTION_IP=$(grep -A 5 "bastion-node:" /root/ansible/rke2/airgap/inventory.yml | grep "ansible_host:" | awk '{print $2}' | tr -d '"' || echo "")
+        # Show original kubeconfig server URL for debugging
+        echo "Original kubeconfig server URL:"
+        grep "server:" /root/kubeconfig.yaml || echo "Could not find server line"
 
+        # Extract bastion node IP from inventory - try multiple methods
+        BASTION_IP=""
+
+        # Method 1: Look for bastion-node in inventory
+        if [[ -f "/root/ansible/rke2/airgap/inventory.yml" ]]; then
+            BASTION_IP=$(grep -A 10 "bastion-node:" /root/ansible/rke2/airgap/inventory.yml | grep "ansible_host:" | head -1 | awk '{print $2}' | tr -d '"' | tr -d "'" || echo "")
+        fi
+
+        # Method 2: Try to get from hostname
         if [[ -z "${BASTION_IP}" ]]; then
-            echo "WARNING: Could not extract bastion IP from inventory, trying alternative method..."
-            # Try to get IP from the currently running node
+            echo "Method 1 failed, trying hostname -I..."
             BASTION_IP=$(hostname -I | awk '{print $1}' || echo "")
+        fi
+
+        # Method 3: Try to get from ip addr
+        if [[ -z "${BASTION_IP}" ]]; then
+            echo "Method 2 failed, trying ip addr..."
+            BASTION_IP=$(ip addr show | grep 'inet ' | grep -v '127.0.0.1' | head -1 | awk '{print $2}' | cut -d'/' -f1 || echo "")
+        fi
+
+        # Method 4: Try to extract from current kubeconfig if it has a valid IP
+        if [[ -z "${BASTION_IP}" ]]; then
+            echo "Method 3 failed, checking if kubeconfig already has a valid IP..."
+            CURRENT_SERVER=$(grep "server:" /root/kubeconfig.yaml | awk '{print $2}' || echo "")
+            if [[ "${CURRENT_SERVER}" =~ ^https://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:6443$ ]]; then
+                BASTION_IP=$(echo "${CURRENT_SERVER}" | sed 's|https://||' | sed 's|:6443||')
+                echo "Found existing valid IP in kubeconfig: ${BASTION_IP}"
+            fi
         fi
 
         if [[ -n "${BASTION_IP}" ]]; then
             echo "Using bastion IP: ${BASTION_IP}"
-            # Replace 127.0.0.1:6443 with bastion IP
-            sed -i "s|https://127.0.0.1:6443|https://${BASTION_IP}:6443|g" /root/kubeconfig.yaml
+
+            # Replace any server URL with the correct one
+            # This handles localhost, template variables, or any malformed URLs
+            sed -i "s|server:.*|server: https://${BASTION_IP}:6443|" /root/kubeconfig.yaml
+
             echo "✓ Updated kubeconfig server URL to https://${BASTION_IP}:6443"
 
             # Verify the change
             echo "Kubeconfig server URL after update:"
             grep "server:" /root/kubeconfig.yaml || echo "Failed to verify server URL"
         else
-            echo "WARNING: Could not determine bastion IP - kubeconfig will still use localhost"
-            echo "This may cause connection issues from Docker containers"
+            echo "ERROR: Could not determine bastion IP using any method"
+            echo "This will cause connection issues from Docker containers"
+            echo "Kubeconfig will be unusable for remote access"
         fi
 
         echo "✓ Kubeconfig copied to /root/kubeconfig.yaml for archival"
