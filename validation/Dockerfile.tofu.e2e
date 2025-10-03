@@ -19,9 +19,10 @@ RUN zypper -n install -y \
 # Install Docker
 RUN zypper install -y -f docker && rpm -e --nodeps --noscripts containerd
 
-# Install Ansible (required for RKE2 deployment)
+# Install Ansible and PyYAML (required for RKE2 deployment and YAML validation)
 RUN python3.11 -m pip install --upgrade pip setuptools && \
-    python3.11 -m pip install ansible
+    python3.11 -m pip install ansible PyYAML && \
+    ln -sf /usr/bin/python3.11 /usr/local/bin/python3
 
 # necessary to run if statements using [[ ]]
 SHELL ["/bin/bash", "-c"]
