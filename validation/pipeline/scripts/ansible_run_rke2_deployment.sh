@@ -157,9 +157,27 @@ else
     exit 1
 fi
 
-# Display the full group_vars file for debugging
-echo "=== Full group_vars/all.yml content (for debugging) ==="
-cat "$GROUP_VARS_FILE"
+# Display the group_vars file for debugging (with size check to avoid flooding logs)
+echo "=== group_vars/all.yml content ==="
+TOTAL_LINES=$(wc -l < "$GROUP_VARS_FILE")
+FILE_SIZE=$(wc -c < "$GROUP_VARS_FILE")
+echo "File size: ${FILE_SIZE} bytes, ${TOTAL_LINES} lines"
+echo ""
+
+# If file is reasonable size (<200 lines), show it all; otherwise show head/tail
+if [[ ${TOTAL_LINES} -le 200 ]]; then
+    echo "--- Full content ---"
+    cat "$GROUP_VARS_FILE"
+else
+    echo "--- First 100 lines ---"
+    head -100 "$GROUP_VARS_FILE"
+    echo ""
+    echo "... (lines $((101)) to $((TOTAL_LINES - 20)) omitted) ..."
+    echo ""
+    echo "--- Last 20 lines ---"
+    tail -20 "$GROUP_VARS_FILE"
+fi
+
 echo "=== End group_vars/all.yml ==="
 
 # Validate YAML syntax before running playbook
