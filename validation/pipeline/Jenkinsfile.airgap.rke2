@@ -2291,8 +2291,9 @@ def validateRancherDeployment() {
     """
 
     // Pass required environment variables to validation container
+    // Use /root/kubeconfig.yaml which is the kubeconfig copied from bastion to shared volume
     def validationEnvVars = [
-        'KUBECONFIG': '/root/.kube/config',
+        'KUBECONFIG': '/root/kubeconfig.yaml',
         'RKE2_VERSION': env.RKE2_VERSION,
         'RANCHER_VERSION': env.RANCHER_VERSION,
         'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
