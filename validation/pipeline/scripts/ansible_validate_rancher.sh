@@ -28,21 +28,46 @@ if ! command -v kubectl &> /dev/null; then
     exit 1
 fi
 
+# Ensure KUBECONFIG is set to the correct location
+# The kubeconfig should be in the shared volume at /root/kubeconfig.yaml
+if [[ -z "${KUBECONFIG}" ]]; then
+    echo "KUBECONFIG not set, attempting to locate kubeconfig..."
+    if [[ -f "/root/kubeconfig.yaml" ]]; then
+        export KUBECONFIG="/root/kubeconfig.yaml"
+        echo "Using kubeconfig from /root/kubeconfig.yaml"
+    elif [[ -f "/root/.kube/config" ]]; then
+        export KUBECONFIG="/root/.kube/config"
+        echo "Using kubeconfig from /root/.kube/config"
+    elif [[ -f "/home/ubuntu/.kube/config" ]]; then
+        export KUBECONFIG="/home/ubuntu/.kube/config"
+        echo "Using kubeconfig from /home/ubuntu/.kube/config"
+    else
+        echo "ERROR: Cannot find kubeconfig file"
+        exit 1
+    fi
+fi
+
+echo "Using KUBECONFIG: ${KUBECONFIG}"
+
 # Check if we can access the cluster
 echo "=== Testing cluster connectivity ==="
 if ! kubectl cluster-info &> /dev/null; then
     echo "ERROR: Cannot connect to Kubernetes cluster"
     echo "Attempting to diagnose the issue..."
-    
+
     # Try to get more diagnostic information
-    echo "Current KUBECONFIG: ${KUBECONFIG:-'NOT SET'}"
-    if [[ -n "${KUBECONFIG}" && -f "${KUBECONFIG}" ]]; then
-        echo "KUBECONFIG file exists, testing connection..."
+    echo "Current KUBECONFIG: ${KUBECONFIG}"
+    if [[ -f "${KUBECONFIG}" ]]; then
+        echo "KUBECONFIG file exists at: ${KUBECONFIG}"
+        echo "KUBECONFIG content (first 20 lines):"
+        head -20 "${KUBECONFIG}" || echo "Failed to read kubeconfig"
+        echo ""
+        echo "Testing connection with verbose output..."
         kubectl cluster-info --v=6 || echo "kubectl connection failed"
     else
-        echo "KUBECONFIG not set or file doesn't exist"
+        echo "KUBECONFIG file doesn't exist at: ${KUBECONFIG}"
     fi
-    
+
     exit 1
 fi
 
