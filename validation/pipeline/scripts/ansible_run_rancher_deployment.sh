@@ -233,11 +233,52 @@ if [[ ! -f "${KUBECONFIG}" ]]; then
     fi
 fi
 
+# First check if cert-manager pods are healthy
+echo "Checking cert-manager deployment health..."
+CERT_MANAGER_READY=false
+
+# Check if cert-manager namespace exists
+if ! kubectl get namespace cert-manager &>/dev/null; then
+    echo "ERROR: cert-manager namespace not found"
+    echo "cert-manager must be installed before deploying Rancher"
+    exit 1
+fi
+
+# Check cert-manager controller deployment status
+if kubectl get deployment cert-manager -n cert-manager &>/dev/null; then
+    AVAILABLE=$(kubectl get deployment cert-manager -n cert-manager -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo "0")
+    DESIRED=$(kubectl get deployment cert-manager -n cert-manager -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1")
+
+    echo "cert-manager controller: ${AVAILABLE}/${DESIRED} replicas available"
+
+    if [[ "${AVAILABLE}" != "${DESIRED}" ]]; then
+        echo "WARNING: cert-manager controller is not fully available"
+        echo "Checking pod status..."
+        kubectl get pods -n cert-manager -l app=cert-manager
+
+        echo ""
+        echo "Checking pod events for errors..."
+        kubectl get events -n cert-manager --field-selector involvedObject.kind=Pod --sort-by='.lastTimestamp' | tail -20
+
+        echo ""
+        echo "Attempting to get pod logs..."
+        POD_NAME=$(kubectl get pods -n cert-manager -l app=cert-manager -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+        if [[ -n "${POD_NAME}" ]]; then
+            echo "Logs from ${POD_NAME}:"
+            kubectl logs -n cert-manager "${POD_NAME}" --tail=50 || echo "Could not retrieve logs"
+        fi
+    fi
+else
+    echo "ERROR: cert-manager deployment not found"
+    exit 1
+fi
+
 # Wait up to 5 minutes for cert-manager webhook to have endpoints
 WAIT_TIMEOUT=300  # 5 minutes
 WAIT_INTERVAL=10  # Check every 10 seconds
 ELAPSED=0
 
+echo ""
 echo "Checking for cert-manager webhook endpoints..."
 while [[ ${ELAPSED} -lt ${WAIT_TIMEOUT} ]]; do
     # Check if cert-manager-webhook service has endpoints
@@ -251,6 +292,7 @@ while [[ ${ELAPSED} -lt ${WAIT_TIMEOUT} ]]; do
             WEBHOOK_PODS_READY=$(kubectl get pods -n cert-manager -l app.kubernetes.io/name=webhook --field-selector=status.phase=Running 2>/dev/null | grep -c "Running" || echo "0")
             if [[ ${WEBHOOK_PODS_READY} -gt 0 ]]; then
                 echo "✓ cert-manager webhook pod(s) are running"
+                CERT_MANAGER_READY=true
                 break
             else
                 echo "Waiting for cert-manager webhook pods to be Running... (${ELAPSED}s/${WAIT_TIMEOUT}s)"
@@ -262,16 +304,26 @@ while [[ ${ELAPSED} -lt ${WAIT_TIMEOUT} ]]; do
         echo "Waiting for cert-manager webhook service... (${ELAPSED}s/${WAIT_TIMEOUT}s)"
     fi
 
+    # Every 30 seconds, show pod status for debugging
+    if [[ $((ELAPSED % 30)) -eq 0 ]] && [[ ${ELAPSED} -gt 0 ]]; then
+        echo "Current cert-manager pod status:"
+        kubectl get pods -n cert-manager
+    fi
+
     sleep ${WAIT_INTERVAL}
     ELAPSED=$((ELAPSED + WAIT_INTERVAL))
 done
 
-if [[ ${ELAPSED} -ge ${WAIT_TIMEOUT} ]]; then
+if [[ "${CERT_MANAGER_READY}" == "false" ]]; then
     echo "WARNING: Timed out waiting for cert-manager webhook to be ready"
     echo "Checking cert-manager status for debugging..."
     kubectl get pods -n cert-manager || echo "Failed to get cert-manager pods"
     kubectl get endpoints -n cert-manager || echo "Failed to get cert-manager endpoints"
-    echo "Proceeding with Rancher deployment anyway..."
+    kubectl describe deployment -n cert-manager cert-manager-webhook || echo "Failed to describe webhook deployment"
+
+    echo ""
+    echo "WARNING: Proceeding with Rancher deployment, but it will likely fail"
+    echo "Rancher requires cert-manager webhook to be operational"
 else
     echo "✓ cert-manager webhook is ready for Rancher installation"
 fi
