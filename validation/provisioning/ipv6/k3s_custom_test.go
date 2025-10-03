@@ -22,15 +22,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type customIPv6Test struct {
+type customK3SIPv6Test struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
 }
 
-func customIPv6Setup(t *testing.T) customIPv6Test {
-	var r customIPv6Test
+func customK3SIPv6Setup(t *testing.T) customK3SIPv6Test {
+	var r customK3SIPv6Test
 
 	testSession := session.NewSession()
 	r.session = testSession
@@ -51,7 +51,7 @@ func customIPv6Setup(t *testing.T) customIPv6Test {
 	err = logging.SetLogger(loggingConfig)
 	assert.NoError(t, err)
 
-	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.RKE2, r.cattleConfig)
+	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.K3S, r.cattleConfig)
 	assert.NoError(t, err)
 
 	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
@@ -60,29 +60,48 @@ func customIPv6Setup(t *testing.T) customIPv6Test {
 	return r
 }
 
-func TestCustomIPv6(t *testing.T) {
+func TestCustomK3SIPv6(t *testing.T) {
+	t.Skip("This test is temporarily disabled. See https://github.com/rancher/rancher/issues/51990.")
 	t.Parallel()
-	r := customIPv6Setup(t)
+	r := customK3SIPv6Setup(t)
 
-	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
-	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
 	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
 	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
+	clusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
+	cidr := &provisioninginput.Networking{
+		ClusterCIDR: clusterConfig.Networking.ClusterCIDR,
+		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
+	}
+
+	stackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     "",
+		ServiceCIDR:     "",
+		StackPreference: "ipv6",
+	}
+
+	cidrStackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
+		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
+		StackPreference: "ipv6",
+	}
+
 	tests := []struct {
 		name         string
 		client       *rancher.Client
 		machinePools []provisioninginput.MachinePools
+		networking   *provisioninginput.Networking
 	}{
-		{"RKE2_IPv6_Custom|etcd_cp_worker", r.standardUserClient, nodeRolesAll},
-		{"RKE2_IPv6_Custom|etcd_cp|worker", r.standardUserClient, nodeRolesShared},
-		{"RKE2_IPv6_Custom|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated},
-		{"RKE2_IPv6_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard},
+		{"K3S_IPv6_Custom_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
+		{"K3S_IPv6_Custom_Stack_Preference", r.standardUserClient, nodeRolesStandard, stackPreference},
+		{"K3S_IPv6_Custom_CIDR_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrStackPreference},
 	}
+
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
@@ -94,9 +113,7 @@ func TestCustomIPv6(t *testing.T) {
 
 		clusterConfig.IPv6Cluster = true
 		clusterConfig.MachinePools = tt.machinePools
-		clusterConfig.Networking = &provisioninginput.Networking{
-			StackPreference: "ipv6",
-		}
+		clusterConfig.Networking = tt.networking
 
 		for i := range clusterConfig.MachinePools {
 			clusterConfig.MachinePools[i].SpecifyCustomPublicIP = true

@@ -24,8 +24,12 @@ type AWSMachineConfigs struct {
 type AWSMachineConfig struct {
 	Roles
 	AMI                string   `json:"ami" yaml:"ami"`
+	EnablePrimaryIpv6  bool     `json:"enablePrimaryIpv6" yaml:"enablePrimaryIpv6"`
+	HttpProtocolIpv6   string   `json:"httpProtocolIpv6" yaml:"httpProtocolIpv6"`
 	IAMInstanceProfile string   `json:"iamInstanceProfile" yaml:"iamInstanceProfile"`
 	InstanceType       string   `json:"instanceType" yaml:"instanceType"`
+	Ipv6AddressCount   string   `json:"ipv6AddressCount" yaml:"ipv6AddressCount"`
+	Ipv6AddressOnly    bool     `json:"ipv6AddressOnly" yaml:"ipv6AddressOnly"`
 	PrivateAddressOnly bool     `json:"privateAddressOnly" yaml:"privateAddressOnly"`
 	Retries            string   `json:"retries" yaml:"retries"`
 	RootSize           string   `json:"rootSize" yaml:"rootSize"`
@@ -50,8 +54,12 @@ func NewAWSMachineConfig(machineConfigs MachineConfigs, generatedPoolName, names
 		machineConfig.SetNamespace(namespace)
 
 		machineConfig.Object["ami"] = awsMachineConfig.AMI
+		machineConfig.Object["enablePrimaryIpv6"] = awsMachineConfig.EnablePrimaryIpv6
+		machineConfig.Object["httpProtocolIpv6"] = awsMachineConfig.HttpProtocolIpv6
 		machineConfig.Object["iamInstanceProfile"] = awsMachineConfig.IAMInstanceProfile
 		machineConfig.Object["instanceType"] = awsMachineConfig.InstanceType
+		machineConfig.Object["ipv6AddressCount"] = awsMachineConfig.Ipv6AddressCount
+		machineConfig.Object["ipv6AddressOnly"] = awsMachineConfig.Ipv6AddressOnly
 		machineConfig.Object["privateAddressOnly"] = awsMachineConfig.PrivateAddressOnly
 		machineConfig.Object["region"] = machineConfigs.AmazonEC2MachineConfigs.Region
 		machineConfig.Object["retries"] = awsMachineConfig.Retries

@@ -64,29 +64,42 @@ func TestCustomK3SDualstack(t *testing.T) {
 	t.Parallel()
 	r := customK3SDualstackSetup(t)
 
-	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
-	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
 	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
 	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
+	clusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
+	ipv4StackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     "",
+		ServiceCIDR:     "",
+		StackPreference: "ipv4",
+	}
+
+	dualStackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     "",
+		ServiceCIDR:     "",
+		StackPreference: "dual",
+	}
+
+	cidrDualStackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
+		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
+		StackPreference: "dual",
+	}
+
 	tests := []struct {
-		name            string
-		client          *rancher.Client
-		machinePools    []provisioninginput.MachinePools
-		stackPreference string
+		name         string
+		client       *rancher.Client
+		machinePools []provisioninginput.MachinePools
+		networking   *provisioninginput.Networking
 	}{
-		{"K3S_IPv4_Custom|etcd_cp_worker", r.standardUserClient, nodeRolesAll, "ipv4"},
-		{"K3S_IPv4_Custom|etcd_cp|worker", r.standardUserClient, nodeRolesShared, "ipv4"},
-		{"K3S_IPv4_Custom|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated, "ipv4"},
-		{"K3S_IPv4_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard, "ipv4"},
-		{"K3S_Dualstack_Custom|etcd_cp_worker", r.standardUserClient, nodeRolesAll, "dual"},
-		{"K3S_Dualstack_Custom|etcd_cp|worker", r.standardUserClient, nodeRolesShared, "dual"},
-		{"K3S_Dualstack_Custom|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated, "dual"},
-		{"K3S_Dualstack_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard, "dual"},
+		{"K3S_Dual_Stack_Custom_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv4StackPreference},
+		{"K3S_Dual_Stack_Custom_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, dualStackPreference},
+		{"K3S_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
 	}
 
 	for _, tt := range tests {
@@ -99,9 +112,7 @@ func TestCustomK3SDualstack(t *testing.T) {
 		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
 		clusterConfig.MachinePools = tt.machinePools
-		clusterConfig.Networking = &provisioninginput.Networking{
-			StackPreference: tt.stackPreference,
-		}
+		clusterConfig.Networking = tt.networking
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()

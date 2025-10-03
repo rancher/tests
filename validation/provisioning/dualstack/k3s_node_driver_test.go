@@ -63,29 +63,48 @@ func TestNodeDriverK3S(t *testing.T) {
 	t.Parallel()
 	r := nodeDriverK3SSetup(t)
 
-	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
-	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
 	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
 	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
+	clusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
+	cidr := &provisioninginput.Networking{
+		ClusterCIDR: clusterConfig.Networking.ClusterCIDR,
+		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
+	}
+
+	ipv4StackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     "",
+		ServiceCIDR:     "",
+		StackPreference: "ipv4",
+	}
+
+	dualStackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     "",
+		ServiceCIDR:     "",
+		StackPreference: "dual",
+	}
+
+	cidrDualStackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
+		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
+		StackPreference: "dual",
+	}
+
 	tests := []struct {
-		name            string
-		machinePools    []provisioninginput.MachinePools
-		client          *rancher.Client
-		stackPreference string
+		name         string
+		client       *rancher.Client
+		machinePools []provisioninginput.MachinePools
+		networking   *provisioninginput.Networking
 	}{
-		{"K3S_IPv4_Node_Driver|etcd_cp_worker", nodeRolesAll, r.standardUserClient, "ipv4"},
-		{"K3S_IPv4_Node_Driver|etcd_cp|worker", nodeRolesShared, r.standardUserClient, "ipv4"},
-		{"K3S_IPv4_Node_Driver|etcd|cp|worker", nodeRolesDedicated, r.standardUserClient, "ipv4"},
-		{"K3S_IPv4_Node_Driver|3_etcd|2_cp|3_worker", nodeRolesStandard, r.standardUserClient, "ipv4"},
-		{"K3S_Dualstack_Node_Driver|etcd_cp_worker", nodeRolesAll, r.standardUserClient, "dual"},
-		{"K3S_Dualstack_Node_Driver|etcd_cp|worker", nodeRolesShared, r.standardUserClient, "dual"},
-		{"K3S_Dualstack_Node_Driver|etcd|cp|worker", nodeRolesDedicated, r.standardUserClient, "dual"},
-		{"K3S_Dualstack_Node_Driver|3_etcd|2_cp|3_worker", nodeRolesStandard, r.standardUserClient, "dual"},
+		{"K3S_Dual_Stack_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
+		{"K3S_Dual_Stack_Node_Driver_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv4StackPreference},
+		{"K3S_Dual_Stack_Node_Driver_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, dualStackPreference},
+		{"K3S_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
 	}
 
 	for _, tt := range tests {
@@ -102,9 +121,7 @@ func TestNodeDriverK3S(t *testing.T) {
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
 			clusterConfig.MachinePools = tt.machinePools
-			clusterConfig.Networking = &provisioninginput.Networking{
-				StackPreference: tt.stackPreference,
-			}
+			clusterConfig.Networking = tt.networking
 
 			assert.NotNil(t, clusterConfig.Provider)
 

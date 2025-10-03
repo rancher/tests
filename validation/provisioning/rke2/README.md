@@ -529,6 +529,7 @@ Custom clusters are only supported on AWS.
         awsRegionAZ: ""
         awsAMI: ""
         awsSecurityGroups: [""]
+        awsSubnetID: ""
         awsSSHKeyName: ""
         awsCICDInstanceTag: "rancher-validation"
         awsIAMProfile: ""
@@ -539,6 +540,7 @@ Custom clusters are only supported on AWS.
         awsRegionAZ: ""
         awsAMI: ""
         awsSecurityGroups: [""]
+        awsSubnetID: ""
         awsSSHKeyName: ""
         awsCICDInstanceTag: "rancher-validation"
         awsIAMProfile: ""
@@ -548,6 +550,7 @@ Custom clusters are only supported on AWS.
       - instanceType: "t3a.xlarge"
         awsAMI: ""
         awsSecurityGroups: [""]
+        awsSubnetID: ""
         awsSSHKeyName: ""
         awsCICDInstanceTag: "rancher-validation"
         awsUser: "Administrator"

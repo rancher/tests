@@ -1,20 +1,19 @@
 //go:build validation || recurring
 
-package dualstack
+package ipv6
 
 import (
 	"os"
 	"testing"
 
+	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
-	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
@@ -23,20 +22,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type nodeDriverRKE2Test struct {
+type customRKE2IPv6Test struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
 }
 
-func nodeDriverRKE2Setup(t *testing.T) nodeDriverRKE2Test {
-	var r nodeDriverRKE2Test
+func customRKE2IPv6Setup(t *testing.T) customRKE2IPv6Test {
+	var r customRKE2IPv6Test
+
 	testSession := session.NewSession()
 	r.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	assert.NoError(t, err)
+
 	r.client = client
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
@@ -59,9 +60,9 @@ func nodeDriverRKE2Setup(t *testing.T) nodeDriverRKE2Test {
 	return r
 }
 
-func TestNodeDriverRKE2(t *testing.T) {
+func TestCustomRKE2IPv6(t *testing.T) {
 	t.Parallel()
-	r := nodeDriverRKE2Setup(t)
+	r := customRKE2IPv6Setup(t)
 
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
@@ -77,22 +78,16 @@ func TestNodeDriverRKE2(t *testing.T) {
 		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
 	}
 
-	ipv4StackPreference := &provisioninginput.Networking{
+	stackPreference := &provisioninginput.Networking{
 		ClusterCIDR:     "",
 		ServiceCIDR:     "",
-		StackPreference: "ipv4",
+		StackPreference: "ipv6",
 	}
 
-	dualStackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     "",
-		ServiceCIDR:     "",
-		StackPreference: "dual",
-	}
-
-	cidrDualStackPreference := &provisioninginput.Networking{
+	cidrStackPreference := &provisioninginput.Networking{
 		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
 		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
-		StackPreference: "dual",
+		StackPreference: "ipv6",
 	}
 
 	tests := []struct {
@@ -101,42 +96,47 @@ func TestNodeDriverRKE2(t *testing.T) {
 		machinePools []provisioninginput.MachinePools
 		networking   *provisioninginput.Networking
 	}{
-		{"RKE2_Dual_Stack_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
-		{"RKE2_Dual_Stack_Node_Driver_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv4StackPreference},
-		{"RKE2_Dual_Stack_Node_Driver_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, dualStackPreference},
-		{"RKE2_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
+		{"RKE2_IPv6_Custom_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
+		{"RKE2_IPv6_Custom_Stack_Preference", r.standardUserClient, nodeRolesStandard, stackPreference},
+		{"RKE2_IPv6_Custom_CIDR_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrStackPreference},
 	}
 
 	for _, tt := range tests {
-		var err error
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
 			r.session.Cleanup()
 		})
 
+		clusterConfig := new(clusters.ClusterConfig)
+		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
+		clusterConfig.IPv6Cluster = true
+		clusterConfig.MachinePools = tt.machinePools
+		clusterConfig.Networking = tt.networking
+
+		for i := range clusterConfig.MachinePools {
+			clusterConfig.MachinePools[i].SpecifyCustomPublicIP = true
+			clusterConfig.MachinePools[i].SpecifyCustomPrivateIP = true
+		}
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			clusterConfig := new(clusters.ClusterConfig)
-			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
-			clusterConfig.MachinePools = tt.machinePools
-			clusterConfig.Networking = tt.networking
-
-			provider := provisioning.CreateProvider(clusterConfig.Provider)
-			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
-			machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+			awsEC2Configs := new(ec2.AWSEC2Configs)
+			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, r.cattleConfig, awsEC2Configs)
 
 			logrus.Info("Provisioning cluster")
-			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
 			assert.NoError(t, err)
 
 			logrus.Infof("Verifying cluster (%s)", cluster.Name)
 			provisioning.VerifyCluster(t, tt.client, cluster)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
-		err = qase.UpdateSchemaParameters(tt.name, params)
+		params := provisioning.GetCustomSchemaParams(tt.client, r.cattleConfig)
+		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
 		}

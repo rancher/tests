@@ -66,7 +66,7 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.13.0
 	github.com/rancher/norman v0.7.0
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20250930150356-0687c0e2375d
+	github.com/rancher/shepherd v0.0.0-20251003203259-669abb78af51
 	github.com/rancher/tests/actions v0.0.0-20250505204226-5b136337f7c5
 	github.com/rancher/tfp-automation v0.0.0-20250611224440-c60e4d69096c
 	github.com/sirupsen/logrus v1.9.3
@@ -98,7 +98,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
-	github.com/go-logr/logr v1.4.2 // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
@@ -152,15 +152,15 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rancher/aks-operator v1.12.0 // indirect
+	github.com/rancher/aks-operator v1.12.1 // indirect
 	github.com/rancher/apiserver v0.7.0 // indirect
-	github.com/rancher/eks-operator v1.12.0 // indirect
-	github.com/rancher/gke-operator v1.12.0 // indirect
+	github.com/rancher/eks-operator v1.12.1 // indirect
+	github.com/rancher/gke-operator v1.12.1 // indirect
 	github.com/rancher/lasso v0.2.3 // indirect
 	github.com/rancher/rke v1.8.0-rc.4 // indirect
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250710162344-185ff9f785cd // indirect
 	github.com/rancher/wrangler v1.1.2 // indirect
-	github.com/rancher/wrangler/v3 v3.2.3-rc.1 // indirect
+	github.com/rancher/wrangler/v3 v3.2.4 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
@@ -206,5 +206,5 @@ require (
 	sigs.k8s.io/kustomize/api v0.19.0 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.19.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
-	sigs.k8s.io/yaml v1.5.0 // indirect
+	sigs.k8s.io/yaml v1.6.0 // indirect
 )

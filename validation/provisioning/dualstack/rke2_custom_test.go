@@ -64,32 +64,42 @@ func TestCustomRKE2Dualstack(t *testing.T) {
 	t.Parallel()
 	r := customRKE2DualstackSetup(t)
 
-	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
-	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
 	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
 	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
+	clusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
+	ipv4StackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     "",
+		ServiceCIDR:     "",
+		StackPreference: "ipv4",
+	}
+
+	dualStackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     "",
+		ServiceCIDR:     "",
+		StackPreference: "dual",
+	}
+
+	cidrDualStackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
+		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
+		StackPreference: "dual",
+	}
+
 	tests := []struct {
-		name            string
-		client          *rancher.Client
-		machinePools    []provisioninginput.MachinePools
-		isWindows       bool
-		stackPreference string
+		name         string
+		client       *rancher.Client
+		machinePools []provisioninginput.MachinePools
+		networking   *provisioninginput.Networking
 	}{
-		{"RKE2_IPv4_Custom|etcd_cp_worker", r.standardUserClient, nodeRolesAll, false, "ipv4"},
-		{"RKE2_IPv4_Custom|etcd_cp|worker", r.standardUserClient, nodeRolesShared, false, "ipv4"},
-		{"RKE2_IPv4_Custom|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated, false, "ipv4"},
-		{"RKE2_IPv4_Custom|etcd|cp|worker|windows", r.standardUserClient, nodeRolesDedicated, true, "ipv4"},
-		{"RKE2_IPv4_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard, false, "ipv4"},
-		{"RKE2_Dualstack_Custom|etcd_cp_worker", r.standardUserClient, nodeRolesAll, false, "dual"},
-		{"RKE2_Dualstack_Custom|etcd_cp|worker", r.standardUserClient, nodeRolesShared, false, "dual"},
-		{"RKE2_Dualstack_Custom|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated, false, "dual"},
-		{"RKE2_Dualstack_Custom|etcd|cp|worker|windows", r.standardUserClient, nodeRolesDedicated, true, "dual"},
-		{"RKE2_Dualstack_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard, false, "dual"},
+		{"RKE2_Dual_Stack_Custom_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv4StackPreference},
+		{"RKE2_Dual_Stack_Custom_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, dualStackPreference},
+		{"RKE2_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
 	}
 
 	for _, tt := range tests {
@@ -102,9 +112,6 @@ func TestCustomRKE2Dualstack(t *testing.T) {
 		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
 		clusterConfig.MachinePools = tt.machinePools
-		clusterConfig.Networking = &provisioninginput.Networking{
-			StackPreference: tt.stackPreference,
-		}
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()

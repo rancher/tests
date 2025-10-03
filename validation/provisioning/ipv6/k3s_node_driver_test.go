@@ -1,6 +1,6 @@
 //go:build validation || recurring
 
-package dualstack
+package ipv6
 
 import (
 	"os"
@@ -23,15 +23,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type nodeDriverRKE2Test struct {
+type nodeDriverK3SIPv6Test struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
 }
 
-func nodeDriverRKE2Setup(t *testing.T) nodeDriverRKE2Test {
-	var r nodeDriverRKE2Test
+func nodeDriverK3SIPv6Setup(t *testing.T) nodeDriverK3SIPv6Test {
+	var r nodeDriverK3SIPv6Test
+
 	testSession := session.NewSession()
 	r.session = testSession
 
@@ -50,7 +51,7 @@ func nodeDriverRKE2Setup(t *testing.T) nodeDriverRKE2Test {
 	err = logging.SetLogger(loggingConfig)
 	assert.NoError(t, err)
 
-	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.RKE2, r.cattleConfig)
+	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.K3S, r.cattleConfig)
 	assert.NoError(t, err)
 
 	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
@@ -59,9 +60,10 @@ func nodeDriverRKE2Setup(t *testing.T) nodeDriverRKE2Test {
 	return r
 }
 
-func TestNodeDriverRKE2(t *testing.T) {
+func TestNodeDriverK3SIPv6(t *testing.T) {
+	t.Skip("This test is temporarily disabled. See https://github.com/rancher/rancher/issues/51990.")
 	t.Parallel()
-	r := nodeDriverRKE2Setup(t)
+	r := nodeDriverK3SIPv6Setup(t)
 
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
@@ -77,22 +79,10 @@ func TestNodeDriverRKE2(t *testing.T) {
 		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
 	}
 
-	ipv4StackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     "",
-		ServiceCIDR:     "",
-		StackPreference: "ipv4",
-	}
-
-	dualStackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     "",
-		ServiceCIDR:     "",
-		StackPreference: "dual",
-	}
-
-	cidrDualStackPreference := &provisioninginput.Networking{
+	cidrStackPreference := &provisioninginput.Networking{
 		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
 		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
-		StackPreference: "dual",
+		StackPreference: "ipv6",
 	}
 
 	tests := []struct {
@@ -101,10 +91,8 @@ func TestNodeDriverRKE2(t *testing.T) {
 		machinePools []provisioninginput.MachinePools
 		networking   *provisioninginput.Networking
 	}{
-		{"RKE2_Dual_Stack_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
-		{"RKE2_Dual_Stack_Node_Driver_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv4StackPreference},
-		{"RKE2_Dual_Stack_Node_Driver_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, dualStackPreference},
-		{"RKE2_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
+		{"K3S_IPv6_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
+		{"K3S_IPv6_Node_Driver_CIDR_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrStackPreference},
 	}
 
 	for _, tt := range tests {
@@ -114,14 +102,14 @@ func TestNodeDriverRKE2(t *testing.T) {
 			r.session.Cleanup()
 		})
 
+		clusterConfig := new(clusters.ClusterConfig)
+		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
+		clusterConfig.MachinePools = tt.machinePools
+		clusterConfig.Networking = tt.networking
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			clusterConfig := new(clusters.ClusterConfig)
-			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
-
-			clusterConfig.MachinePools = tt.machinePools
-			clusterConfig.Networking = tt.networking
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))

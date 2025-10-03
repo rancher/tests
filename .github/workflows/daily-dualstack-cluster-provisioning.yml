@@ -191,6 +191,9 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             compliance: true
+            networking:
+              clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
             registries:
               rke2Registries:
                 mirrors:
@@ -230,6 +233,7 @@ jobs:
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_DUALSTACK_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
+                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE }}"

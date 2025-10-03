@@ -23,14 +23,36 @@ Custom test verfies that various custom cluster configurations provision properl
 3. [Custom Cluster Config](#custom-cluster)
 
 #### Table Tests
-1. `RKE2_IPv6_Custom|etcd_cp_worker`
-2. `RKE2_IPv6_Custom|etcd_cp|worker`
-3. `RKE2_IPv6_Custom|etcd|cp|worker`
-4. `RKE2_IPv6_Custom|etcd|cp|worker|windows`
-5. `RKE2_IPv6_Custom|3_etcd|2_cp|3_worker`
+1. `RKE2_IPv6_Custom_CIDR`
+2. `RKE2_IPv6_Custom_Stack_Preference`
+3. `RKE2_IPv6_Custom_CIDR_Stack_Preference`
+4. `K3S_IPv6_Custom_CIDR`
+5. `K3S_IPv6_Custom_Stack_Preference`
+6. `K3S_IPv6_Custom_CIDR_Stack_Preference`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCustom -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCustomRKE2IPv6 -timeout=1h -v`
+2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCustomK3SIPv6 -timeout=1h -v`
+
+### Node Driver Test
+
+#### Description: 
+Node driver test verfies that various node driver cluster configurations provision properly.
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Machine Config](#machine-config)
+
+#### Table Tests
+1. `RKE2_IPv6_Node_Driver_CIDR`
+2. `RKE2_IPv6_Node_Driver_CIDR_Stack_Preference`
+3. `K3S_IPv6_Node_Driver_CIDR`
+4. `K3S_IPv6_Node_Driver_CIDR_Stack_Preference`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestNodeDriverRKE2IPv6 -timeout=1h -v`
+2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestNodeDriverK3SIPv6 -timeout=1h -v`
 
 ## Configurations
 
@@ -136,6 +158,10 @@ awsMachineConfigs:                            #default
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
     ami: ""                                   #required
+    enablePrimaryIPv6: true
+    httpProtocolIpv6: "enabled"
+    ipv6AddressOnly: true
+    ipv6AddressCount: "1"
     instanceType: "t3a.medium"
     sshUser: "ubuntu"                         #required
     vpcId: ""                                 #required
@@ -272,6 +298,7 @@ Custom clusters are only supported on AWS.
         awsRegionAZ: ""
         awsAMI: ""
         awsSecurityGroups: [""]
+        awsSubnetID: ""
         awsSSHKeyName: ""
         awsCICDInstanceTag: "rancher-validation"
         awsIAMProfile: ""
@@ -282,6 +309,7 @@ Custom clusters are only supported on AWS.
         awsRegionAZ: ""
         awsAMI: ""
         awsSecurityGroups: [""]
+        awsSubnetID: ""
         awsSSHKeyName: ""
         awsCICDInstanceTag: "rancher-validation"
         awsIAMProfile: ""
@@ -291,6 +319,7 @@ Custom clusters are only supported on AWS.
       - instanceType: "t3a.xlarge"
         awsAMI: ""
         awsSecurityGroups: [""]
+        awsSubnetID: ""
         awsSSHKeyName: ""
         awsCICDInstanceTag: "rancher-validation"
         awsUser: "Administrator"
