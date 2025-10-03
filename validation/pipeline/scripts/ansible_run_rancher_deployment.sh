@@ -211,8 +211,9 @@ echo "=== Rancher Playbook Content ==="
 cat "${RANCHER_PLAYBOOK}"
 echo "================================="
 
-# Check cert-manager and webhook status
-echo "=== Checking cert-manager and webhook readiness ==="
+# Wait for cert-manager webhook to be ready before deploying Rancher
+echo "=== Waiting for cert-manager webhook to be ready ==="
+# This prevents the "no endpoints available for service cert-manager-webhook" error
 
 # Set KUBECONFIG if not already set (should be at /root/.kube/config from kubectl setup)
 export KUBECONFIG=${KUBECONFIG:-/root/.kube/config}
@@ -232,29 +233,48 @@ if [[ ! -f "${KUBECONFIG}" ]]; then
     fi
 fi
 
-# Check cert-manager webhook status (but don't block on it)
-echo "Checking cert-manager webhook status..."
-if kubectl get endpoints cert-manager-webhook -n cert-manager &>/dev/null; then
-    ENDPOINT_COUNT=$(kubectl get endpoints cert-manager-webhook -n cert-manager -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null | wc -w)
-    if [[ ${ENDPOINT_COUNT} -gt 0 ]]; then
-        echo "✓ cert-manager webhook has ${ENDPOINT_COUNT} endpoint(s) available"
+# Wait up to 5 minutes for cert-manager webhook to have endpoints
+WAIT_TIMEOUT=300  # 5 minutes
+WAIT_INTERVAL=10  # Check every 10 seconds
+ELAPSED=0
+
+echo "Checking for cert-manager webhook endpoints..."
+while [[ ${ELAPSED} -lt ${WAIT_TIMEOUT} ]]; do
+    # Check if cert-manager-webhook service has endpoints
+    if kubectl get endpoints cert-manager-webhook -n cert-manager &>/dev/null; then
+        ENDPOINT_COUNT=$(kubectl get endpoints cert-manager-webhook -n cert-manager -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null | wc -w)
+
+        if [[ ${ENDPOINT_COUNT} -gt 0 ]]; then
+            echo "✓ cert-manager webhook has ${ENDPOINT_COUNT} endpoint(s) available"
+
+            # Additional check: verify webhook pods are running
+            WEBHOOK_PODS_READY=$(kubectl get pods -n cert-manager -l app.kubernetes.io/name=webhook --field-selector=status.phase=Running 2>/dev/null | grep -c "Running" || echo "0")
+            if [[ ${WEBHOOK_PODS_READY} -gt 0 ]]; then
+                echo "✓ cert-manager webhook pod(s) are running"
+                break
+            else
+                echo "Waiting for cert-manager webhook pods to be Running... (${ELAPSED}s/${WAIT_TIMEOUT}s)"
+            fi
+        else
+            echo "Waiting for cert-manager webhook endpoints... (${ELAPSED}s/${WAIT_TIMEOUT}s)"
+        fi
     else
-        echo "⚠ cert-manager webhook has no endpoints - will use webhook bypass annotations"
+        echo "Waiting for cert-manager webhook service... (${ELAPSED}s/${WAIT_TIMEOUT}s)"
     fi
-else
-    echo "⚠ cert-manager webhook service not found - will use webhook bypass annotations"
-fi
 
-# Check ingress controller webhook status
-echo "Checking RKE2 ingress controller webhook status..."
-if kubectl get validatingwebhookconfigurations.admissionregistration.k8s.io rke2-ingress-nginx-admission &>/dev/null; then
-    echo "✓ RKE2 ingress webhook configuration exists"
-    echo "⚠ May have TLS certificate issues - will use webhook bypass annotations"
-else
-    echo "⚠ RKE2 ingress webhook not found"
-fi
+    sleep ${WAIT_INTERVAL}
+    ELAPSED=$((ELAPSED + WAIT_INTERVAL))
+done
 
-echo "✓ Proceeding with Rancher deployment using webhook bypass annotations"
+if [[ ${ELAPSED} -ge ${WAIT_TIMEOUT} ]]; then
+    echo "WARNING: Timed out waiting for cert-manager webhook to be ready"
+    echo "Checking cert-manager status for debugging..."
+    kubectl get pods -n cert-manager || echo "Failed to get cert-manager pods"
+    kubectl get endpoints -n cert-manager || echo "Failed to get cert-manager endpoints"
+    echo "Proceeding with Rancher deployment anyway..."
+else
+    echo "✓ cert-manager webhook is ready for Rancher installation"
+fi
 
 # Build extra variables to pass to ansible-playbook
 EXTRA_VARS=""
@@ -307,22 +327,11 @@ if [[ "${RANCHER_PLAYBOOK}" == ansible/rke2/airgap/* ]]; then
     echo "Playbook (relative): ${RELATIVE_PLAYBOOK}"
     echo "Inventory (relative): ${RELATIVE_INVENTORY}"
 
-    # Add Helm flags to bypass webhook validation issues
-    # This handles cert-manager and ingress controller webhook failures
-    HELM_EXTRA_ARGS="--disable-openapi-validation"
-    echo "Adding Helm extra arguments to bypass webhook validation: ${HELM_EXTRA_ARGS}"
-    EXTRA_VARS="${EXTRA_VARS} -e helm_extra_args='${HELM_EXTRA_ARGS}'"
-
     cd "${ANSIBLE_WORKDIR}"
     ansible-playbook -i "${RELATIVE_INVENTORY}" "${RELATIVE_PLAYBOOK}" -v ${EXTRA_VARS}
 else
     # Run from repository root for other playbook locations
     echo "=== Running Rancher Deployment Playbook from repository root ==="
-
-    # Add Helm flags to bypass webhook validation issues
-    HELM_EXTRA_ARGS="--disable-openapi-validation"
-    echo "Adding Helm extra arguments to bypass webhook validation: ${HELM_EXTRA_ARGS}"
-    EXTRA_VARS="${EXTRA_VARS} -e helm_extra_args='${HELM_EXTRA_ARGS}'"
 
     ansible-playbook -i "${INVENTORY_PATH}" "${RANCHER_PLAYBOOK}" -v ${EXTRA_VARS}
 fi

@@ -98,6 +98,34 @@ for config_path in "${KUBECONFIG_LOCATIONS[@]}"; do
         echo "Found kubeconfig at: $config_path"
         cp "$config_path" /root/kubeconfig.yaml
         chmod 644 /root/kubeconfig.yaml
+
+        # Fix kubeconfig to use bastion IP instead of localhost
+        # This is critical for Docker container access to the cluster
+        echo "Updating kubeconfig to use bastion IP instead of localhost..."
+
+        # Extract bastion node IP from inventory
+        BASTION_IP=$(grep -A 5 "bastion-node:" /root/ansible/rke2/airgap/inventory.yml | grep "ansible_host:" | awk '{print $2}' | tr -d '"' || echo "")
+
+        if [[ -z "${BASTION_IP}" ]]; then
+            echo "WARNING: Could not extract bastion IP from inventory, trying alternative method..."
+            # Try to get IP from the currently running node
+            BASTION_IP=$(hostname -I | awk '{print $1}' || echo "")
+        fi
+
+        if [[ -n "${BASTION_IP}" ]]; then
+            echo "Using bastion IP: ${BASTION_IP}"
+            # Replace 127.0.0.1:6443 with bastion IP
+            sed -i "s|https://127.0.0.1:6443|https://${BASTION_IP}:6443|g" /root/kubeconfig.yaml
+            echo "✓ Updated kubeconfig server URL to https://${BASTION_IP}:6443"
+
+            # Verify the change
+            echo "Kubeconfig server URL after update:"
+            grep "server:" /root/kubeconfig.yaml || echo "Failed to verify server URL"
+        else
+            echo "WARNING: Could not determine bastion IP - kubeconfig will still use localhost"
+            echo "This may cause connection issues from Docker containers"
+        fi
+
         echo "✓ Kubeconfig copied to /root/kubeconfig.yaml for archival"
         KUBECONFIG_FOUND=true
         break
