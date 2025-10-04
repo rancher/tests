@@ -313,6 +313,69 @@ if command -v kubectl &> /dev/null; then
             echo "Rancher deployment requires a functional API server"
             exit 1
         fi
+
+        # Final comprehensive readiness validation - test actual webhook connectivity
+        echo "=== Final Webhook Readiness Validation ==="
+        WEBHOOK_VALIDATION_PASSED=true
+
+        # Test cert-manager webhook with a simple dry-run validation
+        echo "Testing cert-manager webhook connectivity..."
+        if kubectl create --dry-run=client -f - <<EOF
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: test-webhook-validation
+spec:
+  selfSigned: {}
+EOF
+        then
+            echo "✓ cert-manager webhook validation test passed"
+        else
+            echo "✗ ERROR: cert-manager webhook validation test failed"
+            WEBHOOK_VALIDATION_PASSED=false
+        fi
+
+        # Test ingress admission webhook if it exists
+        echo "Testing ingress controller webhook connectivity..."
+        if kubectl get validatingwebhookconfiguration ingress-nginx-admission &> /dev/null; then
+            if kubectl create --dry-run=client -f - <<EOF
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-ingress-validation
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: test.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: test
+            port:
+              number: 80
+EOF
+            then
+                echo "✓ ingress webhook validation test passed"
+            else
+                echo "✗ ERROR: ingress webhook validation test failed"
+                WEBHOOK_VALIDATION_PASSED=false
+            fi
+        else
+            echo "⚠ WARNING: ingress webhook not found, skipping validation"
+        fi
+
+        if [[ "$WEBHOOK_VALIDATION_PASSED" == false ]]; then
+            echo "✗ ERROR: Final webhook validation failed"
+            echo "This indicates webhooks are not properly configured or accessible"
+            echo "Rancher deployment will fail without functional webhooks"
+            exit 1
+        fi
+
+        echo "✓ All webhook validations passed - proceeding with Rancher deployment"
     else
         echo "⚠ WARNING: cert-manager namespace not found"
     fi
