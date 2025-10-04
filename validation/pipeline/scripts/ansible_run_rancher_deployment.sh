@@ -212,9 +212,120 @@ cat "${RANCHER_PLAYBOOK}"
 echo "================================="
 
 # Note: cert-manager installation and health checks are handled by the Ansible playbook
-# The playbook will install cert-manager and wait for it to be ready before deploying Rancher
+# However, we'll add additional readiness checks to ensure cert-manager is fully ready
 echo "=== Preparing to deploy Rancher ==="
-echo "cert-manager installation and readiness checks will be handled by the Ansible playbook"
+echo "Performing additional readiness checks before Rancher deployment..."
+
+# Wait for cert-manager to be fully ready before proceeding with Rancher
+echo "=== Checking cert-manager readiness ==="
+if command -v kubectl &> /dev/null; then
+    export KUBECONFIG="/home/ubuntu/.kube/config"
+
+    # Check if cert-manager namespace exists
+    if kubectl get namespace cert-manager &> /dev/null; then
+        echo "cert-manager namespace found"
+
+        # Wait for cert-manager deployment to be ready
+        echo "Waiting for cert-manager deployment to be ready..."
+        if kubectl wait --for=condition=available --timeout=300s deployment/cert-manager -n cert-manager; then
+            echo "✓ cert-manager deployment is ready"
+        else
+            echo "⚠ WARNING: cert-manager deployment not ready after 5 minutes, proceeding anyway"
+        fi
+
+        # Check cert-manager webhook service endpoints
+        echo "Checking cert-manager webhook service endpoints..."
+        if kubectl get endpoints cert-manager-webhook -n cert-manager &> /dev/null; then
+            WEBHOOK_ENDPOINTS=$(kubectl get endpoints cert-manager-webhook -n cert-manager -o jsonpath='{.subsets[*].addresses[*]}' | wc -w)
+            if [[ $WEBHOOK_ENDPOINTS -gt 0 ]]; then
+                echo "✓ cert-manager webhook service has $WEBHOOK_ENDPOINTS endpoint(s) available"
+            else
+                echo "⚠ WARNING: cert-manager webhook service has no endpoints available"
+                echo "This may cause Rancher installation to fail"
+
+                # Show cert-manager pod status for debugging
+                echo "cert-manager pod status:"
+                kubectl get pods -n cert-manager -o wide || echo "Could not get pod status"
+            fi
+        else
+            echo "⚠ WARNING: cert-manager webhook service not found"
+        fi
+
+        # Check webhook service connectivity
+        echo "Testing webhook service connectivity..."
+        WEBHOOK_SVC=$(kubectl get svc cert-manager-webhook -n cert-manager -o jsonpath='{.spec.clusterIP}' 2>/dev/null || echo "")
+        if [[ -n "$WEBHOOK_SVC" ]]; then
+            echo "cert-manager webhook service IP: $WEBHOOK_SVC"
+            # Basic connectivity test (without TLS verification)
+            if timeout 10 nc -z $WEBHOOK_SVC 443 2>/dev/null; then
+                echo "✓ cert-manager webhook service is reachable on port 443"
+            else
+                echo "⚠ WARNING: Cannot reach cert-manager webhook service on port 443"
+            fi
+        fi
+    else
+        echo "⚠ WARNING: cert-manager namespace not found"
+    fi
+else
+    echo "⚠ WARNING: kubectl not available for readiness checks"
+fi
+
+echo "cert-manager readiness checks completed"
+
+# Also check ingress controller readiness since it's needed for Rancher webhooks
+echo "=== Checking ingress controller readiness ==="
+if command -v kubectl &> /dev/null; then
+    export KUBECONFIG="/home/ubuntu/.kube/config"
+
+    # Look for common ingress controllers
+    INGRESS_NAMESPACES=("kube-system" "ingress-nginx")
+    INGRESS_DEPLOYMENTS=("ingress-nginx-controller" "nginx-ingress-controller" "rke2-ingress-nginx-controller")
+
+    INGRESS_READY=false
+
+    for namespace in "${INGRESS_NAMESPACES[@]}"; do
+        if kubectl get namespace "$namespace" &> /dev/null; then
+            echo "Found ingress namespace: $namespace"
+
+            for deployment in "${INGRESS_DEPLOYMENTS[@]}"; do
+                if kubectl get deployment "$deployment" -n "$namespace" &> /dev/null; then
+                    echo "Found ingress deployment: $deployment in namespace $namespace"
+
+                    # Check deployment status
+                    if kubectl wait --for=condition=available --timeout=120s deployment/"$deployment" -n "$namespace" 2>/dev/null; then
+                        echo "✓ Ingress deployment $deployment is ready"
+                        INGRESS_READY=true
+
+                        # Check admission webhook endpoints if they exist
+                        if kubectl get service "$deployment-admission" -n "$namespace" &> /dev/null; then
+                            echo "Found ingress admission webhook service"
+                            ADMISSION_ENDPOINTS=$(kubectl get endpoints "$deployment-admission" -n "$namespace" -o jsonpath='{.subsets[*].addresses[*]}' | wc -w)
+                            if [[ $ADMISSION_ENDPOINTS -gt 0 ]]; then
+                                echo "✓ Ingress admission webhook has $ADMISSION_ENDPOINTS endpoint(s) available"
+                            else
+                                echo "⚠ WARNING: Ingress admission webhook has no endpoints available"
+                            fi
+                        fi
+                        break 2
+                    else
+                        echo "⚠ WARNING: Ingress deployment $deployment not ready after 2 minutes"
+                    fi
+                fi
+            done
+        fi
+    done
+
+    if [[ "$INGRESS_READY" == false ]]; then
+        echo "⚠ WARNING: No ready ingress controller found"
+        echo "This may cause Rancher webhook validation to fail"
+    else
+        echo "✓ At least one ingress controller is ready"
+    fi
+else
+    echo "⚠ WARNING: kubectl not available for ingress readiness checks"
+fi
+
+echo "Ingress controller readiness checks completed"
 
 # Build extra variables to pass to ansible-playbook
 EXTRA_VARS=""
