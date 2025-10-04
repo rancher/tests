@@ -2,7 +2,39 @@
 
 ## Overview
 
-This Jenkins job automates the deployment of RKE2 clusters in airgap environments using Ansible playbooks from the [rancher/qa-infra-automation](https://github.com/rancher/qa-infra-automation) repository. The job provisions infrastructure with Terraform, deploys RKE2 in airgap mode, and installs Rancher on the cluster.
+This documentation covers two Jenkins pipelines for airgap RKE2 deployments:
+
+1. **Deployment Pipeline** (`Jenkinsfile.airgap.rke2.improved`): Automates the deployment of RKE2 clusters in airgap environments using Ansible playbooks from the [rancher/qa-infra-automation](https://github.com/rancher/qa-infra-automation) repository. Provisions infrastructure with OpenTofu, deploys RKE2 in airgap mode, and installs Rancher on the cluster.
+
+2. **Destruction Pipeline** (`Jenkinsfile.destroy.airgap.rke2`): Provides automated infrastructure cleanup by retrieving Terraform state from S3 backend and performing controlled destruction of all resources.
+
+## Table of Contents
+
+- [Technology Stack](#technology-stack)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Job Configuration](#job-configuration)
+- [Deployment Process](#deployment-process)
+- [Infrastructure Destruction Pipeline](#infrastructure-destruction-pipeline)
+  - [S3 Backend State Management](#s3-backend-state-management)
+  - [Destruction Pipeline Stages](#destruction-pipeline-stages)
+  - [Using the Destruction Pipeline](#using-the-destruction-pipeline)
+- [Airgap-Specific Considerations](#airgap-specific-considerations)
+- [Troubleshooting](#troubleshooting)
+- [Monitoring and Alerts](#monitoring-and-alerts)
+- [Best Practices](#best-practices)
+- [Support](#support)
+- [Pipeline Files](#pipeline-files)
+- [References](#references)
+
+## Technology Stack
+
+- **Infrastructure as Code**: OpenTofu (Terraform-compatible)
+- **Configuration Management**: Ansible (from qa-infra-automation repository)
+- **State Management**: AWS S3 backend for Terraform/OpenTofu state
+- **Container Runtime**: Docker for pipeline execution
+- **Kubernetes Distribution**: RKE2
+- **Platform Management**: Rancher
 
 ## Architecture
 
@@ -136,6 +168,225 @@ Use the provided templates to configure your deployment:
 - Archives kubeconfig and Terraform state
 - Cleans up Docker containers and volumes
 
+## Infrastructure Destruction Pipeline
+
+### Overview
+
+The destruction pipeline (`Jenkinsfile.destroy.airgap.rke2`) provides automated infrastructure cleanup for environments deployed by the main airgap RKE2 pipeline. It retrieves Terraform state from S3 backend and performs controlled destruction of all resources.
+
+### Prerequisites for Destruction
+
+#### Required Parameters
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `TARGET_WORKSPACE` | Terraform workspace to destroy | `jenkins_airgap_ansible_workspace_123` |
+| `S3_BUCKET_NAME` | S3 bucket storing Terraform state | `jenkins-terraform-state-storage` |
+| `S3_KEY_PREFIX` | S3 key prefix for state files | `jenkins-airgap-rke2/terraform.tfstate` |
+| `S3_REGION` | AWS region for S3 bucket | `us-east-2` |
+
+#### Optional Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `RANCHER_TEST_REPO_URL` | `https://github.com/rancher/tests` | Repository URL |
+| `RANCHER_TEST_REPO_BRANCH` | `main` | Repository branch |
+| `QA_INFRA_REPO_URL` | `https://github.com/rancher/qa-infra-automation` | QA infra repo URL |
+| `QA_INFRA_REPO_BRANCH` | `main` | QA infra repo branch |
+
+### S3 Backend State Management
+
+The destruction pipeline uses S3 backend for Terraform state management:
+
+#### State Storage Structure
+```
+s3://jenkins-terraform-state-storage/
+├── jenkins-airgap-rke2/terraform.tfstate    # Main state file
+└── env:/jenkins_airgap_ansible_workspace_123/  # Workspace-specific configs
+    └── cluster.tfvars                         # Terraform variables
+```
+
+#### State Retrieval Process
+1. Downloads `cluster.tfvars` from S3 workspace directory
+2. Generates `backend.tf` with S3 backend configuration
+3. Initializes OpenTofu with remote state
+4. Selects target workspace
+5. Executes destruction plan
+
+### Destruction Pipeline Stages
+
+#### Stage 1: Initialize Pipeline
+- Validates required parameters (`TARGET_WORKSPACE`, repository URLs)
+- Cleans Jenkins workspace
+- Logs pipeline configuration
+
+#### Stage 2: Checkout Repositories
+- Clones `rancher/tests` repository
+- Clones `rancher/qa-infra-automation` repository
+- Uses shallow cloning for performance
+
+#### Stage 3: Configure Environment
+- Generates environment file (`.env`) with AWS credentials and S3 configuration
+- Sets up SSH keys if provided
+- Builds Docker image for OpenTofu operations
+- Creates shared volume for artifact persistence
+
+#### Stage 4: Infrastructure Destruction Operations
+
+**Configuration Download:**
+- Downloads `cluster.tfvars` from S3 workspace directory
+- Validates file retrieval and content
+
+**OpenTofu Configuration:**
+- Generates `backend.tf` with S3 backend configuration
+- Copies backend configuration to container
+- Validates backend connectivity
+
+**Pre-flight Checks:**
+- Validates infrastructure prerequisites using `tofu_validate_prerequisites.sh`
+- Verifies required environment variables
+- Checks workspace existence
+
+**Destruction Execution:**
+- Initializes OpenTofu with S3 backend
+- Selects target workspace
+- Runs `tofu destroy` with auto-approval
+- Deletes workspace after successful destruction
+
+**Post-destruction Validation:**
+- Validates infrastructure state using `destroy_validate_state.sh`
+- Confirms all resources are destroyed
+- Archives destruction summary
+
+#### Stage 5: S3 Cleanup (Success Only)
+
+After successful destruction, the pipeline cleans up S3 resources:
+
+**Workspace Directory Cleanup:**
+- Deletes `env:/${TF_WORKSPACE}/` directory containing configuration files
+- Removes `cluster.tfvars` and other workspace-specific files
+
+**Terraform State Cleanup:**
+- Deletes the Terraform state file at `${S3_KEY_PREFIX}`
+- Verifies deletion with AWS CLI
+
+**Cleanup Process:**
+```bash
+# Workspace directory deletion
+aws s3 rm "s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/" --recursive --region "${S3_REGION}"
+
+# Terraform state deletion
+aws s3 rm "s3://${S3_BUCKET_NAME}/${S3_KEY_PREFIX}" --region "${S3_REGION}"
+```
+
+### Destruction Scripts
+
+The following scripts are used during destruction:
+
+| Script | Purpose | Location |
+|--------|---------|----------|
+| `destroy_download_config.sh` | Download configuration from S3 | `validation/pipeline/scripts/` |
+| `tofu_validate_prerequisites.sh` | Validate infrastructure prerequisites | `validation/pipeline/scripts/` |
+| `tofu_initialize.sh` | Initialize OpenTofu with S3 backend | `validation/pipeline/scripts/` |
+| `destroy_execute.sh` | Execute infrastructure destruction | `validation/pipeline/scripts/` |
+| `tofu_delete_workspace.sh` | Delete OpenTofu workspace | `validation/pipeline/scripts/` |
+| `destroy_validate_state.sh` | Validate post-destruction state | `validation/pipeline/scripts/` |
+
+### Container Execution Pattern
+
+Destruction operations run inside Docker containers with:
+
+**Volume Mounts:**
+- Shared volume: `/root` - Persists artifacts between containers
+- Script mount: `/tmp/script.sh` - Temporarily mounted scripts
+
+**Environment Variables:**
+- Passed via `.env` file AND direct `-e` flags (fallback mechanism)
+- Critical vars: `TF_WORKSPACE`, `S3_BUCKET_NAME`, `S3_KEY_PREFIX`, `AWS_REGION`
+
+**Container Lifecycle:**
+1. Create container with environment and volumes
+2. Execute destruction script
+3. Copy artifacts to shared volume
+4. Remove container
+5. Extract artifacts from shared volume to Jenkins workspace
+
+### Archived Artifacts
+
+The destruction pipeline archives:
+
+- `destruction-plan.txt` - OpenTofu destruction plan
+- `destruction-summary.json` - Destruction summary and results
+- `destruction-logs.txt` - Complete destruction logs
+- `workspace-list.txt` - OpenTofu workspace list (on failure)
+- `remaining-resources.txt` - Any remaining resources (on failure)
+
+### Failure Handling
+
+**Timeout Handling:**
+- Default timeout: 30 minutes
+- On timeout: Archives failure artifacts and logs error
+
+**Partial Destruction:**
+- Lists remaining resources in state
+- Archives workspace information
+- Provides manual cleanup guidance
+
+**State File Issues:**
+- Validates S3 bucket access before operations
+- Checks workspace existence
+- Verifies backend configuration
+
+### Using the Destruction Pipeline
+
+#### Automated Destruction (Main Pipeline)
+
+When `CLEANUP_RESOURCES=true` in the main pipeline, destruction is automatic.
+
+#### Manual Destruction (Standalone)
+
+To destroy a specific deployment:
+
+1. **Find the workspace name** from the main pipeline logs or S3:
+   ```bash
+   aws s3 ls s3://jenkins-terraform-state-storage/ --recursive | grep env:
+   ```
+
+2. **Trigger the destruction pipeline** with parameters:
+   - `TARGET_WORKSPACE`: e.g., `jenkins_airgap_ansible_workspace_123`
+   - `S3_BUCKET_NAME`: `jenkins-terraform-state-storage`
+   - `S3_KEY_PREFIX`: `jenkins-airgap-rke2/terraform.tfstate`
+   - `S3_REGION`: `us-east-2`
+
+3. **Monitor the destruction** via Jenkins console output
+
+4. **Verify cleanup** by checking:
+   - AWS Console for remaining resources
+   - S3 bucket for deleted workspace directory
+   - Terraform state file deletion
+
+### Destruction Pipeline Best Practices
+
+**Before Running:**
+- Verify the correct workspace name
+- Confirm S3 bucket access permissions
+- Check for any running workloads that need preservation
+
+**During Execution:**
+- Monitor console logs for errors
+- Watch for timeout warnings
+- Verify each stage completes successfully
+
+**After Completion:**
+- Review archived artifacts
+- Confirm S3 cleanup completion
+- Verify AWS resources are destroyed via AWS Console
+
+**Troubleshooting Destruction:**
+- If destruction fails, check `remaining-resources.txt` artifact
+- Review workspace state using AWS CLI
+- Use manual cleanup if automated destruction is blocked
+
 ## Airgap-Specific Considerations
 
 ### Image Management
@@ -180,25 +431,155 @@ Use the provided templates to configure your deployment:
 # Verify registry mirrors are working
 ```
 
+#### Infrastructure Destruction Failures
+
+**S3 State Download Failures:**
+```bash
+# Verify S3 bucket exists and credentials are valid
+aws s3 ls s3://jenkins-terraform-state-storage/
+
+# Check workspace directory exists
+aws s3 ls s3://jenkins-terraform-state-storage/env:/${WORKSPACE_NAME}/
+
+# Manually download configuration
+aws s3 cp s3://jenkins-terraform-state-storage/env:/${WORKSPACE_NAME}/cluster.tfvars ./
+```
+
+**OpenTofu Workspace Issues:**
+```bash
+# List available workspaces
+tofu workspace list
+
+# If workspace doesn't exist, check state file
+aws s3 ls s3://jenkins-terraform-state-storage/jenkins-airgap-rke2/
+
+# Reinitialize backend
+tofu init -reconfigure
+```
+
+**Partial Destruction Failures:**
+```bash
+# Check remaining resources in state
+tofu state list
+
+# Show specific resource details
+tofu state show <resource_name>
+
+# Force remove stuck resources from state (use carefully)
+tofu state rm <resource_name>
+
+# Manually delete AWS resources then refresh state
+tofu refresh
+```
+
+**S3 Cleanup Failures:**
+```bash
+# Verify AWS CLI credentials
+aws sts get-caller-identity
+
+# List workspace contents before deletion
+aws s3 ls s3://jenkins-terraform-state-storage/env:/${WORKSPACE_NAME}/ --recursive
+
+# Manual S3 cleanup if automated fails
+aws s3 rm s3://jenkins-terraform-state-storage/env:/${WORKSPACE_NAME}/ --recursive
+aws s3 rm s3://jenkins-terraform-state-storage/jenkins-airgap-rke2/terraform.tfstate
+```
+
+**Container/Volume Issues:**
+```bash
+# Check if Docker volume exists
+docker volume ls | grep DestroySharedVolume
+
+# Inspect volume contents
+docker run --rm -v <volume_name>:/data alpine ls -la /data
+
+# Force remove stuck containers
+docker ps -a | grep destroy | awk '{print $1}' | xargs docker rm -f
+
+# Clean up Docker resources
+docker system prune -af --volumes
+```
+
 ### Log Locations
 - Jenkins console output contains all deployment logs
 - Kubeconfig is archived as a build artifact
 - Terraform state is archived for infrastructure debugging
 
 ### Manual Cleanup
-If automatic cleanup fails, manually destroy resources:
+
+#### Option 1: Automated Destruction Pipeline (Recommended)
+
+Use the destruction pipeline (`Jenkinsfile.destroy.airgap.rke2`) for safe, automated cleanup:
+
+1. **Find the workspace name** from deployment logs or S3:
+   ```bash
+   aws s3 ls s3://jenkins-terraform-state-storage/ --recursive | grep env:
+   ```
+
+2. **Trigger destruction pipeline** with parameters:
+   - `TARGET_WORKSPACE`: Workspace name from deployment
+   - `S3_BUCKET_NAME`: S3 bucket with Terraform state
+   - `S3_KEY_PREFIX`: State file key prefix
+   - `S3_REGION`: AWS region
+
+3. **Monitor execution** and verify cleanup completion
+
+See [Infrastructure Destruction Pipeline](#infrastructure-destruction-pipeline) section for details.
+
+#### Option 2: Manual Destruction (Last Resort)
+
+If the automated destruction pipeline fails, manually destroy resources:
 
 ```bash
-# SSH to bastion host
+# 1. Download configuration from S3
+aws s3 cp s3://jenkins-terraform-state-storage/env:/${WORKSPACE_NAME}/cluster.tfvars ./cluster.tfvars
+
+# 2. SSH to bastion host (if available)
 ssh -i /path/to/key ubuntu@<bastion-ip>
 
-# Navigate to terraform directory
-cd /root/go/src/github.com/rancher/qa-infra-automation/terraform/aws/cluster_nodes
+# 3. Navigate to OpenTofu directory
+cd /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap
 
-# Destroy infrastructure
-terraform workspace select jenkins_airgap_workspace
-terraform destroy -auto-approve -var-file=cluster.tfvars
+# 4. Initialize with S3 backend
+cat > backend.tf <<EOF
+terraform {
+  backend "s3" {
+    bucket = "jenkins-terraform-state-storage"
+    key    = "jenkins-airgap-rke2/terraform.tfstate"
+    region = "us-east-2"
+  }
+}
+EOF
+
+tofu init
+
+# 5. Select workspace and destroy
+tofu workspace select ${WORKSPACE_NAME}
+tofu destroy -auto-approve -var-file=cluster.tfvars
+
+# 6. Delete workspace
+tofu workspace select default
+tofu workspace delete ${WORKSPACE_NAME}
+
+# 7. Clean up S3 (from local machine)
+aws s3 rm s3://jenkins-terraform-state-storage/env:/${WORKSPACE_NAME}/ --recursive
+aws s3 rm s3://jenkins-terraform-state-storage/jenkins-airgap-rke2/terraform.tfstate
 ```
+
+#### Option 3: Emergency AWS Console Cleanup
+
+If OpenTofu/Terraform is unavailable:
+
+1. **Identify resources** by tags or naming convention
+2. **Delete in order**:
+   - EC2 instances (RKE2 nodes, bastion, registry)
+   - Load balancers
+   - Security groups
+   - Network interfaces
+   - EBS volumes
+   - Elastic IPs
+3. **Verify** no orphaned resources remain
+4. **Clean up S3** state files manually
 
 ## Monitoring and Alerts
 
@@ -209,10 +590,19 @@ terraform destroy -auto-approve -var-file=cluster.tfvars
 - All system pods are running
 
 ### Failure Indicators
-- Terraform apply failures
+
+**Deployment Pipeline:**
+- OpenTofu/Terraform apply failures
 - Ansible playbook errors
 - Cluster validation failures
 - Rancher deployment issues
+
+**Destruction Pipeline:**
+- S3 state download failures
+- OpenTofu workspace selection errors
+- Partial infrastructure destruction
+- S3 cleanup failures
+- Remaining resources in state file
 
 ### Notifications
 Configure Slack webhook for deployment notifications:
@@ -252,10 +642,19 @@ For issues and questions:
 - Consult RKE2 and Rancher documentation
 - Contact the QA infrastructure team
 
+## Pipeline Files
+
+- **Deployment Pipeline**: `validation/pipeline/Jenkinsfile.airgap.rke2.improved`
+- **Destruction Pipeline**: `validation/pipeline/Jenkinsfile.destroy.airgap.rke2`
+- **Deployment Scripts**: `validation/pipeline/scripts/ansible_*.sh`, `validation/pipeline/scripts/tofu_*.sh`
+- **Destruction Scripts**: `validation/pipeline/scripts/destroy_*.sh`
+
 ## References
 
 - [RKE2 Documentation](https://docs.rke2.io/)
 - [Rancher Documentation](https://rancher.com/docs/)
 - [QA Infrastructure Automation Repository](https://github.com/rancher/qa-infra-automation)
+- [OpenTofu Documentation](https://opentofu.org/docs/)
 - [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
 - [Ansible Documentation](https://docs.ansible.com/)
+- [AWS S3 Backend Configuration](https://developer.hashicorp.com/terraform/language/settings/backends/s3)
