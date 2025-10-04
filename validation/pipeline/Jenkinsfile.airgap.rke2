@@ -266,6 +266,7 @@ pipeline {
                     // Checkout QA Infrastructure Repository
                     dir('./qa-infra-automation') {
                         logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
+                        logInfo("Using branch: ${params.QA_INFRA_REPO_BRANCH}")
                         checkout([
                             $class: 'GitSCM',
                             branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
@@ -277,6 +278,11 @@ pipeline {
                                 url: env.QA_INFRA_REPO,
                             ]]
                         ])
+                        // Verify which branch was actually checked out
+                        def actualBranch = sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+                        def latestCommit = sh(script: 'git log -1 --oneline', returnStdout: true).trim()
+                        logInfo("Checked out branch: ${actualBranch}")
+                        logInfo("Latest commit: ${latestCommit}")
                     }
 
                     logInfo('Repository checkout completed successfully')
