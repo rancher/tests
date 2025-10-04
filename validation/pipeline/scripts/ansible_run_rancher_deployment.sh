@@ -225,30 +225,59 @@ if command -v kubectl &> /dev/null; then
     if kubectl get namespace cert-manager &> /dev/null; then
         echo "cert-manager namespace found"
 
-        # Wait for cert-manager deployment to be ready
+        # Wait for cert-manager deployment to be ready - increased timeout
         echo "Waiting for cert-manager deployment to be ready..."
-        if kubectl wait --for=condition=available --timeout=300s deployment/cert-manager -n cert-manager; then
+        if kubectl wait --for=condition=available --timeout=600s deployment/cert-manager -n cert-manager; then
             echo "✓ cert-manager deployment is ready"
         else
-            echo "⚠ WARNING: cert-manager deployment not ready after 5 minutes, proceeding anyway"
+            echo "✗ ERROR: cert-manager deployment not ready after 10 minutes"
+            echo "Showing cert-manager deployment status:"
+            kubectl get deployment cert-manager -n cert-manager -o yaml
+            echo ""
+            echo "Showing cert-manager pod status:"
+            kubectl get pods -n cert-manager -o wide
+            echo ""
+            echo "This is a fatal error - Rancher deployment requires cert-manager to be fully ready"
+            exit 1
         fi
 
-        # Check cert-manager webhook service endpoints
-        echo "Checking cert-manager webhook service endpoints..."
-        if kubectl get endpoints cert-manager-webhook -n cert-manager &> /dev/null; then
-            WEBHOOK_ENDPOINTS=$(kubectl get endpoints cert-manager-webhook -n cert-manager -o jsonpath='{.subsets[*].addresses[*]}' | wc -w)
-            if [[ $WEBHOOK_ENDPOINTS -gt 0 ]]; then
-                echo "✓ cert-manager webhook service has $WEBHOOK_ENDPOINTS endpoint(s) available"
+        # Wait for webhook service endpoints to be available - CRITICAL for Rancher
+        echo "Waiting for cert-manager webhook service endpoints to be available..."
+        WEBHOOK_READY=false
+        for i in {1..30}; do
+            if kubectl get endpoints cert-manager-webhook -n cert-manager &> /dev/null; then
+                WEBHOOK_ENDPOINTS=$(kubectl get endpoints cert-manager-webhook -n cert-manager -o jsonpath='{.subsets[*].addresses[*]}' | wc -w)
+                if [[ $WEBHOOK_ENDPOINTS -gt 0 ]]; then
+                    echo "✓ cert-manager webhook service has $WEBHOOK_ENDPOINTS endpoint(s) available after ${i} attempts"
+                    WEBHOOK_READY=true
+                    break
+                else
+                    echo "Attempt ${i}/30: cert-manager webhook service has no endpoints available, waiting 20 seconds..."
+                    sleep 20
+                fi
             else
-                echo "⚠ WARNING: cert-manager webhook service has no endpoints available"
-                echo "This may cause Rancher installation to fail"
-
-                # Show cert-manager pod status for debugging
-                echo "cert-manager pod status:"
-                kubectl get pods -n cert-manager -o wide || echo "Could not get pod status"
+                echo "Attempt ${i}/30: cert-manager webhook service not found, waiting 20 seconds..."
+                sleep 20
             fi
-        else
-            echo "⚠ WARNING: cert-manager webhook service not found"
+        done
+
+        if [[ "$WEBHOOK_READY" == false ]]; then
+            echo "✗ ERROR: cert-manager webhook service never became ready after 10 minutes"
+            echo "This will cause Rancher installation to fail - webhook validation is required"
+            echo ""
+            echo "Debugging information:"
+            echo "cert-manager endpoints:"
+            kubectl get endpoints -n cert-manager || echo "No endpoints found"
+            echo ""
+            echo "cert-manager pods:"
+            kubectl get pods -n cert-manager -o wide
+            echo ""
+            echo "cert-manager services:"
+            kubectl get svc -n cert-manager
+            echo ""
+            echo "cert-manager pod logs (last 20 lines):"
+            kubectl logs -n cert-manager -l app.kubernetes.io/name=cert-manager --tail=20 || echo "Could not get pod logs"
+            exit 1
         fi
 
         # Check webhook service connectivity
@@ -262,6 +291,27 @@ if command -v kubectl &> /dev/null; then
             else
                 echo "⚠ WARNING: Cannot reach cert-manager webhook service on port 443"
             fi
+        fi
+
+        # Test API server responsiveness - metrics API errors indicate overload
+        echo "Testing Kubernetes API server responsiveness..."
+        API_READY=false
+        for i in {1..12}; do
+            if kubectl get nodes --no-headers | grep -q "Ready" 2>/dev/null; then
+                echo "✓ Kubernetes API server is responsive after ${i} attempts"
+                API_READY=true
+                break
+            else
+                echo "Attempt ${i}/12: API server not responsive, waiting 10 seconds..."
+                sleep 10
+            fi
+        done
+
+        if [[ "$API_READY" == false ]]; then
+            echo "✗ ERROR: Kubernetes API server not responsive after 2 minutes"
+            echo "This may indicate API server overload or other cluster issues"
+            echo "Rancher deployment requires a functional API server"
+            exit 1
         fi
     else
         echo "⚠ WARNING: cert-manager namespace not found"
