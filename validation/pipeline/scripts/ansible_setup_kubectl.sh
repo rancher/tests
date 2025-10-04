@@ -110,30 +110,66 @@ for config_path in "${KUBECONFIG_LOCATIONS[@]}"; do
         # Extract bastion node IP from inventory - try multiple methods
         BASTION_IP=""
 
-        # Method 1: Look for bastion-node in inventory
+        # Method 1: Look for bastion-node in inventory (multiple patterns)
         if [[ -f "/root/ansible/rke2/airgap/inventory.yml" ]]; then
+            echo "Looking for bastion IP in inventory file..."
+            # Try different inventory patterns
             BASTION_IP=$(grep -A 10 "bastion-node:" /root/ansible/rke2/airgap/inventory.yml | grep "ansible_host:" | head -1 | awk '{print $2}' | tr -d '"' | tr -d "'" || echo "")
+            if [[ -z "${BASTION_IP}" ]]; then
+                BASTION_IP=$(grep -A 10 "bastion:" /root/ansible/rke2/airgap/inventory.yml | grep "ansible_host:" | head -1 | awk '{print $2}' | tr -d '"' | tr -d "'" || echo "")
+            fi
+            if [[ -z "${BASTION_IP}" ]]; then
+                BASTION_IP=$(grep -E "ansible_host.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" /root/ansible/rke2/airgap/inventory.yml | head -1 | awk '{print $2}' | tr -d '"' | tr -d "'" || echo "")
+            fi
+            if [[ -n "${BASTION_IP}" ]]; then
+                echo "Found bastion IP from inventory: ${BASTION_IP}"
+            else
+                echo "Could not extract bastion IP from inventory, showing inventory content for debugging:"
+                cat /root/ansible/rke2/airgap/inventory.yml
+            fi
         fi
 
         # Method 2: Try to get from hostname
         if [[ -z "${BASTION_IP}" ]]; then
-            echo "Method 1 failed, trying hostname -I..."
+            echo "Inventory method failed, trying hostname -I..."
             BASTION_IP=$(hostname -I | awk '{print $1}' || echo "")
         fi
 
         # Method 3: Try to get from ip addr
         if [[ -z "${BASTION_IP}" ]]; then
-            echo "Method 2 failed, trying ip addr..."
+            echo "Hostname method failed, trying ip addr..."
             BASTION_IP=$(ip addr show | grep 'inet ' | grep -v '127.0.0.1' | head -1 | awk '{print $2}' | cut -d'/' -f1 || echo "")
         fi
 
-        # Method 4: Try to extract from current kubeconfig if it has a valid IP
+        # Method 4: Try to extract from infrastructure outputs if available
+        if [[ -z "${BASTION_IP}" && -f "/root/infrastructure-outputs.json" ]]; then
+            echo "IP method failed, trying infrastructure outputs..."
+            BASTION_IP=$(grep -o '"bastion_public_dns":"[^"]*"' /root/infrastructure-outputs.json | cut -d'"' -f4 | head -1 || echo "")
+        fi
+
+        # Method 5: Try to extract from current kubeconfig if it has a valid IP
         if [[ -z "${BASTION_IP}" ]]; then
-            echo "Method 3 failed, checking if kubeconfig already has a valid IP..."
+            echo "Infrastructure outputs method failed, checking if kubeconfig already has a valid IP..."
             CURRENT_SERVER=$(grep "server:" /root/kubeconfig.yaml | awk '{print $2}' || echo "")
             if [[ "${CURRENT_SERVER}" =~ ^https://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:6443$ ]]; then
                 BASTION_IP=$(echo "${CURRENT_SERVER}" | sed 's|https://||' | sed 's|:6443||')
                 echo "Found existing valid IP in kubeconfig: ${BASTION_IP}"
+            fi
+        fi
+
+        # Method 6: Fix common template variable issues
+        if [[ -z "${BASTION_IP}" ]]; then
+            echo "All IP detection methods failed, checking for template variables in kubeconfig..."
+            CURRENT_SERVER=$(grep "server:" /root/kubeconfig.yaml | awk '{print $2}' || echo "")
+            if [[ "${CURRENT_SERVER}" =~ \{\{.*\}\} ]]; then
+                echo "Found template variable in server URL: ${CURRENT_SERVER}"
+                echo "This indicates a template substitution failure in the Ansible roles"
+                echo "Using fallback IP detection methods..."
+                # Try to get the primary IP from network interfaces
+                BASTION_IP=$(ip route get 8.8.8.8 | awk '{print $7; exit}' || echo "")
+                if [[ -z "${BASTION_IP}" ]]; then
+                    BASTION_IP=$(hostname -I | awk '{print $1}' || echo "")
+                fi
             fi
         fi
 
@@ -153,6 +189,19 @@ for config_path in "${KUBECONFIG_LOCATIONS[@]}"; do
             echo "ERROR: Could not determine bastion IP using any method"
             echo "This will cause connection issues from Docker containers"
             echo "Kubeconfig will be unusable for remote access"
+
+            # Final fallback: Try to repair malformed template URLs by using a generic placeholder
+            echo "Attempting final fallback - detecting malformed template URLs..."
+            CURRENT_SERVER=$(grep "server:" /root/kubeconfig.yaml | awk '{print $2}' || echo "")
+            if [[ "${CURRENT_SERVER}" =~ \{\{.*\}\}:6443 ]]; then
+                echo "Detected malformed template URL: ${CURRENT_SERVER}"
+                echo "Attempting to use a placeholder IP that may be correct for localhost access"
+                # For containers, the cluster might be accessible via localhost or the container network
+                # Try localhost first as it's common in airgap setups
+                sed -i "s|server:.*|server: https://localhost:6443|" /root/kubeconfig.yaml
+                echo "✓ Updated kubeconfig server URL to https://localhost:6443 (placeholder)"
+                echo "NOTE: This may not work for external access but could work for local access"
+            fi
         fi
 
         echo "✓ Kubeconfig copied to /root/kubeconfig.yaml for archival"
