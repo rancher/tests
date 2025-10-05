@@ -203,6 +203,66 @@ else
 fi
 echo "=== End YAML validation ==="
 
+# Validate Ansible inventory structure
+echo "=== Validating Ansible Inventory Structure ==="
+INVENTORY_FILE="/root/ansible/rke2/airgap/inventory.yml"
+
+if [[ -f "$INVENTORY_FILE" ]]; then
+    echo "✓ Inventory file found at $INVENTORY_FILE"
+
+    # Check for required groups
+    echo "Checking inventory structure..."
+
+    if grep -q "rke2_servers:" "$INVENTORY_FILE"; then
+        echo "✓ rke2_servers group found"
+        SERVER_COUNT=$(grep -A 20 "rke2_servers:" "$INVENTORY_FILE" | grep "rke2-server-" | wc -l)
+        echo "  - Server nodes: $SERVER_COUNT"
+    else
+        echo "✗ rke2_servers group NOT found - this will cause incorrect node roles!"
+    fi
+
+    if grep -q "rke2_agents:" "$INVENTORY_FILE"; then
+        echo "✓ rke2_agents group found"
+        AGENT_COUNT=$(grep -A 20 "rke2_agents:" "$INVENTORY_FILE" | grep "rke2-agent-" | wc -l)
+        echo "  - Agent nodes: $AGENT_COUNT"
+    else
+        echo "✗ rke2_agents group NOT found - this will cause incorrect node roles!"
+    fi
+
+    # Check if using old inventory structure (fallback)
+    if grep -q "airgap_nodes:" "$INVENTORY_FILE" && ! grep -q "rke2_servers:" "$INVENTORY_FILE"; then
+        echo "⚠ WARNING: Using legacy inventory structure (airgap_nodes only)"
+        echo "  This may cause all nodes to become control-plane nodes"
+        echo "  Consider using the updates/rke2-airgap-improvements branch for proper role separation"
+    fi
+
+    # Display inventory structure summary
+    echo ""
+    echo "=== Inventory Structure Summary ==="
+    TOTAL_NODES=$(grep -E "rke2-(server|agent)-[0-9]+" "$INVENTORY_FILE" | wc -l)
+    echo "Total RKE2 nodes defined: $TOTAL_NODES"
+
+    if [[ $SERVER_COUNT -gt 0 ]] && [[ $AGENT_COUNT -gt 0 ]]; then
+        echo "✓ Proper server/agent role separation detected"
+        echo "  Expected cluster structure: 1 control-plane, $((AGENT_COUNT)) worker nodes"
+    elif [[ $TOTAL_NODES -gt 1 ]]; then
+        echo "⚠ WARNING: Multiple nodes detected but no role separation"
+        echo "  This will likely result in all nodes becoming control-plane nodes"
+    fi
+
+    # Show inventory content for debugging
+    echo ""
+    echo "=== Inventory File Content ==="
+    cat "$INVENTORY_FILE"
+    echo "=== End Inventory Content ==="
+
+else
+    echo "✗ ERROR: Inventory file not found at $INVENTORY_FILE"
+    exit 1
+fi
+
+echo "=== End Inventory Validation ==="
+
 echo "Using RKE2 tarball deployment playbook from qa-infra-automation repository"
 echo "Playbook path: $RKE2_TARBALL_PLAYBOOK"
 
@@ -246,6 +306,37 @@ echo "RKE2 tarball deployment playbook execution completed"
 # Copy playbook execution logs to shared volume
 if [[ -f "ansible-playbook.log" ]]; then
     cp ansible-playbook.log /root/rke2_tarball_deployment_execution.log
+fi
+
+# Verify node roles after deployment (only if deployment succeeded)
+if [[ $ANSIBLE_EXIT_CODE -eq 0 ]]; then
+    echo "=== Verifying RKE2 Node Roles ==="
+
+    # Run the node role verification playbook if it exists
+    NODE_ROLE_PLAYBOOK="/root/qa-infra-automation/ansible/rke2/airgap/playbooks/debug/check-node-roles.yml"
+    if [[ -f "$NODE_ROLE_PLAYBOOK" ]]; then
+        echo "Running node role verification playbook..."
+        cd /root/qa-infra-automation/ansible/rke2/airgap
+        ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml playbooks/debug/check-node-roles.yml -v
+
+        if [[ $? -eq 0 ]]; then
+            echo "✓ Node role verification completed"
+        else
+            echo "⚠ Node role verification had issues"
+        fi
+    else
+        echo "Node role verification playbook not found, performing manual check..."
+
+        # Manual node role check
+        cd /root/qa-infra-automation/ansible/rke2/airgap
+        if ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml -c local -m shell -a "export KUBECONFIG=/etc/rancher/rke2/rke2.yaml && /var/lib/rancher/rke2/bin/kubectl get nodes -o wide 2>/dev/null || echo 'kubectl not available'" localhost 2>/dev/null; then
+            echo "✓ Node roles checked manually"
+        else
+            echo "⚠ Could not verify node roles manually"
+        fi
+    fi
+
+    echo "=== End Node Role Verification ==="
 fi
 
 # Copy kubeconfig to shared volume for Jenkins archival if deployment succeeded
