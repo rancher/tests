@@ -76,11 +76,13 @@ fi
 # Clone or update the qa-infra-automation repository
 if [[ ! -d "/root/qa-infra-automation" ]]; then
     echo "Cloning qa-infra-automation repository..."
-    git clone ${QA_INFRA_REPO_URL:-"https://github.com/rancher/qa-infra-automation.git"} /root/qa-infra-automation
+    git clone -b ${QA_INFRA_REPO_BRANCH:-main} ${QA_INFRA_REPO_URL:-"https://github.com/rancher/qa-infra-automation.git"} /root/qa-infra-automation
 else
     echo "Updating qa-infra-automation repository..."
     cd /root/qa-infra-automation
-    git pull origin main
+    git fetch origin
+    git checkout ${QA_INFRA_REPO_BRANCH:-main}
+    git pull origin ${QA_INFRA_REPO_BRANCH:-main}
 fi
 
 # Ensure the required playbooks exist
