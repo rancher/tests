@@ -2010,7 +2010,9 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
     def sshEnvVars = [
         'AWS_SSH_PEM_KEY': awsSshPemKey,
         'AWS_SSH_KEY_NAME': awsSshKeyName,
-        'RKE2_VERSION': env.RKE2_VERSION
+        'RKE2_VERSION': env.RKE2_VERSION,
+        'QA_INFRA_REPO_URL': env.QA_INFRA_REPO,
+        'QA_INFRA_REPO_BRANCH': params.QA_INFRA_REPO_BRANCH
     ]
 
     try {
@@ -2050,7 +2052,9 @@ def runRKE2TarballDeployment() {
     def sshEnvVars = [
         'AWS_SSH_PEM_KEY': awsSshPemKey,
         'AWS_SSH_KEY_NAME': awsSshKeyName,
-        'RKE2_VERSION': env.RKE2_VERSION
+        'RKE2_VERSION': env.RKE2_VERSION,
+        'QA_INFRA_REPO_URL': env.QA_INFRA_REPO,
+        'QA_INFRA_REPO_BRANCH': params.QA_INFRA_REPO_BRANCH
     ]
 
     try {
@@ -2098,7 +2102,9 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
 
     // Pass RKE2_VERSION to container
     def kubectlEnvVars = [
-        'RKE2_VERSION': env.RKE2_VERSION
+        'RKE2_VERSION': env.RKE2_VERSION,
+        'QA_INFRA_REPO_URL': env.QA_INFRA_REPO,
+        'QA_INFRA_REPO_BRANCH': params.QA_INFRA_REPO_BRANCH
     ]
 
     try {
