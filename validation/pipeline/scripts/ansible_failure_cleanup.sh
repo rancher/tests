@@ -22,11 +22,34 @@ cd "${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap"
 
 echo "Working directory: $(pwd)"
 
-# Check if terraform.tfstate exists
-if [[ ! -f "terraform.tfstate" ]]; then
-    echo "WARNING: terraform.tfstate not found - cannot perform cleanup"
-    exit 0
+# Check if we're using remote backend or local state
+if [[ -f "terraform.tfstate" ]]; then
+    echo "Found local terraform.tfstate file"
+    STATE_LOCATION="local"
+elif [[ -f "/root/terraform-state-primary.tfstate" ]]; then
+    echo "Found backed-up state at /root/terraform-state-primary.tfstate"
+    echo "Copying to working directory..."
+    cp /root/terraform-state-primary.tfstate terraform.tfstate
+    STATE_LOCATION="backup"
+else
+    echo "No local state found - checking for remote backend..."
+    # Try to pull state from remote backend
+    if tofu state pull > /tmp/current-state.tfstate 2>/dev/null; then
+        if [[ -s /tmp/current-state.tfstate ]]; then
+            echo "Successfully pulled state from remote backend"
+            STATE_LOCATION="remote"
+        else
+            echo "WARNING: Remote state is empty - infrastructure may already be destroyed"
+            exit 0
+        fi
+    else
+        echo "WARNING: No state found (local, backup, or remote) - cannot perform cleanup"
+        echo "Infrastructure may not have been created or already destroyed"
+        exit 0
+    fi
 fi
+
+echo "State location: ${STATE_LOCATION}"
 
 # Create cleanup log file
 cat > /root/ansible-failure-cleanup.log << EOF

@@ -496,11 +496,8 @@ pipeline {
                         // Archive failure artifacts for debugging
                         archiveAnsibleFailureArtifacts()
 
-                        // Trigger infrastructure cleanup if enabled
-                        if (env.DESTROY_ON_FAILURE.toBoolean()) {
-                            logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup')
-                            handleAnsibleDeploymentFailure()
-                        }
+                        // Note: Cleanup is already handled in the catch block of deployRKE2()
+                        // Don't call handleAnsibleDeploymentFailure() here to avoid double cleanup
                     }
                 }
             }
@@ -551,11 +548,8 @@ pipeline {
                         // Archive failure artifacts for debugging
                         archiveRancherFailureArtifacts()
 
-                        // Trigger infrastructure cleanup if enabled
-                        if (env.DESTROY_ON_FAILURE.toBoolean()) {
-                            logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup')
-                            handleRancherDeploymentFailure()
-                        }
+                        // Note: Cleanup is already handled in the catch block of runRancherDeployment()
+                        // Don't call handleRancherDeploymentFailure() here to avoid double cleanup
                     }
                 }
             }
