@@ -113,11 +113,22 @@ fi
 # Attempt to destroy infrastructure if DESTROY_ON_FAILURE is enabled
 if [[ "${DESTROY_ON_FAILURE}" == "true" ]]; then
     log_cleanup "DESTROY_ON_FAILURE is enabled - attempting infrastructure destruction..."
-    
+
     # Create backup of current state before destruction
     log_cleanup "Creating backup of current Terraform state..."
     cp terraform.tfstate "/root/terraform-state-before-destroy-$(date +%Y%m%d-%H%M%S).tfstate"
-    
+
+    # Initialize Terraform/Tofu backend before destroy
+    log_cleanup "Initializing Tofu backend..."
+    if tofu init -upgrade > /root/terraform-init.log 2>&1; then
+        log_cleanup "✓ Tofu backend initialized successfully"
+    else
+        log_cleanup "✗ Tofu backend initialization failed"
+        echo "- Infrastructure status: Initialization failed" >> /root/ansible-failure-summary.txt
+        echo "- Initialization log: /root/terraform-init.log" >> /root/ansible-failure-summary.txt
+        cat /root/terraform-init.log
+    fi
+
     # Attempt to destroy infrastructure
     log_cleanup "Running tofu destroy..."
     if tofu destroy -auto-approve -no-color > /root/terraform-destroy.log 2>&1; then
@@ -127,6 +138,9 @@ if [[ "${DESTROY_ON_FAILURE}" == "true" ]]; then
         log_cleanup "✗ Infrastructure destruction failed"
         echo "- Infrastructure status: Destruction failed" >> /root/ansible-failure-summary.txt
         echo "- Destruction log: /root/terraform-destroy.log" >> /root/ansible-failure-summary.txt
+        # Show the last 50 lines of the destroy log for debugging
+        log_cleanup "Last 50 lines of destroy log:"
+        tail -50 /root/terraform-destroy.log >> /root/ansible-failure-cleanup.log
     fi
 else
     log_cleanup "DESTROY_ON_FAILURE is disabled - preserving infrastructure"
@@ -140,6 +154,7 @@ tar -czf /root/ansible-failure-artifacts.tar.gz \
     /root/ansible-failure-summary.txt \
     /root/terraform-state-list.txt \
     /root/terraform-outputs.json \
+    /root/terraform-init.log \
     /root/terraform-destroy.log \
     /root/terraform-state-before-destroy-*.tfstate \
     2>/dev/null || log_cleanup "Failed to create cleanup artifacts archive"
@@ -169,6 +184,7 @@ Artifacts Generated:
 - /root/ansible-failure-summary.txt
 - /root/terraform-state-list.txt
 - /root/terraform-outputs.json
+- /root/terraform-init.log (if destruction attempted)
 - /root/terraform-destroy.log (if destruction attempted)
 - /root/terraform-state-before-destroy-*.tfstate (if destruction attempted)
 - /root/ansible-failure-artifacts.tar.gz
