@@ -268,6 +268,17 @@ echo "=== End Inventory Validation ==="
 echo "Using RKE2 tarball deployment playbook from qa-infra-automation repository"
 echo "Playbook path: $RKE2_TARBALL_PLAYBOOK"
 
+# TEST MODE: Check if we should force failure to test DESTROY_ON_FAILURE
+if grep -q "test_force_failure: true" "$GROUP_VARS_FILE" 2>/dev/null; then
+    echo "=========================================="
+    echo "TEST MODE: Forcing deployment failure to test DESTROY_ON_FAILURE cleanup"
+    echo "=========================================="
+    echo ""
+    echo "To disable this test mode, remove 'test_force_failure: true' from your group_vars/all.yml"
+    echo ""
+    exit 1
+fi
+
 # Run the RKE2 deployment playbook from qa-infra-automation
 echo "Running RKE2 tarball deployment playbook..."
 cd /root/qa-infra-automation/ansible/rke2/airgap
