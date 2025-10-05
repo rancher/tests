@@ -1241,9 +1241,13 @@ set -e
 # Source the external cleanup script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_timeout_cleanup.sh
             """
-            // Pass DESTROY_ON_FAILURE environment variable to container
+            // Pass required environment variables to container
             def cleanupEnvVars = [
-                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE
+                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
+                'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
+                'TF_WORKSPACE': env.TF_WORKSPACE,
+                'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
+                'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
             ]
             executeScriptInContainer(cleanupScript, cleanupEnvVars)
             logInfo('Infrastructure cleanup attempted for timeout')
@@ -1269,9 +1273,13 @@ def handleDeploymentFailure() {
             # Source the external cleanup script
             source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_deployment_failure_cleanup.sh
             """
-            // Pass DESTROY_ON_FAILURE environment variable to container
+            // Pass required environment variables to container
             def cleanupEnvVars = [
-                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE
+                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
+                'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
+                'TF_WORKSPACE': env.TF_WORKSPACE,
+                'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
+                'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
             ]
             executeScriptInContainer(cleanupScript, cleanupEnvVars)
             logInfo('Infrastructure cleanup attempted for deployment failure')
@@ -2130,9 +2138,11 @@ set -e
 # Source the external Ansible failure cleanup script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_failure_cleanup.sh
             """
-            // Pass DESTROY_ON_FAILURE environment variable to container
+            // Pass required environment variables to container
             def cleanupEnvVars = [
-                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE
+                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
+                'TF_WORKSPACE': env.TF_WORKSPACE,
+                'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH
             ]
             // Note: Don't cleanup containers yet - we need them for cleanup script
             executeScriptInContainer(cleanupScript, cleanupEnvVars)
@@ -2340,9 +2350,12 @@ set -e
 # Source the external Rancher failure cleanup script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/rancher_failure_cleanup.sh
             """
-            // Pass DESTROY_ON_FAILURE environment variable to container
+            // Pass required environment variables to container
             def cleanupEnvVars = [
-                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE
+                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
+                'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
+                'RKE2_VERSION': env.RKE2_VERSION,
+                'RANCHER_VERSION': env.RANCHER_VERSION
             ]
             // Note: Don't cleanup containers yet - we need them for cleanup script
             executeScriptInContainer(cleanupScript, cleanupEnvVars)
