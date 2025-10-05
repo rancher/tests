@@ -2137,8 +2137,8 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
                 'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
                 'TF_WORKSPACE': env.TF_WORKSPACE,
                 'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-                'AWS_ACCESS_KEY_ID': awsAccessKey,
-                'AWS_SECRET_ACCESS_KEY': awsSecretKey,
+                'AWS_ACCESS_KEY_ID': env.AWS_ACCESS_KEY_ID,
+                'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
                 'AWS_REGION': env.AWS_REGION,
                 'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME,
                 'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME
