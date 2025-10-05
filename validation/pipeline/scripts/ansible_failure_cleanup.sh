@@ -49,11 +49,11 @@ log_cleanup "Gathering current infrastructure state..."
 
 # Get list of all resources
 log_cleanup "Extracting resource list from Terraform state..."
-terraform state list > /root/terraform-state-list.txt 2>/dev/null || log_cleanup "Failed to list Terraform state resources"
+tofu state list > /root/terraform-state-list.txt 2>/dev/null || log_cleanup "Failed to list Terraform state resources"
 
 # Get outputs for debugging
 log_cleanup "Extracting Terraform outputs..."
-terraform output -json > /root/terraform-outputs.json 2>/dev/null || log_cleanup "Failed to extract Terraform outputs"
+tofu output -json > /root/terraform-outputs.json 2>/dev/null || log_cleanup "Failed to extract Terraform outputs"
 
 # Create failure summary
 cat > /root/ansible-failure-summary.txt << EOF
@@ -96,8 +96,8 @@ if [[ "${DESTROY_ON_FAILURE}" == "true" ]]; then
     cp terraform.tfstate "/root/terraform-state-before-destroy-$(date +%Y%m%d-%H%M%S).tfstate"
     
     # Attempt to destroy infrastructure
-    log_cleanup "Running terraform destroy..."
-    if terraform destroy -auto-approve -no-color > /root/terraform-destroy.log 2>&1; then
+    log_cleanup "Running tofu destroy..."
+    if tofu destroy -auto-approve -no-color > /root/terraform-destroy.log 2>&1; then
         log_cleanup "✓ Infrastructure destroyed successfully"
         echo "- Infrastructure status: Destroyed" >> /root/ansible-failure-summary.txt
     else
