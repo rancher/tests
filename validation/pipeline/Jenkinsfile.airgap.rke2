@@ -561,15 +561,9 @@ pipeline {
             script {
                 logInfo('Starting post-build cleanup')
 
-                // Archive important artifacts including comprehensive tfstate backups
+                // Archive important artifacts (excluding sensitive tfstate and tfvars files)
                 archiveBuildArtifacts([
                     'kubeconfig.yaml',
-                    'terraform.tfstate',
-                    'terraform-state.tfstate',
-                    'terraform-state-backup-*.tfstate',
-                    'tfstate-backup-*.tfstate',
-                    'terraform-state-build-*.tfstate',
-                    'terraform_VARS.tfvars',
                     'infrastructure-outputs.json',
                     'ansible-inventory.yml',
                     'ansible-logs.txt',
@@ -1344,9 +1338,9 @@ def backupTerraformStateImmediately() {
 
         executeScriptInContainer(backupScript)
 
-        // Archive the immediate backup
-        archiveArtifacts artifacts: backupName, allowEmptyArchive: true
-        logInfo('Immediate terraform state backup completed')
+        // Archive the immediate backup - DISABLED (tfstate files not archived per security policy)
+        // archiveArtifacts artifacts: backupName, allowEmptyArchive: true
+        logInfo('Immediate terraform state backup completed (not archived)')
     } catch (Exception e) {
         logError("Immediate backup failed: ${e.message}")
     }
@@ -1365,17 +1359,18 @@ def archiveInfrastructureState() {
         sh """
             if [ -f terraform.tfstate ]; then
                 cp terraform.tfstate ${stateName}
-                echo "State archived: ${stateName}"
+                echo "State copied to workspace: ${stateName} (not archived)"
             elif [ -f terraform-state.tfstate ]; then
                 cp terraform-state.tfstate ${stateName}
-                echo "State archived from fallback: ${stateName}"
+                echo "State copied from fallback: ${stateName} (not archived)"
             else
                 echo "No state file available for archival"
             fi
         """
 
-        archiveArtifacts artifacts: stateName, allowEmptyArchive: true
-        logInfo('Infrastructure state archived successfully')
+        // DISABLED - tfstate files not archived per security policy
+        // archiveArtifacts artifacts: stateName, allowEmptyArchive: true
+        logInfo('Infrastructure state processed (not archived)')
     } catch (Exception e) {
         logError("State archival failed: ${e.message}")
     }
@@ -1384,8 +1379,8 @@ def archiveInfrastructureState() {
 def archiveInfrastructureFailureArtifacts() {
     logInfo('Archiving failure artifacts')
     try {
-        // Archive partial state and logs
-        archiveInfrastructureState()
+        // Archive partial state and logs (tfstate archival disabled per security policy)
+        // archiveInfrastructureState()
         archiveBuildArtifacts([
             'tfplan-backup',
             '*.log',
