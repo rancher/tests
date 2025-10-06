@@ -131,7 +131,17 @@ if [[ "${DESTROY_ON_FAILURE}" == "true" ]]; then
 
     # Attempt to destroy infrastructure
     log_cleanup "Running tofu destroy..."
-    if tofu destroy -auto-approve -no-color > /root/terraform-destroy.log 2>&1; then
+
+    # Determine the var-file to use
+    VAR_FILE_ARG=""
+    if [[ -n "${TERRAFORM_VARS_FILENAME}" && -f "${TERRAFORM_VARS_FILENAME}" ]]; then
+        VAR_FILE_ARG="-var-file=${TERRAFORM_VARS_FILENAME}"
+        log_cleanup "Using var-file: ${TERRAFORM_VARS_FILENAME}"
+    else
+        log_cleanup "WARNING: TERRAFORM_VARS_FILENAME not set or file not found - proceeding without var-file"
+    fi
+
+    if tofu destroy ${VAR_FILE_ARG} -auto-approve -no-color > /root/terraform-destroy.log 2>&1; then
         log_cleanup "✓ Infrastructure destroyed successfully"
         echo "- Infrastructure status: Destroyed" >> /root/ansible-failure-summary.txt
     else
