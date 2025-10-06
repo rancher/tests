@@ -1407,7 +1407,6 @@ def finalStateArchival() {
         // Additional final artifacts - fix variable expansion issue
         def artifactsList = [
             'infrastructure-outputs.json',
-            env.TERRAFORM_VARS_FILENAME,
             'ansible-inventory.yml',
             'deployment-summary.json'
         ]
