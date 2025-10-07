@@ -23,7 +23,7 @@ ACE(Authorized Cluster Endpoint) test verifies that a node driver cluster can be
 3. [Machine Config](#machine-config)
 
 #### Table Tests:
-1. `ACE|etcd|3_cp|worker`
+1. `RKE2_ACE`
 
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestACE -timeout=1h -v`

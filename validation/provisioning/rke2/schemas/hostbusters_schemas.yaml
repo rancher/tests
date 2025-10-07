@@ -543,7 +543,7 @@
   suite: Go Automation/Provisioning/RKE2/ACE
   cases:
   - description: Provisions a 3etcd/2cp/2worker node driver cluster with ACE enabled
-    title: ACE|etcd|3_cp|worker
+    title: RKE2_ACE
     priority: 5
     type: 8
     is_flaky: 0

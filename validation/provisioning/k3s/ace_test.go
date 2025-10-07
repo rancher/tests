@@ -1,6 +1,6 @@
 //go:build validation || recurring
 
-package rke2
+package k3s
 
 import (
 	"os"
@@ -33,38 +33,38 @@ type aceTest struct {
 }
 
 func aceSetup(t *testing.T) aceTest {
-	var r aceTest
+	var k aceTest
 	testSession := session.NewSession()
-	r.session = testSession
+	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(t, err)
 
-	r.client = client
+	k.client = client
 
-	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
 	assert.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
-	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
+	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
 	assert.NoError(t, err)
 
-	r.cattleConfig, err = defaults.SetK8sDefault(client, defaults.RKE2, r.cattleConfig)
+	k.cattleConfig, err = defaults.SetK8sDefault(client, defaults.K3S, k.cattleConfig)
 	require.NoError(t, err)
 
-	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
+	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
 	assert.NoError(t, err)
 
-	return r
+	return k
 }
 
 func TestACE(t *testing.T) {
 	t.Parallel()
-	r := aceSetup(t)
+	k := aceSetup(t)
 
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
@@ -77,21 +77,21 @@ func TestACE(t *testing.T) {
 		machinePools []provisioninginput.MachinePools
 		client       *rancher.Client
 	}{
-		{"RKE2_ACE", nodeRolesStandard, r.standardUserClient},
+		{"K3S_ACE", nodeRolesStandard, k.standardUserClient},
 	}
 
 	for _, tt := range tests {
 		var err error
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
+			k.session.Cleanup()
 		})
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			clusterConfig := new(clusters.ClusterConfig)
-			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+			operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
 
 			networking := provisioninginput.Networking{
 				LocalClusterAuthEndpoint: &v1.LocalClusterAuthEndpoint{
@@ -114,7 +114,7 @@ func TestACE(t *testing.T) {
 			provisioning.VerifyCluster(t, tt.client, cluster)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
+		params := provisioning.GetProvisioningSchemaParams(tt.client, k.cattleConfig)
 		err = qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)

@@ -12,6 +12,22 @@
 ## Test Cases
 All of the test cases in this package are listed below, keep in mind that all configuration for these tests have built in defaults [Configuration Defaults](#defaults)
 
+### ACE Test
+
+#### Description: 
+ACE(Authorized Cluster Endpoint) test verifies that a node driver cluster can be provisioned with ACE enabled
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Machine Config](#machine-config)
+
+#### Table Tests:
+1. `K3S_ACE`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestACE -timeout=1h -v`
+
 ### Custom Test
 
 #### Description: 

@@ -161,6 +161,7 @@ func TestAgentCustomization(t *testing.T) {
 }
 
 func TestAgentCustomizationFailure(t *testing.T) {
+	t.Skip("Skipping test due to GH issue https://github.com/rancher/rancher/issues/52035")
 	t.Parallel()
 	r := agentCustomizationSetup(t)
 
