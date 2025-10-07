@@ -14,9 +14,9 @@ on:
         description: "Downstream cluster name"
         required: true
       kubernetes_version:
-        description: "Kubernetes version for the cluster (e.g. v1.32.7+k3s1)"
+        description: "Kubernetes version for the cluster (e.g. 1.32.8)"
         required: true
-        default: "v1.32.7+k3s1"
+        default: "1.32.8"
       test_package:
         description: "Single test package path (e.g. validation/rbac)"
         required: true
@@ -75,6 +75,7 @@ env:
   OPENLDAP_SA_DN_NAME: ${{ vars.OPENLDAP_SA_DN_NAME }}
   OPENLDAP_USERS_SEARCHBASE: ${{ vars.OPENLDAP_USERS_SEARCHBASE }}
   OPENLDAP_GROUPS_SEARCHBASE: ${{ vars.OPENLDAP_GROUPS_SEARCHBASE }}
+  PQA_NETWORK_STACK_PREFERENCE: ${{ vars.PQA_NETWORK_STACK_PREFERENCE }}
 
 jobs:
   run-tests:
@@ -119,6 +120,21 @@ jobs:
           echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/$SSH_PRIVATE_KEY_NAME.pem
           chmod 600 ~/.ssh/$SSH_PRIVATE_KEY_NAME.pem
           echo "SSH_PRIVATE_KEY_PATH=$HOME/.ssh/$SSH_PRIVATE_KEY_NAME.pem" >> $GITHUB_ENV
+
+      - name: Set Kubernetes version formats
+        id: set_k8s_versions
+        shell: bash
+        run: |
+          INPUT_K8s_VERSION="${{ github.event.inputs.kubernetes_version }}"
+          CLEAN_VERSION="${INPUT_K8s_VERSION#v}"
+
+          echo "RKE2_VERSION=v${CLEAN_VERSION}+rke2r1" >> $GITHUB_ENV
+          echo "K3S_VERSION=v${CLEAN_VERSION}+k3s1" >> $GITHUB_ENV
+          echo "KUBERNETES_VERSION=v${CLEAN_VERSION}+k3s1" >> $GITHUB_ENV
+          
+          echo "RKE2_VERSION=$RKE2_VERSION"
+          echo "K3S_VERSION=$K3S_VERSION"
+          echo "KUBERNETES_VERSION=$KUBERNETES_VERSION"
 
       - name: Create cattle config
         run: bash .github/scripts/platform-qa-create-cattle-config.sh

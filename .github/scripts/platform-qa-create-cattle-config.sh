@@ -20,6 +20,30 @@ awsCredentials:
   secretKey: "${AWS_SECRET_KEY}"
   defaultRegion: "${AWS_REGION}"
 
+provisioningInput:
+  machinePools:
+  - machinePoolConfig:
+      etcd: true
+      controlplane: true
+      worker: true
+      quantity: 1
+  nodePools:
+  - nodeRoles:
+      etcd: true
+      controlplane: true
+      worker: true
+      quantity: 1
+  rke2KubernetesVersion:
+    - "${RKE2_VERSION}"
+  k3sKubernetesVersion:
+    - "${K3S_VERSION}"
+  cni:
+    - "${CNI}"
+  providers:
+    - "${PROVIDER_AMAZON}"
+  nodeProviders:
+    - "ec2"
+
 clusterConfig:
   machinePools:
   - machinePoolConfig:
@@ -41,7 +65,7 @@ clusterConfig:
   cni: "${CNI}"
   nodeProvider: "ec2"
   networking:
-    stackPreference: "ipv4"
+    stackPreference: "${PQA_NETWORK_STACK_PREFERENCE}"
   hardened: false
 
 awsMachineConfigs:
@@ -89,7 +113,7 @@ openLDAP:
     distinguishedName: "${OPENLDAP_SA_DN_NAME}"
     password: "${OPENLDAP_SA_PASSWORD}"
   groups:
-    groupSearchBase: "${OPENLDAP_GROUPS_SEARCHBASE}"
+    searchBase: "${OPENLDAP_GROUPS_SEARCHBASE}"
     objectClass: "groupOfNames"
     memberMappingAttribute: "member"
     nestedGroupMembershipEnabled: true

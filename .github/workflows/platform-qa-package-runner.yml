@@ -14,7 +14,7 @@ on:
         description: "Downstream cluster name"
         required: true
       kubernetes_version:
-        description: "Kubernetes version for the cluster (e.g. v1.32.7+k3s1)"
+        description: "Kubernetes version for the cluster (e.g. 1.32.8)"
         required: true
       test_packages:
         description: "Comma-separated test package paths (e.g. validation/rbac,validation/projects)"

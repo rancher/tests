@@ -13,7 +13,7 @@ on:
         description: "Comma-separated downstream cluster names (same order as Rancher hosts)"
         required: true
       kubernetes_versions:
-        description: "Comma-separated Kubernetes versions (same order as Rancher hosts) Example: v1.31.11+k3s1,v1.32.7+k3s1"
+        description: "Comma-separated Kubernetes versions (same order as Rancher hosts) Example: 1.31.11,1.32.8"
         required: true
       test_packages:
         description: "Comma-separated test package paths (e.g. validation/rbac,validation/projects)"
