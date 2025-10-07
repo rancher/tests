@@ -217,11 +217,15 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_IPV6_AMI }}"
+              enablePrimaryIPv6: true
+              httpProtocolIpv6: "enabled"
+              ipv6AddressOnly: true
+              ipv6AddressCount: "1"
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.AWS_ZONE_LETTER }}"
+              zone: "${{ vars.IPV6_AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]

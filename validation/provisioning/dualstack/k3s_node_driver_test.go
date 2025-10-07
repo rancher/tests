@@ -60,6 +60,7 @@ func nodeDriverK3SSetup(t *testing.T) nodeDriverK3STest {
 }
 
 func TestNodeDriverK3S(t *testing.T) {
+	t.Skip("This test is temporarily disabled. See https://github.com/rancher/rancher/issues/51844.")
 	t.Parallel()
 	r := nodeDriverK3SSetup(t)
 

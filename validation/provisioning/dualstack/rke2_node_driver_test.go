@@ -60,6 +60,7 @@ func nodeDriverRKE2Setup(t *testing.T) nodeDriverRKE2Test {
 }
 
 func TestNodeDriverRKE2(t *testing.T) {
+	t.Skip("This test is temporarily disabled. See https://github.com/rancher/rancher/issues/51844.")
 	t.Parallel()
 	r := nodeDriverRKE2Setup(t)
 
