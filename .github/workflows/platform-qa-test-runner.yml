@@ -57,7 +57,7 @@ env:
   AWS_AMI: ${{ secrets.AWS_AMI }}
   AWS_USER: ${{ secrets.AWS_USER }}
   AWS_VPC_ID: ${{ secrets.AWS_VPC_ID }}
-  AWS_SECURITY_GROUP_NAMES: ${{ secrets.AWS_QA_SECURITY_GROUP_NAMES }}
+  AWS_QA_SECURITY_GROUP_NAMES: ${{ secrets.AWS_QA_SECURITY_GROUP_NAMES }}
   PROVIDER_AMAZON: ${{ vars.PROVIDER_AMAZON }}
   CNI: ${{ secrets.CNI }}
   AWS_INSTANCE_TYPE: ${{ vars.AWS_INSTANCE_TYPE }}
@@ -119,7 +119,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/$SSH_PRIVATE_KEY_NAME.pem
           chmod 600 ~/.ssh/$SSH_PRIVATE_KEY_NAME.pem
-          echo "SSH_PRIVATE_KEY_PATH=$HOME/.ssh/$SSH_PRIVATE_KEY_NAME.pem" >> $GITHUB_ENV
+          echo "SSH_PRIVATE_KEY_PATH=$HOME/.ssh" >> $GITHUB_ENV
 
       - name: Set Kubernetes version formats
         id: set_k8s_versions
