@@ -110,7 +110,7 @@ func VerifyRKE1Cluster(t *testing.T, client *rancher.Client, clustersConfig *clu
 
 	if clustersConfig.CloudProvider == "" {
 		podErrors := pods.StatusPods(client, cluster.ID)
-		assert.Empty(t, podErrors)
+		require.Empty(t, podErrors)
 	}
 }
 
@@ -186,7 +186,7 @@ func VerifyCluster(t *testing.T, client *rancher.Client, cluster *steveV1.SteveA
 
 	logrus.Infof("Waiting for pods to be active on cluster (%s)", cluster.Name)
 	podErrors := pods.StatusPods(client, status.ClusterName)
-	assert.Empty(t, podErrors)
+	require.Empty(t, podErrors)
 }
 
 // VerifyHostedCluster validates that the hosted cluster and its resources are in a good state, matching a given config.
@@ -220,7 +220,7 @@ func VerifyHostedCluster(t *testing.T, client *rancher.Client, cluster *manageme
 	require.NoError(t, err)
 
 	podErrors := pods.StatusPods(client, cluster.ID)
-	assert.Empty(t, podErrors)
+	require.Empty(t, podErrors)
 }
 
 // VerifyDeleteRKE1Cluster validates that a rke1 cluster and its resources are deleted.
