@@ -29,6 +29,7 @@
 
 // Pipeline configuration constants
 class PipelineConfig {
+
     static final String DEFAULT_RKE2_VERSION = 'v1.28.8+rke2r1'
     static final String DEFAULT_RANCHER_VERSION = 'v2.10-head'
     static final String DEFAULT_RANCHER_TEST_REPO = 'https://github.com/rancher/tests'
@@ -64,6 +65,7 @@ class PipelineConfig {
     static final String SLACK_CHANNEL = '#rancher-qa'
     static final String SLACK_USERNAME = 'Jenkins'
     static final String SLACK_TITLE = 'Ansible Airgap Setup Pipeline'
+
 }
 
 // ========================================
@@ -215,7 +217,7 @@ pipeline {
 
         // Configuration content from parameters
         TERRAFORM_CONFIG = "${params.TERRAFORM_CONFIG ?: ''}"
-        // ANSIBLE_VARIABLES will be read from uploaded file in pipeline stages
+    // ANSIBLE_VARIABLES will be read from uploaded file in pipeline stages
     }
 
     stages {
@@ -297,7 +299,6 @@ pipeline {
 
                     // Configure credentials and environment files
                     withCredentials(getCredentialsList()) {
-
                         // Setup SSH keys securely
                         setupSSHKeys()
 
@@ -315,7 +316,6 @@ pipeline {
 
                     // Configure credentials for Docker operations
                     withCredentials(getCredentialsList()) {
-
                         // Build Docker image with proper tagging
                         buildDockerImage()
 
@@ -496,8 +496,8 @@ pipeline {
                         // Archive failure artifacts for debugging
                         archiveAnsibleFailureArtifacts()
 
-                        // Note: Cleanup is already handled in the catch block of deployRKE2()
-                        // Don't call handleAnsibleDeploymentFailure() here to avoid double cleanup
+                    // Note: Cleanup is already handled in the catch block of deployRKE2()
+                    // Don't call handleAnsibleDeploymentFailure() here to avoid double cleanup
                     }
                 }
             }
@@ -548,8 +548,8 @@ pipeline {
                         // Archive failure artifacts for debugging
                         archiveRancherFailureArtifacts()
 
-                        // Note: Cleanup is already handled in the catch block of runRancherDeployment()
-                        // Don't call handleRancherDeploymentFailure() here to avoid double cleanup
+                    // Note: Cleanup is already handled in the catch block of runRancherDeployment()
+                    // Don't call handleRancherDeploymentFailure() here to avoid double cleanup
                     }
                 }
             }
@@ -733,7 +733,7 @@ def readAnsibleVariablesFile() {
     def ansibleVarsContent = ''
 
     if (params.ANSIBLE_VARIABLES && params.ANSIBLE_VARIABLES.trim()) {
-        logInfo("Reading Ansible variables from textbox parameter")
+        logInfo('Reading Ansible variables from textbox parameter')
         ansibleVarsContent = params.ANSIBLE_VARIABLES.trim()
         logInfo("Ansible variables content size: ${ansibleVarsContent.length()} bytes")
     } else {
@@ -885,7 +885,7 @@ def generateEnvironmentFile() {
     logInfo("TERRAFORM_VARS_FILENAME env var value: ${env.TERRAFORM_VARS_FILENAME ?: 'NULL'}")
 
     // Debug: Also log the raw environment variable values
-    logInfo("Raw environment variable values:")
+    logInfo('Raw environment variable values:')
     logInfo("  TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}")
     logInfo("  QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}")
     logInfo("  S3_BUCKET_NAME=${env.S3_BUCKET_NAME}")
@@ -1023,7 +1023,7 @@ def executeDockerCommandWithFallback(dockerCmd, scriptFile, extraEnv = [:]) {
 
     // Approach 1: Try the primary command first (with environment file mounting)
     try {
-        logInfo("Attempting Docker execution with environment file mounting...")
+        logInfo('Attempting Docker execution with environment file mounting...')
         sh dockerCmd
         logInfo("✅ Docker command executed successfully with environment file mounting")
         dockerSuccess = true
@@ -1032,15 +1032,15 @@ def executeDockerCommandWithFallback(dockerCmd, scriptFile, extraEnv = [:]) {
 
         // Approach 2: Try fallback with direct environment variables
         try {
-            logInfo("Attempting Docker execution with direct environment variables...")
+            logInfo('Attempting Docker execution with direct environment variables...')
             def fallbackCmd = buildFallbackDockerCommand(scriptFile, extraEnv)
-            logInfo("Executing fallback docker command:")
+            logInfo('Executing fallback docker command:')
             logInfo(fallbackCmd)
             sh fallbackCmd
             logInfo("✅ Fallback Docker command executed successfully with direct environment variables")
             dockerSuccess = true
         } catch (Exception fallbackException) {
-            logError("All Docker execution approaches failed:")
+            logError('All Docker execution approaches failed:')
             logError("  Primary (env file): ${primaryException.message}")
             logError("  Fallback (direct env): ${fallbackException.message}")
             throw fallbackException
@@ -1048,7 +1048,7 @@ def executeDockerCommandWithFallback(dockerCmd, scriptFile, extraEnv = [:]) {
     }
 
     if (!dockerSuccess) {
-        error("All Docker execution attempts failed")
+        error('All Docker execution attempts failed')
     }
 
     sh "rm -f ${scriptFile}"
@@ -1068,7 +1068,7 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
         volumeMounts += " ${inventoryMount}"
     }
 
-    return """
+    return '''
         docker run --rm \\
             ${volumeMounts} \\
             --name ${env.BUILD_CONTAINER_NAME}-fallback \\
@@ -1080,7 +1080,7 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
             ${explicitEnvVars} \\
             ${env.IMAGE_NAME} \\
             sh -c 'echo "=== DEBUG: Container started (FALLBACK MODE) ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment variables passed directly"; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
-    """.stripIndent()
+    '''.stripIndent()
 }
 
 def buildInventoryMount() {
@@ -1120,7 +1120,7 @@ def buildDirectEnvironmentVariables() {
                             // Properly escape the value to prevent command injection
                             def escapedValue = value.replace('"', '\\"').replace('$', '\\$')
                             directEnvVars += " -e \"${key}=${escapedValue}\""
-                        }
+                            }
                     }
                 }
             }
@@ -1222,13 +1222,13 @@ def handleTimeoutFailure() {
         archiveInfrastructureFailureArtifacts()
         if (env.DESTROY_ON_FAILURE.toBoolean()) {
             logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for timeout')
-            def cleanupScript = """
+            def cleanupScript = '''
 #!/bin/bash
 set -e
 
 # Source the external cleanup script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_timeout_cleanup.sh
-            """
+            '''
             // Pass required environment variables to container
             def cleanupEnvVars = [
                 'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
@@ -1252,15 +1252,15 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
 }
 
 def handleDeploymentFailure() {
-    logError("Infrastructure setup failed")
+    logError('Infrastructure setup failed')
     try {
         archiveInfrastructureFailureArtifacts()
         if (env.DESTROY_ON_FAILURE.toBoolean()) {
             logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for deployment failure')
-            def cleanupScript = """
+            def cleanupScript = '''
             # Source the external cleanup script
             source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_deployment_failure_cleanup.sh
-            """
+            '''
             // Pass required environment variables to container
             def cleanupEnvVars = [
                 'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
@@ -1279,7 +1279,7 @@ def handleDeploymentFailure() {
     } catch (cleanupException) {
         logError("Cleanup during deployment failure handling failed: ${cleanupException.message}")
     }
-    throw new Exception("Infrastructure deployment failed")
+    throw new Exception('Infrastructure deployment failed')
 }
 
 // ========================================
@@ -1506,7 +1506,6 @@ def extractArtifactsFromDockerVolume() {
         generateDeploymentSummary()
 
         logInfo('Artifact extraction completed successfully')
-
     } catch (Exception e) {
         logError("Artifact extraction failed: ${e.message}")
         // Don't fail the build, just log the issue
@@ -1555,10 +1554,9 @@ def generateDeploymentSummary() {
         writeFile file: 'deployment-summary.json', text: groovy.json.JsonOutput.prettyPrint(summaryJson)
 
         logInfo('Deployment summary generated successfully')
-
     } catch (Exception e) {
         logError("Failed to generate deployment summary: ${e.message}")
-        logError("Exception details: ${e.toString()}")
+        logError("Exception details: ${e}")
     }
 }
 
@@ -1608,7 +1606,7 @@ terraform {
 }
 """
             writeFile file: 'backend.tf', text: backendConfig
-            logInfo("S3 backend configuration written to: backend.tf")
+            logInfo('S3 backend configuration written to: backend.tf')
 
             // Generate backend.tfvars content from S3 parameters for compatibility
             def backendVars = """
@@ -1652,10 +1650,10 @@ def deployInfrastructure() {
 def validateInfrastructurePrerequisites() {
     logInfo('Validating infrastructure prerequisites')
 
-    def prerequisiteScript = """
+    def prerequisiteScript = '''
     # Source the external prerequisites validation script
     source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/tofu_validate_prerequisites.sh
-    """
+    '''
 
     try {
         executeScriptInContainer(prerequisiteScript)
@@ -1670,10 +1668,10 @@ def validateInfrastructurePrerequisites() {
 def validateInfrastructureState() {
     logInfo('Validating infrastructure state after deployment')
 
-    def validationScript = """
+    def validationScript = '''
     # Source the external infrastructure validation script
     source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_validate_infrastructure.sh
-    """
+    '''
 
     executeScriptInContainer(validationScript)
     logInfo('Infrastructure state validated successfully')
@@ -1712,7 +1710,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
         'AWS_REGION': env.AWS_REGION
     ]
 
-    logInfo("Passing S3 environment variables to container:")
+    logInfo('Passing S3 environment variables to container:')
     s3EnvVars.each { key, value ->
         logInfo("  ${key}=${value}")
     }
@@ -1722,18 +1720,18 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
         logInfo('S3 upload script executed successfully')
     } catch (Exception e) {
         logError("S3 upload failed with exception: ${e.message}")
-        logWarning("Continuing build despite S3 upload failure")
-        // Don't fail the build, just log the issue
+        logWarning('Continuing build despite S3 upload failure')
+    // Don't fail the build, just log the issue
     }
 }
 
 def initializeOpenTofu() {
     logInfo('Initializing OpenTofu with S3 backend')
 
-    def initScript = """
+    def initScript = '''
     # Source the external OpenTofu initialization script
     source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/tofu_initialize.sh
-    """
+    '''
 
     executeScriptInContainer(initScript, [:], true)
 }
@@ -1741,13 +1739,13 @@ def initializeOpenTofu() {
 def manageWorkspace() {
     logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
 
-    def workspaceScript = """
+    def workspaceScript = '''
 #!/bin/bash
 set -e
 
 # Source the external workspace management script
     source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/tofu_manage_workspace.sh
-      """
+      '''
 
     executeScriptInContainer(workspaceScript)
 }
@@ -1755,13 +1753,13 @@ set -e
 def planInfrastructure() {
     logInfo('Planning infrastructure changes')
 
-    def planScript = """
+    def planScript = '''
 #!/bin/bash
 set -e
 
 # Source the external plan infrastructure script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_plan_infrastructure.sh
-      """
+      '''
 
     executeScriptInContainer(planScript)
 }
@@ -1769,30 +1767,28 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
 def applyInfrastructure() {
     logInfo('Applying infrastructure configuration')
 
-    def applyScript = """
+    def applyScript = '''
 #!/bin/bash
 set -e
 
 # Source the external apply infrastructure script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_apply_infrastructure.sh
-      """
+      '''
 
     executeScriptInContainer(applyScript)
 
     // Extract files to shared volume after successful apply (redundant but ensuring)
     logInfo('Extracting files after apply for persistence')
-    sh """
+    sh '''
     if [ -f qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ]; then
         cp qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ./
     fi
-    """
+    '''
 }
 
 // ========================================
 // ANSIBLE DEPLOYMENT FUNCTIONS
 // ========================================
-
-
 
 def generateAnsibleGroupVars() {
     logInfo('Generating Ansible group_vars/all.yml in container')
@@ -1802,13 +1798,13 @@ def generateAnsibleGroupVars() {
         error('ANSIBLE_VARIABLES not loaded - this should have been set in readAnsibleVariablesFile()')
     }
 
-    def groupVarsScript = """
+    def groupVarsScript = '''
 #!/bin/bash
 set -e
 
 # Source the external Ansible group_vars generation script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_generate_group_vars.sh
-    """
+    '''
 
     // Pass required environment variables to container
     def groupVarsEnvVars = [
@@ -1867,7 +1863,7 @@ def loadInfrastructureOutputs() {
                     logWarning("bastion_public_dns found but no 'value' field")
                 }
             } else {
-                logWarning("bastion_public_dns not found or not a Map")
+                logWarning('bastion_public_dns not found or not a Map')
             }
 
             // Extract rancher servers private IPs from nested structure
@@ -1880,7 +1876,7 @@ def loadInfrastructureOutputs() {
                     logWarning("rancher_servers_private_ips found but no 'value' field")
                 }
             } else {
-                logWarning("rancher_servers_private_ips not found or not a Map")
+                logWarning('rancher_servers_private_ips not found or not a Map')
             }
 
             // Set environment variables based on available data
@@ -1888,7 +1884,7 @@ def loadInfrastructureOutputs() {
                 env.BASTION_IP = bastionPublicDns
                 logInfo("BASTION_IP set to bastion public DNS: ${env.BASTION_IP}")
             } else {
-                logWarning("BASTION_IP could not be set - bastion_public_dns.value not found")
+                logWarning('BASTION_IP could not be set - bastion_public_dns.value not found')
                 logWarning("Available keys: ${outputs.keySet()}")
             }
 
@@ -1897,13 +1893,13 @@ def loadInfrastructureOutputs() {
                 env.BASTION_PRIVATE_IP = rancherPrivateIps[0]
                 logInfo("BASTION_PRIVATE_IP set to first rancher server IP: ${env.BASTION_PRIVATE_IP}")
             } else {
-                logWarning("BASTION_PRIVATE_IP could not be set - no valid rancher servers private IPs found")
+                logWarning('BASTION_PRIVATE_IP could not be set - no valid rancher servers private IPs found')
                 logWarning("rancherPrivateIps type: ${rancherPrivateIps?.getClass()?.name}, size: ${rancherPrivateIps?.size()}")
             }
 
             logInfo('Infrastructure outputs loaded successfully')
         } else {
-            error("infrastructure-outputs.json not found in workspace")
+            error('infrastructure-outputs.json not found in workspace')
         }
     } catch (Exception e) {
         def errorMsg = "Failed to load infrastructure outputs: ${e.message}"
@@ -1939,7 +1935,7 @@ def setupAnsibleSSHKeys() {
 
     // Validate that we have the required credentials
     if (!awsSshPemKey || !awsSshKeyName) {
-        error("Required SSH credentials are not available. Check that AWS_SSH_PEM_KEY and AWS_SSH_KEY_NAME credentials are properly configured in Jenkins.")
+        error('Required SSH credentials are not available. Check that AWS_SSH_PEM_KEY and AWS_SSH_KEY_NAME credentials are properly configured in Jenkins.')
     }
 
     // Validate that we have the required infrastructure outputs
@@ -1947,13 +1943,13 @@ def setupAnsibleSSHKeys() {
         error("Required infrastructure outputs are not available. BASTION_IP=${env.BASTION_IP}, BASTION_PRIVATE_IP=${env.BASTION_PRIVATE_IP}")
     }
 
-    def sshSetupScript = """
+    def sshSetupScript = '''
 #!/bin/bash
 set -e
 
 # Source the external Ansible SSH key setup script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_setup_ssh_keys.sh
-    """
+    '''
 
     // Pass SSH key environment variables to the container
     def sshEnvVars = [
@@ -1964,7 +1960,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
     ]
 
     // Debug: Show what we're passing to container
-    logInfo("DEBUG: Passing environment variables to container:")
+    logInfo('DEBUG: Passing environment variables to container:')
     sshEnvVars.each { key, value ->
         logInfo("  ${key} = ${value ? 'SET' : 'NULL'}")
     }
@@ -1982,13 +1978,13 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
 def runAnsibleSSHSetup() {
     logInfo('Running Ansible SSH key setup playbook')
 
-    def sshSetupPlaybookScript = """
+    def sshSetupPlaybookScript = '''
 #!/bin/bash
 set -e
 
 # Source the external Ansible SSH setup playbook script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_run_ssh_setup.sh
-    """
+    '''
 
     // Get SSH credentials and pass them to container
     def awsSshPemKey = null
@@ -2024,13 +2020,13 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
 def runRKE2TarballDeployment() {
     logInfo('Running RKE2 tarball deployment playbook')
 
-    def rke2DeploymentScript = """
+    def rke2DeploymentScript = '''
     #!/bin/bash
     set -e
 
     # Source the external RKE2 tarball deployment script
     source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_run_rke2_deployment.sh
-        """
+        '''
 
     // Get SSH credentials and pass them to container
     def awsSshPemKey = null
@@ -2061,8 +2057,8 @@ def runRKE2TarballDeployment() {
         logError(errorMsg)
 
         // Check if this is an Ansible exit code 2 (failed tasks) but deployment might still be successful
-        if (e.message.contains("script returned exit code 2")) {
-            logWarning("Ansible returned exit code 2 (failed tasks), checking if deployment actually succeeded...")
+        if (e.message.contains('script returned exit code 2')) {
+            logWarning('Ansible returned exit code 2 (failed tasks), checking if deployment actually succeeded...')
 
             // Give a moment for any async operations to complete
             sleep(10)
@@ -2070,12 +2066,12 @@ def runRKE2TarballDeployment() {
             // Check if kubectl access setup has run and cluster is working
             try {
                 setupKubectlAccess()
-                logInfo("Cluster appears to be operational despite Ansible task failures")
-                logInfo("Continuing with deployment...")
+                logInfo('Cluster appears to be operational despite Ansible task failures')
+                logInfo('Continuing with deployment...')
                 return // Don't fail the deployment
             } catch (kubectlException) {
                 logError("kubectl setup also failed: ${kubectlException.message}")
-                logError("Deployment genuinely failed")
+                logError('Deployment genuinely failed')
                 error(errorMsg)
             }
         } else {
@@ -2088,13 +2084,13 @@ def runRKE2TarballDeployment() {
 def setupKubectlAccess() {
     logInfo('Setting up kubectl access on bastion host')
 
-    def kubectlSetupScript = """
+    def kubectlSetupScript = '''
 #!/bin/bash
 set -e
 
 # Source the external kubectl access setup script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_setup_kubectl.sh
-    """
+    '''
 
     // Pass RKE2_VERSION to container
     def kubectlEnvVars = [
@@ -2114,18 +2110,18 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
 }
 
 def handleAnsibleDeploymentFailure() {
-    logError("Ansible deployment failed - initiating cleanup")
+    logError('Ansible deployment failed - initiating cleanup')
     try {
         archiveAnsibleFailureArtifacts()
         if (env.DESTROY_ON_FAILURE.toBoolean()) {
             logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for Ansible failure')
-            def cleanupScript = """
+            def cleanupScript = '''
 #!/bin/bash
 set -e
 
 # Source the external Ansible failure cleanup script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_failure_cleanup.sh
-            """
+            '''
             // Pass required environment variables to container
             def cleanupEnvVars = [
                 'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
@@ -2155,7 +2151,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
             logError("Container cleanup also failed: ${containerCleanupException.message}")
         }
     }
-    throw new Exception("Ansible deployment failed")
+    throw new Exception('Ansible deployment failed')
 }
 
 def archiveAnsibleDeploymentArtifacts() {
@@ -2257,7 +2253,7 @@ def runRancherDeployment() {
         'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX
     ]
 
-    logInfo("Passing environment variables to Rancher deployment:")
+    logInfo('Passing environment variables to Rancher deployment:')
     rancherEnvVars.each { key, value ->
         logInfo("  ${key} = ${value ? 'SET' : 'NULL'}")
     }
@@ -2270,8 +2266,8 @@ def runRancherDeployment() {
         logError(errorMsg)
 
         // Check if this is an Ansible exit code 2 (failed tasks) but deployment might still be successful
-        if (e.message.contains("script returned exit code 2")) {
-            logWarning("Ansible returned exit code 2 (failed tasks), checking if Rancher deployment actually succeeded...")
+        if (e.message.contains('script returned exit code 2')) {
+            logWarning('Ansible returned exit code 2 (failed tasks), checking if Rancher deployment actually succeeded...')
 
             // Give a moment for any async operations to complete
             sleep(10)
@@ -2279,12 +2275,12 @@ def runRancherDeployment() {
             // Check if Rancher is accessible
             try {
                 validateRancherDeployment()
-                logInfo("Rancher appears to be operational despite Ansible task failures")
-                logInfo("Continuing with deployment...")
+                logInfo('Rancher appears to be operational despite Ansible task failures')
+                logInfo('Continuing with deployment...')
                 return // Don't fail deployment
             } catch (rancherException) {
                 logError("Rancher validation also failed: ${rancherException.message}")
-                logError("Rancher deployment genuinely failed")
+                logError('Rancher deployment genuinely failed')
                 error(errorMsg)
             }
         } else {
@@ -2297,13 +2293,13 @@ def runRancherDeployment() {
 def validateRancherDeployment() {
     logInfo('Validating Rancher deployment')
 
-    def validationScript = """
+    def validationScript = '''
     #!/bin/bash
     set -e
 
     # Source the external Rancher validation script
     source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_validate_rancher.sh
-    """
+    '''
 
     // Pass required environment variables to validation container
     // Use /root/kubeconfig.yaml which is the kubeconfig copied from bastion to shared volume
@@ -2315,7 +2311,7 @@ def validateRancherDeployment() {
         'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH
     ]
 
-    logInfo("Passing environment variables to Rancher validation:")
+    logInfo('Passing environment variables to Rancher validation:')
     validationEnvVars.each { key, value ->
         logInfo("  ${key} = ${value ? 'SET' : 'NULL'}")
     }
@@ -2331,18 +2327,18 @@ def validateRancherDeployment() {
 }
 
 def handleRancherDeploymentFailure() {
-    logError("Rancher deployment failed - initiating cleanup")
+    logError('Rancher deployment failed - initiating cleanup')
     try {
         archiveRancherFailureArtifacts()
         if (env.DESTROY_ON_FAILURE.toBoolean()) {
             logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for Rancher failure')
-            def cleanupScript = """
+            def cleanupScript = '''
 #!/bin/bash
 set -e
 
 # Source the external Rancher failure cleanup script
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/rancher_failure_cleanup.sh
-            """
+            '''
             // Pass required environment variables to container
             def cleanupEnvVars = [
                 'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
@@ -2368,7 +2364,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/rancher
             logError("Container cleanup also failed: ${containerCleanupException.message}")
         }
     }
-    throw new Exception("Rancher deployment failed")
+    throw new Exception('Rancher deployment failed')
 }
 
 def archiveRancherDeploymentArtifacts() {
