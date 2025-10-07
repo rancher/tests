@@ -49,8 +49,8 @@ env:
   QUAY_REGISTRY_NAME: ${{ secrets.QUAY_REGISTRY_NAME }}
   QUAY_REGISTRY_USERNAME: ${{ secrets.QUAY_REGISTRY_USERNAME }}
   QUAY_REGISTRY_PASSWORD: ${{ secrets.QUAY_REGISTRY_PASSWORD }}
-  AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_ACCESS_KEY: ${{ secrets.PQA_AWS_ACCESS_KEY }}
+  AWS_SECRET_KEY: ${{ secrets.PQA_AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: ${{ secrets.AWS_REGION }}
   RANCHER_ADMIN_PASSWORD: ${{ secrets.PQA_RANCHER_ADMIN_PASSWORD }}
   AWS_IAM_PROFILE: ${{ secrets.AWS_IAM_PROFILE }}
@@ -131,10 +131,6 @@ jobs:
           echo "RKE2_VERSION=v${CLEAN_VERSION}+rke2r1" >> $GITHUB_ENV
           echo "K3S_VERSION=v${CLEAN_VERSION}+k3s1" >> $GITHUB_ENV
           echo "KUBERNETES_VERSION=v${CLEAN_VERSION}+k3s1" >> $GITHUB_ENV
-          
-          echo "RKE2_VERSION=$RKE2_VERSION"
-          echo "K3S_VERSION=$K3S_VERSION"
-          echo "KUBERNETES_VERSION=$KUBERNETES_VERSION"
 
       - name: Create cattle config
         run: bash .github/scripts/platform-qa-create-cattle-config.sh
