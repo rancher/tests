@@ -67,7 +67,6 @@ require (
 require (
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/pkg/errors v0.9.1
-	github.com/rancher/machine v0.15.0-rancher131
 	github.com/rancher/norman v0.7.0
 	github.com/rancher/rancher v0.0.0-20250806201723-9a7af3779b9d
 	github.com/rancher/wrangler v1.1.2
@@ -83,7 +82,11 @@ require (
 
 )
 
-require gopkg.in/validator.v2 v2.0.1 // indirect
+require (
+	github.com/morikuni/aec v1.0.0 // indirect
+	gopkg.in/validator.v2 v2.0.1 // indirect
+	gotest.tools/v3 v3.5.2 // indirect
+)
 
 require (
 	dario.cat/mergo v1.0.1 // indirect

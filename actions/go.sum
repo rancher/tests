@@ -252,8 +252,6 @@ github.com/rancher/gke-operator v1.12.1 h1:zH2DEQsea+kG61cN0+1NWDQp0FyN28o2XIm5i
 github.com/rancher/gke-operator v1.12.1/go.mod h1:TbOTInXvdC1fPAxj2BHlRIh2j7ezTVQ7eIJW+udz5Xg=
 github.com/rancher/lasso v0.2.3 h1:74/z/C/O3ykhyMrRuEgc9kVyYiSoS7kp5BAijlcyXDg=
 github.com/rancher/lasso v0.2.3/go.mod h1:G+KeeOaKRjp+qGp0bV6VbLhYrq1vHbJPbDh40ejg5yE=
-github.com/rancher/machine v0.15.0-rancher131 h1:/CfIdKVe/0HcI9njKl/DB+OiayNGS+vu/uTspJPXN+k=
-github.com/rancher/machine v0.15.0-rancher131/go.mod h1:6hHF1520bEHY0z+qqv0e1IrMM/JRO+3UuS9obe2iGLk=
 github.com/rancher/norman v0.7.0 h1:duBZxekBj13k/2RTyWKZgV/ntXkIXm0sRKqwFO8ui+I=
 github.com/rancher/norman v0.7.0/go.mod h1:IOQn3CNCms6UK72QHujesLKedqZh4+SP8/FDEFc+7Ns=
 github.com/rancher/rancher v0.0.0-20250806201723-9a7af3779b9d h1:zqOXqPV4BMWGsD8o+IOD8KFz6v8PcN4nXy8NHj05V8c=

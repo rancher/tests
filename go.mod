@@ -112,7 +112,6 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.13.0
 	github.com/rancher/gke-operator v1.12.1 // indirect
 	github.com/rancher/lasso v0.2.3 // indirect
-	github.com/rancher/machine v0.15.0-rancher131 // indirect
 	github.com/rancher/norman v0.7.0
 	github.com/rancher/rke v1.8.0-rc.4 // indirect
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250710162344-185ff9f785cd // indirect
