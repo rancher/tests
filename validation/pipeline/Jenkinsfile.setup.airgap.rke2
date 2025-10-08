@@ -2737,7 +2737,9 @@ def runRancherDeployment() {
         'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
         'TF_WORKSPACE': env.TF_WORKSPACE,
         'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME,
-        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX
+        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
+        'QA_INFRA_REPO_URL': env.QA_INFRA_REPO,
+        'QA_INFRA_REPO_BRANCH': params.QA_INFRA_REPO_BRANCH
     ]
 
     logInfo('Passing environment variables to Rancher deployment:')
