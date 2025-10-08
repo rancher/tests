@@ -1200,8 +1200,6 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     def baseCmd = """docker run --rm \\
             ${volumeMountStr} \\
             --name ${escapedContainerName} \\
-            --interactive \\
-            --tty \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
             ${envVars} \\
             ${secureCredentials} \\
@@ -1337,8 +1335,6 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
     def baseCmd = """docker run --rm \\
             ${volumeMountStr} \\
             --name ${escapedContainerName} \\
-            --interactive \\
-            --tty \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation \\
             -e TF_WORKSPACE="${env.TF_WORKSPACE}" \\
             -e TERRAFORM_VARS_FILENAME="${env.TERRAFORM_VARS_FILENAME}" \\
@@ -1432,19 +1428,36 @@ def cleanupDanglingContainers() {
 def maskSensitiveData(command) {
     def maskedCommand = command
 
-    // Mask AWS credentials
+    // Mask AWS credentials - handle quoted values properly
+    maskedCommand = maskedCommand.replaceAll(/-e "AWS_ACCESS_KEY_ID=[^"]+"/, '-e "AWS_ACCESS_KEY_ID=***"')
+    maskedCommand = maskedCommand.replaceAll(/-e 'AWS_ACCESS_KEY_ID=[^']+'/, "-e 'AWS_ACCESS_KEY_ID=***'")
     maskedCommand = maskedCommand.replaceAll(/AWS_ACCESS_KEY_ID=[^\s]+/, 'AWS_ACCESS_KEY_ID=***')
+
+    maskedCommand = maskedCommand.replaceAll(/-e "AWS_SECRET_ACCESS_KEY=[^"]+"/, '-e "AWS_SECRET_ACCESS_KEY=***"')
+    maskedCommand = maskedCommand.replaceAll(/-e 'AWS_SECRET_ACCESS_KEY=[^']+'/, "-e 'AWS_SECRET_ACCESS_KEY=***'")
     maskedCommand = maskedCommand.replaceAll(/AWS_SECRET_ACCESS_KEY=[^\s]+/, 'AWS_SECRET_ACCESS_KEY=***')
 
     // Mask SSH credentials
+    maskedCommand = maskedCommand.replaceAll(/-e "AWS_SSH_PEM_KEY=[^"]+"/, '-e "AWS_SSH_PEM_KEY=***"')
+    maskedCommand = maskedCommand.replaceAll(/-e 'AWS_SSH_PEM_KEY=[^']+'/, "-e 'AWS_SSH_PEM_KEY=***'")
     maskedCommand = maskedCommand.replaceAll(/AWS_SSH_PEM_KEY=[^\s]+/, 'AWS_SSH_PEM_KEY=***')
+
+    maskedCommand = maskedCommand.replaceAll(/-e "AWS_SSH_KEY_NAME=[^"]+"/, '-e "AWS_SSH_KEY_NAME=***"')
+    maskedCommand = maskedCommand.replaceAll(/-e 'AWS_SSH_KEY_NAME=[^']+'/, "-e 'AWS_SSH_KEY_NAME=***'")
     maskedCommand = maskedCommand.replaceAll(/AWS_SSH_KEY_NAME=[^\s]+/, 'AWS_SSH_KEY_NAME=***')
 
     // Mask private registry credentials
+    maskedCommand = maskedCommand.replaceAll(/-e "PRIVATE_REGISTRY_PASSWORD=[^"]+"/, '-e "PRIVATE_REGISTRY_PASSWORD=***"')
+    maskedCommand = maskedCommand.replaceAll(/-e 'PRIVATE_REGISTRY_PASSWORD=[^']+'/, "-e 'PRIVATE_REGISTRY_PASSWORD=***'")
     maskedCommand = maskedCommand.replaceAll(/PRIVATE_REGISTRY_PASSWORD=[^\s]+/, 'PRIVATE_REGISTRY_PASSWORD=***')
+
+    maskedCommand = maskedCommand.replaceAll(/-e "PRIVATE_REGISTRY_USERNAME=[^"]+"/, '-e "PRIVATE_REGISTRY_USERNAME=***"')
+    maskedCommand = maskedCommand.replaceAll(/-e 'PRIVATE_REGISTRY_USERNAME=[^']+'/, "-e 'PRIVATE_REGISTRY_USERNAME=***'")
     maskedCommand = maskedCommand.replaceAll(/PRIVATE_REGISTRY_USERNAME=[^\s]+/, 'PRIVATE_REGISTRY_USERNAME=***')
 
     // Mask Slack webhook
+    maskedCommand = maskedCommand.replaceAll(/-e "SLACK_WEBHOOK=[^"]+"/, '-e "SLACK_WEBHOOK=***"')
+    maskedCommand = maskedCommand.replaceAll(/-e 'SLACK_WEBHOOK=[^']+'/, "-e 'SLACK_WEBHOOK=***'")
     maskedCommand = maskedCommand.replaceAll(/SLACK_WEBHOOK=[^\s]+/, 'SLACK_WEBHOOK=***')
 
     return maskedCommand
@@ -1458,10 +1471,12 @@ def provideDockerDiagnostics() {
         sh 'docker system df 2>/dev/null || echo "Docker system info not available"'
 
         logInfo('Docker container status:')
-        sh 'docker ps -a --filter "name=${env.BUILD_CONTAINER_NAME}" 2>/dev/null || echo "No matching containers found"'
+        def containerName = env.BUILD_CONTAINER_NAME ?: 'build-container'
+        sh "docker ps -a --filter 'name=${containerName}' 2>/dev/null || echo 'No matching containers found'"
 
         logInfo('Docker images:')
-        sh "docker images | grep '${env.IMAGE_NAME}' 2>/dev/null || echo 'Target image not found'"
+        def imageName = env.IMAGE_NAME ?: 'latest'
+        sh "docker images | grep '${imageName}' 2>/dev/null || echo 'Target image not found'"
 
         logInfo('System resources:')
         sh 'free -h 2>/dev/null || echo "Memory info not available"'
