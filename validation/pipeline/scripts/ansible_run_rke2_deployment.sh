@@ -30,8 +30,9 @@ if [[ ! -f "/root/ansible/rke2/airgap/inventory.yml" ]]; then
     fi
 fi
 
+# Generate group_vars using the centralized script
 if [[ ! -f "/root/group_vars/all.yml" ]]; then
-    echo "ERROR: Ansible group_vars file not found at /root/group_vars/all.yml"
+    echo "ERROR: /root/group_vars/all.yml not found. Make sure ansible_generate_group_vars.sh was run first."
     exit 1
 fi
 
