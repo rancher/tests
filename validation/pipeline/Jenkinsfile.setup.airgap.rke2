@@ -1362,10 +1362,13 @@ def buildInventoryMount() {
     def inventoryFile = 'ansible-inventory.yml'
     if (fileExists(inventoryFile)) {
         logInfo("Mounting inventory file from Jenkins workspace: ${inventoryFile}")
-        return " -v ${pwd()}/${inventoryFile}:/root/go/src/github.com/rancher/qa-infra-automation/inventory/inventory.yml"
+        return " -v ${pwd()}/${inventoryFile}:/root/ansible/rke2/airgap/inventory.yml"
     } else {
         logWarning("Inventory file not found in Jenkins workspace: ${inventoryFile}")
     }
+    // For new deployments, the inventory will be created in shared volume
+    // No need to mount from Jenkins workspace - it will be available via shared volume
+    logInfo("Inventory file will be created in shared volume during infrastructure deployment")
     return ''
 }
 
