@@ -72,7 +72,7 @@ if [ -z "${TERRAFORM_VARS_FILENAME}" ]; then
 fi
 
 # Construct S3 target path - Fixed: removed incorrect "env:" prefix
-S3_TARGET="s3://${S3_BUCKET_NAME}/${TF_WORKSPACE}/config/${TERRAFORM_VARS_FILENAME}"
+S3_TARGET="s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/config/${TERRAFORM_VARS_FILENAME}"
 LOCAL_FILE_PATH="tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}"
 
 echo "Uploading cluster.tfvars to S3..."

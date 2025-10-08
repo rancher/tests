@@ -1153,53 +1153,126 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     def inventoryMount = buildInventoryMount()
     def secureCredentials = buildSecureCredentialVariables()
 
-    def volumeMounts = "-v ${env.VALIDATION_VOLUME}:/root " +
-                       "-v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation " +
-                       "-v ${pwd()}/${scriptFile}:/tmp/script.sh " +
-                       "-v ${envFilePath}:/tmp/.env"
-
-    if (inventoryMount) {
-        volumeMounts += " ${inventoryMount}"
+    // Validate required inputs
+    if (!env.IMAGE_NAME) {
+        error "ERROR: IMAGE_NAME environment variable is not set"
     }
 
-    return """
-        docker run --rm \\
-            ${volumeMounts} \\
-            --name ${containerName} \\
-            -t \\
+    // Escape container name to prevent issues
+    def escapedContainerName = containerName.replaceAll('[^a-zA-Z0-9_-]', '_')
+
+    // Build volume mounts with proper validation
+    def volumeMounts = []
+
+    // Add shared volume
+    if (env.VALIDATION_VOLUME && fileExists(env.VALIDATION_VOLUME)) {
+        volumeMounts.add("-v \"${env.VALIDATION_VOLUME}:/root\"")
+    } else {
+        logWarning("Shared volume path is invalid: ${env.VALIDATION_VOLUME}")
+    }
+
+    // Add qa-infra automation volume
+    def qaInfraPath = "${pwd()}/qa-infra-automation"
+    if (fileExists(qaInfraPath)) {
+        volumeMounts.add("-v \"${qaInfraPath}:/root/go/src/github.com/rancher/qa-infra-automation\"")
+    } else {
+        logWarning("QA infra automation path not found: ${qaInfraPath}")
+    }
+
+    // Add script file volume
+    if (fileExists(scriptFile)) {
+        volumeMounts.add("-v \"${pwd()}/${scriptFile}:/tmp/script.sh\"")
+    }
+
+    // Add environment file volume
+    if (fileExists(envFilePath)) {
+        volumeMounts.add("-v \"${envFilePath}:/tmp/.env\"")
+    }
+
+    // Add inventory mount if available
+    if (inventoryMount) {
+        volumeMounts.add(inventoryMount.trim())
+    }
+
+    def volumeMountStr = volumeMounts.join(' \\\n            ')
+
+    // Construct the base command with proper escaping
+    def baseCmd = """docker run --rm \\
+            ${volumeMountStr} \\
+            --name ${escapedContainerName} \\
+            --interactive \\
+            --tty \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
             ${envVars} \\
             ${secureCredentials} \\
-            ${env.IMAGE_NAME} \\
-            sh -c 'echo "=== DEBUG: Container started ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment file location: /tmp/.env"; echo "Checking if /tmp/.env exists:"; ls -la /tmp/.env || echo "FILE NOT FOUND"; echo "Directory contents of /tmp:"; ls -la /tmp/; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
-    """.stripIndent()
+            "${env.IMAGE_NAME.trim()}\""""
+
+    // Use a safer execution pattern
+    def executionCmd = '''/bin/bash -c \'
+        echo "=== DEBUG: Container started ==="
+        echo "Current user: $(whoami)"
+        echo "Current working directory: $(pwd)"
+        echo "Environment file location: /tmp/.env"
+        echo "Checking if /tmp/.env exists:"
+        ls -la /tmp/.env || echo "FILE NOT FOUND"
+        echo "Directory contents of /tmp:"
+        ls -la /tmp/
+        echo "=== END DEBUG ==="
+        echo "Executing script: /tmp/script.sh"
+        exec /bin/bash /tmp/script.sh
+    \' '''
+
+    return "${baseCmd} ${executionCmd}"
 }
 
 def executeDockerCommandWithFallback(dockerCmd, scriptFile, extraEnv = [:]) {
     def dockerSuccess = false
 
+    // Pre-execution validation
+    validateDockerEnvironment()
+
+    // Log the command for debugging (but mask sensitive data)
+    logInfo('Executing Docker command (sensitive data masked):')
+    logInfo(maskSensitiveData(dockerCmd))
+
     // Approach 1: Try the primary command first (with environment file mounting)
     try {
         logInfo('Attempting Docker execution with environment file mounting...')
-        sh dockerCmd
+
+        // Add timeout and better error handling
+        timeout(time: 30, unit: 'MINUTES') {
+            sh dockerCmd
+        }
+
         logInfo("✅ Docker command executed successfully with environment file mounting")
         dockerSuccess = true
     } catch (Exception primaryException) {
         logWarning("Primary Docker command failed: ${primaryException.message}")
 
+        // Cleanup any dangling containers before fallback
+        cleanupDanglingContainers()
+
         // Approach 2: Try fallback with direct environment variables
         try {
             logInfo('Attempting Docker execution with direct environment variables...')
             def fallbackCmd = buildFallbackDockerCommand(scriptFile, extraEnv)
-            logInfo('Executing fallback docker command:')
-            logInfo(fallbackCmd)
-            sh fallbackCmd
+            logInfo('Executing fallback docker command (sensitive data masked):')
+            logInfo(maskSensitiveData(fallbackCmd))
+
+            timeout(time: 30, unit: 'MINUTES') {
+                sh fallbackCmd
+            }
+
             logInfo("✅ Fallback Docker command executed successfully with direct environment variables")
             dockerSuccess = true
         } catch (Exception fallbackException) {
             logError('All Docker execution approaches failed:')
             logError("  Primary (env file): ${primaryException.message}")
             logError("  Fallback (direct env): ${fallbackException.message}")
+
+            // Additional diagnostic information
+            provideDockerDiagnostics()
+
             throw fallbackException
         }
     }
@@ -1208,38 +1281,84 @@ def executeDockerCommandWithFallback(dockerCmd, scriptFile, extraEnv = [:]) {
         error('All Docker execution attempts failed')
     }
 
-    sh "rm -f ${scriptFile}"
+    // Cleanup script file
+    try {
+        sh "rm -f ${scriptFile}"
+    } catch (Exception e) {
+        logWarning("Failed to cleanup script file ${scriptFile}: ${e.message}")
+    }
 }
 
 def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
-    def envFilePath = "${pwd()}/${env.ENV_FILE}"
     def directEnvVars = buildDirectEnvironmentVariables()
     def explicitEnvVars = buildEnvironmentVariables(extraEnv)
     def secureCredentials = buildSecureCredentialVariables()
     def inventoryMount = buildInventoryMount()
 
-    def volumeMounts = "-v ${env.VALIDATION_VOLUME}:/root " +
-                       "-v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation " +
-                       "-v ${pwd()}/${scriptFile}:/tmp/script.sh"
-
-    if (inventoryMount) {
-        volumeMounts += " ${inventoryMount}"
+    // Validate required inputs
+    if (!env.IMAGE_NAME) {
+        error "ERROR: IMAGE_NAME environment variable is not set for fallback command"
     }
 
-    return """
-        docker run --rm \\
-            ${volumeMounts} \\
-            --name ${env.BUILD_CONTAINER_NAME}-fallback \\
-            -t \\
+    // Escape container name to prevent issues
+    def escapedContainerName = "${env.BUILD_CONTAINER_NAME}-fallback".replaceAll('[^a-zA-Z0-9_-]', '_')
+
+    // Build volume mounts with proper validation (same as primary command)
+    def volumeMounts = []
+
+    // Add shared volume
+    if (env.VALIDATION_VOLUME && fileExists(env.VALIDATION_VOLUME)) {
+        volumeMounts.add("-v \"${env.VALIDATION_VOLUME}:/root\"")
+    } else {
+        logWarning("Shared volume path is invalid in fallback: ${env.VALIDATION_VOLUME}")
+    }
+
+    // Add qa-infra automation volume
+    def qaInfraPath = "${pwd()}/qa-infra-automation"
+    if (fileExists(qaInfraPath)) {
+        volumeMounts.add("-v \"${qaInfraPath}:/root/go/src/github.com/rancher/qa-infra-automation\"")
+    } else {
+        logWarning("QA infra automation path not found in fallback: ${qaInfraPath}")
+    }
+
+    // Add script file volume
+    if (fileExists(scriptFile)) {
+        volumeMounts.add("-v \"${pwd()}/${scriptFile}:/tmp/script.sh\"")
+    }
+
+    // Add inventory mount if available
+    if (inventoryMount) {
+        volumeMounts.add(inventoryMount.trim())
+    }
+
+    def volumeMountStr = volumeMounts.join(' \\\n            ')
+
+    // Construct the base command with proper escaping
+    def baseCmd = """docker run --rm \\
+            ${volumeMountStr} \\
+            --name ${escapedContainerName} \\
+            --interactive \\
+            --tty \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation \\
-            -e TF_WORKSPACE=${env.TF_WORKSPACE} \\
-            -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME} \\
+            -e TF_WORKSPACE="${env.TF_WORKSPACE}" \\
+            -e TERRAFORM_VARS_FILENAME="${env.TERRAFORM_VARS_FILENAME}" \\
             ${directEnvVars} \\
             ${explicitEnvVars} \\
             ${secureCredentials} \\
-            ${env.IMAGE_NAME} \\
-            sh -c 'echo "=== DEBUG: Container started (FALLBACK MODE) ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment variables passed directly"; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
-    """.stripIndent()
+            "${env.IMAGE_NAME.trim()}\""""
+
+    // Use a safer execution pattern for fallback
+    def executionCmd = '''/bin/bash -c \'
+        echo "=== DEBUG: Container started (FALLBACK MODE) ==="
+        echo "Current user: $(whoami)"
+        echo "Current working directory: $(pwd)"
+        echo "Environment variables passed directly"
+        echo "=== END DEBUG ==="
+        echo "Executing script: /tmp/script.sh"
+        exec /bin/bash /tmp/script.sh
+    \' '''
+
+    return "${baseCmd} ${executionCmd}"
 }
 
 def buildInventoryMount() {
@@ -1252,6 +1371,107 @@ def buildInventoryMount() {
         logWarning("Inventory file not found in Jenkins workspace: ${inventoryFile}")
     }
     return ''
+}
+
+def validateDockerEnvironment() {
+    logInfo('Validating Docker environment...')
+
+    try {
+        // Check if Docker is installed and running
+        def dockerVersion = sh(script: 'docker --version', returnStdout: true).trim()
+        logInfo("Docker version: ${dockerVersion}")
+
+        def dockerInfo = sh(script: 'docker info --format "Server Version: {{.ServerVersion}}"', returnStdout: true).trim()
+        logInfo("Docker server info: ${dockerInfo}")
+
+        // Check available disk space
+        def diskSpace = sh(script: 'df -h /var/lib/docker 2>/dev/null || df -h /', returnStdout: true).trim()
+        logInfo("Docker disk space: ${diskSpace}")
+
+        // Check if the Docker image exists
+        if (env.IMAGE_NAME) {
+            try {
+                def imageExists = sh(script: "docker image inspect ${env.IMAGE_NAME} --format='{{.Id}}' 2>/dev/null || echo 'NOT_FOUND'", returnStdout: true).trim()
+                if (imageExists == 'NOT_FOUND') {
+                    logWarning("Docker image ${env.IMAGE_NAME} not found locally - will be pulled during execution")
+                } else {
+                    logInfo("Docker image ${env.IMAGE_NAME} is available locally")
+                }
+            } catch (Exception e) {
+                logWarning("Could not validate Docker image: ${e.message}")
+            }
+        }
+
+        logInfo('✅ Docker environment validation completed')
+    } catch (Exception e) {
+        error("❌ Docker environment validation failed: ${e.message}")
+    }
+}
+
+def cleanupDanglingContainers() {
+    logInfo('Cleaning up any dangling containers...')
+
+    try {
+        // Remove any containers with our naming pattern that might be stuck
+        def containerPattern = env.BUILD_CONTAINER_NAME ?: 'build-container'
+
+        sh """
+            # Remove any containers that might be stuck
+            docker ps -a --filter 'name=${containerPattern}' --format '{{.Names}}' | xargs -r docker rm -f 2>/dev/null || true
+
+            # Remove any dangling containers older than 1 hour
+            docker container prune --force --filter 'until=1h' 2>/dev/null || true
+        """
+
+        logInfo('✅ Container cleanup completed')
+    } catch (Exception e) {
+        logWarning("Container cleanup failed: ${e.message}")
+    }
+}
+
+def maskSensitiveData(command) {
+    def maskedCommand = command
+
+    // Mask AWS credentials
+    maskedCommand = maskedCommand.replaceAll(/AWS_ACCESS_KEY_ID=[^\s]+/, 'AWS_ACCESS_KEY_ID=***')
+    maskedCommand = maskedCommand.replaceAll(/AWS_SECRET_ACCESS_KEY=[^\s]+/, 'AWS_SECRET_ACCESS_KEY=***')
+
+    // Mask SSH credentials
+    maskedCommand = maskedCommand.replaceAll(/AWS_SSH_PEM_KEY=[^\s]+/, 'AWS_SSH_PEM_KEY=***')
+    maskedCommand = maskedCommand.replaceAll(/AWS_SSH_KEY_NAME=[^\s]+/, 'AWS_SSH_KEY_NAME=***')
+
+    // Mask private registry credentials
+    maskedCommand = maskedCommand.replaceAll(/PRIVATE_REGISTRY_PASSWORD=[^\s]+/, 'PRIVATE_REGISTRY_PASSWORD=***')
+    maskedCommand = maskedCommand.replaceAll(/PRIVATE_REGISTRY_USERNAME=[^\s]+/, 'PRIVATE_REGISTRY_USERNAME=***')
+
+    // Mask Slack webhook
+    maskedCommand = maskedCommand.replaceAll(/SLACK_WEBHOOK=[^\s]+/, 'SLACK_WEBHOOK=***')
+
+    return maskedCommand
+}
+
+def provideDockerDiagnostics() {
+    logInfo('=== DOCKER DIAGNOSTICS ===')
+
+    try {
+        logInfo('Docker system information:')
+        sh 'docker system df 2>/dev/null || echo "Docker system info not available"'
+
+        logInfo('Docker container status:')
+        sh 'docker ps -a --filter "name=${env.BUILD_CONTAINER_NAME}" 2>/dev/null || echo "No matching containers found"'
+
+        logInfo('Docker images:')
+        sh "docker images | grep '${env.IMAGE_NAME}' 2>/dev/null || echo 'Target image not found'"
+
+        logInfo('System resources:')
+        sh 'free -h 2>/dev/null || echo "Memory info not available"'
+        sh 'df -h 2>/dev/null | head -5 || echo "Disk info not available"'
+
+    } catch (Exception e) {
+        logWarning("Docker diagnostics failed: ${e.message}")
+    }
+
+    logInfo('=== END DOCKER DIAGNOSTICS ===')
 }
 
 def buildDirectEnvironmentVariables() {
