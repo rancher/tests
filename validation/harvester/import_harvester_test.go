@@ -54,6 +54,8 @@ func (h *HarvesterTestSuite) SetupSuite() {
 		return harvesteraction.ResetHarvesterRegistration(h.harvesterClient)
 	})
 
+	extensioncharts.CreateChartRepoFromGithub(client.Steve, "https://github.com/harvester/harvester-ui-extension", "gh-pages", "harvester")
+	
 	uiExtensionObject, err := extensioncharts.GetChartStatus(client, localCluster, interoperablecharts.ExtensionNamespace, interoperablecharts.HarvesterExtensionName)
 	require.NoError(h.T(), err)
 
