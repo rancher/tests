@@ -77,93 +77,64 @@ fi
 # Change to the qa-infra-automation directory
 cd "${QA_INFRA_WORK_PATH}"
 
-# Ensure inventory directory exists for mounted inventory file
-mkdir -p inventory
+# Ensure Ansible directory structure exists
+mkdir -p /root/ansible/rke2/airgap/inventory/
 
-# Determine inventory path flexibly
-AIRGAP_DIR="ansible/rke2/airgap"
-INVENTORY_PATH=""
-GROUP_VARS_DIR=""
-
-# First, let's see what's actually in the ansible directory structure
-echo "=== DEBUG: Exploring ansible directory structure ==="
-echo "Contents of ansible/:"
-ls -la ansible/ || echo "ansible/ not found"
-echo ""
-echo "Contents of ansible/rke2/:"
-ls -la ansible/rke2/ || echo "ansible/rke2/ not found"
-echo ""
-if [[ -d "${AIRGAP_DIR}" ]]; then
-  echo "Contents of ${AIRGAP_DIR}/:"
-  ls -la "${AIRGAP_DIR}/"
-fi
-echo ""
-echo "Contents of inventory/ (if exists):"
-ls -la inventory/ || echo "inventory/ not found"
-echo "=== END DEBUG ==="
-
-# Check for inventory in multiple locations
-if [[ -f "inventory/inventory.yml" ]]; then
-  INVENTORY_PATH="inventory/inventory.yml"
-  GROUP_VARS_DIR="inventory/group_vars"
-  echo "Found inventory at: ${INVENTORY_PATH}"
-elif [[ -f "${AIRGAP_DIR}/inventory.yml" ]]; then
-  INVENTORY_PATH="${AIRGAP_DIR}/inventory.yml"
-  GROUP_VARS_DIR="${AIRGAP_DIR}/group_vars"
-  echo "Found inventory at: ${INVENTORY_PATH}"
-else
-  # Try common inventory file names under inventory/
-  for f in inventory/hosts.yml inventory/hosts.yaml inventory/hosts.ini; do
-    if [[ -f "$f" ]]; then
-      INVENTORY_PATH="$f"
-      GROUP_VARS_DIR="inventory/group_vars"
-      echo "Found inventory at: ${INVENTORY_PATH}"
-      break
+# Check if inventory file exists at the expected Terraform location
+if [[ ! -f "/root/ansible/rke2/airgap/inventory.yml" ]]; then
+    echo "Ansible inventory file not found at /root/ansible/rke2/airgap/inventory.yml"
+    
+    # Check if inventory file exists in the shared volume (legacy location)
+    if [[ -f "/root/ansible-inventory.yml" ]]; then
+        echo "Found inventory file at shared volume location, copying to expected location..."
+        cp /root/ansible-inventory.yml /root/ansible/rke2/airgap/inventory.yml
+        echo "Inventory file copied successfully"
+    else
+        # Check for inventory in the qa-infra-automation directory
+        echo "Checking for inventory file in qa-infra-automation directory..."
+        if [[ -f "${QA_INFRA_WORK_PATH}/inventory/inventory.yml" ]]; then
+            echo "Found inventory at qa-infra-automation/inventory/inventory.yml, copying to expected location..."
+            cp "${QA_INFRA_WORK_PATH}/inventory/inventory.yml" /root/ansible/rke2/airgap/inventory.yml
+            echo "Inventory file copied successfully"
+        elif [[ -f "${QA_INFRA_WORK_PATH}/ansible/rke2/airgap/inventory.yml" ]]; then
+            echo "Found inventory at qa-infra-automation/ansible/rke2/airgap/inventory.yml, copying to expected location..."
+            cp "${QA_INFRA_WORK_PATH}/ansible/rke2/airgap/inventory.yml" /root/ansible/rke2/airgap/inventory.yml
+            echo "Inventory file copied successfully"
+        else
+            echo "ERROR: Ansible inventory file not found at either:"
+            echo "  - /root/ansible/rke2/airgap/inventory.yml (Terraform location)"
+            echo "  - /root/ansible-inventory.yml (Shared volume location)"
+            echo "  - ${QA_INFRA_WORK_PATH}/inventory/inventory.yml (qa-infra location)"
+            echo "  - ${QA_INFRA_WORK_PATH}/ansible/rke2/airgap/inventory.yml (qa-infra airgap location)"
+            echo "Available files in /root/:"
+            ls -la /root/ | grep -E "(inventory|ansible)" || echo "No inventory/ansible files found"
+            echo "Available files in /root/ansible/ (if exists):"
+            ls -la /root/ansible/ 2>/dev/null || echo "Directory /root/ansible/ does not exist"
+            exit 1
+        fi
     fi
-  done
 fi
 
-if [[ -z "${INVENTORY_PATH}" ]]; then
-  echo "ERROR: Could not locate an Ansible inventory file. Tried:"
-  echo " - inventory/inventory.yml (mounted from Jenkins workspace)"
-  echo " - ${AIRGAP_DIR}/inventory.yml"
-  echo " - inventory/hosts.yml(yaml|ini)"
-  echo "Repository root contents:"
-  ls -la
+# Set inventory path and group_vars directory
+INVENTORY_PATH="/root/ansible/rke2/airgap/inventory.yml"
+GROUP_VARS_DIR="/root/ansible/rke2/airgap/group_vars"
+
+# Copy group_vars to the correct location relative to inventory file
+# Ansible loads group_vars relative to the inventory file location
+mkdir -p /root/ansible/rke2/airgap/group_vars
+
+# Ensure the group_vars file exists and has basic structure
+GROUP_VARS_FILE="/root/ansible/rke2/airgap/group_vars/all.yml"
+if [[ ! -f "/root/group_vars/all.yml" ]]; then
+  echo "ERROR: Source group_vars file not found at /root/group_vars/all.yml"
   exit 1
 fi
 
-# Ensure group_vars directory exists
-if [[ -z "${GROUP_VARS_DIR}" || ! -d "${GROUP_VARS_DIR}" ]]; then
-  echo "WARNING: group_vars directory not found at ${GROUP_VARS_DIR}"
-  echo "Creating group_vars directory structure..."
-  mkdir -p "${GROUP_VARS_DIR}"
-  echo "Created: ${GROUP_VARS_DIR}"
-fi
+cp /root/group_vars/all.yml "$GROUP_VARS_FILE"
+echo "Copied group_vars to inventory-relative location: $GROUP_VARS_FILE"
 
-# Check if group_vars was already generated by ansible_generate_group_vars.sh
-if [[ -f "/root/group_vars/all.yml" ]]; then
-  echo "Found pre-generated group_vars at /root/group_vars/all.yml"
-  echo "Copying to ${GROUP_VARS_DIR}/all.yml"
-  cp /root/group_vars/all.yml "${GROUP_VARS_DIR}/all.yml"
-  echo "Group_vars copied successfully"
-elif [[ -n "${ANSIBLE_VARIABLES}" ]]; then
-  echo "Using ANSIBLE_VARIABLES parameter to create group_vars/all.yml"
-  # Write ANSIBLE_VARIABLES content to group_vars/all.yml
-  printf '%s' "${ANSIBLE_VARIABLES}" | tr -d '\r' > "${GROUP_VARS_DIR}/all.yml"
-  echo "Group_vars created from ANSIBLE_VARIABLES"
-else
-  echo "WARNING: No ANSIBLE_VARIABLES provided and no pre-generated group_vars found"
-  echo "Creating minimal group_vars/all.yml..."
-  cat > "${GROUP_VARS_DIR}/all.yml" << 'EOF'
----
-# Ansible group variables for Rancher deployment
-# This file is auto-generated by the deployment script
-EOF
-  echo "Created minimal ${GROUP_VARS_DIR}/all.yml"
-fi
-
-echo "Using group_vars/all.yml for Rancher deployment"
+# Ensure file ends with newline before any appends
+[[ -n $(tail -c1 "$GROUP_VARS_FILE") ]] && echo "" >> "$GROUP_VARS_FILE"
 
 # Add private registry configuration if provided
 if [[ -n "${PRIVATE_REGISTRY_URL}" ]]; then
@@ -628,37 +599,13 @@ fi
 
 echo "Extra variables for ansible-playbook: ${EXTRA_VARS}"
 
-# Determine the working directory for ansible-playbook
-# The playbook should be run from ansible/rke2/airgap/ where ansible.cfg is located
-ANSIBLE_WORKDIR=""
-if [[ "${RANCHER_PLAYBOOK}" == ansible/rke2/airgap/* ]]; then
-    ANSIBLE_WORKDIR="ansible/rke2/airgap"
-    # Convert absolute paths to relative paths from the airgap directory
-    RELATIVE_PLAYBOOK="${RANCHER_PLAYBOOK#ansible/rke2/airgap/}"
-    
-    # Convert inventory path to be relative from airgap directory
-    if [[ "${INVENTORY_PATH}" == ansible/rke2/airgap/* ]]; then
-        RELATIVE_INVENTORY="${INVENTORY_PATH#ansible/rke2/airgap/}"
-    elif [[ "${INVENTORY_PATH}" == inventory/* ]]; then
-        # inventory/ is at repo root, so we need to go up 3 levels from airgap
-        RELATIVE_INVENTORY="../../../${INVENTORY_PATH}"
-    else
-        RELATIVE_INVENTORY="${INVENTORY_PATH}"
-    fi
-    
-    echo "=== Running Rancher Deployment Playbook from ${ANSIBLE_WORKDIR} ==="
-    echo "Working directory: ${ANSIBLE_WORKDIR}"
-    echo "Playbook (relative): ${RELATIVE_PLAYBOOK}"
-    echo "Inventory (relative): ${RELATIVE_INVENTORY}"
+# Run the Rancher deployment playbook from qa-infra-automation
+echo "Running Rancher deployment playbook..."
+cd /root/qa-infra-automation/ansible/rke2/airgap
 
-    cd "${ANSIBLE_WORKDIR}"
-    ansible-playbook -i "${RELATIVE_INVENTORY}" "${RELATIVE_PLAYBOOK}" -v ${EXTRA_VARS}
-else
-    # Run from repository root for other playbook locations
-    echo "=== Running Rancher Deployment Playbook from repository root ==="
-
-    ansible-playbook -i "${INVENTORY_PATH}" "${RANCHER_PLAYBOOK}" -v ${EXTRA_VARS}
-fi
+# Run ansible-playbook and capture exit code
+ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml "${RANCHER_PLAYBOOK}" -v ${EXTRA_VARS}
+ANSIBLE_EXIT_CODE=$?
 
 # Capture the exit code
 ANSIBLE_EXIT_CODE=$?
@@ -691,6 +638,37 @@ if [[ -f "ansible-playbook.log" ]]; then
     cp ansible-playbook.log /root/rancher_deployment_execution.log
 fi
 
+# Verify node roles after deployment (only if deployment succeeded)
+if [[ $ANSIBLE_EXIT_CODE -eq 0 ]]; then
+    echo "=== Verifying RKE2 Node Roles ==="
+
+    # Run the node role verification playbook if it exists
+    NODE_ROLE_PLAYBOOK="/root/qa-infra-automation/ansible/rke2/airgap/playbooks/debug/check-node-roles.yml"
+    if [[ -f "$NODE_ROLE_PLAYBOOK" ]]; then
+        echo "Running node role verification playbook..."
+        cd /root/qa-infra-automation/ansible/rke2/airgap
+        ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml playbooks/debug/check-node-roles.yml -v
+
+        if [[ $? -eq 0 ]]; then
+            echo "✓ Node role verification completed"
+        else
+            echo "⚠ Node role verification had issues"
+        fi
+    else
+        echo "Node role verification playbook not found, performing manual check..."
+
+        # Manual node role check
+        cd /root/qa-infra-automation/ansible/rke2/airgap
+        if ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml -c local -m shell -a "export KUBECONFIG=/etc/rancher/rke2/rke2.yaml && /var/lib/rancher/rke2/bin/kubectl get nodes -o wide 2>/dev/null || echo 'kubectl not available'" localhost 2>/dev/null; then
+            echo "✓ Node roles checked manually"
+        else
+            echo "⚠ Could not verify node roles manually"
+        fi
+    fi
+
+    echo "=== End Node Role Verification ==="
+fi
+
 # Copy kubeconfig to shared volume for Jenkins archival if deployment succeeded
 if [[ $ANSIBLE_EXIT_CODE -eq 0 ]]; then
     echo "Copying kubeconfig to shared volume for archival..."
@@ -698,6 +676,7 @@ if [[ $ANSIBLE_EXIT_CODE -eq 0 ]]; then
         "/home/ubuntu/.kube/config"
         "/etc/rancher/rke2/rke2.yaml"
         "/root/.kube/config"
+        "/root/ansible/rke2/airgap/kubeconfig"
     )
 
     KUBECONFIG_FOUND=false
@@ -717,10 +696,7 @@ if [[ $ANSIBLE_EXIT_CODE -eq 0 ]]; then
     fi
 fi
 
-# Save deployment logs
-echo "Saving Rancher deployment logs..."
-mkdir -p /root
-echo "Rancher deployment completed with exit code: ${ANSIBLE_EXIT_CODE}" > /root/rancher-deployment-status.txt
+echo "=== Rancher Deployment Completed ==="
 
 # Exit with the same code as ansible-playbook
 exit ${ANSIBLE_EXIT_CODE}
