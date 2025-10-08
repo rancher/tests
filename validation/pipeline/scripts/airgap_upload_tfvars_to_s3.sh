@@ -28,11 +28,19 @@ else
     echo "WARNING: Environment file not found at /tmp/.env"
 fi
 
-# Export AWS credentials for AWS CLI
-export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
-export AWS_REGION="${AWS_REGION:-${S3_REGION}}"
-export AWS_DEFAULT_REGION="${AWS_REGION:-${S3_REGION}}"
+# Export AWS credentials for AWS CLI with validation
+if [[ -n "${AWS_ACCESS_KEY_ID}" && -n "${AWS_SECRET_ACCESS_KEY}" ]]; then
+    export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
+    export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
+    export AWS_REGION="${AWS_REGION:-${S3_REGION}}"
+    export AWS_DEFAULT_REGION="${AWS_REGION:-${S3_REGION}}"
+    echo "AWS credentials configured for region: ${AWS_REGION}"
+else
+    echo "ERROR: AWS credentials not properly configured"
+    echo "AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:+[SET]}"
+    echo "AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:+[SET]}"
+    exit 1
+fi
 
 # Navigate to the qa-infra-automation working directory
 cd ${QA_INFRA_WORK_PATH}
@@ -63,8 +71,8 @@ if [ -z "${TERRAFORM_VARS_FILENAME}" ]; then
     export TERRAFORM_VARS_FILENAME="cluster.tfvars"
 fi
 
-# Construct S3 target path
-S3_TARGET="s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/config/${TERRAFORM_VARS_FILENAME}"
+# Construct S3 target path - Fixed: removed incorrect "env:" prefix
+S3_TARGET="s3://${S3_BUCKET_NAME}/${TF_WORKSPACE}/config/${TERRAFORM_VARS_FILENAME}"
 LOCAL_FILE_PATH="tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}"
 
 echo "Uploading cluster.tfvars to S3..."

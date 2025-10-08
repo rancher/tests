@@ -304,6 +304,9 @@ pipeline {
 
                         // Generate environment file for container execution
                         generateEnvironmentFile()
+
+                        // Validate sensitive data handling and security measures
+                        validateSensitiveDataHandling()
                     }
                 }
             }
@@ -806,9 +809,11 @@ def generateEnvironmentFile() {
         env.AWS_SSH_KEY_NAME = awsSshKeyName
     }
 
-    // Build environment content securely without direct interpolation of secrets
+    // Build environment content securely - EXCLUDE sensitive credentials
+    // These will be passed directly as Docker environment variables instead
     def envLines = [
         '# Environment variables for infrastructure deployment containers',
+        '# NOTE: Sensitive credentials are passed via Docker -e flags for security',
         "TF_WORKSPACE=${env.TF_WORKSPACE}",
         "BUILD_NUMBER=${env.BUILD_NUMBER}",
         "JOB_NAME=${env.JOB_NAME}",
@@ -822,35 +827,22 @@ def generateEnvironmentFile() {
         "HOSTNAME_PREFIX=${env.HOSTNAME_PREFIX}",
         "PRIVATE_REGISTRY_URL=${env.PRIVATE_REGISTRY_URL}",
         "PRIVATE_REGISTRY_USERNAME=${env.PRIVATE_REGISTRY_USERNAME}",
-        "PRIVATE_REGISTRY_PASSWORD=${env.PRIVATE_REGISTRY_PASSWORD}",
+        '# PRIVATE_REGISTRY_PASSWORD excluded - will be passed via Docker env',
         '',
         '# Ansible Configuration',
         "ANSIBLE_VARIABLES=${env.ANSIBLE_VARIABLES}",
         '',
-        '# AWS Credentials for OpenTofu (Standard AWS environment variables)'
+        '# AWS Region Configuration (credentials passed via Docker -e flags)',
+        "AWS_REGION=${env.AWS_REGION}",
+        '',
+        '# S3 Backend Configuration for OpenTofu',
+        "S3_BUCKET_NAME=${env.S3_BUCKET_NAME}",
+        "S3_REGION=${env.S3_REGION}",
+        "S3_KEY_PREFIX=${env.S3_KEY_PREFIX}",
+        '',
+        '# SSH key name (key content passed via Docker -e flags)',
+        "AWS_SSH_KEY_NAME=${awsSshKeyName ?: ''}"
     ]
-
-    // Add credentials securely
-    if (awsAccessKeyId) {
-        envLines.add('AWS_ACCESS_KEY_ID=' + awsAccessKeyId)
-    }
-    if (awsSecretAccessKey) {
-        envLines.add('AWS_SECRET_ACCESS_KEY=' + awsSecretAccessKey)
-    }
-    envLines.add('AWS_REGION=' + env.AWS_REGION)
-    envLines.add('')
-    envLines.add('# SSH Credentials for Ansible')
-    if (awsSshPemKey) {
-        envLines.add('AWS_SSH_PEM_KEY=' + awsSshPemKey)
-    }
-    if (awsSshKeyName) {
-        envLines.add('AWS_SSH_KEY_NAME=' + awsSshKeyName)
-    }
-    envLines.add('')
-    envLines.add('# S3 Backend Configuration for OpenTofu')
-    envLines.add('S3_BUCKET_NAME=' + env.S3_BUCKET_NAME)
-    envLines.add('S3_REGION=' + env.S3_REGION)
-    envLines.add('S3_KEY_PREFIX=' + env.S3_KEY_PREFIX)
 
     def envContent = envLines.join('\n')
     def envFilePath = "${pwd()}/${env.ENV_FILE}"
@@ -912,20 +904,187 @@ def setupSSHKeys() {
     }
 
     if (awsSshPemKey && awsSshKeyName) {
-        logInfo('Setting up SSH keys')
+        logInfo('Setting up SSH keys with secure handling')
 
-        dir('./tests/.ssh') {
-            def decodedKey = new String(awsSshPemKey.decodeBase64())
-            writeFile file: awsSshKeyName, text: decodedKey
-            sh "chmod 600 ${awsSshKeyName}"
+        try {
+            dir('./tests/.ssh') {
+                // Create secure directory with proper permissions
+                sh 'mkdir -p . && chmod 700 .'
+
+                def decodedKey = new String(awsSshPemKey.decodeBase64())
+
+                // Write key file securely
+                writeFile file: awsSshKeyName, text: decodedKey
+
+                // Set secure file permissions
+                sh "chmod 600 ${awsSshKeyName}"
+                sh "chown \$(whoami):$(whoami) ${awsSshKeyName} 2>/dev/null || true"
+
+                // Verify key file security
+                def keyPermissions = sh(script: "ls -la ${awsSshKeyName}", returnStdout: true).trim()
+                logInfo("SSH key file permissions: ${keyPermissions}")
+
+                // Validate key format
+                def keyContent = sh(script: "head -1 ${awsSshKeyName}", returnStdout: true).trim()
+                if (!keyContent.startsWith('-----BEGIN') && !keyContent.startsWith('ssh-rsa') && !keyContent.startsWith('ssh-ed25519')) {
+                    logWarning("SSH key format validation warning - unexpected key format")
+                }
+            }
+
+            logInfo('SSH keys configured successfully')
+
+            // Store key path for cleanup
+            env.SSH_KEY_PATH = "./tests/.ssh/${awsSshKeyName}"
+
+        } catch (Exception e) {
+            logError("SSH key setup failed: ${e.message}")
+            // Clean up any partially created files
+            cleanupSSHKeys()
+            throw e
         }
-
-        logInfo('SSH keys configured successfully')
     } else {
         logWarning('SSH key configuration skipped - missing required environment variables')
         logWarning("AWS_SSH_PEM_KEY: ${awsSshPemKey ? 'SET' : 'NULL'}")
         logWarning("AWS_SSH_KEY_NAME: ${awsSshKeyName ? 'SET' : 'NULL'}")
     }
+}
+
+def cleanupSSHKeys() {
+    logInfo('Cleaning up SSH keys securely')
+
+    try {
+        // Get credentials for key name
+        withCredentials([
+            string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
+        ]) {
+            def awsSshKeyName = env.AWS_SSH_KEY_NAME
+
+            if (awsSshKeyName) {
+                def keyPath = "./tests/.ssh/${awsSshKeyName}"
+
+                if (fileExists(keyPath)) {
+                    // Securely shred the key file if shred is available
+                    try {
+                        sh "shred -vfz -n 3 ${keyPath} 2>/dev/null || rm -f ${keyPath}"
+                        logInfo("SSH key securely shredded: ${keyPath}")
+                    } catch (Exception shredException) {
+                        // Fallback to secure delete
+                        sh "rm -f ${keyPath}"
+                        logWarning("SSH key deleted (shred unavailable): ${keyPath}")
+                    }
+                }
+
+                // Clean up any temporary SSH files
+                sh 'rm -f ./tests/.ssh/known_hosts ./tests/.ssh/config 2>/dev/null || true'
+
+                // Ensure SSH directory is secure
+                if (fileExists('./tests/.ssh')) {
+                    sh 'chmod 700 ./tests/.ssh 2>/dev/null || true'
+                }
+            }
+        }
+    } catch (Exception e) {
+        logWarning("SSH key cleanup encountered issues: ${e.message}")
+        // Continue with cleanup even if some steps fail
+    }
+
+    logInfo('SSH key cleanup completed')
+}
+
+def validateSensitiveDataHandling() {
+    logInfo('Validating sensitive data handling and security measures')
+
+    def validationErrors = []
+
+    // Validate AWS credentials are properly configured (not exposed in environment file)
+    try {
+        def envFileContent = ''
+        if (fileExists(env.ENV_FILE)) {
+            envFileContent = readFile(file: env.ENV_FILE)
+        }
+
+        // Check for plaintext credentials in environment file
+        if (envFileContent.contains('AWS_SECRET_ACCESS_KEY=') &&
+            !envFileContent.contains('AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}')) {
+            validationErrors.add('AWS credentials may be exposed in environment file')
+        }
+
+        if (envFileContent.contains('AWS_SSH_PEM_KEY=') &&
+            !envFileContent.contains('AWS_SSH_PEM_KEY=${AWS_SSH_PEM_KEY:-}')) {
+            validationErrors.add('SSH private key may be exposed in environment file')
+        }
+
+        if (envFileContent.contains('PRIVATE_REGISTRY_PASSWORD=') &&
+            !envFileContent.contains('PRIVATE_REGISTRY_PASSWORD=${PRIVATE_REGISTRY_PASSWORD:-}')) {
+            validationErrors.add('Private registry password may be exposed in environment file')
+        }
+
+    } catch (Exception e) {
+        logWarning("Could not validate environment file content: ${e.message}")
+    }
+
+    // Validate SSH key file permissions
+    try {
+        withCredentials([
+            string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
+        ]) {
+            def awsSshKeyName = env.AWS_SSH_KEY_NAME
+            if (awsSshKeyName) {
+                def keyPath = "./tests/.ssh/${awsSshKeyName}"
+                if (fileExists(keyPath)) {
+                    def permissions = sh(script: "stat -c '%a' ${keyPath}", returnStdout: true).trim()
+                    if (permissions != '600') {
+                        validationErrors.add("SSH key file has insecure permissions: ${permissions} (should be 600)")
+                    }
+
+                    // Validate SSH directory permissions
+                    def dirPermissions = sh(script: "stat -c '%a' ./tests/.ssh", returnStdout: true).trim()
+                    if (dirPermissions != '700') {
+                        validationErrors.add("SSH directory has insecure permissions: ${dirPermissions} (should be 700)")
+                    }
+                }
+            }
+        }
+    } catch (Exception e) {
+        logWarning("Could not validate SSH key permissions: ${e.message}")
+    }
+
+    // Validate Docker security
+    try {
+        // Check if containers are running with proper user isolation
+        def dockerInfo = sh(script: 'docker info 2>/dev/null | grep -i "user namespace remap" || echo "NOT_CONFIGURED"', returnStdout: true).trim()
+        if (dockerInfo == 'NOT_CONFIGURED') {
+            logWarning('Docker user namespace remapping is not configured - consider enabling for additional security')
+        }
+    } catch (Exception e) {
+        logWarning("Could not validate Docker security configuration: ${e.message}")
+    }
+
+    // Validate S3 configuration
+    try {
+        if (env.S3_BUCKET_NAME && env.S3_REGION) {
+            logInfo("S3 configuration validated: bucket=${env.S3_BUCKET_NAME}, region=${env.S3_REGION}")
+        } else {
+            validationErrors.add('S3 configuration is incomplete')
+        }
+    } catch (Exception e) {
+        validationErrors.add("S3 validation failed: ${e.message}")
+    }
+
+    // Report validation results
+    if (!validationErrors.isEmpty()) {
+        logError('Sensitive data handling validation failed:')
+        validationErrors.each { error ->
+            logError("  - ${error}")
+        }
+        // For now, log warnings but don't fail the pipeline
+        // Consider making this stricter based on security requirements
+        logWarning('Security validation completed with warnings - review and address issues')
+    } else {
+        logInfo('✅ All sensitive data handling validations passed')
+    }
+
+    logInfo('Sensitive data handling validation completed')
 }
 
 // ========================================
@@ -1058,6 +1217,7 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
     def envFilePath = "${pwd()}/${env.ENV_FILE}"
     def directEnvVars = buildDirectEnvironmentVariables()
     def explicitEnvVars = buildEnvironmentVariables(extraEnv)
+    def secureCredentials = buildSecureCredentialVariables()
     def inventoryMount = buildInventoryMount()
 
     def volumeMounts = "-v ${env.VALIDATION_VOLUME}:/root " +
@@ -1078,6 +1238,7 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
             -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME} \\
             ${directEnvVars} \\
             ${explicitEnvVars} \\
+            ${secureCredentials} \\
             ${env.IMAGE_NAME} \\
             sh -c 'echo "=== DEBUG: Container started (FALLBACK MODE) ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment variables passed directly"; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
     '''.stripIndent()
@@ -1132,6 +1293,53 @@ def buildDirectEnvironmentVariables() {
     return directEnvVars
 }
 
+def buildSecureCredentialVariables() {
+    def secureEnvVars = ''
+
+    // Get credentials within withCredentials block to ensure they're available
+    withCredentials([
+        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
+        string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')
+    ]) {
+        // Add AWS credentials securely
+        if (env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) {
+            def escapedKeyId = env.AWS_ACCESS_KEY_ID.replace('"', '\\"').replace('$', '\\$')
+            def escapedSecretKey = env.AWS_SECRET_ACCESS_KEY.replace('"', '\\"').replace('$', '\\$')
+            secureEnvVars += " -e \"AWS_ACCESS_KEY_ID=${escapedKeyId}\""
+            secureEnvVars += " -e \"AWS_SECRET_ACCESS_KEY=${escapedSecretKey}\""
+            logInfo('AWS credentials added to secure environment variables')
+        }
+
+        // Add SSH credentials securely
+        if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
+            def escapedPemKey = env.AWS_SSH_PEM_KEY.replace('"', '\\"').replace('$', '\\$')
+            def escapedKeyName = env.AWS_SSH_KEY_NAME.replace('"', '\\"').replace('$', '\\$')
+            secureEnvVars += " -e \"AWS_SSH_PEM_KEY=${escapedPemKey}\""
+            secureEnvVars += " -e \"AWS_SSH_KEY_NAME=${escapedKeyName}\""
+            logInfo('SSH credentials added to secure environment variables')
+        }
+
+        // Add private registry password securely
+        if (env.PRIVATE_REGISTRY_PASSWORD) {
+            def escapedPassword = env.PRIVATE_REGISTRY_PASSWORD.replace('"', '\\"').replace('$', '\\$')
+            secureEnvVars += " -e \"PRIVATE_REGISTRY_PASSWORD=${escapedPassword}\""
+            logInfo('Private registry password added to secure environment variables')
+        }
+
+        // Add Slack webhook securely
+        if (env.SLACK_WEBHOOK) {
+            def escapedWebhook = env.SLACK_WEBHOOK.replace('"', '\\"').replace('$', '\\$')
+            secureEnvVars += " -e \"SLACK_WEBHOOK=${escapedWebhook}\""
+            logInfo('Slack webhook added to secure environment variables')
+        }
+    }
+
+    return secureEnvVars
+}
+
 def cleanupContainersAndVolumes() {
     logInfo('Cleaning up Docker containers and volumes')
 
@@ -1172,6 +1380,23 @@ def cleanupContainersAndVolumes() {
         }
     } catch (Exception e) {
         logError("Docker cleanup failed: ${e.message}")
+    }
+
+    // Clean up SSH keys securely
+    try {
+        cleanupSSHKeys()
+    } catch (Exception sshCleanupException) {
+        logWarning("SSH key cleanup encountered issues: ${sshCleanupException.message}")
+    }
+
+    // Clean up environment files containing sensitive data
+    try {
+        if (fileExists(env.ENV_FILE)) {
+            sh "shred -vfz -n 3 ${env.ENV_FILE} 2>/dev/null || rm -f ${env.ENV_FILE}"
+            logInfo("Environment file securely shredded")
+        }
+    } catch (Exception envCleanupException) {
+        logWarning("Environment file cleanup encountered issues: ${envCleanupException.message}")
     }
 }
 
