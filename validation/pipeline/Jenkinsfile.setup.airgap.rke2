@@ -918,7 +918,7 @@ def setupSSHKeys() {
 
                 // Set secure file permissions
                 sh "chmod 600 ${awsSshKeyName}"
-                sh "chown \$(whoami):$(whoami) ${awsSshKeyName} 2>/dev/null || true"
+                sh "chown \\$(whoami):\\$(whoami) ${awsSshKeyName} 2>/dev/null || true"
 
                 // Verify key file security
                 def keyPermissions = sh(script: "ls -la ${awsSshKeyName}", returnStdout: true).trim()
