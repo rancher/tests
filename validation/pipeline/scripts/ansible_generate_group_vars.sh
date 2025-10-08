@@ -56,59 +56,90 @@ EOF
 # Add the ANSIBLE_VARIABLES content at the end of the file
 echo "" >> "${OUTPUT_FILE}"
 echo "# Variables from ANSIBLE_VARIABLES parameter" >> "${OUTPUT_FILE}"
-printf '%s' "${ANSIBLE_VARIABLES}" | tr -d '\r' >> "${OUTPUT_FILE}"
 
-# Replace placeholders with actual environment variable values
-if [[ -n "${CLUSTER_NAME}" ]]; then
-    sed -i "s/\${CLUSTER_NAME:-rancher-test}/${CLUSTER_NAME}/g" "${OUTPUT_FILE}"
-fi
+# Process ANSIBLE_VARIABLES to replace placeholders with actual environment variable values
+# First, replace common placeholders in the ANSIBLE_VARIABLES content
+PROCESSED_ANSIBLE_VARIABLES="${ANSIBLE_VARIABLES}"
 
-if [[ -n "${NAMESPACE}" ]]; then
-    sed -i "s/\${NAMESPACE:-default}/${NAMESPACE}/g" "${OUTPUT_FILE}"
-fi
-
+# Replace placeholders with actual environment variable values using safe substitution
 if [[ -n "${RKE2_VERSION}" ]]; then
-    sed -i "s/\${RKE2_VERSION}/${RKE2_VERSION}/g" "${OUTPUT_FILE}"
+    PROCESSED_ANSIBLE_VARIABLES="${PROCESSED_ANSIBLE_VARIABLES//\${RKE2_VERSION}/${RKE2_VERSION}}"
 fi
 
 if [[ -n "${RANCHER_VERSION}" ]]; then
-    sed -i "s/\${RANCHER_VERSION}/${RANCHER_VERSION}/g" "${OUTPUT_FILE}"
+    PROCESSED_ANSIBLE_VARIABLES="${PROCESSED_ANSIBLE_VARIABLES//\${RANCHER_VERSION}/${RANCHER_VERSION}}"
 fi
 
-if [[ -n "${RANCHER_HOSTNAME}" ]]; then
-    sed -i "s/\${RANCHER_HOSTNAME}/${RANCHER_HOSTNAME}/g" "${OUTPUT_FILE}"
+if [[ -n "${HOSTNAME_PREFIX}" ]]; then
+    PROCESSED_ANSIBLE_VARIABLES="${PROCESSED_ANSIBLE_VARIABLES//\${HOSTNAME_PREFIX}/${HOSTNAME_PREFIX}}"
 fi
 
 if [[ -n "${PRIVATE_REGISTRY_URL}" ]]; then
-    sed -i "s/\${PRIVATE_REGISTRY_URL}/${PRIVATE_REGISTRY_URL}/g" "${OUTPUT_FILE}"
+    PROCESSED_ANSIBLE_VARIABLES="${PROCESSED_ANSIBLE_VARIABLES//\${PRIVATE_REGISTRY_URL}/${PRIVATE_REGISTRY_URL}}"
 fi
 
 if [[ -n "${PRIVATE_REGISTRY_USERNAME}" ]]; then
-    sed -i "s/\${PRIVATE_REGISTRY_USERNAME}/${PRIVATE_REGISTRY_USERNAME}/g" "${OUTPUT_FILE}"
+    PROCESSED_ANSIBLE_VARIABLES="${PROCESSED_ANSIBLE_VARIABLES//\${PRIVATE_REGISTRY_USERNAME}/${PRIVATE_REGISTRY_USERNAME}}"
 fi
 
 if [[ -n "${PRIVATE_REGISTRY_PASSWORD}" ]]; then
-    sed -i "s/\${PRIVATE_REGISTRY_PASSWORD}/${PRIVATE_REGISTRY_PASSWORD}/g" "${OUTPUT_FILE}"
+    PROCESSED_ANSIBLE_VARIABLES="${PROCESSED_ANSIBLE_VARIABLES//\${PRIVATE_REGISTRY_PASSWORD}/${PRIVATE_REGISTRY_PASSWORD}}"
+fi
+
+# Write the processed ANSIBLE_VARIABLES to the file
+printf '%s' "${PROCESSED_ANSIBLE_VARIABLES}" | tr -d '\r' >> "${OUTPUT_FILE}"
+
+# Replace placeholders in the template section with actual environment variable values
+if [[ -n "${CLUSTER_NAME}" ]]; then
+    sed -i "s|\${CLUSTER_NAME:-rancher-test}|${CLUSTER_NAME}|g" "${OUTPUT_FILE}"
+fi
+
+if [[ -n "${NAMESPACE}" ]]; then
+    sed -i "s|\${NAMESPACE:-default}|${NAMESPACE}|g" "${OUTPUT_FILE}"
+fi
+
+if [[ -n "${RKE2_VERSION}" ]]; then
+    sed -i "s|\"\\${RKE2_VERSION}\"|\"${RKE2_VERSION}\"|g" "${OUTPUT_FILE}"
+fi
+
+if [[ -n "${RANCHER_VERSION}" ]]; then
+    sed -i "s|\"\\${RANCHER_VERSION}\"|\"${RANCHER_VERSION}\"|g" "${OUTPUT_FILE}"
+fi
+
+if [[ -n "${RANCHER_HOSTNAME}" ]]; then
+    sed -i "s|\"\\${RANCHER_HOSTNAME}\"|\"${RANCHER_HOSTNAME}\"|g" "${OUTPUT_FILE}"
+fi
+
+if [[ -n "${PRIVATE_REGISTRY_URL}" ]]; then
+    sed -i "s|\"\\${PRIVATE_REGISTRY_URL}\"|\"${PRIVATE_REGISTRY_URL}\"|g" "${OUTPUT_FILE}"
+fi
+
+if [[ -n "${PRIVATE_REGISTRY_USERNAME}" ]]; then
+    sed -i "s|\"\\${PRIVATE_REGISTRY_USERNAME}\"|\"${PRIVATE_REGISTRY_USERNAME}\"|g" "${OUTPUT_FILE}"
+fi
+
+if [[ -n "${PRIVATE_REGISTRY_PASSWORD}" ]]; then
+    sed -i "s|\"\\${PRIVATE_REGISTRY_PASSWORD}\"|\"${PRIVATE_REGISTRY_PASSWORD}\"|g" "${OUTPUT_FILE}"
 fi
 
 if [[ -n "${ENABLE_PRIVATE_REGISTRY}" ]]; then
-    sed -i "s/\${ENABLE_PRIVATE_REGISTRY:-false}/${ENABLE_PRIVATE_REGISTRY}/g" "${OUTPUT_FILE}"
+    sed -i "s|\${ENABLE_PRIVATE_REGISTRY:-false}|${ENABLE_PRIVATE_REGISTRY}|g" "${OUTPUT_FILE}"
 fi
 
 if [[ -n "${SSH_USER}" ]]; then
-    sed -i "s/\${SSH_USER:-ubuntu}/${SSH_USER}/g" "${OUTPUT_FILE}"
+    sed -i "s|\${SSH_USER:-ubuntu}|${SSH_USER}|g" "${OUTPUT_FILE}"
 fi
 
 if [[ -n "${SSH_PORT}" ]]; then
-    sed -i "s/\${SSH_PORT:-22}/${SSH_PORT}/g" "${OUTPUT_FILE}"
+    sed -i "s|\${SSH_PORT:-22}|${SSH_PORT}|g" "${OUTPUT_FILE}"
 fi
 
 if [[ -n "${POD_CIDR}" ]]; then
-    sed -i "s/\${POD_CIDR:-10.42.0.0\/16}/${POD_CIDR}/g" "${OUTPUT_FILE}"
+    sed -i "s|\${POD_CIDR:-10.42.0.0\/16}|${POD_CIDR}|g" "${OUTPUT_FILE}"
 fi
 
 if [[ -n "${SERVICE_CIDR}" ]]; then
-    sed -i "s/\${SERVICE_CIDR:-10.43.0.0\/16}/${SERVICE_CIDR}/g" "${OUTPUT_FILE}"
+    sed -i "s|\${SERVICE_CIDR:-10.43.0.0\/16}|${SERVICE_CIDR}|g" "${OUTPUT_FILE}"
 fi
 
 # Validate YAML syntax
