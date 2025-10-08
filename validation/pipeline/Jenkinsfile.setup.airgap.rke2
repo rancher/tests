@@ -1164,11 +1164,22 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     // Build volume mounts with proper validation
     def volumeMounts = []
 
-    // Add shared volume
-    if (env.VALIDATION_VOLUME && fileExists(env.VALIDATION_VOLUME)) {
-        volumeMounts.add("-v \"${env.VALIDATION_VOLUME}:/root\"")
+    // Add shared volume - check if Docker volume exists (not file system path)
+    if (env.VALIDATION_VOLUME) {
+        try {
+            // Check if Docker volume exists using docker command
+            def volumeCheck = sh(script: "docker volume inspect ${env.VALIDATION_VOLUME} >/dev/null 2>&1", returnStatus: true)
+            if (volumeCheck == 0) {
+                volumeMounts.add("-v \"${env.VALIDATION_VOLUME}:/root\"")
+                logInfo("Shared volume ${env.VALIDATION_VOLUME} found and will be mounted")
+            } else {
+                logWarning("Docker volume ${env.VALIDATION_VOLUME} does not exist")
+            }
+        } catch (Exception e) {
+            logWarning("Failed to check Docker volume ${env.VALIDATION_VOLUME}: ${e.message}")
+        }
     } else {
-        logWarning("Shared volume path is invalid: ${env.VALIDATION_VOLUME}")
+        logWarning("VALIDATION_VOLUME environment variable is not set")
     }
 
     // Add qa-infra automation volume
