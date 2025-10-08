@@ -123,8 +123,8 @@ jobs:
           chmod 600 ~/.ssh/$SSH_PRIVATE_KEY_NAME.pem
           echo "SSH_PRIVATE_KEY_PATH=$HOME/.ssh" >> $GITHUB_ENV
 
-      - name: Set Kubernetes version formats
-        id: set_k8s_versions
+      - name: Preprocess variables and set environment
+        id: set-env
         shell: bash
         run: |
           INPUT_K8s_VERSION="${{ github.event.inputs.kubernetes_version }}"
@@ -133,6 +133,11 @@ jobs:
           echo "RKE2_VERSION=v${CLEAN_VERSION}+rke2r1" >> $GITHUB_ENV
           echo "K3S_VERSION=v${CLEAN_VERSION}+k3s1" >> $GITHUB_ENV
           echo "KUBERNETES_VERSION=v${CLEAN_VERSION}+k3s1" >> $GITHUB_ENV
+
+          export AWS_SECURITY_GROUP_NAMES=$(echo "$AWS_SECURITY_GROUP_NAMES" | sed 's/,/","/g')
+          export AWS_SECURITY_GROUPS=$(echo "$AWS_SECURITY_GROUPS" | sed 's/,/","/g')
+          echo "AWS_SECURITY_GROUP_NAMES=$AWS_SECURITY_GROUP_NAMES" >> $GITHUB_ENV
+          echo "AWS_SECURITY_GROUPS=$AWS_SECURITY_GROUPS" >> $GITHUB_ENV
 
       - name: Create cattle config
         run: bash .github/scripts/platform-qa-create-cattle-config.sh
