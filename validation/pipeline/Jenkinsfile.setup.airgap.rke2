@@ -802,11 +802,8 @@ def generateEnvironmentFile() {
         awsSshPemKey = env.AWS_SSH_PEM_KEY
         awsSshKeyName = env.AWS_SSH_KEY_NAME
 
-        // Set environment variables for use in other functions
-        env.AWS_ACCESS_KEY_ID = awsAccessKeyId
-        env.AWS_SECRET_ACCESS_KEY = awsSecretAccessKey
-        env.AWS_SSH_PEM_KEY = awsSshPemKey
-        env.AWS_SSH_KEY_NAME = awsSshKeyName
+        // Note: Avoid storing credentials in Jenkins environment variables for security
+        // These will be passed directly as Docker environment variables instead
     }
 
     // Build environment content securely - EXCLUDE sensitive credentials
@@ -898,9 +895,8 @@ def setupSSHKeys() {
         awsSshPemKey = env.AWS_SSH_PEM_KEY
         awsSshKeyName = env.AWS_SSH_KEY_NAME
 
-        // Set environment variables for use in other functions
-        env.AWS_SSH_PEM_KEY = awsSshPemKey
-        env.AWS_SSH_KEY_NAME = awsSshKeyName
+        // Note: Avoid storing credentials in Jenkins environment variables for security
+        // Pass credentials directly to functions that need them instead
     }
 
     if (awsSshPemKey && awsSshKeyName) {
@@ -1155,6 +1151,7 @@ def buildEnvironmentVariables(extraEnv) {
 def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     def envFilePath = "${pwd()}/${env.ENV_FILE}"
     def inventoryMount = buildInventoryMount()
+    def secureCredentials = buildSecureCredentialVariables()
 
     def volumeMounts = "-v ${env.VALIDATION_VOLUME}:/root " +
                        "-v ${pwd()}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation " +
@@ -1172,6 +1169,7 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
             -t \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
             ${envVars} \\
+            ${secureCredentials} \\
             ${env.IMAGE_NAME} \\
             sh -c 'echo "=== DEBUG: Container started ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment file location: /tmp/.env"; echo "Checking if /tmp/.env exists:"; ls -la /tmp/.env || echo "FILE NOT FOUND"; echo "Directory contents of /tmp:"; ls -la /tmp/; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
     """.stripIndent()
@@ -1228,7 +1226,7 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
         volumeMounts += " ${inventoryMount}"
     }
 
-    return '''
+    return """
         docker run --rm \\
             ${volumeMounts} \\
             --name ${env.BUILD_CONTAINER_NAME}-fallback \\
@@ -1241,7 +1239,7 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
             ${secureCredentials} \\
             ${env.IMAGE_NAME} \\
             sh -c 'echo "=== DEBUG: Container started (FALLBACK MODE) ==="; echo "Current user: \$(whoami)"; echo "Current working directory: \$(pwd)"; echo "Environment variables passed directly"; echo "=== END DEBUG ==="; exec sh /tmp/script.sh'
-    '''.stripIndent()
+    """.stripIndent()
 }
 
 def buildInventoryMount() {
@@ -1937,7 +1935,12 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
 
     logInfo('Passing S3 environment variables to container:')
     s3EnvVars.each { key, value ->
-        logInfo("  ${key}=${value}")
+        // Log safely without exposing sensitive values
+        if (key.contains('SECRET') || key.contains('PASSWORD') || key.contains('KEY')) {
+            logInfo("  ${key}=[REDACTED]")
+        } else {
+            logInfo("  ${key}=${value}")
+        }
     }
 
     try {
@@ -2147,9 +2150,8 @@ def setupAnsibleSSHKeys() {
         awsSshPemKey = env.AWS_SSH_PEM_KEY
         awsSshKeyName = env.AWS_SSH_KEY_NAME
 
-        // Set environment variables for use in other functions
-        env.AWS_SSH_PEM_KEY = awsSshPemKey
-        env.AWS_SSH_KEY_NAME = awsSshKeyName
+        // Note: Avoid storing credentials in Jenkins environment variables for security
+        // These are used locally within this function scope only
     }
 
     // Debug: Show current environment variables
