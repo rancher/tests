@@ -13,6 +13,18 @@ escape_sed_replacement() {
     value="${value//&/\\&}"
     value="${value//|/\\|}"
     value="${value//\"/\\\"}"
+    value="${value//\$/\\\$}"
+    value="${value//\*/\\*}"
+    value="${value//\[/\\[}"
+    value="${value//\]/\\]}"
+    value="${value//\(/\\(}"
+    value="${value//\)/\\)}"
+    value="${value//\./\\.}"
+    value="${value//\^/\\^}"
+    value="${value//\?/\\?}"
+    value="${value//\+/\\+}"
+    value="${value//\{/\\\{}"
+    value="${value//\}/\\\}}"
     printf '%s' "$value"
 }
 
@@ -105,47 +117,58 @@ PROCESSED_ANSIBLE_VARIABLES="${ANSIBLE_VARIABLES}"
 # Only replace ${VAR} patterns, leave {{ VAR }} templating syntax intact
 # Use sed for more precise replacement to avoid partial matches
 if [[ -n "${RKE2_VERSION}" ]]; then
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${RKE2_VERSION}/'"${RKE2_VERSION}"'/g')"
+    REPLACEMENT="$(escape_sed_replacement "${RKE2_VERSION}")"
+    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${RKE2_VERSION}/'"${REPLACEMENT}"'/g')"
 fi
 
 if [[ -n "${RANCHER_VERSION}" ]]; then
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${RANCHER_VERSION}/'"${RANCHER_VERSION}"'/g')"
+    REPLACEMENT="$(escape_sed_replacement "${RANCHER_VERSION}")"
+    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${RANCHER_VERSION}/'"${REPLACEMENT}"'/g')"
 fi
 
 if [[ -n "${HOSTNAME_PREFIX}" ]]; then
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${HOSTNAME_PREFIX}/'"${HOSTNAME_PREFIX}"'/g')"
+    REPLACEMENT="$(escape_sed_replacement "${HOSTNAME_PREFIX}")"
+    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${HOSTNAME_PREFIX}/'"${REPLACEMENT}"'/g')"
 fi
 
 if [[ -n "${RANCHER_HOSTNAME}" ]]; then
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${RANCHER_HOSTNAME}/'"${RANCHER_HOSTNAME}"'/g')"
+    REPLACEMENT="$(escape_sed_replacement "${RANCHER_HOSTNAME}")"
+    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${RANCHER_HOSTNAME}/'"${REPLACEMENT}"'/g')"
 fi
 
 if [[ -n "${PRIVATE_REGISTRY_URL}" ]]; then
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${PRIVATE_REGISTRY_URL}/'"${PRIVATE_REGISTRY_URL}"'/g')"
+    REPLACEMENT="$(escape_sed_replacement "${PRIVATE_REGISTRY_URL}")"
+    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${PRIVATE_REGISTRY_URL}/'"${REPLACEMENT}"'/g')"
 fi
 
 if [[ -n "${PRIVATE_REGISTRY_USERNAME}" ]]; then
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${PRIVATE_REGISTRY_USERNAME}/'"${PRIVATE_REGISTRY_USERNAME}"'/g')"
+    REPLACEMENT="$(escape_sed_replacement "${PRIVATE_REGISTRY_USERNAME}")"
+    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${PRIVATE_REGISTRY_USERNAME}/'"${REPLACEMENT}"'/g')"
 fi
 
 if [[ -n "${PRIVATE_REGISTRY_PASSWORD}" ]]; then
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${PRIVATE_REGISTRY_PASSWORD}/'"${PRIVATE_REGISTRY_PASSWORD}"'/g')"
+    REPLACEMENT="$(escape_sed_replacement "${PRIVATE_REGISTRY_PASSWORD}")"
+    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${PRIVATE_REGISTRY_PASSWORD}/'"${REPLACEMENT}"'/g')"
 fi
 
 if [[ -n "${SSH_USER}" ]]; then
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${SSH_USER}/'"${SSH_USER}"'/g')"
+    REPLACEMENT="$(escape_sed_replacement "${SSH_USER}")"
+    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${SSH_USER}/'"${REPLACEMENT}"'/g')"
 fi
 
 if [[ -n "${SSH_PORT}" ]]; then
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${SSH_PORT}/'"${SSH_PORT}"'/g')"
+    REPLACEMENT="$(escape_sed_replacement "${SSH_PORT}")"
+    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${SSH_PORT}/'"${REPLACEMENT}"'/g')"
 fi
 
 if [[ -n "${CLUSTER_NAME}" ]]; then
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${CLUSTER_NAME}/'"${CLUSTER_NAME}"'/g')"
+    REPLACEMENT="$(escape_sed_replacement "${CLUSTER_NAME}")"
+    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${CLUSTER_NAME}/'"${REPLACEMENT}"'/g')"
 fi
 
 if [[ -n "${NAMESPACE}" ]]; then
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${NAMESPACE}/'"${NAMESPACE}"'/g')"
+    REPLACEMENT="$(escape_sed_replacement "${NAMESPACE}")"
+    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${NAMESPACE}/'"${REPLACEMENT}"'/g')"
 fi
 
 # Clean up any remaining unmatched variable patterns that might cause issues
