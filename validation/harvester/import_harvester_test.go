@@ -23,10 +23,10 @@ import (
 )
 
 const (
-	localCluster = "local"
+	localCluster                   = "local"
 	harvesterUIExtensionGitRepoURL = "https://github.com/harvester/harvester-ui-extension"
-	harvesterUIExtensionGitBranch = "gh-pages"
-	harvesterExtensionName = "harvester"
+	harvesterUIExtensionGitBranch  = "gh-pages"
+	harvesterExtensionName         = "harvester"
 )
 
 type HarvesterTestSuite struct {
