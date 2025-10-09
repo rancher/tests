@@ -214,6 +214,7 @@ pipeline {
 
         // Hostname prefix
         HOSTNAME_PREFIX = "${params.HOSTNAME_PREFIX ?: PipelineConfig.DEFAULT_HOSTNAME_PREFIX}"
+        RANCHER_HOSTNAME = "${(params.HOSTNAME_PREFIX ?: PipelineConfig.DEFAULT_HOSTNAME_PREFIX)}.qa.rancher.space"
 
         // Configuration content from parameters
         TERRAFORM_CONFIG = "${params.TERRAFORM_CONFIG ?: ''}"
@@ -822,6 +823,7 @@ def generateEnvironmentFile() {
         "RKE2_VERSION=${env.RKE2_VERSION}",
         "RANCHER_VERSION=${env.RANCHER_VERSION}",
         "HOSTNAME_PREFIX=${env.HOSTNAME_PREFIX}",
+        "RANCHER_HOSTNAME=${env.RANCHER_HOSTNAME}",
         "PRIVATE_REGISTRY_URL=${env.PRIVATE_REGISTRY_URL}",
         "PRIVATE_REGISTRY_USERNAME=${env.PRIVATE_REGISTRY_USERNAME}",
         '# PRIVATE_REGISTRY_PASSWORD excluded - will be passed via Docker env',
@@ -1534,6 +1536,7 @@ def buildDirectEnvironmentVariables() {
                             key == 'ANSIBLE_VARIABLES' || key == 'RKE2_VERSION' || key == 'RANCHER_VERSION' ||
                             key == 'HOSTNAME_PREFIX' ||
                             key == 'PRIVATE_REGISTRY_URL' || key == 'PRIVATE_REGISTRY_USERNAME' || key == 'PRIVATE_REGISTRY_PASSWORD' ||
+                            key == 'RANCHER_HOSTNAME' ||
                             key == 'QA_INFRA_WORK_PATH' || key == 'TF_WORKSPACE' || key == 'TERRAFORM_VARS_FILENAME' ||
                             (key.startsWith('AWS_SSH_') && !key.contains('SECRET') && !key.contains('PASSWORD'))) {
                             // Properly escape the value to prevent command injection
@@ -1979,9 +1982,18 @@ def extractArtifactsFromDockerVolume() {
                         echo "⚠ kubeconfig.yaml not found in shared volume"
                     fi
 
+                    # Copy rendered group_vars if they exist
+                    if [ -f /source/group_vars/all.yml ]; then
+                        mkdir -p /dest/group_vars
+                        cp /source/group_vars/all.yml /dest/group_vars/all.yml
+                        echo "✓ Copied group_vars/all.yml"
+                    else
+                        echo "⚠ group_vars/all.yml not found in shared volume"
+                    fi
+
                     # List what we successfully copied
                     echo "Files successfully copied to Jenkins workspace:"
-                    ls -la /dest/*.json /dest/*.yml /dest/*.tfvars /dest/*.tfstate 2>/dev/null || echo "No matching files found"
+                    ls -la /dest/*.json /dest/*.yml /dest/group_vars/*.yml /dest/*.tfvars /dest/*.tfstate 2>/dev/null || echo "No matching files found"
                 '
         """
 
@@ -2008,7 +2020,8 @@ def generateDeploymentSummary() {
                 job_name: env.JOB_NAME,
                 workspace: env.TF_WORKSPACE,
                 rke2_version: env.RKE2_VERSION,
-                rancher_version: env.RANCHER_VERSION
+                rancher_version: env.RANCHER_VERSION,
+                rancher_hostname: env.RANCHER_HOSTNAME
             ],
             infrastructure: [
                 terraform_vars_file: env.TERRAFORM_VARS_FILENAME,
@@ -2302,7 +2315,8 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
         'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
         'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
         'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
-        'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD
+        'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD,
+        'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME
     ]
 
     try {
@@ -2734,6 +2748,7 @@ def runRancherDeployment() {
         'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
         'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
         'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD,
+        'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
         'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
         'TF_WORKSPACE': env.TF_WORKSPACE,
         'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME,
