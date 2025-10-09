@@ -34,6 +34,21 @@ replace_placeholder() {
 
 echo "=== Generating Ansible group_vars/all.yml ==="
 
+# Debug: Print environment variables to verify they're available
+echo "=== DEBUG: Environment Variables ==="
+echo "RKE2_VERSION: '${RKE2_VERSION:-NOT_SET}'"
+echo "RANCHER_VERSION: '${RANCHER_VERSION:-NOT_SET}'"
+echo "HOSTNAME_PREFIX: '${HOSTNAME_PREFIX:-NOT_SET}'"
+echo "RANCHER_HOSTNAME: '${RANCHER_HOSTNAME:-NOT_SET}'"
+echo "PRIVATE_REGISTRY_URL: '${PRIVATE_REGISTRY_URL:-NOT_SET}'"
+echo "PRIVATE_REGISTRY_USERNAME: '${PRIVATE_REGISTRY_USERNAME:-NOT_SET}'"
+echo "PRIVATE_REGISTRY_PASSWORD: '${PRIVATE_REGISTRY_PASSWORD:-NOT_SET}'"
+echo "SSH_USER: '${SSH_USER:-NOT_SET}'"
+echo "SSH_PORT: '${SSH_PORT:-NOT_SET}'"
+echo "CLUSTER_NAME: '${CLUSTER_NAME:-NOT_SET}'"
+echo "NAMESPACE: '${NAMESPACE:-NOT_SET}'"
+echo "=== END DEBUG ==="
+
 # Validate required inputs
 if [[ -z "${ANSIBLE_VARIABLES}" && -n "${ANSIBLE_VARIABLES_FILE}" ]]; then
     if [[ -f "${ANSIBLE_VARIABLES_FILE}" ]]; then
