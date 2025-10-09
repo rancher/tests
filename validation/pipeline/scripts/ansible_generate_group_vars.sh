@@ -55,10 +55,6 @@ echo "RANCHER_HOSTNAME: '${RANCHER_HOSTNAME:-NOT_SET}'"
 echo "PRIVATE_REGISTRY_URL: '${PRIVATE_REGISTRY_URL:-NOT_SET}'"
 echo "PRIVATE_REGISTRY_USERNAME: '${PRIVATE_REGISTRY_USERNAME:-NOT_SET}'"
 echo "PRIVATE_REGISTRY_PASSWORD: '${PRIVATE_REGISTRY_PASSWORD:-NOT_SET}'"
-echo "SSH_USER: '${SSH_USER:-NOT_SET}'"
-echo "SSH_PORT: '${SSH_PORT:-NOT_SET}'"
-echo "CLUSTER_NAME: '${CLUSTER_NAME:-NOT_SET}'"
-echo "NAMESPACE: '${NAMESPACE:-NOT_SET}'"
 echo "=== END DEBUG ==="
 
 # Validate required inputs
@@ -83,8 +79,6 @@ mkdir -p "${OUTPUT_DIR}"
 OUTPUT_FILE="${OUTPUT_DIR}/all.yml"
 
 # Compute defaulted values used in the template
-CLUSTER_NAME_VALUE="${CLUSTER_NAME:-rancher-test}"
-NAMESPACE_VALUE="${NAMESPACE:-default}"
 RKE2_VERSION_VALUE="${RKE2_VERSION:-}"
 RANCHER_VERSION_VALUE="${RANCHER_VERSION:-}"
 RANCHER_HOSTNAME_VALUE="${RANCHER_HOSTNAME:-}"
@@ -96,8 +90,6 @@ ENABLE_PRIVATE_REGISTRY_VALUE="${ENABLE_PRIVATE_REGISTRY_VALUE,,}"
 if [[ "${ENABLE_PRIVATE_REGISTRY_VALUE}" != "true" && "${ENABLE_PRIVATE_REGISTRY_VALUE}" != "false" ]]; then
     ENABLE_PRIVATE_REGISTRY_VALUE="false"
 fi
-SSH_USER_VALUE="${SSH_USER:-ubuntu}"
-SSH_PORT_VALUE="${SSH_PORT:-22}"
 POD_CIDR_VALUE="${POD_CIDR:-10.42.0.0/16}"
 SERVICE_CIDR_VALUE="${SERVICE_CIDR:-10.43.0.0/16}"
 
@@ -151,25 +143,6 @@ if [[ -n "${PRIVATE_REGISTRY_PASSWORD}" ]]; then
     PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${PRIVATE_REGISTRY_PASSWORD}/'"${REPLACEMENT}"'/g')"
 fi
 
-if [[ -n "${SSH_USER}" ]]; then
-    REPLACEMENT="$(escape_sed_replacement "${SSH_USER}")"
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${SSH_USER}/'"${REPLACEMENT}"'/g')"
-fi
-
-if [[ -n "${SSH_PORT}" ]]; then
-    REPLACEMENT="$(escape_sed_replacement "${SSH_PORT}")"
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${SSH_PORT}/'"${REPLACEMENT}"'/g')"
-fi
-
-if [[ -n "${CLUSTER_NAME}" ]]; then
-    REPLACEMENT="$(escape_sed_replacement "${CLUSTER_NAME}")"
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${CLUSTER_NAME}/'"${REPLACEMENT}"'/g')"
-fi
-
-if [[ -n "${NAMESPACE}" ]]; then
-    REPLACEMENT="$(escape_sed_replacement "${NAMESPACE}")"
-    PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\${NAMESPACE}/'"${REPLACEMENT}"'/g')"
-fi
 
 # Clean up any remaining unmatched variable patterns that might cause issues
 PROCESSED_ANSIBLE_VARIABLES="$(echo "${PROCESSED_ANSIBLE_VARIABLES}" | sed 's/\$[^{}]*}/}/g')"
