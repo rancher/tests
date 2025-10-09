@@ -86,8 +86,9 @@ if [[ -n "${PRIVATE_REGISTRY_PASSWORD}" ]]; then
     PROCESSED_ANSIBLE_VARIABLES="${PROCESSED_ANSIBLE_VARIABLES//\${PRIVATE_REGISTRY_PASSWORD}/${PRIVATE_REGISTRY_PASSWORD}}"
 fi
 
-# Write the processed ANSIBLE_VARIABLES to the file
-printf '%s' "${PROCESSED_ANSIBLE_VARIABLES}" | tr -d '\r' >> "${OUTPUT_FILE}"
+# Write the processed ANSIBLE_VARIABLES to the file, but remove document separators
+# to ensure we have a single YAML document
+printf '%s' "${PROCESSED_ANSIBLE_VARIABLES}" | tr -d '\r' | sed 's/^---//' >> "${OUTPUT_FILE}"
 
 # Replace placeholders in the template section with actual environment variable values
 if [[ -n "${CLUSTER_NAME}" ]]; then
