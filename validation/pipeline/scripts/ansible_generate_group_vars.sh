@@ -226,20 +226,8 @@ echo "=== Generated group_vars file ==="
 echo "File: ${OUTPUT_FILE}"
 echo "Size: $(wc -c < "${OUTPUT_FILE}") bytes"
 echo "Lines: $(wc -l < "${OUTPUT_FILE}")"
-
-TOTAL_LINES=$(wc -l < "${OUTPUT_FILE}")
-if [[ ${TOTAL_LINES} -le 50 ]]; then
-    echo "--- Full content ---"
-    cat "${OUTPUT_FILE}"
-else
-    echo "--- First 25 lines ---"
-    head -25 "${OUTPUT_FILE}"
-    echo ""
-    echo "... (lines 26 to $((TOTAL_LINES - 10)) omitted) ..."
-    echo ""
-    echo "--- Last 10 lines ---"
-    tail -10 "${OUTPUT_FILE}"
-fi
+echo "--- Full content ---"
+cat "${OUTPUT_FILE}"
 
 echo "=== group_vars/all.yml generation completed ==="
 
