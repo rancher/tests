@@ -226,7 +226,7 @@ pipeline {
 
         // Configuration content from parameters
         TERRAFORM_CONFIG = "${params.TERRAFORM_CONFIG ?: ''}"
-    // ANSIBLE_VARIABLES will be read from uploaded file in pipeline stages
+        ANSIBLE_VARIABLES = "${params.ANSIBLE_VARIABLES ?: ''}"
     }
 
     stages {
@@ -749,18 +749,9 @@ def readAnsibleVariablesFile() {
         ansibleVarsContent = params.ANSIBLE_VARIABLES.trim()
         logInfo("Ansible variables content size: ${ansibleVarsContent.length()} bytes")
     } else {
-        logWarning('No Ansible variables provided in textbox - will use default configuration later')
-        // Create a minimal default configuration
-        ansibleVarsContent = """---
-# Default Ansible configuration for RKE2 airgap deployment
-rke2_version: "\${RKE2_VERSION}"
-rancher_version: "\${RANCHER_VERSION}"
-hostname_prefix: "\${HOSTNAME_PREFIX}"
-rancher_hostname: "\${HOSTNAME_PREFIX}.qa.rancher.space"
-private_registry_url: "\${PRIVATE_REGISTRY_URL}"
-private_registry_username: "\${PRIVATE_REGISTRY_USERNAME}"
-airgap_deployment: true
-"""
+        def errorMsg = 'ANSIBLE_VARIABLES parameter is required but was not provided'
+        logError(errorMsg)
+        error(errorMsg)
     }
 
     // Store in environment for passing to containers
