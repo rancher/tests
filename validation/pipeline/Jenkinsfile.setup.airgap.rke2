@@ -806,11 +806,11 @@ def generateEnvironmentFile() {
         // These will be passed directly as Docker environment variables instead
     }
 
-    // Build environment content securely - EXCLUDE sensitive credentials
-    // These will be passed directly as Docker environment variables instead
+    // Build environment content securely - EXCLUDE ALL sensitive credentials
+    // These will be passed directly as Docker environment variables via withCredentials
     def envLines = [
         '# Environment variables for infrastructure deployment containers',
-        '# NOTE: Sensitive credentials are passed via Docker -e flags for security',
+        '# NOTE: All sensitive credentials are passed via Jenkins withCredentials block for security',
         "TF_WORKSPACE=${env.TF_WORKSPACE}",
         "BUILD_NUMBER=${env.BUILD_NUMBER}",
         "JOB_NAME=${env.JOB_NAME}",
@@ -825,12 +825,12 @@ def generateEnvironmentFile() {
         "RANCHER_HOSTNAME=${env.RANCHER_HOSTNAME}",
         "PRIVATE_REGISTRY_URL=${env.PRIVATE_REGISTRY_URL}",
         "PRIVATE_REGISTRY_USERNAME=${env.PRIVATE_REGISTRY_USERNAME}",
-        '# PRIVATE_REGISTRY_PASSWORD excluded - will be passed via Docker env',
+        '# PRIVATE_REGISTRY_PASSWORD excluded - will be passed via withCredentials',
         '',
         '# Ansible Configuration',
         "ANSIBLE_VARIABLES=${env.ANSIBLE_VARIABLES}",
         '',
-        '# AWS Region Configuration (credentials passed via Docker -e flags)',
+        '# AWS Region Configuration (credentials passed via withCredentials)',
         "AWS_REGION=${env.AWS_REGION}",
         '',
         '# S3 Backend Configuration for OpenTofu',
@@ -838,8 +838,11 @@ def generateEnvironmentFile() {
         "S3_REGION=${env.S3_REGION}",
         "S3_KEY_PREFIX=${env.S3_KEY_PREFIX}",
         '',
-        '# SSH key name (key content passed via Docker -e flags)',
-        "AWS_SSH_KEY_NAME=${awsSshKeyName ?: ''}"
+        '# SSH key name (key content passed via withCredentials)',
+        "AWS_SSH_KEY_NAME=${awsSshKeyName ?: ''}",
+        '',
+        '# AWS credentials excluded - will be passed via withCredentials',
+        '# SLACK webhook excluded - will be passed via withCredentials'
     ]
 
     def envContent = envLines.join('\n')
@@ -993,27 +996,37 @@ def validateSensitiveDataHandling() {
 
     def validationErrors = []
 
-    // Validate AWS credentials are properly configured (not exposed in environment file)
+    // Validate AWS credentials are NOT exposed in environment file (new security approach)
     try {
         def envFileContent = ''
         if (fileExists(env.ENV_FILE)) {
             envFileContent = readFile(file: env.ENV_FILE)
         }
 
-        // Check for plaintext credentials in environment file
-        if (envFileContent.contains('AWS_SECRET_ACCESS_KEY=') &&
-            !envFileContent.contains('AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}')) {
-            validationErrors.add('AWS credentials may be exposed in environment file')
+        // Check for ANY plaintext credentials in environment file (should not exist)
+        if (envFileContent.contains('AWS_SECRET_ACCESS_KEY=')) {
+            validationErrors.add('AWS credentials are exposed in environment file - should use withCredentials')
         }
 
-        if (envFileContent.contains('AWS_SSH_PEM_KEY=') &&
-            !envFileContent.contains('AWS_SSH_PEM_KEY=${AWS_SSH_PEM_KEY:-}')) {
-            validationErrors.add('SSH private key may be exposed in environment file')
+        if (envFileContent.contains('AWS_ACCESS_KEY_ID=')) {
+            validationErrors.add('AWS credentials are exposed in environment file - should use withCredentials')
         }
 
-        if (envFileContent.contains('PRIVATE_REGISTRY_PASSWORD=') &&
-            !envFileContent.contains('PRIVATE_REGISTRY_PASSWORD=${PRIVATE_REGISTRY_PASSWORD:-}')) {
-            validationErrors.add('Private registry password may be exposed in environment file')
+        if (envFileContent.contains('AWS_SSH_PEM_KEY=')) {
+            validationErrors.add('SSH private key is exposed in environment file - should use withCredentials')
+        }
+
+        if (envFileContent.contains('PRIVATE_REGISTRY_PASSWORD=')) {
+            validationErrors.add('Private registry password is exposed in environment file - should use withCredentials')
+        }
+
+        if (envFileContent.contains('SLACK_WEBHOOK=')) {
+            validationErrors.add('Slack webhook is exposed in environment file - should use withCredentials')
+        }
+
+        // Verify that environment file contains proper comments about credential handling
+        if (!envFileContent.contains('withCredentials')) {
+            logWarning('Environment file should mention withCredentials for security')
         }
 
     } catch (Exception e) {
@@ -1078,7 +1091,7 @@ def validateSensitiveDataHandling() {
         // Consider making this stricter based on security requirements
         logWarning('Security validation completed with warnings - review and address issues')
     } else {
-        logInfo('✅ All sensitive data handling validations passed')
+        logInfo('✅ All sensitive data handling validations passed - credentials properly secured with withCredentials')
     }
 
     logInfo('Sensitive data handling validation completed')
@@ -1129,8 +1142,8 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
     // Prepare Docker command with environment file mounting
     def dockerCmd = buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv)
 
-    // Execute Docker command with fallback strategy
-    executeDockerCommandWithFallback(dockerCmd, scriptFile, extraEnv)
+    // Execute Docker command with credentials and fallback strategy
+    executeDockerCommandWithCredentials(dockerCmd, scriptFile, extraEnv)
 }
 
 def buildEnvironmentVariables(extraEnv) {
@@ -1152,7 +1165,6 @@ def buildEnvironmentVariables(extraEnv) {
 def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     def envFilePath = "${pwd()}/${env.ENV_FILE}"
     def inventoryMount = buildInventoryMount()
-    def secureCredentials = buildSecureCredentialVariables()
 
     // Validate required inputs
     if (!env.IMAGE_NAME) {
@@ -1208,13 +1220,13 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
 
     def volumeMountStr = volumeMounts.join(' \\\n            ')
 
-    // Construct the base command with proper escaping
+    // Construct the base command with proper escaping - NO secureCredentials here
+    // Credentials will be passed via withCredentials block to avoid interpolation
     def baseCmd = """docker run --rm \\
             ${volumeMountStr} \\
             --name ${escapedContainerName} \\
             -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
             ${envVars} \\
-            ${secureCredentials} \\
             "${env.IMAGE_NAME.trim()}\""""
 
     // Use a safer execution pattern
@@ -1235,7 +1247,7 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     return "${baseCmd} ${executionCmd}"
 }
 
-def executeDockerCommandWithFallback(dockerCmd, scriptFile, extraEnv = [:]) {
+def executeDockerCommandWithCredentials(dockerCmd, scriptFile, extraEnv = [:]) {
     def dockerSuccess = false
 
     // Pre-execution validation
@@ -1245,45 +1257,59 @@ def executeDockerCommandWithFallback(dockerCmd, scriptFile, extraEnv = [:]) {
     logInfo('Executing Docker command (sensitive data masked):')
     logInfo(maskSensitiveData(dockerCmd))
 
-    // Approach 1: Try the primary command first (with environment file mounting)
-    try {
-        logInfo('Attempting Docker execution with environment file mounting...')
-
-        // Add timeout and better error handling
-        timeout(time: 30, unit: 'MINUTES') {
-            sh dockerCmd
+    // Execute Docker command within withCredentials block to avoid interpolation
+    withCredentials([
+        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
+        string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')
+    ]) {
+        // Add PRIVATE_REGISTRY_PASSWORD from environment if available
+        if (env.PRIVATE_REGISTRY_PASSWORD) {
+            // This is already in the environment from parameters, no need to interpolate
         }
 
-        logInfo("✅ Docker command executed successfully with environment file mounting")
-        dockerSuccess = true
-    } catch (Exception primaryException) {
-        logWarning("Primary Docker command failed: ${primaryException.message}")
-
-        // Cleanup any dangling containers before fallback
-        cleanupDanglingContainers()
-
-        // Approach 2: Try fallback with direct environment variables
+        // Approach 1: Try the primary command first (with environment file mounting)
         try {
-            logInfo('Attempting Docker execution with direct environment variables...')
-            def fallbackCmd = buildFallbackDockerCommand(scriptFile, extraEnv)
-            logInfo('Executing fallback docker command (sensitive data masked):')
-            logInfo(maskSensitiveData(fallbackCmd))
+            logInfo('Attempting Docker execution with environment file mounting...')
 
+            // Add timeout and better error handling
             timeout(time: 30, unit: 'MINUTES') {
-                sh fallbackCmd
+                sh dockerCmd
             }
 
-            logInfo("✅ Fallback Docker command executed successfully with direct environment variables")
+            logInfo("✅ Docker command executed successfully with environment file mounting")
             dockerSuccess = true
-        } catch (Exception fallbackException) {
-            logError('All Docker execution approaches failed:')
-            logError("  Primary (env file): ${primaryException.message}")
-            logError("  Fallback (direct env): ${fallbackException.message}")
+        } catch (Exception primaryException) {
+            logWarning("Primary Docker command failed: ${primaryException.message}")
 
-            // Additional diagnostic information
-            provideDockerDiagnostics()
+            // Cleanup any dangling containers before fallback
+            cleanupDanglingContainers()
 
-            throw fallbackException
+            // Approach 2: Try fallback with direct environment variables
+            try {
+                logInfo('Attempting Docker execution with direct environment variables...')
+                def fallbackCmd = buildFallbackDockerCommand(scriptFile, extraEnv)
+                logInfo('Executing fallback docker command (sensitive data masked):')
+                logInfo(maskSensitiveData(fallbackCmd))
+
+                timeout(time: 30, unit: 'MINUTES') {
+                    sh fallbackCmd
+                }
+
+                logInfo("✅ Fallback Docker command executed successfully with direct environment variables")
+                dockerSuccess = true
+            } catch (Exception fallbackException) {
+                logError('All Docker execution approaches failed:')
+                logError("  Primary (env file): ${primaryException.message}")
+                logError("  Fallback (direct env): ${fallbackException.message}")
+
+                // Additional diagnostic information
+                provideDockerDiagnostics()
+
+                throw fallbackException
+            }
         }
     }
 
@@ -1302,7 +1328,6 @@ def executeDockerCommandWithFallback(dockerCmd, scriptFile, extraEnv = [:]) {
 def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
     def directEnvVars = buildDirectEnvironmentVariables()
     def explicitEnvVars = buildEnvironmentVariables(extraEnv)
-    def secureCredentials = buildSecureCredentialVariables()
     def inventoryMount = buildInventoryMount()
 
     // Validate required inputs
@@ -1354,7 +1379,8 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
 
     def volumeMountStr = volumeMounts.join(' \\\n            ')
 
-    // Construct the base command with proper escaping
+    // Construct the base command with proper escaping - NO secureCredentials here
+    // Credentials will be passed via withCredentials block to avoid interpolation
     def baseCmd = """docker run --rm \\
             ${volumeMountStr} \\
             --name ${escapedContainerName} \\
@@ -1363,7 +1389,6 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
             -e TERRAFORM_VARS_FILENAME="${env.TERRAFORM_VARS_FILENAME}" \\
             ${directEnvVars} \\
             ${explicitEnvVars} \\
-            ${secureCredentials} \\
             "${env.IMAGE_NAME.trim()}\""""
 
     // Use a safer execution pattern for fallback
@@ -1529,15 +1554,16 @@ def buildDirectEnvironmentVariables() {
                     if (parts.length == 2) {
                         def key = parts[0].trim()
                         def value = parts[1].trim()
-                        // Pass all required variables for Rancher deployment
-                        if (key == 'AWS_ACCESS_KEY_ID' || key == 'AWS_SECRET_ACCESS_KEY' || key == 'AWS_REGION' ||
+                        // Pass only NON-SENSITIVE variables for Rancher deployment
+                        // Sensitive variables will be passed via withCredentials block
+                        if (key == 'AWS_REGION' ||
                             key == 'S3_BUCKET_NAME' || key == 'S3_REGION' || key == 'S3_KEY_PREFIX' ||
                             key == 'ANSIBLE_VARIABLES' || key == 'RKE2_VERSION' || key == 'RANCHER_VERSION' ||
                             key == 'HOSTNAME_PREFIX' ||
-                            key == 'PRIVATE_REGISTRY_URL' || key == 'PRIVATE_REGISTRY_USERNAME' || key == 'PRIVATE_REGISTRY_PASSWORD' ||
+                            key == 'PRIVATE_REGISTRY_URL' || key == 'PRIVATE_REGISTRY_USERNAME' ||
                             key == 'RANCHER_HOSTNAME' ||
                             key == 'QA_INFRA_WORK_PATH' || key == 'TF_WORKSPACE' || key == 'TERRAFORM_VARS_FILENAME' ||
-                            (key.startsWith('AWS_SSH_') && !key.contains('SECRET') && !key.contains('PASSWORD'))) {
+                            key == 'AWS_SSH_KEY_NAME') {
                             // Properly escape the value to prevent command injection
                             def escapedValue = value.replace('"', '\\"').replace('$', '\\$')
                             directEnvVars += " -e \"${key}=${escapedValue}\""
@@ -1554,50 +1580,9 @@ def buildDirectEnvironmentVariables() {
 }
 
 def buildSecureCredentialVariables() {
-    def secureEnvVars = ''
-
-    // Get credentials within withCredentials block to ensure they're available
-    withCredentials([
-        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
-        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
-        string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')
-    ]) {
-        // Add AWS credentials securely
-        if (env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) {
-            def escapedKeyId = env.AWS_ACCESS_KEY_ID.replace('"', '\\"').replace('$', '\\$')
-            def escapedSecretKey = env.AWS_SECRET_ACCESS_KEY.replace('"', '\\"').replace('$', '\\$')
-            secureEnvVars += " -e \"AWS_ACCESS_KEY_ID=${escapedKeyId}\""
-            secureEnvVars += " -e \"AWS_SECRET_ACCESS_KEY=${escapedSecretKey}\""
-            logInfo('AWS credentials added to secure environment variables')
-        }
-
-        // Add SSH credentials securely
-        if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
-            def escapedPemKey = env.AWS_SSH_PEM_KEY.replace('"', '\\"').replace('$', '\\$')
-            def escapedKeyName = env.AWS_SSH_KEY_NAME.replace('"', '\\"').replace('$', '\\$')
-            secureEnvVars += " -e \"AWS_SSH_PEM_KEY=${escapedPemKey}\""
-            secureEnvVars += " -e \"AWS_SSH_KEY_NAME=${escapedKeyName}\""
-            logInfo('SSH credentials added to secure environment variables')
-        }
-
-        // Add private registry password securely
-        if (env.PRIVATE_REGISTRY_PASSWORD) {
-            def escapedPassword = env.PRIVATE_REGISTRY_PASSWORD.replace('"', '\\"').replace('$', '\\$')
-            secureEnvVars += " -e \"PRIVATE_REGISTRY_PASSWORD=${escapedPassword}\""
-            logInfo('Private registry password added to secure environment variables')
-        }
-
-        // Add Slack webhook securely
-        if (env.SLACK_WEBHOOK) {
-            def escapedWebhook = env.SLACK_WEBHOOK.replace('"', '\\"').replace('$', '\\$')
-            secureEnvVars += " -e \"SLACK_WEBHOOK=${escapedWebhook}\""
-            logInfo('Slack webhook added to secure environment variables')
-        }
-    }
-
-    return secureEnvVars
+    // Return empty string - credentials will be passed via withCredentials block
+    // This prevents Groovy String interpolation of sensitive values
+    return ''
 }
 
 def cleanupContainersAndVolumes() {
