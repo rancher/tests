@@ -469,6 +469,7 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
   def timestamp = System.currentTimeMillis()
   def containerName = "${env.BUILD_CONTAINER_NAME}-script-${timestamp}"
   def scriptFile = "docker-script-${timestamp}.sh"
+  def credentialEnvFile = null
 
   writeFile file: scriptFile, text: scriptContent
 
@@ -491,11 +492,8 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
       string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
       string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
     ]) {
-      // Build credential environment variables for Docker
-      def credentialEnvVars = [
-        'AWS_ACCESS_KEY_ID',
-        'AWS_SECRET_ACCESS_KEY'
-      ]
+      // Create a temporary environment file with credentials
+      credentialEnvFile = createCredentialEnvironmentFile()
       
       // Build the base Docker command
       def dockerCmd = """
@@ -515,8 +513,8 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
                   sh /tmp/script.sh
           """
       
-      // Add credentials to Docker command without interpolation
-      def modifiedDockerCmd = addCredentialsToDockerCommand(dockerCmd, credentialEnvVars)
+      // Add credential environment file to Docker command without exposing credentials in logs
+      def modifiedDockerCmd = addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile)
       
       sh modifiedDockerCmd
     }
@@ -525,6 +523,16 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
     throw e
     } finally {
     sh "rm -f ${scriptFile}"
+    
+    // Cleanup credential environment file
+    try {
+      if (credentialEnvFile && fileExists(credentialEnvFile)) {
+        sh "shred -vfz -n 3 ${credentialEnvFile} 2>/dev/null || rm -f ${credentialEnvFile}"
+        logInfo("Credential environment file securely shredded")
+      }
+    } catch (Exception cleanupException) {
+      logWarning("Failed to cleanup credential environment file: ${cleanupException.message}")
+    }
   }
 }
 
@@ -824,6 +832,7 @@ def executeInContainer(commands) {
   def timestamp = System.currentTimeMillis()
   def containerName = "${env.BUILD_CONTAINER_NAME}-${timestamp}"
   def scriptFile = "destroy-commands-${timestamp}.sh"
+  def credentialEnvFile = null
 
   writeFile file: scriptFile, text: commandString
 
@@ -832,11 +841,8 @@ def executeInContainer(commands) {
     string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
     string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
   ]) {
-    // Build credential environment variables for Docker
-    def credentialEnvVars = [
-      'AWS_ACCESS_KEY_ID',
-      'AWS_SECRET_ACCESS_KEY'
-    ]
+    // Create a temporary environment file with credentials
+    credentialEnvFile = createCredentialEnvironmentFile()
     
     // Build the base Docker command
     def dockerCmd = """
@@ -851,13 +857,23 @@ def executeInContainer(commands) {
               sh /tmp/script.sh
       """
     
-    // Add credentials to Docker command without interpolation
-    def modifiedDockerCmd = addCredentialsToDockerCommand(dockerCmd, credentialEnvVars)
+    // Add credential environment file to Docker command without exposing credentials in logs
+    def modifiedDockerCmd = addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile)
     
     sh modifiedDockerCmd
   }
 
   sh "rm -f ${scriptFile}"
+  
+  // Cleanup credential environment file
+  try {
+    if (credentialEnvFile && fileExists(credentialEnvFile)) {
+      sh "shred -vfz -n 3 ${credentialEnvFile} 2>/dev/null || rm -f ${credentialEnvFile}"
+      logInfo("Credential environment file securely shredded")
+    }
+  } catch (Exception e) {
+    logWarning("Failed to cleanup credential environment file: ${e.message}")
+  }
 }
 
 def cleanupContainersAndVolumes() {
@@ -1058,31 +1074,51 @@ def getAwsRegion() {
   return 'us-east-2'
 }
 
-def addCredentialsToDockerCommand(dockerCmd, credentialEnvVars) {
-  // Add credential environment variables to Docker command without interpolation
+def createCredentialEnvironmentFile() {
+  // Create a temporary environment file with credentials
+  def timestamp = System.currentTimeMillis()
+  def credentialEnvFile = "docker-credentials-${timestamp}.env"
+  
+  def envContent = []
+  
+  // Add AWS credentials
+  if (env.AWS_ACCESS_KEY_ID) {
+    envContent.add("AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}")
+  }
+  if (env.AWS_SECRET_ACCESS_KEY) {
+    envContent.add("AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}")
+  }
+  
+  // Write the environment file
+  writeFile file: credentialEnvFile, text: envContent.join('\n')
+  
+  // Set secure permissions
+  sh "chmod 600 ${credentialEnvFile}"
+  
+  logInfo("Created credential environment file: ${credentialEnvFile}")
+  return credentialEnvFile
+}
+
+def addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile) {
+  // Add credential environment file to Docker command without exposing credentials in logs
   def modifiedCmd = dockerCmd
   
-  // Find the position where we should insert the credential environment variables
-  // This should be after the container name but before the image name
-  def insertionPoint = modifiedCmd.lastIndexOf('--name')
-  if (insertionPoint != -1) {
-    // Find the end of the --name parameter
-    def nameEndIndex = modifiedCmd.indexOf(' ', insertionPoint)
-    if (nameEndIndex != -1) {
-      // Find the next space after the container name
-      def nextSpaceIndex = modifiedCmd.indexOf(' ', nameEndIndex + 1)
-      if (nextSpaceIndex != -1) {
-        // Insert credential environment variables here
-        def credentialFlags = []
-        credentialEnvVars.each { varName ->
-          // Use ${varName} syntax to reference environment variables without interpolation
-          credentialFlags.add("-e \"${varName}=\${${varName}}\"")
+  if (credentialEnvFile) {
+    // Find the position where we should insert the credential environment file
+    // This should be after the container name but before the image name
+    def insertionPoint = modifiedCmd.lastIndexOf('--name')
+    if (insertionPoint != -1) {
+      // Find the end of the --name parameter
+      def nameEndIndex = modifiedCmd.indexOf(' ', insertionPoint)
+      if (nameEndIndex != -1) {
+        // Find the next space after the container name
+        def nextSpaceIndex = modifiedCmd.indexOf(' ', nameEndIndex + 1)
+        if (nextSpaceIndex != -1) {
+          // Insert the credential environment file here
+          modifiedCmd = modifiedCmd.substring(0, nextSpaceIndex) +
+                       ' \\\n              --env-file ' + credentialEnvFile +
+                       modifiedCmd.substring(nextSpaceIndex)
         }
-        def credentialFlagsStr = credentialFlags.join(' \\\n              ')
-        
-        modifiedCmd = modifiedCmd.substring(0, nextSpaceIndex) +
-                     ' \\\n              ' + credentialFlagsStr +
-                     modifiedCmd.substring(nextSpaceIndex)
       }
     }
   }
