@@ -491,7 +491,14 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
       string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
       string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
     ]) {
-      sh """
+      // Build credential environment variables for Docker
+      def credentialEnvVars = [
+        'AWS_ACCESS_KEY_ID',
+        'AWS_SECRET_ACCESS_KEY'
+      ]
+      
+      // Build the base Docker command
+      def dockerCmd = """
               docker run --rm \\
                   -v ${env.VALIDATION_VOLUME}:/root \\
                   -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
@@ -507,6 +514,11 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
                   ${env.IMAGE_NAME} \\
                   sh /tmp/script.sh
           """
+      
+      // Add credentials to Docker command without interpolation
+      def modifiedDockerCmd = addCredentialsToDockerCommand(dockerCmd, credentialEnvVars)
+      
+      sh modifiedDockerCmd
     }
     } catch (Exception e) {
     logError("Script execution failed: ${e.message}")
@@ -820,7 +832,14 @@ def executeInContainer(commands) {
     string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
     string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
   ]) {
-    sh """
+    // Build credential environment variables for Docker
+    def credentialEnvVars = [
+      'AWS_ACCESS_KEY_ID',
+      'AWS_SECRET_ACCESS_KEY'
+    ]
+    
+    // Build the base Docker command
+    def dockerCmd = """
           docker run --rm \\
               -v ${env.VALIDATION_VOLUME}:/root \\
               -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
@@ -831,6 +850,11 @@ def executeInContainer(commands) {
               ${env.IMAGE_NAME} \\
               sh /tmp/script.sh
       """
+    
+    // Add credentials to Docker command without interpolation
+    def modifiedDockerCmd = addCredentialsToDockerCommand(dockerCmd, credentialEnvVars)
+    
+    sh modifiedDockerCmd
   }
 
   sh "rm -f ${scriptFile}"
@@ -1032,4 +1056,36 @@ def getAwsRegion() {
     return paramValue.trim()
   }
   return 'us-east-2'
+}
+
+def addCredentialsToDockerCommand(dockerCmd, credentialEnvVars) {
+  // Add credential environment variables to Docker command without interpolation
+  def modifiedCmd = dockerCmd
+  
+  // Find the position where we should insert the credential environment variables
+  // This should be after the container name but before the image name
+  def insertionPoint = modifiedCmd.lastIndexOf('--name')
+  if (insertionPoint != -1) {
+    // Find the end of the --name parameter
+    def nameEndIndex = modifiedCmd.indexOf(' ', insertionPoint)
+    if (nameEndIndex != -1) {
+      // Find the next space after the container name
+      def nextSpaceIndex = modifiedCmd.indexOf(' ', nameEndIndex + 1)
+      if (nextSpaceIndex != -1) {
+        // Insert credential environment variables here
+        def credentialFlags = []
+        credentialEnvVars.each { varName ->
+          // Use ${varName} syntax to reference environment variables without interpolation
+          credentialFlags.add("-e \"${varName}=\${${varName}}\"")
+        }
+        def credentialFlagsStr = credentialFlags.join(' \\\n              ')
+        
+        modifiedCmd = modifiedCmd.substring(0, nextSpaceIndex) +
+                     ' \\\n              ' + credentialFlagsStr +
+                     modifiedCmd.substring(nextSpaceIndex)
+      }
+    }
+  }
+  
+  return modifiedCmd
 }

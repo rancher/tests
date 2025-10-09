@@ -1270,13 +1270,19 @@ def executeDockerCommandWithCredentials(dockerCmd, scriptFile, extraEnv = [:]) {
             // This is already in the environment from parameters, no need to interpolate
         }
 
+        // Build credential environment variables for Docker
+        def credentialEnvVars = buildCredentialEnvironmentVariables()
+
+        // Modify the Docker command to include credentials as environment variables
+        def modifiedDockerCmd = addCredentialsToDockerCommand(dockerCmd, credentialEnvVars)
+
         // Approach 1: Try the primary command first (with environment file mounting)
         try {
             logInfo('Attempting Docker execution with environment file mounting...')
 
             // Add timeout and better error handling
             timeout(time: 30, unit: 'MINUTES') {
-                sh dockerCmd
+                sh modifiedDockerCmd
             }
 
             logInfo("✅ Docker command executed successfully with environment file mounting")
@@ -1291,11 +1297,12 @@ def executeDockerCommandWithCredentials(dockerCmd, scriptFile, extraEnv = [:]) {
             try {
                 logInfo('Attempting Docker execution with direct environment variables...')
                 def fallbackCmd = buildFallbackDockerCommand(scriptFile, extraEnv)
+                def modifiedFallbackCmd = addCredentialsToDockerCommand(fallbackCmd, credentialEnvVars)
                 logInfo('Executing fallback docker command (sensitive data masked):')
-                logInfo(maskSensitiveData(fallbackCmd))
+                logInfo(maskSensitiveData(modifiedFallbackCmd))
 
                 timeout(time: 30, unit: 'MINUTES') {
-                    sh fallbackCmd
+                    sh modifiedFallbackCmd
                 }
 
                 logInfo("✅ Fallback Docker command executed successfully with direct environment variables")
@@ -1583,6 +1590,57 @@ def buildSecureCredentialVariables() {
     // Return empty string - credentials will be passed via withCredentials block
     // This prevents Groovy String interpolation of sensitive values
     return ''
+}
+
+def buildCredentialEnvironmentVariables() {
+    // Build credential environment variables for Docker without interpolation
+    // These will be added to the Docker command as -e flags
+    def credentialEnvVars = [
+        'AWS_ACCESS_KEY_ID',
+        'AWS_SECRET_ACCESS_KEY',
+        'AWS_SSH_PEM_KEY',
+        'AWS_SSH_KEY_NAME',
+        'SLACK_WEBHOOK'
+    ]
+    
+    // Add PRIVATE_REGISTRY_PASSWORD if it exists in the environment
+    if (env.PRIVATE_REGISTRY_PASSWORD) {
+        credentialEnvVars.add('PRIVATE_REGISTRY_PASSWORD')
+    }
+    
+    return credentialEnvVars
+}
+
+def addCredentialsToDockerCommand(dockerCmd, credentialEnvVars) {
+    // Add credential environment variables to Docker command without interpolation
+    def modifiedCmd = dockerCmd
+    
+    // Find the position where we should insert the credential environment variables
+    // This should be after the container name but before the image name
+    def insertionPoint = modifiedCmd.lastIndexOf('--name')
+    if (insertionPoint != -1) {
+        // Find the end of the --name parameter
+        def nameEndIndex = modifiedCmd.indexOf(' ', insertionPoint)
+        if (nameEndIndex != -1) {
+            // Find the next space after the container name
+            def nextSpaceIndex = modifiedCmd.indexOf(' ', nameEndIndex + 1)
+            if (nextSpaceIndex != -1) {
+                // Insert credential environment variables here
+                def credentialFlags = []
+                credentialEnvVars.each { varName ->
+                    // Use ${varName} syntax to reference environment variables without interpolation
+                    credentialFlags.add("-e \"${varName}=\${${varName}}\"")
+                }
+                def credentialFlagsStr = credentialFlags.join(' \\\n            ')
+                
+                modifiedCmd = modifiedCmd.substring(0, nextSpaceIndex) +
+                             ' \\\n            ' + credentialFlagsStr +
+                             modifiedCmd.substring(nextSpaceIndex)
+            }
+        }
+    }
+    
+    return modifiedCmd
 }
 
 def cleanupContainersAndVolumes() {
