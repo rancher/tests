@@ -380,9 +380,11 @@ def generateDestructionEnvironmentFile() {
   logInfo("Using S3_REGION: '${s3Region}'")
   logInfo("Using AWS_REGION: '${awsRegion}'")
 
-  // Build environment content securely without direct interpolation of secrets
+  // Build environment content securely WITHOUT credentials
+  // Credentials will be passed via withCredentials block
   def envLines = [
         '# Environment variables for infrastructure destruction containers',
+        '# NOTE: All sensitive credentials are passed via Jenkins withCredentials block for security',
         "TARGET_WORKSPACE=${env.TARGET_WORKSPACE}",
         "BUILD_NUMBER=${env.BUILD_NUMBER}",
         "JOB_NAME=${env.JOB_NAME}",
@@ -393,17 +395,11 @@ def generateDestructionEnvironmentFile() {
         "S3_REGION=${s3Region}",
         "AWS_REGION=${awsRegion}",
         '',
-        '# AWS Credentials for OpenTofu'
+        '# AWS Credentials excluded - will be passed via withCredentials',
+        '',
+        '# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)',
+        'TF_VAR_aws_region=' + awsRegion
     ]
-
-  // Add credentials securely
-  envLines.add('AWS_ACCESS_KEY_ID=' + env.AWS_ACCESS_KEY_ID)
-  envLines.add('AWS_SECRET_ACCESS_KEY=' + env.AWS_SECRET_ACCESS_KEY)
-  envLines.add('')
-  envLines.add('# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)')
-  envLines.add('TF_VAR_aws_access_key=' + env.AWS_ACCESS_KEY_ID)
-  envLines.add('TF_VAR_aws_secret_access_key=' + env.AWS_SECRET_ACCESS_KEY)
-  envLines.add('TF_VAR_aws_region=' + awsRegion)
 
   def envContent = envLines.join('\n')
   writeFile file: env.ENV_FILE, text: envContent
@@ -490,22 +486,28 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
     def s3Region = env.S3_REGION ?: params.S3_REGION ?: 'us-east-2'
     def awsRegion = env.AWS_REGION ?: params.S3_REGION ?: 'us-east-2'
 
-    sh """
-            docker run --rm \\
-                -v ${env.VALIDATION_VOLUME}:/root \\
-                -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-                --name ${containerName} \\
-                -t --env-file ${env.ENV_FILE} \\
-                -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \\
-                -e TF_WORKSPACE=${env.TF_WORKSPACE} \\
-                -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME} \\
-                -e S3_BUCKET_NAME="${s3BucketName}" \\
-                -e S3_KEY_PREFIX="${s3KeyPrefix}" \\
-                -e S3_REGION="${s3Region}" \\
-                -e AWS_REGION="${awsRegion}" ${envVars} \\
-                ${env.IMAGE_NAME} \\
-                sh /tmp/script.sh
-        """
+    // Execute Docker command within withCredentials block to avoid interpolation
+    withCredentials([
+      string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+      string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+    ]) {
+      sh """
+              docker run --rm \\
+                  -v ${env.VALIDATION_VOLUME}:/root \\
+                  -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+                  --name ${containerName} \\
+                  -t --env-file ${env.ENV_FILE} \\
+                  -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \\
+                  -e TF_WORKSPACE=${env.TF_WORKSPACE} \\
+                  -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME} \\
+                  -e S3_BUCKET_NAME="${s3BucketName}" \\
+                  -e S3_KEY_PREFIX="${s3KeyPrefix}" \\
+                  -e S3_REGION="${s3Region}" \\
+                  -e AWS_REGION="${awsRegion}" ${envVars} \\
+                  ${env.IMAGE_NAME} \\
+                  sh /tmp/script.sh
+          """
+    }
     } catch (Exception e) {
     logError("Script execution failed: ${e.message}")
     throw e
@@ -813,17 +815,23 @@ def executeInContainer(commands) {
 
   writeFile file: scriptFile, text: commandString
 
-  sh """
-        docker run --rm \\
-            -v ${env.VALIDATION_VOLUME}:/root \\
-            -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-            --name ${containerName} \\
-            -t --env-file ${env.ENV_FILE} \\
-            -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \\
-            -e TF_WORKSPACE=${env.TARGET_WORKSPACE} \\
-            ${env.IMAGE_NAME} \\
-            sh /tmp/script.sh
-    """
+  // Execute Docker command within withCredentials block to avoid interpolation
+  withCredentials([
+    string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+  ]) {
+    sh """
+          docker run --rm \\
+              -v ${env.VALIDATION_VOLUME}:/root \\
+              -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+              --name ${containerName} \\
+              -t --env-file ${env.ENV_FILE} \\
+              -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \\
+              -e TF_WORKSPACE=${env.TARGET_WORKSPACE} \\
+              ${env.IMAGE_NAME} \\
+              sh /tmp/script.sh
+      """
+  }
 
   sh "rm -f ${scriptFile}"
 }
