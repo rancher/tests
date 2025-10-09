@@ -35,6 +35,15 @@ replace_placeholder() {
 echo "=== Generating Ansible group_vars/all.yml ==="
 
 # Validate required inputs
+if [[ -z "${ANSIBLE_VARIABLES}" && -n "${ANSIBLE_VARIABLES_FILE}" ]]; then
+    if [[ -f "${ANSIBLE_VARIABLES_FILE}" ]]; then
+        ANSIBLE_VARIABLES="$(cat "${ANSIBLE_VARIABLES_FILE}")"
+    else
+        echo "ERROR: ANSIBLE_VARIABLES_FILE '${ANSIBLE_VARIABLES_FILE}' does not exist"
+        exit 1
+    fi
+fi
+
 if [[ -z "${ANSIBLE_VARIABLES}" ]]; then
     echo "ERROR: ANSIBLE_VARIABLES environment variable is not set"
     exit 1
@@ -194,7 +203,10 @@ fi
 echo "=== group_vars/all.yml generation completed ==="
 
 # Also copy to standard location for backward compatibility
-mkdir -p /root/ansible/rke2/airgap/group_vars
-cp "${OUTPUT_FILE}" /root/ansible/rke2/airgap/group_vars/all.yml
-
-echo "✓ group_vars/all.yml copied to standard locations"
+TARGET_GROUP_VARS_DIR="/root/ansible/rke2/airgap/group_vars"
+if mkdir -p "${TARGET_GROUP_VARS_DIR}" 2>/dev/null; then
+    cp "${OUTPUT_FILE}" "${TARGET_GROUP_VARS_DIR}/all.yml"
+    echo "✓ group_vars/all.yml copied to ${TARGET_GROUP_VARS_DIR}"
+else
+    echo "⚠ Skipping copy to ${TARGET_GROUP_VARS_DIR} (insufficient permissions)"
+fi
