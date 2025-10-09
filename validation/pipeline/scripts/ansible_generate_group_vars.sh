@@ -160,24 +160,38 @@ fi
 # Write the processed ANSIBLE_VARIABLES to the file, removing leading document separators
 printf '%s\n' "${PROCESSED_ANSIBLE_VARIABLES}" | tr -d '\r' | sed 's/^---//' >> "${OUTPUT_FILE}"
 
-# Validate YAML syntax
-echo "=== Validating generated YAML ==="
-if command -v python3 &>/dev/null; then
-    if python3 -c "import yaml, sys; yaml.safe_load(open('${OUTPUT_FILE}', encoding='utf-8'))" 2>&1; then
-        echo "✓ Generated YAML is valid"
+# Determine whether strict YAML validation should run
+SHOULD_VALIDATE_YAML="true"
+if [[ "${PROCESSED_ANSIBLE_VARIABLES}" == *"{{"* ]] || [[ "${PROCESSED_ANSIBLE_VARIABLES}" == *"}}"* ]]; then
+    echo "⚠ Detected templating tokens ({{ }}) in ANSIBLE_VARIABLES payload; skipping strict YAML validation"
+    SHOULD_VALIDATE_YAML="false"
+elif [[ "${SKIP_YAML_VALIDATION}" == "true" ]]; then
+    echo "⚠ SKIP_YAML_VALIDATION flag set; skipping strict YAML validation"
+    SHOULD_VALIDATE_YAML="false"
+fi
+
+# Validate YAML syntax when safe to do so
+if [[ "${SHOULD_VALIDATE_YAML}" == "true" ]]; then
+    echo "=== Validating generated YAML ==="
+    if command -v python3 &>/dev/null; then
+        if python3 -c "import yaml, sys; yaml.safe_load(open('${OUTPUT_FILE}', encoding='utf-8'))" 2>&1; then
+            echo "✓ Generated YAML is valid"
+        else
+            echo "✗ Generated YAML has syntax errors"
+            exit 1
+        fi
+    elif command -v yamllint &>/dev/null; then
+        if yamllint "${OUTPUT_FILE}"; then
+            echo "✓ Generated YAML is valid"
+        else
+            echo "✗ Generated YAML has validation errors"
+            exit 1
+        fi
     else
-        echo "✗ Generated YAML has syntax errors"
-        exit 1
-    fi
-elif command -v yamllint &>/dev/null; then
-    if yamllint "${OUTPUT_FILE}"; then
-        echo "✓ Generated YAML is valid"
-    else
-        echo "✗ Generated YAML has validation errors"
-        exit 1
+        echo "⚠ No YAML validation tool available, proceeding without validation"
     fi
 else
-    echo "⚠ No YAML validation tool available, proceeding without validation"
+    echo "=== Skipping strict YAML validation ==="
 fi
 
 # Display file information
