@@ -280,7 +280,7 @@ if [[ -n "${RKE2_VERSION}" ]]; then
 fi
 
 # Run ansible-playbook and capture exit code
-ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml playbooks/deploy/rancher-helm-deploy.yml -v ${EXTRA_VARS}
+ansible-playbook -i /root/ansible/rke2/airgap/inventory.yml playbooks/deploy/rancher-helm-deploy-playbook.yml -v ${EXTRA_VARS}
 ANSIBLE_EXIT_CODE=$?
 
 if [[ $ANSIBLE_EXIT_CODE -ne 0 ]]; then
