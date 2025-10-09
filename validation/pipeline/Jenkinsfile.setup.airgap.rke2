@@ -166,6 +166,11 @@ pipeline {
             name: 'ANSIBLE_VARIABLES',
             description: 'These config values are for the rancher instance use for the recurring runs.'
         )
+        booleanParam(
+            name: 'SKIP_YAML_VALIDATION',
+            defaultValue: false,
+            description: 'Skip strict YAML validation for templated group_vars payloads'
+        )
     }
 
     // Global environment variables
@@ -185,6 +190,9 @@ pipeline {
 
         // Cleanup configurations
         DESTROY_ON_FAILURE = "${params.DESTROY_ON_FAILURE}"
+
+        // Skip strict YAML Validation
+        SKIP_YAML_VALIDATION = "${params.SKIP_YAML_VALIDATION}"
 
         // Computed values
         JOB_SHORT_NAME = "${getShortJobName()}"
