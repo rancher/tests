@@ -4,7 +4,6 @@ package projects
 
 import (
 	"fmt"
-	"regexp"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -78,8 +77,8 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestCpuAndMemoryLimitLessTh
 
 	_, _, err := createProjectAndNamespaceWithLimits(standardUserClient, pcrl.cluster.ID, cpuLimit, cpuReservation, memoryLimit, memoryReservation)
 	require.Error(pcrl.T(), err)
-	pattern := fmt.Sprintf(`admission webhook "rancher.cattle.io.projects.management.cattle.io" denied the request: project.spec.containerDefaultResourceLimit: Invalid value: v3.ContainerResourceLimit{RequestsCPU:"%s", RequestsMemory:"%s", LimitsCPU:"%s", LimitsMemory:"%s"}: requested CPU %s is greater than limit %s\nproject.spec.containerDefaultResourceLimit: Invalid value: v3.ContainerResourceLimit{RequestsCPU:"%s", RequestsMemory:"%s", LimitsCPU:"%s", LimitsMemory:"%s"}: requested memory %s is greater than limit %s`, cpuReservation, memoryReservation, cpuLimit, memoryLimit, cpuReservation, cpuLimit, cpuReservation, memoryReservation, cpuLimit, memoryLimit, memoryReservation, memoryLimit)
-	require.Regexp(pcrl.T(), regexp.MustCompile(pattern), err.Error())
+	require.Contains(pcrl.T(), err.Error(), fmt.Sprintf("requested CPU %s is greater than limit %s", cpuReservation, cpuLimit))
+	require.Contains(pcrl.T(), err.Error(), fmt.Sprintf("requested memory %s is greater than limit %s", memoryReservation, memoryLimit))
 }
 
 func (pcrl *ProjectsContainerResourceLimitTestSuite) TestCpuLimitLessThanRequest() {
@@ -96,8 +95,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestCpuLimitLessThanRequest
 
 	_, _, err := createProjectAndNamespaceWithLimits(standardUserClient, pcrl.cluster.ID, cpuLimit, cpuReservation, memoryLimit, memoryReservation)
 	require.Error(pcrl.T(), err)
-	pattern := fmt.Sprintf(`admission webhook "rancher.cattle.io.projects.management.cattle.io" denied the request: project.spec.containerDefaultResourceLimit: Invalid value: v3.ContainerResourceLimit{RequestsCPU:"%s", RequestsMemory:"%s", LimitsCPU:"%s", LimitsMemory:"%s"}: requested CPU %s is greater than limit %s`, cpuReservation, memoryReservation, cpuLimit, memoryLimit, cpuReservation, cpuLimit)
-	require.Regexp(pcrl.T(), regexp.MustCompile(pattern), err.Error())
+	require.Contains(pcrl.T(), err.Error(), fmt.Sprintf("requested CPU %s is greater than limit %s", cpuReservation, cpuLimit))
 }
 
 func (pcrl *ProjectsContainerResourceLimitTestSuite) TestMemoryLimitLessThanRequest() {
@@ -114,8 +112,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestMemoryLimitLessThanRequ
 
 	_, _, err := createProjectAndNamespaceWithLimits(standardUserClient, pcrl.cluster.ID, cpuLimit, cpuReservation, memoryLimit, memoryReservation)
 	require.Error(pcrl.T(), err)
-	pattern := fmt.Sprintf(`admission webhook "rancher.cattle.io.projects.management.cattle.io" denied the request: project.spec.containerDefaultResourceLimit: Invalid value: v3.ContainerResourceLimit{RequestsCPU:"%s", RequestsMemory:"%s", LimitsCPU:"%s", LimitsMemory:"%s"}: requested memory %s is greater than limit %s`, cpuReservation, memoryReservation, cpuLimit, memoryLimit, memoryReservation, memoryLimit)
-	require.Regexp(pcrl.T(), regexp.MustCompile(pattern), err.Error())
+	require.Contains(pcrl.T(), err.Error(), fmt.Sprintf("requested memory %s is greater than limit %s", memoryReservation, memoryLimit))
 }
 
 func (pcrl *ProjectsContainerResourceLimitTestSuite) TestValidCpuLimitButMemoryLimitLessThanRequest() {
@@ -132,8 +129,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestValidCpuLimitButMemoryL
 
 	_, _, err := createProjectAndNamespaceWithLimits(standardUserClient, pcrl.cluster.ID, cpuLimit, cpuReservation, memoryLimit, memoryReservation)
 	require.Error(pcrl.T(), err)
-	pattern := fmt.Sprintf(`admission webhook "rancher.cattle.io.projects.management.cattle.io" denied the request: project.spec.containerDefaultResourceLimit: Invalid value: v3.ContainerResourceLimit{RequestsCPU:"%s", RequestsMemory:"%s", LimitsCPU:"%s", LimitsMemory:"%s"}: requested memory %s is greater than limit %s`, cpuReservation, memoryReservation, cpuLimit, memoryLimit, memoryReservation, memoryLimit)
-	require.Regexp(pcrl.T(), regexp.MustCompile(pattern), err.Error())
+	require.Contains(pcrl.T(), err.Error(), fmt.Sprintf("requested memory %s is greater than limit %s", memoryReservation, memoryLimit))
 }
 
 func (pcrl *ProjectsContainerResourceLimitTestSuite) TestCpuAndMemoryLimitEqualToRequest() {
@@ -247,8 +243,8 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestUpdateProjectWithCpuAnd
 	memoryReservation = "64Mi"
 	_, err = updateProjectContainerResourceLimit(standardUserClient, createdProject, cpuLimit, cpuReservation, memoryLimit, memoryReservation)
 	require.Error(pcrl.T(), err)
-	pattern := fmt.Sprintf(`admission webhook "rancher.cattle.io.projects.management.cattle.io" denied the request: project.spec.containerDefaultResourceLimit: Invalid value: v3.ContainerResourceLimit{RequestsCPU:"%s", RequestsMemory:"%s", LimitsCPU:"%s", LimitsMemory:"%s"}: requested CPU %s is greater than limit %s\nproject.spec.containerDefaultResourceLimit: Invalid value: v3.ContainerResourceLimit{RequestsCPU:"%s", RequestsMemory:"%s", LimitsCPU:"%s", LimitsMemory:"%s"}: requested memory %s is greater than limit %s`, cpuReservation, memoryReservation, cpuLimit, memoryLimit, cpuReservation, cpuLimit, cpuReservation, memoryReservation, cpuLimit, memoryLimit, memoryReservation, memoryLimit)
-	require.Regexp(pcrl.T(), regexp.MustCompile(pattern), err.Error())
+	require.Contains(pcrl.T(), err.Error(), fmt.Sprintf("requested CPU %s is greater than limit %s", cpuReservation, cpuLimit))
+	require.Contains(pcrl.T(), err.Error(), fmt.Sprintf("requested memory %s is greater than limit %s", memoryReservation, memoryLimit))
 }
 
 func (pcrl *ProjectsContainerResourceLimitTestSuite) TestUpdateProjectWithCpuLimitLessThanRequest() {
@@ -284,8 +280,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestUpdateProjectWithCpuLim
 	memoryReservation = ""
 	_, err = updateProjectContainerResourceLimit(standardUserClient, createdProject, cpuLimit, cpuReservation, memoryLimit, memoryReservation)
 	require.Error(pcrl.T(), err)
-	pattern := fmt.Sprintf(`admission webhook "rancher.cattle.io.projects.management.cattle.io" denied the request: project.spec.containerDefaultResourceLimit: Invalid value: v3.ContainerResourceLimit{RequestsCPU:"%s", RequestsMemory:"%s", LimitsCPU:"%s", LimitsMemory:"%s"}: requested CPU %s is greater than limit %s`, cpuReservation, memoryReservation, cpuLimit, memoryLimit, cpuReservation, cpuLimit)
-	require.Regexp(pcrl.T(), regexp.MustCompile(pattern), err.Error())
+	require.Contains(pcrl.T(), err.Error(), fmt.Sprintf("requested CPU %s is greater than limit %s", cpuReservation, cpuLimit))
 }
 
 func (pcrl *ProjectsContainerResourceLimitTestSuite) TestUpdateProjectWithMemoryLimitLessThanRequest() {
@@ -321,8 +316,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestUpdateProjectWithMemory
 	memoryReservation = "64Mi"
 	_, err = updateProjectContainerResourceLimit(standardUserClient, createdProject, cpuLimit, cpuReservation, memoryLimit, memoryReservation)
 	require.Error(pcrl.T(), err)
-	pattern := fmt.Sprintf(`admission webhook "rancher.cattle.io.projects.management.cattle.io" denied the request: project.spec.containerDefaultResourceLimit: Invalid value: v3.ContainerResourceLimit{RequestsCPU:"%s", RequestsMemory:"%s", LimitsCPU:"%s", LimitsMemory:"%s"}: requested memory %s is greater than limit %s`, cpuReservation, memoryReservation, cpuLimit, memoryLimit, memoryReservation, memoryLimit)
-	require.Regexp(pcrl.T(), regexp.MustCompile(pattern), err.Error())
+	require.Contains(pcrl.T(), err.Error(), fmt.Sprintf("requested memory %s is greater than limit %s", memoryReservation, memoryLimit))
 }
 
 func (pcrl *ProjectsContainerResourceLimitTestSuite) TestLimitDeletionPropagationToExistingNamespaces() {

@@ -377,9 +377,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestOverrideQuotaInNamespace() {
 	require.NoError(prq.T(), err)
 
 	log.Info("Increase the number of replicas in the deployment from 2 to 3. Verify that the deployment is in Active state.")
-	replicas := int32(3)
-	currentDeployment, err := getAndConvertDeployment(standardUserClient, prq.cluster.ID, createdDeployment)
+	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, prq.cluster.ID)
 	require.NoError(prq.T(), err)
+	currentDeployment, err := standardUserContext.Apps.Deployment().Get(updatedNamespace.Name, createdDeployment.Name, metav1.GetOptions{})
+	require.NoError(prq.T(), err)
+	replicas := int32(3)
 	currentDeployment.Spec.Replicas = &replicas
 	_, err = deployment.UpdateDeployment(standardUserClient, prq.cluster.ID, updatedNamespace.Name, currentDeployment, true)
 	require.NoError(prq.T(), err)
@@ -464,9 +466,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromNoQuotaToQuotaPr
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that increasing the replicas to 3 in the deployment fails with exceeded quota error.")
-	replicas := int32(3)
-	currentDeployment, err := getAndConvertDeployment(standardUserClient, prq.cluster.ID, createdDeployment)
+	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, prq.cluster.ID)
 	require.NoError(prq.T(), err)
+	currentDeployment, err := standardUserContext.Apps.Deployment().Get(updatedNamespace.Name, createdDeployment.Name, metav1.GetOptions{})
+	require.NoError(prq.T(), err)
+	replicas := int32(3)
 	currentDeployment.Spec.Replicas = &replicas
 	updatedDeployment, err := deployment.UpdateDeployment(standardUserClient, prq.cluster.ID, updatedNamespace.Name, currentDeployment, false)
 	require.NoError(prq.T(), err)
@@ -545,9 +549,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromQuotaToNoQuotaPr
 	require.Error(prq.T(), err)
 
 	log.Info("Increase the replica count of deployment to 10. Verify that there are 10 pods created in the deployment and they are in Running state.")
-	replicas := int32(10)
-	currentDeployment, err := getAndConvertDeployment(standardUserClient, prq.cluster.ID, createdDeployment)
+	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, prq.cluster.ID)
 	require.NoError(prq.T(), err)
+	currentDeployment, err := standardUserContext.Apps.Deployment().Get(movedNamespace.Name, createdDeployment.Name, metav1.GetOptions{})
+	require.NoError(prq.T(), err)
+	replicas := int32(10)
 	currentDeployment.Spec.Replicas = &replicas
 	_, err = deployment.UpdateDeployment(standardUserClient, prq.cluster.ID, movedNamespace.Name, currentDeployment, true)
 	require.NoError(prq.T(), err)

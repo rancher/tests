@@ -11,7 +11,6 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
-	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
@@ -20,7 +19,6 @@ import (
 	quotas "github.com/rancher/tests/actions/kubeapi/resourcequotas"
 	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/projects"
-	"github.com/rancher/tests/actions/workloads"
 	"github.com/rancher/tests/actions/workloads/pods"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -256,26 +254,6 @@ func checkNamespaceResourceQuotaValidationStatus(client *rancher.Client, cluster
 	return nil
 }
 
-func getAndConvertDeployment(client *rancher.Client, clusterID string, deployment *appv1.Deployment) (*appv1.Deployment, error) {
-	steveClient, err := client.Steve.ProxyDownstream(clusterID)
-	if err != nil {
-		return nil, err
-	}
-
-	deploymentID := deployment.Namespace + "/" + deployment.Name
-	deploymentResp, err := steveClient.SteveType(workloads.DeploymentSteveType).ByID(deploymentID)
-	if err != nil {
-		return nil, err
-	}
-
-	deploymentObj := &appv1.Deployment{}
-	err = v1.ConvertToK8sType(deploymentResp.JSONResp, deploymentObj)
-	if err != nil {
-		return nil, err
-	}
-	return deploymentObj, nil
-}
-
 func updateProjectContainerResourceLimit(client *rancher.Client, existingProject *v3.Project, cpuLimit, cpuReservation, memoryLimit, memoryReservation string) (*v3.Project, error) {
 	updatedProject := existingProject.DeepCopy()
 	updatedProject.Spec.ContainerDefaultResourceLimit.LimitsCPU = cpuLimit
@@ -349,54 +327,53 @@ func checkContainerResources(client *rancher.Client, clusterID, namespaceName, d
 }
 
 func checkLimitRange(client *rancher.Client, clusterID, namespaceName string, expectedCPULimit, expectedCPURequest, expectedMemoryLimit, expectedMemoryRequest string) error {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	clusterContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
 
-	limitRanges, err := ctx.Core.LimitRange().List(namespaceName, metav1.ListOptions{})
+	var limitRanges []corev1.LimitRange
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, true, func(ctx context.Context) (bool, error) {
+		limitRangeList, err := clusterContext.Core.LimitRange().List(namespaceName, metav1.ListOptions{})
+		if err != nil {
+			return false, err
+		}
+		if len(limitRangeList.Items) == 0 {
+			return false, nil
+		}
+		limitRanges = limitRangeList.Items
+		return true, nil
+	})
+
 	if err != nil {
-		return err
-	}
-	if len(limitRanges.Items) != 1 {
-		return fmt.Errorf("expected limit range count is 1, but got %d", len(limitRanges.Items))
-	}
-	limitRangeList := limitRanges.Items[0].Spec
-
-	actualCPULimit, ok := limitRangeList.Limits[0].Default["cpu"]
-	if !ok {
-		return fmt.Errorf("cpu limit not found in the limit range")
-	}
-	cpuLimit := actualCPULimit.String()
-	if cpuLimit != expectedCPULimit {
-		return fmt.Errorf("cpu limit in the limit range: %s does not match the expected value: %s", cpuLimit, expectedCPULimit)
+		return fmt.Errorf("limit range not found in namespace %s after waiting: %v", namespaceName, err)
 	}
 
-	actualMemoryLimit, ok := limitRangeList.Limits[0].Default["memory"]
-	if !ok {
-		return fmt.Errorf("memory limit not found in the limit range")
-	}
-	memoryLimit := actualMemoryLimit.String()
-	if memoryLimit != expectedMemoryLimit {
-		return fmt.Errorf("memory limit in the limit range: %s does not match the expected value: %s", memoryLimit, expectedMemoryLimit)
+	if len(limitRanges) != 1 {
+		return fmt.Errorf("expected limit range count is 1, but got %d", len(limitRanges))
 	}
 
-	actualCPURequest, ok := limitRangeList.Limits[0].DefaultRequest["cpu"]
-	if !ok {
-		return fmt.Errorf("cpu request not found in the limit range")
-	}
-	cpuRequest := actualCPURequest.String()
-	if cpuRequest != expectedCPURequest {
-		return fmt.Errorf("cpu request in the limit range: %s does not match the expected value: %s", cpuRequest, expectedCPURequest)
+	limitRange := limitRanges[0].Spec
+	if len(limitRange.Limits) == 0 {
+		return fmt.Errorf("no limits found in limit range spec")
 	}
 
-	actualMemoryRequest, ok := limitRangeList.Limits[0].DefaultRequest["memory"]
-	if !ok {
-		return fmt.Errorf("memory request not found in the limit range")
+	limits := limitRange.Limits[0]
+
+	if actualCPULimit, ok := limits.Default["cpu"]; !ok || actualCPULimit.String() != expectedCPULimit {
+		return fmt.Errorf("cpu limit mismatch: expected %s, got %s", expectedCPULimit, actualCPULimit.String())
 	}
-	memoryRequest := actualMemoryRequest.String()
-	if memoryRequest != expectedMemoryRequest {
-		return fmt.Errorf("memory request in the limit range: %s does not match the expected value: %s", memoryRequest, expectedMemoryRequest)
+
+	if actualCPURequest, ok := limits.DefaultRequest["cpu"]; !ok || actualCPURequest.String() != expectedCPURequest {
+		return fmt.Errorf("cpu request mismatch: expected %s, got %s", expectedCPURequest, actualCPURequest.String())
+	}
+
+	if actualMemoryLimit, ok := limits.Default["memory"]; !ok || actualMemoryLimit.String() != expectedMemoryLimit {
+		return fmt.Errorf("memory limit mismatch: expected %s, got %s", expectedMemoryLimit, actualMemoryLimit.String())
+	}
+
+	if actualMemoryRequest, ok := limits.DefaultRequest["memory"]; !ok || actualMemoryRequest.String() != expectedMemoryRequest {
+		return fmt.Errorf("memory request mismatch: expected %s, got %s", expectedMemoryRequest, actualMemoryRequest.String())
 	}
 
 	return nil
