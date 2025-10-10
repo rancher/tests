@@ -26,6 +26,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning/permutations"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/reports"
+	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/interoperability/fleet"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -176,7 +177,14 @@ func (a *AirGapRKE2CustomClusterTestSuite) TestCustomClusterWithGitRepo() {
 		reports.TimeoutClusterReport(clusterObject, err)
 		require.NoError(a.T(), err)
 
-		provisioning.VerifyCluster(a.T(), a.standardClient, clusterObject)
+		logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
+		provisioning.VerifyClusterReady(a.T(), a.standardClient, clusterObject)
+
+		logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+		pods.VerifyClusterPods(a.T(), a.standardClient, clusterObject)
+
+		logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+		provisioning.VerifyDynamicCluster(a.T(), a.standardClient, clusterObject)
 
 		status := &apisV1.ClusterStatus{}
 		err = steveV1.ConvertToK8sType(clusterObject.Status, status)

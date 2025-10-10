@@ -108,7 +108,7 @@ func VerifyHarvesterLoadBalancer(t *testing.T, client *rancher.Client, serviceLB
 
 	lbHostname := ""
 	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, extdefault.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		updateService, err := steveclient.SteveType("service").ByID(serviceLB.ID)
+		updateService, err := steveclient.SteveType(stevetypes.Service).ByID(serviceLB.ID)
 		if err != nil {
 			return false, nil
 		}

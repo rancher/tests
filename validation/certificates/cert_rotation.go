@@ -21,7 +21,7 @@ import (
 	"github.com/rancher/shepherd/extensions/sshkeys"
 	"github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/shepherd/pkg/wait"
-	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/certificates"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -116,7 +116,7 @@ func RotateCerts(client *rancher.Client, clusterName string) error {
 		return err
 	}
 
-	checkFunc := provisioning.CertRotationCompleteCheckFunc(generation)
+	checkFunc := certificates.CertRotationCompleteCheckFunc(generation)
 	err = wait.WatchWait(result, checkFunc)
 	if err != nil {
 		return err

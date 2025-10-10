@@ -20,6 +20,7 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/upgradeinput"
+	"github.com/rancher/tests/actions/workloads/pods"
 
 	kcluster "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -83,7 +84,11 @@ func DownstreamCluster(u *suite.Suite, testName string, client *rancher.Client, 
 		upgradedCluster, err := upgradeRKE2K3SCluster(u.T(), client, clusterID, testConfig)
 		require.NoError(u.T(), err)
 
-		provisioning.VerifyCluster(u.T(), client, upgradedCluster)
+		logrus.Infof("Verifying the cluster is ready (%s)", upgradedCluster.Name)
+		provisioning.VerifyClusterReady(u.T(), client, upgradedCluster)
+
+		logrus.Infof("Verifying cluster pods (%s)", upgradedCluster.Name)
+		pods.VerifyClusterPods(u.T(), client, upgradedCluster)
 	}
 }
 
