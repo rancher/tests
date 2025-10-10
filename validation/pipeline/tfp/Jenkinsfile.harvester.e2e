@@ -252,13 +252,17 @@ node("harvester-vpn-1") {
                             writeFile file: AWS_RSA_KEY_NAME, text: decodedRsa
                         }
 
-                        commitID = sh(
+                        commitIDInfra = sh(
                             script: "cd infra-repo && git rev-parse --short HEAD",
+                            returnStdout: true
+                        ).trim()
+                        commitIDTest = sh(
+                            script: "cd test-repo && git rev-parse --short HEAD",
                             returnStdout: true
                         ).trim()
 
                         def exists = sh(
-                            script: "docker images -q ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}:${commitID}",
+                            script: "docker images -q ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra}",
                             returnStdout: true
                         ).trim()
 
@@ -269,13 +273,13 @@ node("harvester-vpn-1") {
                                         --build-arg TOFU_VERSION=${TOFU_VERSION} \
                                         --build-arg HARVESTER_PROVIDER_VERSION=${HARVESTER_PROVIDER_VERSION} \
                                         --build-arg RANCHER2_PROVIDER_VERSION=${RANCHER2_PROVIDER_VERSION} \
-                                        -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}:${commitID}"
+                                        -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra}"
                         }
 
                         sh "docker volume create --name ${validationVolume}"
                         
                         writeFile file: filename, text: config
-                        sh "cp vars.tfvars infra-repo/tofu/harvester/modules/vm/cluster.tfvars"
+                        sh "cp vars.tfvars qa-infra-automation/tofu/harvester/modules/vm/cluster.tfvars"
                         def harvesterKubeconfig = sh (
                             script: "yq '.terraform.harvesterCredentials.kubeconfigContent' ${filename}",
                             returnStdout: true
@@ -304,13 +308,13 @@ node("harvester-vpn-1") {
                         sh returnStdout: true, script: "cp config.yml infra-repo/config.yml"
                         
                         sh """
-                        docker run -v ${validationVolume}:/root --name ${testContainer}-dev -t  ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}:${commitID} sh -c '
+                        docker run -v ${validationVolume}:/root --name ${testContainer}-dev -t  ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c '
                         find . -name "*.tf" -exec sed -i "/harvester[[:space:]]*=[[:space:]]*{/,/}/ {s/source *= *\\"harvester\\/harvester\\"/source = \\"terraform.local\\/harvester\\/harvester\\"/g; s/version *= *\\"[^\\"]*\\"/version = \\"0.0.0-dev\\"/g}" {} +
                         '
                         docker cp qa-infra-automation/ansible/vars.yaml ${testContainer}-dev:/root/go/src/github.com/rancher/qa-infra-automation/ansible/vars.yaml
                         docker cp qa-infra-automation/tofu/harvester/modules/vm/cluster.tfvars ${testContainer}-dev:/root/go/src/github.com/rancher/qa-infra-automation/tofu/harvester/modules/vm/cluster.tfvars
                         docker cp config.yml ${testContainer}-dev:/root/go/src/github.com/rancher/qa-infra-automation/config.yml
-                        docker cp harvester.yaml ${testContainer}-dev:/root/go/src/github.com/rancher/qa-infra-automation/tofu/harvester/modules/vm/local.yaml
+                        docker cp harvester.yaml ${testContainer}-dev:/root/go/src/github.com/rancher/qa-infra-automation/tofu/harvester/modules/local.yaml
                         """
 
                     }
@@ -337,7 +341,7 @@ node("harvester-vpn-1") {
                             docker stop ${testContainer}-dev || true
                             docker rm ${testContainer}-dev || true
 
-                            docker run -v ${validationVolume}:/root --name ${testContainer} -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}:${commitID} sh -c '
+                            docker run -v ${validationVolume}:/root --name ${testContainer} -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c '
                                 eval \$(ssh-agent -s)
 
                                 echo "running setup"
@@ -363,39 +367,43 @@ node("harvester-vpn-1") {
                         
                     }
                     stage('Connect Rancher -> Harvester') {
-                        try {
-                            // this test also writes harvesterCloudCredentials to the config
-                            sh( script: """
-                        docker run -v ${validationVolume}:/root --name hvst${golangTestContainer} -t  ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}:${commitID} sh -c "cp "\$CATTLE_TEST_CONFIG" . && export CATTLE_TEST_CONFIG="\$CATTLE_TEST_CONFIG" && /root/go/bin/gotestsum --format standard-verbose --packages=${golangHvstDir} --junitfile ${testResultsOut} -- -tags=${TAGS} ${hvstTestCase} -timeout=${timeout} -v "
-                        """, returnStatus: true)
-                        } catch (err) {
-                            echo "${err} Unable to connect harvester to new rancher setup. Aborting"
-                            sh "docker stop hvst${golangTestContainer} || true; docker rm hvst${golangTestContainer}"
-                            error err
+                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true") {
+                            try {
+                                // this test also writes harvesterCloudCredentials to the config
+                                sh( script: """
+                            docker run -v ${validationVolume}:/root --name hvst${golangTestContainer} -t  ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c "cp "\$CATTLE_TEST_CONFIG" . && export CATTLE_TEST_CONFIG="\$CATTLE_TEST_CONFIG" && /root/go/bin/gotestsum --format standard-verbose --packages=${golangHvstDir} --junitfile ${testResultsOut} -- -tags=${TAGS} ${hvstTestCase} -timeout=${timeout} -v "
+                            """, returnStatus: true)
+                            } catch (err) {
+                                echo "${err} Unable to connect harvester to new rancher setup. Aborting"
+                                sh "docker stop hvst${golangTestContainer} || true; docker rm hvst${golangTestContainer}"
+                                error err
+                            }
+                            sh "docker cp hvst${golangTestContainer}:\$CATTLE_TEST_CONFIG ${filename}"
                         }
-                        sh "docker cp hvst${golangTestContainer}:\$CATTLE_TEST_CONFIG ${filename}"
                     }
                     stage('Create Downstream Cluster for Testing') {
-                        dir("infra-repo") {
-                                def IMPORTED_HVST_KUBECONFIG = sh (
-                                    script: "yq -r '.harvesterCredentials.kubeconfigContent' ../${filename}",
-                                    returnStdout: true
-                                ).trim()
-                                def IMPORTED_HVST_V3_ID = sh (
-                                    script: "yq '.harvesterCredentials.clusterId' ../${filename}",
-                                    returnStdout: true
-                                ).trim()
-                                def tfvars_filepath = "cluster.tfvars"
-                                writeFile file: tfvars_filepath, text: DOWNSTREAM_CLUSTER_CONFIG
-                                sh """
-                                sed -i -E \
-                                    -e 's|kubernetes_version = ".*"|kubernetes_version = "${RANCHER_KUBERNETES_VERSION}"|' \
-                                    -e 's|harvester_cluster_v1_id = ".*"|harvester_cluster_v1_id = "${IMPORTED_HVST_V3_ID}"|' \
-                                    ${tfvars_filepath}
-                                """
+                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true") {
 
-                                // multiline is different
-                                sh """
+                            dir("infra-repo") {
+                                    def IMPORTED_HVST_KUBECONFIG = sh (
+                                        script: "yq -r '.harvesterCredentials.kubeconfigContent' ../${filename}",
+                                        returnStdout: true
+                                    ).trim()
+                                    def IMPORTED_HVST_V3_ID = sh (
+                                        script: "yq '.harvesterCredentials.clusterId' ../${filename}",
+                                        returnStdout: true
+                                    ).trim()
+                                    def tfvars_filepath = "cluster.tfvars"
+                                    writeFile file: tfvars_filepath, text: DOWNSTREAM_CLUSTER_CONFIG
+                                    sh """
+                                    sed -i -E \
+                                        -e 's|kubernetes_version = ".*"|kubernetes_version = "${RANCHER_KUBERNETES_VERSION}"|' \
+                                        -e 's|harvester_cluster_v1_id = ".*"|harvester_cluster_v1_id = "${IMPORTED_HVST_V3_ID}"|' \
+                                        ${tfvars_filepath}
+                                    """
+
+                                    // multiline is different
+                                    sh """
 # Remove existing block
 echo "${IMPORTED_HVST_KUBECONFIG}"
 sed -i '/harvester_kubeconfig_content = <<EOF/,/EOF/d' "${tfvars_filepath}"
@@ -409,34 +417,59 @@ EOF
 echo "}\\n" >> "${tfvars_filepath}"
 
 # echo "\\nEOF\\n}\\n" >> "${tfvars_filepath}"
-                            """
+                                """
 
-                                // run the test with tofu
-                                sh """
-                            
-                            cat ${tfvars_filepath}
-                            docker cp ${tfvars_filepath} hvst${golangTestContainer}:/root/go/src/github.com/rancher/qa-infra-automation/tofu/rancher/cluster/
-                            docker stop hvst${golangTestContainer} || true; docker rm hvst${golangTestContainer}
+                                    // run the test with tofu
+                                    sh """
+                                
+                                cat ${tfvars_filepath}
+                                docker cp ${tfvars_filepath} hvst${golangTestContainer}:/root/go/src/github.com/rancher/qa-infra-automation/tofu/rancher/cluster/
+                                docker stop hvst${golangTestContainer} || true; docker rm hvst${golangTestContainer}
 
-                            docker run -v ${validationVolume}:/root --name ${testContainer}-ds -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}:${commitID} sh -c '
-                            . /root/playbook.env
-                            . ./validation/pipeline/scripts/register_downstream_cluster.sh
-                            '
-                            docker stop ${testContainer}-ds || true; docker rm ${testContainer}-ds
-                            sleep 90
-                            """
+                                docker run -v ${validationVolume}:/root --name ${testContainer}-ds -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c '
+                                . /root/playbook.env
+                                . ./validation/pipeline/scripts/register_downstream_cluster.sh
+                                '
+                                docker stop ${testContainer}-ds || true; docker rm ${testContainer}-ds
+                                sleep 90
+                                """
+                            }
                         }
                     }
                     stage('Run Validation Tests') {
-                        
-                        sh """
-                        docker run -v ${validationVolume}:/root --name ${golangTestContainer} -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}:${commitID} sh -c "cp \$CATTLE_TEST_CONFIG . && export CATTLE_TEST_CONFIG=/root/go/src/github.com/rancher/tests/config.yml && /root/go/bin/gotestsum --format standard-verbose --packages=${golangTestDir} --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
-                        """
-                        
-                        sh """
-                        docker stop ${golangTestContainer} || true
-                        docker rm ${golangTestContainer} || true                        
-                        """
+                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true") {
+                            try {
+                                sh """
+                                docker run -v ${validationVolume}:/root --name ${golangTestContainer} -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c "cp \$CATTLE_TEST_CONFIG . && export CATTLE_TEST_CONFIG=/root/go/src/github.com/rancher/tests/config.yml && /root/go/bin/gotestsum --format standard-verbose --packages=${golangTestDir} --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
+                                """
+                            } catch (err) {
+                                echo "${err} Test had failures.."
+                            }
+                            
+                            sh "docker cp ${golangTestContainer}:/root/go/src/github.com/rancher/tests/config.yml final_config.yml"
+                            
+                            def r_host = sh (
+                                script: "yq '.rancher.host' final_config.yml",
+                                returnStdout: true
+                            ).trim()
+
+                            def r_pass = sh (
+                                script: "yq '.rancher.adminPassword' final_config.yml",
+                                returnStdout: true
+                            ).trim()
+
+                            def h_host = sh (
+                                script: "yq '.harvester.host' final_config.yml",
+                                returnStdout: true
+                            ).trim()
+
+                            currentBuild.description = "https://${r_host}\\n${r_pass}\\nhttps://${h_host}\\n"
+
+                            sh """
+                            docker stop ${golangTestContainer} || true
+                            docker rm ${golangTestContainer} || true                        
+                            """
+                        }
                     }
                     stage('Cleanup terraform resources') {
                         if (env.CLEANUP == "true") {

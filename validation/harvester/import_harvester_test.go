@@ -3,6 +3,7 @@
 package harvester
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/harvester"
@@ -22,7 +23,10 @@ import (
 )
 
 const (
-	localCluster = "local"
+	localCluster                   = "local"
+	harvesterUIExtensionGitRepoURL = "https://github.com/harvester/harvester-ui-extension"
+	harvesterUIExtensionGitBranch  = "gh-pages"
+	harvesterExtensionName         = "harvester"
 )
 
 type HarvesterTestSuite struct {
@@ -53,6 +57,13 @@ func (h *HarvesterTestSuite) SetupSuite() {
 	h.session.RegisterCleanupFunc(func() error {
 		return harvesteraction.ResetHarvesterRegistration(h.harvesterClient)
 	})
+
+	err = extensioncharts.CreateChartRepoFromGithub(client.Steve, harvesterUIExtensionGitRepoURL, harvesterUIExtensionGitBranch, harvesterExtensionName)
+	if err != nil {
+		if !strings.Contains(err.Error(), "already exists") {
+			require.NoError(h.T(), err)
+		}
+	}
 
 	uiExtensionObject, err := extensioncharts.GetChartStatus(client, localCluster, interoperablecharts.ExtensionNamespace, interoperablecharts.HarvesterExtensionName)
 	require.NoError(h.T(), err)
