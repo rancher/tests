@@ -179,10 +179,10 @@ pipeline {
       }
         }
 
-        stage('Infrastructure Destruction Operations') {
+        stage('Infrastructure Destruction') {
       steps {
         script {
-          logInfo('Perform infrastructure destruction with OpenTofu')
+          logInfo('Performing infrastructure destruction using consolidated script')
 
           // Configuration validation
           def requiredVars = [
@@ -200,33 +200,26 @@ pipeline {
 
           timeout(time: timeoutMinutes, unit: 'MINUTES') {
             try {
-              // Download configuration files first
-              downloadConfigurationFromS3()
-              generateTofuConfiguration()
-              generateTofuBackendConfiguration()
+              // Infrastructure destruction using consolidated script
+              destroyInfrastructureWithConsolidatedScript()
 
-              // Pre-flight checks after configuration is ready
-              validateInfrastructurePrerequisites()
-
-              // Infrastructure destruction with enhanced error handling
-              performInfrastructureDestruction()
-
-              // Post-destruction validation
-              validateInfrastructureState()
+              logInfo('Infrastructure destruction process completed.')
+              archiveDestructionResults()
             }
-                        catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+            catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
               logError("Infrastructure destruction timed out after ${timeoutMinutes} minutes")
               logError("Timeout exception details: ${e.message}")
               try {
                 archiveDestructionFailureArtifacts()
-                            } catch (Exception cleanupException) {
+              } catch (Exception cleanupException) {
                 logError("Failed to perform infrastructure cleanup: ${cleanupException.message}")
               }
-                        }
+            } catch (Exception e) {
+              logError("Infrastructure destruction failed: ${e.message}")
+              archiveDestructionFailureArtifacts()
+              throw e
+            }
           }
-
-          logInfo('Infrastructure destruction process completed.')
-          archiveDestructionResults()
         }
       }
       post {
@@ -277,6 +270,29 @@ pipeline {
       }
         }
     }
+}
+
+/**
+ * CONSOLIDATED SCRIPT HELPER FUNCTIONS
+ */
+
+def destroyInfrastructureWithConsolidatedScript() {
+    logInfo('Executing infrastructure destruction with consolidated script')
+
+    def scriptContent = '''
+#!/bin/bash
+set -e
+# Source the consolidated infrastructure cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_infrastructure_cleanup.sh
+'''
+
+    // Pass required environment variables to container
+    def extraEnvVars = [
+        'CLEANUP_WORKSPACE': 'true',
+        'DESTROY_ON_FAILURE': 'true'
+    ]
+
+    executeScriptInContainer(scriptContent, extraEnvVars)
 }
 
 /**

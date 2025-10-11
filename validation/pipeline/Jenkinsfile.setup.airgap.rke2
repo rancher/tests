@@ -341,7 +341,7 @@ pipeline {
         stage('Deploy Infrastructure') {
             steps {
                 script {
-                    logInfo('Initializing airgap infrastructure deployment with OpenTofu')
+                    logInfo('Deploying infrastructure using consolidated script')
 
                     // Configuration validation
                     def requiredVars = [
@@ -360,16 +360,13 @@ pipeline {
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
-                            // Infrastructure deployment with enhanced error handling
-                            deployInfrastructure()
-
-                            // Post-deployment validation
-                            validateInfrastructureState()
+                            // Infrastructure deployment using consolidated script
+                            deployInfrastructureWithConsolidatedScript()
 
                             // Extract artifacts from Docker volume to Jenkins workspace
                             extractArtifactsFromDockerVolume()
 
-                            logInfo('Infrastructure provisioned and validated successfully')
+                            logInfo('Infrastructure deployed and validated successfully')
                         } catch (InterruptedException e) {
                             logError("Infrastructure deployment timed out after ${timeoutMinutes} minutes")
                             logError("Timeout exception details: ${e.message}")
@@ -396,6 +393,27 @@ pipeline {
                         // Extract artifacts even on failure for debugging
                         extractArtifactsFromDockerVolume()
                         archiveInfrastructureFailureArtifacts()
+
+                        // Use consolidated cleanup script
+                        if (env.DESTROY_ON_FAILURE.toBoolean()) {
+                            logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script')
+                            def cleanupScript = '''
+#!/bin/bash
+set -e
+# Source the consolidated cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_cleanup.sh
+# Execute cleanup for deployment failure
+perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
+'''
+                            def cleanupEnvVars = [
+                                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
+                                'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
+                                'TF_WORKSPACE': env.TF_WORKSPACE,
+                                'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
+                                'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
+                            ]
+                            executeScriptInContainer(cleanupScript, cleanupEnvVars)
+                        }
                     }
                 }
                 always {
@@ -409,10 +427,10 @@ pipeline {
             }
         }
 
-        stage('Setup Ansible Environment') {
+        stage('Prepare Ansible Environment') {
             steps {
                 script {
-                    logInfo('Setting up Ansible environment for RKE2 deployment')
+                    logInfo('Preparing Ansible environment using consolidated script')
 
                     // Configuration validation for Ansible
                     def requiredAnsibleVars = [
@@ -429,29 +447,50 @@ pipeline {
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
-                            // Load infrastructure outputs to get BASTION_IP and BASTION_PRIVATE_IP
-                            loadInfrastructureOutputs()
+                            // Prepare Ansible environment using consolidated script
+                            prepareAnsibleEnvironmentWithConsolidatedScript()
 
-                            // Generate Ansible group_vars/all.yml from ANSIBLE_VARIABLES parameter
-                            generateAnsibleGroupVars()
-
-                            // Setup SSH keys for Ansible connectivity
-                            setupAnsibleSSHKeys()
-
-                            logInfo('Ansible environment setup completed successfully')
+                            logInfo('Ansible environment preparation completed successfully')
                         } catch (Exception e) {
-                            logError("Ansible environment setup failed: ${e.message}")
+                            logError("Ansible environment preparation failed: ${e.message}")
                             throw e
                         }
                     }
                 }
             }
             post {
+                success {
+                    script {
+                        // Archive Ansible preparation artifacts
+                        archiveAnsiblePreparationArtifacts()
+                    }
+                }
                 failure {
                     script {
-                        logError('Ansible environment setup failed')
+                        logError('Ansible environment preparation failed')
                         // Archive failure artifacts for debugging
                         archiveAnsibleFailureArtifacts()
+
+                        // Use consolidated cleanup script
+                        if (env.DESTROY_ON_FAILURE.toBoolean()) {
+                            logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script')
+                            def cleanupScript = '''
+#!/bin/bash
+set -e
+# Source the consolidated cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_cleanup.sh
+# Execute cleanup for deployment failure
+perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
+'''
+                            def cleanupEnvVars = [
+                                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
+                                'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
+                                'TF_WORKSPACE': env.TF_WORKSPACE,
+                                'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
+                                'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
+                            ]
+                            executeScriptInContainer(cleanupScript, cleanupEnvVars)
+                        }
                     }
                 }
             }
@@ -460,7 +499,7 @@ pipeline {
         stage('Deploy RKE2 with Ansible') {
             steps {
                 script {
-                    logInfo('Deploying RKE2 cluster using Ansible playbooks')
+                    logInfo('Deploying RKE2 cluster using consolidated script')
 
                     // Configuration validation
                     def requiredAnsibleVars = [
@@ -477,19 +516,35 @@ pipeline {
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
-                            // Run SSH key setup playbook
-                            runAnsibleSSHSetup()
-
-                            // Run main RKE2 tarball deployment playbook
-                            runRKE2TarballDeployment()
-
-                            // Setup kubectl access on bastion
-                            setupKubectlAccess()
+                            // Deploy RKE2 using consolidated script
+                            deployRKE2WithConsolidatedScript()
 
                             logInfo('RKE2 deployment completed successfully')
                         } catch (Exception e) {
-                            logError("RKE2 Ansible deployment failed: ${e.message}")
-                            handleAnsibleDeploymentFailure()
+                            logError("RKE2 deployment failed: ${e.message}")
+
+                            // Use consolidated cleanup script
+                            if (env.DESTROY_ON_FAILURE.toBoolean()) {
+                                logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script')
+                                def cleanupScript = '''
+#!/bin/bash
+set -e
+# Source the consolidated cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_cleanup.sh
+# Execute cleanup for deployment failure
+perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
+'''
+                                def cleanupEnvVars = [
+                                    'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
+                                    'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
+                                    'TF_WORKSPACE': env.TF_WORKSPACE,
+                                    'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
+                                    'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
+                                ]
+                                executeScriptInContainer(cleanupScript, cleanupEnvVars)
+                            }
+
+                            throw e
                         }
                     }
                 }
@@ -497,19 +552,16 @@ pipeline {
             post {
                 success {
                     script {
-                        logInfo('RKE2 Ansible deployment succeeded')
-                        // Archive Ansible deployment artifacts
-                        archiveAnsibleDeploymentArtifacts()
+                        logInfo('RKE2 deployment succeeded')
+                        // Archive RKE2 deployment artifacts
+                        archiveRKE2DeploymentArtifacts()
                     }
                 }
                 failure {
                     script {
-                        logError('RKE2 Ansible deployment failed')
+                        logError('RKE2 deployment failed')
                         // Archive failure artifacts for debugging
                         archiveAnsibleFailureArtifacts()
-
-                    // Note: Cleanup is already handled in the catch block of deployRKE2()
-                    // Don't call handleAnsibleDeploymentFailure() here to avoid double cleanup
                     }
                 }
             }
@@ -518,7 +570,7 @@ pipeline {
         stage('Deploy Rancher with Ansible') {
             steps {
                 script {
-                    logInfo('Deploying Rancher to RKE2 cluster using Ansible playbooks')
+                    logInfo('Deploying Rancher to RKE2 cluster using consolidated script')
 
                     // Configuration validation
                     def requiredAnsibleVars = [
@@ -535,13 +587,35 @@ pipeline {
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
-                            // Run Rancher deployment playbook from qa-infra-automation
-                            runRancherDeployment()
+                            // Deploy Rancher using consolidated script
+                            deployRancherWithConsolidatedScript()
 
                             logInfo('Rancher deployment completed successfully')
                         } catch (Exception e) {
-                            logError("Rancher Ansible deployment failed: ${e.message}")
-                            handleRancherDeploymentFailure()
+                            logError("Rancher deployment failed: ${e.message}")
+
+                            // Use consolidated cleanup script
+                            if (env.DESTROY_ON_FAILURE.toBoolean()) {
+                                logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script')
+                                def cleanupScript = '''
+#!/bin/bash
+set -e
+# Source the consolidated cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_cleanup.sh
+# Execute cleanup for deployment failure
+perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
+'''
+                                def cleanupEnvVars = [
+                                    'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
+                                    'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
+                                    'TF_WORKSPACE': env.TF_WORKSPACE,
+                                    'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
+                                    'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
+                                ]
+                                executeScriptInContainer(cleanupScript, cleanupEnvVars)
+                            }
+
+                            throw e
                         }
                     }
                 }
@@ -549,19 +623,16 @@ pipeline {
             post {
                 success {
                     script {
-                        logInfo('Rancher Ansible deployment succeeded')
+                        logInfo('Rancher deployment succeeded')
                         // Archive Rancher deployment artifacts
                         archiveRancherDeploymentArtifacts()
                     }
                 }
                 failure {
                     script {
-                        logError('Rancher Ansible deployment failed')
+                        logError('Rancher deployment failed')
                         // Archive failure artifacts for debugging
                         archiveRancherFailureArtifacts()
-
-                    // Note: Cleanup is already handled in the catch block of runRancherDeployment()
-                    // Don't call handleRancherDeploymentFailure() here to avoid double cleanup
                     }
                 }
             }
@@ -611,9 +682,63 @@ pipeline {
         failure {
             script {
                 logError('Pipeline failed')
+
+                // Use consolidated cleanup script for failure
+                if (env.DESTROY_ON_FAILURE.toBoolean()) {
+                    logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script for pipeline failure')
+                    def cleanupScript = '''
+#!/bin/bash
+set -e
+# Source the consolidated cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_cleanup.sh
+# Execute cleanup for deployment failure
+perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
+'''
+                    def cleanupEnvVars = [
+                        'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
+                        'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
+                        'TF_WORKSPACE': env.TF_WORKSPACE,
+                        'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
+                        'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
+                    ]
+                    executeScriptInContainer(cleanupScript, cleanupEnvVars)
+                }
+
                 sendSlackNotification([
                     color: 'danger',
                     message: "❌ Ansible Airgap setup failed for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+                ])
+            }
+        }
+
+        aborted {
+            script {
+                logWarning('Pipeline was aborted')
+
+                // Use consolidated cleanup script for timeout/abort
+                if (env.DESTROY_ON_FAILURE.toBoolean()) {
+                    logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script for pipeline timeout')
+                    def cleanupScript = '''
+#!/bin/bash
+set -e
+# Source the consolidated cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_cleanup.sh
+# Execute cleanup for timeout
+perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
+'''
+                    def cleanupEnvVars = [
+                        'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
+                        'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
+                        'TF_WORKSPACE': env.TF_WORKSPACE,
+                        'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
+                        'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
+                    ]
+                    executeScriptInContainer(cleanupScript, cleanupEnvVars)
+                }
+
+                sendSlackNotification([
+                    color: 'warning',
+                    message: "⚠️ Ansible Airgap setup aborted for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
                 ])
             }
         }
@@ -1789,6 +1914,140 @@ def sendSlackNotification(config) {
 }
 
 // ========================================
+// CONSOLIDATED SCRIPT HELPER FUNCTIONS
+// ========================================
+
+def deployInfrastructureWithConsolidatedScript() {
+    logInfo('Executing infrastructure deployment with consolidated script')
+
+    def scriptContent = '''
+#!/bin/bash
+set -e
+# Source the consolidated infrastructure deployment script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_infrastructure_deploy.sh
+'''
+
+    // Pass required environment variables to container
+    def extraEnvVars = [
+        'RKE2_VERSION': env.RKE2_VERSION,
+        'RANCHER_VERSION': env.RANCHER_VERSION,
+        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
+        'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
+        'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
+        'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
+        'UPLOAD_CONFIG_TO_S3': 'true'
+    ]
+
+    executeScriptInContainer(scriptContent, extraEnvVars)
+}
+
+def prepareAnsibleEnvironmentWithConsolidatedScript() {
+    logInfo('Executing Ansible environment preparation with consolidated script')
+
+    def scriptContent = '''
+#!/bin/bash
+set -e
+# Source the consolidated Ansible environment preparation script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_prepare_environment.sh
+'''
+
+    // Pass required environment variables to container
+    def extraEnvVars = [
+        'RKE2_VERSION': env.RKE2_VERSION,
+        'RANCHER_VERSION': env.RANCHER_VERSION,
+        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
+        'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
+        'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
+        'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
+        'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD,
+        'SKIP_YAML_VALIDATION': env.SKIP_YAML_VALIDATION
+    ]
+
+    executeScriptInContainer(scriptContent, extraEnvVars)
+}
+
+def deployRKE2WithConsolidatedScript() {
+    logInfo('Executing RKE2 deployment with consolidated script')
+
+    def scriptContent = '''
+#!/bin/bash
+set -e
+# Source the consolidated RKE2 deployment script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_deploy_rke2.sh
+'''
+
+    // Pass required environment variables to container
+    def extraEnvVars = [
+        'RKE2_VERSION': env.RKE2_VERSION,
+        'SKIP_VALIDATION': 'false'
+    ]
+
+    executeScriptInContainer(scriptContent, extraEnvVars)
+}
+
+def deployRancherWithConsolidatedScript() {
+    logInfo('Executing Rancher deployment with consolidated script')
+
+    def scriptContent = '''
+#!/bin/bash
+set -e
+# Source the consolidated Rancher deployment script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_deploy_rancher.sh
+'''
+
+    // Pass required environment variables to container
+    def extraEnvVars = [
+        'RANCHER_VERSION': env.RANCHER_VERSION,
+        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
+        'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
+        'SKIP_VERIFICATION': 'false'
+    ]
+
+    executeScriptInContainer(scriptContent, extraEnvVars)
+}
+
+// ========================================
+// ARTIFACT ARCHIVING FUNCTIONS
+// ========================================
+
+def archiveAnsiblePreparationArtifacts() {
+    logInfo('Archiving Ansible preparation artifacts')
+    archiveBuildArtifacts([
+        'group_vars.tar.gz',
+        'ansible-preparation-report.txt'
+    ])
+}
+
+def archiveRKE2DeploymentArtifacts() {
+    logInfo('Archiving RKE2 deployment artifacts')
+    archiveBuildArtifacts([
+        'kubeconfig.yaml',
+        'rke2_deployment_report.txt',
+        'rke2_deployment.log',
+        'rke2_playbook_execution.log',
+        'node_role_verification.log'
+    ])
+}
+
+def archiveRancherDeploymentArtifacts() {
+    logInfo('Archiving Rancher deployment artifacts')
+    archiveBuildArtifacts([
+        'rancher_deployment_report.txt',
+        'rancher_deployment.log',
+        'rancher_playbook_execution.log'
+    ])
+}
+
+def archiveRancherFailureArtifacts() {
+    logInfo('Archiving Rancher failure artifacts')
+    archiveBuildArtifacts([
+        'rancher_deployment.log',
+        'rancher_playbook_execution.log',
+        'rancher_failure-summary.txt'
+    ])
+}
+
+// ========================================
 // ERROR HANDLING FUNCTIONS
 // ========================================
 
@@ -1797,14 +2056,16 @@ def handleTimeoutFailure() {
     try {
         archiveInfrastructureFailureArtifacts()
         if (env.DESTROY_ON_FAILURE.toBoolean()) {
-            logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for timeout')
+            logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script for timeout')
             def cleanupScript = '''
 #!/bin/bash
 set -e
 
-# Source the external cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_timeout_cleanup.sh
-            '''
+# Source the consolidated cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_cleanup.sh
+# Execute cleanup for timeout
+perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
+'''
             // Pass required environment variables to container
             def cleanupEnvVars = [
                 'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
@@ -1832,11 +2093,15 @@ def handleDeploymentFailure() {
     try {
         archiveInfrastructureFailureArtifacts()
         if (env.DESTROY_ON_FAILURE.toBoolean()) {
-            logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for deployment failure')
+            logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script for deployment failure')
             def cleanupScript = '''
-            # Source the external cleanup script
-            source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_deployment_failure_cleanup.sh
-            '''
+#!/bin/bash
+set -e
+# Source the consolidated cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_cleanup.sh
+# Execute cleanup for deployment failure
+perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
+'''
             // Pass required environment variables to container
             def cleanupEnvVars = [
                 'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
