@@ -15,7 +15,7 @@ source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap
 
 readonly SCRIPT_NAME="$(basename "$0")"
 readonly SCRIPT_DIR="$(dirname "$0")"
-readonly CLEANUP_TYPE="${CLEANUP_TYPE:-deployment_failure}"  # deployment_failure, timeout, manual
+CLEANUP_TYPE="${CLEANUP_TYPE:-deployment_failure}"  # deployment_failure, timeout, manual
 readonly DESTROY_ON_FAILURE="${DESTROY_ON_FAILURE:-true}"
 
 # =============================================================================

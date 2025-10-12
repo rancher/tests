@@ -40,11 +40,11 @@ deploy_infrastructure() {
     # Validate required variables
     validate_required_vars "QA_INFRA_WORK_PATH" "TF_WORKSPACE" "TERRAFORM_VARS_FILENAME"
 
-    # Initialize OpenTofu
-    initialize_tofu "$module_path"
-
-    # Manage workspace
+    # Manage workspace first (before backend initialization)
     manage_workspace "$workspace_name" "$module_path"
+
+    # Initialize OpenTofu (now that workspace exists)
+    initialize_tofu "$module_path"
 
     # Generate and apply plan
     log_info "=== Infrastructure Planning Phase ==="

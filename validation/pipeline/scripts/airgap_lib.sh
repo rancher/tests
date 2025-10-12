@@ -162,24 +162,36 @@ manage_workspace() {
         return 1
     }
 
+    # First, do a basic initialization without backend if needed
+    if [[ ! -f ".terraform" ]] || [[ ! -d ".terraform" ]]; then
+        log_info "Terraform not initialized, doing basic init first"
+        tofu init -input=false -upgrade || {
+            log_error "Failed to initialize Terraform for workspace management"
+            return 1
+        }
+    fi
+
+    # Temporarily unset TF_WORKSPACE to avoid automatic selection
+    local current_tf_workspace="$TF_WORKSPACE"
+    unset TF_WORKSPACE
+
     # Check if workspace exists
     local workspace_exists
     workspace_exists=$(tofu workspace list 2>/dev/null | grep -w "$workspace_name" || true)
 
     if [[ -z "$workspace_exists" ]]; then
         log_info "Creating workspace: $workspace_name"
-        # Temporarily unset TF_WORKSPACE to allow workspace creation
-        unset TF_WORKSPACE
         tofu workspace new "$workspace_name"
-        export TF_WORKSPACE="$workspace_name"
         log_success "Workspace created: $workspace_name"
     else
         log_info "Workspace already exists: $workspace_name"
     fi
 
     # Select the workspace
-    export TF_WORKSPACE="$workspace_name"
     tofu workspace select "$workspace_name"
+
+    # Restore TF_WORKSPACE
+    export TF_WORKSPACE="$current_tf_workspace"
 
     # Verify workspace selection
     local current_workspace
