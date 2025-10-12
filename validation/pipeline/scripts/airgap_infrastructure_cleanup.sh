@@ -6,7 +6,8 @@ set -e
 # Replaces: destroy_execute.sh, destroy_download_config.sh, destroy_validate_state.sh, tofu_delete_workspace.sh
 
 # Load the airgap library
-source "$(dirname "$0")/airgap_lib.sh"
+# Use absolute path since script may be executed from /tmp/
+source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
 
 # =============================================================================
 # SCRIPT CONFIGURATION

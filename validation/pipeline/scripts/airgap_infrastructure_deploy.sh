@@ -6,7 +6,8 @@ set -e
 # Replaces: airgap_plan_infrastructure.sh, airgap_apply_infrastructure.sh, airgap_validate_infrastructure.sh, airgap_backup_state.sh
 
 # Load the airgap library
-source "$(dirname "$0")/airgap_lib.sh"
+# Use absolute path since script may be executed from /tmp/
+source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
 
 # =============================================================================
 # SCRIPT CONFIGURATION

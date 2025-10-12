@@ -6,7 +6,7 @@ set -e
 # Replaces: ansible_run_rancher_deployment.sh
 
 # Load the airgap library
-source "$(dirname "$0")/airgap_lib.sh"
+source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
 
 # =============================================================================
 # SCRIPT CONFIGURATION
