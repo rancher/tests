@@ -78,15 +78,77 @@ deploy_infrastructure() {
 
 handle_inventory_file() {
     local module_path="${1:-$REMOTE_TOFU_MODULE_PATH}"
-    local inventory_file="$module_path/inventory.yml"
     local shared_inventory="$SHARED_VOLUME_PATH/ansible-inventory.yml"
     local ansible_inventory="/root/ansible/rke2/airgap/inventory.yml"
 
     log_info "Handling inventory file generation"
 
-    # Check if inventory file exists
-    if [[ -f "$inventory_file" && -s "$inventory_file" ]]; then
-        log_success "Inventory file found and has content: $inventory_file"
+    # Try multiple possible inventory file locations and names
+    local inventory_files=(
+        "$module_path/inventory.yml"
+        "$module_path/inventory.yaml"
+        "$module_path/ansible_inventory.yml"
+        "$module_path/ansible_inventory.yaml"
+        "$module_path/local_file.ansible_inventory.yml"
+        "$module_path/local_file.ansible_inventory.yaml"
+    )
+
+    # Also look for any .yml or .yaml file that might be inventory-like
+    while IFS= read -r -d '' file; do
+        inventory_files+=("$file")
+    done < <(find "$module_path" -maxdepth 1 -name "*.yml" -o -name "*.yaml" -print0 2>/dev/null)
+
+    local found_inventory=""
+    local inventory_file=""
+
+    # Search for inventory file
+    for candidate_file in "${inventory_files[@]}"; do
+        if [[ -f "$candidate_file" && -s "$candidate_file" ]]; then
+            # Check if it looks like an Ansible inventory file
+            if grep -q "all:\|hosts:\|children:" "$candidate_file" 2>/dev/null; then
+                found_inventory="$candidate_file"
+                inventory_file="$candidate_file"
+                log_success "Found Ansible inventory file: $inventory_file"
+                break
+            fi
+        fi
+    done
+
+    # If no inventory found, search more broadly
+    if [[ -z "$found_inventory" ]]; then
+        log_info "Standard inventory search failed, searching for any YAML files with inventory content..."
+
+        while IFS= read -r -d '' file; do
+            if [[ -f "$file" && -s "$file" ]]; then
+                # Check for inventory-like content
+                if grep -q -E "(ansible_host|ansible_user|ansible_ssh_private_key_file)" "$file" 2>/dev/null; then
+                    found_inventory="$file"
+                    inventory_file="$file"
+                    log_success "Found inventory-like file: $inventory_file"
+                    break
+                fi
+            fi
+        done < <(find "$module_path" -name "*.yml" -o -name "*.yaml" -print0 2>/dev/null)
+    fi
+
+    # If still no inventory found, check Terraform output
+    if [[ -z "$found_inventory" ]]; then
+        log_info "No inventory file found, checking Terraform outputs..."
+
+        # Try to get inventory from Terraform output
+        if tofu output -json > "$SHARED_VOLUME_PATH/tf-outputs-check.json" 2>/dev/null; then
+            # Look for inventory content in outputs
+            if grep -q "hosts\|inventory\|ansible" "$SHARED_VOLUME_PATH/tf-outputs-check.json" 2>/dev/null; then
+                log_info "Found inventory-related Terraform outputs"
+                # Copy outputs for debugging
+                cp "$SHARED_VOLUME_PATH/tf-outputs-check.json" "$SHARED_VOLUME_PATH/inventory-debug-outputs.json"
+            fi
+        fi
+    fi
+
+    # Process found inventory
+    if [[ -n "$found_inventory" && -f "$inventory_file" ]]; then
+        log_success "Processing inventory file: $inventory_file"
 
         # Copy to shared volume for artifact extraction
         cp "$inventory_file" "$shared_inventory"
@@ -112,9 +174,33 @@ handle_inventory_file() {
         fi
         log_info "=== End Inventory Content ==="
 
+        # Validate inventory syntax
+        if validate_yaml_syntax "$inventory_file"; then
+            log_success "Inventory file syntax is valid"
+        else
+            log_warning "Inventory file has syntax issues, but proceeding anyway"
+        fi
+
     else
-        log_error "Inventory file not found or empty: $inventory_file"
+        log_error "No valid inventory file found in $module_path"
+        log_warning "Searched for: $(printf ", %s" "${inventory_files[@]}")"
         log_warning "This may indicate a problem with the Terraform deployment"
+
+        # List all files in module directory for debugging
+        log_info "Files in module directory:"
+        ls -la "$module_path" | head -20 || true
+
+        # Create a debug file showing what we searched for
+        {
+            echo "Inventory File Search Results - $(date)"
+            echo "Module path: $module_path"
+            echo "Search patterns tried:"
+            printf "  %s\n" "${inventory_files[@]}"
+            echo ""
+            echo "Files found in directory:"
+            ls -la "$module_path" 2>/dev/null || echo "Directory not accessible"
+        } > "$SHARED_VOLUME_PATH/inventory-search-debug.txt"
+
         return 1
     fi
 }

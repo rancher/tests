@@ -80,11 +80,12 @@ EOF
         log_cleanup "Switching to workspace: $workspace_name"
         export TF_WORKSPACE="$workspace_name"
 
-        # Try to select the workspace (may fail if workspace doesn't exist)
-        if tofu workspace select "$workspace_name" 2>/dev/null; then
+        # Use improved workspace selection function
+        if select_workspace "$workspace_name" "$module_path" "false"; then
             log_cleanup "Successfully switched to workspace: $workspace_name"
         else
             log_cleanup "WARNING: Could not switch to workspace $workspace_name (may not exist)"
+            log_cleanup "Proceeding with cleanup in current workspace"
         fi
     fi
 
