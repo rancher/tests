@@ -350,14 +350,6 @@ def validateInfrastructurePrerequisites() {
   }
 }
 
-def validateInfrastructureState() {
-  logInfo('Validating infrastructure state after deployment')
-
-  def scriptPath = 'tests/validation/pipeline/scripts/destroy_validate_state.sh'
-  def scriptContent = readFile(file: scriptPath)
-  executeScriptInContainer(scriptContent)
-  logInfo('Infrastructure state validated successfully')
-}
 
 def getShortJobName() {
   def jobName = "${env.JOB_NAME}"
@@ -552,31 +544,7 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
   }
 }
 
-def performInfrastructureDestruction() {
-  initializeOpenTofu()
-  executeDestruction()
-  
-  // Delete the workspace after successful infrastructure destruction
-  logInfo("Deleting workspace ${env.TF_WORKSPACE} after infrastructure destruction")
-  manageWorkspace()
 
-  logInfo('Infrastructure destruction and workspace cleanup completed successfully')
-}
-
-def downloadConfigurationFromS3() {
-  logInfo('Downloading configuration files from S3')
-
-  // Add debug logging before execution
-  logInfo("S3 Bucket: ${env.S3_BUCKET_NAME}")
-  logInfo("S3 Key Prefix: ${env.S3_KEY_PREFIX}")
-  logInfo("S3 Region: ${env.S3_REGION}")
-  logInfo("AWS Region: ${env.AWS_REGION}")
-
-  def scriptPath = 'tests/validation/pipeline/scripts/destroy_download_config.sh'
-  def scriptContent = readFile(file: scriptPath)
-  executeScriptInContainer(scriptContent)
-  logInfo('Configuration files downloaded from S3 successfully')
-}
 
 def generateTofuConfiguration() {
   logInfo('Generating OpenTofu configuration files')
@@ -786,13 +754,6 @@ def manageWorkspace() {
   executeScriptInContainer(scriptContent)
 }
 
-def executeDestruction() {
-  logInfo('Executing direct infrastructure destruction')
-
-  def scriptPath = 'tests/validation/pipeline/scripts/destroy_execute.sh'
-  def scriptContent = readFile(file: scriptPath)
-  executeScriptInContainer(scriptContent)
-}
 
 def archiveDestructionResults() {
   logInfo('Archiving destruction results')

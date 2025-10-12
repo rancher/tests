@@ -2160,32 +2160,6 @@ def extractStateFromContainer() {
     """
 }
 
-def backupTerraformStateImmediately() {
-    logInfo('Creating immediate backup of terraform state after successful deployment')
-
-    try {
-        // Extract state immediately for successful deployments
-        extractStateFromVolume()
-        extractStateFromContainer()
-
-        def timestamp = new Date().format('yyyyMMdd-HHmmss')
-        def backupName = "terraform-state-build-${env.BUILD_NUMBER}-${timestamp}.tfstate"
-
-        def backupScript = """
-    # Source the external backup script
-    BACKUP_NAME="${backupName}"
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_backup_state.sh
-        """.stripIndent()
-
-        executeScriptInContainer(backupScript)
-
-        // Archive the immediate backup - DISABLED (tfstate files not archived per security policy)
-        // archiveArtifacts artifacts: backupName, allowEmptyArchive: true
-        logInfo('Immediate terraform state backup completed (not archived)')
-    } catch (Exception e) {
-        logError("Immediate backup failed: ${e.message}")
-    }
-}
 
 def archiveInfrastructureState() {
     logInfo('Archiving infrastructure state')
@@ -2516,70 +2490,7 @@ def validateInfrastructurePrerequisites() {
     }
 }
 
-def validateInfrastructureState() {
-    logInfo('Validating infrastructure state after deployment')
 
-    def validationScript = '''
-    # Source the external infrastructure validation script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_validate_infrastructure.sh
-    '''
-
-    executeScriptInContainer(validationScript)
-    logInfo('Infrastructure state validated successfully')
-}
-
-def uploadClusterTfvarsToS3() {
-    logInfo('Uploading cluster.tfvars to S3')
-
-    // Validate required S3 variables
-    def requiredS3Vars = ['S3_BUCKET_NAME', 'S3_REGION', 'TF_WORKSPACE', 'TERRAFORM_VARS_FILENAME']
-    validateRequiredVariables(requiredS3Vars)
-
-    def uploadScript = """
-#!/bin/bash
-set -e
-
-# Debug: Show environment variables passed to container
-echo "=== DEBUG: S3 Environment Variables in Container ==="
-echo "S3_BUCKET_NAME=\${S3_BUCKET_NAME}"
-echo "S3_REGION=\${S3_REGION}"
-echo "S3_KEY_PREFIX=\${S3_KEY_PREFIX}"
-echo "TF_WORKSPACE=\${TF_WORKSPACE}"
-echo "TERRAFORM_VARS_FILENAME=\${TERRAFORM_VARS_FILENAME}"
-echo "AWS_REGION=\${AWS_REGION}"
-echo "=== END DEBUG ==="
-
-# Source the external S3 upload script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_upload_tfvars_to_s3.sh
-    """.stripIndent()
-
-    // Explicitly pass S3 variables as environment variables to the container
-    def s3EnvVars = [
-        'S3_BUCKET_NAME': env.S3_BUCKET_NAME,
-        'S3_REGION': env.S3_REGION,
-        'S3_KEY_PREFIX': env.S3_KEY_PREFIX,
-        'AWS_REGION': env.AWS_REGION
-    ]
-
-    logInfo('Passing S3 environment variables to container:')
-    s3EnvVars.each { key, value ->
-        // Log safely without exposing sensitive values
-        if (key.contains('SECRET') || key.contains('PASSWORD') || key.contains('KEY')) {
-            logInfo("  ${key}=[REDACTED]")
-        } else {
-            logInfo("  ${key}=${value}")
-        }
-    }
-
-    try {
-        executeScriptInContainer(uploadScript, s3EnvVars)
-        logInfo('S3 upload script executed successfully')
-    } catch (Exception e) {
-        logError("S3 upload failed with exception: ${e.message}")
-        logWarning('Continuing build despite S3 upload failure')
-    // Don't fail the build, just log the issue
-    }
-}
 
 def initializeOpenTofu() {
     logInfo('Initializing OpenTofu with S3 backend')
@@ -2606,41 +2517,6 @@ set -e
     executeScriptInContainer(workspaceScript)
 }
 
-def planInfrastructure() {
-    logInfo('Planning infrastructure changes')
-
-    def planScript = '''
-#!/bin/bash
-set -e
-
-# Source the external plan infrastructure script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_plan_infrastructure.sh
-      '''
-
-    executeScriptInContainer(planScript)
-}
-
-def applyInfrastructure() {
-    logInfo('Applying infrastructure configuration')
-
-    def applyScript = '''
-#!/bin/bash
-set -e
-
-# Source the external apply infrastructure script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_apply_infrastructure.sh
-      '''
-
-    executeScriptInContainer(applyScript)
-
-    // Extract files to shared volume after successful apply (redundant but ensuring)
-    logInfo('Extracting files after apply for persistence')
-    sh '''
-    if [ -f qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ]; then
-        cp qa-infra-automation/tofu/aws/modules/airgap/terraform.tfstate ./
-    fi
-    '''
-}
 
 // ========================================
 // ANSIBLE DEPLOYMENT FUNCTIONS
