@@ -1920,6 +1920,9 @@ def sendSlackNotification(config) {
 def deployInfrastructureWithConsolidatedScript() {
     logInfo('Executing infrastructure deployment with consolidated script')
 
+    // First, generate the Terraform configuration including backend.tf
+    generateTofuConfiguration()
+
     def scriptContent = '''
 #!/bin/bash
 set -e
