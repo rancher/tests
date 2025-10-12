@@ -6,7 +6,7 @@ set -e
 # Replaces: ansible_generate_group_vars.sh, ansible_setup_ssh_keys.sh, ansible_run_ssh_setup.sh
 
 # Load the airgap library
-source "$(dirname "$0")/airgap_lib.sh"
+source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
 
 # =============================================================================
 # SCRIPT CONFIGURATION
