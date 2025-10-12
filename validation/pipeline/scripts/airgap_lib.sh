@@ -162,6 +162,10 @@ manage_workspace() {
         return 1
     }
 
+    # Temporarily unset TF_WORKSPACE to avoid automatic selection
+    local current_tf_workspace="$TF_WORKSPACE"
+    unset TF_WORKSPACE
+
     # First, do a basic initialization without backend if needed
     if [[ ! -f ".terraform" ]] || [[ ! -d ".terraform" ]]; then
         log_info "Terraform not initialized, doing basic init first"
@@ -170,10 +174,6 @@ manage_workspace() {
             return 1
         }
     fi
-
-    # Temporarily unset TF_WORKSPACE to avoid automatic selection
-    local current_tf_workspace="$TF_WORKSPACE"
-    unset TF_WORKSPACE
 
     # Check if workspace exists
     local workspace_exists
