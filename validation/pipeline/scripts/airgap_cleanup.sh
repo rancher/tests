@@ -6,7 +6,8 @@ set -e
 # Replaces: airgap_deployment_failure_cleanup.sh, ansible_failure_cleanup.sh, airgap_timeout_cleanup.sh
 
 # Load the airgap library
-source "$(dirname "$0")/airgap_lib.sh"
+# Use absolute path since script may be executed from /tmp/
+source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
 
 # =============================================================================
 # SCRIPT CONFIGURATION
