@@ -205,6 +205,83 @@ manage_workspace() {
     log_success "Workspace selected: $workspace_name"
 }
 
+# Select existing workspace (for cleanup operations)
+select_workspace() {
+    local workspace_name="${1:-$TF_WORKSPACE}"
+    local module_path="${2:-$TOFU_MODULE_PATH}"
+    local allow_create="${3:-false}"
+
+    if [[ -z "$workspace_name" ]]; then
+        log_warning "No workspace name provided for selection"
+        return 1
+    fi
+
+    log_info "Selecting workspace: $workspace_name"
+
+    cd "$module_path" || {
+        log_error "Failed to change to directory: $module_path"
+        return 1
+    }
+
+    # Temporarily unset TF_WORKSPACE to avoid automatic selection conflicts
+    local current_tf_workspace="$TF_WORKSPACE"
+    unset TF_WORKSPACE
+
+    # Ensure Terraform is initialized
+    if [[ ! -f ".terraform" ]] || [[ ! -d ".terraform" ]]; then
+        log_debug "Terraform not initialized for workspace selection, doing basic init"
+        if ! tofu init -input=false -upgrade 2>/dev/null; then
+            log_warning "Failed to initialize Terraform for workspace selection"
+            export TF_WORKSPACE="$current_tf_workspace"
+            return 1
+        fi
+    fi
+
+    # Check if workspace exists
+    local workspace_exists
+    workspace_exists=$(tofu workspace list 2>/dev/null | grep -w "$workspace_name" || true)
+
+    if [[ -z "$workspace_exists" ]]; then
+        if [[ "$allow_create" == "true" ]]; then
+            log_info "Workspace does not exist, creating: $workspace_name"
+            if tofu workspace new "$workspace_name" 2>/dev/null; then
+                log_success "Workspace created and selected: $workspace_name"
+                export TF_WORKSPACE="$current_tf_workspace"
+                return 0
+            else
+                log_error "Failed to create workspace: $workspace_name"
+                export TF_WORKSPACE="$current_tf_workspace"
+                return 1
+            fi
+        else
+            log_warning "Workspace does not exist: $workspace_name"
+            export TF_WORKSPACE="$current_tf_workspace"
+            return 1
+        fi
+    fi
+
+    # Select the workspace
+    if tofu workspace select "$workspace_name" 2>/dev/null; then
+        log_success "Workspace selected: $workspace_name"
+        export TF_WORKSPACE="$current_tf_workspace"
+
+        # Verify selection
+        local current_workspace
+        current_workspace=$(tofu workspace show 2>/dev/null || echo "unknown")
+        if [[ "$current_workspace" == "$workspace_name" ]]; then
+            log_debug "Workspace selection verified: $workspace_name"
+            return 0
+        else
+            log_warning "Workspace selection may have failed. Expected: $workspace_name, Current: $current_workspace"
+            return 1
+        fi
+    else
+        log_error "Failed to select workspace: $workspace_name"
+        export TF_WORKSPACE="$current_tf_workspace"
+        return 1
+    fi
+}
+
 # Generate Terraform plan
 generate_plan() {
     local module_path="${1:-$TOFU_MODULE_PATH}"
@@ -690,7 +767,7 @@ initialize_airgap_environment() {
 # Export all functions for use in other scripts
 export -f log_info log_success log_warning log_error log_debug
 export -f load_environment export_aws_credentials validate_required_vars
-export -f initialize_tofu manage_workspace generate_plan apply_plan destroy_infrastructure cleanup_workspace
+export -f initialize_tofu manage_workspace select_workspace generate_plan apply_plan destroy_infrastructure cleanup_workspace
 export -f backup_state generate_outputs validate_infrastructure
 export -f generate_group_vars validate_yaml_syntax setup_ssh_keys
 export -f backup_file create_cleanup_archive wait_for_confirmation

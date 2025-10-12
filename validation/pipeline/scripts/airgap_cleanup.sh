@@ -516,8 +516,8 @@ manual_infrastructure_destruction() {
     if initialize_tofu "$TOFU_MODULE_PATH"; then
         log_cleanup "Terraform initialized for manual destruction"
 
-        # Select workspace
-        if tofu workspace select "$workspace" 2>/dev/null; then
+        # Select workspace using improved function
+        if select_workspace "$workspace" "$TOFU_MODULE_PATH" "false"; then
             log_cleanup "Selected workspace: $workspace"
 
             # Attempt destruction
@@ -527,7 +527,8 @@ manual_infrastructure_destruction() {
                 log_cleanup "✗ Manual infrastructure destruction failed"
             fi
         else
-            log_cleanup "Failed to select workspace for destruction"
+            log_cleanup "Failed to select workspace for destruction: $workspace"
+            log_cleanup "This may indicate the workspace was already cleaned up or never existed"
         fi
     else
         log_cleanup "Failed to initialize Terraform for manual destruction"
