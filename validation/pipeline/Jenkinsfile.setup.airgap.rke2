@@ -1935,7 +1935,11 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
         'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
         'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
         'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
-        'UPLOAD_CONFIG_TO_S3': 'true'
+        'UPLOAD_CONFIG_TO_S3': 'true',
+        'S3_BUCKET_NAME': env.S3_BUCKET_NAME,
+        'S3_REGION': env.S3_REGION,
+        'S3_KEY_PREFIX': env.S3_KEY_PREFIX,
+        'AWS_REGION': env.AWS_REGION
     ]
 
     executeScriptInContainer(scriptContent, extraEnvVars)
