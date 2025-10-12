@@ -2029,23 +2029,6 @@ def archiveRKE2DeploymentArtifacts() {
     ])
 }
 
-def archiveRancherDeploymentArtifacts() {
-    logInfo('Archiving Rancher deployment artifacts')
-    archiveBuildArtifacts([
-        'rancher_deployment_report.txt',
-        'rancher_deployment.log',
-        'rancher_playbook_execution.log'
-    ])
-}
-
-def archiveRancherFailureArtifacts() {
-    logInfo('Archiving Rancher failure artifacts')
-    archiveBuildArtifacts([
-        'rancher_deployment.log',
-        'rancher_playbook_execution.log',
-        'rancher_failure-summary.txt'
-    ])
-}
 
 // ========================================
 // ERROR HANDLING FUNCTIONS
