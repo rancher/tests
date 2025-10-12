@@ -794,7 +794,7 @@ parse_arguments() {
 
     export CLEANUP_TYPE="$cleanup_type"
     export TF_WORKSPACE="$workspace"
-    export DESTROY_ON_FAILURE="$destroy_infrastructure"
+    # Note: DESTROY_ON_FAILURE is already readonly from line 19, don't re-export
 
     log_info "Configuration:"
     log_info "  Cleanup type: $cleanup_type"
