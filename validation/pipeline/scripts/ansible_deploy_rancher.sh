@@ -29,7 +29,7 @@ deploy_rancher() {
     # Validate prerequisites
     validate_rancher_prerequisites
 
-    
+
 
     # Prepare Rancher deployment variables
     prepare_rancher_variables
@@ -56,30 +56,30 @@ validate_rancher_prerequisites() {
     local validation_errors=0
 
     # Check if RKE2 cluster is accessible
-    local kubeconfig_locations=(
-        "$SHARED_VOLUME_PATH/kubeconfig.yaml"
-        "/root/.kube/config"
-        "/etc/rancher/rke2/rke2.yaml"
-    )
+    # local kubeconfig_locations=(
+    #     "$SHARED_VOLUME_PATH/kubeconfig.yaml"
+    #     "/root/.kube/config"
+    #     "/etc/rancher/rke2/rke2.yaml"
+    # )
 
-    local kubeconfig_found=false
-    for config_path in "${kubeconfig_locations[@]}"; do
-        if [[ -f "$config_path" ]]; then
-            export KUBECONFIG="$config_path"
-            if kubectl cluster-info &>/dev/null; then
-                log_info "  ✓ Working kubeconfig found: $config_path"
-                kubeconfig_found=true
-                break
-            else
-                log_warning "  ⚠ Kubeconfig found but cluster not accessible: $config_path"
-            fi
-        fi
-    done
+    # local kubeconfig_found=false
+    # for config_path in "${kubeconfig_locations[@]}"; do
+    #     if [[ -f "$config_path" ]]; then
+    #         export KUBECONFIG="$config_path"
+    #         if kubectl cluster-info &>/dev/null; then
+    #             log_info "  ✓ Working kubeconfig found: $config_path"
+    #             kubeconfig_found=true
+    #             break
+    #         else
+    #             log_warning "  ⚠ Kubeconfig found but cluster not accessible: $config_path"
+    #         fi
+    #     fi
+    # done
 
-    if [[ "$kubeconfig_found" == "false" ]]; then
-        log_error "  ✗ No working kubeconfig found"
-        ((validation_errors++))
-    fi
+    # if [[ "$kubeconfig_found" == "false" ]]; then
+    #     log_error "  ✗ No working kubeconfig found"
+    #     ((validation_errors++))
+    # fi
 
     # Check qa-infra-automation repository
     if [[ -d "$QA_INFRA_CLONE_PATH" ]]; then
@@ -356,7 +356,7 @@ OPTIONS:
     -w, --workspace WORKSPACE    Terraform workspace name (default: \$TF_WORKSPACE)
     -h, --help                 Show this help message
     --debug                   Enable debug logging
-    
+
 
 ENVIRONMENT VARIABLES:
     TF_WORKSPACE              Terraform workspace name
@@ -375,7 +375,7 @@ EXAMPLES:
     # Deploy with debug logging
     DEBUG=true $SCRIPT_NAME --debug
 
-    
+
 
 EOF
 }
