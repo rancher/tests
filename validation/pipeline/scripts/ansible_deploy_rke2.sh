@@ -39,7 +39,7 @@ deploy_rke2() {
     verify_rke2_deployment
 
     # Setup kubectl access
-    setup_kubectl_access
+    # setup_kubectl_access
 
     # Run post-deployment validation
     validate_rke2_cluster
