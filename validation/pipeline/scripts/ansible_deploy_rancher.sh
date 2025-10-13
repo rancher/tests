@@ -15,7 +15,7 @@ source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap
 readonly SCRIPT_NAME="$(basename "$0")"
 readonly SCRIPT_DIR="$(dirname "$0")"
 readonly QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
-readonly RANCHER_PLAYBOOK="$QA_INFRA_CLONE_PATH/ansible/rke2/airgap/playbooks/deploy/rancher-helm-playbook.yml"
+readonly RANCHER_PLAYBOOK="$QA_INFRA_CLONE_PATH/ansible/rke2/airgap/playbooks/deploy/rancher-helm-deploy-playbook.yml"
 
 # =============================================================================
 # RANCHER DEPLOYMENT

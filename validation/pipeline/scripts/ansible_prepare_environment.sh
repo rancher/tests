@@ -136,7 +136,7 @@ validate_qa_infra_structure() {
     local playbooks_dir="$QA_INFRA_CLONE_PATH/ansible/rke2/airgap/playbooks"
     local key_playbooks=(
         "deploy/rke2-tarball-playbook.yml"
-        "deploy/rancher-helm-playbook.yml"
+        "deploy/rancher-helm-deploy-playbook.yml"
     )
 
     log_info "Checking for required playbooks:"
