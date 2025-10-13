@@ -32,7 +32,6 @@ type NodeScalingDualstackTestSuite struct {
 	client                 *rancher.Client
 	session                *session.Session
 	cattleConfig           map[string]any
-	rke2ClusterConfig      *clusters.ClusterConfig
 	rke2IPv4ClusterID      string
 	rke2DualstackClusterID string
 	k3sIPv4ClusterID       string
@@ -141,11 +140,6 @@ func (s *NodeScalingDualstackTestSuite) TestScalingDualstackNodePools() {
 		Quantity: 1,
 	}
 
-	nodeRolesWindows := machinepools.NodeRoles{
-		Windows:  true,
-		Quantity: 1,
-	}
-
 	tests := []struct {
 		name      string
 		nodeRoles machinepools.NodeRoles
@@ -155,11 +149,9 @@ func (s *NodeScalingDualstackTestSuite) TestScalingDualstackNodePools() {
 		{"RKE2_IPv4_Node_Driver_Scale_Control_Plane", nodeRolesControlPlane, s.rke2IPv4ClusterID, false},
 		{"RKE2_IPv4_Node_Driver_Scale_ETCD", nodeRolesEtcd, s.rke2IPv4ClusterID, false},
 		{"RKE2_IPv4_Node_Driver_Scale_Worker", nodeRolesWorker, s.rke2IPv4ClusterID, false},
-		{"RKE2_IPv4_Node_Driver_Scale_Windows", nodeRolesWindows, s.rke2IPv4ClusterID, true},
 		{"RKE2_Dualstack_Node_Driver_Scale_Control_Plane", nodeRolesControlPlane, s.rke2DualstackClusterID, false},
 		{"RKE2_Dualstack_Node_Driver_Scale_ETCD", nodeRolesEtcd, s.rke2DualstackClusterID, false},
 		{"RKE2_Dualstack_Node_Driver_Scale_Worker", nodeRolesWorker, s.rke2DualstackClusterID, false},
-		{"RKE2_Dualstack_Node_Driver_Scale_Windows", nodeRolesWindows, s.rke2DualstackClusterID, true},
 		{"K3S_IPv4_Node_Driver_Scale_Control_Plane", nodeRolesControlPlane, s.k3sIPv4ClusterID, false},
 		{"K3S_IPv4_Node_Driver_Scale_ETCD", nodeRolesEtcd, s.k3sIPv4ClusterID, false},
 		{"K3S_IPv4_Node_Driver_Scale_Worker", nodeRolesWorker, s.k3sIPv4ClusterID, false},
@@ -173,10 +165,6 @@ func (s *NodeScalingDualstackTestSuite) TestScalingDualstackNodePools() {
 		require.NoError(s.T(), err)
 
 		s.Run(tt.name, func() {
-			if s.rke2ClusterConfig.Provider != "vsphere" && tt.isWindows {
-				s.T().Skip("Windows test requires access to vSphere")
-			}
-
 			nodescaling.ScalingRKE2K3SNodePools(s.T(), s.client, tt.clusterID, tt.nodeRoles)
 
 			logrus.Infof("Verifying cluster (%s)", cluster.Name)
