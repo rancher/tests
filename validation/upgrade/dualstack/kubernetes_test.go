@@ -79,6 +79,7 @@ func (u *UpgradeDualstackKubernetesTestSuite) SetupSuite() {
 	u.rke2DualstackClusterConfig = new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.rke2DualstackClusterConfig)
 
+	u.rke2DualstackClusterConfig.IPv6Cluster = true
 	u.rke2DualstackClusterConfig.Networking = &provisioninginput.Networking{
 		StackPreference: "dual",
 	}
@@ -93,9 +94,25 @@ func (u *UpgradeDualstackKubernetesTestSuite) SetupSuite() {
 	u.k3sDualstackClusterConfig = new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.k3sDualstackClusterConfig)
 
+	u.k3sDualstackClusterConfig.IPv6Cluster = true
 	u.k3sDualstackClusterConfig.Networking = &provisioninginput.Networking{
 		StackPreference: "dual",
 	}
+
+	nodeRolesStandard := []provisioninginput.MachinePools{
+		provisioninginput.EtcdMachinePool,
+		provisioninginput.ControlPlaneMachinePool,
+		provisioninginput.WorkerMachinePool,
+	}
+
+	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
+	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
+	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
+
+	u.rke2IPv4ClusterConfig.MachinePools = nodeRolesStandard
+	u.rke2DualstackClusterConfig.MachinePools = nodeRolesStandard
+	u.k3sIPv4ClusterConfig.MachinePools = nodeRolesStandard
+	u.k3sDualstackClusterConfig.MachinePools = nodeRolesStandard
 
 	logrus.Info("Provisioning RKE2 cluster w/ipv4 stack preference")
 	u.rke2IPv4ClusterID, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), u.rke2IPv4ClusterConfig, nil, false, false)
