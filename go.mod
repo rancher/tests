@@ -72,7 +72,7 @@ require (
 	github.com/gruntwork-io/terratest v0.49.0
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/rancher/rancher v0.0.0-20250806201723-9a7af3779b9d
-	github.com/rancher/shepherd v0.0.0-20251003203259-669abb78af51
+	github.com/rancher/shepherd v0.0.0-20251014125336-6d6696ba1f66
 	github.com/rancher/tests/actions v0.0.0-20250912201502-f3fc74d763e3
 	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
 	github.com/rancher/tfp-automation v0.0.0-20250926183218-1454b20eb26b
@@ -109,7 +109,7 @@ require (
 	github.com/rancher/apiserver v0.7.0 // indirect
 	github.com/rancher/backup-restore-operator v1.2.1
 	github.com/rancher/eks-operator v1.12.1 // indirect
-	github.com/rancher/fleet/pkg/apis v0.13.0
+	github.com/rancher/fleet/pkg/apis v0.14.0-alpha.3
 	github.com/rancher/gke-operator v1.12.1 // indirect
 	github.com/rancher/lasso v0.2.3 // indirect
 	github.com/rancher/norman v0.7.0

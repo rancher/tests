@@ -61,7 +61,7 @@ replace (
 
 require (
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20251003203259-669abb78af51
+	github.com/rancher/shepherd v0.0.0-20251014125336-6d6696ba1f66
 )
 
 require (
@@ -174,7 +174,7 @@ require (
 	github.com/rancher/aks-operator v1.12.1 // indirect
 	github.com/rancher/apiserver v0.7.0 // indirect
 	github.com/rancher/eks-operator v1.12.1 // indirect
-	github.com/rancher/fleet/pkg/apis v0.13.0 // indirect
+	github.com/rancher/fleet/pkg/apis v0.14.0-alpha.3 // indirect
 	github.com/rancher/gke-operator v1.12.1 // indirect
 	github.com/rancher/lasso v0.2.3 // indirect
 	github.com/rancher/rke v1.8.0-rc.4 // indirect
