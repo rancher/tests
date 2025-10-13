@@ -1960,6 +1960,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
 
     // Pass required environment variables to container
     def extraEnvVars = [
+        'ANSIBLE_VARIABLES': env.ANSIBLE_VARIABLES,
         'RKE2_VERSION': env.RKE2_VERSION,
         'RANCHER_VERSION': env.RANCHER_VERSION,
         'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
