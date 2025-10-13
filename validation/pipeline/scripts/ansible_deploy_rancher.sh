@@ -29,8 +29,7 @@ deploy_rancher() {
     # Validate prerequisites
     validate_rancher_prerequisites
 
-    # Validate cluster connectivity
-    validate_cluster_connectivity
+    
 
     # Prepare Rancher deployment variables
     prepare_rancher_variables
@@ -38,8 +37,8 @@ deploy_rancher() {
     # Run Rancher deployment playbook
     run_rancher_playbook
 
-    # Verify Rancher deployment
-    verify_rancher_deployment
+    # Note: Verification is handled by the Ansible playbook
+    log_info "Rancher deployment verification is handled by the Ansible playbook"
 
     # Generate deployment report
     generate_rancher_deployment_report
@@ -141,58 +140,7 @@ validate_rancher_prerequisites() {
     log_success "Rancher prerequisite validation passed"
 }
 
-# =============================================================================
-# CLUSTER CONNECTIVITY VALIDATION
-# =============================================================================
 
-validate_cluster_connectivity() {
-    log_info "Validating cluster connectivity"
-
-    # Check node status
-    log_info "Checking cluster node status..."
-    if kubectl get nodes --no-headers 2>/dev/null | grep -q "Ready"; then
-        local ready_nodes
-        ready_nodes=$(kubectl get nodes --no-headers | grep "Ready" | wc -l)
-        local total_nodes
-        total_nodes=$(kubectl get nodes --no-headers | wc -l)
-        log_info "Cluster nodes: $ready_nodes/$total_nodes ready"
-
-        if [[ $ready_nodes -eq 0 ]]; then
-            log_error "No ready nodes found in cluster"
-            exit 1
-        fi
-    else
-        log_error "Cannot access cluster nodes"
-        exit 1
-    fi
-
-    # Check system pods
-    log_info "Checking system pods..."
-    if kubectl get pods -n kube-system --no-headers 2>/dev/null | grep -q "Running"; then
-        local running_pods
-        running_pods=$(kubectl get pods -n kube-system --no-headers | grep "Running" | wc -l)
-        local total_pods
-        total_pods=$(kubectl get pods -n kube-system --no-headers | wc -l)
-        log_info "System pods: $running_pods/$total_pods running"
-
-        if [[ $running_pods -eq 0 ]]; then
-            log_warning "No running system pods found - cluster may not be fully ready"
-        fi
-    else
-        log_warning "Cannot access system pods"
-    fi
-
-    # Check cluster info
-    log_info "Cluster access test:"
-    if kubectl cluster-info &>/dev/null; then
-        log_success "Cluster is accessible"
-    else
-        log_error "Cannot access cluster info"
-        exit 1
-    fi
-
-    log_success "Cluster connectivity validation passed"
-}
 
 # =============================================================================
 # RANCHER VARIABLES PREPARATION
@@ -312,191 +260,7 @@ run_rancher_playbook() {
     fi
 }
 
-# =============================================================================
-# RANCHER DEPLOYMENT VERIFICATION
-# =============================================================================
 
-verify_rancher_deployment() {
-    log_info "Verifying Rancher deployment"
-
-    if [[ "${RANCHER_ANSIBLE_EXIT_CODE}" -ne 0 ]]; then
-        log_error "Rancher deployment failed, skipping verification"
-        return 1
-    fi
-
-    # Wait for Rancher pods to be ready
-    wait_for_rancher_pods
-
-    # Check Rancher system components
-    verify_rancher_components
-
-    # Verify Rancher accessibility
-    verify_rancher_accessibility
-
-    log_success "Rancher deployment verification completed"
-}
-
-# =============================================================================
-# RANCHER PODS VERIFICATION
-# =============================================================================
-
-wait_for_rancher_pods() {
-    log_info "Waiting for Rancher pods to be ready..."
-
-    local max_attempts=30
-    local attempt=1
-
-    while [[ $attempt -le $max_attempts ]]; do
-        log_info "Checking Rancher pods (attempt $attempt/$max_attempts)..."
-
-        # Check for Rancher pods
-        if kubectl get pods -n cattle-system --no-headers 2>/dev/null | grep -q "Running"; then
-            local running_pods
-            running_pods=$(kubectl get pods -n cattle-system --no-headers | grep "Running" | wc -l)
-            local total_pods
-            total_pods=$(kubectl get pods -n cattle-system --no-headers | wc -l)
-            log_info "Rancher pods: $running_pods/$total_pods running"
-
-            if [[ $running_pods -eq $total_pods && $total_pods -gt 0 ]]; then
-                log_success "All Rancher pods are running"
-                return 0
-            fi
-        fi
-
-        # Check for cattle-fleet pods if fleet is installed
-        if kubectl get namespaces | grep -q "cattle-fleet-system"; then
-            if kubectl get pods -n cattle-fleet-system --no-headers 2>/dev/null | grep -q "Running"; then
-                local fleet_running
-                fleet_running=$(kubectl get pods -n cattle-fleet-system --no-headers | grep "Running" | wc -l)
-                local fleet_total
-                fleet_total=$(kubectl get pods -n cattle-fleet-system --no-headers | wc -l)
-                log_info "Fleet pods: $fleet_running/$fleet_total running"
-            fi
-        fi
-
-        if [[ $attempt -eq $max_attempts ]]; then
-            log_warning "Timeout waiting for Rancher pods to be ready"
-            kubectl get pods -A | grep -E "(cattle|rancher)" || true
-        fi
-
-        sleep 10
-        ((attempt++))
-    done
-}
-
-# =============================================================================
-# RANCHER COMPONENTS VERIFICATION
-# =============================================================================
-
-verify_rancher_components() {
-    log_info "Verifying Rancher system components"
-
-    # Check Rancher namespace
-    if kubectl get namespace cattle-system &>/dev/null; then
-        log_success "Rancher namespace exists: cattle-system"
-    else
-        log_error "Rancher namespace not found"
-        return 1
-    fi
-
-    # Check Rancher deployment
-    if kubectl get deployment rancher -n cattle-system &>/dev/null; then
-        log_success "Rancher deployment found"
-        local replicas
-        replicas=$(kubectl get deployment rancher -n cattle-system -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-        log_info "Rancher ready replicas: $replicas"
-    else
-        log_error "Rancher deployment not found"
-        return 1
-    fi
-
-    # Check Rancher service
-    if kubectl get service rancher -n cattle-system &>/dev/null; then
-        log_success "Rancher service found"
-        local service_type
-        service_type=$(kubectl get service rancher -n cattle-system -o jsonpath='{.spec.type}' 2>/dev/null || echo "unknown")
-        log_info "Rancher service type: $service_type"
-    else
-        log_error "Rancher service not found"
-        return 1
-    fi
-
-    # Check Ingress if available
-    if command -v nginx &>/dev/null || kubectl get ingress -n cattle-system &>/dev/null; then
-        if kubectl get ingress -n cattle-system --no-headers 2>/dev/null | grep -q "rancher"; then
-            log_success "Rancher ingress found"
-        else
-            log_info "Rancher ingress not found (may not be required)"
-        fi
-    fi
-
-    log_success "Rancher components verification completed"
-}
-
-# =============================================================================
-# RANCHER ACCESSIBILITY VERIFICATION
-# =============================================================================
-
-verify_rancher_accessibility() {
-    log_info "Verifying Rancher accessibility"
-
-    # Get Rancher URL from group_vars or service
-    local rancher_url=""
-    local group_vars_file="/root/ansible/rke2/airgap/group_vars/all.yml"
-
-    if grep -q "^rancher_hostname:" "$group_vars_file"; then
-        rancher_url=$(grep "^rancher_hostname:" "$group_vars_file" | cut -d'"' -f2)
-        log_info "Rancher URL from group_vars: $rancher_url"
-    fi
-
-    # Try to get Rancher URL from service (if LoadBalancer)
-    if [[ -z "$rancher_url" ]]; then
-        local service_type
-        service_type=$(kubectl get service rancher -n cattle-system -o jsonpath='{.spec.type}' 2>/dev/null || echo "")
-
-        if [[ "$service_type" == "LoadBalancer" ]]; then
-            local lb_ip
-            lb_ip=$(kubectl get service rancher -n cattle-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-            if [[ -n "$lb_ip" ]]; then
-                rancher_url="https://$lb_ip"
-                log_info "Rancher URL from LoadBalancer: $rancher_url"
-            fi
-        fi
-    fi
-
-    # Try to check Rancher API health
-    if [[ -n "$rancher_url" ]]; then
-        log_info "Testing Rancher API accessibility..."
-        if command -v curl &>/dev/null; then
-            # Use a simple health check (avoiding authentication requirements)
-            if curl -k -s --connect-timeout 10 "$rancher_url/ping" 2>/dev/null | grep -q "pong"; then
-                log_success "Rancher API is accessible: $rancher_url"
-            else
-                log_info "Rancher API health check failed (may require authentication)"
-                log_info "This is normal for Rancher without proper credentials"
-            fi
-        else
-            log_info "curl not available, skipping API accessibility test"
-        fi
-    fi
-
-    # Check Rancher version via API if possible
-    if kubectl get pods -n cattle-system --no-headers 2>/dev/null | grep -q "rancher"; then
-        local rancher_pod
-        rancher_pod=$(kubectl get pods -n cattle-system -l app=rancher -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-        if [[ -n "$rancher_pod" ]]; then
-            log_info "Found Rancher pod: $rancher_pod"
-            # Try to get Rancher version from pod
-            local rancher_image
-            rancher_image=$(kubectl get pod "$rancher_pod" -n cattle-system -o jsonpath='{.spec.containers[0].image}' 2>/dev/null || echo "")
-            if [[ -n "$rancher_image" ]]; then
-                log_info "Rancher image: $rancher_image"
-            fi
-        fi
-    fi
-
-    log_success "Rancher accessibility verification completed"
-}
 
 # =============================================================================
 # RANCHER DEPLOYMENT REPORT
@@ -523,20 +287,8 @@ Deployment Summary:
 Rancher Status:
 EOF
 
-    # Add Rancher pod information
-    if kubectl get pods -n cattle-system &>/dev/null; then
-        echo "- Rancher Pods:" >> "$report_file"
-        kubectl get pods -n cattle-system >> "$report_file" 2>&1
-    else
-        echo "- Rancher Pods: Not accessible" >> "$report_file"
-    fi
-
-    # Add Rancher service information
-    if kubectl get service rancher -n cattle-system &>/dev/null; then
-        echo "" >> "$report_file"
-        echo "- Rancher Service:" >> "$report_file"
-        kubectl get service rancher -n cattle-system >> "$report_file" 2>&1
-    fi
+    # Note: Rancher pod and service information is handled by Ansible playbook
+    echo "- Rancher Status: Verification handled by Ansible playbook" >> "$report_file"
 
     # Add Rancher URL information
     local group_vars_file="/root/ansible/rke2/airgap/group_vars/all.yml"
@@ -604,7 +356,7 @@ OPTIONS:
     -w, --workspace WORKSPACE    Terraform workspace name (default: \$TF_WORKSPACE)
     -h, --help                 Show this help message
     --debug                   Enable debug logging
-    --skip-verification       Skip post-deployment verification
+    
 
 ENVIRONMENT VARIABLES:
     TF_WORKSPACE              Terraform workspace name
@@ -623,8 +375,7 @@ EXAMPLES:
     # Deploy with debug logging
     DEBUG=true $SCRIPT_NAME --debug
 
-    # Deploy without verification
-    $SCRIPT_NAME --skip-verification
+    
 
 EOF
 }
@@ -635,17 +386,12 @@ EOF
 
 parse_arguments() {
     local workspace="$TF_WORKSPACE"
-    local skip_verification="false"
 
     while [[ $# -gt 0 ]]; do
         case $1 in
             -w|--workspace)
                 workspace="$2"
                 shift 2
-                ;;
-            --skip-verification)
-                skip_verification="true"
-                shift
                 ;;
             --debug)
                 export DEBUG="true"
@@ -664,11 +410,9 @@ parse_arguments() {
     done
 
     export TF_WORKSPACE="$workspace"
-    export SKIP_VERIFICATION="$skip_verification"
 
     log_info "Configuration:"
     log_info "  Workspace: $workspace"
-    log_info "  Skip verification: $skip_verification"
     log_info "  Debug mode: ${DEBUG:-false}"
 }
 
