@@ -62,7 +62,7 @@ deploy_infrastructure() {
     validate_infrastructure "$module_path"
 
     # Handle inventory file generation
-    handle_inventory_file "$module_path"
+    # handle_inventory_file "$module_path"
 
     # Upload configuration to S3 if enabled
     if [[ "${UPLOAD_CONFIG_TO_S3:-true}" == "true" ]]; then
