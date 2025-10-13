@@ -84,7 +84,13 @@ handle_inventory_file() {
     log_info "Handling inventory file generation"
 
     # Try multiple possible inventory file locations and names
+    # Primary location: Terraform generates inventory in ansible/rke2/airgap/inventory/
     local inventory_files=(
+        "$module_path/ansible/rke2/airgap/inventory/inventory.yml"
+        "$module_path/ansible/rke2/airgap/inventory/inventory.yaml"
+        "$module_path/ansible/rke2/airgap/inventory.yml"
+        "$module_path/ansible/rke2/airgap/inventory.yaml"
+        # Fallback locations (module root)
         "$module_path/inventory.yml"
         "$module_path/inventory.yaml"
         "$module_path/ansible_inventory.yml"
@@ -131,26 +137,24 @@ handle_inventory_file() {
         done < <(find "$module_path" -name "*.yml" -o -name "*.yaml" -print0 2>/dev/null)
     fi
 
-    # If still no inventory found, check Terraform output and generate inventory
+    # If still no inventory found, provide debugging information but don't generate fallback
     if [[ -z "$found_inventory" ]]; then
-        log_info "No inventory file found, checking Terraform outputs..."
+        log_error "No inventory file found in expected locations"
+        log_warning "This indicates a problem with the Terraform module's inventory generation"
+        log_info "Expected inventory locations searched:"
+        printf "  - %s\n" "${inventory_files[@]}" | head -10
 
-        # Try to get inventory from Terraform output
+        # Check if Terraform outputs are available for debugging
         if tofu output -json > "$SHARED_VOLUME_PATH/tf-outputs-check.json" 2>/dev/null; then
-            # Look for inventory content in outputs
-            if grep -q "hosts\|inventory\|ansible" "$SHARED_VOLUME_PATH/tf-outputs-check.json" 2>/dev/null; then
-                log_info "Found inventory-related Terraform outputs"
-                # Copy outputs for debugging
-                cp "$SHARED_VOLUME_PATH/tf-outputs-check.json" "$SHARED_VOLUME_PATH/inventory-debug-outputs.json"
-            fi
-
-            # Generate inventory file from Terraform outputs
-            if generate_inventory_from_outputs "$SHARED_VOLUME_PATH/tf-outputs-check.json" "$module_path/inventory.yml"; then
-                found_inventory="$module_path/inventory.yml"
-                inventory_file="$module_path/inventory.yml"
-                log_success "Generated inventory file from Terraform outputs: $inventory_file"
-            fi
+            log_info "Terraform outputs captured for debugging"
+            cp "$SHARED_VOLUME_PATH/tf-outputs-check.json" "$SHARED_VOLUME_PATH/inventory-debug-outputs.json"
+            log_info "Available outputs:"
+            tofu output 2>/dev/null | grep -E "(bastion|rancher|registry)" || log_warning "No expected outputs found"
+        else
+            log_error "Could not retrieve Terraform outputs for debugging"
         fi
+
+        return 1
     fi
 
     # Process found inventory
