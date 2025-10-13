@@ -2204,11 +2204,6 @@ def finalStateArchival() {
         // Archive infrastructure state (creates infrastructure-state-* files)
         archiveInfrastructureState()
 
-        // Create immediate backup for successful deployments (creates terraform-state-build-* files)
-        if (currentBuild.currentResult == 'SUCCESS') {
-            backupTerraformStateImmediately()
-        }
-
         // Additional final artifacts - fix variable expansion issue
         def artifactsList = [
             'infrastructure-outputs.json',
