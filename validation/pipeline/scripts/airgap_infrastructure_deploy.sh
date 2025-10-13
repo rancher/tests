@@ -131,7 +131,7 @@ handle_inventory_file() {
         done < <(find "$module_path" -name "*.yml" -o -name "*.yaml" -print0 2>/dev/null)
     fi
 
-    # If still no inventory found, check Terraform output
+    # If still no inventory found, check Terraform output and generate inventory
     if [[ -z "$found_inventory" ]]; then
         log_info "No inventory file found, checking Terraform outputs..."
 
@@ -142,6 +142,13 @@ handle_inventory_file() {
                 log_info "Found inventory-related Terraform outputs"
                 # Copy outputs for debugging
                 cp "$SHARED_VOLUME_PATH/tf-outputs-check.json" "$SHARED_VOLUME_PATH/inventory-debug-outputs.json"
+            fi
+
+            # Generate inventory file from Terraform outputs
+            if generate_inventory_from_outputs "$SHARED_VOLUME_PATH/tf-outputs-check.json" "$module_path/inventory.yml"; then
+                found_inventory="$module_path/inventory.yml"
+                inventory_file="$module_path/inventory.yml"
+                log_success "Generated inventory file from Terraform outputs: $inventory_file"
             fi
         fi
     fi

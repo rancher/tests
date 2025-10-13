@@ -536,6 +536,177 @@ validate_infrastructure() {
     log_success "Infrastructure validation completed"
 }
 
+# Generate inventory file from Terraform outputs
+generate_inventory_from_outputs() {
+    local outputs_file="$1"
+    local inventory_file="$2"
+
+    log_info "Generating inventory file from Terraform outputs"
+
+    if [[ ! -f "$outputs_file" ]]; then
+        log_error "Terraform outputs file not found: $outputs_file"
+        return 1
+    fi
+
+    # Extract values from Terraform outputs
+    local bastion_dns bastion_ip registry_dns registry_ip
+    local rancher_servers rancher_server_ips
+    local internal_lb_dns internal_lb_ip
+
+    # Parse JSON outputs using basic tools (python3 might not be available)
+    if command -v python3 &>/dev/null && python3 -c "import json" 2>/dev/null; then
+        # Use Python3 for JSON parsing
+        bastion_dns=$(python3 -c "
+import json
+try:
+    data = json.load(open('$outputs_file'))
+    print(data.get('bastion_public_dns', {}).get('value', ''))
+except:
+    pass" 2>/dev/null)
+
+        bastion_ip=$(python3 -c "
+import json
+try:
+    data = json.load(open('$outputs_file'))
+    print(data.get('bastion_public_ip', {}).get('value', ''))
+except:
+    pass" 2>/dev/null)
+
+        registry_dns=$(python3 -c "
+import json
+try:
+    data = json.load(open('$outputs_file'))
+    print(data.get('registry_public_dns', {}).get('value', ''))
+except:
+    pass" 2>/dev/null)
+
+        registry_ip=$(python3 -c "
+import json
+try:
+    data = json.load(open('$outputs_file'))
+    print(data.get('registry_public_ip', {}).get('value', ''))
+except:
+    pass" 2>/dev/null)
+
+        rancher_server_ips=$(python3 -c "
+import json
+try:
+    data = json.load(open('$outputs_file'))
+    ips = data.get('rancher_servers_private_ips', {}).get('value', [])
+    if isinstance(ips, list):
+        for ip in ips:
+            print(ip)
+    else:
+        print(str(ips))
+except:
+    pass" 2>/dev/null)
+
+        internal_lb_dns=$(python3 -c "
+import json
+try:
+    data = json.load(open('$outputs_file'))
+    print(data.get('internal_load_balancer_dns', {}).get('value', ''))
+except:
+    pass" 2>/dev/null)
+
+        internal_lb_ip=$(python3 -c "
+import json
+try:
+    data = json.load(open('$outputs_file'))
+    print(data.get('internal_load_balancer_ip', {}).get('value', ''))
+except:
+    pass" 2>/dev/null)
+    else
+        log_warning "Python3 not available, using fallback JSON parsing"
+        # Fallback: try basic grep/sed for common patterns
+        bastion_dns=$(grep -o '"bastion_public_dns": *"[^"]*"' "$outputs_file" | sed 's/.*"bastion_public_dns": *"\([^"]*\)".*/\1/' 2>/dev/null)
+        bastion_ip=$(grep -o '"bastion_public_ip": *"[^"]*"' "$outputs_file" | sed 's/.*"bastion_public_ip": *"\([^"]*\)".*/\1/' 2>/dev/null)
+        registry_dns=$(grep -o '"registry_public_dns": *"[^"]*"' "$outputs_file" | sed 's/.*"registry_public_dns": *"\([^"]*\)".*/\1/' 2>/dev/null)
+        registry_ip=$(grep -o '"registry_public_ip": *"[^"]*"' "$outputs_file" | sed 's/.*"registry_public_ip": *"\([^"]*\)".*/\1/' 2>/dev/null)
+    fi
+
+    # Convert newline-separated IPs to array for Rancher servers
+    if [[ -n "$rancher_server_ips" ]]; then
+        # Convert newlines to spaces for read command
+        rancher_servers=()
+        while IFS= read -r ip; do
+            [[ -n "$ip" ]] && rancher_servers+=("$ip")
+        done <<< "$rancher_server_ips"
+
+        log_debug "Found ${#rancher_servers[@]} Rancher server IPs: ${rancher_servers[*]}"
+    else
+        log_warning "No Rancher server IPs found in Terraform outputs"
+        return 1
+    fi
+
+    # Generate inventory file
+    log_info "Creating inventory file with ${#rancher_servers[@]} Rancher servers"
+
+    cat > "$inventory_file" << EOF
+---
+# Ansible inventory file generated from Terraform outputs
+# Generated on: $(date)
+
+all:
+  children:
+    bastion:
+      hosts:
+        bastion:
+          ansible_host: ${bastion_ip:-$bastion_dns}
+          ansible_user: ec2-user
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+
+    registry:
+      hosts:
+        registry:
+          ansible_host: ${registry_ip:-$registry_dns}
+          ansible_user: ec2-user
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+
+    rancher_servers:
+      hosts:
+EOF
+
+    # Add Rancher servers to inventory
+    local server_num=1
+    for server_ip in "${rancher_servers[@]}"; do
+        cat >> "$inventory_file" << EOF
+        rancher-server-${server_num}:
+          ansible_host: ${server_ip}
+          ansible_user: ec2-user
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+EOF
+        ((server_num++))
+    done
+
+    # Add load balancer if available
+    if [[ -n "$internal_lb_ip" || -n "$internal_lb_dns" ]]; then
+        cat >> "$inventory_file" << EOF
+
+    load_balancer:
+      hosts:
+        internal-lb:
+          ansible_host: ${internal_lb_ip:-$internal_lb_dns}
+          ansible_user: ec2-user
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+EOF
+    fi
+
+    # Validate the generated inventory
+    if [[ -f "$inventory_file" && -s "$inventory_file" ]]; then
+        log_success "Inventory file generated successfully: $inventory_file"
+        log_info "Inventory contains:"
+        log_info "  - 1 bastion host"
+        log_info "  - 1 registry host"
+        log_info "  - ${#rancher_servers[@]} Rancher server hosts"
+        [[ -n "$internal_lb_ip" || -n "$internal_lb_dns" ]] && log_info "  - 1 load balancer host"
+        return 0
+    else
+        log_error "Failed to generate inventory file"
+        return 1
+    fi
+}
+
 # =============================================================================
 # ANSIBLE-RELATED FUNCTIONS
 # =============================================================================
@@ -768,7 +939,7 @@ initialize_airgap_environment() {
 export -f log_info log_success log_warning log_error log_debug
 export -f load_environment export_aws_credentials validate_required_vars
 export -f initialize_tofu manage_workspace select_workspace generate_plan apply_plan destroy_infrastructure cleanup_workspace
-export -f backup_state generate_outputs validate_infrastructure
+export -f backup_state generate_outputs validate_infrastructure generate_inventory_from_outputs
 export -f generate_group_vars validate_yaml_syntax setup_ssh_keys
 export -f backup_file create_cleanup_archive wait_for_confirmation
 export -f initialize_airgap_environment
