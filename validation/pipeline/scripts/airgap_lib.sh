@@ -639,39 +639,50 @@ except:
         return 1
     fi
 
-    # Generate inventory file
+    # Generate inventory file with RKE2 structure
     log_info "Creating inventory file with ${#rancher_servers[@]} Rancher servers"
+
+    # Determine server/agent distribution for RKE2
+    # For airgap RKE2, typically use 3 servers for HA or 1 server for single node
+    local server_count
+    local agent_count
+    local total_nodes=${#rancher_servers[@]}
+
+    if [[ $total_nodes -eq 1 ]]; then
+        server_count=1
+        agent_count=0
+    elif [[ $total_nodes -eq 2 ]]; then
+        server_count=2
+        agent_count=0
+    elif [[ $total_nodes -eq 3 ]]; then
+        server_count=3
+        agent_count=0
+    else
+        # For 4+ nodes, use 3 servers and rest as agents
+        server_count=3
+        agent_count=$((total_nodes - server_count))
+    fi
+
+    log_info "RKE2 node distribution: $server_count servers, $agent_count agents"
 
     cat > "$inventory_file" << EOF
 ---
 # Ansible inventory file generated from Terraform outputs
 # Generated on: $(date)
+# RKE2 cluster configuration for airgap deployment
 
 all:
   children:
-    bastion:
-      hosts:
-        bastion:
-          ansible_host: ${bastion_ip:-$bastion_dns}
-          ansible_user: ec2-user
-          ansible_ssh_private_key_file: ~/.ssh/id_rsa
-
-    registry:
-      hosts:
-        registry:
-          ansible_host: ${registry_ip:-$registry_dns}
-          ansible_user: ec2-user
-          ansible_ssh_private_key_file: ~/.ssh/id_rsa
-
-    rancher_servers:
+    rke2_servers:
       hosts:
 EOF
 
-    # Add Rancher servers to inventory
+    # Add RKE2 servers (first N nodes become servers)
     local server_num=1
-    for server_ip in "${rancher_servers[@]}"; do
+    for ((i=0; i<server_count && i<total_nodes; i++)); do
+        local server_ip="${rancher_servers[$i]}"
         cat >> "$inventory_file" << EOF
-        rancher-server-${server_num}:
+        rke2-server-${server_num}:
           ansible_host: ${server_ip}
           ansible_user: ec2-user
           ansible_ssh_private_key_file: ~/.ssh/id_rsa
@@ -679,7 +690,54 @@ EOF
         ((server_num++))
     done
 
-    # Add load balancer if available
+    # Add RKE2 agents if we have more than server_count nodes
+    if [[ $agent_count -gt 0 ]]; then
+        cat >> "$inventory_file" << EOF
+
+    rke2_agents:
+      hosts:
+EOF
+
+        local agent_num=1
+        for ((i=server_count; i<total_nodes; i++)); do
+            local agent_ip="${rancher_servers[$i]}"
+            cat >> "$inventory_file" << EOF
+        rke2-agent-${agent_num}:
+          ansible_host: ${agent_ip}
+          ansible_user: ec2-user
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+EOF
+            ((agent_num++))
+        done
+    fi
+
+    # Add bastion as a separate host for access (optional but useful for debugging)
+    if [[ -n "$bastion_ip" || -n "$bastion_dns" ]]; then
+        cat >> "$inventory_file" << EOF
+
+    bastion:
+      hosts:
+        bastion:
+          ansible_host: ${bastion_ip:-$bastion_dns}
+          ansible_user: ec2-user
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+EOF
+    fi
+
+    # Add registry information (for reference, not as managed hosts)
+    if [[ -n "$registry_ip" || -n "$registry_dns" ]]; then
+        cat >> "$inventory_file" << EOF
+
+    registry:
+      hosts:
+        registry:
+          ansible_host: ${registry_ip:-$registry_dns}
+          ansible_user: ec2-user
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+EOF
+    fi
+
+    # Add load balancer information if available
     if [[ -n "$internal_lb_ip" || -n "$internal_lb_dns" ]]; then
         cat >> "$inventory_file" << EOF
 
@@ -696,9 +754,10 @@ EOF
     if [[ -f "$inventory_file" && -s "$inventory_file" ]]; then
         log_success "Inventory file generated successfully: $inventory_file"
         log_info "Inventory contains:"
-        log_info "  - 1 bastion host"
-        log_info "  - 1 registry host"
-        log_info "  - ${#rancher_servers[@]} Rancher server hosts"
+        log_info "  - $server_count RKE2 server hosts"
+        [[ $agent_count -gt 0 ]] && log_info "  - $agent_count RKE2 agent hosts"
+        [[ -n "$bastion_ip" || -n "$bastion_dns" ]] && log_info "  - 1 bastion host"
+        [[ -n "$registry_ip" || -n "$registry_dns" ]] && log_info "  - 1 registry host"
         [[ -n "$internal_lb_ip" || -n "$internal_lb_dns" ]] && log_info "  - 1 load balancer host"
         return 0
     else
