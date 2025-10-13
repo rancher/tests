@@ -224,38 +224,9 @@ run_rke2_playbook() {
 check_deployment_status() {
     local exit_code=$1
 
-    log_info "Checking RKE2 deployment status (exit code: $exit_code)"
-
-    # Check if we have a working cluster despite warnings
-    local kubeconfig_locations=(
-        "/root/.kube/config"
-        "/etc/rancher/rke2/rke2.yaml"
-        "/root/ansible/rke2/airgap/kubeconfig"
-    )
-
-    local working_kubeconfig=""
-    for config_path in "${kubeconfig_locations[@]}"; do
-        if [[ -f "$config_path" ]]; then
-            export KUBECONFIG="$config_path"
-            if kubectl get nodes --no-headers 2>/dev/null | grep -q "Ready"; then
-                working_kubeconfig="$config_path"
-                log_success "Found working cluster with kubeconfig: $config_path"
-                break
-            fi
-        fi
-    done
-
-    if [[ -n "$working_kubeconfig" ]]; then
-        log_warning "Ansible had warnings but cluster is operational"
-        log_info "Treating deployment as successful"
-        export ANSIBLE_EXIT_CODE=0
-
-        # Show cluster status
-        show_cluster_status
-    else
-        log_error "RKE2 deployment failed and cluster is not operational"
-        export ANSIBLE_EXIT_CODE=$exit_code
-    fi
+    log_info "Skipping cluster health checks from Jenkins agent (exit code: $exit_code)"
+    log_info "Validate node readiness from the bastion host using the staged kubeconfig."
+    export ANSIBLE_EXIT_CODE=$exit_code
 }
 
 # =============================================================================
@@ -299,28 +270,7 @@ verify_rke2_deployment() {
 # =============================================================================
 
 manual_node_role_check() {
-    log_info "Performing manual node role check"
-
-    local kubeconfig_locations=(
-        "/root/.kube/config"
-        "/etc/rancher/rke2/rke2.yaml"
-    )
-
-    for config_path in "${kubeconfig_locations[@]}"; do
-        if [[ -f "$config_path" ]]; then
-            export KUBECONFIG="$config_path"
-            log_info "Checking nodes with kubeconfig: $config_path"
-
-            if kubectl get nodes -o wide 2>/dev/null | tee "$SHARED_VOLUME_PATH/manual_node_check.log"; then
-                log_success "Manual node check completed"
-                return 0
-            else
-                log_warning "Could not get nodes with kubeconfig: $config_path"
-            fi
-        fi
-    done
-
-    log_warning "Manual node role check failed - kubectl not accessible"
+    log_info "Skipping node role checks on Jenkins agent. Run 'kubectl get nodes -o wide' from the bastion host and capture results manually."
 }
 
 # =============================================================================
@@ -328,45 +278,20 @@ manual_node_role_check() {
 # =============================================================================
 
 setup_kubectl_access() {
-    log_info "Setting up kubectl access"
+    log_info "Staging kubeconfig for downstream use"
 
-    local kubeconfig_locations=(
-        "/root/.kube/config"
-        "/etc/rancher/rke2/rke2.yaml"
-        "/root/ansible/rke2/airgap/kubeconfig"
-    )
-
+    local source_config="/root/ansible/rke2/airgap/kubeconfig"
     local target_config="$SHARED_VOLUME_PATH/kubeconfig.yaml"
-    local config_found=false
 
-    for config_path in "${kubeconfig_locations[@]}"; do
-        if [[ -f "$config_path" ]]; then
-            log_info "Found kubeconfig at: $config_path"
-
-            # Copy to shared volume
-            cp "$config_path" "$target_config"
-            chmod 644 "$target_config"
-
-            # Test the configuration
-            export KUBECONFIG="$target_config"
-            if kubectl cluster-info &>/dev/null; then
-                log_success "Kubectl access configured successfully"
-                log_info "Kubeconfig copied to: $target_config"
-                config_found=true
-                break
-            else
-                log_warning "Kubeconfig test failed for: $config_path"
-            fi
-        fi
-    done
-
-    if [[ "$config_found" == "false" ]]; then
-        log_error "Could not setup kubectl access - no working kubeconfig found"
+    if [[ -f "$source_config" ]]; then
+        cp "$source_config" "$target_config"
+        chmod 644 "$target_config"
+        log_success "Kubeconfig copied to shared volume: $target_config"
+        log_info "Kubernetes connectivity must be verified from the bastion host. Jenkins agents do not have network access to airgapped nodes."
+    else
+        log_warning "Expected kubeconfig not found at $source_config"
         return 1
     fi
-
-    # Verify kubectl version compatibility
-    verify_kubectl_version
 }
 
 # =============================================================================
@@ -374,24 +299,7 @@ setup_kubectl_access() {
 # =============================================================================
 
 verify_kubectl_version() {
-    log_info "Verifying kubectl version compatibility"
-
-    if command -v kubectl &>/dev/null; then
-        local kubectl_version
-        kubectl_version=$(kubectl version --client --short 2>/dev/null | grep "Client Version" | cut -d':' -f2- | xargs || echo "unknown")
-        log_info "kubectl version: $kubectl_version"
-
-        # Check cluster version
-        if kubectl version --short &>/dev/null; then
-            local cluster_version
-            cluster_version=$(kubectl version --short 2>/dev/null | grep "Server Version" | cut -d':' -f2- | xargs || echo "unknown")
-            log_info "Cluster version: $cluster_version"
-        else
-            log_warning "Could not determine cluster version"
-        fi
-    else
-        log_warning "kubectl command not found in PATH"
-    fi
+    log_info "Skipping kubectl version verification on Jenkins agent - perform from bastion host if required."
 }
 
 # =============================================================================
@@ -399,55 +307,11 @@ verify_kubectl_version() {
 # =============================================================================
 
 validate_rke2_cluster() {
-    log_info "Validating RKE2 cluster"
-
-    local validation_errors=0
-
-    # Check node readiness
-    log_info "Checking node readiness..."
-    if kubectl get nodes --no-headers | grep -q "Ready"; then
-        local ready_nodes
-        ready_nodes=$(kubectl get nodes --no-headers | grep "Ready" | wc -l)
-        local total_nodes
-        total_nodes=$(kubectl get nodes --no-headers | wc -l)
-        log_info "Node status: $ready_nodes/$total_nodes nodes ready"
-
-        if [[ $ready_nodes -eq $total_nodes && $total_nodes -gt 0 ]]; then
-            log_success "All nodes are ready"
-        else
-            log_warning "Some nodes are not ready"
-            kubectl get nodes
-        fi
-    else
-        log_error "No ready nodes found"
-        ((validation_errors++))
-    fi
-
-    # Check system pods
-    log_info "Checking system pods..."
-    if kubectl get pods -n kube-system --no-headers | grep -q "Running"; then
-        local running_pods
-        running_pods=$(kubectl get pods -n kube-system --no-headers | grep "Running" | wc -l)
-        local total_pods
-        total_pods=$(kubectl get pods -n kube-system --no-headers | wc -l)
-        log_info "System pods: $running_pods/$total_pods running"
-    else
-        log_warning "No running system pods found"
-    fi
-
-    # Check cluster info
-    log_info "Cluster information:"
-    if kubectl cluster-info 2>/dev/null; then
-        log_success "Cluster is accessible"
-    else
-        log_warning "Cluster info command failed"
-    fi
-
-    if [[ $validation_errors -eq 0 ]]; then
-        log_success "RKE2 cluster validation passed"
-    else
-        log_warning "RKE2 cluster validation had $validation_errors issues"
-    fi
+    log_info "Skipping RKE2 cluster validation from Jenkins agent."
+    log_info "Run validation commands from the bastion host using the staged kubeconfig:"
+    log_info "  kubectl get nodes -o wide"
+    log_info "  kubectl get pods -n kube-system"
+    log_info "  kubectl cluster-info"
 }
 
 # =============================================================================
@@ -472,52 +336,19 @@ Deployment Summary:
 - Working Directory: $(pwd)
 
 Deployment Status:
-EOF
-
-    # Add node information
-    if kubectl get nodes &>/dev/null; then
-        echo "- Nodes:" >> "$report_file"
-        kubectl get nodes >> "$report_file" 2>&1
-    else
-        echo "- Nodes: Not accessible" >> "$report_file"
-    fi
-
-    # Add pod information
-    if kubectl get pods -n kube-system &>/dev/null; then
-        echo "" >> "$report_file"
-        echo "- System Pods:" >> "$report_file"
-        kubectl get pods -n kube-system >> "$report_file" 2>&1
-    fi
-
-    cat >> "$report_file" << EOF
+- Jenkins agents cannot reach the airgapped cluster to gather kubectl data.
+- Use the staged kubeconfig on the bastion host to collect node and pod status.
 
 Artifacts Generated:
 - $SHARED_VOLUME_PATH/kubeconfig.yaml
 - $SHARED_VOLUME_PATH/rke2_deployment.log
 - $SHARED_VOLUME_PATH/rke2_playbook_execution.log
-- $SHARED_VOLUME_PATH/node_role_verification.log
-- $SHARED_VOLUME_PATH/manual_node_check.log
 - $SHARED_VOLUME_PATH/rke2_deployment_report.txt
 
-EOF
-
-    # Add recommendations
-    if [[ "${ANSIBLE_EXIT_CODE}" -eq 0 ]]; then
-        cat >> "$report_file" << EOF
 Recommendations:
-- RKE2 deployment completed successfully
-- Kubeconfig is available for Rancher deployment
-- Cluster is ready for next deployment phase
+- Perform post-deployment validation from the bastion host.
+- Archive any kubectl outputs gathered remotely alongside this report.
 EOF
-    else
-        cat >> "$report_file" << EOF
-Recommendations:
-- RKE2 deployment had issues
-- Check deployment logs for details
-- Manual intervention may be required
-- Consider running cleanup and redeploy
-EOF
-    fi
 
     log_success "Deployment report generated: $report_file"
 }
@@ -527,21 +358,8 @@ EOF
 # =============================================================================
 
 show_cluster_status() {
-    log_info "=== Cluster Status ==="
-
-    if kubectl get nodes &>/dev/null; then
-        echo "Nodes:"
-        kubectl get nodes
-        echo ""
-    fi
-
-    if kubectl get pods -A &>/dev/null; then
-        echo "Pods by namespace:"
-        kubectl get pods -A
-        echo ""
-    fi
-
-    echo "=== End Cluster Status ==="
+    log_info "Cluster status reporting is unavailable on the Jenkins agent."
+    log_info "Collect status information from the bastion host instead."
 }
 
 # =============================================================================
