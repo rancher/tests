@@ -14,22 +14,22 @@
          set +e
          case "${{ inputs.suite }}" in
            rancher-server-one)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCertRotationTestSuite/TestCertRotation";
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/dualstack \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCertRotationDualstackTestSuite/TestCertRotationDualstack";
              cert_exit=$?;
              echo "cert_exit=$cert_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteClusterTestSuite/TestDeletingCluster";
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/dualstack \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteDualstackClusterTestSuite/TestDeletingDualstackCluster";
              delete_exit=$?;
              echo "delete_exit=$delete_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestNodeScalingTestSuite/TestScalingNodePools";
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/dualstack \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestNodeScalingDualstackTestSuite/TestScalingDualstackNodePools";
              node_scale_exit=$?;
              echo "node_scale_exit=$node_scale_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -43,31 +43,17 @@
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
-               --junitfile resultst.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRestoreTestSuite/TestSnapshotRestore";
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/dualstack \
+               --junitfile resultst.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotDualstackRestoreTestSuite/TestSnapshotDualstackRestore";
              snap_restore_exit=$?;
              echo "snap_restore_exit=$snap_restore_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows";
-             snap_restore_win_exit=$?;
-             echo "snap_restore_win_exit=$snap_restore_win_exit" >> $GITHUB_ENV;
-             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-             ./validation/reporter
-
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes";
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/dualstack \
+               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestUpgradeDualstackKubernetesTestSuite/TestUpgradeDualstackKubernetes";
              upgrade_exit=$?;
              echo "upgrade_exit=$upgrade_exit" >> $GITHUB_ENV;
-             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-             ./validation/reporter
-
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes";
-             upgrade_win_exit=$?;
-             echo "upgrade_win_exit=$upgrade_win_exit" >> $GITHUB_ENV;
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
              ;;
@@ -83,9 +69,7 @@
            [node_scale_exit]="Node Scaling"
            [prov_exit]="Provisioning"
            [snap_restore_exit]="Snapshot Restore"
-           [snap_restore_win_exit]="Snapshot Restore Windows"
            [upgrade_exit]="Kubernetes Upgrade"
-           [upgrade_win_exit]="Windows Kubernetes Upgrade"
          )
 
          for exit_code in "${!suites[@]}"; do
