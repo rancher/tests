@@ -139,7 +139,7 @@ handle_inventory_file() {
 
 upload_config_to_s3() {
     local config_file="${1:-$TERRAFORM_VARS_FILENAME}"
-    local s3_key="$workspace/env:/cluster.tfvars"
+    local s3_key="env:/$TF_WORKSPACE/config/cluster.tfvars"
 
     log_info "Uploading configuration file to S3: s3://$S3_BUCKET_NAME/$s3_key"
 
