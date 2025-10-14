@@ -123,30 +123,25 @@ func VerifyCluster(t *testing.T, client *rancher.Client, cluster *steveV1.SteveA
 	require.NoError(t, err)
 
 	kubeProvisioningClient, err := adminClient.GetKubeAPIProvisioningClient()
-	reports.TimeoutClusterReport(cluster, err)
 	require.NoError(t, err)
 
 	watchInterface, err := kubeProvisioningClient.Clusters(namespaces.FleetDefault).Watch(context.TODO(), metav1.ListOptions{
 		FieldSelector:  "metadata.name=" + cluster.Name,
 		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 	})
-	reports.TimeoutClusterReport(cluster, err)
 	require.NoError(t, err)
 
 	logrus.Infof("Waiting for cluster (%s) to be active", cluster.Name)
 	checkFunc := shepherdclusters.IsProvisioningClusterReady
 	err = wait.WatchWait(watchInterface, checkFunc)
-	reports.TimeoutClusterReport(cluster, err)
 	require.NoError(t, err)
 
 	clusterToken, err := clusters.CheckServiceAccountTokenSecret(client, cluster.Name)
-	reports.TimeoutClusterReport(cluster, err)
 	require.NoError(t, err)
 	assert.NotEmpty(t, clusterToken)
 
 	logrus.Infof("Waiting for all machines to be ready on cluster (%s)", cluster.Name)
 	err = nodestat.AllMachineReady(client, cluster.ID, defaults.ThirtyMinuteTimeout)
-	reports.TimeoutClusterReport(cluster, err)
 	require.NoError(t, err)
 
 	status := &provv1.ClusterStatus{}
@@ -164,14 +159,12 @@ func VerifyCluster(t *testing.T, client *rancher.Client, cluster *steveV1.SteveA
 		require.NotEmpty(t, clusterSpec.DefaultPodSecurityAdmissionConfigurationTemplateName)
 
 		err := psadeploy.CreateNginxDeployment(client, status.ClusterName, clusterSpec.DefaultPodSecurityAdmissionConfigurationTemplateName)
-		reports.TimeoutClusterReport(cluster, err)
 		require.NoError(t, err)
 	}
 
 	if clusterSpec.RKEConfig.Registries != nil {
 		for registryName := range clusterSpec.RKEConfig.Registries.Configs {
 			havePrefix, err := registries.CheckAllClusterPodsForRegistryPrefix(client, status.ClusterName, registryName)
-			reports.TimeoutClusterReport(cluster, err)
 			require.NoError(t, err)
 			assert.True(t, havePrefix)
 		}
@@ -179,7 +172,6 @@ func VerifyCluster(t *testing.T, client *rancher.Client, cluster *steveV1.SteveA
 
 	if clusterSpec.LocalClusterAuthEndpoint.Enabled {
 		mgmtClusterObject, err := adminClient.Management.Cluster.ByID(status.ClusterName)
-		reports.TimeoutClusterReport(cluster, err)
 		require.NoError(t, err)
 		VerifyACE(t, adminClient, mgmtClusterObject)
 	}
