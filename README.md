@@ -11,6 +11,10 @@
 | [![Daily IPv6 Cluster Provisioning](https://github.com/rancher/tests/actions/workflows/daily-ipv6-cluster-provisioning.yml/badge.svg)](https://github.com/rancher/tests/actions/workflows/daily-ipv6-cluster-provisioning.yml) | [![Recurring IPv6 Tests](https://github.com/rancher/tests/actions/workflows/recurring-ipv6-tests.yml/badge.svg)](https://github.com/rancher/tests/actions/workflows/recurring-ipv6-tests.yml) |
 | [![Daily Rancher Upgrade Cluster Provisioning](https://github.com/rancher/tests/actions/workflows/daily-rancher-upgrade-cluster-provisioning.yml/badge.svg)](https://github.com/rancher/tests/actions/workflows/daily-rancher-upgrade-cluster-provisioning.yml) |  |
 
+| **Prime UI Checks** |
+|:----------------:|
+ [![Prime UI Checks](https://github.com/rancher/tests/actions/workflows/post-release-prime.yml/badge.svg)](https://github.com/rancher/tests/actions/workflows/post-release-prime.yml) | |
+
 # Rancher Tests
 
 Welcome to the rancher test repo. 

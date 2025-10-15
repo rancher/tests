@@ -17,6 +17,7 @@ jobs:
     strategy:
       matrix:
         workflow:
+          - post-release-prime.yml
           - recurring-tests.yml
 
     steps:
