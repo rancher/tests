@@ -15,7 +15,7 @@
          case "${{ inputs.suite }}" in
            rancher-server-one)
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/dualstack \
-               --junitfile results.xml --jsonfile results_cert.json -- -timeout=3h -tags=recurring -v -run "TestCertRotationDualstackTestSuite/TestCertRotationDualstack";
+               --junitfile results.xml --jsonfile results_cert.json -- -timeout=3h -tags=recurring -v;
              cert_exit=$?;
              echo "cert_exit=$cert_exit" >> $GITHUB_ENV;
              cp results_cert.json results.json
@@ -23,7 +23,7 @@
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/dualstack \
-               --junitfile results.xml --jsonfile results_delete.json -- -timeout=3h -tags=recurring -v -run "TestDeleteDualstackClusterTestSuite/TestDeletingDualstackCluster";
+               --junitfile results.xml --jsonfile results_delete.json -- -timeout=3h -tags=recurring -v;
              delete_exit=$?;
              echo "delete_exit=$delete_exit" >> $GITHUB_ENV;
              cp results_delete.json results.json
@@ -31,7 +31,7 @@
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/dualstack \
-               --junitfile results.xml --jsonfile results_node_scale.json -- -timeout=3h -tags=recurring -v -run "TestNodeScalingDualstackTestSuite/TestScalingDualstackNodePools";
+               --junitfile results.xml --jsonfile results_node_scale.json -- -timeout=3h -tags=recurring -v;
              node_scale_exit=$?;
              echo "node_scale_exit=$node_scale_exit" >> $GITHUB_ENV;
              cp results_node_scale.json results.json
@@ -48,7 +48,7 @@
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/dualstack \
-               --junitfile resultst.xml --jsonfile results_snapshot.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotDualstackRestoreTestSuite/TestSnapshotDualstackRestore";
+               --junitfile results.xml --jsonfile results_snapshot.json -- -timeout=3h -tags=recurring -v;
              snap_restore_exit=$?;
              echo "snap_restore_exit=$snap_restore_exit" >> $GITHUB_ENV;
              cp results_snapshot.json results.json
@@ -56,7 +56,7 @@
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/dualstack \
-               --junitfile results.xml --jsonfile results_upgrade.json -- -timeout=3h -tags=recurring -v -run "TestUpgradeDualstackKubernetesTestSuite/TestUpgradeDualstackKubernetes";
+               --junitfile results.xml --jsonfile results_upgrade.json -- -timeout=3h -tags=recurring -v;
              upgrade_exit=$?;
              echo "upgrade_exit=$upgrade_exit" >> $GITHUB_ENV;
              cp results_upgrade.json results.json

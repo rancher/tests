@@ -15,7 +15,7 @@
          case "${{ inputs.suite }}" in
            rancher-server-one)
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/ipv6 \
-               --junitfile results.xml --jsonfile results_delete.json -- -timeout=3h -tags=recurring -v -run "TestDeleteIPv6ClusterTestSuite/TestDeletingIPv6Cluster";
+               --junitfile results.xml --jsonfile results_delete.json -- -timeout=3h -tags=recurring -v;
              delete_exit=$?;
              echo "delete_exit=$delete_exit" >> $GITHUB_ENV;
              cp results_delete.json results.json
@@ -23,10 +23,10 @@
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/ipv6 \
-               --junitfile results.xml --jsonfile results_custom_scale.json -- -timeout=3h -tags=recurring -v -run "TestCustomIPv6ClusterNodeScalingTestSuite/TestScalingCustomIPv6ClusterNodes";
-             custom_scale_exit=$?;
-             echo "custom_scale_exit=$custom_scale_exit" >> $GITHUB_ENV;
-             cp results_custom_scale.json results.json
+               --junitfile results.xml --jsonfile results_node_scale.json -- -timeout=3h -tags=recurring -v;
+             node_scale_exit=$?;
+             echo "node_scale_exit=$node_scale_exit" >> $GITHUB_ENV;
+             cp results_node_scale.json results.json
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
              ;;
@@ -40,7 +40,7 @@
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/ipv6 \
-               --junitfile resultst.xml --jsonfile results_snapshot.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotIPv6RestoreTestSuite/TestSnapshotIPv6Restore";
+               --junitfile results.xml --jsonfile results_snapshot.json -- -timeout=3h -tags=recurring -v;
              snap_restore_exit=$?;
              echo "snap_restore_exit=$snap_restore_exit" >> $GITHUB_ENV;
              cp results_snapshot.json results.json
@@ -48,7 +48,7 @@
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/ipv6 \
-               --junitfile results.xml --jsonfile results_upgrade.json -- -timeout=3h -tags=recurring -v -run "TestUpgradeIPv6KubernetesTestSuite/TestUpgradeIPv6Kubernetes";
+               --junitfile results.xml --jsonfile results_upgrade.json -- -timeout=3h -tags=recurring -v;
              upgrade_exit=$?;
              echo "upgrade_exit=$upgrade_exit" >> $GITHUB_ENV;
              cp results_upgrade.json results.json
@@ -63,8 +63,8 @@
        run: |
          declare -A suites=(
            [delete_exit]="Delete Cluster:results_delete.json"
-           [custom_scale_exit]="Custom Cluster Node Scaling:results_custom_scale.json"
-           [prox_exit]="RKE2:results_prov.json"
+           [node_scale_exit]="Node Scaling:results_node_scale.json"
+           [prov_exit]="Provisioning:results_prov.json"
            [snap_restore_exit]="Snapshot Restore:results_snapshot.json"
            [upgrade_exit]="Kubernetes Upgrade:results_upgrade.json"
          )
