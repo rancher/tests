@@ -15,38 +15,43 @@
          case "${{ inputs.suite }}" in
            rancher-server-one)
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/ipv6 \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteIPv6ClusterTestSuite/TestDeletingIPv6Cluster";
+               --junitfile results.xml --jsonfile results_delete.json -- -timeout=3h -tags=recurring -v -run "TestDeleteIPv6ClusterTestSuite/TestDeletingIPv6Cluster";
              delete_exit=$?;
              echo "delete_exit=$delete_exit" >> $GITHUB_ENV;
+             cp results_delete.json results.json
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/ipv6 \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCustomIPv6ClusterNodeScalingTestSuite/TestScalingCustomIPv6ClusterNodes";
+               --junitfile results.xml --jsonfile results_custom_scale.json -- -timeout=3h -tags=recurring -v -run "TestCustomIPv6ClusterNodeScalingTestSuite/TestScalingCustomIPv6ClusterNodes";
              custom_scale_exit=$?;
              echo "custom_scale_exit=$custom_scale_exit" >> $GITHUB_ENV;
+             cp results_custom_scale.json results.json
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
              ;;
            rancher-server-two)
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
-             rke2_exit=$?;
-             echo "rke2_exit=$rke2_exit" >> $GITHUB_ENV;
+               --junitfile results.xml --jsonfile results_prov.json -- -timeout=3h -tags=recurring -v;
+             prov_exit=$?;
+             echo "prov_exit=$prov_exit" >> $GITHUB_ENV;
+             cp results_prov.json results.json
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/ipv6 \
-               --junitfile resultst.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotIPv6RestoreTestSuite/TestSnapshotIPv6Restore";
+               --junitfile resultst.xml --jsonfile results_snapshot.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotIPv6RestoreTestSuite/TestSnapshotIPv6Restore";
              snap_restore_exit=$?;
              echo "snap_restore_exit=$snap_restore_exit" >> $GITHUB_ENV;
+             cp results_snapshot.json results.json
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/ipv6 \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestUpgradeIPv6KubernetesTestSuite/TestUpgradeIPv6Kubernetes";
+               --junitfile results.xml --jsonfile results_upgrade.json -- -timeout=3h -tags=recurring -v -run "TestUpgradeIPv6KubernetesTestSuite/TestUpgradeIPv6Kubernetes";
              upgrade_exit=$?;
              echo "upgrade_exit=$upgrade_exit" >> $GITHUB_ENV;
+             cp results_upgrade.json results.json
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
              ;;
@@ -57,21 +62,26 @@
      - name: Show failed tests
        run: |
          declare -A suites=(
-           [delete_exit]="Delete Cluster"
-           [custom_scale_exit]="Custom Cluster Node Scaling"
-           [rke2_exit]="RKE2"
-           [snap_restore_exit]="Snapshot Restore"
-           [upgrade_exit]="Kubernetes Upgrade"
+           [delete_exit]="Delete Cluster:results_delete.json"
+           [custom_scale_exit]="Custom Cluster Node Scaling:results_custom_scale.json"
+           [prox_exit]="RKE2:results_prov.json"
+           [snap_restore_exit]="Snapshot Restore:results_snapshot.json"
+           [upgrade_exit]="Kubernetes Upgrade:results_upgrade.json"
          )
 
+         failed=0
          for exit_code in "${!suites[@]}"; do
-           exit_val="${!exit_code}"
-
-           if [ "$exit_val" != "" ] && [ "$exit_val" -ne 0 ]; then
-             echo "Failed ${suites[$exit_code]} tests:"
-             jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
-             echo ""
-             exit 1
-           fi
+          IFS=: read suite_name results_file <<< "${suites[$exit_code]}"
+          exit_val="${!exit_code}"
+           
+          if [ "$exit_val" != "" ] && [ "$exit_val" -ne 0 ]; then
+            echo "Failed $suite_name tests:"
+            jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' "$results_file"
+            failed=1
+          fi
          done
+
+         if [ "$failed" -eq 1 ]; then
+          exit 1
+         fi
        shell: bash
