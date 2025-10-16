@@ -1,0 +1,72 @@
+FROM registry.suse.com/bci/bci-base:latest
+
+ENV WORKSPACE=/root/go/src/github.com/rancher/tests
+ENV WORKSPACE2=/root/go/src/github.com/rancher/qa-infra-automation
+
+WORKDIR $WORKSPACE
+
+COPY ["./tests", "$WORKSPACE"]
+COPY ["./qa-infra-automation", "$WORKSPACE2"]
+
+ARG TOFU_VERSION=1.10.6
+
+# Install essential packages for airgap RKE2 deployment
+RUN zypper -n install -y \
+    ca-certificates git-core wget curl unzip tar \
+    vim less file xz gzip sed gawk iproute2 iptables jq \
+    python311 python311-pip python311-base openssh
+
+# Install Docker
+RUN zypper install -y -f docker && rpm -e --nodeps --noscripts containerd
+
+# Install Ansible and PyYAML (required for RKE2 deployment and YAML validation)
+RUN python3.11 -m pip install --upgrade pip setuptools && \
+    python3.11 -m pip install ansible PyYAML && \
+    ln -sf /usr/bin/python3.11 /usr/local/bin/python3
+
+# necessary to run if statements using [[ ]]
+SHELL ["/bin/bash", "-c"]
+
+# Install ansible-inventory-terraform plugin
+# RUN ansible-galaxy collection install cloud.terraform
+
+# Setup SSH directory and copy keys
+RUN mkdir -p /root/.ssh
+RUN if [ -d .ssh ]; then chmod 600 .ssh/jenkins-* 2>/dev/null || true; fi
+RUN if [ -d .ssh ]; then cp -r .ssh/jenkins-* /root/.ssh/ 2>/dev/null || true; fi
+RUN if [ -d /root/.ssh ]; then \
+    shopt -s nullglob; \
+    for pem_file in /root/.ssh/jenkins-*; do \
+        if [ -f "$pem_file" ]; then \
+            echo "Generating public key for: $pem_file"; \
+            ssh-keygen -f "$pem_file" -y > "/root/.ssh/$(basename "$pem_file").pub" || echo "Failed to generate key for $pem_file"; \
+        fi; \
+    done; \
+    shopt -u nullglob; \
+    fi
+
+RUN ls -al /root/.ssh || echo "No SSH keys found"
+
+# Install OpenTofu
+RUN wget "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.zip" && \
+    unzip -j "tofu_${TOFU_VERSION}_linux_amd64.zip" "tofu" && \
+    mv tofu /usr/local/bin/ && \
+    chmod +x /usr/local/bin/tofu && \
+    rm "tofu_${TOFU_VERSION}_linux_amd64.zip"
+
+# Install kubectl
+RUN curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl" && \
+    chmod +x kubectl && \
+    mv ./kubectl /usr/local/bin/kubectl
+
+# Install AWS CLI v2 (required for S3 state operations)
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip aws/
+
+# Verify installations
+RUN tofu version && kubectl version --client && aws --version
+
+# necessary to run if statements using [[ ]]
+SHELL ["/bin/bash", "-c"]
