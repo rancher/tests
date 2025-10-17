@@ -1,8 +1,6 @@
 module github.com/rancher/tests/actions
 
-go 1.24.0
-
-toolchain go1.24.2
+go 1.24.2
 
 replace (
 	github.com/containerd/containerd => github.com/containerd/containerd v1.6.27 // for compatibilty with docker 20.10.x
@@ -62,10 +60,11 @@ replace (
 require (
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20251003203259-669abb78af51
+	github.com/rancher/tfp-automation v0.0.0-20251016221424-5aafbe545b8e
 )
 
 require (
-	github.com/aws/aws-sdk-go v1.55.5
+	github.com/aws/aws-sdk-go v1.55.6
 	github.com/pkg/errors v0.9.1
 	github.com/rancher/norman v0.7.0
 	github.com/rancher/rancher v0.0.0-20250806201723-9a7af3779b9d
@@ -83,6 +82,7 @@ require (
 )
 
 require (
+	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	gopkg.in/validator.v2 v2.0.1 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
@@ -145,7 +145,7 @@ require (
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/kubereboot/kured v1.13.1 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
-	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
@@ -166,7 +166,7 @@ require (
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pkg/sftp v1.13.5 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.52.0 // indirect
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.72.0 // indirect
 	github.com/prometheus/client_golang v1.22.0 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
@@ -219,12 +219,12 @@ require (
 	k8s.io/component-base v0.33.2 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-aggregator v0.33.2 // indirect
-	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect
+	k8s.io/kube-openapi v0.31.5 // indirect
 	k8s.io/kubectl v0.33.2 // indirect
 	k8s.io/kubernetes v1.33.2 // indirect
 	k8s.io/pod-security-admission v0.33.2 // indirect
 	sigs.k8s.io/cli-utils v0.37.2 // indirect
-	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
+	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/kustomize/api v0.19.0 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.19.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
