@@ -111,8 +111,10 @@ node {
             stage('Setup') {
                 sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
                 sh returnStdout:true, script: 'chmod a+x ./yq'
+                def envText = readFile("${envFile}")
+                writeFile file: "${envFile}", text: envText+"BUILD_DOWNSTREAM_CLUSTER=false"
             }
-            stage("Build Environment") {
+            stage("Build Rancher Environment") {
               try {
                 sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
                 "${imageName} sh -c \"${workPath}pipeline/scripts/setup_environment.sh && ${workPath}pipeline/scripts/build_qase_auto_testrun.sh\""
