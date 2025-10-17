@@ -21,6 +21,7 @@ import (
 	"github.com/rancher/shepherd/extensions/users"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/workloads/pods"
 
 	"github.com/rancher/tests/actions/rbac"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -171,10 +172,17 @@ func (gr *GlobalRolesV2TestSuite) TestClusterCreationAfterAddingGlobalRoleWithIn
 	log.Info("As the new user, create two new downstream  K3S clusters.")
 	_, firstClusterSteveObject, _, err := createDownstreamCluster(userClient, "K3S")
 	require.NoError(gr.T(), err)
-	provisioning.VerifyCluster(gr.T(), userClient, firstClusterSteveObject)
+
+	provisioning.VerifyClusterReady(gr.T(), userClient, firstClusterSteveObject)
+	pods.VerifyClusterPods(gr.T(), userClient, firstClusterSteveObject)
+	provisioning.VerifyDynamicCluster(gr.T(), userClient, firstClusterSteveObject)
+
 	_, secondClusterSteveObject, _, err := createDownstreamCluster(userClient, "K3S")
 	require.NoError(gr.T(), err)
-	provisioning.VerifyCluster(gr.T(), userClient, secondClusterSteveObject)
+
+	provisioning.VerifyClusterReady(gr.T(), userClient, secondClusterSteveObject)
+	pods.VerifyClusterPods(gr.T(), userClient, secondClusterSteveObject)
+	provisioning.VerifyDynamicCluster(gr.T(), userClient, secondClusterSteveObject)
 
 	gr.validateRBACResources(createdUser, createdGlobalRole, inheritedClusterRoles)
 }
@@ -425,7 +433,10 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromClu
 	log.Info("Create a RKE2 downstream cluster.")
 	_, rke2SteveObject, _, err := createDownstreamCluster(gr.client, "RKE2")
 	require.NoError(gr.T(), err)
-	provisioning.VerifyCluster(gr.T(), gr.client, rke2SteveObject)
+
+	provisioning.VerifyClusterReady(gr.T(), gr.client, rke2SteveObject)
+	pods.VerifyClusterPods(gr.T(), gr.client, rke2SteveObject)
+	provisioning.VerifyDynamicCluster(gr.T(), gr.client, rke2SteveObject)
 
 	log.Info("Create a global role with inheritedClusterRoles.")
 	inheritedClusterRoles := []string{rbac.ClusterOwner.String()}

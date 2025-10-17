@@ -12,7 +12,6 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/cloudprovider"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
@@ -20,6 +19,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -95,7 +95,7 @@ func TestAWSCloudProvider(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			clusterConfig.Provider = providers.AWS
+			clusterConfig.CloudProvider = providers.AWS
 			clusterConfig.MachinePools = tt.machinePools
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
@@ -106,11 +106,14 @@ func TestAWSCloudProvider(t *testing.T) {
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 			assert.NoError(t, err)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(t, tt.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(t, r.client, cluster)
 
-			logrus.Infof("Verifying cloud provider on cluster (%s)", cluster.Name)
-			cloudprovider.VerifyCloudProvider(t, tt.client, defaults.RKE2, nil, clusterConfig, cluster, nil)
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(t, r.client, cluster)
+
+			logrus.Infof("Verifying cloud provider (%s)", cluster.Name)
+			provider.VerifyCloudProviderFunc(t, r.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
@@ -164,11 +167,14 @@ func TestVSphereCloudProvider(t *testing.T) {
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 			assert.NoError(t, err)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(t, tt.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(t, r.client, cluster)
 
-			logrus.Infof("Verifying cloud provider %s", cluster.Name)
-			cloudprovider.VerifyCloudProvider(t, tt.client, "rke2", nil, clusterConfig, cluster, nil)
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(t, r.client, cluster)
+
+			logrus.Infof("Verifying cloud provider (%s)", cluster.Name)
+			provider.VerifyCloudProviderFunc(t, r.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)

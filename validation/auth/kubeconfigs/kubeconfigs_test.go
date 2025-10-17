@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
 	kubeconfigapi "github.com/rancher/tests/actions/kubeconfigs"
+	"github.com/rancher/tests/actions/workloads/pods"
 
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/rbac"
@@ -71,17 +72,23 @@ func (kc *KubeconfigTestSuite) SetupSuite() {
 	cluster2ID, err := clusters.GetClusterIDByName(kc.client, clusterObject2.Name)
 	require.NoError(kc.T(), err)
 
-	provisioning.VerifyCluster(kc.T(), kc.client, aceClusterObject1)
+	provisioning.VerifyClusterReady(kc.T(), client, clusterObject2)
+	pods.VerifyClusterPods(kc.T(), client, clusterObject2)
+	provisioning.VerifyDynamicCluster(kc.T(), client, clusterObject2)
 	kc.aceCluster1, err = kc.client.Management.Cluster.ByID(aceCluster1ID)
 	require.NoError(kc.T(), err)
 	log.Infof("ACE-enabled cluster created: %s (%s)", kc.aceCluster1.Name, aceCluster1ID)
 
-	provisioning.VerifyCluster(kc.T(), kc.client, aceClusterObject2)
+	provisioning.VerifyClusterReady(kc.T(), client, clusterObject2)
+	pods.VerifyClusterPods(kc.T(), client, clusterObject2)
+	provisioning.VerifyDynamicCluster(kc.T(), client, clusterObject2)
 	kc.aceCluster2, err = kc.client.Management.Cluster.ByID(aceCluster2ID)
 	require.NoError(kc.T(), err)
 	log.Infof("ACE-enabled cluster created: %s (%s)", kc.aceCluster2.Name, aceCluster2ID)
 
-	provisioning.VerifyCluster(kc.T(), kc.client, clusterObject2)
+	provisioning.VerifyClusterReady(kc.T(), client, clusterObject2)
+	pods.VerifyClusterPods(kc.T(), client, clusterObject2)
+	provisioning.VerifyDynamicCluster(kc.T(), client, clusterObject2)
 	kc.cluster2, err = kc.client.Management.Cluster.ByID(cluster2ID)
 	require.NoError(kc.T(), err)
 	log.Infof("ACE-disabled cluster created: %s (%s)", kc.cluster2.Name, cluster2ID)

@@ -23,6 +23,7 @@ import (
 	rbac "github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/settings"
 	"github.com/rancher/tests/actions/users"
+	"github.com/rancher/tests/actions/workloads/pods"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -95,7 +96,14 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementCre
 	clusterObject, err := provisioning.CreateProvisioningCluster(createdRaReplacementUserClient, provider, credentialSpec, ra.clusterConfig, machineConfigSpec, nil)
 	require.NoError(ra.T(), err)
 
-	provisioning.VerifyCluster(ra.T(), ra.client, clusterObject)
+	log.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
+	provisioning.VerifyClusterReady(ra.T(), ra.client, clusterObject)
+
+	log.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+	pods.VerifyClusterPods(ra.T(), ra.client, clusterObject)
+
+	log.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+	provisioning.VerifyDynamicCluster(ra.T(), ra.client, clusterObject)
 }
 
 func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementListGlobalSettings() {
