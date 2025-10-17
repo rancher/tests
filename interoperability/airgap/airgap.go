@@ -27,7 +27,7 @@ func TfpSetupSuite(t *testing.T) (map[string]any, *rancher.Config, *terraform.Op
 	require.NoError(t, err)
 
 	cattleConfig = configMap[0]
-	rancherConfig, terraformConfig, terratestConfig := config.LoadTFPConfigs(cattleConfig)
+	rancherConfig, terraformConfig, terratestConfig, _ := config.LoadTFPConfigs(cattleConfig)
 
 	adminUser := &management.User{
 		Username: "admin",
