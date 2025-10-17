@@ -237,6 +237,10 @@ func updateTestInRun(client *upstream.APIClient, testResult testresult.GoTestRes
 
 	resultParams := make(map[string]string)
 	for _, param := range params {
+		if param.ParameterSingle == nil {
+			continue
+		}
+
 		if len(param.ParameterSingle.Values) > 0 {
 			paramKey := param.ParameterSingle.Title
 			paramVal := strings.Join(param.ParameterSingle.Values, ", ")
