@@ -74,6 +74,11 @@ func TestCustomRKE2Dualstack(t *testing.T) {
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
+	cidr := &provisioninginput.Networking{
+		ClusterCIDR: clusterConfig.Networking.ClusterCIDR,
+		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
+	}
+
 	ipv4StackPreference := &provisioninginput.Networking{
 		ClusterCIDR:     "",
 		ServiceCIDR:     "",
@@ -98,6 +103,7 @@ func TestCustomRKE2Dualstack(t *testing.T) {
 		machinePools []provisioninginput.MachinePools
 		networking   *provisioninginput.Networking
 	}{
+		{"RKE2_Dual_Stack_Custom_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
 		{"RKE2_Dual_Stack_Custom_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv4StackPreference},
 		{"RKE2_Dual_Stack_Custom_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, dualStackPreference},
 		{"RKE2_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},

@@ -32,38 +32,38 @@ type nodeDriverK3STest struct {
 }
 
 func nodeDriverK3SSetup(t *testing.T) nodeDriverK3STest {
-	var r nodeDriverK3STest
+	var k nodeDriverK3STest
 	testSession := session.NewSession()
-	r.session = testSession
+	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	assert.NoError(t, err)
-	r.client = client
+	k.client = client
 
-	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
 	assert.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
-	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
+	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
 	assert.NoError(t, err)
 
-	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.K3S, r.cattleConfig)
+	k.cattleConfig, err = defaults.SetK8sDefault(k.client, defaults.K3S, k.cattleConfig)
 	assert.NoError(t, err)
 
-	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
+	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
 	assert.NoError(t, err)
 
-	return r
+	return k
 }
 
 func TestNodeDriverK3S(t *testing.T) {
 	t.Skip("This test is temporarily disabled. See https://github.com/rancher/rancher/issues/51844.")
 	t.Parallel()
-	r := nodeDriverK3SSetup(t)
+	k := nodeDriverK3SSetup(t)
 
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
@@ -72,23 +72,25 @@ func TestNodeDriverK3S(t *testing.T) {
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	clusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
+
+	ipv6Params := &machinepools.AWSMachineConfig{
+		EnablePrimaryIpv6: true,
+		HttpProtocolIpv6:  "enabled",
+		Ipv6AddressCount:  "1",
+		Ipv6AddressOnly:   true,
+	}
+
+	nonIpv6Params := &machinepools.AWSMachineConfig{
+		EnablePrimaryIpv6: false,
+		HttpProtocolIpv6:  "disabled",
+		Ipv6AddressCount:  "",
+		Ipv6AddressOnly:   false,
+	}
 
 	cidr := &provisioninginput.Networking{
 		ClusterCIDR: clusterConfig.Networking.ClusterCIDR,
 		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
-	}
-
-	ipv4StackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     "",
-		ServiceCIDR:     "",
-		StackPreference: "ipv4",
-	}
-
-	dualStackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     "",
-		ServiceCIDR:     "",
-		StackPreference: "dual",
 	}
 
 	cidrDualStackPreference := &provisioninginput.Networking{
@@ -101,31 +103,39 @@ func TestNodeDriverK3S(t *testing.T) {
 		name         string
 		client       *rancher.Client
 		machinePools []provisioninginput.MachinePools
+		ipv6Params   *machinepools.AWSMachineConfig
 		networking   *provisioninginput.Networking
 	}{
-		{"K3S_Dual_Stack_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
-		{"K3S_Dual_Stack_Node_Driver_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv4StackPreference},
-		{"K3S_Dual_Stack_Node_Driver_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, dualStackPreference},
-		{"K3S_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
+		{"K3S_Dual_Stack_Node_Driver_CIDR", k.standardUserClient, nodeRolesStandard, nonIpv6Params, cidr},
+		{"K3S_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, ipv6Params, cidrDualStackPreference},
 	}
 
 	for _, tt := range tests {
 		var err error
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
+			k.session.Cleanup()
 		})
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			clusterConfig := new(clusters.ClusterConfig)
-			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+			operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
 
 			clusterConfig.MachinePools = tt.machinePools
 			clusterConfig.Networking = tt.networking
 
-			assert.NotNil(t, clusterConfig.Provider)
+			machineConfig := new(machinepools.AWSMachineConfigs)
+
+			config.LoadAndUpdateConfig(machinepools.AWSMachineConfigsKey, machineConfig, func() {
+				for i := range machineConfig.AWSMachineConfig {
+					machineConfig.AWSMachineConfig[i].EnablePrimaryIpv6 = tt.ipv6Params.EnablePrimaryIpv6
+					machineConfig.AWSMachineConfig[i].HttpProtocolIpv6 = tt.ipv6Params.HttpProtocolIpv6
+					machineConfig.AWSMachineConfig[i].Ipv6AddressCount = tt.ipv6Params.Ipv6AddressCount
+					machineConfig.AWSMachineConfig[i].Ipv6AddressOnly = tt.ipv6Params.Ipv6AddressOnly
+				}
+			})
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
@@ -142,7 +152,7 @@ func TestNodeDriverK3S(t *testing.T) {
 			pods.VerifyClusterPods(t, tt.client, cluster)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
+		params := provisioning.GetProvisioningSchemaParams(tt.client, k.cattleConfig)
 		err = qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)

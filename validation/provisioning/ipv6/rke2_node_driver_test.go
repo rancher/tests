@@ -1,3 +1,5 @@
+//go:build validation || recurring
+
 package ipv6
 
 import (
@@ -60,7 +62,6 @@ func nodeDriverRKE2IPv6Setup(t *testing.T) nodeDriverRKE2IPv6Test {
 }
 
 func TestNodeDriverRKE2IPv6(t *testing.T) {
-	t.Skip("This test is temporarily disabled. See https://github.com/rancher/rancher/issues/51990.")
 	t.Parallel()
 	r := nodeDriverRKE2IPv6Setup(t)
 
@@ -78,6 +79,12 @@ func TestNodeDriverRKE2IPv6(t *testing.T) {
 		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
 	}
 
+	stackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     "",
+		ServiceCIDR:     "",
+		StackPreference: "ipv6",
+	}
+
 	cidrStackPreference := &provisioninginput.Networking{
 		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
 		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
@@ -91,6 +98,7 @@ func TestNodeDriverRKE2IPv6(t *testing.T) {
 		networking   *provisioninginput.Networking
 	}{
 		{"RKE2_IPv6_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
+		{"RKE2_IPv6_Node_Driver_Stack_Preference", r.standardUserClient, nodeRolesStandard, stackPreference},
 		{"RKE2_IPv6_Node_Driver_CIDR_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrStackPreference},
 	}
 

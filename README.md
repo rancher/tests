@@ -10,6 +10,7 @@
 | [![Daily Dualstack Cluster Provisioning](https://github.com/rancher/tests/actions/workflows/daily-dualstack-cluster-provisioning.yml/badge.svg)](https://github.com/rancher/tests/actions/workflows/daily-dualstack-cluster-provisioning.yml) | [![Recurring Dualstack Tests](https://github.com/rancher/tests/actions/workflows/recurring-dualstack-tests.yml/badge.svg)](https://github.com/rancher/tests/actions/workflows/recurring-dualstack-tests.yml) |
 | [![Daily IPv6 Cluster Provisioning](https://github.com/rancher/tests/actions/workflows/daily-ipv6-cluster-provisioning.yml/badge.svg)](https://github.com/rancher/tests/actions/workflows/daily-ipv6-cluster-provisioning.yml) | [![Recurring IPv6 Tests](https://github.com/rancher/tests/actions/workflows/recurring-ipv6-tests.yml/badge.svg)](https://github.com/rancher/tests/actions/workflows/recurring-ipv6-tests.yml) |
 | [![Daily Rancher Upgrade Cluster Provisioning](https://github.com/rancher/tests/actions/workflows/daily-rancher-upgrade-cluster-provisioning.yml/badge.svg)](https://github.com/rancher/tests/actions/workflows/daily-rancher-upgrade-cluster-provisioning.yml) |  |
+| [![Daily Dualstack Rancher IPv6 Cluster Provisioning](https://github.com/rancher/tests/actions/workflows/daily-dualstack-rancher-ipv6-cluster-provisioning.yml/badge.svg)](https://github.com/rancher/tests/actions/workflows/daily-dualstack-rancher-ipv6-cluster-provisioning.yml) | |
 
 | **Prime UI Checks** |
 |:----------------:|

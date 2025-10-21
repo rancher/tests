@@ -10,8 +10,8 @@ runs:
         set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 \
         --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
-        rke2_exit=$?;
-        echo "rke2_exit=$rke2_exit" >> $GITHUB_ENV;
+        exit_code=$?;
+        echo "exit_code=$exit_code" >> $GITHUB_ENV;
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
         ./validation/reporter;
       shell: bash
@@ -20,8 +20,8 @@ runs:
     - name: Show failed tests
       run: |
         failed=0
-        if [ "$rke2_exit" -ne 0 ]; then
-          echo "Failed RKE2 tests:"
+        if [ "$exit_code" -ne 0 ]; then
+          echo "Failed Provisioning tests:"
           jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
           failed=1
         fi

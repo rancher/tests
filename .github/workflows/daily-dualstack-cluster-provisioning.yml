@@ -232,6 +232,7 @@ jobs:
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
+              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"

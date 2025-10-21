@@ -80,6 +80,12 @@ func TestNodeDriverK3SIPv6(t *testing.T) {
 		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
 	}
 
+	stackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     "",
+		ServiceCIDR:     "",
+		StackPreference: "ipv6",
+	}
+
 	cidrStackPreference := &provisioninginput.Networking{
 		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
 		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
@@ -93,6 +99,7 @@ func TestNodeDriverK3SIPv6(t *testing.T) {
 		networking   *provisioninginput.Networking
 	}{
 		{"K3S_IPv6_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
+		{"K3S_IPv6_Node_Driver_Stack_Preference", r.standardUserClient, nodeRolesStandard, stackPreference},
 		{"K3S_IPv6_Node_Driver_CIDR_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrStackPreference},
 	}
 
