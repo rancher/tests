@@ -747,63 +747,62 @@ region = "${env.S3_REGION}"
 
 def downloadClusterTfvarsFromS3() {
   logInfo('Downloading cluster.tfvars from S3 workspace')
-  
+
   withCredentials([
     string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
     string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
   ]) {
+    // Script will try multiple likely S3 keys/locations and download the first match.
     def downloadScript = """
 #!/bin/bash
 set -e
 
-echo "Downloading cluster.tfvars from S3 workspace: s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}"
+VARFILE="${env.TERRAFORM_VARS_FILENAME}"
+BUCKET="${env.S3_BUCKET_NAME}"
+REGION="${env.S3_REGION}"
+WORKSPACE="${env.TF_WORKSPACE}"
+SHARED="/root"
+MODULE_PATH="${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap"
 
-# Check if the file exists in S3
-if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}" --region "${env.S3_REGION}" 2>/dev/null; then
-    echo "Found cluster.tfvars in S3 workspace, downloading..."
-    
-    # Download the file to the shared volume
-    aws s3 cp "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}" "/root/${env.TERRAFORM_VARS_FILENAME}" --region "${env.S3_REGION}"
-    
-    # Also copy to the expected module path
-    mkdir -p "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"
-    cp "/root/${env.TERRAFORM_VARS_FILENAME}" "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
-    
-    echo "cluster.tfvars downloaded successfully"
-    echo "File contents preview:"
-    head -20 "/root/${env.TERRAFORM_VARS_FILENAME}" || echo "Could not preview file contents"
-else
-    echo "WARNING: cluster.tfvars not found in S3 workspace: s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}"
-    echo "Available files in workspace:"
-    aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_REGION}" || echo "Could not list workspace files"
-    
-    # Create a minimal cluster.tfvars file to prevent errors
-    echo "Creating minimal cluster.tfvars file to prevent errors..."
-    cat > "/root/${env.TERRAFORM_VARS_FILENAME}" << 'EOF'
-# Minimal cluster.tfvars created for destroy operation
-# Original file was not found in S3 workspace
+echo "Attempting to locate \${VARFILE} for workspace '\${WORKSPACE}' in s3://\${BUCKET}/"
 
-aws_region = "${env.AWS_REGION}"
-hostname_prefix = "${env.TARGET_WORKSPACE}-destroy"
+candidates=(
+  "env:/\${WORKSPACE}/\${VARFILE}"
+  "env:/\${WORKSPACE}/config/\${VARFILE}"
+  "\${WORKSPACE}/\${VARFILE}"
+  "\${WORKSPACE}/config/\${VARFILE}"
+  "config/\${VARFILE}"
+  "\${VARFILE}"
+)
 
-# Note: This is a minimal file created for destroy operation
-# The original cluster.tfvars was not found in the S3 workspace
-EOF
-    
-    # Copy to module path
-    mkdir -p "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"
-    cp "/root/${env.TERRAFORM_VARS_FILENAME}" "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
-    
-    echo "Minimal cluster.tfvars file created"
+found=0
+for key in "\${candidates[@]}"; do
+  echo "Checking s3://\${BUCKET}/\${key}"
+  if aws s3 ls "s3://\${BUCKET}/\${key}" --region "\${REGION}" >/dev/null 2>&1; then
+    echo "Found at s3://\${BUCKET}/\${key}, downloading..."
+    aws s3 cp "s3://\${BUCKET}/\${key}" "\${SHARED}/\${VARFILE}" --region "\${REGION}"
+    mkdir -p "\${MODULE_PATH}"
+    cp "\${SHARED}/\${VARFILE}" "\${MODULE_PATH}/\${VARFILE}"
+    echo "Downloaded and copied \${VARFILE} to \${MODULE_PATH}/\${VARFILE}"
+    found=1
+    break
+  fi
+done
+
+if [[ "\${found}" -ne 1 ]]; then
+  echo "WARNING: Could not locate \${VARFILE} in S3 workspace s3://\${BUCKET}/ (checked \${#candidates[@]} locations)."
+  echo "Available files (partial):"
+  aws s3 ls "s3://\${BUCKET}/env:/\${WORKSPACE}/" --recursive --region "\${REGION}" 2>/dev/null || aws s3 ls "s3://\${BUCKET}/\${WORKSPACE}/" --recursive --region "\${REGION}" 2>/dev/null || true
+  echo "Proceeding without creating fallback var file; destruction scripts will handle missing vars appropriately."
 fi
 """
-    
+
     def timestamp = System.currentTimeMillis()
     def scriptFile = "download-cluster-tfvars-${timestamp}.sh"
     def containerName = "${env.BUILD_CONTAINER_NAME}-download-${timestamp}"
-    
+
     writeFile file: scriptFile, text: downloadScript
-    
+
     try {
       sh """
         docker run --rm \\
@@ -821,11 +820,10 @@ fi
           ${env.IMAGE_NAME} \\
           sh /tmp/script.sh
       """
-      logInfo('cluster.tfvars download completed')
+      logInfo('cluster.tfvars download attempt completed')
     } catch (Exception e) {
-      logError("Failed to download cluster.tfvars: ${e.message}")
-      // Don't fail the pipeline, just log the error
-      logWarning('Will proceed with cluster.tfvars download failure')
+      logError("Failed to execute download script: ${e.message}")
+      logWarning('Proceeding without cluster.tfvars; downstream scripts will decide next steps')
     } finally {
       sh "rm -f ${scriptFile}"
     }
