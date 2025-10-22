@@ -73,20 +73,6 @@ func TestNodeDriverRKE2(t *testing.T) {
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
-	ipv6Params := &machinepools.AWSMachineConfig{
-		EnablePrimaryIpv6: true,
-		HttpProtocolIpv6:  "enabled",
-		Ipv6AddressCount:  "1",
-		Ipv6AddressOnly:   true,
-	}
-
-	nonIpv6Params := &machinepools.AWSMachineConfig{
-		EnablePrimaryIpv6: false,
-		HttpProtocolIpv6:  "disabled",
-		Ipv6AddressCount:  "",
-		Ipv6AddressOnly:   false,
-	}
-
 	cidr := &provisioninginput.Networking{
 		ClusterCIDR: clusterConfig.Networking.ClusterCIDR,
 		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
@@ -102,11 +88,10 @@ func TestNodeDriverRKE2(t *testing.T) {
 		name         string
 		client       *rancher.Client
 		machinePools []provisioninginput.MachinePools
-		ipv6Params   *machinepools.AWSMachineConfig
 		networking   *provisioninginput.Networking
 	}{
-		{"RKE2_Dual_Stack_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, nonIpv6Params, cidr},
-		{"RKE2_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv6Params, cidrDualStackPreference},
+		{"RKE2_Dual_Stack_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
+		{"RKE2_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
 	}
 
 	for _, tt := range tests {
@@ -124,17 +109,6 @@ func TestNodeDriverRKE2(t *testing.T) {
 
 			clusterConfig.MachinePools = tt.machinePools
 			clusterConfig.Networking = tt.networking
-
-			machineConfig := new(machinepools.AWSMachineConfigs)
-
-			config.LoadAndUpdateConfig(machinepools.AWSMachineConfigsKey, machineConfig, func() {
-				for i := range machineConfig.AWSMachineConfig {
-					machineConfig.AWSMachineConfig[i].EnablePrimaryIpv6 = tt.ipv6Params.EnablePrimaryIpv6
-					machineConfig.AWSMachineConfig[i].HttpProtocolIpv6 = tt.ipv6Params.HttpProtocolIpv6
-					machineConfig.AWSMachineConfig[i].Ipv6AddressCount = tt.ipv6Params.Ipv6AddressCount
-					machineConfig.AWSMachineConfig[i].Ipv6AddressOnly = tt.ipv6Params.Ipv6AddressOnly
-				}
-			})
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))

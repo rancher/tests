@@ -14,6 +14,14 @@
          set +e
          case "${{ inputs.suite }}" in
            rancher-server-one)
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/ipv6 \
+               --junitfile results.xml --jsonfile results_cert.json -- -timeout=3h -tags=recurring -v;
+             cert_exit=$?;
+             echo "cert_exit=$cert_exit" >> $GITHUB_ENV;
+             cp results_cert.json results.json
+             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+             ./validation/reporter
+             
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/ipv6 \
                --junitfile results.xml --jsonfile results_delete.json -- -timeout=3h -tags=recurring -v;
              delete_exit=$?;
@@ -62,6 +70,7 @@
      - name: Show failed tests
        run: |
          declare -A suites=(
+           [cert_exit]="Cert Rotation:results_cert.json"
            [delete_exit]="Delete Cluster:results_delete.json"
            [node_scale_exit]="Node Scaling:results_node_scale.json"
            [prov_exit]="Provisioning:results_prov.json"

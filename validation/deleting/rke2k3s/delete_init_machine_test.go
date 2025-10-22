@@ -106,7 +106,7 @@ func (d *DeleteInitMachineTestSuite) TestDeleteInitMachine() {
 
 		d.Run(tt.name, func() {
 			logrus.Infof("Deleting init machine on cluster (%s)", cluster.Name)
-			err := deleteInitMachine(d.client, tt.clusterID)
+			err := DeleteInitMachine(d.client, tt.clusterID)
 			require.NoError(d.T(), err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)

@@ -1,19 +1,19 @@
-- suite: Go Automation/Certificates
+- suite: Go Automation/Deleting
   projects: [RRT, RM]
   cases:
-  - description: Rotates the clusters certificates
-    title: RKE2_Dualstack_Certificate_Rotation
+  - description: Deletes an existing cluster
+    title: RKE2_Delete_IPv6_Cluster
     priority: 4
     type: 8
     is_flaky: 0
     automation: 2
     steps:
-    - action: Rotate the clusters certificates
+    - action: Delete the existing cluster
       expectedresult: ""
       data: ""
       position: 1
       attachments: []
-    - action: Verify cluster state
+    - action: Verify cluster is deleted
       expectedresult: ""
       data: ""
       position: 2

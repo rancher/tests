@@ -202,6 +202,7 @@ jobs:
             networking:
               clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
               serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
+              stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
             registries:
               rke2Registries:
                 mirrors:
@@ -223,6 +224,10 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
+              enablePrimaryIPv6: true
+              httpProtocolIpv6: "enabled"
+              ipv6AddressOnly: true
+              ipv6AddressCount: "1"
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
               subnetId: "${{ secrets.AWS_SUBNET_ID }}"

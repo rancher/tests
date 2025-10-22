@@ -1,6 +1,6 @@
 //go:build validation || recurring
 
-package dualstack
+package ipv6
 
 import (
 	"os"
@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type CertRotationDualstackTestSuite struct {
+type CertRotationIPv6TestSuite struct {
 	suite.Suite
 	session       *session.Session
 	client        *rancher.Client
@@ -35,11 +35,11 @@ type CertRotationDualstackTestSuite struct {
 	rke2ClusterID string
 }
 
-func (c *CertRotationDualstackTestSuite) TearDownSuite() {
+func (c *CertRotationIPv6TestSuite) TearDownSuite() {
 	c.session.Cleanup()
 }
 
-func (c *CertRotationDualstackTestSuite) SetupSuite() {
+func (c *CertRotationIPv6TestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	c.session = testSession
 
@@ -85,12 +85,12 @@ func (c *CertRotationDualstackTestSuite) SetupSuite() {
 	require.NoError(c.T(), err)
 }
 
-func (c *CertRotationDualstackTestSuite) TestCertRotationDualstack() {
+func (c *CertRotationIPv6TestSuite) TestCertRotationIPv6() {
 	tests := []struct {
 		name      string
 		clusterID string
 	}{
-		{"RKE2_Dualstack_Certificate_Rotation", c.rke2ClusterID},
+		{"RKE2_IPv6_Certificate_Rotation", c.rke2ClusterID},
 	}
 
 	for _, tt := range tests {
@@ -116,6 +116,6 @@ func (c *CertRotationDualstackTestSuite) TestCertRotationDualstack() {
 	}
 }
 
-func TestCertRotationDualstackTestSuite(t *testing.T) {
-	suite.Run(t, new(CertRotationDualstackTestSuite))
+func TestCertRotationIPv6TestSuite(t *testing.T) {
+	suite.Run(t, new(CertRotationIPv6TestSuite))
 }

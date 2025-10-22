@@ -213,6 +213,7 @@ jobs:
             networking:
               clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
               serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              stackPreference: "${{ vars.STACK_PREFERENCE_IPV6 }}"
             registries:
               rke2Registries:
                 mirrors:
@@ -246,6 +247,7 @@ jobs:
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
+              subnetId: "${{ secrets.AWS_IPV6_SUBNET_ID }}"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
