@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -73,6 +74,11 @@ func TestCustomRKE2Dualstack(t *testing.T) {
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
+	cidr := &provisioninginput.Networking{
+		ClusterCIDR: clusterConfig.Networking.ClusterCIDR,
+		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
+	}
+
 	ipv4StackPreference := &provisioninginput.Networking{
 		ClusterCIDR:     "",
 		ServiceCIDR:     "",
@@ -97,6 +103,7 @@ func TestCustomRKE2Dualstack(t *testing.T) {
 		machinePools []provisioninginput.MachinePools
 		networking   *provisioninginput.Networking
 	}{
+		{"RKE2_Dual_Stack_Custom_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
 		{"RKE2_Dual_Stack_Custom_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv4StackPreference},
 		{"RKE2_Dual_Stack_Custom_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, dualStackPreference},
 		{"RKE2_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
@@ -125,8 +132,11 @@ func TestCustomRKE2Dualstack(t *testing.T) {
 			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
 			assert.NoError(t, err)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(t, tt.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(t, tt.client, cluster)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(t, tt.client, cluster)
 		})
 
 		params := provisioning.GetCustomSchemaParams(tt.client, r.cattleConfig)

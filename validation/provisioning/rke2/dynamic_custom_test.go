@@ -20,6 +20,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/reports"
+	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -108,11 +109,17 @@ func TestDynamicCustom(t *testing.T) {
 				reports.TimeoutClusterReport(cluster, err)
 				require.NoError(t, err)
 
-				logrus.Infof("Verifying cluster (%s)", cluster.Name)
-				provisioning.VerifyCluster(t, tt.client, cluster)
+				logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+				provisioning.VerifyClusterReady(t, r.client, cluster)
+
+				logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+				pods.VerifyClusterPods(t, r.client, cluster)
 
 				logrus.Infof("Verifying cloud provider on cluster (%s)", cluster.Name)
-				cloudprovider.VerifyCloudProvider(t, tt.client, defaults.RKE2, nil, clusterConfig, cluster, nil)
+				cloudprovider.VerifyCloudProvider(t, tt.client, defaults.RKE2, clusterConfig, cluster, nil)
+
+				logrus.Infof("Verifying cluster features (%s)", cluster.Name)
+				provisioning.VerifyDynamicCluster(t, r.client, cluster)
 			}
 		})
 	}

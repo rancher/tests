@@ -232,6 +232,7 @@ jobs:
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
+              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -283,6 +284,14 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-dualstack-provisioning
+
+      - name: Reporting Results to Slack
+        if: always()
+        uses: ./.github/actions/report-to-slack
+        with:
+          job-status: ${{ job.status }}
+          slack-channel: ${{ secrets.HB_SLACK_CHANNEL }}
+          slack-webhook-url: ${{ secrets.HB_SLACK_WEBHOOK_URL }}
 
       - name: Cleanup Infrastructure
         if: always()

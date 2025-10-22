@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -60,7 +61,6 @@ func nodeDriverRKE2Setup(t *testing.T) nodeDriverRKE2Test {
 }
 
 func TestNodeDriverRKE2(t *testing.T) {
-	t.Skip("This test is temporarily disabled. See https://github.com/rancher/rancher/issues/51844.")
 	t.Parallel()
 	r := nodeDriverRKE2Setup(t)
 
@@ -73,21 +73,23 @@ func TestNodeDriverRKE2(t *testing.T) {
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
+	ipv6Params := &machinepools.AWSMachineConfig{
+		EnablePrimaryIpv6: true,
+		HttpProtocolIpv6:  "enabled",
+		Ipv6AddressCount:  "1",
+		Ipv6AddressOnly:   true,
+	}
+
+	nonIpv6Params := &machinepools.AWSMachineConfig{
+		EnablePrimaryIpv6: false,
+		HttpProtocolIpv6:  "disabled",
+		Ipv6AddressCount:  "",
+		Ipv6AddressOnly:   false,
+	}
+
 	cidr := &provisioninginput.Networking{
 		ClusterCIDR: clusterConfig.Networking.ClusterCIDR,
 		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
-	}
-
-	ipv4StackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     "",
-		ServiceCIDR:     "",
-		StackPreference: "ipv4",
-	}
-
-	dualStackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     "",
-		ServiceCIDR:     "",
-		StackPreference: "dual",
 	}
 
 	cidrDualStackPreference := &provisioninginput.Networking{
@@ -100,12 +102,11 @@ func TestNodeDriverRKE2(t *testing.T) {
 		name         string
 		client       *rancher.Client
 		machinePools []provisioninginput.MachinePools
+		ipv6Params   *machinepools.AWSMachineConfig
 		networking   *provisioninginput.Networking
 	}{
-		{"RKE2_Dual_Stack_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
-		{"RKE2_Dual_Stack_Node_Driver_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv4StackPreference},
-		{"RKE2_Dual_Stack_Node_Driver_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, dualStackPreference},
-		{"RKE2_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
+		{"RKE2_Dual_Stack_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, nonIpv6Params, cidr},
+		{"RKE2_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv6Params, cidrDualStackPreference},
 	}
 
 	for _, tt := range tests {
@@ -124,6 +125,17 @@ func TestNodeDriverRKE2(t *testing.T) {
 			clusterConfig.MachinePools = tt.machinePools
 			clusterConfig.Networking = tt.networking
 
+			machineConfig := new(machinepools.AWSMachineConfigs)
+
+			config.LoadAndUpdateConfig(machinepools.AWSMachineConfigsKey, machineConfig, func() {
+				for i := range machineConfig.AWSMachineConfig {
+					machineConfig.AWSMachineConfig[i].EnablePrimaryIpv6 = tt.ipv6Params.EnablePrimaryIpv6
+					machineConfig.AWSMachineConfig[i].HttpProtocolIpv6 = tt.ipv6Params.HttpProtocolIpv6
+					machineConfig.AWSMachineConfig[i].Ipv6AddressCount = tt.ipv6Params.Ipv6AddressCount
+					machineConfig.AWSMachineConfig[i].Ipv6AddressOnly = tt.ipv6Params.Ipv6AddressOnly
+				}
+			})
+
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
@@ -132,8 +144,11 @@ func TestNodeDriverRKE2(t *testing.T) {
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 			assert.NoError(t, err)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(t, tt.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(t, tt.client, cluster)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(t, tt.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)

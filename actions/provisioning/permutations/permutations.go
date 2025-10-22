@@ -19,6 +19,8 @@ import (
 	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/actions/rke1/componentchecks"
 	"github.com/rancher/tests/actions/rke1/nodetemplates"
+	"github.com/rancher/tests/actions/workloads/pods"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -84,7 +86,14 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						reports.TimeoutClusterReport(clusterObject, err)
 						require.NoError(s.T(), err)
 
-						provisioning.VerifyCluster(s.T(), client, clusterObject)
+						logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
+						provisioning.VerifyClusterReady(s.T(), client, clusterObject)
+
+						logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+						pods.VerifyClusterPods(s.T(), client, clusterObject)
+
+						logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
+						provisioning.VerifyDynamicCluster(s.T(), client, clusterObject)
 
 					case RKE1ProvisionCluster:
 						testClusterConfig.KubernetesVersion = kubeVersion
@@ -112,7 +121,14 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						reports.TimeoutClusterReport(clusterObject, err)
 						require.NoError(s.T(), err)
 
-						provisioning.VerifyCluster(s.T(), client, clusterObject)
+						logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
+						provisioning.VerifyClusterReady(s.T(), client, clusterObject)
+
+						logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+						pods.VerifyClusterPods(s.T(), client, clusterObject)
+
+						logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
+						provisioning.VerifyDynamicCluster(s.T(), client, clusterObject)
 
 					case RKE1CustomCluster:
 						testClusterConfig.KubernetesVersion = kubeVersion
@@ -141,7 +157,14 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						reports.TimeoutClusterReport(clusterObject, err)
 						require.NoError(s.T(), err)
 
-						provisioning.VerifyCluster(s.T(), client, clusterObject)
+						logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
+						provisioning.VerifyClusterReady(s.T(), client, clusterObject)
+
+						logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+						pods.VerifyClusterPods(s.T(), client, clusterObject)
+
+						logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
+						provisioning.VerifyDynamicCluster(s.T(), client, clusterObject)
 
 					case RKE1AirgapCluster:
 						testClusterConfig.KubernetesVersion = kubeVersion
@@ -161,7 +184,7 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						s.T().Fatalf("Invalid cluster type: %s", clusterType)
 					}
 
-					cloudprovider.VerifyCloudProvider(s.T(), client, clusterType, nodeTemplate, testClusterConfig, clusterObject, rke1ClusterObject)
+					cloudprovider.VerifyCloudProvider(s.T(), client, clusterType, testClusterConfig, clusterObject, rke1ClusterObject)
 				})
 			}
 		}

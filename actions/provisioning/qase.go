@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/machinepools"
+	"github.com/rancher/tfp-automation/config"
 	"github.com/sirupsen/logrus"
 	upstream "go.qase.io/qase-api-client"
 )
@@ -20,26 +21,17 @@ func GetProvisioningSchemaParams(client *rancher.Client, cattleConfig map[string
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
 
-	provider := CreateProvider(clusterConfig.Provider)
-	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
-	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+	terraformConfig := new(config.TerraformConfig)
+	operations.LoadObjectFromMap(config.TerraformConfigurationFileKey, cattleConfig, terraformConfig)
 
-	var osParam upstream.TestCaseParameterCreate
-	if strings.Contains(clusterConfig.Provider, "aws") {
-		osNames, err := provider.GetOSNamesFunc(client, credentialSpec, machineConfigSpec)
-		if err != nil {
-			logrus.Warningf("Error getting OS Name %s", err)
-			return nil
-		}
-
-		osParam = upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "OS", Values: osNames}}
-	}
-
-	providerParam := upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "Provider", Values: []string{clusterConfig.Provider}}}
-	k8sParam := upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "K8sVersion", Values: []string{clusterConfig.KubernetesVersion}}}
-	cniParam := upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "CNI", Values: []string{clusterConfig.CNI}}}
-
-	params = append(params, providerParam, osParam, k8sParam, cniParam)
+	params = append(params,
+		getRunType(terraformConfig),
+		getRancherType(terraformConfig),
+		getOSNameParam(client, clusterConfig),
+		getProviderParam(clusterConfig),
+		getK8sParam(clusterConfig),
+		getCNIParam(clusterConfig),
+	)
 
 	return params
 }
@@ -50,22 +42,137 @@ func GetCustomSchemaParams(client *rancher.Client, cattleConfig map[string]any) 
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
 
+	terraformConfig := new(config.TerraformConfig)
+	operations.LoadObjectFromMap(config.TerraformConfigurationFileKey, cattleConfig, terraformConfig)
+
+	params = append(params,
+		getRunType(terraformConfig),
+		getRancherType(terraformConfig),
+		getOSNameCustomParam(client, cattleConfig, clusterConfig),
+		getProviderParam(clusterConfig),
+		getK8sParam(clusterConfig),
+		getCNIParam(clusterConfig),
+	)
+
+	return params
+}
+
+func getRunType(terraform *config.TerraformConfig) upstream.TestCaseParameterCreate {
+	var version string
+	if terraform.Standalone != nil && terraform.Standalone.UpgradedRancherTagVersion == "" {
+		version = terraform.Standalone.RancherTagVersion
+	} else if terraform.Standalone != nil && terraform.Standalone.UpgradedRancherTagVersion != "" {
+		version = terraform.Standalone.UpgradedRancherTagVersion
+	}
+
+	switch {
+	case terraform.Standalone == nil:
+		return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "Scheduled Testing", Values: []string{""}}}
+	case version != "" && !strings.Contains(version, "-alpha") && !strings.Contains(version, "-rc"):
+		return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "Scheduled Testing", Values: []string{version}}}
+	case version != "" && strings.Contains(version, "-alpha"):
+		return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "Release Testing", Values: []string{version}}}
+	case version != "" && strings.Contains(version, "-rc"):
+		return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "RC Testing", Values: []string{version}}}
+	}
+
+	return upstream.TestCaseParameterCreate{}
+}
+
+func getRancherType(terraform *config.TerraformConfig) upstream.TestCaseParameterCreate {
+	var image, version, title string
+	isUpgrade := false
+	prevImage := ""
+	prevVersion := ""
+
+	if terraform.Standalone != nil && terraform.Standalone.UpgradedRancherImage == "" && terraform.Standalone.UpgradedRancherTagVersion == "" {
+		image = terraform.Standalone.RancherImage
+		version = terraform.Standalone.RancherTagVersion
+	} else if terraform.Standalone != nil && terraform.Standalone.UpgradedRancherImage != "" && terraform.Standalone.UpgradedRancherTagVersion != "" {
+		image = terraform.Standalone.UpgradedRancherImage
+		version = terraform.Standalone.UpgradedRancherTagVersion
+		prevImage = terraform.Standalone.RancherImage
+		prevVersion = terraform.Standalone.RancherTagVersion
+		isUpgrade = true
+	}
+
+	if image != "" {
+		if isUpgrade {
+			var fromType, toType string
+			switch prevImage {
+			case "rancher/rancher":
+				fromType = "Rancher Community"
+			default:
+				fromType = "Rancher Prime"
+			}
+
+			switch image {
+			case "rancher/rancher":
+				toType = "Rancher Community"
+			default:
+				toType = "Rancher Prime"
+			}
+
+			title = "Upgraded From " + fromType + ": " + prevVersion + " to " + toType
+		} else {
+			switch image {
+			case "rancher/rancher":
+				title = "Rancher Community"
+			default:
+				title = "Rancher Prime"
+			}
+		}
+
+		return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: title, Values: []string{version}}}
+	}
+
+	return upstream.TestCaseParameterCreate{}
+}
+
+func getOSNameParam(client *rancher.Client, clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
+	provider := CreateProvider(clusterConfig.Provider)
+	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+
+	if strings.Contains(clusterConfig.Provider, "aws") {
+		osNames, err := provider.GetOSNamesFunc(client, credentialSpec, machineConfigSpec)
+		if err != nil {
+			logrus.Warningf("Error getting OS Name %s", err)
+			return upstream.TestCaseParameterCreate{}
+		}
+
+		return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "OS", Values: osNames}}
+	}
+
+	return upstream.TestCaseParameterCreate{}
+}
+
+func getOSNameCustomParam(client *rancher.Client, cattleConfig map[string]any, clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
 	customConfig := new(rancherEc2.AWSEC2Configs)
 	operations.LoadObjectFromMap(defaults.AWSEC2Configs, cattleConfig, customConfig)
 	externalNodeProvider := ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
-	osNames, err := externalNodeProvider.GetOSNamesFunc(client, *customConfig)
-	if err != nil {
-		logrus.Warningf("Error getting OS Name %s", err)
-		return nil
+	if strings.Contains(clusterConfig.Provider, "aws") {
+		osNames, err := externalNodeProvider.GetOSNamesFunc(client, *customConfig)
+		if err != nil {
+			logrus.Warningf("Error getting OS Name %s", err)
+			return upstream.TestCaseParameterCreate{}
+		}
+
+		return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "OS", Values: osNames}}
 	}
 
-	osParam := upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "OS", Values: osNames}}
-	providerParam := upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "Provider", Values: []string{clusterConfig.Provider}}}
-	k8sParam := upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "K8sVersion", Values: []string{clusterConfig.KubernetesVersion}}}
-	cniParam := upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "CNI", Values: []string{clusterConfig.CNI}}}
+	return upstream.TestCaseParameterCreate{}
+}
 
-	params = append(params, providerParam, osParam, k8sParam, cniParam)
+func getK8sParam(clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
+	return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "K8sVersion", Values: []string{clusterConfig.KubernetesVersion}}}
+}
 
-	return params
+func getProviderParam(clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
+	return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "Provider", Values: []string{clusterConfig.Provider}}}
+}
+
+func getCNIParam(clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
+	return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "CNI", Values: []string{clusterConfig.CNI}}}
 }

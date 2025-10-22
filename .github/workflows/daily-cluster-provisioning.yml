@@ -227,11 +227,13 @@ jobs:
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
+              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
+              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -304,6 +306,14 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
+
+      - name: Reporting Results to Slack
+        if: always()
+        uses: ./.github/actions/report-to-slack
+        with:
+          job-status: ${{ job.status }}
+          slack-channel: ${{ secrets.HB_SLACK_CHANNEL }}
+          slack-webhook-url: ${{ secrets.HB_SLACK_WEBHOOK_URL }}
 
       - name: Cleanup Infrastructure
         if: always()
@@ -517,11 +527,13 @@ jobs:
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
+              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
+              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -594,6 +606,14 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
+
+      - name: Reporting Results to Slack
+        if: always()
+        uses: ./.github/actions/report-to-slack
+        with:
+          job-status: ${{ job.status }}
+          slack-channel: ${{ secrets.HB_SLACK_CHANNEL }}
+          slack-webhook-url: ${{ secrets.HB_SLACK_WEBHOOK_URL }}
 
       - name: Cleanup Infrastructure
         if: always()
@@ -814,11 +834,14 @@ jobs:
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
+              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES_PRIME }}]
+              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
+
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -891,6 +914,14 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
+
+      - name: Reporting Results to Slack
+        if: always()
+        uses: ./.github/actions/report-to-slack
+        with:
+          job-status: ${{ job.status }}
+          slack-channel: ${{ secrets.HB_SLACK_CHANNEL }}
+          slack-webhook-url: ${{ secrets.HB_SLACK_WEBHOOK_URL }}
 
       - name: Cleanup Infrastructure
         if: always()

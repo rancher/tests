@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/scalinginput"
+	"github.com/rancher/tests/actions/workloads/pods"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
@@ -108,8 +109,11 @@ func (s *AutoReplaceSuite) TestAutoReplace() {
 			err := scalinginput.AutoReplaceFirstNodeWithRole(s.client, cluster.Name, tt.role)
 			require.NoError(s.T(), err)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(s.T(), s.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(s.T(), s.client, cluster)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(s.T(), s.client, cluster)
 		})
 	}
 }

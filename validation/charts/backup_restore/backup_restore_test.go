@@ -15,6 +15,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/interoperability/charts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -113,7 +114,15 @@ func (b *BackupTestSuite) TestS3InPlaceRestore() {
 
 	logrus.Info("Validating downstream clusters are in an Active status...")
 	provisioning.VerifyRKE1Cluster(b.T(), b.client, rke1ClusterConfig, rke1ClusterObj)
-	provisioning.VerifyCluster(b.T(), b.client, rke2SteveObj)
+
+	logrus.Infof("Verifying the cluster is ready (%s)", rke2SteveObj.Name)
+	provisioning.VerifyClusterReady(b.T(), b.client, rke2SteveObj)
+
+	logrus.Infof("Verifying cluster pods (%s)", rke2SteveObj.Name)
+	pods.VerifyClusterPods(b.T(), b.client, rke2SteveObj)
+
+	logrus.Infof("Verifying cluster pods (%s)", rke2SteveObj.Name)
+	provisioning.VerifyDynamicCluster(b.T(), b.client, rke2SteveObj)
 }
 
 func TestBackupTestSuite(t *testing.T) {

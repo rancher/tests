@@ -12,12 +12,14 @@ import (
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/config/operations/permutations"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/actions/cloudprovider"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/config/permutationdata"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -99,8 +101,17 @@ func TestDynamicNodeDriver(t *testing.T) {
 				cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 				assert.NoError(t, err)
 
-				logrus.Infof("Verifying cluster (%s)", cluster.Name)
-				provisioning.VerifyCluster(t, tt.client, cluster)
+				logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+				provisioning.VerifyClusterReady(t, tt.client, cluster)
+
+				logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+				pods.VerifyClusterPods(t, tt.client, cluster)
+
+				logrus.Infof("Verifying cloud provider %s", cluster.Name)
+				cloudprovider.VerifyCloudProvider(t, tt.client, defaults.K3S, clusterConfig, cluster, nil)
+
+				logrus.Infof("Verifying cluster features (%s)", cluster.Name)
+				provisioning.VerifyDynamicCluster(t, tt.client, cluster)
 			}
 		})
 	}

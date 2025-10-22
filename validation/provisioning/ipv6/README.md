@@ -46,9 +46,11 @@ Node driver test verfies that various node driver cluster configurations provisi
 
 #### Table Tests
 1. `RKE2_IPv6_Node_Driver_CIDR`
-2. `RKE2_IPv6_Node_Driver_CIDR_Stack_Preference`
-3. `K3S_IPv6_Node_Driver_CIDR`
-4. `K3S_IPv6_Node_Driver_CIDR_Stack_Preference`
+2. `RKE2_IPv6_Node_Driver_Stack_Preference`
+3. `RKE2_IPv6_Node_Driver_CIDR_Stack_Preference`
+4. `K3S_IPv6_Node_Driver_CIDR`
+5. `K3S_IPv6_Node_Driver_Stack_Preference`
+6. `K3S_IPv6_Node_Driver_CIDR_Stack_Preference`
 
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestNodeDriverRKE2IPv6 -timeout=1h -v`

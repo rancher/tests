@@ -24,6 +24,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning/permutations"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/reports"
+	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/interoperability/fleet"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -181,7 +182,14 @@ func (f *FleetWithProvisioningTestSuite) TestHardenedAfterAddedGitRepo() {
 			reports.TimeoutClusterReport(clusterObject, err)
 			require.NoError(f.T(), err)
 
-			provisioning.VerifyCluster(f.T(), tt.client, clusterObject)
+			logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
+			provisioning.VerifyClusterReady(f.T(), tt.client, clusterObject)
+
+			logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+			pods.VerifyClusterPods(f.T(), tt.client, clusterObject)
+
+			logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
+			provisioning.VerifyDynamicCluster(f.T(), tt.client, clusterObject)
 
 			status := &provv1.ClusterStatus{}
 			err = steveV1.ConvertToK8sType(clusterObject.Status, status)
@@ -268,7 +276,14 @@ func (f *FleetWithProvisioningTestSuite) TestWindowsAfterAddedGitRepo() {
 			reports.TimeoutClusterReport(clusterObject, err)
 			require.NoError(f.T(), err)
 
-			provisioning.VerifyCluster(f.T(), tt.client, clusterObject)
+			logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
+			provisioning.VerifyClusterReady(f.T(), tt.client, clusterObject)
+
+			logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+			pods.VerifyClusterPods(f.T(), tt.client, clusterObject)
+
+			logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
+			provisioning.VerifyDynamicCluster(f.T(), tt.client, clusterObject)
 
 			status := &provv1.ClusterStatus{}
 			err = steveV1.ConvertToK8sType(clusterObject.Status, status)

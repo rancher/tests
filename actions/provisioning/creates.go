@@ -58,7 +58,6 @@ const (
 	active         = "active"
 	internalIP     = "alpha.kubernetes.io/provided-node-ip"
 	rke1ExternalIP = "rke.cattle.io/external-ip"
-	namespace      = "fleet-default"
 
 	rke2k3sAirgapCustomCluster           = "rke2k3sairgapcustomcluster"
 	rke2k3sNodeCorralName                = "rke2k3sregisterNode"
@@ -178,7 +177,16 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 		return nil, err
 	}
 
-	createdCluster, err := adminClient.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + clusterName)
+	var createdCluster *v1.SteveAPIObject
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		createdCluster, err = adminClient.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + clusterName)
+		if err != nil {
+			logrus.Warningf("Unable to get cluster (%s): %s . Retrying", clusterName, err.Error())
+			return false, nil
+		}
+
+		return true, nil
+	})
 
 	return createdCluster, err
 }
@@ -592,7 +600,7 @@ func CreateProvisioningAirgapCustomCluster(client *rancher.Client, clustersConfi
 
 	clusterName := namegen.AppendRandomString(rke2k3sAirgapCustomCluster)
 
-	cluster := clusters.NewK3SRKE2ClusterConfig(clusterName, namespace, clustersConfig, nil, "")
+	cluster := clusters.NewK3SRKE2ClusterConfig(clusterName, namespaces.FleetDefault, clustersConfig, nil, "")
 
 	clusterResp, err := shepherdclusters.CreateK3SRKE2Cluster(client, cluster)
 	if err != nil {
@@ -642,7 +650,7 @@ func CreateProvisioningAirgapCustomCluster(client *rancher.Client, clustersConfi
 		return nil, err
 	}
 
-	createdCluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(namespace + "/" + clusterName)
+	createdCluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + clusterName)
 	return createdCluster, err
 }
 
@@ -937,7 +945,7 @@ func DeleteRKE2K3SCustomClusterNodes(client *rancher.Client, clusterID string, c
 			snippedIP := strings.Split(node.Annotations[internalIP], ",")[0]
 
 			if snippedIP == nodeToDelete.PrivateIPAddress {
-				machine, err := client.Steve.SteveType(stevetypes.Machine).ByID(namespace + "/" + node.Annotations[machineNameAnnotation])
+				machine, err := client.Steve.SteveType(stevetypes.Machine).ByID(namespaces.FleetDefault + "/" + node.Annotations[machineNameAnnotation])
 				if err != nil {
 					return err
 				}

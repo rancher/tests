@@ -1,0 +1,12 @@
+#Required for all tests
+rancher:
+  host: "<required>"
+  adminToken: "<required>"
+  insecure: true
+  cleanup: true
+
+prime:
+  brand: "<name of brand>"
+  isPrime: true 
+  rancherVersion: "<version_or_commit_of_rancher>"
+  registry: "<name of registry>
