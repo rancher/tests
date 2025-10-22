@@ -295,6 +295,14 @@ jobs:
           suite: ${{ matrix.suite }}
         uses: ./.github/actions/run-hostbusters-dualstack-test-suites
 
+      - name: Reporting Results to Slack
+        if: always()
+        uses: ./.github/actions/report-to-slack
+        with:
+          job-status: ${{ job.status }}
+          slack-channel: ${{ secrets.HB_SLACK_CHANNEL }}
+          slack-webhook-url: ${{ secrets.HB_SLACK_WEBHOOK_URL }}
+
       - name: Cleanup Infrastructure
         if: always()
         working-directory: tfp-automation/modules/dualstack/aws

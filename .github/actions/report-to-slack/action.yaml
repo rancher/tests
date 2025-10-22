@@ -1,0 +1,40 @@
+---
+name: "Report to Slack"
+description: "Send build status to Slack"
+inputs:
+  job-status:
+    description: "The status of the job"
+    required: true
+  slack-channel:
+    description: "Slack channel"
+    required: true
+  slack-webhook-url:
+    description: "Slack webhook URL"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - id: slack-status
+      shell: bash
+      run: |
+        if [ "${{ inputs.job-status }}" == "success" ]; then
+          echo "emoji=:vcheck1:" >> $GITHUB_OUTPUT
+        elif [ "${{ inputs.job-status }}" == "failure" ]; then
+          echo "emoji=:x:" >> $GITHUB_OUTPUT
+        elif [ "${{ inputs.job-status }}" == "cancelled" ]; then
+          echo "emoji=:warning:" >> $GITHUB_OUTPUT
+        else
+          echo "emoji=:help:" >> $GITHUB_OUTPUT
+        fi
+
+    - uses: slackapi/slack-github-action@v2.1.1
+      with:
+        webhook: ${{ inputs.slack-webhook-url }}
+        webhook-type: incoming-webhook
+        payload: |
+          text: "*GitHub Action build result*: ${{ job.status }}\nWorkflow: ${{ github.workflow }}\nJob: ${{ github.job }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
+          blocks:
+            - type: "section"
+              text:
+                type: "mrkdwn"
+                text: "${{ steps.slack-status.outputs.emoji }} *${{ github.repository }} - ${{ github.workflow }}* — `${{ inputs.job-status }}`\n*Job:* `${{ github.job }}` • <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Action Run>"

@@ -290,6 +290,14 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-ipv6-provisioning
 
+      - name: Reporting Results to Slack
+        if: always()
+        uses: ./.github/actions/report-to-slack
+        with:
+          job-status: ${{ job.status }}
+          slack-channel: ${{ secrets.HB_SLACK_CHANNEL }}
+          slack-webhook-url: ${{ secrets.HB_SLACK_WEBHOOK_URL }}
+
       - name: Cleanup Infrastructure
         if: always()
         working-directory: tfp-automation/modules/ipv6/aws
