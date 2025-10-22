@@ -4,25 +4,45 @@ set -e
 # Consolidated OpenTofu initialization script for both airgap and destroy operations
 # Supports both environment file sourcing and direct environment variable passing
 
-echo '=== DEBUG: OpenTofu Initialization ==='
-echo "DEBUG: QA_INFRA_WORK_PATH='${QA_INFRA_WORK_PATH}'"
-echo "DEBUG: TERRAFORM_BACKEND_VARS_FILENAME='${TERRAFORM_BACKEND_VARS_FILENAME}'"
-echo "DEBUG: TF_WORKSPACE='${TF_WORKSPACE}'"
+# =============================================================================
+# CONSTANTS
+# =============================================================================
 
-# Source environment file if it exists (airgap compatibility)
-if [ -f /tmp/.env ]; then
-    echo "Sourcing environment file: /tmp/.env"
-    source /tmp/.env
-    
-    # Debug: Check if AWS variables are set after sourcing
-    echo "=== DEBUG: AWS Variables after sourcing ==="
-    echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:+[SET]}"
-    echo "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:+[SET]}"
-    echo "AWS_REGION=${AWS_REGION}"
-    echo "S3_BUCKET_NAME=${S3_BUCKET_NAME}"
-    echo "S3_REGION=${S3_REGION}"
-    echo "S3_KEY_PREFIX=${S3_KEY_PREFIX}"
-    echo "=== END DEBUG ==="
+readonly SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_DIR="$(dirname "$0")"
+readonly ENV_FILE="/tmp/.env"
+
+# =============================================================================
+# LOGGING FUNCTIONS
+# =============================================================================
+
+log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
+log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
+
+# =============================================================================
+# PREREQUISITE VALIDATION
+# =============================================================================
+
+validate_prerequisites() {
+  [[ -n "${QA_INFRA_WORK_PATH:-}" ]] || { log_error "QA_INFRA_WORK_PATH not set"; exit 1; }
+  [[ -d "${QA_INFRA_WORK_PATH}" ]] || { log_error "QA_INFRA_WORK_PATH directory not found"; exit 1; }
+  command -v tofu >/dev/null || { log_error "tofu not found"; exit 1; }
+}
+
+# =============================================================================
+# MAIN FUNCTION
+# =============================================================================
+
+main() {
+  log_info "Starting OpenTofu initialization with $SCRIPT_NAME"
+
+  # Validate prerequisites
+  validate_prerequisites
+
+  # Source environment file if it exists (airgap compatibility)
+  if [[ -f "$ENV_FILE" ]]; then
+    log_info "Sourcing environment file: $ENV_FILE"
+    source "$ENV_FILE"
     
     # Export the sourced variables explicitly to ensure they're available
     export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
@@ -32,16 +52,16 @@ if [ -f /tmp/.env ]; then
     export S3_BUCKET_NAME="${S3_BUCKET_NAME}"
     export S3_REGION="${S3_REGION}"
     export S3_KEY_PREFIX="${S3_KEY_PREFIX}"
-else
-    echo "Environment file not found at /tmp/.env, using Docker environment variables"
+  else
+    log_info "Environment file not found at $ENV_FILE, using Docker environment variables"
     # Fallback to environment variables passed by Docker (destroy compatibility)
     export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
     export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
     export AWS_REGION="${AWS_REGION:-us-east-2}"
     export AWS_DEFAULT_REGION="${AWS_REGION:-us-east-2}"
-fi
+  fi
 
-cd ${QA_INFRA_WORK_PATH}
+  cd "${QA_INFRA_WORK_PATH}"
 
 echo 'DEBUG: Current working directory:'
 pwd
@@ -91,4 +111,8 @@ fi
 echo 'Verifying initialization success...'
 tofu -chdir=tofu/aws/modules/airgap providers
 
-echo 'OpenTofu initialization completed successfully'
+  log_info "OpenTofu initialization completed successfully"
+}
+
+# Execute main function
+main "$@"

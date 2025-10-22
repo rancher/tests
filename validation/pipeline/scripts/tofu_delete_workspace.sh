@@ -4,17 +4,48 @@ set -e
 # OpenTofu workspace deletion script for destroy operations
 # This script safely deletes the specified workspace after infrastructure destruction
 
-echo '=== DEBUG: Workspace Deletion ==='
-echo "DEBUG: QA_INFRA_WORK_PATH='${QA_INFRA_WORK_PATH}'"
-echo "DEBUG: TF_WORKSPACE='${TF_WORKSPACE}'"
+# =============================================================================
+# CONSTANTS
+# =============================================================================
 
-# Export AWS credentials for OpenTofu
-export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
-export AWS_REGION="${AWS_REGION:-us-east-2}"
-export AWS_DEFAULT_REGION="${AWS_REGION:-us-east-2}"
+readonly SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_DIR="$(dirname "$0")"
 
-cd ${QA_INFRA_WORK_PATH}
+# =============================================================================
+# LOGGING FUNCTIONS
+# =============================================================================
+
+log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
+log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
+
+# =============================================================================
+# PREREQUISITE VALIDATION
+# =============================================================================
+
+validate_prerequisites() {
+  [[ -n "${QA_INFRA_WORK_PATH:-}" ]] || { log_error "QA_INFRA_WORK_PATH not set"; exit 1; }
+  [[ -n "${TF_WORKSPACE:-}" ]] || { log_error "TF_WORKSPACE not set"; exit 1; }
+  command -v tofu >/dev/null || { log_error "tofu not found"; exit 1; }
+}
+
+# =============================================================================
+# MAIN FUNCTION
+# =============================================================================
+
+main() {
+  log_info "Starting workspace deletion with $SCRIPT_NAME"
+  log_info "Target workspace: ${TF_WORKSPACE}"
+
+  # Validate prerequisites
+  validate_prerequisites
+
+  # Export AWS credentials for OpenTofu
+  export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
+  export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
+  export AWS_REGION="${AWS_REGION:-us-east-2}"
+  export AWS_DEFAULT_REGION="${AWS_REGION:-us-east-2}"
+
+  cd "${QA_INFRA_WORK_PATH}"
 
 echo 'Current workspaces before deletion:'
 tofu -chdir=tofu/aws/modules/airgap workspace list
@@ -73,4 +104,8 @@ fi
 echo 'Final workspace list after deletion:'
 tofu -chdir=tofu/aws/modules/airgap workspace list
 
-echo "=== Workspace Deletion Complete ==="
+  log_info "Workspace deletion completed"
+}
+
+# Execute main function
+main "$@"
