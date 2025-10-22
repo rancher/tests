@@ -911,8 +911,6 @@ def generateEnvironmentFile() {
     logInfo('Generating environment file for container execution')
 
     // Get credentials within withCredentials block to ensure they're available
-    def awsAccessKeyId = null
-    def awsSecretAccessKey = null
     def awsSshPemKey = null
     def awsSshKeyName = null
 
@@ -922,13 +920,27 @@ def generateEnvironmentFile() {
         string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
         string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
     ]) {
-        awsAccessKeyId = env.AWS_ACCESS_KEY_ID
-        awsSecretAccessKey = env.AWS_SECRET_ACCESS_KEY
         awsSshPemKey = env.AWS_SSH_PEM_KEY
         awsSshKeyName = env.AWS_SSH_KEY_NAME
 
         // Note: Avoid storing credentials in Jenkins environment variables for security
         // These will be passed directly as Docker environment variables instead
+    }
+
+    // Parse TERRAFORM_CONFIG to extract AWS infrastructure variables
+    def awsConfigVars = [:]
+    if (env.TERRAFORM_CONFIG) {
+        def terraformConfig = env.TERRAFORM_CONFIG
+        // Extract AWS variables from terraform config
+        def awsVarPattern = ~/(\w+)\s*=\s*"([^"]*)"/
+        terraformConfig.eachMatch(awsVarPattern) { match ->
+            def varName = match[1]
+            def varValue = match[2]
+            // Only include AWS-related variables
+            if (varName.startsWith('AWS_')) {
+                awsConfigVars[varName] = varValue
+            }
+        }
     }
 
     // Build environment content securely - EXCLUDE ALL sensitive credentials
@@ -957,6 +969,17 @@ def generateEnvironmentFile() {
         '',
         '# AWS Region Configuration (credentials passed via withCredentials)',
         "AWS_REGION=${env.AWS_REGION}",
+        '',
+        '# AWS Infrastructure Variables from TERRAFORM_CONFIG',
+        "AWS_AMI=${awsConfigVars['AWS_AMI'] ?: ''}",
+        "AWS_HOSTNAME_PREFIX=${awsConfigVars['AWS_HOSTNAME_PREFIX'] ?: env.HOSTNAME_PREFIX}",
+        "AWS_ROUTE53_ZONE=${awsConfigVars['AWS_ROUTE53_ZONE'] ?: ''}",
+        "AWS_SSH_USER=${awsConfigVars['AWS_SSH_USER'] ?: 'ec2-user'}",
+        "AWS_SECURITY_GROUP=${awsConfigVars['AWS_SECURITY_GROUP'] ?: ''}",
+        "AWS_VPC=${awsConfigVars['AWS_VPC'] ?: ''}",
+        "AWS_VOLUME_SIZE=${awsConfigVars['AWS_VOLUME_SIZE'] ?: '50'}",
+        "AWS_SUBNET=${awsConfigVars['AWS_SUBNET'] ?: ''}",
+        "INSTANCE_TYPE=${awsConfigVars['INSTANCE_TYPE'] ?: 't3.large'}",
         '',
         '# S3 Backend Configuration for OpenTofu',
         "S3_BUCKET_NAME=${env.S3_BUCKET_NAME}",
@@ -1010,6 +1033,12 @@ def generateEnvironmentFile() {
     logInfo("  S3_REGION=${env.S3_REGION}")
     logInfo("  AWS_SSH_PEM_KEY=${awsSshPemKey ? 'SET' : 'NULL'}")
     logInfo("  AWS_SSH_KEY_NAME=${awsSshKeyName ? 'SET' : 'NULL'}")
+    
+    // Debug: Log AWS infrastructure variables
+    logInfo('AWS Infrastructure Variables:')
+    awsConfigVars.each { key, value ->
+        logInfo("  ${key}=${value}")
+    }
 }
 
 def setupSSHKeys() {
@@ -1299,6 +1328,32 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     // Escape container name to prevent issues
     def escapedContainerName = containerName.replaceAll('[^a-zA-Z0-9_-]', '_')
 
+    // Copy helper into workspace and mount it into container
+    try {
+        if (fileExists('validation/pipeline/scripts/debug_env_check.sh')) {
+            sh '''
+                cp validation/pipeline/scripts/debug_env_check.sh ./tmp_debug_env_check.sh || true
+                chmod +x ./tmp_debug_env_check.sh || true
+            '''
+            logInfo("DEBUG helper copied to workspace: ./tmp_debug_env_check.sh")
+        } else {
+            // Fallback: create a minimal debug helper so container runs still produce useful output
+            writeFile file: 'tmp_debug_env_check.sh', text: '''#!/bin/bash
+set -e
+echo "=== INLINE FALLBACK DEBUG SCRIPT ==="
+echo "Printing /tmp/.env contents (masked):"
+[ -f /tmp/.env ] && sed -n '1,200p' /tmp/.env || echo "/tmp/.env not found"
+echo "Printing environment (selected keys):"
+env | egrep 'AWS|S3|TF|RANCHER|RKE2|HOSTNAME' || env
+echo "=== END DEBUG ==="
+'''
+            sh 'chmod +x ./tmp_debug_env_check.sh || true'
+            logInfo("FALLBACK debug helper created at ./tmp_debug_env_check.sh")
+        }
+    } catch (err) {
+        logWarning("Failed to prepare debug helper in workspace: ${err}")
+    }
+
     // Build volume mounts with proper validation
     def volumeMounts = []
 
@@ -1336,6 +1391,11 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     // Add environment file volume
     if (fileExists(envFilePath)) {
         volumeMounts.add("-v \"${envFilePath}:/tmp/.env\"")
+    }
+
+    // Add debug helper script volume
+    if (fileExists('./tmp_debug_env_check.sh')) {
+        volumeMounts.add("-v \"${pwd()}/tmp_debug_env_check.sh:/tmp/debug_env_check.sh\"")
     }
 
     // Add inventory mount if available
@@ -1514,6 +1574,11 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
         volumeMounts.add("-v \"${pwd()}/${scriptFile}:/tmp/script.sh\"")
     }
 
+    // Add debug helper script volume
+    if (fileExists('./tmp_debug_env_check.sh')) {
+        volumeMounts.add("-v \"${pwd()}/tmp_debug_env_check.sh:/tmp/debug_env_check.sh\"")
+    }
+
     // Add inventory mount if available
     if (inventoryMount) {
         volumeMounts.add(inventoryMount.trim())
@@ -1541,7 +1606,7 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
         echo "Environment variables passed directly"
         echo "=== END DEBUG ==="
         echo "Executing script: /tmp/script.sh"
-        /bin/bash /root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/debug_env_check.sh && exec /bin/bash /tmp/script.sh
+        /bin/bash /tmp/debug_env_check.sh && exec /bin/bash /tmp/script.sh
     \' '''
 
     return "${baseCmd} ${executionCmd}"
