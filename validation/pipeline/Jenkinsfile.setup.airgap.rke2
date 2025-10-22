@@ -1999,8 +1999,8 @@ def deployRancherWithConsolidatedScript() {
     def scriptContent = '''
 #!/bin/bash
 set -e
-# Source the consolidated Rancher deployment script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_deploy_rancher.sh
+# Source the minimal Rancher deployment wrapper
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_deploy_rancher_minimal.sh
 '''
 
     // Pass required environment variables to container
