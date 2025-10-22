@@ -194,6 +194,13 @@ pipeline {
                     ]
           validateRequiredVariables(requiredVars)
 
+          // Generate and copy backend configuration before running destroy
+          logInfo('Generating OpenTofu backend configuration')
+          generateTofuBackendConfiguration()
+          
+          logInfo('Initializing OpenTofu with backend configuration')
+          initializeOpenTofu()
+
           // Enhanced timeout with reasonable defaults
           def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
                         Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
