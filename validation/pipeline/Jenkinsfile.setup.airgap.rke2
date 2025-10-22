@@ -1366,7 +1366,7 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
         ls -la /tmp/
         echo "=== END DEBUG ==="
         echo "Executing script: /tmp/script.sh"
-        exec /bin/bash /tmp/script.sh
+        /bin/bash /root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/debug_env_check.sh && exec /bin/bash /tmp/script.sh
     \' '''
 
     return "${baseCmd} ${executionCmd}"
@@ -1541,7 +1541,7 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
         echo "Environment variables passed directly"
         echo "=== END DEBUG ==="
         echo "Executing script: /tmp/script.sh"
-        exec /bin/bash /tmp/script.sh
+        /bin/bash /root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/debug_env_check.sh && exec /bin/bash /tmp/script.sh
     \' '''
 
     return "${baseCmd} ${executionCmd}"
