@@ -5,18 +5,39 @@ set -e
 # Consolidated script that handles all types of cleanup operations
 # Replaces: airgap_deployment_failure_cleanup.sh, ansible_failure_cleanup.sh, airgap_timeout_cleanup.sh
 
-# Load the airgap library
-# Use absolute path since script may be executed from /tmp/
-source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
+readonly SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_DIR="$(dirname "$0")"
+readonly QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
+CLEANUP_TYPE="${CLEANUP_TYPE:-deployment_failure}"  # deployment_failure, timeout, manual
+readonly DESTROY_ON_FAILURE="${DESTROY_ON_FAILURE:-true}"
+
+# =============================================================================
+# LOGGING FUNCTIONS
+# =============================================================================
+
+log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
+log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
+
+# =============================================================================
+# PREREQUISITE VALIDATION
+# =============================================================================
+
+validate_prerequisites() {
+  [[ -f "${SCRIPT_DIR}/airgap_lib.sh" ]] || { log_error "airgap_lib.sh not found"; exit 1; }
+  command -v ansible-playbook >/dev/null || { log_error "ansible-playbook not found"; exit 1; }
+}
 
 # =============================================================================
 # SCRIPT CONFIGURATION
 # =============================================================================
 
-readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_DIR="$(dirname "$0")"
-CLEANUP_TYPE="${CLEANUP_TYPE:-deployment_failure}"  # deployment_failure, timeout, manual
-readonly DESTROY_ON_FAILURE="${DESTROY_ON_FAILURE:-true}"
+# Load the airgap library
+# Use absolute path since script may be executed from /tmp/
+source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
 
 # =============================================================================
 # UNIFIED CLEANUP MAIN FUNCTION
@@ -810,24 +831,24 @@ parse_arguments() {
 # =============================================================================
 
 main() {
-    log_info "=== Unified Airgap Cleanup Started ==="
-    log_info "Script: $SCRIPT_NAME"
-    log_info "Timestamp: $(date)"
-    log_info "Working directory: $(pwd)"
+  log_info "Starting unified cleanup with $SCRIPT_NAME"
 
-    # Parse command line arguments
-    parse_arguments "$@"
+  # Validate prerequisites
+  validate_prerequisites
 
-    # Initialize the airgap environment
-    initialize_airgap_environment
+  # Parse command line arguments
+  parse_arguments "$@"
 
-    # Wait for confirmation if in interactive mode
-    wait_for_confirmation "Press Enter to start unified cleanup..."
+  # Initialize the airgap environment
+  initialize_airgap_environment
 
-    # Run the cleanup
-    perform_cleanup "$CLEANUP_TYPE" "$TF_WORKSPACE" "$DESTROY_ON_FAILURE"
+  # Wait for confirmation if in interactive mode
+  wait_for_confirmation "Press Enter to start unified cleanup..."
 
-    log_success "=== Unified Airgap Cleanup Completed ==="
+  # Run the cleanup
+  perform_cleanup "$CLEANUP_TYPE" "$TF_WORKSPACE" "$DESTROY_ON_FAILURE"
+
+  log_info "Unified cleanup completed"
 }
 
 # Error handling

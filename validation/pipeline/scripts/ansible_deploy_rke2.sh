@@ -183,12 +183,9 @@ run_rke2_playbook() {
         exit 1
     fi
 
-    # Prepare extra variables
+    # Build extra-vars from environment
     local extra_vars=""
-    if [[ -n "${RKE2_VERSION}" ]]; then
-        extra_vars="-e rke2_version=${RKE2_VERSION}"
-        log_info "Passing RKE2_VERSION as extra variable: ${RKE2_VERSION}"
-    fi
+    [[ -n "${RKE2_VERSION:-}" ]] && extra_vars+=" -e rke2_version=${RKE2_VERSION}"
 
     # Change to playbook directory
     cd "$QA_INFRA_CLONE_PATH/ansible/rke2/airgap" || {
@@ -449,24 +446,21 @@ parse_arguments() {
 # =============================================================================
 
 main() {
-    log_info "=== RKE2 Deployment Started ==="
-    log_info "Script: $SCRIPT_NAME"
-    log_info "Timestamp: $(date)"
-    log_info "Working directory: $(pwd)"
+  log_info "Starting RKE2 deployment with $SCRIPT_NAME"
 
-    # Parse command line arguments
-    parse_arguments "$@"
+  # Parse command line arguments
+  parse_arguments "$@"
 
-    # Initialize the airgap environment
-    initialize_airgap_environment
+  # Initialize the airgap environment
+  initialize_airgap_environment
 
-    # Wait for confirmation if in interactive mode
-    wait_for_confirmation "Press Enter to start RKE2 deployment..."
+  # Wait for confirmation if in interactive mode
+  wait_for_confirmation "Press Enter to start RKE2 deployment..."
 
-    # Run the deployment
-    deploy_rke2 "$TF_WORKSPACE"
+  # Run the deployment
+  deploy_rke2 "$TF_WORKSPACE"
 
-    log_success "=== RKE2 Deployment Completed ==="
+  log_info "RKE2 deployment completed"
 }
 
 # Error handling

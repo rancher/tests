@@ -5,16 +5,37 @@ set -e
 # Consolidated script that handles infrastructure destruction and workspace management
 # Replaces: destroy_execute.sh, destroy_download_config.sh, destroy_validate_state.sh, tofu_delete_workspace.sh
 
-# Load the airgap library
-# Use absolute path since script may be executed from /tmp/
-source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
+readonly SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_DIR="$(dirname "$0")"
+readonly QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
+
+# =============================================================================
+# LOGGING FUNCTIONS
+# =============================================================================
+
+log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
+log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
+
+# =============================================================================
+# PREREQUISITE VALIDATION
+# =============================================================================
+
+validate_prerequisites() {
+  [[ -f "${SCRIPT_DIR}/airgap_lib.sh" ]] || { log_error "airgap_lib.sh not found"; exit 1; }
+  command -v tofu >/dev/null || { log_error "tofu not found"; exit 1; }
+}
 
 # =============================================================================
 # SCRIPT CONFIGURATION
 # =============================================================================
 
-readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_DIR="$(dirname "$0")"
+# Load the airgap library
+# Use absolute path since script may be executed from /tmp/
+source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
 
 # =============================================================================
 # CLEANUP OPERATIONS
@@ -412,24 +433,24 @@ parse_arguments() {
 # =============================================================================
 
 main() {
-    log_info "=== Airgap Infrastructure Cleanup Started ==="
-    log_info "Script: $SCRIPT_NAME"
-    log_info "Timestamp: $(date)"
-    log_info "Working directory: $(pwd)"
+  log_info "Starting infrastructure cleanup with $SCRIPT_NAME"
 
-    # Parse command line arguments
-    parse_arguments "$@"
+  # Validate prerequisites
+  validate_prerequisites
 
-    # Initialize the airgap environment
-    initialize_airgap_environment
+  # Parse command line arguments
+  parse_arguments "$@"
 
-    # Wait for confirmation if in interactive mode
-    wait_for_confirmation "Press Enter to start infrastructure cleanup..."
+  # Initialize the airgap environment
+  initialize_airgap_environment
 
-    # Run the cleanup
-    cleanup_infrastructure "$TF_WORKSPACE" "$TERRAFORM_VARS_FILENAME" "$use_remote_path" "$CLEANUP_WORKSPACE"
+  # Wait for confirmation if in interactive mode
+  wait_for_confirmation "Press Enter to start infrastructure cleanup..."
 
-    log_success "=== Airgap Infrastructure Cleanup Completed ==="
+  # Run the cleanup
+  cleanup_infrastructure "$TF_WORKSPACE" "$TERRAFORM_VARS_FILENAME" "$use_remote_path" "$CLEANUP_WORKSPACE"
+
+  log_info "Infrastructure cleanup completed"
 }
 
 # Error handling
