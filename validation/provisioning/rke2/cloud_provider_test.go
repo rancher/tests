@@ -229,11 +229,14 @@ func TestHarvesterCloudProvider(t *testing.T) {
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 			assert.NoError(t, err)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(t, tt.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(t, r.client, cluster)
 
-			logrus.Infof("Verifying cloud provider on cluster (%s)", cluster.Name)
-			cloudprovider.VerifyCloudProvider(t, tt.client, defaults.RKE2, nil, clusterConfig, cluster, nil)
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(t, r.client, cluster)
+
+			logrus.Infof("Verifying cloud provider (%s)", cluster.Name)
+			provider.VerifyCloudProviderFunc(t, r.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)

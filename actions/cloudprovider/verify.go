@@ -135,11 +135,10 @@ func VerifyHarvesterCloudProvider(t *testing.T, client *rancher.Client, clusterO
 	lbServiceResp := CreateHarvesterCloudProviderWorkloadAndServicesLB(t, client, clusterObject)
 
 	services.VerifyHarvesterLoadBalancer(t, client, lbServiceResp, status.ClusterName)
-  
-  	CreatePVCWorkload(t, client, status.ClusterName)
+	CreatePVCWorkload(t, client, status.ClusterName)
 
-  	podErrors := pods.StatusPods(client, status.ClusterName)
-  	require.Empty(t, podErrors)
+	podErrors := pods.StatusPods(client, status.ClusterName)
+	require.Empty(t, podErrors)
 }
 
 func VerifyVSphereCloudProvider(t *testing.T, client *rancher.Client, clusterObject *steveV1.SteveAPIObject) {
