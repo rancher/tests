@@ -1942,7 +1942,11 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
         'S3_BUCKET_NAME': env.S3_BUCKET_NAME,
         'S3_REGION': env.S3_REGION,
         'S3_KEY_PREFIX': env.S3_KEY_PREFIX,
-        'AWS_REGION': env.AWS_REGION
+        'AWS_REGION': env.AWS_REGION,
+        'AWS_ACCESS_KEY_ID': env.AWS_ACCESS_KEY_ID,
+        'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+        'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
+        'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
     ]
 
     executeScriptInContainer(scriptContent, extraEnvVars)
@@ -1968,7 +1972,9 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
         'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
         'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
         'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD,
-        'SKIP_YAML_VALIDATION': env.SKIP_YAML_VALIDATION
+        'SKIP_YAML_VALIDATION': env.SKIP_YAML_VALIDATION,
+        'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
+        'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
     ]
 
     executeScriptInContainer(scriptContent, extraEnvVars)
@@ -1987,7 +1993,9 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
     // Pass required environment variables to container
     def extraEnvVars = [
         'RKE2_VERSION': env.RKE2_VERSION,
-        'SKIP_VALIDATION': 'false'
+        'SKIP_VALIDATION': 'false',
+        'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
+        'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
     ]
 
     executeScriptInContainer(scriptContent, extraEnvVars)
