@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Only run debug checks if DEBUG is enabled
+if [ "${DEBUG:-false}" != "true" ]; then
+  echo "DEBUG mode is disabled, skipping debug checks"
+  exit 0
+fi
+
 REQUIRED_VARS=(AWS_AMI AWS_HOSTNAME_PREFIX AWS_ROUTE53_ZONE AWS_SSH_USER AWS_SECURITY_GROUP AWS_VPC AWS_VOLUME_SIZE AWS_SUBNET INSTANCE_TYPE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_REGION)
 
 echo "[DEBUG] Checking environment variables presence"
