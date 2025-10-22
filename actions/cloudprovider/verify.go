@@ -130,6 +130,10 @@ func VerifyCloudProvider(t *testing.T, client *rancher.Client, clusterType strin
 			lbServiceResp := CreateHarvesterCloudProviderWorkloadAndServicesLB(t, client, clusterObject)
 
 			services.VerifyHarvesterLoadBalancer(t, client, lbServiceResp, status.ClusterName)
+			CreatePVCWorkload(t, client, status.ClusterName)
+
+			podErrors := pods.StatusPods(client, status.ClusterName)
+			require.Empty(t, podErrors)
 
 		} else if testClusterConfig.CloudProvider == provisioninginput.VsphereCloudProviderName.String() {
 			CreatePVCWorkload(t, client, status.ClusterName)
