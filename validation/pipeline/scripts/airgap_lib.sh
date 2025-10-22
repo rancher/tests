@@ -145,6 +145,73 @@ initialize_tofu() {
     log_success "OpenTofu initialization completed"
 }
 
+# =============================================================================
+# BACKEND & S3 HELPERS
+# =============================================================================
+# Generate backend.tf and backend.tfvars files in a given module path.
+# Uses S3_BUCKET_NAME, S3_REGION, S3_KEY_PREFIX and TERRAFORM_BACKEND_VARS_FILENAME.
+generate_backend_files() {
+    local module_path="${1:-$TOFU_MODULE_PATH}"
+    local backend_vars_filename="${TERRAFORM_BACKEND_VARS_FILENAME:-backend.tfvars}"
+
+    if [[ -z "${S3_BUCKET_NAME}" || -z "${S3_REGION}" || -z "${S3_KEY_PREFIX}" ]]; then
+        log_error "S3 backend parameters are not all set (S3_BUCKET_NAME,S3_REGION,S3_KEY_PREFIX)"
+        return 1
+    fi
+
+    mkdir -p "${module_path}" || { log_error "Failed to create module path: ${module_path}"; return 1; }
+
+    cat > "${module_path}/backend.tf" <<EOF
+terraform {
+  backend "s3" {
+    bucket = "${S3_BUCKET_NAME}"
+    key    = "${S3_KEY_PREFIX}"
+    region = "${S3_REGION}"
+  }
+}
+EOF
+
+    cat > "${module_path}/${backend_vars_filename}" <<EOF
+bucket = "${S3_BUCKET_NAME}"
+key    = "${S3_KEY_PREFIX}"
+region = "${S3_REGION}"
+EOF
+
+    log_info "Generated backend.tf and ${backend_vars_filename} in ${module_path}"
+    return 0
+}
+
+# Download cluster.tfvars (or provided var file) from S3 workspace into shared volume
+# and copy it into the module path so OpenTofu/terraform can use it.
+download_cluster_tfvars_from_s3() {
+    local workspace="${1:-${TF_WORKSPACE}}"
+    local varfile="${2:-${TERRAFORM_VARS_FILENAME:-cluster.tfvars}}"
+    local target_module="${3:-${TOFU_MODULE_PATH}}"
+    local dest_shared="${SHARED_VOLUME_PATH}/${varfile}"
+
+    if [[ -z "${S3_BUCKET_NAME}" || -z "${S3_REGION}" || -z "${workspace}" ]]; then
+        log_warning "Missing S3 parameters or workspace; cannot download ${varfile}"
+        return 1
+    fi
+
+    log_info "Attempting to download ${varfile} from S3 workspace s3://${S3_BUCKET_NAME}/env:/${workspace}/"
+
+    if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace}/${varfile}" --region "${S3_REGION}" >/dev/null 2>&1; then
+        if aws s3 cp "s3://${S3_BUCKET_NAME}/env:/${workspace}/${varfile}" "${dest_shared}" --region "${S3_REGION}"; then
+            mkdir -p "${target_module}"
+            cp "${dest_shared}" "${target_module}/${varfile}"
+            log_success "Downloaded and copied ${varfile} to ${target_module}/${varfile}"
+            return 0
+        else
+            log_warning "aws s3 cp failed for s3://${S3_BUCKET_NAME}/env:/${workspace}/${varfile}"
+            return 1
+        fi
+    else
+        log_warning "${varfile} not found in S3 workspace s3://${S3_BUCKET_NAME}/env:/${workspace}/"
+        return 1
+    fi
+}
+
 # Manage Terraform workspace
 manage_workspace() {
     local workspace_name="${1:-$TF_WORKSPACE}"
@@ -770,7 +837,7 @@ initialize_airgap_environment() {
 # Export all functions for use in other scripts
 export -f log_info log_success log_warning log_error log_debug
 export -f load_environment export_aws_credentials validate_required_vars
-export -f initialize_tofu manage_workspace select_workspace generate_plan apply_plan destroy_infrastructure cleanup_workspace
+export -f initialize_tofu manage_workspace select_workspace generate_plan apply_plan destroy_infrastructure cleanup_workspace generate_backend_files download_cluster_tfvars_from_s3
 export -f backup_state generate_outputs validate_infrastructure
 export -f generate_group_vars validate_yaml_syntax setup_ssh_keys
 export -f backup_file create_cleanup_archive wait_for_confirmation

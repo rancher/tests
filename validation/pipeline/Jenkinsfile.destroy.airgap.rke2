@@ -745,7 +745,97 @@ region = "${env.S3_REGION}"
   }
 }
 
+def downloadClusterTfvarsFromS3() {
+  logInfo('Downloading cluster.tfvars from S3 workspace')
+  
+  withCredentials([
+    string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+  ]) {
+    def downloadScript = """
+#!/bin/bash
+set -e
+
+echo "Downloading cluster.tfvars from S3 workspace: s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}"
+
+# Check if the file exists in S3
+if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}" --region "${env.S3_REGION}" 2>/dev/null; then
+    echo "Found cluster.tfvars in S3 workspace, downloading..."
+    
+    # Download the file to the shared volume
+    aws s3 cp "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}" "/root/${env.TERRAFORM_VARS_FILENAME}" --region "${env.S3_REGION}"
+    
+    # Also copy to the expected module path
+    mkdir -p "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"
+    cp "/root/${env.TERRAFORM_VARS_FILENAME}" "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+    
+    echo "cluster.tfvars downloaded successfully"
+    echo "File contents preview:"
+    head -20 "/root/${env.TERRAFORM_VARS_FILENAME}" || echo "Could not preview file contents"
+else
+    echo "WARNING: cluster.tfvars not found in S3 workspace: s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/${env.TERRAFORM_VARS_FILENAME}"
+    echo "Available files in workspace:"
+    aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_REGION}" || echo "Could not list workspace files"
+    
+    # Create a minimal cluster.tfvars file to prevent errors
+    echo "Creating minimal cluster.tfvars file to prevent errors..."
+    cat > "/root/${env.TERRAFORM_VARS_FILENAME}" << 'EOF'
+# Minimal cluster.tfvars created for destroy operation
+# Original file was not found in S3 workspace
+
+aws_region = "${env.AWS_REGION}"
+hostname_prefix = "${env.TARGET_WORKSPACE}-destroy"
+
+# Note: This is a minimal file created for destroy operation
+# The original cluster.tfvars was not found in the S3 workspace
+EOF
+    
+    # Copy to module path
+    mkdir -p "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"
+    cp "/root/${env.TERRAFORM_VARS_FILENAME}" "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+    
+    echo "Minimal cluster.tfvars file created"
+fi
+"""
+    
+    def timestamp = System.currentTimeMillis()
+    def scriptFile = "download-cluster-tfvars-${timestamp}.sh"
+    def containerName = "${env.BUILD_CONTAINER_NAME}-download-${timestamp}"
+    
+    writeFile file: scriptFile, text: downloadScript
+    
+    try {
+      sh """
+        docker run --rm \\
+          -v ${env.VALIDATION_VOLUME}:/root \\
+          -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+          --name ${containerName} \\
+          -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \\
+          -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \\
+          -e AWS_DEFAULT_REGION="${env.AWS_REGION}" \\
+          -e S3_BUCKET_NAME="${env.S3_BUCKET_NAME}" \\
+          -e S3_REGION="${env.S3_REGION}" \\
+          -e TF_WORKSPACE="${env.TF_WORKSPACE}" \\
+          -e TERRAFORM_VARS_FILENAME="${env.TERRAFORM_VARS_FILENAME}" \\
+          -e TARGET_WORKSPACE="${env.TARGET_WORKSPACE}" \\
+          ${env.IMAGE_NAME} \\
+          sh /tmp/script.sh
+      """
+      logInfo('cluster.tfvars download completed')
+    } catch (Exception e) {
+      logError("Failed to download cluster.tfvars: ${e.message}")
+      // Don't fail the pipeline, just log the error
+      logWarning('Will proceed with cluster.tfvars download failure')
+    } finally {
+      sh "rm -f ${scriptFile}"
+    }
+  }
+}
+
 def initializeOpenTofu() {
+  // Download cluster.tfvars from S3 workspace before initialization
+  downloadClusterTfvarsFromS3()
+
   logInfo('Initializing OpenTofu with S3 backend')
 
   def scriptPath = 'tests/validation/pipeline/scripts/tofu_initialize.sh'
