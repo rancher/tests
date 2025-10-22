@@ -114,6 +114,23 @@ EOF
     log_cleanup "Gathering pre-cleanup infrastructure state..."
     gather_cleanup_information "$module_path" "$cleanup_log"
 
+    # Ensure backend files and var file are available before initializing OpenTofu
+    log_cleanup "Ensuring backend configuration and terraform var file are present in module path"
+
+    # Attempt to download cluster.tfvars from S3 into shared volume and module path
+    if download_cluster_tfvars_from_s3 "$workspace_name" "$var_file" "$module_path"; then
+        log_cleanup "cluster.tfvars is available in module path"
+    else
+        log_cleanup "WARNING: cluster.tfvars not fetched from S3 workspace; proceeding (var file may be absent)"
+    fi
+
+    # Generate backend.tf / backend.tfvars in module path to ensure tofu init has backend config
+    if generate_backend_files "$module_path"; then
+        log_cleanup "Backend configuration generated in module path"
+    else
+        log_cleanup "WARNING: Failed to generate backend configuration in module path"
+    fi
+
     # Initialize OpenTofu
     if initialize_tofu "$module_path"; then
         log_cleanup "OpenTofu initialization successful"
