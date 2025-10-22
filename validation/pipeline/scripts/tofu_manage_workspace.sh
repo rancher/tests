@@ -1,75 +1,125 @@
 #!/bin/bash
 set -e
 
-# Consolidated OpenTofu workspace management script for both airgap and destroy operations
-# Handles workspace creation, selection, and verification
+# OpenTofu workspace management helper
+# Handles workspace creation, selection, and verification in a robust way.
 
-echo '=== DEBUG: Workspace Management ==='
-echo "DEBUG: QA_INFRA_WORK_PATH='${QA_INFRA_WORK_PATH}'"
-echo "DEBUG: TF_WORKSPACE='${TF_WORKSPACE}'"
+SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_NAME
+SCRIPT_DIR="$(dirname "$0")"
+readonly SCRIPT_DIR
+QA_INFRA_WORK_PATH="${QA_INFRA_WORK_PATH:-/root/go/src/github.com/rancher/qa-infra-automation}"
+readonly QA_INFRA_WORK_PATH
 
-# Export AWS credentials for OpenTofu (airgap compatibility)
-export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
-export AWS_REGION="${AWS_REGION:-us-east-2}"
-export AWS_DEFAULT_REGION="${AWS_REGION:-us-east-2}"
+log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
+log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
+log_warning() { echo "[WARN] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
 
-cd ${QA_INFRA_WORK_PATH}
+validate_prerequisites() {
+  # If logging helper already exists, assume airgap library is loaded
+  if type log_info >/dev/null 2>&1; then
+    :
+  else
+    local lib_candidates=(
+      "${SCRIPT_DIR}/airgap_lib.sh"
+      "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+      "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+      "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+    )
 
-echo 'Managing workspace state...'
-echo 'Current workspaces:'
-tofu -chdir=tofu/aws/modules/airgap workspace list
+    for lib in "${lib_candidates[@]}"; do
+      if [[ -f "$lib" ]]; then
+        # shellcheck disable=SC1090
+        source "$lib"
+        log_info "Sourced airgap library from: $lib"
+        break
+      fi
+    done
 
-echo "Target workspace: ${TF_WORKSPACE}"
+    if ! type log_info >/dev/null 2>&1; then
+      log_error "airgap_lib.sh not found in expected locations: ${lib_candidates[*]}"
+      exit 1
+    fi
+  fi
 
-# Store the workspace name for operations
-WORKSPACE_NAME="${TF_WORKSPACE}"
+  command -v tofu >/dev/null 2>&1 || { log_error "tofu binary not found in PATH"; exit 1; }
+  [[ -n "${TF_WORKSPACE:-}" ]] || log_warning "TF_WORKSPACE empty - ensure you set the target workspace"
+}
 
-# Check if workspace exists and create if needed
-# When TF_WORKSPACE is set, OpenTofu automatically uses it
-# We just need to verify the workspace exists or create it if it doesn't
-echo 'Checking if workspace exists...'
-WORKSPACE_EXISTS=$(tofu -chdir=tofu/aws/modules/airgap workspace list | grep -w "${WORKSPACE_NAME}" || true)
+manage_workspace() {
+  local workspace_name="${1:-$TF_WORKSPACE}"
+  [[ -n "$workspace_name" ]] || { log_error "Workspace name not provided"; exit 1; }
 
-if [ -z "$WORKSPACE_EXISTS" ]; then
-    echo "Workspace ${WORKSPACE_NAME} does not exist, creating it..."
-    # Temporarily unset TF_WORKSPACE to allow workspace creation
+  log_info "Workspace management starting: $workspace_name"
+  log_info "QA_INFRA_WORK_PATH=$QA_INFRA_WORK_PATH"
+
+  # Export AWS credentials for OpenTofu (airgap compatibility)
+  export AWS_REGION="${AWS_REGION:-us-east-2}"
+  export AWS_DEFAULT_REGION="${AWS_REGION}"
+
+  # Use a safe cd
+  if ! cd "$QA_INFRA_WORK_PATH"; then
+    log_error "Failed to change to QA repo path: $QA_INFRA_WORK_PATH"
+    exit 1
+  fi
+
+  log_info "Listing current workspaces"
+  tofu -chdir=tofu/aws/modules/airgap workspace list || log_warning "Failed to list workspaces"
+
+  # Check if workspace exists
+  log_info "Checking if workspace exists: $workspace_name"
+  local workspace_exists
+  workspace_exists=$(tofu -chdir=tofu/aws/modules/airgap workspace list 2>/dev/null | grep -w -- "$workspace_name" || true)
+
+  if [[ -z "$workspace_exists" ]]; then
+    log_info "Workspace $workspace_name does not exist - creating"
+    # Temporarily unset TF_WORKSPACE to allow creation if necessary
     unset TF_WORKSPACE
-    tofu -chdir=tofu/aws/modules/airgap workspace new "${WORKSPACE_NAME}"
-    # Set TF_WORKSPACE back for subsequent operations
-    export TF_WORKSPACE="${WORKSPACE_NAME}"
-    echo "Workspace ${WORKSPACE_NAME} created successfully"
-else
-    echo "Workspace ${WORKSPACE_NAME} already exists"
-fi
+    if ! tofu -chdir=tofu/aws/modules/airgap workspace new "$workspace_name"; then
+      log_error "Failed to create workspace: $workspace_name"
+      exit 1
+    fi
+    export TF_WORKSPACE="$workspace_name"
+    log_info "Workspace $workspace_name created"
+  else
+    log_info "Workspace $workspace_name already exists"
+    export TF_WORKSPACE="$workspace_name"
+  fi
 
-echo 'Verifying workspace selection...'
-CURRENT_WORKSPACE=$(tofu -chdir=tofu/aws/modules/airgap workspace show)
-echo "Current workspace: $CURRENT_WORKSPACE"
+  # Verify selection
+  log_info "Verifying workspace selection"
+  local current_workspace
+  current_workspace=$(tofu -chdir=tofu/aws/modules/airgap workspace show 2>/dev/null || echo "")
+  log_info "Current workspace: $current_workspace"
 
-if [ "$CURRENT_WORKSPACE" != "${WORKSPACE_NAME}" ]; then
-    echo "ERROR: Expected workspace ${WORKSPACE_NAME}, but got '$CURRENT_WORKSPACE'"
-    echo 'Available workspaces:'
-    tofu -chdir=tofu/aws/modules/airgap workspace list
+  if [[ "$current_workspace" != "$workspace_name" ]]; then
+    log_error "Expected workspace $workspace_name but got '$current_workspace'"
+    log_info "Available workspaces:"
+    tofu -chdir=tofu/aws/modules/airgap workspace list || true
     exit 1
-fi
+  fi
 
-# Final verification that workspace exists
-echo "Final workspace verification..."
-if tofu -chdir=tofu/aws/modules/airgap workspace list | grep -q "${WORKSPACE_NAME}"; then
-    echo "✓ Workspace '${WORKSPACE_NAME}' confirmed to exist"
-    echo "✓ TF_WORKSPACE environment variable: ${TF_WORKSPACE}"
-else
-    echo "ERROR: Workspace '${WORKSPACE_NAME}' not found"
-    echo 'Available workspaces:'
-    tofu -chdir=tofu/aws/modules/airgap workspace list
+  # Final confirmation
+  if tofu -chdir=tofu/aws/modules/airgap workspace list | grep -q -- "$workspace_name"; then
+    log_info "✓ Workspace '$workspace_name' confirmed to exist"
+    log_info "✓ TF_WORKSPACE: ${TF_WORKSPACE}"
+  else
+    log_error "Workspace '$workspace_name' not found after creation/selection"
+    tofu -chdir=tofu/aws/modules/airgap workspace list || true
     exit 1
-fi
+  fi
 
-echo "Workspace management completed successfully for: ${WORKSPACE_NAME}"
+  # Re-initialize to ensure workspace is properly configured (airgap compatibility)
+  log_info "Re-initializing workspace to ensure proper configuration"
+  tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade || log_warning "tofu init returned non-zero"
+  log_info "Workspace management completed for: $workspace_name"
+}
 
-# Re-initialize to ensure workspace is properly configured (airgap compatibility)
-echo 'Re-initializing to ensure workspace is properly configured...'
-tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade
+main() {
+  validate_prerequisites
+  manage_workspace "$@"
+}
 
-echo '=== END DEBUG ==='
+trap 'log_error "Script failed at line $LINENO"' ERR
+
+main "$@"

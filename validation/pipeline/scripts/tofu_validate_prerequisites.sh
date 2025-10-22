@@ -1,66 +1,87 @@
 #!/bin/bash
 set -e
 
-# Consolidated prerequisites validation script for both airgap and destroy operations
-# Validates environment, OpenTofu installation, and required files
+# OpenTofu prerequisites validation helper
+# Validates environment, OpenTofu installation, and required files for airgap/destroy operations.
 
-echo '=== DEBUG: Environment Variables ==='
-echo "DEBUG: QA_INFRA_WORK_PATH='${QA_INFRA_WORK_PATH}'"
-echo "DEBUG: TF_WORKSPACE='${TF_WORKSPACE}'"
-echo "DEBUG: TERRAFORM_VARS_FILENAME='${TERRAFORM_VARS_FILENAME}'"
-echo "DEBUG: S3_BUCKET_NAME='${S3_BUCKET_NAME}'"
-echo "DEBUG: S3_KEY_PREFIX='${S3_KEY_PREFIX}'"
-echo "DEBUG: AWS_REGION='${AWS_REGION}'"
-echo '=== END DEBUG ==='
+SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_NAME
+SCRIPT_DIR="$(dirname "$0")"
+readonly SCRIPT_DIR
+QA_INFRA_WORK_PATH="${QA_INFRA_WORK_PATH:-/root/go/src/github.com/rancher/qa-infra-automation}"
+readonly QA_INFRA_WORK_PATH
+TERRAFORM_VARS_FILENAME="${TERRAFORM_VARS_FILENAME:-cluster.tfvars}"
+readonly TERRAFORM_VARS_FILENAME
 
-cd ${QA_INFRA_WORK_PATH}
+log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
+log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
+log_warning() { echo "[WARN] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
 
-echo 'Checking OpenTofu installation...'
-tofu version
-
-echo 'Checking workspace directory...'
-test -d ${QA_INFRA_WORK_PATH}
-
-echo 'Validating terraform vars file...'
-echo "DEBUG: TERRAFORM_VARS_FILENAME='${TERRAFORM_VARS_FILENAME}'"
-
-echo 'DEBUG: Current working directory:'
-pwd
-echo 'DEBUG: Contents of current directory:'
-ls -la
-
-echo 'DEBUG: Checking if tofu/aws/modules/airgap directory exists:'
-if [ -d "${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap" ]; then
-    echo "DEBUG: Directory exists, contents:"
-    ls -la "${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/"
-else
-    echo "DEBUG: Directory does not exist: ${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap"
-fi
-
-echo 'DEBUG: Checking if /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap directory exists:'
-if [ -d "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap" ]; then
-    echo "DEBUG: Directory exists, contents:"
-    ls -la "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/"
-else
-    echo "DEBUG: Directory does not exist: /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap"
-fi
-
-# Check both the shared volume location and the qa-infra-automation location
-if [ -f "${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}" ]; then
-    echo "Found terraform vars file at: ${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}"
-elif [ -f "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}" ]; then
-    echo "Found terraform vars file at: /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}"
-else
-    echo "ERROR: terraform vars file not found at either location:"
-    echo "  1. ${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}"
-    echo "  2. /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}"
-    echo "Available files in tofu/aws/modules/airgap/:"
-    ls -la "${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/" 2>/dev/null || echo "Directory not accessible"
-    ls -la "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/" 2>/dev/null || echo "Directory not accessible"
-    echo "DEBUG: Testing file existence with explicit paths:"
-    test -f "${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/cluster.tfvars" && echo "cluster.tfvars found at path 1" || echo "cluster.tfvars NOT found at path 1"
-    test -f "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/cluster.tfvars" && echo "cluster.tfvars found at path 2" || echo "cluster.tfvars NOT found at path 2"
+validate_prerequisites() {
+  # Ensure tofu binary is available or fail fast
+  if ! command -v tofu >/dev/null 2>&1; then
+    log_error "tofu binary not found in PATH"
     exit 1
-fi
+  fi
 
-echo 'All infrastructure prerequisites validated successfully'
+  # If logging helpers from airgap_lib.sh are not available, try to source the library
+  if ! type log_info >/dev/null 2>&1; then
+    local lib_candidates=(
+      "${SCRIPT_DIR}/airgap_lib.sh"
+      "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+      "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+      "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+    )
+    for lib in "${lib_candidates[@]}"; do
+      if [[ -f "$lib" ]]; then
+        # shellcheck disable=SC1090
+        source "$lib"
+        log_info "Sourced airgap library from: $lib"
+        break
+      fi
+    done
+  fi
+
+  # Validate QA repo path
+  if [[ ! -d "$QA_INFRA_WORK_PATH" ]]; then
+    log_error "QA_INFRA_WORK_PATH directory not found: $QA_INFRA_WORK_PATH"
+    exit 1
+  fi
+
+  # Check for terraform vars file in expected locations
+  if [[ -f "${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}" ]]; then
+    log_info "Found terraform vars file at: ${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}"
+  elif [[ -f "/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}" ]]; then
+    log_info "Found terraform vars file at: /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}"
+  else
+    log_error "terraform vars file not found in expected locations"
+    log_error "Checked: ${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}"
+    log_error "       /root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap/${TERRAFORM_VARS_FILENAME}"
+    exit 1
+  fi
+
+  log_info "Prerequisites validated successfully"
+}
+
+main() {
+  log_info "Starting prerequisites validation: $SCRIPT_NAME"
+  log_info "QA_INFRA_WORK_PATH=$QA_INFRA_WORK_PATH"
+  log_info "TF_WORKSPACE=${TF_WORKSPACE:-<not-set>}"
+  log_info "TERRAFORM_VARS_FILENAME=$TERRAFORM_VARS_FILENAME"
+
+  validate_prerequisites
+
+  # Diagnostic info (limited, safe)
+  log_info "Current working directory: $(pwd)"
+  log_info "Listing tofu module directory (if present):"
+  if [[ -d "${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap" ]]; then
+    ls -la "${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/" | head -50 || true
+  else
+    log_warning "Module directory not found: ${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap"
+  fi
+
+  log_info "All infrastructure prerequisites validated successfully"
+}
+
+trap 'log_error "Script failed at line $LINENO"' ERR
+main "$@"
