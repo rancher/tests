@@ -25,7 +25,35 @@ log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
 # =============================================================================
 
 validate_prerequisites() {
-  [[ -f "${SCRIPT_DIR}/airgap_lib.sh" ]] || { log_error "airgap_lib.sh not found"; exit 1; }
+  # If logging helper already exists, assume airgap library is loaded
+  if type log_info >/dev/null 2>&1; then
+    # Still validate required binaries
+    command -v tofu >/dev/null || { log_error "tofu not found"; exit 1; }
+    command -v aws >/dev/null || { log_error "aws CLI not found"; exit 1; }
+    return 0
+  fi
+
+  local lib_candidates=(
+    "${SCRIPT_DIR}/airgap_lib.sh"
+    "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+    "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+    "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+  )
+
+  for lib in "${lib_candidates[@]}"; do
+    if [[ -f "$lib" ]]; then
+      # shellcheck disable=SC1090
+      source "$lib"
+      log_info "Sourced airgap library from: $lib"
+      break
+    fi
+  done
+
+  if ! type log_info >/dev/null 2>&1; then
+    log_error "airgap_lib.sh not found in expected locations: ${lib_candidates[*]}"
+    exit 1
+  fi
+
   command -v tofu >/dev/null || { log_error "tofu not found"; exit 1; }
   command -v aws >/dev/null || { log_error "aws CLI not found"; exit 1; }
 }
@@ -36,7 +64,10 @@ validate_prerequisites() {
 
 # Load the airgap library
 # Use absolute path since script may be executed from /tmp/
-source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+# shellcheck disable=SC1090
+if [[ -f "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh" ]]; then
+  source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+fi
 
 # =============================================================================
 # MAIN DEPLOYMENT FUNCTION

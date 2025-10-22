@@ -6,16 +6,23 @@ set -e
 # Replaces: ansible_run_rke2_deployment.sh, ansible_setup_kubectl.sh, ansible_validate_rancher.sh
 
 # Load the airgap library
-source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+# shellcheck disable=SC1090
+if [[ -f "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh" ]]; then
+  source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+fi
 
 # =============================================================================
 # SCRIPT CONFIGURATION
 # =============================================================================
 
-readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_DIR="$(dirname "$0")"
-readonly QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
-readonly RKE2_PLAYBOOK="$QA_INFRA_CLONE_PATH/ansible/rke2/airgap/playbooks/deploy/rke2-tarball-playbook.yml"
+SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_NAME
+SCRIPT_DIR="$(dirname "$0")"
+readonly SCRIPT_DIR
+QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
+readonly QA_INFRA_CLONE_PATH
+RKE2_PLAYBOOK="$QA_INFRA_CLONE_PATH/ansible/rke2/airgap/playbooks/deploy/rke2-tarball-playbook.yml"
+readonly RKE2_PLAYBOOK
 
 # =============================================================================
 # RKE2 DEPLOYMENT
@@ -183,20 +190,21 @@ run_rke2_playbook() {
         exit 1
     fi
 
-    # Build extra-vars from environment
-    local extra_vars=""
-    [[ -n "${RKE2_VERSION:-}" ]] && extra_vars+=" -e rke2_version=${RKE2_VERSION}"
-
+    # Build extra-vars as an array (avoids word-splitting/globbing issues)
+    local -a extra_args=()
+    [[ -n "${RKE2_VERSION:-}" ]] && extra_args+=( -e "rke2_version=${RKE2_VERSION}" )
+    
     # Change to playbook directory
     cd "$QA_INFRA_CLONE_PATH/ansible/rke2/airgap" || {
         log_error "Failed to change to playbook directory"
         exit 1
     }
-
-    log_info "Executing: ansible-playbook -i $inventory_file $RKE2_PLAYBOOK -v $extra_vars"
-
+    
+    # Show the command for debugging (join array for readability)
+    log_info "Executing: ansible-playbook -i $inventory_file $RKE2_PLAYBOOK -v ${extra_args[*]}"
+    
     # Run the playbook with logging
-    if ansible-playbook -i "$inventory_file" "$RKE2_PLAYBOOK" -v $extra_vars 2>&1 | tee "$log_file"; then
+    if ansible-playbook -i "$inventory_file" "$RKE2_PLAYBOOK" -v "${extra_args[@]}" 2>&1 | tee "$log_file"; then
         log_success "RKE2 deployment playbook completed successfully"
         export ANSIBLE_EXIT_CODE=0
     else

@@ -27,7 +27,33 @@ log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
 # =============================================================================
 
 validate_prerequisites() {
-  [[ -f "${SCRIPT_DIR}/airgap_lib.sh" ]] || { log_error "airgap_lib.sh not found"; exit 1; }
+  # If logging helper already exists, assume airgap library is loaded
+  if type log_info >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # Candidate locations to find airgap_lib.sh in CI/container environments
+  local lib_candidates=(
+    "${SCRIPT_DIR}/airgap_lib.sh"
+    "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+    "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+    "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+  )
+
+  for lib in "${lib_candidates[@]}"; do
+    if [[ -f "$lib" ]]; then
+      # shellcheck disable=SC1090
+      source "$lib"
+      log_info "Sourced airgap library from: $lib"
+      break
+    fi
+  done
+
+  if ! type log_info >/dev/null 2>&1; then
+    log_error "airgap_lib.sh not found in expected locations: ${lib_candidates[*]}"
+    exit 1
+  fi
+
   command -v ansible-playbook >/dev/null || { log_error "ansible-playbook not found"; exit 1; }
 }
 
@@ -35,9 +61,11 @@ validate_prerequisites() {
 # SCRIPT CONFIGURATION
 # =============================================================================
 
-# Load the airgap library
-# Use absolute path since script may be executed from /tmp/
-source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+# Load the airgap library (only if present at known absolute path)
+# shellcheck disable=SC1090
+if [[ -f "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh" ]]; then
+  source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+fi
 
 # =============================================================================
 # UNIFIED CLEANUP MAIN FUNCTION
