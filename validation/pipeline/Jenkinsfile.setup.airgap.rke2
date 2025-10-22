@@ -1354,7 +1354,7 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
             ${envVars} \\
             "${env.IMAGE_NAME.trim()}\""""
 
-    // Use a safer execution pattern
+    // Use a safer execution pattern; run the debug helper from /tmp (mounted) then execute the main script
     def executionCmd = '''/bin/bash -c \'
         echo "=== DEBUG: Container started ==="
         echo "Current user: $(whoami)"
@@ -1366,7 +1366,7 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
         ls -la /tmp/
         echo "=== END DEBUG ==="
         echo "Executing script: /tmp/script.sh"
-        /bin/bash /root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/debug_env_check.sh && exec /bin/bash /tmp/script.sh
+        /bin/bash /tmp/debug_env_check.sh && exec /bin/bash /tmp/script.sh
     \' '''
 
     return "${baseCmd} ${executionCmd}"
