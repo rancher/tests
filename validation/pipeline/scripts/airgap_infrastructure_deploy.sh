@@ -91,7 +91,7 @@ deploy_infrastructure() {
     fi
 
     # Validate required variables
-    validate_required_vars "QA_INFRA_WORK_PATH" "TF_WORKSPACE" "TERRAFORM_VARS_FILENAME"
+    validate_required_vars "QA_INFRA_WORK_PATH" "TF_WORKSPACE" "TERRAFORM_VARS_FILENAME" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_REGION" "AWS_AMI" "AWS_HOSTNAME_PREFIX" "AWS_ROUTE53_ZONE" "AWS_SSH_USER" "AWS_SECURITY_GROUP" "AWS_VPC" "AWS_VOLUME_SIZE" "AWS_SUBNET" "INSTANCE_TYPE"
 
     # Manage workspace first (before backend initialization)
     manage_workspace "$workspace_name" "$module_path"
