@@ -171,6 +171,11 @@ pipeline {
             defaultValue: false,
             description: 'Skip strict YAML validation for templated group_vars payloads'
         )
+        booleanParam(
+            name: 'DEBUG',
+            defaultValue: false,
+            description: 'Enable debug output and verbose logging throughout the pipeline'
+        )
     }
 
     // Global environment variables
@@ -193,6 +198,9 @@ pipeline {
 
         // Skip strict YAML Validation
         SKIP_YAML_VALIDATION = "${params.SKIP_YAML_VALIDATION}"
+
+        // Debug mode
+        DEBUG = "${params.DEBUG}"
 
         // Computed values
         JOB_SHORT_NAME = "${getShortJobName()}"
@@ -772,7 +780,9 @@ def logWarning(msg) {
 }
 
 def logDebug(msg) {
-    echo "${PipelineConfig.LOG_PREFIX_DEBUG} ${getTimestamp()} ${msg}"
+    if (env.DEBUG.toBoolean()) {
+        echo "${PipelineConfig.LOG_PREFIX_DEBUG} ${getTimestamp()} ${msg}"
+    }
 }
 
 def getTimestamp() {
@@ -1302,6 +1312,13 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 
 def buildEnvironmentVariables(extraEnv) {
     def envVars = ''
+    
+    // Always include DEBUG flag
+    if (env.DEBUG) {
+        def escapedValue = env.DEBUG.replace('"', '\\"').replace('$', '\\$')
+        envVars += " -e \"DEBUG=${escapedValue}\""
+    }
+    
     extraEnv.each { key, value ->
         // Skip null/empty values to avoid passing literal "null" or blanks
         if (value != null) {
@@ -1328,17 +1345,18 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
     // Escape container name to prevent issues
     def escapedContainerName = containerName.replaceAll('[^a-zA-Z0-9_-]', '_')
 
-    // Copy helper into workspace and mount it into container
-    try {
-        if (fileExists('validation/pipeline/scripts/debug_env_check.sh')) {
-            sh '''
-                cp validation/pipeline/scripts/debug_env_check.sh ./tmp_debug_env_check.sh || true
-                chmod +x ./tmp_debug_env_check.sh || true
-            '''
-            logInfo("DEBUG helper copied to workspace: ./tmp_debug_env_check.sh")
-        } else {
-            // Fallback: create a minimal debug helper so container runs still produce useful output
-            writeFile file: 'tmp_debug_env_check.sh', text: '''#!/bin/bash
+    // Copy helper into workspace and mount it into container (only if DEBUG is enabled)
+    if (env.DEBUG.toBoolean()) {
+        try {
+            if (fileExists('validation/pipeline/scripts/debug_env_check.sh')) {
+                sh '''
+                    cp validation/pipeline/scripts/debug_env_check.sh ./tmp_debug_env_check.sh || true
+                    chmod +x ./tmp_debug_env_check.sh || true
+                '''
+                logInfo("DEBUG helper copied to workspace: ./tmp_debug_env_check.sh")
+            } else {
+                // Fallback: create a minimal debug helper so container runs still produce useful output
+                writeFile file: 'tmp_debug_env_check.sh', text: '''#!/bin/bash
 set -e
 echo "=== INLINE FALLBACK DEBUG SCRIPT ==="
 echo "Printing /tmp/.env contents (masked):"
@@ -1347,11 +1365,12 @@ echo "Printing environment (selected keys):"
 env | egrep 'AWS|S3|TF|RANCHER|RKE2|HOSTNAME' || env
 echo "=== END DEBUG ==="
 '''
-            sh 'chmod +x ./tmp_debug_env_check.sh || true'
-            logInfo("FALLBACK debug helper created at ./tmp_debug_env_check.sh")
+                sh 'chmod +x ./tmp_debug_env_check.sh || true'
+                logInfo("FALLBACK debug helper created at ./tmp_debug_env_check.sh")
+            }
+        } catch (err) {
+            logWarning("Failed to prepare debug helper in workspace: ${err}")
         }
-    } catch (err) {
-        logWarning("Failed to prepare debug helper in workspace: ${err}")
     }
 
     // Build volume mounts with proper validation
@@ -1393,8 +1412,8 @@ echo "=== END DEBUG ==="
         volumeMounts.add("-v \"${envFilePath}:/tmp/.env\"")
     }
 
-    // Add debug helper script volume
-    if (fileExists('./tmp_debug_env_check.sh')) {
+    // Add debug helper script volume (only if DEBUG is enabled)
+    if (env.DEBUG.toBoolean() && fileExists('./tmp_debug_env_check.sh')) {
         volumeMounts.add("-v \"${pwd()}/tmp_debug_env_check.sh:/tmp/debug_env_check.sh\"")
     }
 
@@ -1428,6 +1447,11 @@ echo "=== END DEBUG ==="
         echo "Executing script: /tmp/script.sh"
         /bin/bash /tmp/debug_env_check.sh && exec /bin/bash /tmp/script.sh
     \' '''
+    
+    // If DEBUG is disabled, use a simpler execution command without debug output
+    if (!env.DEBUG.toBoolean()) {
+        executionCmd = '''/bin/bash -c 'exec /bin/bash /tmp/script.sh' '''
+    }
 
     return "${baseCmd} ${executionCmd}"
 }
@@ -1574,8 +1598,8 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
         volumeMounts.add("-v \"${pwd()}/${scriptFile}:/tmp/script.sh\"")
     }
 
-    // Add debug helper script volume
-    if (fileExists('./tmp_debug_env_check.sh')) {
+    // Add debug helper script volume (only if DEBUG is enabled)
+    if (env.DEBUG.toBoolean() && fileExists('./tmp_debug_env_check.sh')) {
         volumeMounts.add("-v \"${pwd()}/tmp_debug_env_check.sh:/tmp/debug_env_check.sh\"")
     }
 
@@ -1608,6 +1632,11 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
         echo "Executing script: /tmp/script.sh"
         /bin/bash /tmp/debug_env_check.sh && exec /bin/bash /tmp/script.sh
     \' '''
+    
+    // If DEBUG is disabled, use a simpler execution command without debug output
+    if (!env.DEBUG.toBoolean()) {
+        executionCmd = '''/bin/bash -c 'exec /bin/bash /tmp/script.sh' '''
+    }
 
     return "${baseCmd} ${executionCmd}"
 }
