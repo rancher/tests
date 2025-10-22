@@ -4,23 +4,48 @@ set -e
 # Script to handle Rancher deployment failure cleanup
 # This script is executed within the Docker container when Rancher deployment fails
 
-echo "=== Rancher Deployment Failure Cleanup ==="
-echo "RKE2 Version: ${RKE2_VERSION:-'NOT SET'}"
-echo "Rancher Version: ${RANCHER_VERSION:-'NOT SET'}"
-echo "QA Infra Work Path: ${QA_INFRA_WORK_PATH:-'NOT SET'}"
-echo "DESTROY_ON_FAILURE: ${DESTROY_ON_FAILURE:-'false'}"
+# =============================================================================
+# CONSTANTS
+# =============================================================================
 
-# Validate required environment variables
-if [[ -z "${QA_INFRA_WORK_PATH}" ]]; then
-    echo "ERROR: QA_INFRA_WORK_PATH environment variable is not set"
-    exit 1
-fi
+readonly SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_DIR="$(dirname "$0")"
+readonly FAILURE_REPORT_DIR="/root/rancher-failure-report"
 
-# Change to the qa-infra-automation directory
-cd "${QA_INFRA_WORK_PATH}"
+# =============================================================================
+# LOGGING FUNCTIONS
+# =============================================================================
 
-# Change to the airgap ansible directory
-cd ansible/rke2/airgap
+log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
+log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
+
+# =============================================================================
+# PREREQUISITE VALIDATION
+# =============================================================================
+
+validate_prerequisites() {
+  [[ -n "${QA_INFRA_WORK_PATH:-}" ]] || { log_error "QA_INFRA_WORK_PATH not set"; exit 1; }
+  [[ -d "${QA_INFRA_WORK_PATH}" ]] || { log_error "QA_INFRA_WORK_PATH directory not found"; exit 1; }
+}
+
+# =============================================================================
+# MAIN FUNCTION
+# =============================================================================
+
+main() {
+  log_info "Starting Rancher deployment failure cleanup with $SCRIPT_NAME"
+  log_info "RKE2 Version: ${RKE2_VERSION:-'NOT SET'}"
+  log_info "Rancher Version: ${RANCHER_VERSION:-'NOT SET'}"
+  log_info "DESTROY_ON_FAILURE: ${DESTROY_ON_FAILURE:-'false'}"
+
+  # Validate prerequisites
+  validate_prerequisites
+
+  # Change to the qa-infra-automation directory
+  cd "${QA_INFRA_WORK_PATH}"
+
+  # Change to the airgap ansible directory
+  cd ansible/rke2/airgap
 
 echo "=== Collecting Rancher Deployment Failure Information ==="
 
@@ -223,8 +248,10 @@ fi
 echo "Copying failure report to shared volume..."
 cp /root/rancher-failure-report-*.tar.gz /root/ 2>/dev/null || echo "Failed to copy failure report to shared volume"
 
-echo "=== Rancher Deployment Failure Cleanup Completed ==="
-echo "Failure report has been generated and archived"
-echo "Check the archived artifacts for detailed failure information"
+  log_info "Rancher deployment failure cleanup completed"
+  log_info "Failure report has been generated and archived"
+  log_info "Check the archived artifacts for detailed failure information"
+}
 
-exit 0
+# Execute main function
+main "$@"
