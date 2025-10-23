@@ -14,13 +14,6 @@ readonly SCRIPT_DIR="$(dirname "$0")"
 readonly OUTPUT_DIR="${ANSIBLE_OUTPUT_DIR:-/root/ansible/rke2/airgap/group_vars}"
 
 # =============================================================================
-# LOGGING FUNCTIONS
-# =============================================================================
-
-log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
-log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
-
-# =============================================================================
 # PREREQUISITE VALIDATION
 # =============================================================================
 
@@ -67,10 +60,10 @@ validate_prerequisites() {
 # =============================================================================
 
 main() {
-  log_info "Starting group variables generation with $SCRIPT_NAME"
-
   # Validate prerequisites
   validate_prerequisites
+
+  log_info "Starting group variables generation with $SCRIPT_NAME"
 
   # Validate required environment variables
   validate_required_vars "ANSIBLE_VARIABLES"

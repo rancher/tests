@@ -58,10 +58,10 @@ validate_prerequisites() {
 # =============================================================================
 
 main() {
-  log_info "Starting OpenTofu initialization with $SCRIPT_NAME"
-
   # Validate prerequisites
   validate_prerequisites
+
+  log_info "Starting OpenTofu initialization with $SCRIPT_NAME"
 
   # Source environment file if it exists (airgap compatibility)
   if [[ -f "$ENV_FILE" ]]; then

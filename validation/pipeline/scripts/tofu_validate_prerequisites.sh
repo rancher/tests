@@ -62,12 +62,12 @@ validate_prerequisites() {
 }
 
 main() {
+  validate_prerequisites
+
   log_info "Starting prerequisites validation: $SCRIPT_NAME"
   log_info "QA_INFRA_WORK_PATH=$QA_INFRA_WORK_PATH"
   log_info "TF_WORKSPACE=${TF_WORKSPACE:-<not-set>}"
   log_info "TERRAFORM_VARS_FILENAME=$TERRAFORM_VARS_FILENAME"
-
-  validate_prerequisites
 
   # Diagnostic info (limited, safe)
   log_info "Current working directory: $(pwd)"

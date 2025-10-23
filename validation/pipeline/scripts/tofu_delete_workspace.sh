@@ -57,11 +57,11 @@ validate_prerequisites() {
 # =============================================================================
 
 main() {
-  log_info "Starting workspace deletion with $SCRIPT_NAME"
-  log_info "Target workspace: ${TF_WORKSPACE}"
-
   # Validate prerequisites
   validate_prerequisites
+  
+  log_info "Starting workspace deletion with $SCRIPT_NAME"
+  log_info "Target workspace: ${TF_WORKSPACE}"
 
   # Export AWS credentials for OpenTofu
   export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
