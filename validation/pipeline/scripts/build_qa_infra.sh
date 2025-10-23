@@ -1,37 +1,4 @@
 #!/bin/bash
-set -e
-
-# Build QA Infrastructure Script
-# Consolidated script that builds QA infrastructure for testing
-
-# Standard script metadata
-readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_DIR="$(dirname "$0")"
-readonly QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
-
-# Load the airgap library (try multiple candidate locations)
-# shellcheck disable=SC1090
-if ! type log_info >/dev/null 2>&1; then
-  lib_candidates=(
-    "${SCRIPT_DIR}/airgap_lib.sh"
-    "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
-    "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
-    "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
-  )
-
-  for lib in "${lib_candidates[@]}"; do
-    if [[ -f "$lib" ]]; then
-      source "$lib"
-      log_info "Sourced airgap library from: $lib"
-      break
-    fi
-  done
-
-  if ! type log_info >/dev/null 2>&1; then
-    echo "[ERROR] airgap_lib.sh not found in expected locations: ${lib_candidates[*]}" >&2
-    exit 1
-  fi
-fi
 
 show_help() {
     cat <<EOF
@@ -240,4 +207,4 @@ if [[ "$BUILD_DOWNSTREAM_CLUSTER" == "true" ]]; then
 fi
 
 
-log_success "Script completed successfully!"
+echo "Script completed successfully!"
