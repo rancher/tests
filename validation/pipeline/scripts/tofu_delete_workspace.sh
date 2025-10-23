@@ -15,14 +15,38 @@ readonly SCRIPT_DIR="$(dirname "$0")"
 # LOGGING FUNCTIONS
 # =============================================================================
 
-log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
-log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
+# Logging functions will be provided by airgap_lib.sh
 
 # =============================================================================
 # PREREQUISITE VALIDATION
 # =============================================================================
 
 validate_prerequisites() {
+  # If logging helper already exists, assume airgap library is loaded
+  if ! type log_info >/dev/null 2>&1; then
+    # Load airgap library with robust sourcing
+    local lib_candidates=(
+      "${SCRIPT_DIR}/airgap_lib.sh"
+      "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+      "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+      "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+    )
+
+    for lib in "${lib_candidates[@]}"; do
+      if [[ -f "$lib" ]]; then
+        # shellcheck disable=SC1090
+        source "$lib"
+        log_info "Sourced airgap library from: $lib"
+        break
+      fi
+    done
+
+    if ! type log_info >/dev/null 2>&1; then
+      log_error "airgap_lib.sh not found in expected locations: ${lib_candidates[*]}"
+      exit 1
+    fi
+  fi
+
   [[ -n "${QA_INFRA_WORK_PATH:-}" ]] || { log_error "QA_INFRA_WORK_PATH not set"; exit 1; }
   [[ -n "${TF_WORKSPACE:-}" ]] || { log_error "TF_WORKSPACE not set"; exit 1; }
   command -v tofu >/dev/null || { log_error "tofu not found"; exit 1; }
@@ -45,7 +69,10 @@ main() {
   export AWS_REGION="${AWS_REGION:-us-east-2}"
   export AWS_DEFAULT_REGION="${AWS_REGION:-us-east-2}"
 
-  cd "${QA_INFRA_WORK_PATH}"
+  cd "${QA_INFRA_WORK_PATH}" || {
+    log_error "Failed to change to QA_INFRA_WORK_PATH: ${QA_INFRA_WORK_PATH}"
+    exit 1
+  }
 
 echo 'Current workspaces before deletion:'
 tofu -chdir=tofu/aws/modules/airgap workspace list
@@ -106,6 +133,9 @@ tofu -chdir=tofu/aws/modules/airgap workspace list
 
   log_info "Workspace deletion completed"
 }
+
+# Error handling
+trap 'log_error "Script failed at line $LINENO"' ERR
 
 # Execute main function
 main "$@"

@@ -19,8 +19,7 @@ readonly DESTROY_ON_FAILURE="${DESTROY_ON_FAILURE:-true}"
 # LOGGING FUNCTIONS
 # =============================================================================
 
-log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
-log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
+# Logging functions will be provided by airgap_lib.sh
 
 # =============================================================================
 # PREREQUISITE VALIDATION
@@ -61,11 +60,7 @@ validate_prerequisites() {
 # SCRIPT CONFIGURATION
 # =============================================================================
 
-# Load the airgap library (only if present at known absolute path)
-# shellcheck disable=SC1090
-if [[ -f "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh" ]]; then
-  source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
-fi
+# Load the airgap library (robust sourcing is handled by validate_prerequisites)
 
 # =============================================================================
 # UNIFIED CLEANUP MAIN FUNCTION

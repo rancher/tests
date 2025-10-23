@@ -16,14 +16,38 @@ readonly FAILURE_REPORT_DIR="/root/rancher-failure-report"
 # LOGGING FUNCTIONS
 # =============================================================================
 
-log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
-log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
+# Logging functions will be provided by airgap_lib.sh
 
 # =============================================================================
 # PREREQUISITE VALIDATION
 # =============================================================================
 
 validate_prerequisites() {
+  # If logging helper already exists, assume airgap library is loaded
+  if ! type log_info >/dev/null 2>&1; then
+    # Load airgap library with robust sourcing
+    local lib_candidates=(
+      "${SCRIPT_DIR}/airgap_lib.sh"
+      "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+      "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+      "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+    )
+
+    for lib in "${lib_candidates[@]}"; do
+      if [[ -f "$lib" ]]; then
+        # shellcheck disable=SC1090
+        source "$lib"
+        log_info "Sourced airgap library from: $lib"
+        break
+      fi
+    done
+
+    if ! type log_info >/dev/null 2>&1; then
+      log_error "airgap_lib.sh not found in expected locations: ${lib_candidates[*]}"
+      exit 1
+    fi
+  fi
+
   [[ -n "${QA_INFRA_WORK_PATH:-}" ]] || { log_error "QA_INFRA_WORK_PATH not set"; exit 1; }
   [[ -d "${QA_INFRA_WORK_PATH}" ]] || { log_error "QA_INFRA_WORK_PATH directory not found"; exit 1; }
 }
@@ -42,10 +66,16 @@ main() {
   validate_prerequisites
 
   # Change to the qa-infra-automation directory
-  cd "${QA_INFRA_WORK_PATH}"
+  cd "${QA_INFRA_WORK_PATH}" || {
+    log_error "Failed to change to QA_INFRA_WORK_PATH: ${QA_INFRA_WORK_PATH}"
+    exit 1
+  }
 
   # Change to the airgap ansible directory
-  cd ansible/rke2/airgap
+  cd ansible/rke2/airgap || {
+    log_error "Failed to change to ansible directory"
+    exit 1
+  }
 
 echo "=== Collecting Rancher Deployment Failure Information ==="
 
@@ -252,6 +282,9 @@ cp /root/rancher-failure-report-*.tar.gz /root/ 2>/dev/null || echo "Failed to c
   log_info "Failure report has been generated and archived"
   log_info "Check the archived artifacts for detailed failure information"
 }
+
+# Error handling
+trap 'log_error "Script failed at line $LINENO"' ERR
 
 # Execute main function
 main "$@"
