@@ -99,8 +99,8 @@ manage_workspace() {
 
   # Final confirmation
   if tofu -chdir=tofu/aws/modules/airgap workspace list | grep -q -- "$workspace_name"; then
-    log_info "✓ Workspace '$workspace_name' confirmed to exist"
-    log_info "✓ TF_WORKSPACE: ${TF_WORKSPACE}"
+    log_info "[OK] Workspace '$workspace_name' confirmed to exist"
+    log_info "[OK] TF_WORKSPACE: ${TF_WORKSPACE}"
   else
     log_error "Workspace '$workspace_name' not found after creation/selection"
     tofu -chdir=tofu/aws/modules/airgap workspace list || true

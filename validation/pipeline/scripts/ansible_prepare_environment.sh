@@ -166,9 +166,9 @@ validate_qa_infra_structure() {
     for playbook in "${key_playbooks[@]}"; do
         local playbook_path="$playbooks_dir/$playbook"
         if [[ -f "$playbook_path" ]]; then
-            log_info "  ✓ Found: $playbook"
+            log_info "  [OK] Found: $playbook"
         else
-            log_warning "  ✗ Missing: $playbook"
+            log_warning "  [FAIL] Missing: $playbook"
         fi
     done
 
@@ -229,23 +229,23 @@ validate_inventory_file() {
         has_servers=true
         local server_count
         server_count=$(grep -A 20 "rke2_servers:" "$inventory_file" | grep "rke2-server-" | wc -l)
-        log_info "  ✓ rke2_servers group found ($server_count nodes)"
+        log_info "  [OK] rke2_servers group found ($server_count nodes)"
     else
-        log_warning "  ✗ rke2_servers group not found"
+        log_warning "  [FAIL] rke2_servers group not found"
     fi
 
     if grep -q "rke2_agents:" "$inventory_file"; then
         has_agents=true
         local agent_count
         agent_count=$(grep -A 20 "rke2_agents:" "$inventory_file" | grep "rke2-agent-" | wc -l)
-        log_info "  ✓ rke2_agents group found ($agent_count nodes)"
+        log_info "  [OK] rke2_agents group found ($agent_count nodes)"
     else
-        log_warning "  ✗ rke2_agents group not found"
+        log_warning "  [FAIL] rke2_agents group not found"
     fi
 
     # Check for legacy structure
     if grep -q "airgap_nodes:" "$inventory_file" && ! grep -q "rke2_servers:" "$inventory_file"; then
-        log_warning "  ⚠ Using legacy inventory structure (airgap_nodes only)"
+        log_warning "  [WARN] Using legacy inventory structure (airgap_nodes only)"
         log_warning "    This may cause all nodes to become control-plane nodes"
     fi
 
@@ -372,22 +372,22 @@ validate_ansible_environment() {
             local file_size
             file_size=$(stat -c%s "$file" 2>/dev/null || echo 0)
             if [[ $file_size -gt 0 ]]; then
-                log_info "  ✓ $file ($file_size bytes)"
+                log_info "  [OK] $file ($file_size bytes)"
             else
-                log_error "  ✗ $file (empty)"
+                log_error "  [FAIL] $file (empty)"
                 ((validation_errors++))
             fi
         else
-            log_error "  ✗ $file (missing)"
+            log_error "  [FAIL] $file (missing)"
             ((validation_errors++))
         fi
     done
 
     # Check repository structure
     if [[ -d "$QA_INFRA_CLONE_PATH" ]]; then
-        log_info "  ✓ qa-infra-automation repository exists"
+        log_info "  [OK] qa-infra-automation repository exists"
     else
-        log_error "  ✗ qa-infra-automation repository missing"
+        log_error "  [FAIL] qa-infra-automation repository missing"
         ((validation_errors++))
     fi
 
@@ -400,9 +400,9 @@ validate_ansible_environment() {
     log_info "Checking required directories:"
     for dir in "${required_dirs[@]}"; do
         if [[ -d "$dir" ]]; then
-            log_info "  ✓ $dir"
+            log_info "  [OK] $dir"
         else
-            log_error "  ✗ $dir"
+            log_error "  [FAIL] $dir"
             ((validation_errors++))
         fi
     done
@@ -412,9 +412,9 @@ validate_ansible_environment() {
     log_info "Checking environment variables:"
     for var in "${required_vars[@]}"; do
         if [[ -n "${!var}" ]]; then
-            log_info "  ✓ $var is set"
+            log_info "  [OK] $var is set"
         else
-            log_warning "  ⚠ $var is not set"
+            log_warning "  [WARN] $var is not set"
         fi
     done
 

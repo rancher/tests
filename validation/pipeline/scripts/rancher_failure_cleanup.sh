@@ -239,9 +239,9 @@ if [[ "${DESTROY_ON_FAILURE}" == "true" ]]; then
             
             # Run the cleanup playbook
             if ansible-playbook -i inventory.yml "${playbook}" -v > "${FAILURE_REPORT_DIR}/rancher-cleanup-playbook.log" 2>&1; then
-                echo "✓ Rancher cleanup playbook executed successfully"
+                echo "[OK] Rancher cleanup playbook executed successfully"
             else
-                echo "✗ Rancher cleanup playbook failed"
+                echo "[FAIL] Rancher cleanup playbook failed"
                 echo "Check ${FAILURE_REPORT_DIR}/rancher-cleanup-playbook.log for details"
             fi
             break

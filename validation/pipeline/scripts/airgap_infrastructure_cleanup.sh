@@ -152,9 +152,9 @@ EOF
     # Perform infrastructure destruction
     log_cleanup "Starting infrastructure destruction..."
     if destroy_infrastructure "$module_path" "$var_file"; then
-        log_cleanup "✓ Infrastructure destruction completed successfully"
+        log_cleanup "[OK] Infrastructure destruction completed successfully"
     else
-        log_cleanup "✗ Infrastructure destruction failed or had issues"
+        log_cleanup "[FAIL] Infrastructure destruction failed or had issues"
 
         # Try to get remaining resources
         if tofu state list > "$SHARED_VOLUME_PATH/remaining-resources.txt" 2>/dev/null; then
