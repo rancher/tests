@@ -92,7 +92,7 @@ echo "Checking if workspace '${TF_WORKSPACE}' exists..."
 WORKSPACE_EXISTS=$(tofu -chdir=tofu/aws/modules/airgap workspace list | grep -w "${TF_WORKSPACE}" || true)
 
 if [ -z "$WORKSPACE_EXISTS" ]; then
-    echo "ℹ️ Workspace '${TF_WORKSPACE}' does not exist - nothing to delete"
+    echo "[INFO] Workspace '${TF_WORKSPACE}' does not exist - nothing to delete"
     echo "Available workspaces:"
     tofu -chdir=tofu/aws/modules/airgap workspace list
     exit 0
