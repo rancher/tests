@@ -57,13 +57,13 @@ validate_prerequisites() {
 # =============================================================================
 
 main() {
+  # Validate prerequisites
+  validate_prerequisites
+  
   log_info "Starting Rancher deployment failure cleanup with $SCRIPT_NAME"
   log_info "RKE2 Version: ${RKE2_VERSION:-'NOT SET'}"
   log_info "Rancher Version: ${RANCHER_VERSION:-'NOT SET'}"
   log_info "DESTROY_ON_FAILURE: ${DESTROY_ON_FAILURE:-'false'}"
-
-  # Validate prerequisites
-  validate_prerequisites
 
   # Change to the qa-infra-automation directory
   cd "${QA_INFRA_WORK_PATH}" || {
