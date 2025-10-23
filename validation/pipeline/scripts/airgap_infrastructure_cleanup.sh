@@ -472,10 +472,10 @@ parse_arguments() {
 # =============================================================================
 
 main() {
-  log_info "Starting infrastructure cleanup with $SCRIPT_NAME"
-
   # Validate prerequisites
   validate_prerequisites
+
+  log_info "Starting infrastructure cleanup with $SCRIPT_NAME"
 
   # Parse command line arguments
   parse_arguments "$@"
