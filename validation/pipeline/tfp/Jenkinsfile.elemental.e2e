@@ -22,6 +22,14 @@ node {
     def ansibleVarsFilename = "vars.yaml"
     def terraformVarsfilename = "cluster.tfvars"
 
+    if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
+      branch = "${env.BRANCH}"
+    }
+
+    if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
+      rancherRepo = "${env.REPO}"
+    }
+  
     if ("${env.QA_INFRA_REPO_BRANCH}" != "null" && "${env.QA_INFRA_REPO_BRANCH}" != "") {
       qaInfraBranch = "${env.QA_INFRA_REPO_BRANCH}"
     }
@@ -135,7 +143,7 @@ node {
               if ("${env.CLEANUP_RANCHER}" == "True" || "${env.CLEANUP_RANCHER}" == "true") {
                 try {
                     sh "docker run --volumes-from ${buildTestContainer} --name ${cleanupTestContainer} -t --env-file ${envFile} " +
-                    "${imageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh\""
+                    "${imageName} sh -c \"BUILD_DOWNSTREAM_CLUSTER=false ${workPath}pipeline/scripts/rancher_cleanup.sh\""
                 } catch(err) {
                   sh "docker stop ${buildTestContainer}"
                   sh "docker rm -v ${buildTestContainer}"
