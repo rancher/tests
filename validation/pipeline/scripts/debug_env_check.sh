@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Standard script metadata
+readonly SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_DIR="$(dirname "$0")"
+
+# Try to source airgap_lib.sh if available for consistent logging utilities (non-fatal)
+# shellcheck disable=SC1090
+if [[ -f "${SCRIPT_DIR}/airgap_lib.sh" ]]; then
+  source "${SCRIPT_DIR}/airgap_lib.sh"
+elif [[ -f "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh" ]]; then
+  source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+fi
+
 # Only run debug checks if DEBUG is enabled
 if [ "${DEBUG:-false}" != "true" ]; then
   echo "DEBUG mode is disabled, skipping debug checks"
