@@ -933,8 +933,8 @@ def generateEnvironmentFile() {
         awsSshPemKey = env.AWS_SSH_PEM_KEY
         awsSshKeyName = env.AWS_SSH_KEY_NAME
 
-        // Note: Avoid storing credentials in Jenkins environment variables for security
-        // These will be passed directly as Docker environment variables instead
+    // Note: Avoid storing credentials in Jenkins environment variables for security
+    // These will be passed directly as Docker environment variables instead
     }
 
     // Parse TERRAFORM_CONFIG to extract AWS infrastructure variables
@@ -1043,7 +1043,7 @@ def generateEnvironmentFile() {
     logInfo("  S3_REGION=${env.S3_REGION}")
     logInfo("  AWS_SSH_PEM_KEY=${awsSshPemKey ? 'SET' : 'NULL'}")
     logInfo("  AWS_SSH_KEY_NAME=${awsSshKeyName ? 'SET' : 'NULL'}")
-    
+
     // Debug: Log AWS infrastructure variables
     logInfo('AWS Infrastructure Variables:')
     awsConfigVars.each { key, value ->
@@ -1063,8 +1063,8 @@ def setupSSHKeys() {
         awsSshPemKey = env.AWS_SSH_PEM_KEY
         awsSshKeyName = env.AWS_SSH_KEY_NAME
 
-        // Note: Avoid storing credentials in Jenkins environment variables for security
-        // Pass credentials directly to functions that need them instead
+    // Note: Avoid storing credentials in Jenkins environment variables for security
+    // Pass credentials directly to functions that need them instead
     }
 
     if (awsSshPemKey && awsSshKeyName) {
@@ -1091,7 +1091,7 @@ def setupSSHKeys() {
                 // Validate key format
                 def keyContent = sh(script: "head -1 ${awsSshKeyName}", returnStdout: true).trim()
                 if (!keyContent.startsWith('-----BEGIN') && !keyContent.startsWith('ssh-rsa') && !keyContent.startsWith('ssh-ed25519')) {
-                    logWarning("SSH key format validation warning - unexpected key format")
+                    logWarning('SSH key format validation warning - unexpected key format')
                 }
             }
 
@@ -1099,7 +1099,6 @@ def setupSSHKeys() {
 
             // Store key path for cleanup
             env.SSH_KEY_PATH = "./tests/.ssh/${awsSshKeyName}"
-
         } catch (Exception e) {
             logError("SSH key setup failed: ${e.message}")
             // Clean up any partially created files
@@ -1149,7 +1148,7 @@ def cleanupSSHKeys() {
         }
     } catch (Exception e) {
         logWarning("SSH key cleanup encountered issues: ${e.message}")
-        // Continue with cleanup even if some steps fail
+    // Continue with cleanup even if some steps fail
     }
 
     logInfo('SSH key cleanup completed')
@@ -1192,7 +1191,6 @@ def validateSensitiveDataHandling() {
         if (!envFileContent.contains('withCredentials')) {
             logWarning('Environment file should mention withCredentials for security')
         }
-
     } catch (Exception e) {
         logWarning("Could not validate environment file content: ${e.message}")
     }
@@ -1312,13 +1310,13 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 
 def buildEnvironmentVariables(extraEnv) {
     def envVars = ''
-    
+
     // Always include DEBUG flag
     if (env.DEBUG) {
         def escapedValue = env.DEBUG.replace('"', '\\"').replace('$', '\\$')
         envVars += " -e \"DEBUG=${escapedValue}\""
     }
-    
+
     extraEnv.each { key, value ->
         // Skip null/empty values to avoid passing literal "null" or blanks
         if (value != null) {
@@ -1339,7 +1337,7 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
 
     // Validate required inputs
     if (!env.IMAGE_NAME) {
-        error "ERROR: IMAGE_NAME environment variable is not set"
+        error 'ERROR: IMAGE_NAME environment variable is not set'
     }
 
     // Escape container name to prevent issues
@@ -1353,7 +1351,7 @@ def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
                     cp validation/pipeline/scripts/debug_env_check.sh ./tmp_debug_env_check.sh || true
                     chmod +x ./tmp_debug_env_check.sh || true
                 '''
-                logInfo("DEBUG helper copied to workspace: ./tmp_debug_env_check.sh")
+                logInfo('DEBUG helper copied to workspace: ./tmp_debug_env_check.sh')
             } else {
                 // Fallback: create a minimal debug helper so container runs still produce useful output
                 writeFile file: 'tmp_debug_env_check.sh', text: '''#!/bin/bash
@@ -1366,7 +1364,7 @@ env | egrep 'AWS|S3|TF|RANCHER|RKE2|HOSTNAME' || env
 echo "=== END DEBUG ==="
 '''
                 sh 'chmod +x ./tmp_debug_env_check.sh || true'
-                logInfo("FALLBACK debug helper created at ./tmp_debug_env_check.sh")
+                logInfo('FALLBACK debug helper created at ./tmp_debug_env_check.sh')
             }
         } catch (err) {
             logWarning("Failed to prepare debug helper in workspace: ${err}")
@@ -1391,7 +1389,7 @@ echo "=== END DEBUG ==="
             logWarning("Failed to check Docker volume ${env.VALIDATION_VOLUME}: ${e.message}")
         }
     } else {
-        logWarning("VALIDATION_VOLUME environment variable is not set")
+        logWarning('VALIDATION_VOLUME environment variable is not set')
     }
 
     // Add qa-infra automation volume
@@ -1447,7 +1445,7 @@ echo "=== END DEBUG ==="
         echo "Executing script: /tmp/script.sh"
         /bin/bash /tmp/debug_env_check.sh && exec /bin/bash /tmp/script.sh
     \' '''
-    
+
     // If DEBUG is disabled, use a simpler execution command without debug output
     if (!env.DEBUG.toBoolean()) {
         executionCmd = '''/bin/bash -c 'exec /bin/bash /tmp/script.sh' '''
@@ -1477,7 +1475,7 @@ def executeDockerCommandWithCredentials(dockerCmd, scriptFile, extraEnv = [:]) {
     ]) {
         // Add PRIVATE_REGISTRY_PASSWORD from environment if available
         if (env.PRIVATE_REGISTRY_PASSWORD) {
-            // This is already in the environment from parameters, no need to interpolate
+        // This is already in the environment from parameters, no need to interpolate
         }
 
         // Create a temporary environment file with credentials
@@ -1495,7 +1493,7 @@ def executeDockerCommandWithCredentials(dockerCmd, scriptFile, extraEnv = [:]) {
                 sh modifiedDockerCmd
             }
 
-            logInfo("✅ Docker command executed successfully with environment file mounting")
+            logInfo('✅ Docker command executed successfully with environment file mounting')
             dockerSuccess = true
         } catch (Exception primaryException) {
             logWarning("Primary Docker command failed: ${primaryException.message}")
@@ -1515,7 +1513,7 @@ def executeDockerCommandWithCredentials(dockerCmd, scriptFile, extraEnv = [:]) {
                     sh modifiedFallbackCmd
                 }
 
-                logInfo("✅ Fallback Docker command executed successfully with direct environment variables")
+                logInfo('✅ Fallback Docker command executed successfully with direct environment variables')
                 dockerSuccess = true
             } catch (Exception fallbackException) {
                 logError('All Docker execution approaches failed:')
@@ -1544,7 +1542,7 @@ def executeDockerCommandWithCredentials(dockerCmd, scriptFile, extraEnv = [:]) {
     try {
         if (credentialEnvFile && fileExists(credentialEnvFile)) {
             sh "shred -vfz -n 3 ${credentialEnvFile} 2>/dev/null || rm -f ${credentialEnvFile}"
-            logInfo("Credential environment file securely shredded")
+            logInfo('Credential environment file securely shredded')
         }
     } catch (Exception e) {
         logWarning("Failed to cleanup credential environment file: ${e.message}")
@@ -1558,7 +1556,7 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
 
     // Validate required inputs
     if (!env.IMAGE_NAME) {
-        error "ERROR: IMAGE_NAME environment variable is not set for fallback command"
+        error 'ERROR: IMAGE_NAME environment variable is not set for fallback command'
     }
 
     // Escape container name to prevent issues
@@ -1582,7 +1580,7 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
             logWarning("Failed to check Docker volume ${env.VALIDATION_VOLUME} (fallback): ${e.message}")
         }
     } else {
-        logWarning("VALIDATION_VOLUME environment variable is not set (fallback)")
+        logWarning('VALIDATION_VOLUME environment variable is not set (fallback)')
     }
 
     // Add qa-infra automation volume
@@ -1632,7 +1630,7 @@ def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
         echo "Executing script: /tmp/script.sh"
         /bin/bash /tmp/debug_env_check.sh && exec /bin/bash /tmp/script.sh
     \' '''
-    
+
     // If DEBUG is disabled, use a simpler execution command without debug output
     if (!env.DEBUG.toBoolean()) {
         executionCmd = '''/bin/bash -c 'exec /bin/bash /tmp/script.sh' '''
@@ -1652,7 +1650,7 @@ def buildInventoryMount() {
     }
     // For new deployments, the inventory will be created in shared volume
     // No need to mount from Jenkins workspace - it will be available via shared volume
-    logInfo("Inventory file will be created in shared volume during infrastructure deployment")
+    logInfo('Inventory file will be created in shared volume during infrastructure deployment')
     return ''
 }
 
@@ -1768,7 +1766,6 @@ def provideDockerDiagnostics() {
         logInfo('System resources:')
         sh 'free -h 2>/dev/null || echo "Memory info not available"'
         sh 'df -h 2>/dev/null | head -5 || echo "Disk info not available"'
-
     } catch (Exception e) {
         logWarning("Docker diagnostics failed: ${e.message}")
     }
@@ -1831,12 +1828,12 @@ def buildCredentialEnvironmentVariables() {
         'AWS_SSH_KEY_NAME',
         'SLACK_WEBHOOK'
     ]
-    
+
     // Add PRIVATE_REGISTRY_PASSWORD if it exists in the environment
     if (env.PRIVATE_REGISTRY_PASSWORD) {
         credentialEnvVars.add('PRIVATE_REGISTRY_PASSWORD')
     }
-    
+
     return credentialEnvVars
 }
 
@@ -1844,9 +1841,9 @@ def createCredentialEnvironmentFile() {
     // Create a temporary environment file with credentials
     def timestamp = System.currentTimeMillis()
     def credentialEnvFile = "docker-credentials-${timestamp}.env"
-    
+
     def envContent = []
-    
+
     // Add AWS credentials
     if (env.AWS_ACCESS_KEY_ID) {
         envContent.add("AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}")
@@ -1854,7 +1851,7 @@ def createCredentialEnvironmentFile() {
     if (env.AWS_SECRET_ACCESS_KEY) {
         envContent.add("AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}")
     }
-    
+
     // Add SSH credentials
     if (env.AWS_SSH_PEM_KEY) {
         envContent.add("AWS_SSH_PEM_KEY=${env.AWS_SSH_PEM_KEY}")
@@ -1862,23 +1859,23 @@ def createCredentialEnvironmentFile() {
     if (env.AWS_SSH_KEY_NAME) {
         envContent.add("AWS_SSH_KEY_NAME=${env.AWS_SSH_KEY_NAME}")
     }
-    
+
     // Add Slack webhook
     if (env.SLACK_WEBHOOK) {
         envContent.add("SLACK_WEBHOOK=${env.SLACK_WEBHOOK}")
     }
-    
+
     // Add private registry password
     if (env.PRIVATE_REGISTRY_PASSWORD) {
         envContent.add("PRIVATE_REGISTRY_PASSWORD=${env.PRIVATE_REGISTRY_PASSWORD}")
     }
-    
+
     // Write the environment file
     writeFile file: credentialEnvFile, text: envContent.join('\n')
-    
+
     // Set secure permissions
     sh "chmod 600 ${credentialEnvFile}"
-    
+
     logInfo("Created credential environment file: ${credentialEnvFile}")
     return credentialEnvFile
 }
@@ -1886,7 +1883,7 @@ def createCredentialEnvironmentFile() {
 def addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile) {
     // Add credential environment file to Docker command without exposing credentials in logs
     def modifiedCmd = dockerCmd
-    
+
     if (credentialEnvFile) {
         // Find the position where we should insert the credential environment file
         // This should be after the container name but before the image name
@@ -1906,7 +1903,7 @@ def addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile) {
             }
         }
     }
-    
+
     return modifiedCmd
 }
 
@@ -1963,7 +1960,7 @@ def cleanupContainersAndVolumes() {
     try {
         if (fileExists(env.ENV_FILE)) {
             sh "shred -vfz -n 3 ${env.ENV_FILE} 2>/dev/null || rm -f ${env.ENV_FILE}"
-            logInfo("Environment file securely shredded")
+            logInfo('Environment file securely shredded')
         }
     } catch (Exception envCleanupException) {
         logWarning("Environment file cleanup encountered issues: ${envCleanupException.message}")
@@ -2102,7 +2099,7 @@ def deployRancherWithConsolidatedScript() {
 #!/bin/bash
 set -e
 # Source the minimal Rancher deployment wrapper
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_deploy_rancher_minimal.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible_deploy_rancher.sh
 '''
 
     // Pass required environment variables to container
@@ -2138,7 +2135,6 @@ def archiveRKE2DeploymentArtifacts() {
         'node_role_verification.log'
     ])
 }
-
 
 // ========================================
 // ERROR HANDLING FUNCTIONS
@@ -2252,7 +2248,6 @@ def extractStateFromContainer() {
     fi
     """
 }
-
 
 def archiveInfrastructureState() {
     logInfo('Archiving infrastructure state')
@@ -2578,8 +2573,6 @@ def validateInfrastructurePrerequisites() {
     }
 }
 
-
-
 def initializeOpenTofu() {
     logInfo('Initializing OpenTofu with S3 backend')
 
@@ -2604,7 +2597,6 @@ set -e
 
     executeScriptInContainer(workspaceScript)
 }
-
 
 // ========================================
 // ANSIBLE DEPLOYMENT FUNCTIONS
@@ -2743,8 +2735,8 @@ def setupAnsibleSSHKeys() {
         awsSshPemKey = env.AWS_SSH_PEM_KEY
         awsSshKeyName = env.AWS_SSH_KEY_NAME
 
-        // Note: Avoid storing credentials in Jenkins environment variables for security
-        // These are used locally within this function scope only
+    // Note: Avoid storing credentials in Jenkins environment variables for security
+    // These are used locally within this function scope only
     }
 
     // Debug: Show current environment variables
