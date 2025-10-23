@@ -13,9 +13,7 @@ readonly QA_INFRA_WORK_PATH
 TERRAFORM_VARS_FILENAME="${TERRAFORM_VARS_FILENAME:-cluster.tfvars}"
 readonly TERRAFORM_VARS_FILENAME
 
-log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
-log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
-log_warning() { echo "[WARN] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
+# Logging functions will be provided by airgap_lib.sh
 
 validate_prerequisites() {
   # Ensure tofu binary is available or fail fast

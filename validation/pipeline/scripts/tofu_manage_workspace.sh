@@ -11,9 +11,7 @@ readonly SCRIPT_DIR
 QA_INFRA_WORK_PATH="${QA_INFRA_WORK_PATH:-/root/go/src/github.com/rancher/qa-infra-automation}"
 readonly QA_INFRA_WORK_PATH
 
-log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
-log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
-log_warning() { echo "[WARN] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
+# Logging functions will be provided by airgap_lib.sh
 
 validate_prerequisites() {
   # If logging helper already exists, assume airgap library is loaded

@@ -17,8 +17,7 @@ readonly QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
 # LOGGING FUNCTIONS
 # =============================================================================
 
-log_info() { echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
-log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
+# Logging functions will be provided by airgap_lib.sh
 
 # =============================================================================
 # PREREQUISITE VALIDATION
@@ -62,12 +61,7 @@ validate_prerequisites() {
 # SCRIPT CONFIGURATION
 # =============================================================================
 
-# Load the airgap library
-# Use absolute path since script may be executed from /tmp/
-# shellcheck disable=SC1090
-if [[ -f "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh" ]]; then
-  source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
-fi
+# Load the airgap library (robust sourcing is handled by validate_prerequisites)
 
 # =============================================================================
 # MAIN DEPLOYMENT FUNCTION
