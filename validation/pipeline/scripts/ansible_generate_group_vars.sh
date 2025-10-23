@@ -59,11 +59,8 @@ validate_prerequisites() {
 # SCRIPT CONFIGURATION
 # =============================================================================
 
-# Load the airgap library (only if present at known absolute path)
-# shellcheck disable=SC1090
-if [[ -f "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh" ]]; then
-  source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
-fi
+# airgap_lib sourcing is handled by validate_prerequisites() to allow flexible locations
+# and avoid unconditional absolute-path sourcing here.
 
 # =============================================================================
 # MAIN FUNCTION
@@ -103,6 +100,9 @@ main() {
     exit 1
   fi
 }
+
+# Error handling
+trap 'log_error "Script failed at line $LINENO"' ERR
 
 # Execute main function
 main "$@"

@@ -5,10 +5,28 @@ set -e
 # Consolidated script that handles RKE2 tarball deployment and validation
 # Replaces: ansible_run_rke2_deployment.sh, ansible_setup_kubectl.sh, ansible_validate_rancher.sh
 
-# Load the airgap library
+# Load the airgap library (try multiple candidate locations)
 # shellcheck disable=SC1090
-if [[ -f "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh" ]]; then
-  source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+if ! type log_info >/dev/null 2>&1; then
+  lib_candidates=(
+    "${SCRIPT_DIR}/airgap_lib.sh"
+    "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+    "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+    "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+  )
+
+  for lib in "${lib_candidates[@]}"; do
+    if [[ -f "$lib" ]]; then
+      source "$lib"
+      log_info "Sourced airgap library from: $lib"
+      break
+    fi
+  done
+
+  if ! type log_info >/dev/null 2>&1; then
+    echo "[ERROR] airgap_lib.sh not found in expected locations: ${lib_candidates[*]}" >&2
+    exit 1
+  fi
 fi
 
 # =============================================================================

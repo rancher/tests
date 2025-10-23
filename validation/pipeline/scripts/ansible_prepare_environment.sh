@@ -5,8 +5,7 @@ set -e
 # Consolidated script that handles group_vars generation, inventory setup, and SSH key configuration
 # Replaces: ansible_generate_group_vars.sh, ansible_setup_ssh_keys.sh, ansible_run_ssh_setup.sh
 
-# Load the airgap library
-source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+# airgap_lib will be sourced after SCRIPT_* constants are defined (see below)
 
 # =============================================================================
 # SCRIPT CONFIGURATION
@@ -17,6 +16,30 @@ readonly SCRIPT_DIR="$(dirname "$0")"
 readonly QA_INFRA_REPO_URL="${QA_INFRA_REPO_URL:-https://github.com/rancher/qa-infra-automation.git}"
 readonly QA_INFRA_REPO_BRANCH="${QA_INFRA_REPO_BRANCH:-main}"
 readonly QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
+ 
+# Load the airgap library (try multiple candidate locations)
+# shellcheck disable=SC1090
+if ! type log_info >/dev/null 2>&1; then
+  lib_candidates=(
+    "${SCRIPT_DIR}/airgap_lib.sh"
+    "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+    "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+    "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+  )
+ 
+  for lib in "${lib_candidates[@]}"; do
+    if [[ -f "$lib" ]]; then
+      source "$lib"
+      log_info "Sourced airgap library from: $lib"
+      break
+    fi
+  done
+ 
+  if ! type log_info >/dev/null 2>&1; then
+    echo "[ERROR] airgap_lib.sh not found in expected locations: ${lib_candidates[*]}" >&2
+    exit 1
+  fi
+fi
 
 # =============================================================================
 # ANSIBLE ENVIRONMENT PREPARATION

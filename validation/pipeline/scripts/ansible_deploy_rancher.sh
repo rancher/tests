@@ -5,17 +5,35 @@ set -e
 # Consolidated script that handles Rancher Helm deployment and validation
 # Replaces: ansible_run_rancher_deployment.sh
 
-# Load the airgap library
-source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
-
-# =============================================================================
-# SCRIPT CONFIGURATION
-# =============================================================================
-
+# Standard script metadata
 readonly SCRIPT_NAME="$(basename "$0")"
 readonly SCRIPT_DIR="$(dirname "$0")"
 readonly QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
 readonly RANCHER_PLAYBOOK="$QA_INFRA_CLONE_PATH/ansible/rke2/airgap/playbooks/deploy/rancher-helm-deploy-playbook.yml"
+ 
+# Load the airgap library (try multiple candidate locations)
+# shellcheck disable=SC1090
+if ! type log_info >/dev/null 2>&1; then
+  lib_candidates=(
+    "${SCRIPT_DIR}/airgap_lib.sh"
+    "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_lib.sh"
+    "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+    "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+  )
+ 
+  for lib in "${lib_candidates[@]}"; do
+    if [[ -f "$lib" ]]; then
+      source "$lib"
+      log_info "Sourced airgap library from: $lib"
+      break
+    fi
+  done
+ 
+  if ! type log_info >/dev/null 2>&1; then
+    echo "[ERROR] airgap_lib.sh not found in expected locations: ${lib_candidates[*]}" >&2
+    exit 1
+  fi
+fi
 
 # =============================================================================
 # RANCHER DEPLOYMENT
@@ -223,17 +241,10 @@ run_rancher_playbook() {
         exit 1
     fi
 
-    # Prepare extra variables
-    local extra_vars=""
-    if [[ -n "${RANCHER_VERSION}" ]]; then
-        extra_vars="-e rancher_version=${RANCHER_VERSION}"
-        log_info "Passing rancher_version as extra variable: ${RANCHER_VERSION}"
-    fi
-
-    if [[ -n "${HOSTNAME_PREFIX}" ]]; then
-        extra_vars="$extra_vars -e hostname_prefix=${HOSTNAME_PREFIX}"
-        log_info "Passing hostname_prefix as extra variable: ${HOSTNAME_PREFIX}"
-    fi
+    # Prepare extra variables safely as an array to avoid word-splitting/globbing
+    local -a extra_args=()
+    [[ -n "${RANCHER_VERSION:-}" ]] && { extra_args+=( -e "rancher_version=${RANCHER_VERSION}" ); log_info "Passing rancher_version as extra variable: ${RANCHER_VERSION}"; }
+    [[ -n "${HOSTNAME_PREFIX:-}" ]] && { extra_args+=( -e "hostname_prefix=${HOSTNAME_PREFIX}" ); log_info "Passing hostname_prefix as extra variable: ${HOSTNAME_PREFIX}"; }
 
     # Change to playbook directory
     cd "$QA_INFRA_CLONE_PATH/ansible/rke2/airgap" || {
@@ -241,10 +252,10 @@ run_rancher_playbook() {
         exit 1
     }
 
-    log_info "Executing: ansible-playbook -i $inventory_file $RANCHER_PLAYBOOK -v $extra_vars"
+    log_info "Executing: ansible-playbook -i $inventory_file $RANCHER_PLAYBOOK -v ${extra_args[*]}"
 
     # Run the playbook with logging
-    if ansible-playbook -i "$inventory_file" "$RANCHER_PLAYBOOK" -v $extra_vars 2>&1 | tee "$log_file"; then
+    if ansible-playbook -i "$inventory_file" "$RANCHER_PLAYBOOK" -v "${extra_args[@]}" 2>&1 | tee "$log_file"; then
         log_success "Rancher deployment playbook completed successfully"
         export RANCHER_ANSIBLE_EXIT_CODE=0
     else
