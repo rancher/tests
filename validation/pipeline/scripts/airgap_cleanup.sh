@@ -530,9 +530,9 @@ perform_infrastructure_destruction() {
 
         # Run the cleanup script
         if bash "$cleanup_script" --local-path; then
-            log_cleanup "✓ Infrastructure destruction completed successfully"
+            log_cleanup "[OK] Infrastructure destruction completed successfully"
         else
-            log_cleanup "✗ Infrastructure destruction failed or had issues"
+            log_cleanup "[FAIL] Infrastructure destruction failed or had issues"
         fi
     else
         log_cleanup "Infrastructure cleanup script not found, attempting manual destruction..."
@@ -566,9 +566,9 @@ manual_infrastructure_destruction() {
 
             # Attempt destruction
             if tofu destroy -auto-approve -var-file="$TERRAFORM_VARS_FILENAME"; then
-                log_cleanup "✓ Manual infrastructure destruction completed"
+                log_cleanup "[OK] Manual infrastructure destruction completed"
             else
-                log_cleanup "✗ Manual infrastructure destruction failed"
+                log_cleanup "[FAIL] Manual infrastructure destruction failed"
             fi
         else
             log_cleanup "Failed to select workspace for destruction: $workspace"

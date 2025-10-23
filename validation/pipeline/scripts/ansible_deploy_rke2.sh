@@ -94,26 +94,26 @@ validate_deployment_prerequisites() {
     log_info "Checking required deployment files:"
     for file in "${required_files[@]}"; do
         if [[ -f "$file" && -s "$file" ]]; then
-            log_info "  ✓ $file exists and is not empty"
+            log_info "  [OK] $file exists and is not empty"
         else
-            log_error "  ✗ $file is missing or empty"
+            log_error "  [FAIL] $file is missing or empty"
             ((validation_errors++))
         fi
     done
 
     # Check qa-infra-automation repository
     if [[ -d "$QA_INFRA_CLONE_PATH" ]]; then
-        log_info "  ✓ qa-infra-automation repository exists"
+        log_info "  [OK] qa-infra-automation repository exists"
     else
-        log_error "  ✗ qa-infra-automation repository not found"
+        log_error "  [FAIL] qa-infra-automation repository not found"
         ((validation_errors++))
     fi
 
     # Check RKE2 playbook
     if [[ -f "$RKE2_PLAYBOOK" ]]; then
-        log_info "  ✓ RKE2 deployment playbook exists: $RKE2_PLAYBOOK"
+        log_info "  [OK] RKE2 deployment playbook exists: $RKE2_PLAYBOOK"
     else
-        log_error "  ✗ RKE2 deployment playbook not found: $RKE2_PLAYBOOK"
+        log_error "  [FAIL] RKE2 deployment playbook not found: $RKE2_PLAYBOOK"
         ((validation_errors++))
     fi
 
@@ -122,17 +122,17 @@ validate_deployment_prerequisites() {
     log_info "Checking environment variables:"
     for var in "${required_vars[@]}"; do
         if [[ -n "${!var}" ]]; then
-            log_info "  ✓ $var=${!var}"
+            log_info "  [OK] $var=${!var}"
         else
-            log_warning "  ⚠ $var is not set"
+            log_warning "  [WARN] $var is not set"
         fi
     done
 
     # Check Ansible availability
     if command -v ansible-playbook &>/dev/null; then
-        log_info "  ✓ ansible-playbook is available"
+        log_info "  [OK] ansible-playbook is available"
     else
-        log_error "  ✗ ansible-playbook not found"
+        log_error "  [FAIL] ansible-playbook not found"
         ((validation_errors++))
     fi
 

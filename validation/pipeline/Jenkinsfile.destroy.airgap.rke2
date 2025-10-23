@@ -1029,7 +1029,7 @@ def cleanupS3WorkspaceDirectory() {
                 echo "ERROR: Failed to delete workspace directory"
                 exit 1
             else
-                echo "✅ Successfully deleted workspace directory"
+                echo "[OK] Successfully deleted workspace directory"
             fi
         else
             echo "ℹ️ Workspace directory does not exist in S3 - nothing to clean up"
@@ -1051,7 +1051,7 @@ def cleanupS3WorkspaceDirectory() {
                 echo "ERROR: Failed to delete terraform state file"
                 exit 1
             else
-                echo "✅ Successfully deleted terraform state file"
+                echo "[OK] Successfully deleted terraform state file"
             fi
         else
             echo "ℹ️ Terraform state file does not exist in S3 - nothing to clean up"
@@ -1097,11 +1097,11 @@ def logInfo(message) {
 }
 
 def logError(message) {
-  echo "❌ [ERROR] ${new Date().format('HH:mm:ss')} - ${message}"
+  echo "[FAIL] [ERROR] ${new Date().format('HH:mm:ss')} - ${message}"
 }
 
 def logWarning(message) {
-  echo "⚠️ [WARNING] ${new Date().format('HH:mm:ss')} - ${message}"
+  echo "[WARN] [WARNING] ${new Date().format('HH:mm:ss')} - ${message}"
 }
 
 def logDebug(message) {

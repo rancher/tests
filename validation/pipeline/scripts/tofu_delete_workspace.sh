@@ -122,7 +122,7 @@ echo "Verifying workspace deletion..."
 WORKSPACE_STILL_EXISTS=$(tofu -chdir=tofu/aws/modules/airgap workspace list | grep -w "${TARGET_WORKSPACE}" || true)
 
 if [ -z "$WORKSPACE_STILL_EXISTS" ]; then
-    echo "✅ Workspace '${TARGET_WORKSPACE}' deleted successfully"
+    echo "[OK] Workspace '${TARGET_WORKSPACE}' deleted successfully"
 else
     echo "ERROR: Workspace '${TARGET_WORKSPACE}' still exists after deletion attempt"
     exit 1
