@@ -10,18 +10,7 @@
  * The pipeline uses the ANSIBLE_VARIABLES parameter to provide the complete
  * group_vars/all.yml content for Ansible configuration.
  *
- * Improvements made:
- * - Extracted constants for better maintainability
- * - Broke down large functions into smaller, focused functions
- * - Improved error handling with consistent patterns
- * - Added structured logging with timestamps
- * - Simplified Docker execution logic
- * - Enhanced parameter validation with detailed error messages
- * - Reduced code duplication through helper functions
- * - Added comprehensive documentation and inline comments
- * - Improved resource cleanup patterns
- * - Complete Ansible integration for RKE2 airgap deployment
- */
+**/
 
 // ========================================
 // CONSTANTS AND CONFIGURATION
