@@ -72,7 +72,6 @@ def dockerHelper() {
     return dockerHelperInstance
 }
 
-
 pipeline {
     agent any
 
