@@ -17,10 +17,13 @@ node {
     def qaInfraRepo = "https://github.com/rancher/qa-infra-automation"
     def config = env.CONFIG
     def ansibleConfig = env.ANSIBLE_CONFIG
-    def terraformConfig = env.TERRAFORM_CONFIG 
+    def terraformConfig = env.TERRAFORM_CONFIG
     def filename = "config.yaml"
     def ansibleVarsFilename = "vars.yaml"
     def terraformVarsfilename = "cluster.tfvars"
+    def elementalTerraformVarsfilename = "elemental.tfvars"
+    def elementalTerraformConfig = env.ELEMENTAL_TERRAFORM_CONFIG
+    def googleCredentialsFilename = "service_account.json"
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"
@@ -61,7 +64,9 @@ node {
                           string(credentialsId: 'RANCHER_BYO_TLS_CERT', variable: 'RANCHER_BYO_TLS_CERT'),
                           string(credentialsId: 'RANCHER_BYO_TLS_KEY', variable: 'RANCHER_BYO_TLS_KEY'),
                           string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK'),
-                          string(credentialsId: 'QASE_AUTOMATION_TOKEN', variable: 'QASE_AUTOMATION_TOKEN')]) {
+                          string(credentialsId: 'QASE_AUTOMATION_TOKEN', variable: 'QASE_AUTOMATION_TOKEN'),
+                          string(credentialsId: 'GOOGLE_CLOUD_PROJECT', variable: 'GOOGLE_CLOUD_PROJECT'),
+                          string(credentialsId: 'GOOGLE_SERVICE_ACCOUNT', variable: 'GOOGLE_SERVICE_ACCOUNT')]) {
           
         withEnv(paramsMap) {
           stage('Checkout') {
@@ -93,6 +98,8 @@ node {
               terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC)
               terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS)
               ansibleConfig = ansibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
+              elementalTerraformConfig = elementalTerraformConfig.replace('${GOOGLE_CLOUD_PROJECT}', env.GOOGLE_CLOUD_PROJECT)
+              elementalTerraformConfig = elementalTerraformConfig.replace('${GOOGLE_SERVICE_ACCOUNT}', googleCredentialsFilename)
 
 
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
@@ -113,6 +120,11 @@ node {
                 dir ("./tofu/aws/modules/cluster_nodes") {
                   writeFile file: terraformVarsfilename, text: terraformConfig
                 }
+                dir ("./tofu/gcp/modules/elemental_nodes") {
+                  def decoded = new String(env.GOOGLE_SERVICE_ACCOUNT.decodeBase64())
+                  writeFile file: googleCredentialsFilename, text: decoded
+                  writeFile file: elementalTerraformVarsfilename, text: elementalTerraformConfig
+                }
               }
               
               dir ("./") {
@@ -130,7 +142,7 @@ node {
             stage("Build Environment") {
               try {
                 sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
-                "${imageName} sh -c \"${workPath}pipeline/scripts/setup_environment.sh && ${workPath}pipeline/scripts/build_qase_auto_testrun.sh\""
+                "${imageName} sh -c \"${workPath}pipeline/scripts/setup_environment.sh && chmod +x ${workPath}pipeline/scripts/build_elemental_qa_infra.sh && ${workPath}pipeline/scripts/build_elemental_qa_infra.sh\""
               } catch(err) {
                   sh "docker stop ${buildTestContainer}"
                   sh "docker rm -v ${buildTestContainer}"
@@ -143,7 +155,7 @@ node {
               if ("${env.CLEANUP_RANCHER}" == "True" || "${env.CLEANUP_RANCHER}" == "true") {
                 try {
                     sh "docker run --volumes-from ${buildTestContainer} --name ${cleanupTestContainer} -t --env-file ${envFile} " +
-                    "${imageName} sh -c \"BUILD_DOWNSTREAM_CLUSTER=false ${workPath}pipeline/scripts/rancher_cleanup.sh\""
+                    "${imageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh && chmod +x ${workPath}pipeline/scripts/destroy_elemental_qa_infra.sh && ${workPath}pipeline/scripts/destroy_elemental_qa_infra.sh\""
                 } catch(err) {
                   sh "docker stop ${buildTestContainer}"
                   sh "docker rm -v ${buildTestContainer}"
