@@ -62,7 +62,7 @@ class PipelineConfig {
 // ========================================
 
 // Lazily-loadable Docker helper accessor (must be defined before pipeline execution)
-def dockerHelperInstance = null
+dockerHelperInstance = null
 
 def dockerHelper() {
     if (dockerHelperInstance == null) {
