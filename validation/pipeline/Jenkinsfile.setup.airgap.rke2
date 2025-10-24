@@ -409,7 +409,7 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
                                 'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
                                 'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
                             ]
-                            executeScriptInContainer(cleanupScript, cleanupEnvVars)
+                            dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
                         }
                     }
                 }
@@ -486,7 +486,7 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
                                 'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
                                 'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
                             ]
-                            executeScriptInContainer(cleanupScript, cleanupEnvVars)
+                            dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
                         }
                     }
                 }
@@ -538,7 +538,7 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
                                     'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
                                     'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
                                 ]
-                                executeScriptInContainer(cleanupScript, cleanupEnvVars)
+                                dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
                             }
 
                             throw e
@@ -609,7 +609,7 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
                                     'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
                                     'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
                                 ]
-                                executeScriptInContainer(cleanupScript, cleanupEnvVars)
+                                dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
                             }
 
                             throw e
@@ -698,7 +698,7 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
                         'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
                         'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
                     ]
-                    executeScriptInContainer(cleanupScript, cleanupEnvVars)
+                    dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
                 }
 
                 sendSlackNotification([
@@ -730,7 +730,7 @@ perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
                         'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
                         'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
                     ]
-                    executeScriptInContainer(cleanupScript, cleanupEnvVars)
+                    dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
                 }
 
                 sendSlackNotification([
@@ -750,6 +750,16 @@ perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
             }
         }
     }
+}
+
+def dockerHelperInstance = null
+
+def dockerHelper() {
+    if (dockerHelperInstance == null) {
+        def helperScript = load('validation/pipeline/scripts/docker_helper.groovy')
+        dockerHelperInstance = helperScript.init(this)
+    }
+    return dockerHelperInstance
 }
 
 // ========================================
@@ -1280,622 +1290,6 @@ def createSharedVolume() {
     sh "docker volume create --name ${env.VALIDATION_VOLUME}"
 }
 
-def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = false) {
-    def timestamp = System.currentTimeMillis()
-    def containerName = "${env.BUILD_CONTAINER_NAME}-script-${timestamp}"
-    def scriptFile = "docker-script-${timestamp}.sh"
-
-    writeFile file: scriptFile, text: scriptContent
-
-    def envVars = buildEnvironmentVariables(extraEnv)
-    def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE} -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}"
-
-    // Prepare Docker command with environment file mounting
-    def dockerCmd = buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv)
-
-    // Execute Docker command with credentials and fallback strategy
-    executeDockerCommandWithCredentials(dockerCmd, scriptFile, extraEnv)
-}
-
-def buildEnvironmentVariables(extraEnv) {
-    def envVars = ''
-
-    // Always include DEBUG flag
-    if (env.DEBUG) {
-        def escapedValue = env.DEBUG.replace('"', '\\"').replace('$', '\\$')
-        envVars += " -e \"DEBUG=${escapedValue}\""
-    }
-
-    extraEnv.each { key, value ->
-        // Skip null/empty values to avoid passing literal "null" or blanks
-        if (value != null) {
-            def strVal = value.toString()
-            if (strVal.trim()) {
-                // Properly escape the value to prevent command injection
-                def escapedValue = strVal.replace('"', '\\"').replace('$', '\\$')
-                envVars += " -e \"${key}=${escapedValue}\""
-            }
-        }
-    }
-    return envVars
-}
-
-def buildDockerCommand(containerName, scriptFile, envVars, workspaceEnv) {
-    def envFilePath = "${pwd()}/${env.ENV_FILE}"
-    def inventoryMount = buildInventoryMount()
-
-    // Validate required inputs
-    if (!env.IMAGE_NAME) {
-        error 'ERROR: IMAGE_NAME environment variable is not set'
-    }
-
-    // Escape container name to prevent issues
-    def escapedContainerName = containerName.replaceAll('[^a-zA-Z0-9_-]', '_')
-
-    // Copy helper into workspace and mount it into container (only if DEBUG is enabled)
-    if (env.DEBUG.toBoolean()) {
-        try {
-            if (fileExists('validation/pipeline/scripts/debug_env_check.sh')) {
-                sh '''
-                    cp validation/pipeline/scripts/debug_env_check.sh ./tmp_debug_env_check.sh || true
-                    chmod +x ./tmp_debug_env_check.sh || true
-                '''
-                logInfo('DEBUG helper copied to workspace: ./tmp_debug_env_check.sh')
-            } else {
-                // Fallback: create a minimal debug helper so container runs still produce useful output
-                writeFile file: 'tmp_debug_env_check.sh', text: '''#!/bin/bash
-set -e
-echo "=== INLINE FALLBACK DEBUG SCRIPT ==="
-echo "Printing /tmp/.env contents (masked):"
-[ -f /tmp/.env ] && sed -n '1,200p' /tmp/.env || echo "/tmp/.env not found"
-echo "Printing environment (selected keys):"
-env | egrep 'AWS|S3|TF|RANCHER|RKE2|HOSTNAME' || env
-echo "=== END DEBUG ==="
-'''
-                sh 'chmod +x ./tmp_debug_env_check.sh || true'
-                logInfo('FALLBACK debug helper created at ./tmp_debug_env_check.sh')
-            }
-        } catch (err) {
-            logWarning("Failed to prepare debug helper in workspace: ${err}")
-        }
-    }
-
-    // Build volume mounts with proper validation
-    def volumeMounts = []
-
-    // Add shared volume - check if Docker volume exists (not file system path)
-    if (env.VALIDATION_VOLUME) {
-        try {
-            // Check if Docker volume exists using docker command
-            def volumeCheck = sh(script: "docker volume inspect ${env.VALIDATION_VOLUME} >/dev/null 2>&1", returnStatus: true)
-            if (volumeCheck == 0) {
-                volumeMounts.add("-v \"${env.VALIDATION_VOLUME}:/root\"")
-                logInfo("Shared volume ${env.VALIDATION_VOLUME} found and will be mounted")
-            } else {
-                logWarning("Docker volume ${env.VALIDATION_VOLUME} does not exist")
-            }
-        } catch (Exception e) {
-            logWarning("Failed to check Docker volume ${env.VALIDATION_VOLUME}: ${e.message}")
-        }
-    } else {
-        logWarning('VALIDATION_VOLUME environment variable is not set')
-    }
-
-    // Add qa-infra automation volume
-    def qaInfraPath = "${pwd()}/qa-infra-automation"
-    if (fileExists(qaInfraPath)) {
-        volumeMounts.add("-v \"${qaInfraPath}:/root/go/src/github.com/rancher/qa-infra-automation\"")
-    } else {
-        logWarning("QA infra automation path not found: ${qaInfraPath}")
-    }
-
-    // Add script file volume
-    if (fileExists(scriptFile)) {
-        volumeMounts.add("-v \"${pwd()}/${scriptFile}:/tmp/script.sh\"")
-    }
-
-    // Add environment file volume
-    if (fileExists(envFilePath)) {
-        volumeMounts.add("-v \"${envFilePath}:/tmp/.env\"")
-    }
-
-    // Add debug helper script volume (only if DEBUG is enabled)
-    if (env.DEBUG.toBoolean() && fileExists('./tmp_debug_env_check.sh')) {
-        volumeMounts.add("-v \"${pwd()}/tmp_debug_env_check.sh:/tmp/debug_env_check.sh\"")
-    }
-
-    // Add inventory mount if available
-    if (inventoryMount) {
-        volumeMounts.add(inventoryMount.trim())
-    }
-
-    def volumeMountStr = volumeMounts.join(' \\\n            ')
-
-    // Construct the base command with proper escaping - NO secureCredentials here
-    // Credentials will be passed via withCredentials block to avoid interpolation
-    def baseCmd = """docker run --rm \\
-            ${volumeMountStr} \\
-            --name ${escapedContainerName} \\
-            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
-            ${envVars} \\
-            "${env.IMAGE_NAME.trim()}\""""
-
-    // Use a safer execution pattern; run the debug helper from /tmp (mounted) then execute the main script
-    def executionCmd = '''/bin/bash -c \'
-        echo "=== DEBUG: Container started ==="
-        echo "Current user: $(whoami)"
-        echo "Current working directory: $(pwd)"
-        echo "Environment file location: /tmp/.env"
-        echo "Checking if /tmp/.env exists:"
-        ls -la /tmp/.env || echo "FILE NOT FOUND"
-        echo "Directory contents of /tmp:"
-        ls -la /tmp/
-        echo "=== END DEBUG ==="
-        echo "Executing script: /tmp/script.sh"
-        /bin/bash /tmp/debug_env_check.sh && exec /bin/bash /tmp/script.sh
-    \' '''
-
-    // If DEBUG is disabled, use a simpler execution command without debug output
-    if (!env.DEBUG.toBoolean()) {
-        executionCmd = '''/bin/bash -c 'exec /bin/bash /tmp/script.sh' '''
-    }
-
-    return "${baseCmd} ${executionCmd}"
-}
-
-def executeDockerCommandWithCredentials(dockerCmd, scriptFile, extraEnv = [:]) {
-    def dockerSuccess = false
-    def credentialEnvFile = null
-
-    // Pre-execution validation
-    validateDockerEnvironment()
-
-    // Log the command for debugging (but mask sensitive data)
-    logInfo('Executing Docker command (sensitive data masked):')
-    logInfo(maskSensitiveData(dockerCmd))
-
-    // Execute Docker command within withCredentials block to avoid interpolation
-    withCredentials([
-        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
-        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
-        string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')
-    ]) {
-        // Add PRIVATE_REGISTRY_PASSWORD from environment if available
-        if (env.PRIVATE_REGISTRY_PASSWORD) {
-        // This is already in the environment from parameters, no need to interpolate
-        }
-
-        // Create a temporary environment file with credentials
-        credentialEnvFile = createCredentialEnvironmentFile()
-
-        // Modify the Docker command to use the credential environment file
-        def modifiedDockerCmd = addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile)
-
-        // Approach 1: Try the primary command first (with environment file mounting)
-        try {
-            logInfo('Attempting Docker execution with environment file mounting...')
-
-            // Add timeout and better error handling
-            timeout(time: 30, unit: 'MINUTES') {
-                sh modifiedDockerCmd
-            }
-
-            logInfo('[OK] Docker command executed successfully with environment file mounting')
-            dockerSuccess = true
-        } catch (Exception primaryException) {
-            logWarning("Primary Docker command failed: ${primaryException.message}")
-
-            // Cleanup any dangling containers before fallback
-            cleanupDanglingContainers()
-
-            // Approach 2: Try fallback with direct environment variables
-            try {
-                logInfo('Attempting Docker execution with direct environment variables...')
-                def fallbackCmd = buildFallbackDockerCommand(scriptFile, extraEnv)
-                def modifiedFallbackCmd = addCredentialEnvFileToDockerCommand(fallbackCmd, credentialEnvFile)
-                logInfo('Executing fallback docker command (sensitive data masked):')
-                logInfo(maskSensitiveData(modifiedFallbackCmd))
-
-                timeout(time: 30, unit: 'MINUTES') {
-                    sh modifiedFallbackCmd
-                }
-
-                logInfo('[OK] Fallback Docker command executed successfully with direct environment variables')
-                dockerSuccess = true
-            } catch (Exception fallbackException) {
-                logError('All Docker execution approaches failed:')
-                logError("  Primary (env file): ${primaryException.message}")
-                logError("  Fallback (direct env): ${fallbackException.message}")
-
-                // Additional diagnostic information
-                provideDockerDiagnostics()
-
-                throw fallbackException
-            }
-        }
-    }
-
-    if (!dockerSuccess) {
-        error('All Docker execution attempts failed')
-    }
-
-    // Cleanup script file and credential environment file
-    try {
-        sh "rm -f ${scriptFile}"
-    } catch (Exception e) {
-        logWarning("Failed to cleanup script file ${scriptFile}: ${e.message}")
-    }
-
-    try {
-        if (credentialEnvFile && fileExists(credentialEnvFile)) {
-            sh "shred -vfz -n 3 ${credentialEnvFile} 2>/dev/null || rm -f ${credentialEnvFile}"
-            logInfo('Credential environment file securely shredded')
-        }
-    } catch (Exception e) {
-        logWarning("Failed to cleanup credential environment file: ${e.message}")
-    }
-}
-
-def buildFallbackDockerCommand(scriptFile, extraEnv = [:]) {
-    def directEnvVars = buildDirectEnvironmentVariables()
-    def explicitEnvVars = buildEnvironmentVariables(extraEnv)
-    def inventoryMount = buildInventoryMount()
-
-    // Validate required inputs
-    if (!env.IMAGE_NAME) {
-        error 'ERROR: IMAGE_NAME environment variable is not set for fallback command'
-    }
-
-    // Escape container name to prevent issues
-    def escapedContainerName = "${env.BUILD_CONTAINER_NAME}-fallback".replaceAll('[^a-zA-Z0-9_-]', '_')
-
-    // Build volume mounts with proper validation (same as primary command)
-    def volumeMounts = []
-
-    // Add shared volume - check if Docker volume exists (not file system path)
-    if (env.VALIDATION_VOLUME) {
-        try {
-            // Check if Docker volume exists using docker command
-            def volumeCheck = sh(script: "docker volume inspect ${env.VALIDATION_VOLUME} >/dev/null 2>&1", returnStatus: true)
-            if (volumeCheck == 0) {
-                volumeMounts.add("-v \"${env.VALIDATION_VOLUME}:/root\"")
-                logInfo("Shared volume ${env.VALIDATION_VOLUME} found and will be mounted (fallback)")
-            } else {
-                logWarning("Docker volume ${env.VALIDATION_VOLUME} does not exist (fallback)")
-            }
-        } catch (Exception e) {
-            logWarning("Failed to check Docker volume ${env.VALIDATION_VOLUME} (fallback): ${e.message}")
-        }
-    } else {
-        logWarning('VALIDATION_VOLUME environment variable is not set (fallback)')
-    }
-
-    // Add qa-infra automation volume
-    def qaInfraPath = "${pwd()}/qa-infra-automation"
-    if (fileExists(qaInfraPath)) {
-        volumeMounts.add("-v \"${qaInfraPath}:/root/go/src/github.com/rancher/qa-infra-automation\"")
-    } else {
-        logWarning("QA infra automation path not found in fallback: ${qaInfraPath}")
-    }
-
-    // Add script file volume
-    if (fileExists(scriptFile)) {
-        volumeMounts.add("-v \"${pwd()}/${scriptFile}:/tmp/script.sh\"")
-    }
-
-    // Add debug helper script volume (only if DEBUG is enabled)
-    if (env.DEBUG.toBoolean() && fileExists('./tmp_debug_env_check.sh')) {
-        volumeMounts.add("-v \"${pwd()}/tmp_debug_env_check.sh:/tmp/debug_env_check.sh\"")
-    }
-
-    // Add inventory mount if available
-    if (inventoryMount) {
-        volumeMounts.add(inventoryMount.trim())
-    }
-
-    def volumeMountStr = volumeMounts.join(' \\\n            ')
-
-    // Construct the base command with proper escaping - NO secureCredentials here
-    // Credentials will be passed via withCredentials block to avoid interpolation
-    def baseCmd = """docker run --rm \\
-            ${volumeMountStr} \\
-            --name ${escapedContainerName} \\
-            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation \\
-            -e TF_WORKSPACE="${env.TF_WORKSPACE}" \\
-            -e TERRAFORM_VARS_FILENAME="${env.TERRAFORM_VARS_FILENAME}" \\
-            ${directEnvVars} \\
-            ${explicitEnvVars} \\
-            "${env.IMAGE_NAME.trim()}\""""
-
-    // Use a safer execution pattern for fallback
-    def executionCmd = '''/bin/bash -c \'
-        echo "=== DEBUG: Container started (FALLBACK MODE) ==="
-        echo "Current user: $(whoami)"
-        echo "Current working directory: $(pwd)"
-        echo "Environment variables passed directly"
-        echo "=== END DEBUG ==="
-        echo "Executing script: /tmp/script.sh"
-        /bin/bash /tmp/debug_env_check.sh && exec /bin/bash /tmp/script.sh
-    \' '''
-
-    // If DEBUG is disabled, use a simpler execution command without debug output
-    if (!env.DEBUG.toBoolean()) {
-        executionCmd = '''/bin/bash -c 'exec /bin/bash /tmp/script.sh' '''
-    }
-
-    return "${baseCmd} ${executionCmd}"
-}
-
-def buildInventoryMount() {
-    // Mount ansible-inventory.yml if it exists in Jenkins workspace
-    def inventoryFile = 'ansible-inventory.yml'
-    if (fileExists(inventoryFile)) {
-        logInfo("Mounting inventory file from Jenkins workspace: ${inventoryFile}")
-        return " -v ${pwd()}/${inventoryFile}:/root/ansible/rke2/airgap/inventory.yml"
-    } else {
-        logWarning("Inventory file not found in Jenkins workspace: ${inventoryFile}")
-    }
-    // For new deployments, the inventory will be created in shared volume
-    // No need to mount from Jenkins workspace - it will be available via shared volume
-    logInfo('Inventory file will be created in shared volume during infrastructure deployment')
-    return ''
-}
-
-def validateDockerEnvironment() {
-    logInfo('Validating Docker environment...')
-
-    try {
-        // Check if Docker is installed and running
-        def dockerVersion = sh(script: 'docker --version', returnStdout: true).trim()
-        logInfo("Docker version: ${dockerVersion}")
-
-        def dockerInfo = sh(script: 'docker info --format "Server Version: {{.ServerVersion}}"', returnStdout: true).trim()
-        logInfo("Docker server info: ${dockerInfo}")
-
-        // Check available disk space
-        def diskSpace = sh(script: 'df -h /var/lib/docker 2>/dev/null || df -h /', returnStdout: true).trim()
-        logInfo("Docker disk space: ${diskSpace}")
-
-        // Check if the Docker image exists
-        if (env.IMAGE_NAME) {
-            try {
-                def imageExists = sh(script: "docker image inspect ${env.IMAGE_NAME} --format='{{.Id}}' 2>/dev/null || echo 'NOT_FOUND'", returnStdout: true).trim()
-                if (imageExists == 'NOT_FOUND') {
-                    logWarning("Docker image ${env.IMAGE_NAME} not found locally - will be pulled during execution")
-                } else {
-                    logInfo("Docker image ${env.IMAGE_NAME} is available locally")
-                }
-            } catch (Exception e) {
-                logWarning("Could not validate Docker image: ${e.message}")
-            }
-        }
-
-        logInfo('[OK] Docker environment validation completed')
-    } catch (Exception e) {
-        error("[FAIL] Docker environment validation failed: ${e.message}")
-    }
-}
-
-def cleanupDanglingContainers() {
-    logInfo('Cleaning up any dangling containers...')
-
-    try {
-        // Remove any containers with our naming pattern that might be stuck
-        def containerPattern = env.BUILD_CONTAINER_NAME ?: 'build-container'
-
-        sh """
-            # Remove any containers that might be stuck
-            docker ps -a --filter 'name=${containerPattern}' --format '{{.Names}}' | xargs -r docker rm -f 2>/dev/null || true
-
-            # Remove any dangling containers older than 1 hour
-            docker container prune --force --filter 'until=1h' 2>/dev/null || true
-        """
-
-        logInfo('[OK] Container cleanup completed')
-    } catch (Exception e) {
-        logWarning("Container cleanup failed: ${e.message}")
-    }
-}
-
-def maskSensitiveData(command) {
-    def maskedCommand = command
-
-    // Mask AWS credentials - handle quoted values properly
-    maskedCommand = maskedCommand.replaceAll(/-e "AWS_ACCESS_KEY_ID=[^"]+"/, '-e "AWS_ACCESS_KEY_ID=***"')
-    maskedCommand = maskedCommand.replaceAll(/-e 'AWS_ACCESS_KEY_ID=[^']+'/, "-e 'AWS_ACCESS_KEY_ID=***'")
-    maskedCommand = maskedCommand.replaceAll(/AWS_ACCESS_KEY_ID=[^\s]+/, 'AWS_ACCESS_KEY_ID=***')
-
-    maskedCommand = maskedCommand.replaceAll(/-e "AWS_SECRET_ACCESS_KEY=[^"]+"/, '-e "AWS_SECRET_ACCESS_KEY=***"')
-    maskedCommand = maskedCommand.replaceAll(/-e 'AWS_SECRET_ACCESS_KEY=[^']+'/, "-e 'AWS_SECRET_ACCESS_KEY=***'")
-    maskedCommand = maskedCommand.replaceAll(/AWS_SECRET_ACCESS_KEY=[^\s]+/, 'AWS_SECRET_ACCESS_KEY=***')
-
-    // Mask SSH credentials
-    maskedCommand = maskedCommand.replaceAll(/-e "AWS_SSH_PEM_KEY=[^"]+"/, '-e "AWS_SSH_PEM_KEY=***"')
-    maskedCommand = maskedCommand.replaceAll(/-e 'AWS_SSH_PEM_KEY=[^']+'/, "-e 'AWS_SSH_PEM_KEY=***'")
-    maskedCommand = maskedCommand.replaceAll(/AWS_SSH_PEM_KEY=[^\s]+/, 'AWS_SSH_PEM_KEY=***')
-
-    maskedCommand = maskedCommand.replaceAll(/-e "AWS_SSH_KEY_NAME=[^"]+"/, '-e "AWS_SSH_KEY_NAME=***"')
-    maskedCommand = maskedCommand.replaceAll(/-e 'AWS_SSH_KEY_NAME=[^']+'/, "-e 'AWS_SSH_KEY_NAME=***'")
-    maskedCommand = maskedCommand.replaceAll(/AWS_SSH_KEY_NAME=[^\s]+/, 'AWS_SSH_KEY_NAME=***')
-
-    // Mask private registry credentials
-    maskedCommand = maskedCommand.replaceAll(/-e "PRIVATE_REGISTRY_PASSWORD=[^"]+"/, '-e "PRIVATE_REGISTRY_PASSWORD=***"')
-    maskedCommand = maskedCommand.replaceAll(/-e 'PRIVATE_REGISTRY_PASSWORD=[^']+'/, "-e 'PRIVATE_REGISTRY_PASSWORD=***'")
-    maskedCommand = maskedCommand.replaceAll(/PRIVATE_REGISTRY_PASSWORD=[^\s]+/, 'PRIVATE_REGISTRY_PASSWORD=***')
-
-    maskedCommand = maskedCommand.replaceAll(/-e "PRIVATE_REGISTRY_USERNAME=[^"]+"/, '-e "PRIVATE_REGISTRY_USERNAME=***"')
-    maskedCommand = maskedCommand.replaceAll(/-e 'PRIVATE_REGISTRY_USERNAME=[^']+'/, "-e 'PRIVATE_REGISTRY_USERNAME=***'")
-    maskedCommand = maskedCommand.replaceAll(/PRIVATE_REGISTRY_USERNAME=[^\s]+/, 'PRIVATE_REGISTRY_USERNAME=***')
-
-    // Mask Slack webhook
-    maskedCommand = maskedCommand.replaceAll(/-e "SLACK_WEBHOOK=[^"]+"/, '-e "SLACK_WEBHOOK=***"')
-    maskedCommand = maskedCommand.replaceAll(/-e 'SLACK_WEBHOOK=[^']+'/, "-e 'SLACK_WEBHOOK=***'")
-    maskedCommand = maskedCommand.replaceAll(/SLACK_WEBHOOK=[^\s]+/, 'SLACK_WEBHOOK=***')
-
-    return maskedCommand
-}
-
-def provideDockerDiagnostics() {
-    logInfo('=== DOCKER DIAGNOSTICS ===')
-
-    try {
-        logInfo('Docker system information:')
-        sh 'docker system df 2>/dev/null || echo "Docker system info not available"'
-
-        logInfo('Docker container status:')
-        def containerName = env.BUILD_CONTAINER_NAME ?: 'build-container'
-        sh "docker ps -a --filter 'name=${containerName}' 2>/dev/null || echo 'No matching containers found'"
-
-        logInfo('Docker images:')
-        def imageName = env.IMAGE_NAME ?: 'latest'
-        sh "docker images | grep '${imageName}' 2>/dev/null || echo 'Target image not found'"
-
-        logInfo('System resources:')
-        sh 'free -h 2>/dev/null || echo "Memory info not available"'
-        sh 'df -h 2>/dev/null | head -5 || echo "Disk info not available"'
-    } catch (Exception e) {
-        logWarning("Docker diagnostics failed: ${e.message}")
-    }
-
-    logInfo('=== END DOCKER DIAGNOSTICS ===')
-}
-
-def buildDirectEnvironmentVariables() {
-    def directEnvVars = ''
-    def envFileExists = fileExists(env.ENV_FILE)
-
-    if (envFileExists) {
-        try {
-            def fileContent = readFile file: env.ENV_FILE
-            fileContent.split('\n').each { line ->
-                line = line.trim()
-                if (line && !line.startsWith('#') && line.contains('=')) {
-                    def parts = line.split('=', 2)
-                    if (parts.length == 2) {
-                        def key = parts[0].trim()
-                        def value = parts[1].trim()
-                        // Pass only NON-SENSITIVE variables for Rancher deployment
-                        // Sensitive variables will be passed via withCredentials block
-                        if (key == 'AWS_REGION' ||
-                            key == 'S3_BUCKET_NAME' || key == 'S3_REGION' || key == 'S3_KEY_PREFIX' ||
-                            key == 'ANSIBLE_VARIABLES' || key == 'RKE2_VERSION' || key == 'RANCHER_VERSION' ||
-                            key == 'HOSTNAME_PREFIX' ||
-                            key == 'PRIVATE_REGISTRY_URL' || key == 'PRIVATE_REGISTRY_USERNAME' ||
-                            key == 'RANCHER_HOSTNAME' ||
-                            key == 'QA_INFRA_WORK_PATH' || key == 'TF_WORKSPACE' || key == 'TERRAFORM_VARS_FILENAME' ||
-                            key == 'AWS_SSH_KEY_NAME') {
-                            // Properly escape the value to prevent command injection
-                            def escapedValue = value.replace('"', '\\"').replace('$', '\\$')
-                            directEnvVars += " -e \"${key}=${escapedValue}\""
-                            }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logWarning("Could not read environment file for direct variable passing: ${e.message}")
-        }
-    }
-
-    return directEnvVars
-}
-
-def buildSecureCredentialVariables() {
-    // Return empty string - credentials will be passed via withCredentials block
-    // This prevents Groovy String interpolation of sensitive values
-    return ''
-}
-
-def buildCredentialEnvironmentVariables() {
-    // Build credential environment variables for Docker without interpolation
-    // These will be added to the Docker command as -e flags
-    def credentialEnvVars = [
-        'AWS_ACCESS_KEY_ID',
-        'AWS_SECRET_ACCESS_KEY',
-        'AWS_SSH_PEM_KEY',
-        'AWS_SSH_KEY_NAME',
-        'SLACK_WEBHOOK'
-    ]
-
-    // Add PRIVATE_REGISTRY_PASSWORD if it exists in the environment
-    if (env.PRIVATE_REGISTRY_PASSWORD) {
-        credentialEnvVars.add('PRIVATE_REGISTRY_PASSWORD')
-    }
-
-    return credentialEnvVars
-}
-
-def createCredentialEnvironmentFile() {
-    // Create a temporary environment file with credentials
-    def timestamp = System.currentTimeMillis()
-    def credentialEnvFile = "docker-credentials-${timestamp}.env"
-
-    def envContent = []
-
-    // Add AWS credentials
-    if (env.AWS_ACCESS_KEY_ID) {
-        envContent.add("AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}")
-    }
-    if (env.AWS_SECRET_ACCESS_KEY) {
-        envContent.add("AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}")
-    }
-
-    // Add SSH credentials
-    if (env.AWS_SSH_PEM_KEY) {
-        envContent.add("AWS_SSH_PEM_KEY=${env.AWS_SSH_PEM_KEY}")
-    }
-    if (env.AWS_SSH_KEY_NAME) {
-        envContent.add("AWS_SSH_KEY_NAME=${env.AWS_SSH_KEY_NAME}")
-    }
-
-    // Add Slack webhook
-    if (env.SLACK_WEBHOOK) {
-        envContent.add("SLACK_WEBHOOK=${env.SLACK_WEBHOOK}")
-    }
-
-    // Add private registry password
-    if (env.PRIVATE_REGISTRY_PASSWORD) {
-        envContent.add("PRIVATE_REGISTRY_PASSWORD=${env.PRIVATE_REGISTRY_PASSWORD}")
-    }
-
-    // Write the environment file
-    writeFile file: credentialEnvFile, text: envContent.join('\n')
-
-    // Set secure permissions
-    sh "chmod 600 ${credentialEnvFile}"
-
-    logInfo("Created credential environment file: ${credentialEnvFile}")
-    return credentialEnvFile
-}
-
-def addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile) {
-    // Add credential environment file to Docker command without exposing credentials in logs
-    def modifiedCmd = dockerCmd
-
-    if (credentialEnvFile) {
-        // Find the position where we should insert the credential environment file
-        // This should be after the container name but before the image name
-        def insertionPoint = modifiedCmd.lastIndexOf('--name')
-        if (insertionPoint != -1) {
-            // Find the end of the --name parameter
-            def nameEndIndex = modifiedCmd.indexOf(' ', insertionPoint)
-            if (nameEndIndex != -1) {
-                // Find the next space after the container name
-                def nextSpaceIndex = modifiedCmd.indexOf(' ', nameEndIndex + 1)
-                if (nextSpaceIndex != -1) {
-                    // Insert the credential environment file here
-                    modifiedCmd = modifiedCmd.substring(0, nextSpaceIndex) +
-                                 ' \\\n            --env-file ' + credentialEnvFile +
-                                 modifiedCmd.substring(nextSpaceIndex)
-                }
-            }
-        }
-    }
-
-    return modifiedCmd
-}
-
 def cleanupContainersAndVolumes() {
     logInfo('Cleaning up Docker containers and volumes')
 
@@ -2029,7 +1423,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_
         'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
     ]
 
-    executeScriptInContainer(scriptContent, extraEnvVars)
+    dockerHelper().executeScriptInContainer(scriptContent, extraEnvVars)
 }
 
 def prepareAnsibleEnvironmentWithConsolidatedScript() {
@@ -2057,7 +1451,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
         'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
     ]
 
-    executeScriptInContainer(scriptContent, extraEnvVars)
+    dockerHelper().executeScriptInContainer(scriptContent, extraEnvVars)
 }
 
 def deployRKE2WithConsolidatedScript() {
@@ -2078,7 +1472,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
         'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
     ]
 
-    executeScriptInContainer(scriptContent, extraEnvVars)
+    dockerHelper().executeScriptInContainer(scriptContent, extraEnvVars)
 }
 
 def deployRancherWithConsolidatedScript() {
@@ -2099,7 +1493,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
         'SKIP_VERIFICATION': 'false'
     ]
 
-    executeScriptInContainer(scriptContent, extraEnvVars)
+    dockerHelper().executeScriptInContainer(scriptContent, extraEnvVars)
 }
 
 // ========================================
@@ -2152,7 +1546,7 @@ perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
                 'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
                 'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
             ]
-            executeScriptInContainer(cleanupScript, cleanupEnvVars)
+            dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
             logInfo('Infrastructure cleanup attempted for timeout')
         } else {
             logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for timeout')
@@ -2188,7 +1582,7 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
                 'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
                 'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
             ]
-            executeScriptInContainer(cleanupScript, cleanupEnvVars)
+            dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
             logInfo('Infrastructure cleanup attempted for deployment failure')
         } else {
             logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for deployment failure')
@@ -2553,7 +1947,7 @@ def validateInfrastructurePrerequisites() {
     '''
 
     try {
-        executeScriptInContainer(prerequisiteScript)
+        dockerHelper().executeScriptInContainer(prerequisiteScript)
         logInfo('All infrastructure prerequisites validated')
     } catch (Exception e) {
         def errorMsg = "Infrastructure prerequisites validation failed: ${e.message}"
@@ -2570,7 +1964,7 @@ def initializeOpenTofu() {
     source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/tofu_initialize.sh
     '''
 
-    executeScriptInContainer(initScript, [:], true)
+    dockerHelper().executeScriptInContainer(initScript, [:], true)
 }
 
 def manageWorkspace() {
@@ -2584,7 +1978,7 @@ set -e
     source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/tofu_manage_workspace.sh
       '''
 
-    executeScriptInContainer(workspaceScript)
+    dockerHelper().executeScriptInContainer(workspaceScript)
 }
 
 // ========================================
@@ -2620,7 +2014,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
     ]
 
     try {
-        executeScriptInContainer(groupVarsScript, groupVarsEnvVars)
+        dockerHelper().executeScriptInContainer(groupVarsScript, groupVarsEnvVars)
         logInfo('Ansible group_vars generated successfully')
     } catch (Exception e) {
         def errorMsg = "Ansible group_vars generation failed: ${e.message}"
@@ -2767,7 +2161,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
     }
 
     try {
-        executeScriptInContainer(sshSetupScript, sshEnvVars)
+        dockerHelper().executeScriptInContainer(sshSetupScript, sshEnvVars)
         logInfo('Ansible SSH keys setup completed successfully')
     } catch (Exception e) {
         def errorMsg = "Ansible SSH key setup failed: ${e.message}"
@@ -2809,7 +2203,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
     ]
 
     try {
-        executeScriptInContainer(sshSetupPlaybookScript, sshEnvVars)
+        dockerHelper().executeScriptInContainer(sshSetupPlaybookScript, sshEnvVars)
         logInfo('Ansible SSH setup playbook executed successfully')
     } catch (Exception e) {
         def errorMsg = "Ansible SSH setup playbook failed: ${e.message}"
@@ -2851,7 +2245,7 @@ def runRKE2TarballDeployment() {
     ]
 
     try {
-        executeScriptInContainer(rke2DeploymentScript, sshEnvVars)
+        dockerHelper().executeScriptInContainer(rke2DeploymentScript, sshEnvVars)
         logInfo('RKE2 tarball deployment playbook executed successfully')
     } catch (Exception e) {
         def errorMsg = "RKE2 tarball deployment playbook failed: ${e.message}"
@@ -2901,7 +2295,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
     ]
 
     try {
-        executeScriptInContainer(kubectlSetupScript, kubectlEnvVars)
+        dockerHelper().executeScriptInContainer(kubectlSetupScript, kubectlEnvVars)
         logInfo('kubectl access setup completed successfully')
     } catch (Exception e) {
         def errorMsg = "kubectl access setup failed: ${e.message}"
@@ -2935,7 +2329,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/ansible
                 'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME
             ]
             // Note: Don't cleanup containers yet - we need them for cleanup script
-            executeScriptInContainer(cleanupScript, cleanupEnvVars)
+            dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
             logInfo('Infrastructure cleanup attempted for Ansible failure')
         } else {
             logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for Ansible failure')
@@ -3063,7 +2457,7 @@ def runRancherDeployment() {
     }
 
     try {
-        executeScriptInContainer(rancherDeploymentScript, rancherEnvVars)
+        dockerHelper().executeScriptInContainer(rancherDeploymentScript, rancherEnvVars)
         logInfo('Rancher deployment playbook executed successfully')
     } catch (Exception e) {
         def errorMsg = "Rancher deployment playbook failed: ${e.message}"
@@ -3121,7 +2515,7 @@ def validateRancherDeployment() {
     }
 
     try {
-        executeScriptInContainer(validationScript, validationEnvVars)
+        dockerHelper().executeScriptInContainer(validationScript, validationEnvVars)
         logInfo('Rancher deployment validation completed successfully')
     } catch (Exception e) {
         def errorMsg = "Rancher deployment validation failed: ${e.message}"
@@ -3151,7 +2545,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/rancher
                 'RANCHER_VERSION': env.RANCHER_VERSION
             ]
             // Note: Don't cleanup containers yet - we need them for cleanup script
-            executeScriptInContainer(cleanupScript, cleanupEnvVars)
+            dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
             logInfo('Infrastructure cleanup attempted for Rancher failure')
         } else {
             logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for Rancher failure')
