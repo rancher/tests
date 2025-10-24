@@ -530,6 +530,8 @@ echo "=== END DEBUG ==="
             return dockerCmd
         }
 
+        // Find a good insertion point after the --name <container> section so
+        // we keep the env-file close to the container metadata options.
         def insertionPoint = dockerCmd.lastIndexOf('--name')
         if (insertionPoint == -1) {
             return dockerCmd
@@ -545,9 +547,9 @@ echo "=== END DEBUG ==="
             return dockerCmd
         }
 
-        return dockerCmd.substring(0, nextSpaceIndex) +
-            " \\\n+            --env-file ${credentialEnvFile}" +
-            dockerCmd.substring(nextSpaceIndex)
+    // Simpler approach: append the env-file flag at the end to avoid
+    // fragile string insertion logic that can break quoting during load.
+    return dockerCmd + " --env-file ${credentialEnvFile}"
     }
 
     private String escapeForShell(String value) {
