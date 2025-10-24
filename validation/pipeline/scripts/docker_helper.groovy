@@ -63,10 +63,10 @@ class DockerExecutionHelper implements Serializable {
             prepareDebugHelper()
         }
 
-        def volumeMounts = collectVolumeMounts(envFilePath, scriptFile, inventoryMount)
-        def volumeMountStr = volumeMounts.join(' \\\n+            ')
+    def volumeMounts = collectVolumeMounts(envFilePath, scriptFile, inventoryMount)
+    def volumeMountStr = volumeMounts.join(' \\\n+            ')
 
-        def baseCmd = """docker run --rm \\\n+            ${volumeMountStr} \\\n+            --name ${escapedContainerName} \\\n+            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\\n+            ${envVars} \\\n+            \"${pipeline.env.IMAGE_NAME.trim()}\""""
+    def baseCmd = """docker run --rm \\\n+            ${volumeMountStr} \\\n+            --name ${escapedContainerName} \\\n+            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\\n+            ${envVars} \\\n+            \"${pipeline.env.IMAGE_NAME.trim()}\"""
 
         def executionCmd = buildPrimaryExecutionCommand()
         if (!pipeline.env.DEBUG?.toBoolean()) {
@@ -179,10 +179,10 @@ class DockerExecutionHelper implements Serializable {
         }
 
         def escapedContainerName = "${pipeline.env.BUILD_CONTAINER_NAME}-fallback".replaceAll('[^a-zA-Z0-9_-]', '_')
-        def volumeMounts = collectFallbackVolumeMounts(scriptFile, inventoryMount)
-        def volumeMountStr = volumeMounts.join(' \\\n+            ')
+    def volumeMounts = collectFallbackVolumeMounts(scriptFile, inventoryMount)
+    def volumeMountStr = volumeMounts.join(' \\\n+            ')
 
-        def baseCmd = """docker run --rm \\\n+            ${volumeMountStr} \\\n+            --name ${escapedContainerName} \\\n+            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation \\\n+            -e TF_WORKSPACE=\"${pipeline.env.TF_WORKSPACE}\" \\\n+            -e TERRAFORM_VARS_FILENAME=\"${pipeline.env.TERRAFORM_VARS_FILENAME}\" \\\n+            ${directEnvVars} \\\n+            ${explicitEnvVars} \\\n+            \"${pipeline.env.IMAGE_NAME.trim()}\""""
+    def baseCmd = """docker run --rm \\\n+            ${volumeMountStr} \\\n+            --name ${escapedContainerName} \\\n+            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation \\\n+            -e TF_WORKSPACE=\"${pipeline.env.TF_WORKSPACE}\" \\\n+            -e TERRAFORM_VARS_FILENAME=\"${pipeline.env.TERRAFORM_VARS_FILENAME}\" \\\n+            ${directEnvVars} \\\n+            ${explicitEnvVars} \\\n+            \"${pipeline.env.IMAGE_NAME.trim()}\"""
 
         def executionCmd = buildFallbackExecutionCommand()
         if (!pipeline.env.DEBUG?.toBoolean()) {
