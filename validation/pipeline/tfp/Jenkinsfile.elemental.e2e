@@ -24,6 +24,9 @@ node {
     def elementalTerraformVarsfilename = "elemental.tfvars"
     def elementalTerraformConfig = env.ELEMENTAL_TERRAFORM_CONFIG
     def googleCredentialsFilename = "service_account.json"
+    def elementalAnsibleConfig = env.ELEMENTAL_ANSIBLE_CONFIG
+    def elementalConfig = env.ELEMENTAL_CONFIG
+    def elementalConfigFile = "elementalconfig.yaml"
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"
@@ -116,6 +119,10 @@ node {
               dir("./qa-infra-automation") {
                 dir ("./ansible") {
                   writeFile file: ansibleVarsFilename, text: ansibleConfig
+                }
+                dir ("./ansible/rancher/downstream/elemental") {
+                  writeFile file: ansibleVarsFilename, text: elementalAnsibleConfig
+                  writeFile file: elementalConfigFile, text: elementalConfig
                 }
                 dir ("./tofu/aws/modules/cluster_nodes") {
                   writeFile file: terraformVarsfilename, text: terraformConfig
