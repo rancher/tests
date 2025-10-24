@@ -66,7 +66,42 @@ dockerHelperInstance = null
 
 def dockerHelper() {
     if (dockerHelperInstance == null) {
-        def helperScript = load('validation/pipeline/scripts/docker_helper.groovy')
+        // Try a few likely locations for the helper file. Jenkins may perform
+        // additional checkouts (into subdirs like 'tests') which moves file
+        // paths around during the run; be tolerant and try multiple candidates.
+        def candidates = [
+            'validation/pipeline/scripts/docker_helper.groovy',
+            'tests/validation/pipeline/scripts/docker_helper.groovy',
+            'validation/pipeline/scripts/docker_helper.groovy'
+        ]
+
+        def helperPath = null
+        for (p in candidates) {
+            try {
+                if (fileExists(p)) {
+                    helperPath = p
+                    break
+                }
+            } catch (err) {
+                // fileExists may not be available outside node context; ignore and continue
+            }
+        }
+
+        if (helperPath == null) {
+            echo "[ERROR] docker_helper.groovy not found in workspace at any of: ${candidates}"
+            // Provide workspace diagnostics to help triage
+            try {
+                echo '[DEBUG] Listing validation/pipeline/scripts:'
+                sh 'ls -la validation/pipeline/scripts || true'
+                echo '[DEBUG] Listing tests/validation/pipeline/scripts:'
+                sh 'ls -la tests/validation/pipeline/scripts || true'
+            } catch (err) {
+                echo "[DEBUG] workspace listing failed: ${err.message}"
+            }
+            error('docker_helper.groovy not present in workspace; ensure the repo checkout includes validation/pipeline/scripts or adjust pipeline checkouts')
+        }
+
+        def helperScript = load(helperPath)
         dockerHelperInstance = helperScript.init(this)
     }
     return dockerHelperInstance
