@@ -61,6 +61,18 @@ class PipelineConfig {
 // PIPELINE DEFINITION
 // ========================================
 
+// Lazily-loadable Docker helper accessor (must be defined before pipeline execution)
+def dockerHelperInstance = null
+
+def dockerHelper() {
+    if (dockerHelperInstance == null) {
+        def helperScript = load('validation/pipeline/scripts/docker_helper.groovy')
+        dockerHelperInstance = helperScript.init(this)
+    }
+    return dockerHelperInstance
+}
+
+
 pipeline {
     agent any
 
@@ -750,16 +762,6 @@ perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
             }
         }
     }
-}
-
-def dockerHelperInstance = null
-
-def dockerHelper() {
-    if (dockerHelperInstance == null) {
-        def helperScript = load('validation/pipeline/scripts/docker_helper.groovy')
-        dockerHelperInstance = helperScript.init(this)
-    }
-    return dockerHelperInstance
 }
 
 // ========================================
