@@ -1066,8 +1066,8 @@ def generateEnvironmentFile() {
     logInfo("  QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}")
     logInfo("  S3_BUCKET_NAME=${env.S3_BUCKET_NAME}")
     logInfo("  S3_REGION=${env.S3_REGION}")
-    logSensitiveInfo("  AWS_SSH_PEM_KEY=${awsSshPemKey ? 'SET' : 'NULL'}")
-    logSensitiveInfo("  AWS_SSH_KEY_NAME=${awsSshKeyName ? 'SET' : 'NULL'}")
+    logInfo("  AWS_SSH_PEM_KEY=${awsSshPemKey ? 'SET' : 'NULL'}")
+    logInfo("  AWS_SSH_KEY_NAME=${awsSshKeyName ? 'SET' : 'NULL'}")
 
     // Debug: Log AWS infrastructure variables
     logInfo('AWS Infrastructure Variables:')
@@ -2125,8 +2125,8 @@ def setupAnsibleSSHKeys() {
 
     // Debug: Show current environment variables
     logInfo('DEBUG: SSH Configuration (sensitive data redacted):')
-    logSensitiveInfo("DEBUG: AWS_SSH_PEM_KEY = ${awsSshPemKey ? 'SET' : 'NULL'}")
-    logSensitiveInfo("DEBUG: AWS_SSH_KEY_NAME = ${awsSshKeyName ? 'SET' : 'NULL'}")
+    logInfo("DEBUG: AWS_SSH_PEM_KEY = ${awsSshPemKey ? 'SET' : 'NULL'}")
+    logInfo("DEBUG: AWS_SSH_KEY_NAME = ${awsSshKeyName ? 'SET' : 'NULL'}")
     logInfo("DEBUG: BASTION_IP = ${env.BASTION_IP}")
     logInfo("DEBUG: BASTION_PRIVATE_IP = ${env.BASTION_PRIVATE_IP}")
 
