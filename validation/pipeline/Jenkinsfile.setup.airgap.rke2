@@ -64,9 +64,8 @@ def dockerHelper() {
         // additional checkouts (into subdirs like 'tests') which moves file
         // paths around during the run; be tolerant and try multiple candidates.
         def candidates = [
-            'validation/pipeline/scripts/docker_helper.groovy',
-            'tests/validation/pipeline/scripts/docker_helper.groovy',
-            'validation/pipeline/scripts/docker_helper.groovy'
+            'validation/pipeline/scripts/airgap/docker_helper.groovy',
+            'tests/validation/pipeline/scripts/airgap/docker_helper.groovy'
         ]
 
         def helperPath = null
@@ -378,7 +377,7 @@ pipeline {
         stage('Deploy Infrastructure') {
             steps {
                 script {
-                    logInfo('Deploying infrastructure using consolidated script')
+                    logInfo('Deploying infrastructure')
 
                     // Configuration validation
                     def requiredVars = [
@@ -397,7 +396,6 @@ pipeline {
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
-                            // Infrastructure deployment using consolidated script
                             deployInfrastructureWithConsolidatedScript()
 
                             // Extract artifacts from Docker volume to Jenkins workspace
@@ -438,7 +436,7 @@ pipeline {
 #!/bin/bash
 set -e
 # Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_cleanup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
 # Execute cleanup for deployment failure
 perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
 '''
@@ -515,7 +513,7 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
 #!/bin/bash
 set -e
 # Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_cleanup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
 # Execute cleanup for deployment failure
 perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
 '''
@@ -567,7 +565,7 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
 #!/bin/bash
 set -e
 # Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_cleanup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
 # Execute cleanup for deployment failure
 perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
 '''
@@ -638,7 +636,7 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
 #!/bin/bash
 set -e
 # Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_cleanup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
 # Execute cleanup for deployment failure
 perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
 '''
@@ -723,7 +721,7 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
 #!/bin/bash
 set -e
 # Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_cleanup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
 # Execute cleanup for deployment failure
 perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
 '''
@@ -750,7 +748,7 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
 #!/bin/bash
 set -e
 # Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_cleanup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
 # Execute cleanup for timeout
 perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
 '''
@@ -1370,7 +1368,7 @@ def deployInfrastructureWithConsolidatedScript() {
 #!/bin/bash
 set -e
 # Source the consolidated infrastructure deployment script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_infrastructure_deploy.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_infrastructure_deploy.sh
 '''
 
     // Pass required environment variables to container
@@ -1402,7 +1400,7 @@ def prepareAnsibleEnvironmentWithConsolidatedScript() {
 #!/bin/bash
 set -e
 # Source the consolidated Ansible environment preparation script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapansible_prepare_environment.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_prepare_environment.sh
 '''
 
     // Pass required environment variables to container
@@ -1430,7 +1428,7 @@ def deployRKE2WithConsolidatedScript() {
 #!/bin/bash
 set -e
 # Source the consolidated RKE2 deployment script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapansible_deploy_rke2.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_deploy_rke2.sh
 '''
 
     // Pass required environment variables to container
@@ -1451,7 +1449,7 @@ def deployRancherWithConsolidatedScript() {
 #!/bin/bash
 set -e
 # Source the minimal Rancher deployment wrapper
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapansible_deploy_rancher.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_deploy_rancher.sh
 '''
 
     // Pass required environment variables to container
@@ -1503,7 +1501,7 @@ def handleTimeoutFailure() {
 set -e
 
 # Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_cleanup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
 # Execute cleanup for timeout
 perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
 '''
@@ -1539,7 +1537,7 @@ def handleDeploymentFailure() {
 #!/bin/bash
 set -e
 # Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_cleanup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
 # Execute cleanup for deployment failure
 perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
 '''
@@ -1912,7 +1910,7 @@ def validateInfrastructurePrerequisites() {
 
     def prerequisiteScript = '''
     # Source the external prerequisites validation script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgaptofu_validate_prerequisites.sh
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/tofu_validate_prerequisites.sh
     '''
 
     try {
@@ -1930,7 +1928,7 @@ def initializeOpenTofu() {
 
     def initScript = '''
     # Source the external OpenTofu initialization script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgaptofu_initialize.sh
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/tofu_initialize.sh
     '''
 
     dockerHelper().executeScriptInContainer(initScript, [:], true)
@@ -1944,7 +1942,7 @@ def manageWorkspace() {
 set -e
 
 # Source the external workspace management script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgaptofu_manage_workspace.sh
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/tofu_manage_workspace.sh
       '''
 
     dockerHelper().executeScriptInContainer(workspaceScript)
@@ -1967,7 +1965,7 @@ def generateAnsibleGroupVars() {
 set -e
 
 # Source the external Ansible group_vars generation script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapansible_generate_group_vars.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_generate_group_vars.sh
     '''
 
     // Pass required environment variables to container
@@ -2112,7 +2110,7 @@ def setupAnsibleSSHKeys() {
 set -e
 
 # Source the external Ansible SSH key setup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapansible_setup_ssh_keys.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_setup_ssh_keys.sh
     '''
 
     // Pass SSH key environment variables to the container
@@ -2147,7 +2145,7 @@ def runAnsibleSSHSetup() {
 set -e
 
 # Source the external Ansible SSH setup playbook script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapansible_run_ssh_setup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_run_ssh_setup.sh
     '''
 
     // Get SSH credentials and pass them to container
@@ -2189,7 +2187,7 @@ def runRKE2TarballDeployment() {
     set -e
 
     # Source the external RKE2 tarball deployment script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapansible_run_rke2_deployment.sh
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_run_rke2_deployment.sh
         '''
 
     // Get SSH credentials and pass them to container
@@ -2253,7 +2251,7 @@ def setupKubectlAccess() {
 set -e
 
 # Source the external kubectl access setup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapansible_setup_kubectl.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_setup_kubectl.sh
     '''
 
     // Pass RKE2_VERSION to container
@@ -2284,7 +2282,7 @@ def handleAnsibleDeploymentFailure() {
 set -e
 
 # Source the external Ansible failure cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapansible_failure_cleanup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_failure_cleanup.sh
             '''
             // Pass required environment variables to container
             def cleanupEnvVars = [
@@ -2386,7 +2384,7 @@ def runRancherDeployment() {
     echo "=== END DEBUG ==="
 
     # Source external Rancher deployment script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapansible_run_rancher_deployment.sh
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_run_rancher_deployment.sh
     """
 
     // Get SSH credentials and pass them to container
@@ -2465,7 +2463,7 @@ def validateRancherDeployment() {
     set -e
 
     # Source the external Rancher validation script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapansible_validate_rancher.sh
+    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_validate_rancher.sh
     '''
 
     // Pass required environment variables to validation container
@@ -2504,7 +2502,7 @@ def handleRancherDeploymentFailure() {
 set -e
 
 # Source the external Rancher failure cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgaprancher_failure_cleanup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/rancher_failure_cleanup.sh
             '''
             // Pass required environment variables to container
             def cleanupEnvVars = [
