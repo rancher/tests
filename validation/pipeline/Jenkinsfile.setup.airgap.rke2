@@ -1,4 +1,6 @@
 #!/usr/bin/env groovy
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 
 /**
  * Ansible Airgap Setup Jenkinsfile
@@ -75,7 +77,7 @@ def dockerHelper() {
                     helperPath = p
                     break
                 }
-            } catch (err) {
+            } catch (ignored) {
                 // fileExists may not be available outside node context; ignore and continue
             }
         }
@@ -776,6 +778,24 @@ perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
 // LOGGING UTILITY FUNCTIONS
 // ========================================
 
+static def redactSensitiveValue(value) {
+    if (!value || value.toString().trim().isEmpty()) {
+        return 'NULL'
+    }
+
+    def strValue = value.toString()
+    if (strValue.length() <= 8) {
+        return '***REDACTED***'
+    }
+
+    // Show first 4 and last 4 characters for debugging purposes
+    return "${strValue.take(4)}...${strValue.takeRight(4)} (${strValue.length()} chars)"
+}
+
+def logSensitiveInfo(name, value) {
+    logInfo("${name} = ${redactSensitiveValue(value)}")
+}
+
 def logInfo(msg) {
     echo "${PipelineConfig.LOG_PREFIX_INFO} ${getTimestamp()} ${msg}"
 }
@@ -794,7 +814,7 @@ def logDebug(msg) {
     }
 }
 
-def getTimestamp() {
+static def getTimestamp() {
     return new Date().format('yyyy-MM-dd HH:mm:ss')
 }
 
@@ -838,12 +858,12 @@ def validateParameters() {
     logInfo('All parameters validated successfully')
 }
 
-def isValidVersionFormat(version) {
+static def isValidVersionFormat(version) {
     // RKE2 version format: v1.28.8+rke2r1
     return version ==~ /^v\d+\.\d+\.\d+\+rke2r\d+$/
 }
 
-def isValidRancherVersionFormat(version) {
+static def isValidRancherVersionFormat(version) {
     // Rancher version format: v2.10-head, v2.11.0, head
     return version ==~ /^(v\d+\.\d+(-head|\.\d+)?|head)$/
 }
@@ -952,8 +972,8 @@ def generateEnvironmentFile() {
         // Extract AWS variables from terraform config
         def awsVarPattern = ~/(\w+)\s*=\s*"([^"]*)"/
         terraformConfig.eachMatch(awsVarPattern) { match ->
-            def varName = match[1]
-            def varValue = match[2]
+            def varName = match[1 as String]
+            def varValue = match[2 as String]
             // Only include AWS-related variables
             if (varName.startsWith('AWS_')) {
                 awsConfigVars[varName] = varValue
@@ -1048,8 +1068,8 @@ def generateEnvironmentFile() {
     logInfo("  QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}")
     logInfo("  S3_BUCKET_NAME=${env.S3_BUCKET_NAME}")
     logInfo("  S3_REGION=${env.S3_REGION}")
-    logInfo("  AWS_SSH_PEM_KEY=${awsSshPemKey ? 'SET' : 'NULL'}")
-    logInfo("  AWS_SSH_KEY_NAME=${awsSshKeyName ? 'SET' : 'NULL'}")
+    logSensitiveInfo("  AWS_SSH_PEM_KEY=${awsSshPemKey ? 'SET' : 'NULL'}")
+    logSensitiveInfo("  AWS_SSH_KEY_NAME=${awsSshKeyName ? 'SET' : 'NULL'}")
 
     // Debug: Log AWS infrastructure variables
     logInfo('AWS Infrastructure Variables:')
@@ -1137,7 +1157,7 @@ def cleanupSSHKeys() {
                     try {
                         sh "shred -vfz -n 3 ${keyPath} 2>/dev/null || rm -f ${keyPath}"
                         logInfo("SSH key securely shredded: ${keyPath}")
-                    } catch (Exception shredException) {
+                    } catch (Exception ignored) {
                         // Fallback to secure delete
                         sh "rm -f ${keyPath}"
                         logWarning("SSH key deleted (shred unavailable): ${keyPath}")
@@ -1165,12 +1185,28 @@ def validateSensitiveDataHandling() {
     logInfo('Validating sensitive data handling and security measures')
 
     def validationErrors = []
+    // List of patterns that should never appear in logs or env files
+    def sensitivePatterns = [
+            'AWS_SECRET_ACCESS_KEY=',
+            'AWS_ACCESS_KEY_ID=',
+            'AWS_SSH_PEM_KEY=',
+            'PRIVATE_REGISTRY_PASSWORD=',
+            '-----BEGIN',
+            '-----END'
+    ]
 
     // Validate AWS credentials are NOT exposed in environment file (new security approach)
     try {
         def envFileContent = ''
         if (fileExists(env.ENV_FILE)) {
             envFileContent = readFile(file: env.ENV_FILE)
+        }
+
+        // Check for ANY plaintext credentials in environment file
+        sensitivePatterns.each { pattern ->
+            if (envFileContent.contains(pattern) && !envFileContent.contains("${pattern} excluded")) {
+                validationErrors.add("Sensitive pattern '${pattern}' found in environment file - should use withCredentials")
+            }
         }
 
         // Check for ANY plaintext credentials in environment file (should not exist)
@@ -1808,8 +1844,8 @@ def generateDeploymentSummary() {
             }
         }
 
-        def summaryJson = groovy.json.JsonOutput.toJson(summary)
-        writeFile file: 'deployment-summary.json', text: groovy.json.JsonOutput.prettyPrint(summaryJson)
+        def summaryJson = JsonOutput.toJson(summary)
+        writeFile file: 'deployment-summary.json', text: JsonOutput.prettyPrint(summaryJson)
 
         logInfo('Deployment summary generated successfully')
     } catch (Exception e) {
@@ -2003,7 +2039,7 @@ def loadInfrastructureOutputs() {
             logInfo("Raw infrastructure outputs content: ${jsonOutput}")
 
             // Parse JSON using Groovy's JsonSlurper
-            def jsonSlurper = new groovy.json.JsonSlurper()
+            def jsonSlurper = new JsonSlurper()
             def outputs = jsonSlurper.parseText(jsonOutput)
 
             // Debug: Show the parsed structure
@@ -2090,8 +2126,9 @@ def setupAnsibleSSHKeys() {
     }
 
     // Debug: Show current environment variables
-    logInfo("DEBUG: AWS_SSH_PEM_KEY = ${awsSshPemKey ? 'SET' : 'NULL'}")
-    logInfo("DEBUG: AWS_SSH_KEY_NAME = ${awsSshKeyName ? 'SET' : 'NULL'}")
+    logInfo('DEBUG: SSH Configuration (sensitive data redacted):')
+    logSensitiveInfo("DEBUG: AWS_SSH_PEM_KEY = ${awsSshPemKey ? 'SET' : 'NULL'}")
+    logSensitiveInfo("DEBUG: AWS_SSH_KEY_NAME = ${awsSshKeyName ? 'SET' : 'NULL'}")
     logInfo("DEBUG: BASTION_IP = ${env.BASTION_IP}")
     logInfo("DEBUG: BASTION_PRIVATE_IP = ${env.BASTION_PRIVATE_IP}")
 
@@ -2229,8 +2266,7 @@ def runRKE2TarballDeployment() {
             try {
                 setupKubectlAccess()
                 logInfo('Cluster appears to be operational despite Ansible task failures')
-                logInfo('Continuing with deployment...')
-                return // Don't fail the deployment
+                logInfo('Continuing with deployment...') // Don't fail the deployment
             } catch (kubectlException) {
                 logError("kubectl setup also failed: ${kubectlException.message}")
                 logError('Deployment genuinely failed')
@@ -2441,8 +2477,7 @@ def runRancherDeployment() {
             try {
                 validateRancherDeployment()
                 logInfo('Rancher appears to be operational despite Ansible task failures')
-                logInfo('Continuing with deployment...')
-                return // Don't fail deployment
+                logInfo('Continuing with deployment...') // Don't fail deployment
             } catch (rancherException) {
                 logError("Rancher validation also failed: ${rancherException.message}")
                 logError('Rancher deployment genuinely failed')
