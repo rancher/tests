@@ -49,12 +49,6 @@ class PipelineConfig {
     static final String LOG_PREFIX_ERROR = '[ERROR]'
     static final String LOG_PREFIX_WARNING = '[WARNING]'
     static final String LOG_PREFIX_DEBUG = '[DEBUG]'
-
-    // Slack configuration
-    static final String SLACK_CHANNEL = '#rancher-qa'
-    static final String SLACK_USERNAME = 'Jenkins'
-    static final String SLACK_TITLE = 'Ansible Airgap Setup Pipeline'
-
 }
 
 // ========================================
@@ -715,10 +709,6 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
         success {
             script {
                 logInfo('Pipeline completed successfully')
-                sendSlackNotification([
-                    color: 'good',
-                    message: "[OK] Ansible Airgap setup succeeded for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
-                ])
             }
         }
 
@@ -746,11 +736,6 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
                     ]
                     dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
                 }
-
-                sendSlackNotification([
-                    color: 'danger',
-                    message: "[FAIL] Ansible Airgap setup failed for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
-                ])
             }
         }
 
@@ -778,21 +763,12 @@ perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
                     ]
                     dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
                 }
-
-                sendSlackNotification([
-                    color: 'warning',
-                    message: "[WARN] Ansible Airgap setup aborted for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
-                ])
             }
         }
 
         unstable {
             script {
                 logWarning('Pipeline completed with warnings')
-                sendSlackNotification([
-                    color: 'warning',
-                    message: "[WARN] Ansible Airgap setup completed with warnings for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
-                ])
             }
         }
     }
@@ -935,7 +911,6 @@ def getCredentialsList() {
         string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
         string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
         string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
-        string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')
     ]
 }
 
@@ -1035,7 +1010,6 @@ def generateEnvironmentFile() {
         "AWS_SSH_KEY_NAME=${awsSshKeyName ?: ''}",
         '',
         '# AWS credentials excluded - will be passed via withCredentials',
-        '# SLACK webhook excluded - will be passed via withCredentials'
     ]
 
     def envContent = envLines.join('\n')
@@ -1218,10 +1192,6 @@ def validateSensitiveDataHandling() {
             validationErrors.add('Private registry password is exposed in environment file - should use withCredentials')
         }
 
-        if (envFileContent.contains('SLACK_WEBHOOK=')) {
-            validationErrors.add('Slack webhook is exposed in environment file - should use withCredentials')
-        }
-
         // Verify that environment file contains proper comments about credential handling
         if (!envFileContent.contains('withCredentials')) {
             logWarning('Environment file should mention withCredentials for security')
@@ -1383,43 +1353,6 @@ def cleanupContainersAndVolumes() {
         }
     } catch (Exception envCleanupException) {
         logWarning("Environment file cleanup encountered issues: ${envCleanupException.message}")
-    }
-}
-
-// ========================================
-// NOTIFICATION FUNCTIONS
-// ========================================
-
-def sendSlackNotification(config) {
-    if (env.SLACK_WEBHOOK) {
-        try {
-            def payload = [
-                channel: PipelineConfig.SLACK_CHANNEL,
-                username: PipelineConfig.SLACK_USERNAME,
-                color: config.color,
-                title: PipelineConfig.SLACK_TITLE,
-                message: config.message,
-                fields: [
-                    [title: 'Job', value: env.JOB_NAME, short: true],
-                    [title: 'Build', value: env.BUILD_NUMBER, short: true],
-                    [title: 'RKE2 Version', value: env.RKE2_VERSION, short: true],
-                    [title: 'Rancher Version', value: env.RANCHER_VERSION, short: true]
-                ]
-            ]
-
-            httpRequest(
-                httpMode: 'POST',
-                url: env.SLACK_WEBHOOK,
-                contentType: 'APPLICATION_JSON',
-                requestBody: groovy.json.JsonOutput.toJson(payload)
-            )
-
-            logInfo('Slack notification sent successfully')
-        } catch (Exception e) {
-            logError("Failed to send Slack notification: ${e.message}")
-        }
-    } else {
-        logWarning('Slack webhook not configured - skipping notification')
     }
 }
 
