@@ -1,0 +1,66 @@
+- suite: Go Automation/Prime
+  projects: [RRT, RM]
+  cases:
+  - description: Checks that the UI branding is set to Prime
+    title: Prime_Brand
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Checks the UI branding is set to Prime
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Checks that the version is correct
+    title: Prime_Version
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Checks the version is correct
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Checks that the system default registry is using the correct Prime registry
+    title: Prime_System_Default_Registry
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Checks the system default registry is using the correct Prime registry
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Checks that the local cluster rancher images are using the correct Prime registry
+    title: Prime_Local_Cluster_Rancher_Images
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Checks the local cluster rancher images are using the correct Prime registry
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

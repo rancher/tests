@@ -114,11 +114,11 @@ func (rb *StackStateRBACTestSuite) SetupSuite() {
 	client, err = client.ReLogin()
 	require.NoError(rb.T(), err)
 
-	initialStackstateExtension, err := extencharts.GetChartStatus(client, localCluster, interoperability.StackstateExtensionNamespace, interoperability.StackstateExtensionsName)
+	initialStackstateExtension, err := extencharts.GetChartStatus(client, localCluster, interoperability.ExtensionNamespace, interoperability.StackstateExtensionsName)
 	require.NoError(rb.T(), err)
 
 	if !initialStackstateExtension.IsAlreadyInstalled {
-		latestUIPluginVersion, err := rb.client.Catalog.GetLatestChartVersion(interoperability.StackstateExtensionsName, interoperability.UIPluginName)
+		latestUIPluginVersion, err := rb.client.Catalog.GetLatestChartVersion(interoperability.StackstateExtensionsName, interoperability.UIPluginRepoName)
 		require.NoError(rb.T(), err)
 
 		extensionOptions := &uiplugins.ExtensionOptions{
@@ -127,7 +127,7 @@ func (rb *StackStateRBACTestSuite) SetupSuite() {
 			Version:     latestUIPluginVersion,
 		}
 
-		err = uiplugins.InstallObservabilityUiPlugin(client, extensionOptions)
+		err = uiplugins.InstallUIPlugin(client, extensionOptions, interoperability.UIPluginRepoName)
 		require.NoError(rb.T(), err)
 		log.Info("Installed stackstate ui plugin.")
 	}

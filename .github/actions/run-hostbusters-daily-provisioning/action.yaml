@@ -9,9 +9,10 @@ runs:
       run: |
         set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s \
-        --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
+        --junitfile results_k3s.xml --jsonfile results_k3s.json -- -timeout=3h -tags=recurring -v;
         k3s_exit=$?;
         echo "k3s_exit=$k3s_exit" >> $GITHUB_ENV;
+        cp results_k3s.json results.json
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
         ./validation/reporter;
       shell: bash
@@ -22,9 +23,10 @@ runs:
       run: |
         set +e
         gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 \
-        --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
+        --junitfile results_rke2.xml --jsonfile results_rke2.json -- -timeout=3h -tags=recurring -v;
         rke2_exit=$?;
         echo "rke2_exit=$rke2_exit" >> $GITHUB_ENV;
+        cp results_rke2.json results.json
         ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
         ./validation/reporter;
       shell: bash
@@ -35,13 +37,13 @@ runs:
         failed=0
         if [ "$k3s_exit" -ne 0 ]; then
           echo "Failed K3S tests:"
-          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
+          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results_k3s.json
           failed=1
         fi
 
         if [ "$rke2_exit" -ne 0 ]; then
           echo "Failed RKE2 tests:"
-          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
+          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results_rke2.json
           failed=1
         fi
 

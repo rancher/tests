@@ -99,11 +99,11 @@ func (ss *StackStateTestSuite) SetupSuite() {
 	client, err = client.ReLogin()
 	require.NoError(ss.T(), err)
 
-	initialStackstateExtension, err := extencharts.GetChartStatus(client, localCluster, interoperablecharts.StackstateExtensionNamespace, interoperablecharts.StackstateExtensionsName)
+	initialStackstateExtension, err := extencharts.GetChartStatus(client, localCluster, interoperablecharts.ExtensionNamespace, interoperablecharts.StackstateExtensionsName)
 	require.NoError(ss.T(), err)
 
 	if !initialStackstateExtension.IsAlreadyInstalled {
-		latestUIPluginVersion, err := ss.client.Catalog.GetLatestChartVersion(interoperablecharts.StackstateExtensionsName, interoperablecharts.UIPluginName)
+		latestUIPluginVersion, err := ss.client.Catalog.GetLatestChartVersion(interoperablecharts.StackstateExtensionsName, interoperablecharts.UIPluginRepoName)
 		require.NoError(ss.T(), err)
 
 		extensionOptions := &uiplugins.ExtensionOptions{
@@ -112,7 +112,7 @@ func (ss *StackStateTestSuite) SetupSuite() {
 			Version:     latestUIPluginVersion,
 		}
 
-		err = uiplugins.InstallObservabilityUiPlugin(client, extensionOptions)
+		err = uiplugins.InstallUIPlugin(client, extensionOptions, interoperablecharts.UIPluginRepoName)
 		require.NoError(ss.T(), err)
 		log.Info("Installed stackstate ui extensions")
 	}

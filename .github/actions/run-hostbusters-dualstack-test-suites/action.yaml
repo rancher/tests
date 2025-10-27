@@ -14,60 +14,52 @@
          set +e
          case "${{ inputs.suite }}" in
            rancher-server-one)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestCertRotationTestSuite/TestCertRotation";
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/dualstack \
+               --junitfile results.xml --jsonfile results_cert.json -- -timeout=3h -tags=recurring -v;
              cert_exit=$?;
              echo "cert_exit=$cert_exit" >> $GITHUB_ENV;
+             cp results_cert.json results.json
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestDeleteClusterTestSuite/TestDeletingCluster";
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/dualstack \
+               --junitfile results.xml --jsonfile results_delete.json -- -timeout=3h -tags=recurring -v;
              delete_exit=$?;
              echo "delete_exit=$delete_exit" >> $GITHUB_ENV;
+             cp results_delete.json results.json
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2k3s \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestNodeScalingTestSuite/TestScalingNodePools";
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/dualstack \
+               --junitfile results.xml --jsonfile results_node_scale.json -- -timeout=3h -tags=recurring -v;
              node_scale_exit=$?;
              echo "node_scale_exit=$node_scale_exit" >> $GITHUB_ENV;
+             cp results_node_scale.json results.json
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
              ;;
            rancher-server-two)
              gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/dualstack \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v;
+               --junitfile results.xml --jsonfile results_prov.json -- -timeout=3h -tags=recurring -v;
              prov_exit=$?;
              echo "prov_exit=$prov_exit" >> $GITHUB_ENV;
+             cp results_prov.json results.json
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
-               --junitfile resultst.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRestoreTestSuite/TestSnapshotRestore";
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/dualstack \
+               --junitfile results.xml --jsonfile results_snapshot.json -- -timeout=3h -tags=recurring -v;
              snap_restore_exit=$?;
              echo "snap_restore_exit=$snap_restore_exit" >> $GITHUB_ENV;
+             cp results_snapshot.json results.json
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
 
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows";
-             snap_restore_win_exit=$?;
-             echo "snap_restore_win_exit=$snap_restore_win_exit" >> $GITHUB_ENV;
-             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-             ./validation/reporter
-
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes";
+             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/dualstack \
+               --junitfile results.xml --jsonfile results_upgrade.json -- -timeout=3h -tags=recurring -v;
              upgrade_exit=$?;
              echo "upgrade_exit=$upgrade_exit" >> $GITHUB_ENV;
-             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-             ./validation/reporter
-
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s \
-               --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=recurring -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes";
-             upgrade_win_exit=$?;
-             echo "upgrade_win_exit=$upgrade_win_exit" >> $GITHUB_ENV;
+             cp results_upgrade.json results.json
              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
              ./validation/reporter
              ;;
@@ -78,24 +70,27 @@
      - name: Show failed tests
        run: |
          declare -A suites=(
-           [cert_exit]="Cert Rotation"
-           [delete_exit]="Delete Cluster"
-           [node_scale_exit]="Node Scaling"
-           [prov_exit]="Provisioning"
-           [snap_restore_exit]="Snapshot Restore"
-           [snap_restore_win_exit]="Snapshot Restore Windows"
-           [upgrade_exit]="Kubernetes Upgrade"
-           [upgrade_win_exit]="Windows Kubernetes Upgrade"
+           [cert_exit]="Cert Rotation:results_cert.json"
+           [delete_exit]="Delete Cluster:results_delete.json"
+           [node_scale_exit]="Node Scaling:results_node_scale.json"
+           [prov_exit]="Provisioning:results_prov.json"
+           [snap_restore_exit]="Snapshot Restore:results_snapshot.json"
+           [upgrade_exit]="Kubernetes Upgrade:results_upgrade.json"
          )
 
+         failed=0
          for exit_code in "${!suites[@]}"; do
-           exit_val="${!exit_code}"
-
-           if [ "$exit_val" != "" ] && [ "$exit_val" -ne 0 ]; then
-             echo "Failed ${suites[$exit_code]} tests:"
-             jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
-             echo ""
-             exit 1
-           fi
+          IFS=: read suite_name results_file <<< "${suites[$exit_code]}"
+          exit_val="${!exit_code}"
+           
+          if [ "$exit_val" != "" ] && [ "$exit_val" -ne 0 ]; then
+            echo "Failed $suite_name tests:"
+            jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' "$results_file"
+            failed=1
+          fi
          done
+
+         if [ "$failed" -eq 1 ]; then
+          exit 1
+         fi
        shell: bash

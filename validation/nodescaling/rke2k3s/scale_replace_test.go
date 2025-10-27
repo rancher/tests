@@ -21,6 +21,7 @@ import (
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/scalinginput"
+	"github.com/rancher/tests/actions/workloads/pods"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
@@ -130,8 +131,11 @@ func (s *NodeReplacingTestSuite) TestReplacingNodes() {
 			err := scalinginput.ReplaceNodes(s.client, cluster.Name, tt.nodeRoles.Etcd, tt.nodeRoles.ControlPlane, tt.nodeRoles.Worker)
 			require.NoError(s.T(), err)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(s.T(), s.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(s.T(), s.client, cluster)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(s.T(), s.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(s.client, s.cattleConfig)

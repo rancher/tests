@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/config"
@@ -60,13 +59,11 @@ func (d *DeleteIPv6ClusterTestSuite) SetupSuite() {
 	rke2ClusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, rke2ClusterConfig)
 
-	rke2ClusterConfig.IPv6Cluster = true
 	rke2ClusterConfig.Networking = &provisioninginput.Networking{
-		StackPreference: "ipv6",
+		ClusterCIDR:     rke2ClusterConfig.Networking.ClusterCIDR,
+		ServiceCIDR:     rke2ClusterConfig.Networking.ServiceCIDR,
+		StackPreference: rke2ClusterConfig.Networking.StackPreference,
 	}
-
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, d.cattleConfig, awsEC2Configs)
 
 	nodeRolesStandard := []provisioninginput.MachinePools{
 		provisioninginput.EtcdMachinePool,
@@ -80,13 +77,8 @@ func (d *DeleteIPv6ClusterTestSuite) SetupSuite() {
 
 	rke2ClusterConfig.MachinePools = nodeRolesStandard
 
-	for i := range rke2ClusterConfig.MachinePools {
-		rke2ClusterConfig.MachinePools[i].SpecifyCustomPublicIP = true
-		rke2ClusterConfig.MachinePools[i].SpecifyCustomPrivateIP = true
-	}
-
 	logrus.Info("Provisioning RKE2 cluster")
-	d.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2ClusterConfig, awsEC2Configs, true, true)
+	d.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2ClusterConfig, nil, true, false)
 	require.NoError(d.T(), err)
 }
 

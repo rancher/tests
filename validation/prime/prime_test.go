@@ -1,8 +1,9 @@
-//go:build validation
+//go:build validation || prime
 
 package prime
 
 import (
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -11,6 +12,9 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	prime "github.com/rancher/tests/actions/prime"
+	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/qase"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -26,6 +30,7 @@ const (
 type PrimeTestSuite struct {
 	suite.Suite
 	session        *session.Session
+	cattleConfig   map[string]any
 	client         *rancher.Client
 	brand          string
 	isPrime        bool
@@ -41,6 +46,8 @@ func (t *PrimeTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	t.session = testSession
 
+	t.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+
 	primeConfig := new(rancherversion.Config)
 	config.LoadConfig(rancherversion.ConfigurationFileKey, primeConfig)
 
@@ -55,33 +62,97 @@ func (t *PrimeTestSuite) SetupSuite() {
 	t.client = client
 }
 
-func (t *PrimeTestSuite) TestPrimeUIBrand() {
-	rancherBrand, err := t.client.Management.Setting.ByID(uiBrand)
-	require.NoError(t.T(), err)
+func (t *PrimeTestSuite) TestPrimeBrand() {
+	tests := []struct {
+		name string
+	}{
+		{"Prime_Brand"},
+	}
 
-	checkBrand := prime.CheckUIBrand(t.client, t.isPrime, rancherBrand, t.brand)
-	assert.NoError(t.T(), checkBrand)
+	for _, tt := range tests {
+		t.Run(tt.name, func() {
+			rancherBrand, err := t.client.Management.Setting.ByID(uiBrand)
+			require.NoError(t.T(), err)
+
+			checkBrand := prime.CheckUIBrand(t.client, t.isPrime, rancherBrand, t.brand)
+			assert.NoError(t.T(), checkBrand)
+		})
+
+		params := provisioning.GetProvisioningSchemaParams(t.client, t.cattleConfig)
+		err := qase.UpdateSchemaParameters(tt.name, params)
+		if err != nil {
+			logrus.Warningf("Failed to upload schema parameters %s", err)
+		}
+	}
 }
 
 func (t *PrimeTestSuite) TestPrimeVersion() {
-	serverVersion, err := t.client.Management.Setting.ByID(serverVersion)
-	require.NoError(t.T(), err)
+	tests := []struct {
+		name string
+	}{
+		{"Prime_Version"},
+	}
 
-	checkVersion := prime.CheckVersion(t.isPrime, t.rancherVersion, serverVersion)
-	assert.NoError(t.T(), checkVersion)
+	for _, tt := range tests {
+		t.Run(tt.name, func() {
+			serverVersion, err := t.client.Management.Setting.ByID(serverVersion)
+			require.NoError(t.T(), err)
+
+			checkVersion := prime.CheckVersion(t.isPrime, t.rancherVersion, serverVersion)
+			assert.NoError(t.T(), checkVersion)
+		})
+
+		params := provisioning.GetProvisioningSchemaParams(t.client, t.cattleConfig)
+		err := qase.UpdateSchemaParameters(tt.name, params)
+		if err != nil {
+			logrus.Warningf("Failed to upload schema parameters %s", err)
+		}
+	}
 }
 
 func (t *PrimeTestSuite) TestSystemDefaultRegistry() {
-	registry, err := t.client.Management.Setting.ByID(systemRegistry)
-	require.NoError(t.T(), err)
+	tests := []struct {
+		name string
+	}{
+		{"Prime_System_Default_Registry"},
+	}
 
-	checkRegistry := prime.CheckSystemDefaultRegistry(t.isPrime, t.primeRegistry, registry)
-	assert.NoError(t.T(), checkRegistry)
+	for _, tt := range tests {
+		t.Run(tt.name, func() {
+			registry, err := t.client.Management.Setting.ByID(systemRegistry)
+			require.NoError(t.T(), err)
+
+			checkRegistry := prime.CheckSystemDefaultRegistry(t.isPrime, t.primeRegistry, registry)
+			assert.NoError(t.T(), checkRegistry)
+		})
+
+		params := provisioning.GetProvisioningSchemaParams(t.client, t.cattleConfig)
+		err := qase.UpdateSchemaParameters(tt.name, params)
+		if err != nil {
+			logrus.Warningf("Failed to upload schema parameters %s", err)
+		}
+	}
 }
 
 func (t *PrimeTestSuite) TestLocalClusterRancherImages() {
-	podErrors := pods.StatusPods(t.client, localCluster)
-	assert.Empty(t.T(), podErrors)
+	tests := []struct {
+		name string
+	}{
+		{"Prime_Local_Cluster_Rancher_Images"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func() {
+			podErrors := pods.StatusPods(t.client, localCluster)
+			assert.Empty(t.T(), podErrors)
+		})
+
+		params := provisioning.GetProvisioningSchemaParams(t.client, t.cattleConfig)
+		err := qase.UpdateSchemaParameters(tt.name, params)
+		if err != nil {
+			logrus.Warningf("Failed to upload schema parameters %s", err)
+		}
+	}
 }
 
 func TestPrimeTestSuite(t *testing.T) {

@@ -4,48 +4,53 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rancher/machine/libmachine/log"
 	v1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 )
 
 const (
-	stackstateExtensionNamespace = "cattle-ui-plugin-system"
-	stackstateExtensionsName     = "observability"
-	uiPluginName                 = "rancher-ui-plugins"
-	local                        = "local"
+	extensionNamespace = "cattle-ui-plugin-system"
 )
 
-var (
-	timeoutSeconds = int64(defaults.TwoMinuteTimeout)
-)
+// newUIPluginInstallAction is a private helper function that returns chart install action with the extension payload options.
+func newUIPluginInstallAction(p *ExtensionOptions) *types.ChartInstallAction {
 
-// InstallObservabilityUiPlugin is a helper function that installs the observability extension chart in the local cluster of rancher.
-func InstallObservabilityUiPlugin(client *rancher.Client, installExtensionOptions *ExtensionOptions) error {
+	chartInstall := newPluginsInstall(p.ChartName, p.Version, nil)
+	chartInstalls := []types.ChartInstall{*chartInstall}
 
-	extensionInstallAction := newStackstateUiPluginInstallAction(installExtensionOptions)
+	chartInstallAction := &types.ChartInstallAction{
+		Namespace: extensionNamespace,
+		Charts:    chartInstalls,
+	}
+
+	return chartInstallAction
+}
+
+// InstallUIPlugin is a helper function that installs a UI extension chart in the local cluster of rancher.
+func InstallUIPlugin(client *rancher.Client, installExtensionOptions *ExtensionOptions, chartRepoName string) error {
+	extensionInstallAction := newUIPluginInstallAction(installExtensionOptions)
 
 	catalogClient, err := client.GetClusterCatalogClient(local)
 	if err != nil {
 		return err
 	}
 
-	// register uninstall stackstate extension as a cleanup function
 	client.Session.RegisterCleanupFunc(func() error {
 		defaultChartUninstallAction := newPluginUninstallAction()
 
-		err := catalogClient.UninstallChart(stackstateExtensionsName, stackstateExtensionNamespace, defaultChartUninstallAction)
+		err := catalogClient.UninstallChart(installExtensionOptions.ChartName, extensionNamespace, defaultChartUninstallAction)
 		if err != nil {
 			return err
 		}
 
-		watchAppInterface, err := catalogClient.Apps(stackstateExtensionNamespace).Watch(context.TODO(), metav1.ListOptions{
-			FieldSelector:  "metadata.name=" + stackstateExtensionsName,
+		watchAppInterface, err := catalogClient.Apps(extensionNamespace).Watch(context.TODO(), metav1.ListOptions{
+			FieldSelector:  "metadata.name=" + installExtensionOptions.ChartName,
 			TimeoutSeconds: &timeoutSeconds,
 		})
 		if err != nil {
@@ -55,9 +60,9 @@ func InstallObservabilityUiPlugin(client *rancher.Client, installExtensionOption
 		err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
 			chart := event.Object.(*v1.App)
 			if event.Type == watch.Error {
-				return false, fmt.Errorf("there was an error uninstalling stackstate extension")
+				return false, fmt.Errorf("there was an error uninstalling %s extension", installExtensionOptions.ChartName)
 			} else if event.Type == watch.Deleted {
-				log.Info("Uninstalled observability extension successfully.")
+				logrus.Infof("Uninstalled %s extension successfully.", installExtensionOptions)
 				return true, nil
 			} else if chart == nil {
 				return true, nil
@@ -69,14 +74,13 @@ func InstallObservabilityUiPlugin(client *rancher.Client, installExtensionOption
 		return err
 
 	})
-
-	err = catalogClient.InstallChart(extensionInstallAction, uiPluginName)
+	err = catalogClient.InstallChart(extensionInstallAction, chartRepoName)
 	if err != nil {
 		return err
 	}
 
-	watchAppInterface, err := catalogClient.Apps(stackstateExtensionNamespace).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + stackstateExtensionsName,
+	watchAppInterface, err := catalogClient.Apps(extensionNamespace).Watch(context.TODO(), metav1.ListOptions{
+		FieldSelector:  "metadata.name=" + installExtensionOptions.ChartName,
 		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 	})
 	if err != nil {
@@ -96,23 +100,9 @@ func InstallObservabilityUiPlugin(client *rancher.Client, installExtensionOption
 	return err
 }
 
-// newStackstateUiPluginInstallAction is a private helper function that returns chart install action with stackstate extension payload options.
-func newStackstateUiPluginInstallAction(p *ExtensionOptions) *types.ChartInstallAction {
-
-	chartInstall := newPluginsInstall(p.ChartName, p.Version, nil)
-	chartInstalls := []types.ChartInstall{*chartInstall}
-
-	chartInstallAction := &types.ChartInstallAction{
-		Namespace: stackstateExtensionNamespace,
-		Charts:    chartInstalls,
-	}
-
-	return chartInstallAction
-}
-
 // CreateExtensionsRepo is a helper that utilizes the rancher client and add the ui extensions repo to the list if repositories in the local cluster.
 func CreateExtensionsRepo(client *rancher.Client, rancherUiPluginsName, uiExtensionGitRepoURL, uiExtensionsRepoBranch string) error {
-	log.Info("Adding ui extensions repo to rancher chart repositories in the local cluster.")
+	logrus.Info("Adding ui extensions repo to rancher chart repositories in the local cluster.")
 
 	clusterRepoObj := v1.ClusterRepo{
 		ObjectMeta: metav1.ObjectMeta{
@@ -146,7 +136,7 @@ func CreateExtensionsRepo(client *rancher.Client, rancherUiPluginsName, uiExtens
 			if event.Type == watch.Error {
 				return false, fmt.Errorf("there was an error deleting the cluster repo")
 			} else if event.Type == watch.Deleted {
-				log.Info("Removed extensions repo successfully.")
+				logrus.Info("Removed extensions repo successfully.")
 				return true, nil
 			}
 			return false, nil

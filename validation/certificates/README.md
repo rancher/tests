@@ -205,14 +205,19 @@ gotestsum --format standard-verbose --packages=github.com/rancher/tests/validati
 
 ### Certificate rotation
 
-### RKE1
+#### RKE1
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1CertRotationTestSuite/TestRKE1CertRotation"`
 
-### RKE2/K3S
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationTestSuite/TestCertRotation"` \
+#### RKE2/K3S
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationTestSuite/TestCertRotation"`
+
+#### RKE2 Windows
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationWindowsTestSuite/TestCertRotationWindows"`
 
-### Dualstack
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationDualstackTestSuite/TestCertRotationDualstack"`
+#### IPv6
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/ipv6 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationIPv6TestSuite/TestCertRotationIPv6"`
+
+#### Dualstack
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/dualstack --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestCertRotationDualstackTestSuite/TestCertRotationDualstack"`
 
 If the specified test passes immediately without warning, try adding the `-count=1` flag to get around this issue. This will avoid previous results from interfering with the new test run.

@@ -3,7 +3,10 @@ package provisioning
 import (
 	"fmt"
 
+	"testing"
+
 	"github.com/rancher/shepherd/clients/rancher"
+	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/aws"
@@ -12,6 +15,7 @@ import (
 	"github.com/rancher/shepherd/extensions/cloudcredentials/harvester"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/linode"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/vsphere"
+	"github.com/rancher/tests/actions/cloudprovider"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -24,16 +28,32 @@ import (
 	r1vsphere "github.com/rancher/tests/actions/rke1/nodetemplates/vsphere"
 )
 
+type ProviderName string
+
+const (
+	AWSProvider          = "aws"
+	AzureProvider        = "azure"
+	DOProvider           = "do"
+	HarvesterProvider    = "harvester"
+	LinodeProvider       = "linode"
+	GoogleProvider       = "google"
+	VsphereProvider      = "vsphere"
+	VsphereCloudProvider = "rancher-vsphere"
+)
+
 type CloudCredFunc func(rancherClient *rancher.Client, credentials cloudcredentials.CloudCredential) (*v1.SteveAPIObject, error)
 type MachinePoolFunc func(machineConfig machinepools.MachineConfigs, generatedPoolName, namespace string) []unstructured.Unstructured
 type MachineRolesFunc func(machineConfig machinepools.MachineConfigs) []machinepools.Roles
 type OSNamesFunc func(client *rancher.Client, cloudCredential cloudcredentials.CloudCredential, machineConfigs machinepools.MachineConfigs) ([]string, error)
+type VerifyCloudProviderFunc func(t *testing.T, client *rancher.Client, clusterObject *steveV1.SteveAPIObject)
 
 type Provider struct {
 	Name                               provisioninginput.ProviderName
+	CloudProviderName                  string
 	MachineConfigPoolResourceSteveType string
 	MachinePoolFunc                    MachinePoolFunc
 	CloudCredFunc                      CloudCredFunc
+	VerifyCloudProviderFunc            VerifyCloudProviderFunc
 	GetMachineRolesFunc                MachineRolesFunc
 	GetOSNamesFunc                     OSNamesFunc
 }
@@ -42,65 +62,68 @@ type Provider struct {
 // configs in the form of a Provider struct. Accepts a
 // string of the name of the provider.
 func CreateProvider(name string) Provider {
+	var provider Provider
 	switch {
-	case name == provisioninginput.AWSProviderName.String():
-		provider := Provider{
-			Name:                               provisioninginput.AWSProviderName,
+	case name == AWSProvider:
+		provider = Provider{
+			Name:                               AWSProvider,
+			CloudProviderName:                  AWSProvider,
 			MachineConfigPoolResourceSteveType: machinepools.AWSPoolType,
 			MachinePoolFunc:                    machinepools.NewAWSMachineConfig,
 			CloudCredFunc:                      aws.CreateAWSCloudCredentials,
+			VerifyCloudProviderFunc:            cloudprovider.VerifyAWSCloudProvider,
 			GetMachineRolesFunc:                machinepools.GetAWSMachineRoles,
 			GetOSNamesFunc:                     machinepools.GetAWSOSNames,
 		}
-		return provider
-	case name == provisioninginput.AzureProviderName.String():
-		provider := Provider{
-			Name:                               provisioninginput.AzureProviderName,
+	case name == AzureProvider:
+		provider = Provider{
+			Name:                               AzureProvider,
 			MachineConfigPoolResourceSteveType: machinepools.AzurePoolType,
 			MachinePoolFunc:                    machinepools.NewAzureMachineConfig,
 			CloudCredFunc:                      azure.CreateAzureCloudCredentials,
 			GetMachineRolesFunc:                machinepools.GetAzureMachineRoles,
 		}
-		return provider
-	case name == provisioninginput.DOProviderName.String():
-		provider := Provider{
-			Name:                               provisioninginput.DOProviderName,
+	case name == DOProvider:
+		provider = Provider{
+			Name:                               DOProvider,
 			MachineConfigPoolResourceSteveType: machinepools.DOPoolType,
 			MachinePoolFunc:                    machinepools.NewDigitalOceanMachineConfig,
 			CloudCredFunc:                      digitalocean.CreateDigitalOceanCloudCredentials,
 			GetMachineRolesFunc:                machinepools.GetDOMachineRoles,
 		}
-		return provider
-	case name == provisioninginput.LinodeProviderName.String():
-		provider := Provider{
-			Name:                               provisioninginput.LinodeProviderName,
+	case name == LinodeProvider:
+		provider = Provider{
+			Name:                               LinodeProvider,
 			MachineConfigPoolResourceSteveType: machinepools.LinodePoolType,
 			MachinePoolFunc:                    machinepools.NewLinodeMachineConfig,
 			CloudCredFunc:                      linode.CreateLinodeCloudCredentials,
 			GetMachineRolesFunc:                machinepools.GetLinodeMachineRoles,
 		}
-		return provider
-	case name == provisioninginput.HarvesterProviderName.String():
-		provider := Provider{
-			Name:                               provisioninginput.HarvesterProviderName,
+	case name == HarvesterProvider:
+		provider = Provider{
+			Name:                               HarvesterProvider,
+			CloudProviderName:                  HarvesterProvider,
 			MachineConfigPoolResourceSteveType: machinepools.HarvesterPoolType,
 			MachinePoolFunc:                    machinepools.NewHarvesterMachineConfig,
 			CloudCredFunc:                      harvester.CreateHarvesterCloudCredentials,
+			VerifyCloudProviderFunc:            cloudprovider.VerifyHarvesterCloudProvider,
 			GetMachineRolesFunc:                machinepools.GetHarvesterMachineRoles,
 		}
-		return provider
-	case name == provisioninginput.VsphereProviderName.String():
-		provider := Provider{
-			Name:                               provisioninginput.VsphereProviderName,
+	case name == VsphereProvider:
+		provider = Provider{
+			Name:                               VsphereProvider,
+			CloudProviderName:                  VsphereCloudProvider,
 			MachineConfigPoolResourceSteveType: machinepools.VmwarevsphereType,
 			MachinePoolFunc:                    machinepools.NewVSphereMachineConfig,
 			CloudCredFunc:                      vsphere.CreateVsphereCloudCredentials,
+			VerifyCloudProviderFunc:            cloudprovider.VerifyVSphereCloudProvider,
 			GetMachineRolesFunc:                machinepools.GetVsphereMachineRoles,
 		}
-		return provider
 	default:
 		panic(fmt.Sprintf("Provider:%v not found", name))
 	}
+
+	return provider
 }
 
 type NodeTemplateFunc func(rancherClient *rancher.Client) (*nodetemplates.NodeTemplate, error)
@@ -115,9 +138,9 @@ type RKE1Provider struct {
 // string of the name of the provider.
 func CreateRKE1Provider(name string) RKE1Provider {
 	switch {
-	case name == provisioninginput.AWSProviderName.String():
+	case name == AWSProvider:
 		provider := RKE1Provider{
-			Name:             provisioninginput.AWSProviderName,
+			Name:             AWSProvider,
 			NodeTemplateFunc: r1aws.CreateAWSNodeTemplate,
 		}
 		return provider

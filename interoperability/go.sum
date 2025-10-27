@@ -2102,8 +2102,8 @@ github.com/rancher/shepherd v0.0.0-20251003203259-669abb78af51 h1:xi4qsdR2UtySDv
 github.com/rancher/shepherd v0.0.0-20251003203259-669abb78af51/go.mod h1:BdEW/H1ZkLUn3/A/73pacOSfgh9nn5ITjg5qj02CyS4=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250710162344-185ff9f785cd h1:M3oVcVktMhNk8l3ZRW94kroqzWzE/VGbZfLw/F0rw5Y=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250710162344-185ff9f785cd/go.mod h1:VfRrgue4yl6O0GYakMGYgyByu7ySooPQWWRxTt2MIEI=
-github.com/rancher/tfp-automation v0.0.0-20250611224440-c60e4d69096c h1:qxp0e4ZnCX8EBdECPOejAY0vYQVac3zqZN/qhnMaUSk=
-github.com/rancher/tfp-automation v0.0.0-20250611224440-c60e4d69096c/go.mod h1:TySEKfLEjE5bdWwtzGQOdTFbh0Bj4Sj2gpfsdKxjrI0=
+github.com/rancher/tfp-automation v0.0.0-20251016221424-5aafbe545b8e h1:4XpRPzt0C9oB0LsFaC0BoBSR16vp1GSLiZPoJR4KHVs=
+github.com/rancher/tfp-automation v0.0.0-20251016221424-5aafbe545b8e/go.mod h1:oM1wVyAbzm/DVgyBbJhoSOm+6femRWShw0iB57p1iRE=
 github.com/rancher/wrangler v0.6.2-0.20200515155908-1923f3f8ec3f/go.mod h1:NmtmlLkchboIksYJuBemwcP4RBfv8FpeyhVoWXB9Wdc=
 github.com/rancher/wrangler v0.6.2-0.20200622171942-7224e49a2407/go.mod h1:NmtmlLkchboIksYJuBemwcP4RBfv8FpeyhVoWXB9Wdc=
 github.com/rancher/wrangler v1.1.2 h1:oXbXo9k7y/H4drUpb4RM1c++vT9O3rpoNEfyusGykiU=
@@ -2129,8 +2129,8 @@ github.com/ruudk/golang-pdf417 v0.0.0-20181029194003-1af4ab5afa58/go.mod h1:6lfF
 github.com/ruudk/golang-pdf417 v0.0.0-20201230142125-a7e3863a1245/go.mod h1:pQAZKsJ8yyVxGRWYNEm9oFB8ieLgKFnamEyDmSA0BRk=
 github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=
-github.com/sergi/go-diff v1.3.1 h1:xkr+Oxo4BOQKmkn/B9eMK0g5Kg/983T9DqqPHwYqD+8=
-github.com/sergi/go-diff v1.3.1/go.mod h1:aMJSSKb2lpPvRNec0+w3fl7LP9IOFzdc9Pa4NFbPK1I=
+github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 h1:n661drycOFuPLCN3Uc8sB6B/s6Z4t2xvBgU1htSHuq8=
+github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3/go.mod h1:A0bzQcvG0E7Rwjx0REVgAGH58e96+X0MeOfepqsbeW4=
 github.com/shurcooL/sanitized_anchor_name v1.0.0/go.mod h1:1NzhyTcUVG4SuEtjjoZeVRXNmyL/1OwPU0+IJeTBvfc=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6MwdIuYE2rE=

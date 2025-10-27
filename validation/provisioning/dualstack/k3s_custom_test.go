@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -30,39 +31,39 @@ type customK3SDualstackTest struct {
 }
 
 func customK3SDualstackSetup(t *testing.T) customK3SDualstackTest {
-	var r customK3SDualstackTest
+	var k customK3SDualstackTest
 
 	testSession := session.NewSession()
-	r.session = testSession
+	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	assert.NoError(t, err)
 
-	r.client = client
+	k.client = client
 
-	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
 	assert.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
-	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
+	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
 	assert.NoError(t, err)
 
-	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.K3S, r.cattleConfig)
+	k.cattleConfig, err = defaults.SetK8sDefault(k.client, defaults.K3S, k.cattleConfig)
 	assert.NoError(t, err)
 
-	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
+	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
 	assert.NoError(t, err)
 
-	return r
+	return k
 }
 
 func TestCustomK3SDualstack(t *testing.T) {
 	t.Parallel()
-	r := customK3SDualstackSetup(t)
+	k := customK3SDualstackSetup(t)
 
 	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
@@ -71,7 +72,12 @@ func TestCustomK3SDualstack(t *testing.T) {
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	clusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
+
+	cidr := &provisioninginput.Networking{
+		ClusterCIDR: clusterConfig.Networking.ClusterCIDR,
+		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
+	}
 
 	ipv4StackPreference := &provisioninginput.Networking{
 		ClusterCIDR:     "",
@@ -97,19 +103,20 @@ func TestCustomK3SDualstack(t *testing.T) {
 		machinePools []provisioninginput.MachinePools
 		networking   *provisioninginput.Networking
 	}{
-		{"K3S_Dual_Stack_Custom_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv4StackPreference},
-		{"K3S_Dual_Stack_Custom_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, dualStackPreference},
-		{"K3S_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
+		{"K3S_Dual_Stack_Custom_CIDR", k.standardUserClient, nodeRolesStandard, cidr},
+		{"K3S_Dual_Stack_Custom_IPv4_Stack_Preference", k.standardUserClient, nodeRolesStandard, ipv4StackPreference},
+		{"K3S_Dual_Stack_Custom_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, dualStackPreference},
+		{"K3S_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
 	}
 
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
+			k.session.Cleanup()
 		})
 
 		clusterConfig := new(clusters.ClusterConfig)
-		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+		operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
 
 		clusterConfig.MachinePools = tt.machinePools
 		clusterConfig.Networking = tt.networking
@@ -120,17 +127,20 @@ func TestCustomK3SDualstack(t *testing.T) {
 			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
 			awsEC2Configs := new(ec2.AWSEC2Configs)
-			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, r.cattleConfig, awsEC2Configs)
+			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, k.cattleConfig, awsEC2Configs)
 
 			logrus.Info("Provisioning cluster")
 			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
 			assert.NoError(t, err)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(t, tt.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(t, tt.client, cluster)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(t, tt.client, cluster)
 		})
 
-		params := provisioning.GetCustomSchemaParams(tt.client, r.cattleConfig)
+		params := provisioning.GetCustomSchemaParams(tt.client, k.cattleConfig)
 		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)

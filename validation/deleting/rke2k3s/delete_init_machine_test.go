@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/pods"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
@@ -105,11 +106,14 @@ func (d *DeleteInitMachineTestSuite) TestDeleteInitMachine() {
 
 		d.Run(tt.name, func() {
 			logrus.Infof("Deleting init machine on cluster (%s)", cluster.Name)
-			err := deleteInitMachine(d.client, tt.clusterID)
+			err := DeleteInitMachine(d.client, tt.clusterID)
 			require.NoError(d.T(), err)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(d.T(), d.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(d.T(), d.client, cluster)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(d.T(), d.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(d.client, d.cattleConfig)

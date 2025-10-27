@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/config"
@@ -26,13 +27,11 @@ import (
 
 type DeleteDualstackClusterTestSuite struct {
 	suite.Suite
-	session                *session.Session
-	client                 *rancher.Client
-	cattleConfig           map[string]any
-	rke2IPv4ClusterID      string
-	k3sIPv4ClusterID       string
-	rke2DualstackClusterID string
-	k3sDualstackClusterID  string
+	session       *session.Session
+	client        *rancher.Client
+	cattleConfig  map[string]any
+	rke2ClusterID string
+	k3sClusterID  string
 }
 
 func (d *DeleteDualstackClusterTestSuite) TearDownSuite() {
@@ -59,34 +58,22 @@ func (d *DeleteDualstackClusterTestSuite) SetupSuite() {
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(d.T(), err)
 
-	rke2IPv4ClusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, rke2IPv4ClusterConfig)
+	rke2ClusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, rke2ClusterConfig)
 
-	rke2IPv4ClusterConfig.Networking = &provisioninginput.Networking{
-		StackPreference: "ipv4",
+	rke2ClusterConfig.Networking = &provisioninginput.Networking{
+		ClusterCIDR:     rke2ClusterConfig.Networking.ClusterCIDR,
+		ServiceCIDR:     rke2ClusterConfig.Networking.ServiceCIDR,
+		StackPreference: rke2ClusterConfig.Networking.StackPreference,
 	}
 
-	rke2DualstackClusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, rke2DualstackClusterConfig)
+	k3sClusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, k3sClusterConfig)
 
-	rke2DualstackClusterConfig.IPv6Cluster = true
-	rke2DualstackClusterConfig.Networking = &provisioninginput.Networking{
-		StackPreference: "dual",
-	}
-
-	k3sIPv4ClusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, k3sIPv4ClusterConfig)
-
-	k3sIPv4ClusterConfig.Networking = &provisioninginput.Networking{
-		StackPreference: "ipv4",
-	}
-
-	k3sDualstackClusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, k3sDualstackClusterConfig)
-
-	k3sDualstackClusterConfig.IPv6Cluster = true
-	k3sDualstackClusterConfig.Networking = &provisioninginput.Networking{
-		StackPreference: "dual",
+	k3sClusterConfig.Networking = &provisioninginput.Networking{
+		ClusterCIDR:     k3sClusterConfig.Networking.ClusterCIDR,
+		ServiceCIDR:     k3sClusterConfig.Networking.ServiceCIDR,
+		StackPreference: k3sClusterConfig.Networking.StackPreference,
 	}
 
 	nodeRolesStandard := []provisioninginput.MachinePools{
@@ -99,25 +86,18 @@ func (d *DeleteDualstackClusterTestSuite) SetupSuite() {
 	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
-	rke2IPv4ClusterConfig.MachinePools = nodeRolesStandard
-	rke2DualstackClusterConfig.MachinePools = nodeRolesStandard
-	k3sIPv4ClusterConfig.MachinePools = nodeRolesStandard
-	k3sDualstackClusterConfig.MachinePools = nodeRolesStandard
+	rke2ClusterConfig.MachinePools = nodeRolesStandard
+	k3sClusterConfig.MachinePools = nodeRolesStandard
 
-	logrus.Info("Provisioning RKE2 cluster w/ipv4 stack preference")
-	d.rke2IPv4ClusterID, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2IPv4ClusterConfig, nil, true, false)
+	awsEC2Configs := new(ec2.AWSEC2Configs)
+	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, d.cattleConfig, awsEC2Configs)
+
+	logrus.Info("Provisioning RKE2 cluster")
+	d.rke2ClusterID, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2ClusterConfig, awsEC2Configs, true, true)
 	require.NoError(d.T(), err)
 
-	logrus.Info("Provisioning RKE2 cluster w/dual stack preference")
-	d.rke2DualstackClusterID, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2DualstackClusterConfig, nil, true, false)
-	require.NoError(d.T(), err)
-
-	logrus.Info("Provisioning K3S cluster w/ipv4 stack preference")
-	d.k3sIPv4ClusterID, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.K3SClusterType.String(), k3sIPv4ClusterConfig, nil, true, false)
-	require.NoError(d.T(), err)
-
-	logrus.Info("Provisioning K3S cluster w/dual stack preference")
-	d.k3sDualstackClusterID, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.K3SClusterType.String(), k3sDualstackClusterConfig, nil, true, false)
+	logrus.Info("Provisioning K3S cluster")
+	d.k3sClusterID, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.K3SClusterType.String(), k3sClusterConfig, awsEC2Configs, true, true)
 	require.NoError(d.T(), err)
 }
 
@@ -126,10 +106,8 @@ func (d *DeleteDualstackClusterTestSuite) TestDeletingDualstackCluster() {
 		name      string
 		clusterID string
 	}{
-		{"RKE2_Delete_IPv4_Cluster", d.rke2IPv4ClusterID},
-		{"RKE2_Delete_Dualstack_Cluster", d.rke2DualstackClusterID},
-		{"K3S_Delete_IPv4_Cluster", d.k3sIPv4ClusterID},
-		{"K3S_Delete_Dualstack_Cluster", d.k3sDualstackClusterID},
+		{"RKE2_Delete_Dualstack_Cluster", d.rke2ClusterID},
+		{"K3S_Delete_Dualstack_Cluster", d.k3sClusterID},
 	}
 
 	for _, tt := range tests {

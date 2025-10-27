@@ -21,22 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-const (
-	// Public constants
-	StackstateExtensionNamespace = "cattle-ui-plugin-system"
-	StackstateExtensionsName     = "observability"
-	UIPluginName                 = "rancher-ui-plugins"
-	StackstateK8sAgent           = "stackstate-k8s-agent"
-	StackstateNamespace          = "stackstate"
-	StackstateCRD                = "observability.rancher.io.configuration"
-	RancherPartnerChartRepo      = "rancher-partner-charts"
-	rancherChartsName            = "rancher-charts"
-	rancherPartnerCharts         = "rancher-partner-charts"
-	serverURLSettingID           = "server-url"
-	StackStateServerChartRepo    = "suse-observability"
-	StackStateServerNamespace    = "suse-observability"
-)
-
 var (
 	timeoutSeconds = int64(defaults.TwoMinuteTimeout)
 )

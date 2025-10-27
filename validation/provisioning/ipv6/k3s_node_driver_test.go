@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -79,6 +80,12 @@ func TestNodeDriverK3SIPv6(t *testing.T) {
 		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
 	}
 
+	stackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     "",
+		ServiceCIDR:     "",
+		StackPreference: "ipv6",
+	}
+
 	cidrStackPreference := &provisioninginput.Networking{
 		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
 		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
@@ -92,6 +99,7 @@ func TestNodeDriverK3SIPv6(t *testing.T) {
 		networking   *provisioninginput.Networking
 	}{
 		{"K3S_IPv6_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
+		{"K3S_IPv6_Node_Driver_Stack_Preference", r.standardUserClient, nodeRolesStandard, stackPreference},
 		{"K3S_IPv6_Node_Driver_CIDR_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrStackPreference},
 	}
 
@@ -119,8 +127,11 @@ func TestNodeDriverK3SIPv6(t *testing.T) {
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 			assert.NoError(t, err)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(t, tt.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(t, tt.client, cluster)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(t, tt.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)

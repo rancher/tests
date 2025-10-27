@@ -1,3 +1,5 @@
+//go:build validation || recurring
+
 package ipv6
 
 import (
@@ -16,6 +18,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -59,7 +62,6 @@ func nodeDriverRKE2IPv6Setup(t *testing.T) nodeDriverRKE2IPv6Test {
 }
 
 func TestNodeDriverRKE2IPv6(t *testing.T) {
-	t.Skip("This test is temporarily disabled. See https://github.com/rancher/rancher/issues/51990.")
 	t.Parallel()
 	r := nodeDriverRKE2IPv6Setup(t)
 
@@ -77,6 +79,12 @@ func TestNodeDriverRKE2IPv6(t *testing.T) {
 		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
 	}
 
+	stackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     "",
+		ServiceCIDR:     "",
+		StackPreference: "ipv6",
+	}
+
 	cidrStackPreference := &provisioninginput.Networking{
 		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
 		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
@@ -90,6 +98,7 @@ func TestNodeDriverRKE2IPv6(t *testing.T) {
 		networking   *provisioninginput.Networking
 	}{
 		{"RKE2_IPv6_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
+		{"RKE2_IPv6_Node_Driver_Stack_Preference", r.standardUserClient, nodeRolesStandard, stackPreference},
 		{"RKE2_IPv6_Node_Driver_CIDR_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrStackPreference},
 	}
 
@@ -117,8 +126,11 @@ func TestNodeDriverRKE2IPv6(t *testing.T) {
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 			assert.NoError(t, err)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(t, tt.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(t, tt.client, cluster)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(t, tt.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)

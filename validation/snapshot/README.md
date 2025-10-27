@@ -119,25 +119,30 @@ sshPath:
   sshPath: "/<path to .ssh folder>"
 ```
 
-## Running Tests
+### Running Tests
 
-These tests utilize Go build tags. Due to this, see the below examples on how to run the tests:
+#### RKE1
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1SnapshotRestoreTestSuite/TestRKE1SnapshotRestore"`
 
-### RKE1
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1SnapshotRestoreTestSuite/TestRKE1SnapshotRestore"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1S3SnapshotRestoreTestSuite/TestRKE1S3SnapshotRestore"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1SnapshotRecurringTestSuite/TestRKE1SnapshotRecurringRestores"`
+#### RKE2/K3s
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRestoreTestSuite/TestSnapshotRestore"`
 
-### RKE2/K3s
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRestoreTestSuite/TestSnapshotRestore"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestS3SnapshotRestoreTestSuite/TestS3SnapshotRestore"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRetentionTestSuite/TestAutomaticSnapshotRetention"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRecurringTestSuite/TestSnapshotRecurringRestores"`
-
-### IPv6
+#### IPv6
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/ipv6 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotIPv6RestoreTestSuite/TestSnapshotIPv6Restore"`
 
-### Dualstack
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/dualstack --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotDualstackRestoreTestSuite/TestSnapshotDualstackRestore"` \
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/dualstack --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotDualstackRestoreWindowsTestSuite/TestSnapshotDualstackRestoreWindows"`
+#### Dualstack
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/dualstack --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotDualstackRestoreTestSuite/TestSnapshotDualstackRestore"`
+
+#### S3
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1S3SnapshotRestoreTestSuite/TestRKE1S3SnapshotRestore"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestS3SnapshotRestoreTestSuite/TestS3SnapshotRestore"`
+
+#### Windows
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRestoreWindowsTestSuite/TestSnapshotRestoreWindows"`
+
+#### Retention
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRetentionTestSuite/TestAutomaticSnapshotRetention"`
+
+#### Recurring
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestRKE1SnapshotRecurringTestSuite/TestRKE1SnapshotRecurringRestores"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestSnapshotRecurringTestSuite/TestSnapshotRecurringRestores"`

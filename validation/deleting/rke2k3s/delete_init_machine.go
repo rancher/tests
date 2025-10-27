@@ -10,8 +10,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// deleteInitMachine deletes the init machine from the specified cluster.
-func deleteInitMachine(client *rancher.Client, clusterID string) error {
+// DeleteInitMachine deletes the init machine from the specified cluster.
+func DeleteInitMachine(client *rancher.Client, clusterID string) error {
 	initMachine, err := machinepools.GetInitMachine(client, clusterID)
 	if err != nil {
 		return err

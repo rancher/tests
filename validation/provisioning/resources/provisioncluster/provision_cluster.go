@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,7 +47,8 @@ func ProvisionRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterType s
 		clusterObject, err = provisioning.CreateProvisioningCustomCluster(client, &externalNodeProvider, clusterConfig, ec2Configs)
 		require.NoError(t, err)
 
-		provisioning.VerifyCluster(t, client, clusterObject)
+		provisioning.VerifyClusterReady(t, client, clusterObject)
+		pods.VerifyClusterPods(t, client, clusterObject)
 	} else {
 		provider := provisioning.CreateProvider(clusterConfig.Provider)
 		credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
@@ -55,7 +57,8 @@ func ProvisionRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterType s
 		clusterObject, err = provisioning.CreateProvisioningCluster(client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 		require.NoError(t, err)
 
-		provisioning.VerifyCluster(t, client, clusterObject)
+		provisioning.VerifyClusterReady(t, client, clusterObject)
+		pods.VerifyClusterPods(t, client, clusterObject)
 	}
 
 	return clusterObject.ID, nil

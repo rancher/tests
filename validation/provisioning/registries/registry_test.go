@@ -25,6 +25,7 @@ import (
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/registries"
 	"github.com/rancher/tests/actions/reports"
+	actionspods "github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -346,7 +347,11 @@ func (rt *RegistryTestSuite) TestRegistriesK3S() {
 				reports.TimeoutClusterReport(clusterObject, err)
 				require.NoError(rt.T(), err)
 
-				provisioning.VerifyCluster(rt.T(), subClient, clusterObject)
+				logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
+				provisioning.VerifyClusterReady(rt.T(), subClient, clusterObject)
+
+				logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+				actionspods.VerifyClusterPods(rt.T(), subClient, clusterObject)
 			})
 		}
 	}
@@ -369,7 +374,11 @@ func (rt *RegistryTestSuite) TestRegistriesK3S() {
 				reports.TimeoutClusterReport(clusterObject, err)
 				require.NoError(rt.T(), err)
 
-				provisioning.VerifyCluster(rt.T(), subClient, clusterObject)
+				logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
+				provisioning.VerifyClusterReady(rt.T(), subClient, clusterObject)
+
+				logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+				actionspods.VerifyClusterPods(rt.T(), subClient, clusterObject)
 			})
 		}
 	}
@@ -418,7 +427,11 @@ func (rt *RegistryTestSuite) TestRegistriesRKE2() {
 				reports.TimeoutClusterReport(clusterObject, err)
 				require.NoError(rt.T(), err)
 
-				provisioning.VerifyCluster(rt.T(), subClient, clusterObject)
+				logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
+				provisioning.VerifyClusterReady(rt.T(), subClient, clusterObject)
+
+				logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+				actionspods.VerifyClusterPods(rt.T(), subClient, clusterObject)
 			})
 		}
 	}
@@ -439,7 +452,11 @@ func (rt *RegistryTestSuite) TestRegistriesRKE2() {
 				reports.TimeoutClusterReport(clusterObject, err)
 				require.NoError(rt.T(), err)
 
-				provisioning.VerifyCluster(rt.T(), subClient, clusterObject)
+				logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
+				provisioning.VerifyClusterReady(rt.T(), subClient, clusterObject)
+
+				logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
+				actionspods.VerifyClusterPods(rt.T(), subClient, clusterObject)
 			})
 		}
 	}

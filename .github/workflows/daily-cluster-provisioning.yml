@@ -10,6 +10,11 @@ on:
         description: "Rancher tag version"
       rancher_chart_version:
         description: "Rancher chart version"
+      run_all_versions:
+        description: "Run all supported versions if manually triggered"
+        required: false
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       rancher_version:
@@ -33,6 +38,7 @@ jobs:
   head:
     if: |
       github.event_name == 'schedule' ||
+      github.event.inputs.run_all_versions == 'true' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head'))
     name: head
     runs-on: ubuntu-latest
@@ -100,7 +106,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_HEAD) 
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_HEAD) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -111,7 +118,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_12) 
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_12) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_12)
             }}
 
       - name: Set Rancher repo
@@ -219,11 +227,12 @@ jobs:
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
+              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
+              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -297,6 +306,14 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
 
+      - name: Reporting Results to Slack
+        if: always()
+        uses: ./.github/actions/report-to-slack
+        with:
+          job-status: ${{ job.status }}
+          slack-channel: ${{ secrets.HB_SLACK_CHANNEL }}
+          slack-webhook-url: ${{ secrets.HB_SLACK_WEBHOOK_URL }}
+
       - name: Cleanup Infrastructure
         if: always()
         working-directory: tfp-automation/modules/sanity/aws
@@ -319,6 +336,7 @@ jobs:
   v2-12:
     if: |
       github.event_name == 'schedule' ||
+      github.event.inputs.run_all_versions == 'true' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.12')) ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12.')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ github.event.inputs.rancher_version }}
@@ -387,7 +405,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_12_HEAD) 
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_12_HEAD) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_12_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -398,7 +417,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_12)
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_12) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_12)
             }}
 
       - name: Set Rancher repo
@@ -506,11 +526,12 @@ jobs:
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
+              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
+              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -584,6 +605,14 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
 
+      - name: Reporting Results to Slack
+        if: always()
+        uses: ./.github/actions/report-to-slack
+        with:
+          job-status: ${{ job.status }}
+          slack-channel: ${{ secrets.HB_SLACK_CHANNEL }}
+          slack-webhook-url: ${{ secrets.HB_SLACK_WEBHOOK_URL }}
+
       - name: Cleanup Infrastructure
         if: always()
         working-directory: tfp-automation/modules/sanity/aws
@@ -606,6 +635,7 @@ jobs:
   v2-11:
     if: |
       github.event_name == 'schedule' ||
+      github.event.inputs.run_all_versions == 'true' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.11')) ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.11.')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ github.event.inputs.rancher_version }}
@@ -674,7 +704,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_11_HEAD) 
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_11_HEAD) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_11_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -685,7 +716,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_11) 
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_11) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_11)
             }}
 
       - name: Set Rancher repo
@@ -800,11 +832,13 @@ jobs:
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
+              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES_PRIME }}]
+              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
+
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -877,6 +911,14 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-daily-provisioning
+
+      - name: Reporting Results to Slack
+        if: always()
+        uses: ./.github/actions/report-to-slack
+        with:
+          job-status: ${{ job.status }}
+          slack-channel: ${{ secrets.HB_SLACK_CHANNEL }}
+          slack-webhook-url: ${{ secrets.HB_SLACK_WEBHOOK_URL }}
 
       - name: Cleanup Infrastructure
         if: always()

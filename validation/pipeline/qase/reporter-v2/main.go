@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -25,6 +26,7 @@ var (
 	testRunName             = os.Getenv(qase.TestRunNameEnvVar)
 	_, callerFilePath, _, _ = runtime.Caller(0)
 	basepath                = filepath.Join(filepath.Dir(callerFilePath), "..", "..", "..", "..")
+	validStatus             = []string{"passed", "failed", "skipped"}
 )
 
 const (
@@ -235,6 +237,10 @@ func updateTestInRun(client *upstream.APIClient, testResult testresult.GoTestRes
 
 	resultParams := make(map[string]string)
 	for _, param := range params {
+		if param.ParameterSingle == nil {
+			continue
+		}
+
 		if len(param.ParameterSingle.Values) > 0 {
 			paramKey := param.ParameterSingle.Title
 			paramVal := strings.Join(param.ParameterSingle.Values, ", ")
@@ -246,9 +252,14 @@ func updateTestInRun(client *upstream.APIClient, testResult testresult.GoTestRes
 		}
 	}
 
+	status := fmt.Sprintf("%sed", testResult.Status)
+	if !slices.Contains(validStatus, status) {
+		status = "failed"
+	}
+
 	resultBody := upstream.ResultCreate{
 		CaseId:  qaseTestCase.Id,
-		Status:  fmt.Sprintf("%sed", testResult.Status),
+		Status:  status,
 		Time:    *upstream.NewNullableInt64(&elapsedTime),
 		Param:   resultParams,
 		Comment: *upstream.NewNullableString(&testResult.StackTrace),

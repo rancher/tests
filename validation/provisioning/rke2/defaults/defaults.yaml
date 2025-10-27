@@ -84,3 +84,6 @@ templateTest:
       insecureSkipTLSVerify: true
   templateProvider: "aws"
   templateName: "<required>"
+
+logging:
+   level: "debug"

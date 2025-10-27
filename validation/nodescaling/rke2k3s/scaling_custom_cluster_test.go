@@ -21,6 +21,7 @@ import (
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/scalinginput"
+	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/validation/nodescaling"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -152,8 +153,11 @@ func (s *CustomClusterNodeScalingTestSuite) TestScalingCustomClusterNodes() {
 			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, s.cattleConfig, awsEC2Configs)
 			nodescaling.ScalingRKE2K3SCustomClusterPools(s.T(), s.client, tt.clusterID, s.scalingConfig.NodeProvider, tt.nodeRoles, awsEC2Configs, tt.clusterConfig)
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(s.T(), s.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(s.T(), s.client, cluster)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(s.T(), s.client, cluster)
 		})
 
 		params := provisioning.GetCustomSchemaParams(s.client, s.cattleConfig)

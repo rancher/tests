@@ -20,6 +20,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/validation/certificates"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -105,8 +106,11 @@ func (c *CertRotationWindowsTestSuite) TestCertRotationWindows() {
 			logrus.Infof("Rotating certificates on cluster (%s)", cluster.Name)
 			require.NoError(c.T(), certificates.RotateCerts(c.client, cluster.Name))
 
-			logrus.Infof("Verifying cluster (%s)", cluster.Name)
-			provisioning.VerifyCluster(c.T(), c.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			provisioning.VerifyClusterReady(c.T(), c.client, cluster)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			pods.VerifyClusterPods(c.T(), c.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(c.client, c.cattleConfig)
