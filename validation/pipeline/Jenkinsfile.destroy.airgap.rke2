@@ -290,7 +290,7 @@ def destroyInfrastructureWithConsolidatedScript() {
 #!/bin/bash
 set -e
 # Source the consolidated infrastructure cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap_infrastructure_cleanup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_infrastructure_cleanup.sh
 '''
 
     // Pass required environment variables to container
