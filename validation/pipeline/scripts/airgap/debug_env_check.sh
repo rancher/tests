@@ -9,8 +9,8 @@ readonly SCRIPT_DIR="$(dirname "$0")"
 # shellcheck disable=SC1090
 if [[ -f "${SCRIPT_DIR}/airgap_lib.sh" ]]; then
   source "${SCRIPT_DIR}/airgap_lib.sh"
-elif [[ -f "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_lib.sh" ]]; then
-  source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_lib.sh"
+elif [[ -f "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_lib.sh" ]]; then
+  source "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_lib.sh"
 fi
 
 # Only run debug checks if DEBUG is enabled
@@ -45,10 +45,10 @@ else
   echo "QA_INFRA_CLONE_PATH: /root/qa-infra-automation NOT FOUND"
 fi
 
-if [ -f /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_lib.sh ]; then
-  echo "airgap_lib.sh reachable at /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_lib.sh"
+if [ -f /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_lib.sh ]; then
+  echo "airgap_lib.sh reachable at /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_lib.sh"
 else
-  echo "airgap_lib.sh NOT FOUND at /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_lib.sh"
+  echo "airgap_lib.sh NOT FOUND at /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_lib.sh"
 fi
 
 exit 0

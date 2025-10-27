@@ -26,7 +26,7 @@ validate_prerequisites() {
   if ! type log_info >/dev/null 2>&1; then
     local lib_candidates=(
       "${SCRIPT_DIR}/airgap_lib.sh"
-      "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_lib.sh"
+      "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_lib.sh"
       "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
       "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
     )
