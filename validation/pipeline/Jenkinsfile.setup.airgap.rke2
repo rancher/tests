@@ -86,10 +86,10 @@ def dockerHelper() {
             echo "[ERROR] docker_helper.groovy not found in workspace at any of: ${candidates}"
             // Provide workspace diagnostics to help triage
             try {
-                echo '[DEBUG] Listing validation/pipeline/scripts:'
-                sh 'ls -la validation/pipeline/scripts || true'
-                echo '[DEBUG] Listing tests/validation/pipeline/scripts:'
-                sh 'ls -la tests/validation/pipeline/scripts || true'
+                echo '[DEBUG] Listing validation/pipeline/scripts/airgap:'
+                sh 'ls -la validation/pipeline/scripts/airgap || true'
+                echo '[DEBUG] Listing tests/validation/pipeline/scripts/aigap:'
+                sh 'ls -la tests/validation/pipeline/scripts/airgap || true'
             } catch (err) {
                 echo "[DEBUG] workspace listing failed: ${err.message}"
             }
