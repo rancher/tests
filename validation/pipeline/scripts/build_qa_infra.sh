@@ -128,7 +128,7 @@ attempt=0
 while [ $attempt -lt $max_attempts ]; do
     attempt=$((attempt + 1))
     echo "Attempt $attempt: Running RKE2 playbook..."
-    ansible-playbook -i "$TERRAFORM_INVENTORY" "$RKE2_PLAYBOOK_PATH" -vvvv -e "@$VARS_FILE"
+    ansible-playbook -i "$TERRAFORM_INVENTORY" "$RKE2_PLAYBOOK_PATH" -vvvv -e "@$VARS_FILE" --skip-tags gather_facts
     rke2_exit_code=$?
     if [ $rke2_exit_code -ne 0 ]; then
         echo "RKE2 playbook failed on attempt $attempt."
