@@ -35,22 +35,52 @@ env:
   HOSTNAME_PREFIX: "gha6-recur"
 
 jobs:
-  head:
-    if: |
-      github.event_name == 'schedule' ||
-      github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head'))
-    name: head
-    runs-on: ubuntu-latest
-    environment: latest
+  ipv6-recurring-tests:
     strategy:
       fail-fast: false
       matrix:
+        include:
+          - version: head
+            environment: latest
+            rancher_prefix_version: "head"
+            rke2_version: ${{ vars.RKE2_VERSION_2_12 }}
+            rancher_chart_version: "${{ vars.RELEASED_RANCHER_CHART_VERSION_2_12 }}"
+            rancher_version: "${{ vars.RANCHER_VERSION_HEAD }}"
+            qase_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
         suite:
           - rancher-server-one
           - rancher-server-two
+    name: ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.environment }}
 
     steps:
+      - name: Skip non-matching matrix versions
+        id: skip-matrix-version
+        if: |
+          github.event_name == 'schedule' ||
+          github.event.inputs.run_all_versions == 'true' ||
+          (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, matrix.rancher_prefix_version)) && contains(github.event.inputs.rancher_version, matrix.rancher_prefix_version) ||
+          (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, matrix.rancher_prefix_version)) && contains(inputs.rancher_version, '-alpha')
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.rancher_version }}"
+          MATRIX_VERSION="${{ matrix.version }}"
+          MATRIX_VERSION="${MATRIX_VERSION//-/.}"
+          EVENT_NAME="${{ github.event_name }}"
+
+          echo "INPUT_VERSION=$INPUT_VERSION"
+          echo "MATRIX_VERSION=$MATRIX_VERSION"
+          if [[ "${{ github.event.inputs.run_all_versions }}" == "true" || \
+                "$EVENT_NAME" == "schedule" || \
+                ("$EVENT_NAME" == "workflow_dispatch" && "$INPUT_VERSION" == "$MATRIX_VERSION"*) || \
+                ("$EVENT_NAME" == "workflow_call" && "$INPUT_VERSION" == "$MATRIX_VERSION"*) ]]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+            echo "Skipping version ${{ matrix.version }}"
+            exit 0
+          fi
+      
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -62,20 +92,33 @@ jobs:
           repository: rancher/tfp-automation
           path: tfp-automation
 
+      - name: Set up environment variables
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
+        run: |
+          if [ "${{ matrix.environment }}" == "latest" ]; then
+            echo "PREFIX_LIST_ID=${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}" >> $GITHUB_ENV
+            echo "SECURITY_GROUPS=${{ secrets.AWS_SECURITY_GROUPS }}" >> $GITHUB_ENV
+            echo "SECURITY_GROUP_NAMES=${{ secrets.AWS_SECURITY_GROUP_NAMES }}" >> $GITHUB_ENV
+            echo "RANCHER_AGENT_IMAGE=" >> $GITHUB_ENV
+          fi
+
       - name: Configure AWS credentials
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Get AWS credentials from Secrets Manager
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         uses: aws-actions/aws-secretsmanager-get-secrets@v2
         with:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         uses: rancher-eio/read-vault-secrets@main
         with:
           secrets: |
@@ -88,12 +131,14 @@ jobs:
           echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
 
       - name: Whitelist Runner IP
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
+          prefix-list-id: ${{ env.PREFIX_LIST_ID }}
           region: "${{ secrets.AWS_REGION }}"
 
       - name: Set up SSH Keys
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         uses: ./.github/actions/setup-ssh-keys
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -102,9 +147,11 @@ jobs:
           windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
 
       - name: Uniquify hostname prefix
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         uses: ./.github/actions/uniquify-hostname
 
       - name: Set Rancher version
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         uses: ./.github/actions/set-env-var
         with:
           key: RANCHER_VERSION
@@ -112,11 +159,12 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_HEAD) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_HEAD)
+              (github.event_name == 'schedule' && matrix.rancher_version) ||
+              (github.event.inputs.run_all_versions == 'true' && matrix.rancher_version)
             }}
 
       - name: Set Rancher chart version
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         uses: ./.github/actions/set-env-var
         with:
           key: RANCHER_CHART_VERSION
@@ -124,24 +172,27 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_12) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_12)
+              (github.event_name == 'schedule' && matrix.rancher_chart_version) ||
+              (github.event.inputs.run_all_versions == 'true' && matrix.rancher_chart_version)
             }}
 
       - name: Set Rancher repo
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         uses: ./.github/actions/set-rancher-repo
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           fallback-repo: ${{ secrets.RANCHER_REPO }}
 
       - name: Get Qase ID
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
+          qase_recurring_id: ${{ matrix.qase_id }}
 
       - name: Create config.yaml
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         run: |
           cat > config.yaml <<EOF
           rancher:
@@ -165,8 +216,8 @@ jobs:
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               region: "${{ secrets.AWS_REGION }}"
-              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
+              awsSecurityGroups: [${{ env.AWS_SECURITY_GROUPS }}]
+              awsSecurityGroupNames: [${{ env.AWS_SECURITY_GROUP_NAMES }}]
               awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
               awsVpcID: "${{ secrets.AWS_VPC_ID }}"
               awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
@@ -196,7 +247,7 @@ jobs:
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
-              rke2Version: "${{ vars.RKE2_VERSION_2_12 }}"
+              rke2Version: "${{ matrix.rke2_version }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
@@ -246,7 +297,7 @@ jobs:
               zone: "${{ vars.IPV6_AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
+              securityGroup: [${{ env.AWS_SECURITY_GROUP_NAMES }}]
               subnetId: "${{ secrets.AWS_IPV6_SUBNET_ID }}"
 
           awsEC2Configs:
@@ -257,7 +308,7 @@ jobs:
               - instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_IPV6_AMI }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
+                awsSecurityGroups: [${{ env.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_IPV6_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-recurring-runs"
@@ -270,30 +321,37 @@ jobs:
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         run: echo "CATTLE_TEST_CONFIG=${{ github.workspace }}/config.yaml" >> $GITHUB_ENV
         shell: bash
 
       - name: Set up Go environment
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         uses: actions/setup-go@v5
         with:
           go-version-file: "./go.mod"
 
       - name: Build Packages
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         run: ./.github/scripts/go-build.sh
 
       - name: Install gotestsum
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         run: go install gotest.tools/gotestsum@latest
 
       - name: Set up Terraform
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: "${{ vars.TERRAFORM_VERSION }}"
           terraform_wrapper: false
 
       - name: Creating Rancher server
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
       - name: Run Test Suites
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' }}
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
@@ -302,29 +360,38 @@ jobs:
           suite: ${{ matrix.suite }}
         uses: ./.github/actions/run-hostbusters-ipv6-test-suites
 
-      - name: Reporting Results to Slack
-        if: always()
-        uses: ./.github/actions/report-to-slack
-        with:
-          job-status: ${{ job.status }}
-          slack-channel: ${{ secrets.HB_SLACK_CHANNEL }}
-          slack-webhook-url: ${{ secrets.HB_SLACK_WEBHOOK_URL }}
-
       - name: Cleanup Infrastructure
-        if: always()
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' && always() }}
         working-directory: tfp-automation/modules/ipv6/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
-        if: always()
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' && always() }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Revoke Runner IP
-        if: always()
+        if: ${{ steps.skip-matrix-version.outputs.run == 'true' && always() }}
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
+          prefix-list-id: ${{ env.PREFIX_LIST_ID }}
           region: "${{ secrets.AWS_REGION }}"
+
+  report-to-slack:
+    needs: ipv6-recurring-tests
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Reporting Results to Slack
+        uses: ./.github/actions/report-to-slack
+        with:
+          job-status: ${{ needs.ipv6-recurring-tests.outputs.job-status }}
+          slack-channel: ${{ secrets.SLACK_CHANNEL }}
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
