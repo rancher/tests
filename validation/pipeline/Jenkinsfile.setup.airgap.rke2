@@ -1,6 +1,4 @@
 #!/usr/bin/env groovy
-import groovy.json.JsonOutput
-import groovy.json.JsonSlurper
 
 /**
  * Ansible Airgap Setup Jenkinsfile
@@ -972,8 +970,8 @@ def generateEnvironmentFile() {
         // Extract AWS variables from terraform config
         def awsVarPattern = ~/(\w+)\s*=\s*"([^"]*)"/
         terraformConfig.eachMatch(awsVarPattern) { match ->
-            def varName = match[1 as String]
-            def varValue = match[2 as String]
+            def varName = match[1]
+            def varValue = match[2]
             // Only include AWS-related variables
             if (varName.startsWith('AWS_')) {
                 awsConfigVars[varName] = varValue
@@ -1844,8 +1842,8 @@ def generateDeploymentSummary() {
             }
         }
 
-        def summaryJson = JsonOutput.toJson(summary)
-        writeFile file: 'deployment-summary.json', text: JsonOutput.prettyPrint(summaryJson)
+        def summaryJson = groovy.json.JsonOutput.toJson(summary)
+        writeFile file: 'deployment-summary.json', text: groovy.json.JsonOutput.prettyPrint(summaryJson)
 
         logInfo('Deployment summary generated successfully')
     } catch (Exception e) {
@@ -2039,7 +2037,7 @@ def loadInfrastructureOutputs() {
             logInfo("Raw infrastructure outputs content: ${jsonOutput}")
 
             // Parse JSON using Groovy's JsonSlurper
-            def jsonSlurper = new JsonSlurper()
+            def jsonSlurper = new groovy.json.JsonSlurper()
             def outputs = jsonSlurper.parseText(jsonOutput)
 
             // Debug: Show the parsed structure
