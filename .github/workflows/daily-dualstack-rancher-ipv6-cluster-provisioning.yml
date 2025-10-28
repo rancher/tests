@@ -35,27 +35,16 @@ env:
   HOSTNAME_PREFIX: "gha6-prov"
 
 jobs:
-  daily-dualstack-rancher-ipv6-cluster-provisioning-tests:
+  head:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head'))
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - version: head
-            environment: latest
-            rancher_prefix_version: "head"
-            rke2_version: ${{ vars.RKE2_VERSION_2_12 }}
-            rancher_chart_version: "${{ vars.RELEASED_RANCHER_CHART_VERSION_2_12 }}"
-            rancher_version: "${{ vars.RANCHER_VERSION_HEAD }}"
-            qase_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
-    name: ${{ matrix.version }}
+    name: head
     runs-on: ubuntu-latest
-    environment: ${{ matrix.environment }}
+    environment: latest
 
-    steps:      
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -66,15 +55,6 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
-
-      - name: Set up environment variables
-        run: |
-          if [ "${{ matrix.environment }}" == "latest" ]; then
-            echo "PREFIX_LIST_ID=${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}" >> $GITHUB_ENV
-            echo "SECURITY_GROUPS=${{ secrets.AWS_SECURITY_GROUPS }}" >> $GITHUB_ENV
-            echo "SECURITY_GROUP_NAMES=${{ secrets.AWS_SECURITY_GROUP_NAMES }}" >> $GITHUB_ENV
-            echo "RANCHER_AGENT_IMAGE=" >> $GITHUB_ENV
-          fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -89,7 +69,7 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Fetch and Set DockerHub Credentials
+      - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@main
         with:
           secrets: |
@@ -104,7 +84,7 @@ jobs:
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ env.PREFIX_LIST_ID }}
+          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
           region: "${{ secrets.AWS_REGION }}"
 
       - name: Set up SSH Keys
@@ -126,8 +106,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && matrix.rancher_version) ||
-              (github.event.inputs.run_all_versions == 'true' && matrix.rancher_version)
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_HEAD) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -138,8 +118,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && matrix.rancher_chart_version) ||
-              (github.event.inputs.run_all_versions == 'true' && matrix.rancher_chart_version)
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_12) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_12)
             }}
 
       - name: Set Rancher repo
@@ -153,7 +133,7 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_recurring_id: ${{ matrix.qase_id }}
+          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
 
       - name: Create config.yaml
         run: |
@@ -179,8 +159,8 @@ jobs:
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               region: "${{ secrets.AWS_REGION }}"
-              awsSecurityGroups: [${{ env.SECURITY_GROUPS }}]
-              awsSecurityGroupNames: [${{ env.SECURITY_GROUP_NAMES }}]
+              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
+              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
               awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
               awsVpcID: "${{ secrets.AWS_VPC_ID }}"
               awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
@@ -208,7 +188,7 @@ jobs:
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
-              rke2Version: "${{ matrix.rke2_version }}"
+              rke2Version: "${{ vars.RKE2_VERSION_2_12 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
@@ -222,7 +202,6 @@ jobs:
             networking:
               clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
               serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
-              stackPreference: "${{ vars.STACK_PREFERENCE_IPV6 }}"
             registries:
               rke2Registries:
                 mirrors:
@@ -255,7 +234,7 @@ jobs:
               zone: "${{ vars.IPV6_AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ env.AWS_SECURITY_GROUP_NAMES }}]
+              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
               subnetId: "${{ secrets.AWS_IPV6_SUBNET_ID }}"
 
           awsEC2Configs:
@@ -266,7 +245,7 @@ jobs:
               - instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_IPV6_AMI }}"
-                awsSecurityGroups: [${{ env.SECURITY_GROUPS }}]
+                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "hb-daily-provisioning"
@@ -325,7 +304,7 @@ jobs:
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ env.PREFIX_LIST_ID }}
+          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
           region: "${{ secrets.AWS_REGION }}"
 
       - name: Set job status output
@@ -333,22 +312,10 @@ jobs:
         run: echo "job_status=${{ job.status }}" >> $GITHUB_OUTPUT
         id: set-job-status
 
-    outputs:
-      job-status: ${{ steps.set-job-status.outputs.job_status }}
-
-  report-to-slack:
-    needs: daily-dualstack-rancher-ipv6-cluster-provisioning-tests
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      
       - name: Reporting Results to Slack
+        if: always()
         uses: ./.github/actions/report-to-slack
         with:
-          job-status: ${{ needs.daily-dualstack-rancher-ipv6-cluster-provisioning-tests.outputs.job-status }}
+          job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
