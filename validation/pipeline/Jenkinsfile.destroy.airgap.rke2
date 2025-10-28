@@ -290,7 +290,7 @@ def destroyInfrastructureWithConsolidatedScript() {
 #!/bin/bash
 set -e
 # Source the consolidated infrastructure cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgapairgap_infrastructure_cleanup.sh
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_infrastructure_cleanup.sh
 '''
 
     // Pass required environment variables to container
@@ -346,7 +346,7 @@ def validateInfrastructurePrerequisites() {
   logInfo('Validating infrastructure prerequisites')
 
   try {
-    def scriptPath = 'tests/validation/pipeline/scripts/tofu_validate_prerequisites.sh'
+    def scriptPath = 'tests/validation/pipeline/scripts/airgap/tofu_validate_prerequisites.sh'
     def scriptContent = readFile(file: scriptPath)
     executeScriptInContainer(scriptContent)
     logInfo('All infrastructure prerequisites validated')
@@ -836,7 +836,7 @@ def initializeOpenTofu() {
 
   logInfo('Initializing OpenTofu with S3 backend')
 
-  def scriptPath = 'tests/validation/pipeline/scripts/tofu_initialize.sh'
+  def scriptPath = 'tests/validation/pipeline/scripts/airgap/tofu_initialize.sh'
   def scriptContent = readFile(file: scriptPath)
   executeScriptInContainer(scriptContent, [:], true)
 }
@@ -844,7 +844,7 @@ def initializeOpenTofu() {
 def manageWorkspace() {
   logInfo("Deleting OpenTofu workspace: ${env.TF_WORKSPACE}")
 
-  def scriptPath = 'tests/validation/pipeline/scripts/tofu_delete_workspace.sh'
+  def scriptPath = 'tests/validation/pipeline/scripts/airgap/tofu_delete_workspace.sh'
   def scriptContent = readFile(file: scriptPath)
   executeScriptInContainer(scriptContent)
 }
