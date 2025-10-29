@@ -1470,10 +1470,6 @@ def generateTofuConfiguration() {
     // Replace variables in config (similar to Jenkinsfile.recurring pattern)
     terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
     terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
-//    terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
-//    terraformConfig = terraformConfig.replace('${AWS_IAM_PROFILE}', env.AWS_IAM_PROFILE ?: '')
-//    terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC ?: '')
-//    terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS ?: '')
     terraformConfig = terraformConfig.replace('${HOSTNAME_PREFIX}', env.HOSTNAME_PREFIX ?: '')
 
     // Write the configuration file
@@ -1482,18 +1478,18 @@ def generateTofuConfiguration() {
             writeFile file: env.TERRAFORM_VARS_FILENAME, text: terraformConfig
             logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
 
-            // Create proper backend.tf file with S3 configuration
-            def backendConfig = """
-terraform {
-  backend "s3" {
-    bucket = "${env.S3_BUCKET_NAME}"
-    key    = "${env.S3_KEY_PREFIX}"
-    region = "${env.S3_REGION}"
-  }
-}
-"""
-            writeFile file: 'backend.tf', text: backendConfig
-            logInfo('S3 backend configuration written to: backend.tf')
+//            // Create proper backend.tf file with S3 configuration
+//            def backendConfig = """
+//terraform {
+//  backend "s3" {
+//    bucket = "${env.S3_BUCKET_NAME}"
+//    key    = "${env.S3_KEY_PREFIX}"
+//    region = "${env.S3_REGION}"
+//  }
+//}
+//"""
+//            writeFile file: 'backend.tf', text: backendConfig
+//            logInfo('S3 backend configuration written to: backend.tf')
 
             // Generate backend.tfvars content from S3 parameters for compatibility
             def backendVars = """
