@@ -840,16 +840,7 @@ validate_pipeline_parameters
     ]
 
     try {
-        // Run validation in a temporary container
-        sh """
-            docker run --rm \
-                -e RKE2_VERSION='${params.RKE2_VERSION}' \
-                -e RANCHER_VERSION='${params.RANCHER_VERSION}' \
-                -e RANCHER_TEST_REPO_URL='${params.RANCHER_TEST_REPO_URL}' \
-                -e QA_INFRA_REPO_URL='${params.QA_INFRA_REPO_URL}' \
-                -v \$(pwd)/tests:/root/go/src/github.com/rancher/tests \
-                alpine:latest sh -c '${validationScript}'
-        """
+		dockerHelper().executeScriptInContainer(validationScript, validationEnvVars)
         logInfo('All parameters validated successfully')
     } catch (Exception e) {
         def errorMsg = "Parameter validation failed: ${e.message}"
