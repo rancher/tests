@@ -33,10 +33,6 @@ class PipelineConfig {
     static final int VALIDATION_TIMEOUT_MINUTES = 15
 
     // File names
-    static final String ANSIBLE_VARS_FILE = 'vars.yaml'
-    static final String TERRAFORM_VARS_FILE = 'cluster.tfvars'
-    static final String TERRAFORM_BACKEND_VARS_FILE = 'backend.tfvars'
-    static final String ENVIRONMENT_FILE = '.env'
 
     // Docker configuration
     static final String DOCKER_BUILD_CONTEXT = '.'
@@ -48,7 +44,6 @@ class PipelineConfig {
     static final String LOG_PREFIX_INFO = '[INFO]'
     static final String LOG_PREFIX_ERROR = '[ERROR]'
     static final String LOG_PREFIX_WARNING = '[WARNING]'
-    static final String LOG_PREFIX_DEBUG = '[DEBUG]'
 }
 
 // ========================================
@@ -379,85 +374,61 @@ pipeline {
                 script {
                     logInfo('Deploying infrastructure')
 
-                    // Configuration validation
-                    def requiredVars = [
-                        'QA_INFRA_WORK_PATH',
-                        'TF_WORKSPACE',
-                        'TERRAFORM_VARS_FILENAME',
-                        'TERRAFORM_BACKEND_VARS_FILENAME',
-                        'TERRAFORM_TIMEOUT'
-                    ]
+                    // Validate required variables inline
+                    validateRequiredVariables([
+                            'QA_INFRA_WORK_PATH', 'TF_WORKSPACE',
+                            'TERRAFORM_VARS_FILENAME', 'TERRAFORM_BACKEND_VARS_FILENAME'
+                    ])
 
-                    validateRequiredVariables(requiredVars)
+                    // Generate configuration files
+                    generateTofuConfiguration()
 
-                    // Enhanced timeout with reasonable defaults
                     def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
-                        Integer.parseInt(env.TERRAFORM_TIMEOUT) : PipelineConfig.TERRAFORM_TIMEOUT_MINUTES
+                            Integer.parseInt(env.TERRAFORM_TIMEOUT) : PipelineConfig.TERRAFORM_TIMEOUT_MINUTES
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
-                            deployInfrastructureWithConsolidatedScript()
+                            // Direct script execution - no wrapper function
+                            def infraScript = '''
+#!/bin/bash
+set -e
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_infrastructure_deploy.sh
+'''
 
-                            // Extract artifacts from Docker volume to Jenkins workspace
+                            def infraEnvVars = [
+                                    'RKE2_VERSION': env.RKE2_VERSION,
+                                    'RANCHER_VERSION': env.RANCHER_VERSION,
+                                    'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
+                                    'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
+                                    'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
+                                    'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
+                                    'UPLOAD_CONFIG_TO_S3': 'true',
+                                    'S3_BUCKET_NAME': env.S3_BUCKET_NAME,
+                                    'S3_REGION': env.S3_REGION,
+                                    'S3_KEY_PREFIX': env.S3_KEY_PREFIX,
+                                    'AWS_REGION': env.AWS_REGION,
+                                    'AWS_ACCESS_KEY_ID': env.AWS_ACCESS_KEY_ID,
+                                    'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+                                    'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
+                                    'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
+                            ]
+
+                            dockerHelper().executeScriptInContainer(infraScript, infraEnvVars)
                             extractArtifactsFromDockerVolume()
+                            logInfo('Infrastructure deployed successfully')
 
-                            logInfo('Infrastructure deployed and validated successfully')
-                        } catch (InterruptedException e) {
-                            logError("Infrastructure deployment timed out after ${timeoutMinutes} minutes")
-                            logError("Timeout exception details: ${e.message}")
-                            handleTimeoutFailure()
+                        } catch (InterruptedException ignored) {
+                            handleFailureCleanup('timeout')
                         } catch (Exception e) {
-                            logError("Infrastructure setup failed: ${e.message}")
-                            logError("Deployment failure exception details: ${e.message}")
-                            handleDeploymentFailure()
+                            logError("Infrastructure deployment failed: ${e.message}")
+                            handleFailureCleanup('deployment')
                         }
                     }
                 }
             }
             post {
-                success {
-                    script {
-                        logInfo('Infrastructure deployment succeeded')
-                        // Extract artifacts for successful deployment
-                        extractArtifactsFromDockerVolume()
-                    }
-                }
                 failure {
-                    script {
-                        logError('Infrastructure operations failed')
-                        // Extract artifacts even on failure for debugging
-                        extractArtifactsFromDockerVolume()
-                        archiveInfrastructureFailureArtifacts()
-
-                        // Use consolidated cleanup script
-                        if (env.DESTROY_ON_FAILURE.toBoolean()) {
-                            logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script')
-                            def cleanupScript = '''
-#!/bin/bash
-set -e
-# Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
-# Execute cleanup for deployment failure
-perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
-'''
-                            def cleanupEnvVars = [
-                                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
-                                'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-                                'TF_WORKSPACE': env.TF_WORKSPACE,
-                                'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
-                                'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
-                            ]
-                            dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
-                        }
-                    }
-                }
-                always {
-                    script {
-                        // Ensure artifacts are extracted before final archival
-                        extractArtifactsFromDockerVolume()
-                        // Final comprehensive state archival attempt (handles both success and failure)
-                        finalStateArchival()
-                    }
+                    script { handleFailureCleanup('deployment') }
                 }
             }
         }
@@ -465,68 +436,42 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
         stage('Prepare Ansible Environment') {
             steps {
                 script {
-                    logInfo('Preparing Ansible environment using consolidated script')
+                    logInfo('Preparing Ansible environment with consolidated script')
 
-                    // Configuration validation for Ansible
-                    def requiredAnsibleVars = [
-                        'QA_INFRA_WORK_PATH',
-                        'ANSIBLE_VARS_FILENAME',
-                        'ANSIBLE_TIMEOUT'
-                    ]
+                    validateRequiredVariables(['QA_INFRA_WORK_PATH', 'ANSIBLE_VARS_FILENAME'])
 
-                    validateRequiredVariables(requiredAnsibleVars)
-
-                    // Enhanced timeout with reasonable defaults
                     def timeoutMinutes = env.ANSIBLE_TIMEOUT ?
-                        Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
+                            Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
-                        try {
-                            // Prepare Ansible environment using consolidated script
-                            prepareAnsibleEnvironmentWithConsolidatedScript()
+                        // Direct script execution - no wrapper
+                        def ansiblePrepScript = '''
+#!/bin/bash
+set -e
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_prepare_environment.sh
+'''
 
-                            logInfo('Ansible environment preparation completed successfully')
-                        } catch (Exception e) {
-                            logError("Ansible environment preparation failed: ${e.message}")
-                            throw e
-                        }
+                        def ansiblePrepEnvVars = [
+                                'ANSIBLE_VARIABLES': env.ANSIBLE_VARIABLES,
+                                'RKE2_VERSION': env.RKE2_VERSION,
+                                'RANCHER_VERSION': env.RANCHER_VERSION,
+                                'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
+                                'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
+                                'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
+                                'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
+                                'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD,
+                                'SKIP_YAML_VALIDATION': env.SKIP_YAML_VALIDATION,
+                                'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
+                                'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
+                        ]
+
+                        dockerHelper().executeScriptInContainer(ansiblePrepScript, ansiblePrepEnvVars)
                     }
                 }
             }
             post {
-                success {
-                    script {
-                        // Archive Ansible preparation artifacts
-                        archiveAnsiblePreparationArtifacts()
-                    }
-                }
                 failure {
-                    script {
-                        logError('Ansible environment preparation failed')
-                        // Archive failure artifacts for debugging
-                        archiveAnsibleFailureArtifacts()
-
-                        // Use consolidated cleanup script
-                        if (env.DESTROY_ON_FAILURE.toBoolean()) {
-                            logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script')
-                            def cleanupScript = '''
-#!/bin/bash
-set -e
-# Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
-# Execute cleanup for deployment failure
-perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
-'''
-                            def cleanupEnvVars = [
-                                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
-                                'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-                                'TF_WORKSPACE': env.TF_WORKSPACE,
-                                'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
-                                'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
-                            ]
-                            dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
-                        }
-                    }
+                    script { handleFailureCleanup('ansible_prep') }
                 }
             }
         }
@@ -534,70 +479,43 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
         stage('Deploy RKE2 with Ansible') {
             steps {
                 script {
-                    logInfo('Deploying RKE2 cluster using consolidated script')
+                    logInfo('Deploying RKE2 cluster with consolidated script')
 
-                    // Configuration validation
-                    def requiredAnsibleVars = [
-                        'QA_INFRA_WORK_PATH',
-                        'ANSIBLE_VARS_FILENAME',
-                        'ANSIBLE_TIMEOUT'
-                    ]
+                    validateRequiredVariables(['QA_INFRA_WORK_PATH', 'ANSIBLE_VARS_FILENAME'])
 
-                    validateRequiredVariables(requiredAnsibleVars)
-
-                    // Enhanced timeout with reasonable defaults
                     def timeoutMinutes = env.ANSIBLE_TIMEOUT ?
-                        Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
+                            Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
-                            // Deploy RKE2 using consolidated script
-                            deployRKE2WithConsolidatedScript()
-
-                            logInfo('RKE2 deployment completed successfully')
-                        } catch (Exception e) {
-                            logError("RKE2 deployment failed: ${e.message}")
-
-                            // Use consolidated cleanup script
-                            if (env.DESTROY_ON_FAILURE.toBoolean()) {
-                                logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script')
-                                def cleanupScript = '''
+                            // Direct script execution - no wrapper
+                            def rke2Script = '''
 #!/bin/bash
 set -e
-# Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
-# Execute cleanup for deployment failure
-perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_deploy_rke2.sh
 '''
-                                def cleanupEnvVars = [
-                                    'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
-                                    'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-                                    'TF_WORKSPACE': env.TF_WORKSPACE,
-                                    'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
-                                    'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
-                                ]
-                                dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
-                            }
 
+                            def rke2EnvVars = [
+                                    'RKE2_VERSION': env.RKE2_VERSION,
+                                    'SKIP_VALIDATION': 'false',
+                                    'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
+                                    'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
+                            ]
+
+                            dockerHelper().executeScriptInContainer(rke2Script, rke2EnvVars)
+                            logInfo('RKE2 deployment completed successfully')
+
+                        } catch (Exception e) {
+                            logError("RKE2 deployment failed: ${e.message}")
+                            handleFailureCleanup('rke2')
                             throw e
                         }
                     }
                 }
             }
             post {
-                success {
-                    script {
-                        logInfo('RKE2 deployment succeeded')
-                        // Archive RKE2 deployment artifacts
-                        archiveRKE2DeploymentArtifacts()
-                    }
-                }
                 failure {
-                    script {
-                        logError('RKE2 deployment failed')
-                        // Archive failure artifacts for debugging
-                        archiveAnsibleFailureArtifacts()
-                    }
+                    script { handleFailureCleanup('rke2') }
                 }
             }
         }
@@ -605,70 +523,43 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
         stage('Deploy Rancher with Ansible') {
             steps {
                 script {
-                    logInfo('Deploying Rancher to RKE2 cluster using consolidated script')
+                    logInfo('Deploying Rancher with consolidated script')
 
-                    // Configuration validation
-                    def requiredAnsibleVars = [
-                        'QA_INFRA_WORK_PATH',
-                        'ANSIBLE_VARS_FILENAME',
-                        'ANSIBLE_TIMEOUT'
-                    ]
+                    validateRequiredVariables(['QA_INFRA_WORK_PATH', 'ANSIBLE_VARS_FILENAME'])
 
-                    validateRequiredVariables(requiredAnsibleVars)
-
-                    // Enhanced timeout with reasonable defaults
                     def timeoutMinutes = env.ANSIBLE_TIMEOUT ?
-                        Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
+                            Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
 
                     timeout(time: timeoutMinutes, unit: 'MINUTES') {
                         try {
-                            // Deploy Rancher using consolidated script
-                            deployRancherWithConsolidatedScript()
-
-                            logInfo('Rancher deployment completed successfully')
-                        } catch (Exception e) {
-                            logError("Rancher deployment failed: ${e.message}")
-
-                            // Use consolidated cleanup script
-                            if (env.DESTROY_ON_FAILURE.toBoolean()) {
-                                logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script')
-                                def cleanupScript = '''
+                            // Direct script execution - no wrapper
+                            def rancherScript = '''
 #!/bin/bash
 set -e
-# Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
-# Execute cleanup for deployment failure
-perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_deploy_rancher.sh
 '''
-                                def cleanupEnvVars = [
-                                    'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
-                                    'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-                                    'TF_WORKSPACE': env.TF_WORKSPACE,
-                                    'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
-                                    'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
-                                ]
-                                dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
-                            }
 
+                            def rancherEnvVars = [
+                                    'RANCHER_VERSION': env.RANCHER_VERSION,
+                                    'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
+                                    'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
+                                    'SKIP_VERIFICATION': 'false'
+                            ]
+
+                            dockerHelper().executeScriptInContainer(rancherScript, rancherEnvVars)
+                            logInfo('Rancher deployment completed successfully')
+
+                        } catch (Exception e) {
+                            logError("Rancher deployment failed: ${e.message}")
+                            handleFailureCleanup('rancher')
                             throw e
                         }
                     }
                 }
             }
             post {
-                success {
-                    script {
-                        logInfo('Rancher deployment succeeded')
-                        // Archive Rancher deployment artifacts
-                        archiveRancherDeploymentArtifacts()
-                    }
-                }
                 failure {
-                    script {
-                        logError('Rancher deployment failed')
-                        // Archive failure artifacts for debugging
-                        archiveRancherFailureArtifacts()
-                    }
+                    script { handleFailureCleanup('rancher') }
                 }
             }
         }
@@ -776,23 +667,6 @@ perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
 // LOGGING UTILITY FUNCTIONS
 // ========================================
 
-static def redactSensitiveValue(value) {
-    if (!value || value.toString().trim().isEmpty()) {
-        return 'NULL'
-    }
-
-    def strValue = value.toString()
-    if (strValue.length() <= 8) {
-        return '***REDACTED***'
-    }
-
-    // Show first 4 and last 4 characters for debugging purposes
-    return "${strValue.take(4)}...${strValue.takeRight(4)} (${strValue.length()} chars)"
-}
-
-def logSensitiveInfo(name, value) {
-    logInfo("${name} = ${redactSensitiveValue(value)}")
-}
 
 def logInfo(msg) {
     echo "${PipelineConfig.LOG_PREFIX_INFO} ${getTimestamp()} ${msg}"
@@ -806,11 +680,6 @@ def logWarning(msg) {
     echo "${PipelineConfig.LOG_PREFIX_WARNING} ${getTimestamp()} ${msg}"
 }
 
-def logDebug(msg) {
-    if (env.DEBUG.toBoolean()) {
-        echo "${PipelineConfig.LOG_PREFIX_DEBUG} ${getTimestamp()} ${msg}"
-    }
-}
 
 static def getTimestamp() {
     return new Date().format('yyyy-MM-dd HH:mm:ss')
@@ -1286,127 +1155,6 @@ def cleanupContainersAndVolumes() {
 }
 
 // ========================================
-// CONSOLIDATED SCRIPT HELPER FUNCTIONS
-// ========================================
-
-def deployInfrastructureWithConsolidatedScript() {
-    logInfo('Executing infrastructure deployment with consolidated script')
-
-    // First, generate the Terraform configuration including backend.tf
-    generateTofuConfiguration()
-
-    def scriptContent = '''
-#!/bin/bash
-set -e
-# Source the consolidated infrastructure deployment script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_infrastructure_deploy.sh
-'''
-
-    // Pass required environment variables to container
-    def extraEnvVars = [
-        'RKE2_VERSION': env.RKE2_VERSION,
-        'RANCHER_VERSION': env.RANCHER_VERSION,
-        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
-        'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
-        'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
-        'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
-        'UPLOAD_CONFIG_TO_S3': 'true',
-        'S3_BUCKET_NAME': env.S3_BUCKET_NAME,
-        'S3_REGION': env.S3_REGION,
-        'S3_KEY_PREFIX': env.S3_KEY_PREFIX,
-        'AWS_REGION': env.AWS_REGION,
-        'AWS_ACCESS_KEY_ID': env.AWS_ACCESS_KEY_ID,
-        'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
-        'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
-        'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
-    ]
-
-    dockerHelper().executeScriptInContainer(scriptContent, extraEnvVars)
-}
-
-def prepareAnsibleEnvironmentWithConsolidatedScript() {
-    logInfo('Executing Ansible environment preparation with consolidated script')
-
-    def scriptContent = '''
-#!/bin/bash
-set -e
-# Source the consolidated Ansible environment preparation script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_prepare_environment.sh
-'''
-
-    // Pass required environment variables to container
-    def extraEnvVars = [
-        'ANSIBLE_VARIABLES': env.ANSIBLE_VARIABLES,
-        'RKE2_VERSION': env.RKE2_VERSION,
-        'RANCHER_VERSION': env.RANCHER_VERSION,
-        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
-        'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
-        'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
-        'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
-        'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD,
-        'SKIP_YAML_VALIDATION': env.SKIP_YAML_VALIDATION,
-        'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
-        'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
-    ]
-
-    dockerHelper().executeScriptInContainer(scriptContent, extraEnvVars)
-}
-
-def deployRKE2WithConsolidatedScript() {
-    logInfo('Executing RKE2 deployment with consolidated script')
-
-    def scriptContent = '''
-#!/bin/bash
-set -e
-# Source the consolidated RKE2 deployment script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_deploy_rke2.sh
-'''
-
-    // Pass required environment variables to container
-    def extraEnvVars = [
-        'RKE2_VERSION': env.RKE2_VERSION,
-        'SKIP_VALIDATION': 'false',
-        'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
-        'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
-    ]
-
-    dockerHelper().executeScriptInContainer(scriptContent, extraEnvVars)
-}
-
-def deployRancherWithConsolidatedScript() {
-    logInfo('Executing Rancher deployment with consolidated script')
-
-    def scriptContent = '''
-#!/bin/bash
-set -e
-# Source the minimal Rancher deployment wrapper
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_deploy_rancher.sh
-'''
-
-    // Pass required environment variables to container
-    def extraEnvVars = [
-        'RANCHER_VERSION': env.RANCHER_VERSION,
-        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
-        'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
-        'SKIP_VERIFICATION': 'false'
-    ]
-
-    dockerHelper().executeScriptInContainer(scriptContent, extraEnvVars)
-}
-
-// ========================================
-// ARTIFACT ARCHIVING FUNCTIONS
-// ========================================
-
-def archiveAnsiblePreparationArtifacts() {
-    logInfo('Archiving Ansible preparation artifacts')
-    archiveBuildArtifacts([
-        'group_vars.tar.gz',
-        'ansible-preparation-report.txt'
-    ])
-}
-
-// ========================================
 // UNIFIED CLEANUP AND ERROR HANDLING
 // ========================================
 
@@ -1532,93 +1280,6 @@ def archiveFailureArtifactsByType(String failureType) {
     archiveBuildArtifacts(artifacts)
 }
 
-def archiveRKE2DeploymentArtifacts() {
-    logInfo('Archiving RKE2 deployment artifacts')
-    archiveBuildArtifacts([
-        'kubeconfig.yaml',
-        'rke2_deployment_report.txt',
-        'rke2_deployment.log',
-        'rke2_playbook_execution.log',
-        'node_role_verification.log'
-    ])
-}
-
-// ========================================
-// ERROR HANDLING FUNCTIONS
-// ========================================
-
-def handleTimeoutFailure() {
-    logError("Infrastructure deployment timed out after ${env.TERRAFORM_TIMEOUT} minutes")
-    try {
-        archiveInfrastructureFailureArtifacts()
-        if (env.DESTROY_ON_FAILURE.toBoolean()) {
-            logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script for timeout')
-            def cleanupScript = '''
-#!/bin/bash
-set -e
-
-# Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
-# Execute cleanup for timeout
-perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
-'''
-            // Pass required environment variables to container
-            def cleanupEnvVars = [
-                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
-                'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-                'TF_WORKSPACE': env.TF_WORKSPACE,
-                'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
-                'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
-            ]
-            dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
-            logInfo('Infrastructure cleanup attempted for timeout')
-        } else {
-            logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for timeout')
-            logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
-        }
-        cleanupContainersAndVolumes()
-    } catch (cleanupException) {
-        logError("Cleanup during timeout handling failed: ${cleanupException.message}")
-    }
-    // Use Jenkins built-in timeout exception instead of custom FlowInterruptedException
-    error("Pipeline timed out after ${env.TERRAFORM_TIMEOUT} minutes")
-}
-
-def handleDeploymentFailure() {
-    logError('Infrastructure setup failed')
-    try {
-        archiveInfrastructureFailureArtifacts()
-        if (env.DESTROY_ON_FAILURE.toBoolean()) {
-            logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script for deployment failure')
-            def cleanupScript = '''
-#!/bin/bash
-set -e
-# Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
-# Execute cleanup for deployment failure
-perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
-'''
-            // Pass required environment variables to container
-            def cleanupEnvVars = [
-                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
-                'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-                'TF_WORKSPACE': env.TF_WORKSPACE,
-                'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
-                'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
-            ]
-            dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
-            logInfo('Infrastructure cleanup attempted for deployment failure')
-        } else {
-            logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for deployment failure')
-            logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
-        }
-        cleanupContainersAndVolumes()
-    } catch (cleanupException) {
-        logError("Cleanup during deployment failure handling failed: ${cleanupException.message}")
-    }
-    throw new Exception('Infrastructure deployment failed')
-}
-
 // ========================================
 // ARTIFACT MANAGEMENT FUNCTIONS
 // ========================================
@@ -1632,95 +1293,6 @@ def archiveBuildArtifacts(artifacts) {
     }
 }
 
-def extractStateFromVolume() {
-    logInfo('Extracting terraform state from shared volume')
-    sh """
-    if [ -f /root/terraform.tfstate ]; then
-        cp /root/terraform.tfstate ./terraform.tfstate || echo 'No state file in volume or copy failed'
-        echo 'State extraction from volume attempted'
-    else
-        echo 'No state file found in shared volume'
-    fi
-    """
-}
-
-def extractStateFromContainer() {
-    logInfo('Extracting terraform state from container backup')
-    sh """
-    if [ -f /root/terraform-state-primary.tfstate ]; then
-        cp /root/terraform-state-primary.tfstate ./terraform-state.tfstate || echo 'Fallback state copy failed'
-        echo 'Fallback state extraction from container attempted'
-    else
-        echo 'No fallback state found in container'
-    fi
-    """
-}
-
-def archiveInfrastructureState() {
-    logInfo('Archiving infrastructure state')
-    try {
-        // Extract current state
-        extractStateFromVolume()
-        extractStateFromContainer()
-
-        def timestamp = new Date().format('yyyyMMdd-HHmmss')
-        def stateName = "infrastructure-state-${env.BUILD_NUMBER}-${timestamp}.tfstate"
-
-        sh """
-            if [ -f terraform.tfstate ]; then
-                cp terraform.tfstate ${stateName}
-                echo "State copied to workspace: ${stateName} (not archived)"
-            elif [ -f terraform-state.tfstate ]; then
-                cp terraform-state.tfstate ${stateName}
-                echo "State copied from fallback: ${stateName} (not archived)"
-            else
-                echo "No state file available for archival"
-            fi
-        """
-
-        // DISABLED - tfstate files not archived per security policy
-        // archiveArtifacts artifacts: stateName, allowEmptyArchive: true
-        logInfo('Infrastructure state processed (not archived)')
-    } catch (Exception e) {
-        logError("State archival failed: ${e.message}")
-    }
-}
-
-def archiveInfrastructureFailureArtifacts() {
-    logInfo('Archiving failure artifacts')
-    try {
-        // Archive partial state and logs (tfstate archival disabled per security policy)
-        // archiveInfrastructureState()
-        archiveBuildArtifacts([
-            'tfplan-backup',
-            '*.log',
-            'ansible-logs.txt',
-            'error-*.txt'
-        ])
-        logInfo('Failure artifacts archived')
-    } catch (Exception e) {
-        logError("Failure artifacts archival failed: ${e.message}")
-    }
-}
-
-def finalStateArchival() {
-    logInfo('Performing final comprehensive state archival')
-    try {
-        // Archive infrastructure state (creates infrastructure-state-* files)
-        archiveInfrastructureState()
-
-        // Additional final artifacts - fix variable expansion issue
-        def artifactsList = [
-            'infrastructure-outputs.json',
-            'ansible-inventory.yml',
-            'deployment-summary.json'
-        ]
-        archiveBuildArtifacts(artifactsList)
-        logInfo('Final state archival completed')
-    } catch (Exception e) {
-        logError("Final archival failed: ${e.message}")
-    }
-}
 
 // ========================================
 // ARTIFACT EXTRACTION FUNCTIONS
@@ -1932,691 +1504,5 @@ region = "${env.S3_REGION}"
             writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
             logInfo("S3 backend variables written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
         }
-    }
-}
-
-def deployInfrastructure() {
-    logInfo('Starting infrastructure deployment process')
-
-    // Step 1: Generate Tofu config (must be first to create required files)
-    generateTofuConfiguration()
-
-    // Step 2: Upload cluster.tfvars to S3 immediately after generation
-    uploadClusterTfvarsToS3()
-
-    // Step 3: Validate infrastructure prerequisites (now files exist)
-    validateInfrastructurePrerequisites()
-
-    // Step 4: Initialize OpenTofu
-    initializeOpenTofu()
-
-    // Step 5: Manage workspace
-    manageWorkspace()
-
-    // Step 6: Plan infrastructure changes
-    planInfrastructure()
-
-    // Step 7: Apply infrastructure
-    applyInfrastructure()
-
-    logInfo('Infrastructure deployment completed successfully')
-}
-
-def validateInfrastructurePrerequisites() {
-    logInfo('Validating infrastructure prerequisites')
-
-    def prerequisiteScript = '''
-    # Source the external prerequisites validation script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/tofu_validate_prerequisites.sh
-    '''
-
-    try {
-        dockerHelper().executeScriptInContainer(prerequisiteScript)
-        logInfo('All infrastructure prerequisites validated')
-    } catch (Exception e) {
-        def errorMsg = "Infrastructure prerequisites validation failed: ${e.message}"
-        logError(errorMsg)
-        error(errorMsg)
-    }
-}
-
-def initializeOpenTofu() {
-    logInfo('Initializing OpenTofu with S3 backend')
-
-    def initScript = '''
-    # Source the external OpenTofu initialization script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/tofu_initialize.sh
-    '''
-
-    dockerHelper().executeScriptInContainer(initScript, [:], true)
-}
-
-def manageWorkspace() {
-    logInfo("Managing OpenTofu workspace: ${env.TF_WORKSPACE}")
-
-    def workspaceScript = '''
-#!/bin/bash
-set -e
-
-# Source the external workspace management script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/tofu_manage_workspace.sh
-      '''
-
-    dockerHelper().executeScriptInContainer(workspaceScript)
-}
-
-// ========================================
-// ANSIBLE DEPLOYMENT FUNCTIONS
-// ========================================
-
-def generateAnsibleGroupVars() {
-    logInfo('Generating Ansible group_vars/all.yml in container')
-
-    // Validate that ANSIBLE_VARIABLES was loaded
-    if (!env.ANSIBLE_VARIABLES) {
-        error('ANSIBLE_VARIABLES not loaded - this should have been set in readAnsibleVariablesFile()')
-    }
-
-    def groupVarsScript = '''
-#!/bin/bash
-set -e
-
-# Source the external Ansible group_vars generation script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_generate_group_vars.sh
-    '''
-
-    // Pass required environment variables to container
-    def groupVarsEnvVars = [
-        'ANSIBLE_VARIABLES': env.ANSIBLE_VARIABLES,
-        'RKE2_VERSION': env.RKE2_VERSION,
-        'RANCHER_VERSION': env.RANCHER_VERSION,
-        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
-        'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
-        'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
-        'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD,
-        'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME
-    ]
-
-    try {
-        dockerHelper().executeScriptInContainer(groupVarsScript, groupVarsEnvVars)
-        logInfo('Ansible group_vars generated successfully')
-    } catch (Exception e) {
-        def errorMsg = "Ansible group_vars generation failed: ${e.message}"
-        logError(errorMsg)
-        error(errorMsg)
-    }
-}
-
-def loadInfrastructureOutputs() {
-    logInfo('Loading infrastructure outputs from Terraform')
-
-    try {
-        // Check if infrastructure-outputs.json exists
-        if (fileExists('infrastructure-outputs.json')) {
-            // Read JSON file using shell command and parse it
-            def jsonOutput = sh(script: 'cat infrastructure-outputs.json', returnStdout: true).trim()
-
-            // Debug: Show the actual JSON content
-            logInfo("Raw infrastructure outputs content: ${jsonOutput}")
-
-            // Parse JSON using Groovy's JsonSlurper
-            def jsonSlurper = new groovy.json.JsonSlurper()
-            def outputs = jsonSlurper.parseText(jsonOutput)
-
-            // Debug: Show the parsed structure
-            logInfo("Parsed outputs type: ${outputs.getClass().name}")
-            if (outputs instanceof Map) {
-                logInfo("Available keys in outputs: ${outputs.keySet()}")
-            }
-
-            // Handle the actual Terraform output structure with metadata
-            def bastionPublicDns = null
-            def rancherPrivateIps = []
-
-            // Extract bastion public DNS from nested structure
-            if (outputs.containsKey('bastion_public_dns') && outputs.bastion_public_dns instanceof Map) {
-                def bastionOutput = outputs.bastion_public_dns
-                if (bastionOutput.containsKey('value')) {
-                    bastionPublicDns = bastionOutput.value
-                    logInfo("Found bastion_public_dns.value: ${bastionPublicDns}")
-                } else {
-                    logWarning("bastion_public_dns found but no 'value' field")
-                }
-            } else {
-                logWarning('bastion_public_dns not found or not a Map')
-            }
-
-            // Extract rancher servers private IPs from nested structure
-            if (outputs.containsKey('rancher_servers_private_ips') && outputs.rancher_servers_private_ips instanceof Map) {
-                def rancherIpsOutput = outputs.rancher_servers_private_ips
-                if (rancherIpsOutput.containsKey('value')) {
-                    rancherPrivateIps = rancherIpsOutput.value
-                    logInfo("Found rancher_servers_private_ips.value: ${rancherPrivateIps}")
-                } else {
-                    logWarning("rancher_servers_private_ips found but no 'value' field")
-                }
-            } else {
-                logWarning('rancher_servers_private_ips not found or not a Map')
-            }
-
-            // Set environment variables based on available data
-            if (bastionPublicDns) {
-                env.BASTION_IP = bastionPublicDns
-                logInfo("BASTION_IP set to bastion public DNS: ${env.BASTION_IP}")
-            } else {
-                logWarning('BASTION_IP could not be set - bastion_public_dns.value not found')
-                logWarning("Available keys: ${outputs.keySet()}")
-            }
-
-            // Use first rancher server private IP as bastion private IP
-            if (rancherPrivateIps && rancherPrivateIps instanceof List && rancherPrivateIps.size() > 0) {
-                env.BASTION_PRIVATE_IP = rancherPrivateIps[0]
-                logInfo("BASTION_PRIVATE_IP set to first rancher server IP: ${env.BASTION_PRIVATE_IP}")
-            } else {
-                logWarning('BASTION_PRIVATE_IP could not be set - no valid rancher servers private IPs found')
-                logWarning("rancherPrivateIps type: ${rancherPrivateIps?.getClass()?.name}, size: ${rancherPrivateIps?.size()}")
-            }
-
-            logInfo('Infrastructure outputs loaded successfully')
-        } else {
-            error('infrastructure-outputs.json not found in workspace')
-        }
-    } catch (Exception e) {
-        def errorMsg = "Failed to load infrastructure outputs: ${e.message}"
-        logError(errorMsg)
-        error(errorMsg)
-    }
-}
-
-def setupAnsibleSSHKeys() {
-    logInfo('Setting up SSH keys for Ansible connectivity')
-
-    // Get credentials within withCredentials block to ensure they're available
-    def awsSshPemKey = null
-    def awsSshKeyName = null
-
-    withCredentials([
-        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
-        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
-    ]) {
-        awsSshPemKey = env.AWS_SSH_PEM_KEY
-        awsSshKeyName = env.AWS_SSH_KEY_NAME
-
-    // Note: Avoid storing credentials in Jenkins environment variables for security
-    // These are used locally within this function scope only
-    }
-
-    // Debug: Show current environment variables
-    logInfo('DEBUG: SSH Configuration (sensitive data redacted):')
-    logInfo("DEBUG: AWS_SSH_PEM_KEY = ${awsSshPemKey ? 'SET' : 'NULL'}")
-    logInfo("DEBUG: AWS_SSH_KEY_NAME = ${awsSshKeyName ? 'SET' : 'NULL'}")
-    logInfo("DEBUG: BASTION_IP = ${env.BASTION_IP}")
-    logInfo("DEBUG: BASTION_PRIVATE_IP = ${env.BASTION_PRIVATE_IP}")
-
-    // Validate that we have the required credentials
-    if (!awsSshPemKey || !awsSshKeyName) {
-        error('Required SSH credentials are not available. Check that AWS_SSH_PEM_KEY and AWS_SSH_KEY_NAME credentials are properly configured in Jenkins.')
-    }
-
-    // Validate that we have the required infrastructure outputs
-    if (!env.BASTION_IP || !env.BASTION_PRIVATE_IP) {
-        error("Required infrastructure outputs are not available. BASTION_IP=${env.BASTION_IP}, BASTION_PRIVATE_IP=${env.BASTION_PRIVATE_IP}")
-    }
-
-    def sshSetupScript = '''
-#!/bin/bash
-set -e
-
-# Source the external Ansible SSH key setup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_setup_ssh_keys.sh
-    '''
-
-    // Pass SSH key environment variables to the container
-    def sshEnvVars = [
-        'AWS_SSH_PEM_KEY': awsSshPemKey,
-        'AWS_SSH_KEY_NAME': awsSshKeyName,
-        'BASTION_IP': env.BASTION_IP,
-        'BASTION_PRIVATE_IP': env.BASTION_PRIVATE_IP
-    ]
-
-    // Debug: Show what we're passing to container
-    logInfo('DEBUG: Passing environment variables to container:')
-    sshEnvVars.each { key, value ->
-        logInfo("  ${key} = ${value ? 'SET' : 'NULL'}")
-    }
-
-    try {
-        dockerHelper().executeScriptInContainer(sshSetupScript, sshEnvVars)
-        logInfo('Ansible SSH keys setup completed successfully')
-    } catch (Exception e) {
-        def errorMsg = "Ansible SSH key setup failed: ${e.message}"
-        logError(errorMsg)
-        error(errorMsg)
-    }
-}
-
-def runAnsibleSSHSetup() {
-    logInfo('Running Ansible SSH key setup playbook')
-
-    def sshSetupPlaybookScript = '''
-#!/bin/bash
-set -e
-
-# Source the external Ansible SSH setup playbook script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_run_ssh_setup.sh
-    '''
-
-    // Get SSH credentials and pass them to container
-    def awsSshPemKey = null
-    def awsSshKeyName = null
-
-    withCredentials([
-        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
-        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
-    ]) {
-        awsSshPemKey = env.AWS_SSH_PEM_KEY
-        awsSshKeyName = env.AWS_SSH_KEY_NAME
-    }
-
-    // Pass SSH credentials and RKE2 version to container
-    def sshEnvVars = [
-        'AWS_SSH_PEM_KEY': awsSshPemKey,
-        'AWS_SSH_KEY_NAME': awsSshKeyName,
-        'RKE2_VERSION': env.RKE2_VERSION,
-        'QA_INFRA_REPO_URL': env.QA_INFRA_REPO,
-        'QA_INFRA_REPO_BRANCH': params.QA_INFRA_REPO_BRANCH
-    ]
-
-    try {
-        dockerHelper().executeScriptInContainer(sshSetupPlaybookScript, sshEnvVars)
-        logInfo('Ansible SSH setup playbook executed successfully')
-    } catch (Exception e) {
-        def errorMsg = "Ansible SSH setup playbook failed: ${e.message}"
-        logError(errorMsg)
-        error(errorMsg)
-    }
-}
-
-def runRKE2TarballDeployment() {
-    logInfo('Running RKE2 tarball deployment playbook')
-
-    def rke2DeploymentScript = '''
-    #!/bin/bash
-    set -e
-
-    # Source the external RKE2 tarball deployment script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_run_rke2_deployment.sh
-        '''
-
-    // Get SSH credentials and pass them to container
-    def awsSshPemKey = null
-    def awsSshKeyName = null
-
-    withCredentials([
-        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
-        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
-    ]) {
-        awsSshPemKey = env.AWS_SSH_PEM_KEY
-        awsSshKeyName = env.AWS_SSH_KEY_NAME
-    }
-
-    // Pass SSH credentials and RKE2 version to container
-    def sshEnvVars = [
-        'AWS_SSH_PEM_KEY': awsSshPemKey,
-        'AWS_SSH_KEY_NAME': awsSshKeyName,
-        'RKE2_VERSION': env.RKE2_VERSION,
-        'QA_INFRA_REPO_URL': env.QA_INFRA_REPO,
-        'QA_INFRA_REPO_BRANCH': params.QA_INFRA_REPO_BRANCH
-    ]
-
-    try {
-        dockerHelper().executeScriptInContainer(rke2DeploymentScript, sshEnvVars)
-        logInfo('RKE2 tarball deployment playbook executed successfully')
-    } catch (Exception e) {
-        def errorMsg = "RKE2 tarball deployment playbook failed: ${e.message}"
-        logError(errorMsg)
-
-        // Check if this is an Ansible exit code 2 (failed tasks) but deployment might still be successful
-        if (e.message.contains('script returned exit code 2')) {
-            logWarning('Ansible returned exit code 2 (failed tasks), checking if deployment actually succeeded...')
-
-            // Give a moment for any async operations to complete
-            sleep(10)
-
-            // Check if kubectl access setup has run and cluster is working
-            try {
-                setupKubectlAccess()
-                logInfo('Cluster appears to be operational despite Ansible task failures')
-                logInfo('Continuing with deployment...') // Don't fail the deployment
-            } catch (kubectlException) {
-                logError("kubectl setup also failed: ${kubectlException.message}")
-                logError('Deployment genuinely failed')
-                error(errorMsg)
-            }
-        } else {
-            // Critical failure, not just Ansible task failures
-            error(errorMsg)
-        }
-    }
-}
-
-def setupKubectlAccess() {
-    logInfo('Setting up kubectl access on bastion host')
-
-    def kubectlSetupScript = '''
-#!/bin/bash
-set -e
-
-# Source the external kubectl access setup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_setup_kubectl.sh
-    '''
-
-    // Pass RKE2_VERSION to container
-    def kubectlEnvVars = [
-        'RKE2_VERSION': env.RKE2_VERSION,
-        'QA_INFRA_REPO_URL': env.QA_INFRA_REPO,
-        'QA_INFRA_REPO_BRANCH': params.QA_INFRA_REPO_BRANCH
-    ]
-
-    try {
-        dockerHelper().executeScriptInContainer(kubectlSetupScript, kubectlEnvVars)
-        logInfo('kubectl access setup completed successfully')
-    } catch (Exception e) {
-        def errorMsg = "kubectl access setup failed: ${e.message}"
-        logError(errorMsg)
-        error(errorMsg)
-    }
-}
-
-def handleAnsibleDeploymentFailure() {
-    logError('Ansible deployment failed - initiating cleanup')
-    try {
-        archiveAnsibleFailureArtifacts()
-        if (env.DESTROY_ON_FAILURE.toBoolean()) {
-            logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for Ansible failure')
-            def cleanupScript = '''
-#!/bin/bash
-set -e
-
-# Source the external Ansible failure cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_failure_cleanup.sh
-            '''
-            // Pass required environment variables to container
-            def cleanupEnvVars = [
-                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
-                'TF_WORKSPACE': env.TF_WORKSPACE,
-                'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-                'AWS_ACCESS_KEY_ID': env.AWS_ACCESS_KEY_ID,
-                'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
-                'AWS_REGION': env.AWS_REGION,
-                'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME,
-                'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME
-            ]
-            // Note: Don't cleanup containers yet - we need them for cleanup script
-            dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
-            logInfo('Infrastructure cleanup attempted for Ansible failure')
-        } else {
-            logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for Ansible failure')
-            logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
-        }
-        // Only cleanup containers after infrastructure cleanup is attempted
-        cleanupContainersAndVolumes()
-    } catch (cleanupException) {
-        logError("Cleanup during Ansible failure handling failed: ${cleanupException.message}")
-        // Still try to cleanup containers even if infrastructure cleanup fails
-        try {
-            cleanupContainersAndVolumes()
-        } catch (containerCleanupException) {
-            logError("Container cleanup also failed: ${containerCleanupException.message}")
-        }
-    }
-    throw new Exception('Ansible deployment failed')
-}
-
-def archiveAnsibleDeploymentArtifacts() {
-    logInfo('Archiving Ansible deployment artifacts')
-    try {
-        archiveBuildArtifacts([
-            'ansible-inventory.yml',
-            'group_vars/all.yml',
-            'kubeconfig.yaml',
-            'ansible-logs.txt',
-            'rke2-deployment-logs.txt',
-            'kubectl-setup-logs.txt',
-            'deployment-summary.json'
-        ])
-        logInfo('Ansible deployment artifacts archived successfully')
-    } catch (Exception e) {
-        logError("Ansible deployment artifacts archival failed: ${e.message}")
-    }
-}
-
-def archiveAnsibleFailureArtifacts() {
-    logInfo('Archiving Ansible failure artifacts')
-    try {
-        archiveBuildArtifacts([
-            'ansible-inventory.yml',
-            'group_vars/all.yml',
-            'ansible-error-logs.txt',
-            'ssh-setup-error-logs.txt',
-            'rke2-deployment-error-logs.txt',
-            'kubectl-setup-error-logs.txt',
-            'ansible-debug-info.txt'
-        ])
-        logInfo('Ansible failure artifacts archived successfully')
-    } catch (Exception e) {
-        logError("Ansible failure artifacts archival failed: ${e.message}")
-    }
-}
-
-// ========================================
-// RANCHER DEPLOYMENT FUNCTIONS
-// ========================================
-
-def runRancherDeployment() {
-    logInfo('Running Rancher deployment playbook from qa-infra-automation repository')
-
-    // Validate required environment variables first
-    def requiredRancherVars = [
-        'RKE2_VERSION',
-        'RANCHER_VERSION',
-        'QA_INFRA_WORK_PATH',
-        'TF_WORKSPACE',
-        'TERRAFORM_VARS_FILENAME'
-    ]
-
-    validateRequiredVariables(requiredRancherVars)
-
-    def rancherDeploymentScript = """
-    #!/bin/bash
-    set -e
-
-    # Debug: Show environment variables in container
-    echo "=== DEBUG: Rancher Deployment Environment Variables ==="
-    echo "RKE2_VERSION=\${RKE2_VERSION}"
-    echo "RANCHER_VERSION=\${RANCHER_VERSION}"
-    echo "QA_INFRA_WORK_PATH=\${QA_INFRA_WORK_PATH}"
-    echo "TF_WORKSPACE=\${TF_WORKSPACE}"
-    echo "TERRAFORM_VARS_FILENAME=\${TERRAFORM_VARS_FILENAME}"
-    echo "=== END DEBUG ==="
-
-    # Source external Rancher deployment script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_run_rancher_deployment.sh
-    """
-
-    // Get SSH credentials and pass them to container
-    def awsSshPemKey = null
-    def awsSshKeyName = null
-
-    withCredentials([
-        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
-        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
-    ]) {
-        awsSshPemKey = env.AWS_SSH_PEM_KEY
-        awsSshKeyName = env.AWS_SSH_KEY_NAME
-    }
-
-    // Pass all required environment variables to container
-    def rancherEnvVars = [
-        'AWS_SSH_PEM_KEY': awsSshPemKey,
-        'AWS_SSH_KEY_NAME': awsSshKeyName,
-        'ANSIBLE_VARIABLES': env.ANSIBLE_VARIABLES,
-        'RKE2_VERSION': env.RKE2_VERSION,
-        'RANCHER_VERSION': env.RANCHER_VERSION,
-        'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
-        'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
-        'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD,
-        'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
-        'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-        'TF_WORKSPACE': env.TF_WORKSPACE,
-        'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME,
-        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
-        'QA_INFRA_REPO_URL': env.QA_INFRA_REPO,
-        'QA_INFRA_REPO_BRANCH': params.QA_INFRA_REPO_BRANCH
-    ]
-
-    logInfo('Passing environment variables to Rancher deployment:')
-    rancherEnvVars.each { key, value ->
-        logInfo("  ${key} = ${value ? 'SET' : 'NULL'}")
-    }
-
-    try {
-        dockerHelper().executeScriptInContainer(rancherDeploymentScript, rancherEnvVars)
-        logInfo('Rancher deployment playbook executed successfully')
-    } catch (Exception e) {
-        def errorMsg = "Rancher deployment playbook failed: ${e.message}"
-        logError(errorMsg)
-
-        // Check if this is an Ansible exit code 2 (failed tasks) but deployment might still be successful
-        if (e.message.contains('script returned exit code 2')) {
-            logWarning('Ansible returned exit code 2 (failed tasks), checking if Rancher deployment actually succeeded...')
-
-            // Give a moment for any async operations to complete
-            sleep(10)
-
-            // Check if Rancher is accessible
-            try {
-                validateRancherDeployment()
-                logInfo('Rancher appears to be operational despite Ansible task failures')
-                logInfo('Continuing with deployment...') // Don't fail deployment
-            } catch (rancherException) {
-                logError("Rancher validation also failed: ${rancherException.message}")
-                logError('Rancher deployment genuinely failed')
-                error(errorMsg)
-            }
-        } else {
-            // Critical failure, not just Ansible task failures
-            error(errorMsg)
-        }
-    }
-}
-
-def validateRancherDeployment() {
-    logInfo('Validating Rancher deployment')
-
-    def validationScript = '''
-    #!/bin/bash
-    set -e
-
-    # Source the external Rancher validation script
-    source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_validate_rancher.sh
-    '''
-
-    // Pass required environment variables to validation container
-    // Use /root/kubeconfig.yaml which is the kubeconfig copied from bastion to shared volume
-    def validationEnvVars = [
-        'KUBECONFIG': '/root/kubeconfig.yaml',
-        'RKE2_VERSION': env.RKE2_VERSION,
-        'RANCHER_VERSION': env.RANCHER_VERSION,
-        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
-        'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH
-    ]
-
-    logInfo('Passing environment variables to Rancher validation:')
-    validationEnvVars.each { key, value ->
-        logInfo("  ${key} = ${value ? 'SET' : 'NULL'}")
-    }
-
-    try {
-        dockerHelper().executeScriptInContainer(validationScript, validationEnvVars)
-        logInfo('Rancher deployment validation completed successfully')
-    } catch (Exception e) {
-        def errorMsg = "Rancher deployment validation failed: ${e.message}"
-        logError(errorMsg)
-        error(errorMsg)
-    }
-}
-
-def handleRancherDeploymentFailure() {
-    logError('Rancher deployment failed - initiating cleanup')
-    try {
-        archiveRancherFailureArtifacts()
-        if (env.DESTROY_ON_FAILURE.toBoolean()) {
-            logInfo('DESTROY_ON_FAILURE is true - attempting infrastructure cleanup for Rancher failure')
-            def cleanupScript = '''
-#!/bin/bash
-set -e
-
-# Source the external Rancher failure cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/rancher_failure_cleanup.sh
-            '''
-            // Pass required environment variables to container
-            def cleanupEnvVars = [
-                'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
-                'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-                'RKE2_VERSION': env.RKE2_VERSION,
-                'RANCHER_VERSION': env.RANCHER_VERSION
-            ]
-            // Note: Don't cleanup containers yet - we need them for cleanup script
-            dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
-            logInfo('Infrastructure cleanup attempted for Rancher failure')
-        } else {
-            logWarning('DESTROY_ON_FAILURE is false - manual cleanup required for Rancher failure')
-            logWarning('Please run the destroy pipeline or manually clean up resources in workspace: ${env.TF_WORKSPACE}')
-        }
-        // Only cleanup containers after infrastructure cleanup is attempted
-        cleanupContainersAndVolumes()
-    } catch (cleanupException) {
-        logError("Cleanup during Rancher failure handling failed: ${cleanupException.message}")
-        // Still try to cleanup containers even if infrastructure cleanup fails
-        try {
-            cleanupContainersAndVolumes()
-        } catch (containerCleanupException) {
-            logError("Container cleanup also failed: ${containerCleanupException.message}")
-        }
-    }
-    throw new Exception('Rancher deployment failed')
-}
-
-def archiveRancherDeploymentArtifacts() {
-    logInfo('Archiving Rancher deployment artifacts')
-    try {
-        archiveBuildArtifacts([
-            'ansible-inventory.yml',
-            'group_vars/all.yml',
-            'kubeconfig.yaml',
-            'rancher-deployment-logs.txt',
-            'rancher-validation-logs.txt',
-            'deployment-summary.json'
-        ])
-        logInfo('Rancher deployment artifacts archived successfully')
-    } catch (Exception e) {
-        logError("Rancher deployment artifacts archival failed: ${e.message}")
-    }
-}
-
-def archiveRancherFailureArtifacts() {
-    logInfo('Archiving Rancher failure artifacts')
-    try {
-        archiveBuildArtifacts([
-            'ansible-inventory.yml',
-            'group_vars/all.yml',
-            'rancher-deployment-error-logs.txt',
-            'rancher-validation-error-logs.txt',
-            'rancher-debug-info.txt'
-        ])
-        logInfo('Rancher failure artifacts archived successfully')
-    } catch (Exception e) {
-        logError("Rancher failure artifacts archival failed: ${e.message}")
     }
 }
