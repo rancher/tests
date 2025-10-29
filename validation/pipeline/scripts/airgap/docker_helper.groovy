@@ -227,6 +227,14 @@ class DockerExecutionHelper implements Serializable {
             pipeline.logWarning("QA infra automation path not found: ${qaInfraPath}")
         }
 
+        // Mount rancher-tests repo into expected container path
+        def testsRepoPath = "${pipeline.pwd()}"
+        if (pipeline.fileExists(testsRepoPath)) {
+            mounts.add("-v \"${testsRepoPath}:/root/go/src/github.com/rancher/tests\"")
+        } else {
+            pipeline.logWarning("Rancher tests path not found: ${testsRepoPath}")
+        }
+
         if (pipeline.fileExists(scriptFile)) {
             mounts.add("-v \"${pipeline.pwd()}/${scriptFile}:/tmp/script.sh\"")
         }
@@ -260,6 +268,14 @@ class DockerExecutionHelper implements Serializable {
             mounts.add("-v \"${qaInfraPath}:/root/go/src/github.com/rancher/qa-infra-automation\"")
         } else {
             pipeline.logWarning("QA infra automation path not found in fallback: ${qaInfraPath}")
+        }
+
+        // Mount rancher-tests repo into expected container path (fallback)
+        def testsRepoPath = "${pipeline.pwd()}"
+        if (pipeline.fileExists(testsRepoPath)) {
+            mounts.add("-v \"${testsRepoPath}:/root/go/src/github.com/rancher/tests\"")
+        } else {
+            pipeline.logWarning("Rancher tests path not found in fallback: ${testsRepoPath}")
         }
 
         if (pipeline.fileExists(scriptFile)) {
