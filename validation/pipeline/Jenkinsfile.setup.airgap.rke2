@@ -90,6 +90,7 @@ def setupSSHKeysSecure() {
     logInfo('Setting up SSH keys')
     
     try {
+        // Create SSH directory in workspace
         dir('./tests/.ssh') {
             sh 'mkdir -p . && chmod 700 .'
             
@@ -104,6 +105,14 @@ def setupSSHKeysSecure() {
             if (!keyContent.startsWith('-----BEGIN')) {
                 logWarning('SSH key format validation warning - unexpected format')
             }
+            
+            // Also generate public key for SSH operations
+            sh """
+                if [ -f "${env.AWS_SSH_KEY_NAME}" ]; then
+                    ssh-keygen -f "${env.AWS_SSH_KEY_NAME}" -y > "${env.AWS_SSH_KEY_NAME}.pub" || echo "Failed to generate public key"
+                    chmod 644 "${env.AWS_SSH_KEY_NAME}.pub" 2>/dev/null || true
+                fi
+            """
         }
         
         env.SSH_KEY_PATH = "./tests/.ssh/${env.AWS_SSH_KEY_NAME}"
@@ -574,6 +583,9 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/
 
                     validateRequiredVariables(['QA_INFRA_WORK_PATH', 'ANSIBLE_VARS_FILENAME'])
 
+                    // Ensure SSH keys are available in container
+                    ensureSSHKeysInContainer()
+
                     def timeoutMinutes = env.ANSIBLE_TIMEOUT ?
                             Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
 
@@ -1001,6 +1013,36 @@ def buildDockerImage() {
 def createSharedVolume() {
     logInfo("Creating shared volume: ${env.VALIDATION_VOLUME}")
     sh "docker volume create --name ${env.VALIDATION_VOLUME}"
+}
+
+def ensureSSHKeysInContainer() {
+    logInfo('Ensuring SSH keys are available in container')
+    
+    if (!env.SSH_KEY_PATH || !fileExists(env.SSH_KEY_PATH)) {
+        logWarning('SSH keys not found in workspace')
+        return
+    }
+    
+    try {
+        // Copy SSH keys into container volume
+        sh """
+            docker run --rm \\
+                -v ${env.VALIDATION_VOLUME}:/target \\
+                -v \$(pwd)/tests/.ssh:/source \\
+                alpine:latest \\
+                sh -c '
+                    mkdir -p /target/.ssh
+                    chmod 700 /target/.ssh
+                    cp -r /source/* /target/.ssh/
+                    chmod 600 /target/.ssh/*
+                    echo "SSH keys copied to container volume"
+                '
+        """
+        logInfo('SSH keys successfully copied to container volume')
+    } catch (Exception e) {
+        logError("Failed to copy SSH keys to container: ${e.message}")
+        throw e
+    }
 }
 
 def cleanupContainersAndVolumes() {
