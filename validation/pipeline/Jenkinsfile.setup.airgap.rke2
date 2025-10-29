@@ -1155,8 +1155,126 @@ def cleanupContainersAndVolumes() {
 }
 
 // ========================================
-// UNIFIED CLEANUP AND ERROR HANDLING
+// UNIFIED ARTIFACT MANAGEMENT
 // ========================================
+
+/**
+ * Centralized artifact configuration map
+ * Defines all artifact types and their associated files
+ */
+@NonCPS
+static def getArtifactDefinitions() {
+    return [
+        'infrastructure': [
+            'infrastructure-outputs.json',
+            'ansible-inventory.yml',
+            '*.tfvars'
+        ],
+        'ansible_prep': [
+            'group_vars.tar.gz',
+            'group_vars/all.yml',
+            'ansible-preparation-report.txt'
+        ],
+        'rke2_deployment': [
+            'kubeconfig.yaml',
+            'rke2_deployment_report.txt',
+            'rke2_deployment.log',
+            'kubectl-setup-logs.txt'
+        ],
+        'rancher_deployment': [
+            'rancher-deployment-logs.txt',
+            'rancher-validation-logs.txt',
+            'deployment-summary.json'
+        ],
+        'failure_common': [
+            '*.log',
+            'error-*.txt',
+            'ansible-debug-info.txt'
+        ],
+        'failure_infrastructure': [
+            'tfplan-backup',
+            'infrastructure-outputs.json'
+        ],
+        'failure_ansible': [
+            'ansible-inventory.yml',
+            'ansible-error-logs.txt',
+            'ssh-setup-error-logs.txt'
+        ],
+        'failure_rke2': [
+            'rke2-deployment-error-logs.txt',
+            'kubectl-setup-error-logs.txt'
+        ],
+        'failure_rancher': [
+            'rancher-deployment-error-logs.txt',
+            'rancher-validation-logs.txt',
+            'rancher-debug-info.txt'
+        ],
+        'success_complete': [
+            'kubeconfig.yaml',
+            'infrastructure-outputs.json',
+            'ansible-inventory.yml',
+            'deployment-summary.json'
+        ]
+    ]
+}
+
+/**
+ * Archive artifacts based on type
+ */
+def archiveArtifactsByType(String artifactType, List additionalFiles = []) {
+    def artifactDefs = getArtifactDefinitions()
+    
+    if (!artifactDefs.containsKey(artifactType)) {
+        logWarning("Unknown artifact type: ${artifactType}, using failure_common")
+        artifactType = 'failure_common'
+    }
+    
+    def artifactList = artifactDefs[artifactType] + additionalFiles
+    
+    logInfo("Archiving ${artifactType} artifacts")
+    try {
+        archiveArtifacts(
+            artifacts: artifactList.join(','),
+            allowEmptyArchive: true,
+            fingerprint: true,
+            onlyIfSuccessful: false
+        )
+    } catch (Exception e) {
+        logError("Failed to archive ${artifactType} artifacts: ${e.message}")
+    }
+}
+
+/**
+ * Archive failure artifacts - combines common + specific
+ */
+def archiveFailureArtifactsByType(String failureType) {
+    def typeMap = [
+        'deployment': 'failure_infrastructure',
+        'ansible_prep': 'failure_ansible',
+        'rke2': 'failure_rke2',
+        'rancher': 'failure_rancher',
+        'timeout': 'failure_infrastructure',
+        'aborted': 'failure_common'
+    ]
+    
+    def specificType = typeMap[failureType] ?: 'failure_common'
+    archiveArtifactsByType(specificType)
+    
+    if (specificType != 'failure_common') {
+        archiveArtifactsByType('failure_common')
+    }
+}
+
+def archiveBuildArtifacts(List artifacts) {
+    try {
+        archiveArtifacts(
+            artifacts: artifacts.join(','),
+            allowEmptyArchive: true
+        )
+    } catch (Exception e) {
+        logError("Failed to archive artifacts: ${e.message}")
+    }
+}
 
 /**
  * Unified cleanup handler for all failure scenarios
@@ -1231,68 +1349,6 @@ perform_cleanup "${CLEANUP_REASON}" "${TF_WORKSPACE}" "true"
         throw e
     }
 }
-
-/**
- * Archive artifacts based on failure type
- *
- * @param failureType Type of failure to determine which artifacts to archive
- */
-def archiveFailureArtifactsByType(String failureType) {
-    def artifactMap = [
-        'deployment': [
-            'tfplan-backup',
-            '*.log',
-            'error-*.txt',
-            'infrastructure-outputs.json'
-        ],
-        'ansible_prep': [
-            'group_vars.tar.gz',
-            'ansible-error-logs.txt',
-            'ansible-debug-info.txt'
-        ],
-        'rke2': [
-            'ansible-inventory.yml',
-            'rke2-deployment-error-logs.txt',
-            'kubectl-setup-error-logs.txt',
-            'ssh-setup-error-logs.txt'
-        ],
-        'rancher': [
-            'ansible-inventory.yml',
-            'rancher-deployment-error-logs.txt',
-            'rancher-validation-error-logs.txt',
-            'rancher-debug-info.txt'
-        ],
-        'timeout': [
-            '*.log',
-            'tfplan-backup',
-            'error-*.txt',
-            'timeout-debug-info.txt'
-        ],
-        'aborted': [
-            '*.log',
-            'aborted-state-*.txt'
-        ]
-    ]
-
-    def artifacts = artifactMap[failureType] ?: ['*.log', 'error-*.txt']
-
-    logInfo("Archiving ${failureType} failure artifacts")
-    archiveBuildArtifacts(artifacts)
-}
-
-// ========================================
-// ARTIFACT MANAGEMENT FUNCTIONS
-// ========================================
-
-def archiveBuildArtifacts(artifacts) {
-    try {
-        archiveArtifacts artifacts: artifacts.join(','), allowEmptyArchive: true
-        logInfo("Artifacts archived: ${artifacts.join(', ')}")
-    } catch (Exception e) {
-        logError("Failed to archive artifacts: ${e.message}")
-    }
-}
-
 
 // ========================================
 // ARTIFACT EXTRACTION FUNCTIONS
