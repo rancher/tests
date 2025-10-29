@@ -273,9 +273,6 @@ pipeline {
                     // (deleteDir will delete the uploaded file)
                     readAnsibleVariablesFile()
 
-                    // Validate parameters and environment
-                    validateParameters()
-
                     // Set up dynamic variables
                     setupDynamicEnvironment()
 
@@ -369,6 +366,9 @@ pipeline {
 
                         // Create shared volume
                         createSharedVolume()
+
+                        // Validate parameters and environment
+                        validateParameters()
                     }
                 }
             }
@@ -836,24 +836,11 @@ validate_pipeline_parameters
             'RKE2_VERSION': params.RKE2_VERSION,
             'RANCHER_VERSION': params.RANCHER_VERSION,
             'RANCHER_TEST_REPO_URL': params.RANCHER_TEST_REPO_URL,
-            'RANCHER_TEST_REPO_BRANCH': params.RANCHER_TEST_REPO_BRANCH,
             'QA_INFRA_REPO_URL': params.QA_INFRA_REPO_URL,
-            'QA_INFRA_REPO_BRANCH': params.QA_INFRA_REPO_BRANCH
     ]
 
     try {
-        // Run validation in a temporary container
-        sh """
-            docker run --rm \\
-                -e RKE2_VERSION='${params.RKE2_VERSION}' \\
-                -e RANCHER_VERSION='${params.RANCHER_VERSION}' \\
-                -e RANCHER_TEST_REPO_URL='${params.RANCHER_TEST_REPO_URL}' \\
-                -e RANCHER_TEST_REPO_BRANCH='${params.RANCHER_TEST_REPO_BRANCH}' \\
-                -e QA_INFRA_REPO_URL='${params.QA_INFRA_REPO_URL}' \\
-                -e QA_INFRA_REPO_BRANCH='${params.QA_INFRA_REPO_BRANCH}' \\
-                -v \$(pwd)/tests:/root/go/src/github.com/rancher/tests \\
-                alpine:latest sh -c '${validationScript}'
-        """
+        dockerHelper().executeScriptInContainer(validationScript, validationEnvVars)
         logInfo('All parameters validated successfully')
     } catch (Exception e) {
         def errorMsg = "Parameter validation failed: ${e.message}"
