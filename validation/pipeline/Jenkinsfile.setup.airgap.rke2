@@ -40,7 +40,7 @@ class PipelineConfig {
 
     // Docker configuration
     static final String DOCKER_BUILD_CONTEXT = '.'
-    static final String DOCKERFILE_PATH = './tests/validation/Dockerfile.tofu.e2e'
+    static final String DOCKERFILE_PATH = './validation/Dockerfile.tofu.e2e'
     static final String SHARED_VOLUME_PREFIX = 'AnsibleAirgapSharedVolume'
     static final String CONTAINER_NAME_PREFIX = 'airgap-ansible'
 
