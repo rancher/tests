@@ -227,12 +227,15 @@ class DockerExecutionHelper implements Serializable {
             pipeline.logWarning("QA infra automation path not found: ${qaInfraPath}")
         }
 
-        // Mount rancher-tests repo into expected container path
-        def testsRepoPath = "${pipeline.pwd()}"
-        if (pipeline.fileExists(testsRepoPath)) {
-            mounts.add("-v \"${testsRepoPath}:/root/go/src/github.com/rancher/tests\"")
+        // Mount rancher-tests repo into expected container path (prefer nested ./tests checkout)
+        def testsPath = "${pipeline.pwd()}/tests"
+        def rootPath = "${pipeline.pwd()}"
+        if (pipeline.fileExists(testsPath)) {
+            mounts.add("-v \"${testsPath}:/root/go/src/github.com/rancher/tests\"")
+        } else if (pipeline.fileExists("${rootPath}/validation")) {
+            mounts.add("-v \"${rootPath}:/root/go/src/github.com/rancher/tests\"")
         } else {
-            pipeline.logWarning("Rancher tests path not found: ${testsRepoPath}")
+            pipeline.logWarning("Rancher tests path not found: ${testsPath} or ${rootPath}")
         }
 
         if (pipeline.fileExists(scriptFile)) {
@@ -270,12 +273,15 @@ class DockerExecutionHelper implements Serializable {
             pipeline.logWarning("QA infra automation path not found in fallback: ${qaInfraPath}")
         }
 
-        // Mount rancher-tests repo into expected container path (fallback)
-        def testsRepoPath = "${pipeline.pwd()}"
-        if (pipeline.fileExists(testsRepoPath)) {
-            mounts.add("-v \"${testsRepoPath}:/root/go/src/github.com/rancher/tests\"")
+        // Mount rancher-tests repo into expected container path (fallback; prefer nested ./tests checkout)
+        def testsPath = "${pipeline.pwd()}/tests"
+        def rootPath = "${pipeline.pwd()}"
+        if (pipeline.fileExists(testsPath)) {
+            mounts.add("-v \"${testsPath}:/root/go/src/github.com/rancher/tests\"")
+        } else if (pipeline.fileExists("${rootPath}/validation")) {
+            mounts.add("-v \"${rootPath}:/root/go/src/github.com/rancher/tests\"")
         } else {
-            pipeline.logWarning("Rancher tests path not found in fallback: ${testsRepoPath}")
+            pipeline.logWarning("Rancher tests path not found in fallback: ${testsPath} or ${rootPath}")
         }
 
         if (pipeline.fileExists(scriptFile)) {
