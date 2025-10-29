@@ -294,9 +294,9 @@ class DockerExecutionHelper implements Serializable {
 
     private void prepareDebugHelper() {
         try {
-            if (pipeline.fileExists('validation/pipeline/scripts/debug_env_check.sh')) {
+            if (pipeline.fileExists('validation/pipeline/scripts/airgap/debug_env_check.sh')) {
                 pipeline.sh '''
-                    cp validation/pipeline/scripts/debug_env_check.sh ./tmp_debug_env_check.sh || true
+                    cp validation/pipeline/scripts/airgap/debug_env_check.sh ./tmp_debug_env_check.sh || true
                     chmod +x ./tmp_debug_env_check.sh || true
                 '''
                 pipeline.logInfo('DEBUG helper copied to workspace: ./tmp_debug_env_check.sh')
