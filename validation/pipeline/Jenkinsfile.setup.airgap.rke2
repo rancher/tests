@@ -16,34 +16,158 @@
 // CONSTANTS AND CONFIGURATION
 // ========================================
 
-// Pipeline configuration constants
-class PipelineConfig {
+// ========================================
+// CONSOLIDATED ENVIRONMENT CONFIGURATION
+// ========================================
+def configureEnvironmentComplete() {
+    logInfo('Configuring complete environment setup')
+    
+    // Step 1: Read and validate Ansible variables
+    readAndValidateAnsibleVariables()
+    
+    // Step 2: Setup dynamic environment variables
+    env.RKE2_VERSION = params.RKE2_VERSION
+    env.RANCHER_VERSION = params.RANCHER_VERSION
+    env.TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
+    env.RANCHER_HOSTNAME = "${params.HOSTNAME_PREFIX ?: PipelineConfig.DEFAULT_HOSTNAME_PREFIX}.qa.rancher.space"
+    
+    logInfo("RKE2 Version: ${env.RKE2_VERSION}")
+    logInfo("Rancher Version: ${env.RANCHER_VERSION}")
+    logInfo("Rancher Hostname: ${env.RANCHER_HOSTNAME}")
+    
+    // Step 3: Configure credentials and generate files
+    withCredentials(getCredentialsList()) {
+        setupSSHKeysSecure()
+        generateEnvironmentFileComplete()
+        validateSensitiveDataHandling()
+    }
+    
+    logInfo('Environment configuration completed successfully')
+}
 
-    static final String DEFAULT_RKE2_VERSION = 'v1.28.8+rke2r1'
-    static final String DEFAULT_RANCHER_VERSION = 'v2.10-head'
-    static final String DEFAULT_RANCHER_TEST_REPO = 'https://github.com/rancher/tests'
-    static final String DEFAULT_QA_INFRA_REPO = 'https://github.com/rancher/qa-infra-automation'
-    static final String DEFAULT_S3_BUCKET = 'jenkins-terraform-state-storage'
-    static final String DEFAULT_S3_REGION = 'us-east-2'
-    static final String DEFAULT_HOSTNAME_PREFIX = 'ansible-airgap'
+/**
+ * Read and validate Ansible variables from parameter
+ */
+def readAndValidateAnsibleVariables() {
+    if (!params.ANSIBLE_VARIABLES || !params.ANSIBLE_VARIABLES.trim()) {
+        error('ANSIBLE_VARIABLES parameter is required but was not provided')
+    }
+    
+    def ansibleVarsContent = params.ANSIBLE_VARIABLES.trim()
+    logInfo("Ansible variables loaded: ${ansibleVarsContent.length()} bytes")
+    
+    env.ANSIBLE_VARIABLES = ansibleVarsContent
+}
 
-    // Timeout values in minutes
-    static final int TERRAFORM_TIMEOUT_MINUTES = 30
-    static final int ANSIBLE_TIMEOUT_MINUTES = 45
-    static final int VALIDATION_TIMEOUT_MINUTES = 15
+/**
+ * Setup SSH keys with secure handling
+ */
+def setupSSHKeysSecure() {
+    if (!env.AWS_SSH_PEM_KEY || !env.AWS_SSH_KEY_NAME) {
+        logWarning('SSH key configuration skipped - credentials not available')
+        return
+    }
+    
+    logInfo('Setting up SSH keys')
+    
+    try {
+        dir('./tests/.ssh') {
+            sh 'mkdir -p . && chmod 700 .'
+            
+            def decodedKey = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
+            writeFile file: env.AWS_SSH_KEY_NAME, text: decodedKey
+            
+            sh "chmod 600 ${env.AWS_SSH_KEY_NAME}"
+            sh "chown \$(whoami):\$(whoami) ${env.AWS_SSH_KEY_NAME} 2>/dev/null || true"
+            
+            // Validate key format
+            def keyContent = sh(script: "head -1 ${env.AWS_SSH_KEY_NAME}", returnStdout: true).trim()
+            if (!keyContent.startsWith('-----BEGIN')) {
+                logWarning('SSH key format validation warning - unexpected format')
+            }
+        }
+        
+        env.SSH_KEY_PATH = "./tests/.ssh/${env.AWS_SSH_KEY_NAME}"
+        logInfo('SSH keys configured successfully')
+        
+    } catch (Exception e) {
+        logError("SSH key setup failed: ${e.message}")
+        cleanupSSHKeys()
+        throw e
+    }
+}
 
-    // File names
+/**
+ * Generate complete environment file for container execution
+ */
+def generateEnvironmentFileComplete() {
+    logInfo('Generating environment file')
+    
+    // Parse Terraform config for AWS variables
+    def awsVars = extractAWSVariablesFromTerraformConfig()
+    
+    def envLines = [
+        '# Environment Configuration - Credentials passed via withCredentials',
+        "TF_WORKSPACE=${env.TF_WORKSPACE}",
+        "BUILD_NUMBER=${env.BUILD_NUMBER}",
+        "JOB_NAME=${env.JOB_NAME}",
+        "TERRAFORM_TIMEOUT=${env.TERRAFORM_TIMEOUT}",
+        "ANSIBLE_TIMEOUT=${env.ANSIBLE_TIMEOUT}",
+        "QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}",
+        "TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}",
+        "ANSIBLE_VARS_FILENAME=${env.ANSIBLE_VARS_FILENAME}",
+        "RKE2_VERSION=${env.RKE2_VERSION}",
+        "RANCHER_VERSION=${env.RANCHER_VERSION}",
+        "HOSTNAME_PREFIX=${env.HOSTNAME_PREFIX}",
+        "RANCHER_HOSTNAME=${env.RANCHER_HOSTNAME}",
+        "PRIVATE_REGISTRY_URL=${env.PRIVATE_REGISTRY_URL}",
+        "PRIVATE_REGISTRY_USERNAME=${env.PRIVATE_REGISTRY_USERNAME}",
+        '',
+        '# Ansible Configuration',
+        "ANSIBLE_VARIABLES=${env.ANSIBLE_VARIABLES}",
+        '',
+        '# AWS Configuration',
+        "AWS_REGION=${env.AWS_REGION}",
+        "AWS_AMI=${awsVars['AWS_AMI'] ?: ''}",
+        "AWS_HOSTNAME_PREFIX=${awsVars['AWS_HOSTNAME_PREFIX'] ?: env.HOSTNAME_PREFIX}",
+        "AWS_SSH_USER=${awsVars['AWS_SSH_USER'] ?: 'ec2-user'}",
+        "INSTANCE_TYPE=${awsVars['INSTANCE_TYPE'] ?: 't3.large'}",
+        '',
+        '# S3 Backend',
+        "S3_BUCKET_NAME=${env.S3_BUCKET_NAME}",
+        "S3_REGION=${env.S3_REGION}",
+        "S3_KEY_PREFIX=${env.S3_KEY_PREFIX}",
+        '',
+        "AWS_SSH_KEY_NAME=${env.AWS_SSH_KEY_NAME ?: ''}",
+        '# Sensitive credentials passed via withCredentials block'
+    ]
+    
+    writeFile file: env.ENV_FILE, text: envLines.join('\n')
+    logInfo("Environment file created: ${env.ENV_FILE}")
+}
 
-    // Docker configuration
-    static final String DOCKER_BUILD_CONTEXT = '.'
-    static final String DOCKERFILE_PATH = './tests/validation/Dockerfile.tofu.e2e'
-    static final String SHARED_VOLUME_PREFIX = 'AnsibleAirgapSharedVolume'
-    static final String CONTAINER_NAME_PREFIX = 'airgap-ansible'
-
-    // Logging configuration
-    static final String LOG_PREFIX_INFO = '[INFO]'
-    static final String LOG_PREFIX_ERROR = '[ERROR]'
-    static final String LOG_PREFIX_WARNING = '[WARNING]'
+/**
+ * Extract AWS variables from Terraform config parameter
+ */
+def extractAWSVariablesFromTerraformConfig() {
+    def awsVars = [:]
+    
+    if (!env.TERRAFORM_CONFIG) {
+        return awsVars
+    }
+    
+    def config = env.TERRAFORM_CONFIG
+    def pattern = ~/(\w+)\s*=\s*"([^"]*)"/
+    
+    config.eachMatch(pattern) { match ->
+        def varName = match[1]
+        def varValue = match[2]
+        if (varName.startsWith('AWS_') || varName == 'INSTANCE_TYPE') {
+            awsVars[varName] = varValue
+        }
+    }
+    
+    return awsVars
 }
 
 // ========================================
@@ -264,14 +388,10 @@ pipeline {
         stage('Initialize Pipeline') {
             steps {
                 script {
-                    // Read uploaded Ansible variables file BEFORE cleaning workspace
-                    // (deleteDir will delete the uploaded file)
-                    readAnsibleVariablesFile()
+                    // Complete environment configuration
+                    configureEnvironmentComplete()
 
-                    // Set up dynamic variables
-                    setupDynamicEnvironment()
-
-                    // Clean workspace
+                    // Clean workspace after environment setup
                     deleteDir()
 
                     logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
@@ -336,11 +456,6 @@ pipeline {
 
                     // Configure credentials and environment files
                     withCredentials(getCredentialsList()) {
-                        // Setup SSH keys securely
-                        setupSSHKeys()
-
-                        // Generate environment file for container execution
-                        generateEnvironmentFile()
 
                         // Validate sensitive data handling and security measures
                         validateSensitiveDataHandling()
@@ -772,37 +887,6 @@ validate_sensitive_data_handling "${ENV_FILE}"
 // ENVIRONMENT SETUP FUNCTIONS
 // ========================================
 
-def setupDynamicEnvironment() {
-    env.RKE2_VERSION = params.RKE2_VERSION
-    env.RANCHER_VERSION = params.RANCHER_VERSION
-    env.TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
-
-    logInfo('Dynamic environment configured')
-    logInfo("RKE2 Version: ${env.RKE2_VERSION}")
-    logInfo("Rancher Version: ${env.RANCHER_VERSION}")
-    logInfo("Terraform Vars Filename: ${env.TERRAFORM_VARS_FILENAME}")
-}
-
-def readAnsibleVariablesFile() {
-    logInfo('Reading Ansible variables from textbox parameter')
-
-    def ansibleVarsContent = ''
-
-    if (params.ANSIBLE_VARIABLES && params.ANSIBLE_VARIABLES.trim()) {
-        logInfo('Reading Ansible variables from textbox parameter')
-        ansibleVarsContent = params.ANSIBLE_VARIABLES.trim()
-        logInfo("Ansible variables content size: ${ansibleVarsContent.length()} bytes")
-    } else {
-        def errorMsg = 'ANSIBLE_VARIABLES parameter is required but was not provided'
-        logError(errorMsg)
-        error(errorMsg)
-    }
-
-    // Store in environment for passing to containers
-    env.ANSIBLE_VARIABLES = ansibleVarsContent
-    logInfo('Ansible variables loaded successfully')
-}
-
 def getCredentialsList() {
     return [
         string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
@@ -824,200 +908,6 @@ def getShortJobName() {
 // ========================================
 // CONFIGURATION GENERATION FUNCTIONS
 // ========================================
-
-def generateEnvironmentFile() {
-    logInfo('Generating environment file for container execution')
-
-    // Get credentials within withCredentials block to ensure they're available
-    def awsSshPemKey = null
-    def awsSshKeyName = null
-
-    withCredentials([
-        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
-        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
-    ]) {
-        awsSshPemKey = env.AWS_SSH_PEM_KEY
-        awsSshKeyName = env.AWS_SSH_KEY_NAME
-
-    // Note: Avoid storing credentials in Jenkins environment variables for security
-    // These will be passed directly as Docker environment variables instead
-    }
-
-    // Parse TERRAFORM_CONFIG to extract AWS infrastructure variables
-    def awsConfigVars = [:]
-    if (env.TERRAFORM_CONFIG) {
-        def terraformConfig = env.TERRAFORM_CONFIG
-        // Extract AWS variables from terraform config
-        def awsVarPattern = ~/(\w+)\s*=\s*"([^"]*)"/
-        terraformConfig.eachMatch(awsVarPattern) { match ->
-            def varName = match[1]
-            def varValue = match[2]
-            // Only include AWS-related variables
-            if (varName.startsWith('AWS_')) {
-                awsConfigVars[varName] = varValue
-            }
-        }
-    }
-
-    // Build environment content securely - EXCLUDE ALL sensitive credentials
-    // These will be passed directly as Docker environment variables via withCredentials
-    def envLines = [
-        '# Environment variables for infrastructure deployment containers',
-        '# NOTE: All sensitive credentials are passed via Jenkins withCredentials block for security',
-        "TF_WORKSPACE=${env.TF_WORKSPACE}",
-        "BUILD_NUMBER=${env.BUILD_NUMBER}",
-        "JOB_NAME=${env.JOB_NAME}",
-        "TERRAFORM_TIMEOUT=${env.TERRAFORM_TIMEOUT}",
-        "ANSIBLE_TIMEOUT=${env.ANSIBLE_TIMEOUT}",
-        "QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}",
-        "TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}",
-        "ANSIBLE_VARS_FILENAME=${env.ANSIBLE_VARS_FILENAME}",
-        "RKE2_VERSION=${env.RKE2_VERSION}",
-        "RANCHER_VERSION=${env.RANCHER_VERSION}",
-        "HOSTNAME_PREFIX=${env.HOSTNAME_PREFIX}",
-        "RANCHER_HOSTNAME=${env.RANCHER_HOSTNAME}",
-        "PRIVATE_REGISTRY_URL=${env.PRIVATE_REGISTRY_URL}",
-        "PRIVATE_REGISTRY_USERNAME=${env.PRIVATE_REGISTRY_USERNAME}",
-        '# PRIVATE_REGISTRY_PASSWORD excluded - will be passed via withCredentials',
-        '',
-        '# Ansible Configuration',
-        "ANSIBLE_VARIABLES=${env.ANSIBLE_VARIABLES}",
-        '',
-        '# AWS Region Configuration (credentials passed via withCredentials)',
-        "AWS_REGION=${env.AWS_REGION}",
-        '',
-        '# AWS Infrastructure Variables from TERRAFORM_CONFIG',
-        "AWS_AMI=${awsConfigVars['AWS_AMI'] ?: ''}",
-        "AWS_HOSTNAME_PREFIX=${awsConfigVars['AWS_HOSTNAME_PREFIX'] ?: env.HOSTNAME_PREFIX}",
-        "AWS_ROUTE53_ZONE=${awsConfigVars['AWS_ROUTE53_ZONE'] ?: ''}",
-        "AWS_SSH_USER=${awsConfigVars['AWS_SSH_USER'] ?: 'ec2-user'}",
-        "AWS_SECURITY_GROUP=${awsConfigVars['AWS_SECURITY_GROUP'] ?: ''}",
-        "AWS_VPC=${awsConfigVars['AWS_VPC'] ?: ''}",
-        "AWS_VOLUME_SIZE=${awsConfigVars['AWS_VOLUME_SIZE'] ?: '50'}",
-        "AWS_SUBNET=${awsConfigVars['AWS_SUBNET'] ?: ''}",
-        "INSTANCE_TYPE=${awsConfigVars['INSTANCE_TYPE'] ?: 't3.large'}",
-        '',
-        '# S3 Backend Configuration for OpenTofu',
-        "S3_BUCKET_NAME=${env.S3_BUCKET_NAME}",
-        "S3_REGION=${env.S3_REGION}",
-        "S3_KEY_PREFIX=${env.S3_KEY_PREFIX}",
-        '',
-        '# SSH key name (key content passed via withCredentials)',
-        "AWS_SSH_KEY_NAME=${awsSshKeyName ?: ''}",
-        '',
-        '# AWS credentials excluded - will be passed via withCredentials',
-    ]
-
-    def envContent = envLines.join('\n')
-    def envFilePath = "${pwd()}/${env.ENV_FILE}"
-    writeFile file: env.ENV_FILE, text: envContent
-    logInfo("Environment file created: ${env.ENV_FILE}")
-    logInfo("Full path to environment file: ${envFilePath}")
-
-    // Ensure the file was actually created
-    def fileCreated = fileExists(env.ENV_FILE)
-    if (!fileCreated) {
-        error("Environment file was not created successfully at: ${envFilePath}")
-    }
-
-    // Debug: Check if file exists (using Jenkins built-in method)
-    def envFileExists = fileExists(env.ENV_FILE)
-    logInfo("Environment file exists: ${envFileExists}")
-
-    if (envFileExists) {
-        // Use Jenkins readFile to get file size instead of File constructor
-        try {
-            def fileContent = readFile file: env.ENV_FILE
-            def envFileSize = fileContent.length()
-            logInfo("Environment file size: ${envFileSize} bytes")
-        } catch (Exception e) {
-            logInfo("Could not read environment file: ${e.message}")
-        }
-    }
-
-    // Debug: Check if TERRAFORM_VARS_FILENAME is in the envLines
-    def terraformVarsLine = envLines.find { it.startsWith('TERRAFORM_VARS_FILENAME=') }
-    logInfo("TERRAFORM_VARS_FILENAME line in env file: ${terraformVarsLine ?: 'NOT FOUND'}")
-    logInfo("TERRAFORM_VARS_FILENAME env var value: ${env.TERRAFORM_VARS_FILENAME ?: 'NULL'}")
-
-    // Debug: Also log the raw environment variable values
-    logInfo('Raw environment variable values:')
-    logInfo("  TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}")
-    logInfo("  QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}")
-    logInfo("  S3_BUCKET_NAME=${env.S3_BUCKET_NAME}")
-    logInfo("  S3_REGION=${env.S3_REGION}")
-    logInfo("  AWS_SSH_PEM_KEY=${awsSshPemKey ? 'SET' : 'NULL'}")
-    logInfo("  AWS_SSH_KEY_NAME=${awsSshKeyName ? 'SET' : 'NULL'}")
-
-    // Debug: Log AWS infrastructure variables
-    logInfo('AWS Infrastructure Variables:')
-    awsConfigVars.each { key, value ->
-        logInfo("  ${key}=${value}")
-    }
-}
-
-def setupSSHKeys() {
-    // Get credentials within withCredentials block to ensure they're available
-    def awsSshPemKey = null
-    def awsSshKeyName = null
-
-    withCredentials([
-        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
-        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
-    ]) {
-        awsSshPemKey = env.AWS_SSH_PEM_KEY
-        awsSshKeyName = env.AWS_SSH_KEY_NAME
-
-    // Note: Avoid storing credentials in Jenkins environment variables for security
-    // Pass credentials directly to functions that need them instead
-    }
-
-    if (awsSshPemKey && awsSshKeyName) {
-        logInfo('Setting up SSH keys with secure handling')
-
-        try {
-            dir('./tests/.ssh') {
-                // Create secure directory with proper permissions
-                sh 'mkdir -p . && chmod 700 .'
-
-                def decodedKey = new String(awsSshPemKey.decodeBase64())
-
-                // Write key file securely
-                writeFile file: awsSshKeyName, text: decodedKey
-
-                // Set secure file permissions
-                sh "chmod 600 ${awsSshKeyName}"
-                sh 'chown $(whoami):$(whoami) ' + awsSshKeyName + ' 2>/dev/null || true'
-
-                // Verify key file security
-                def keyPermissions = sh(script: "ls -la ${awsSshKeyName}", returnStdout: true).trim()
-                logInfo("SSH key file permissions: ${keyPermissions}")
-
-                // Validate key format
-                def keyContent = sh(script: "head -1 ${awsSshKeyName}", returnStdout: true).trim()
-                if (!keyContent.startsWith('-----BEGIN') && !keyContent.startsWith('ssh-rsa') && !keyContent.startsWith('ssh-ed25519')) {
-                    logWarning('SSH key format validation warning - unexpected key format')
-                }
-            }
-
-            logInfo('SSH keys configured successfully')
-
-            // Store key path for cleanup
-            env.SSH_KEY_PATH = "./tests/.ssh/${awsSshKeyName}"
-        } catch (Exception e) {
-            logError("SSH key setup failed: ${e.message}")
-            // Clean up any partially created files
-            cleanupSSHKeys()
-            throw e
-        }
-    } else {
-        logWarning('SSH key configuration skipped - missing required environment variables')
-        logWarning("AWS_SSH_PEM_KEY: ${awsSshPemKey ? 'SET' : 'NULL'}")
-        logWarning("AWS_SSH_KEY_NAME: ${awsSshKeyName ? 'SET' : 'NULL'}")
-    }
-}
 
 def cleanupSSHKeys() {
     logInfo('Cleaning up SSH keys securely')
