@@ -173,7 +173,6 @@ class DockerExecutionHelper implements Serializable {
             pipeline.string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
             pipeline.string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
             pipeline.string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
-            pipeline.string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK')
         ]
     }
 
@@ -441,10 +440,6 @@ echo "=== END DEBUG ==="
         masked = masked.replaceAll(/-e 'PRIVATE_REGISTRY_USERNAME=[^']+'/, "-e 'PRIVATE_REGISTRY_USERNAME=***'")
         masked = masked.replaceAll(/PRIVATE_REGISTRY_USERNAME=[^\s]+/, 'PRIVATE_REGISTRY_USERNAME=***')
 
-        masked = masked.replaceAll(/-e "SLACK_WEBHOOK=[^"]+"/, '-e "SLACK_WEBHOOK=***"')
-        masked = masked.replaceAll(/-e 'SLACK_WEBHOOK=[^']+'/, "-e 'SLACK_WEBHOOK=***'")
-        masked = masked.replaceAll(/SLACK_WEBHOOK=[^\s]+/, 'SLACK_WEBHOOK=***')
-
         return masked
     }
 
@@ -529,7 +524,6 @@ echo "=== END DEBUG ==="
         appendIfPresent(envContent, 'AWS_SECRET_ACCESS_KEY', pipeline.env.AWS_SECRET_ACCESS_KEY)
         appendIfPresent(envContent, 'AWS_SSH_PEM_KEY', pipeline.env.AWS_SSH_PEM_KEY)
         appendIfPresent(envContent, 'AWS_SSH_KEY_NAME', pipeline.env.AWS_SSH_KEY_NAME)
-        appendIfPresent(envContent, 'SLACK_WEBHOOK', pipeline.env.SLACK_WEBHOOK)
         appendIfPresent(envContent, 'PRIVATE_REGISTRY_PASSWORD', pipeline.env.PRIVATE_REGISTRY_PASSWORD)
 
         pipeline.writeFile file: credentialEnvFile, text: envContent.join('\n')
