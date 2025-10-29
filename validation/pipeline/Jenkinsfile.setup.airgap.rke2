@@ -821,69 +821,91 @@ static def getTimestamp() {
 // ========================================
 
 def validateParameters() {
-    logInfo('Validating pipeline parameters')
+    logInfo('Validating pipeline parameters using external script')
 
-    def validationErrors = []
+    def validationScript = '''
+#!/bin/bash
+set -e
+# Source the external validation helper script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/validation_helpers.sh
+# Run parameter validation
+validate_pipeline_parameters
+'''
 
-    // Required parameters validation
-    if (!params.RKE2_VERSION?.trim()) {
-        validationErrors.add('RKE2_VERSION parameter is required')
-    }
-    if (!params.RANCHER_VERSION?.trim()) {
-        validationErrors.add('RANCHER_VERSION parameter is required')
-    }
-    if (!params.RANCHER_TEST_REPO_URL?.trim()) {
-        validationErrors.add('RANCHER_TEST_REPO_URL parameter is required')
-    }
-    if (!params.QA_INFRA_REPO_URL?.trim()) {
-        validationErrors.add('QA_INFRA_REPO_URL parameter is required')
-    }
+    def validationEnvVars = [
+            'RKE2_VERSION': params.RKE2_VERSION,
+            'RANCHER_VERSION': params.RANCHER_VERSION,
+            'RANCHER_TEST_REPO_URL': params.RANCHER_TEST_REPO_URL,
+            'QA_INFRA_REPO_URL': params.QA_INFRA_REPO_URL
+    ]
 
-    // Version format validation
-    if (params.RKE2_VERSION && !isValidVersionFormat(params.RKE2_VERSION)) {
-        validationErrors.add("RKE2_VERSION '${params.RKE2_VERSION}' does not match expected format (e.g., v1.28.8+rke2r1)")
-    }
-    if (params.RANCHER_VERSION && !isValidRancherVersionFormat(params.RANCHER_VERSION)) {
-        validationErrors.add("RANCHER_VERSION '${params.RANCHER_VERSION}' does not match expected format (e.g., v2.10-head, v2.11.0)")
-    }
-
-    if (validationErrors) {
-        def errorMsg = 'Parameter validation failed:\n' + validationErrors.join('\n- ')
+    try {
+        // Run validation in a temporary container
+        sh """
+            docker run --rm \
+                -e RKE2_VERSION='${params.RKE2_VERSION}' \
+                -e RANCHER_VERSION='${params.RANCHER_VERSION}' \
+                -e RANCHER_TEST_REPO_URL='${params.RANCHER_TEST_REPO_URL}' \
+                -e QA_INFRA_REPO_URL='${params.QA_INFRA_REPO_URL}' \
+                -v \$(pwd)/tests:/root/go/src/github.com/rancher/tests \
+                alpine:latest sh -c '${validationScript}'
+        """
+        logInfo('All parameters validated successfully')
+    } catch (Exception e) {
+        def errorMsg = "Parameter validation failed: ${e.message}"
         logError(errorMsg)
         error(errorMsg)
     }
-
-    logInfo('All parameters validated successfully')
 }
 
-static def isValidVersionFormat(version) {
-    // RKE2 version format: v1.28.8+rke2r1
-    return version ==~ /^v\d+\.\d+\.\d+\+rke2r\d+$/
-}
-
-static def isValidRancherVersionFormat(version) {
-    // Rancher version format: v2.10-head, v2.11.0, head
-    return version ==~ /^(v\d+\.\d+(-head|\.\d+)?|head)$/
-}
-
-def validateRequiredVariables(requiredVars) {
+def validateRequiredVariables(List<String> requiredVars) {
     logInfo('Validating required environment variables')
 
-    def missingVars = []
+    def validationScript = '''
+#!/bin/bash
+set -e
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/validation_helpers.sh
+validate_required_variables ''' + requiredVars.join(' ')
+
+    def envVars = [:]
     requiredVars.each { varName ->
-        def varValue = env."${varName}"
-        if (!varValue || varValue.trim().isEmpty()) {
-            missingVars.add(varName)
-        }
+        envVars[varName] = env."${varName}" ?: ''
     }
 
-    if (!missingVars.isEmpty()) {
-        def errorMsg = "Missing required environment variables: ${missingVars.join(', ')}"
+    try {
+        dockerHelper().executeScriptInContainer(validationScript, envVars)
+        logInfo('All required variables validated successfully')
+    } catch (Exception e) {
+        def errorMsg = "Required variables validation failed: ${e.message}"
         logError(errorMsg)
         error(errorMsg)
     }
+}
 
-    logInfo('All required variables validated successfully')
+
+def validateSensitiveDataHandling() {
+    logInfo('Validating sensitive data handling using external script')
+
+    def validationScript = '''
+#!/bin/bash
+set -e
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/validation_helpers.sh
+validate_sensitive_data_handling "${ENV_FILE}"
+'''
+
+    def validationEnvVars = [
+            'ENV_FILE': env.ENV_FILE,
+            'SSH_KEY_PATH': env.SSH_KEY_PATH ?: ''
+    ]
+
+    try {
+        dockerHelper().executeScriptInContainer(validationScript, validationEnvVars)
+        logInfo('Sensitive data handling validated successfully')
+    } catch (Exception e) {
+        // Log warning but don't fail the build
+        logWarning("Sensitive data validation issues detected: ${e.message}")
+        logWarning('Review security measures and address any concerns')
+    }
 }
 
 // ========================================
@@ -1179,122 +1201,6 @@ def cleanupSSHKeys() {
     logInfo('SSH key cleanup completed')
 }
 
-def validateSensitiveDataHandling() {
-    logInfo('Validating sensitive data handling and security measures')
-
-    def validationErrors = []
-    // List of patterns that should never appear in logs or env files
-    def sensitivePatterns = [
-            'AWS_SECRET_ACCESS_KEY=',
-            'AWS_ACCESS_KEY_ID=',
-            'AWS_SSH_PEM_KEY=',
-            'PRIVATE_REGISTRY_PASSWORD=',
-            '-----BEGIN',
-            '-----END'
-    ]
-
-    // Validate AWS credentials are NOT exposed in environment file (new security approach)
-    try {
-        def envFileContent = ''
-        if (fileExists(env.ENV_FILE)) {
-            envFileContent = readFile(file: env.ENV_FILE)
-        }
-
-        // Check for ANY plaintext credentials in environment file
-        sensitivePatterns.each { pattern ->
-            if (envFileContent.contains(pattern) && !envFileContent.contains("${pattern} excluded")) {
-                validationErrors.add("Sensitive pattern '${pattern}' found in environment file - should use withCredentials")
-            }
-        }
-
-        // Check for ANY plaintext credentials in environment file (should not exist)
-        if (envFileContent.contains('AWS_SECRET_ACCESS_KEY=')) {
-            validationErrors.add('AWS credentials are exposed in environment file - should use withCredentials')
-        }
-
-        if (envFileContent.contains('AWS_ACCESS_KEY_ID=')) {
-            validationErrors.add('AWS credentials are exposed in environment file - should use withCredentials')
-        }
-
-        if (envFileContent.contains('AWS_SSH_PEM_KEY=')) {
-            validationErrors.add('SSH private key is exposed in environment file - should use withCredentials')
-        }
-
-        if (envFileContent.contains('PRIVATE_REGISTRY_PASSWORD=')) {
-            validationErrors.add('Private registry password is exposed in environment file - should use withCredentials')
-        }
-
-        // Verify that environment file contains proper comments about credential handling
-        if (!envFileContent.contains('withCredentials')) {
-            logWarning('Environment file should mention withCredentials for security')
-        }
-    } catch (Exception e) {
-        logWarning("Could not validate environment file content: ${e.message}")
-    }
-
-    // Validate SSH key file permissions
-    try {
-        withCredentials([
-            string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
-        ]) {
-            def awsSshKeyName = env.AWS_SSH_KEY_NAME
-            if (awsSshKeyName) {
-                def keyPath = "./tests/.ssh/${awsSshKeyName}"
-                if (fileExists(keyPath)) {
-                    def permissions = sh(script: "stat -c '%a' ${keyPath}", returnStdout: true).trim()
-                    if (permissions != '600') {
-                        validationErrors.add("SSH key file has insecure permissions: ${permissions} (should be 600)")
-                    }
-
-                    // Validate SSH directory permissions
-                    def dirPermissions = sh(script: "stat -c '%a' ./tests/.ssh", returnStdout: true).trim()
-                    if (dirPermissions != '700') {
-                        validationErrors.add("SSH directory has insecure permissions: ${dirPermissions} (should be 700)")
-                    }
-                }
-            }
-        }
-    } catch (Exception e) {
-        logWarning("Could not validate SSH key permissions: ${e.message}")
-    }
-
-    // Validate Docker security
-    try {
-        // Check if containers are running with proper user isolation
-        def dockerInfo = sh(script: 'docker info 2>/dev/null | grep -i "user namespace remap" || echo "NOT_CONFIGURED"', returnStdout: true).trim()
-        if (dockerInfo == 'NOT_CONFIGURED') {
-            logWarning('Docker user namespace remapping is not configured - consider enabling for additional security')
-        }
-    } catch (Exception e) {
-        logWarning("Could not validate Docker security configuration: ${e.message}")
-    }
-
-    // Validate S3 configuration
-    try {
-        if (env.S3_BUCKET_NAME && env.S3_REGION) {
-            logInfo("S3 configuration validated: bucket=${env.S3_BUCKET_NAME}, region=${env.S3_REGION}")
-        } else {
-            validationErrors.add('S3 configuration is incomplete')
-        }
-    } catch (Exception e) {
-        validationErrors.add("S3 validation failed: ${e.message}")
-    }
-
-    // Report validation results
-    if (!validationErrors.isEmpty()) {
-        logError('Sensitive data handling validation failed:')
-        validationErrors.each { error ->
-            logError("  - ${error}")
-        }
-        // For now, log warnings but don't fail the pipeline
-        // Consider making this stricter based on security requirements
-        logWarning('Security validation completed with warnings - review and address issues')
-    } else {
-        logInfo('[OK] All sensitive data handling validations passed - credentials properly secured with withCredentials')
-    }
-
-    logInfo('Sensitive data handling validation completed')
-}
 
 // ========================================
 // DOCKER MANAGEMENT FUNCTIONS
@@ -1507,6 +1413,132 @@ def archiveAnsiblePreparationArtifacts() {
         'group_vars.tar.gz',
         'ansible-preparation-report.txt'
     ])
+}
+
+// ========================================
+// UNIFIED CLEANUP AND ERROR HANDLING
+// ========================================
+
+/**
+ * Unified cleanup handler for all failure scenarios
+ * Replaces repetitive cleanup code in multiple post blocks
+ *
+ * @param failureType Type of failure: 'deployment', 'ansible_prep', 'rke2', 'rancher', 'timeout', 'aborted'
+ */
+def handleFailureCleanup(String failureType) {
+    logError("${failureType} failure detected - initiating cleanup")
+
+    try {
+        // Extract artifacts before cleanup
+        extractArtifactsFromDockerVolume()
+
+        // Archive failure-specific artifacts
+        archiveFailureArtifactsByType(failureType)
+
+        // Execute infrastructure cleanup if enabled
+        if (env.DESTROY_ON_FAILURE?.toBoolean()) {
+            logInfo('DESTROY_ON_FAILURE is true - executing consolidated cleanup')
+            executeInfrastructureCleanup(failureType)
+        } else {
+            logWarning('DESTROY_ON_FAILURE is false - manual cleanup required')
+            logWarning("Please clean up resources in workspace: ${env.TF_WORKSPACE}")
+        }
+
+        // Always cleanup containers and volumes
+        cleanupContainersAndVolumes()
+
+    } catch (Exception cleanupException) {
+        logError("Cleanup failed: ${cleanupException.message}")
+        // Attempt container cleanup even if infrastructure cleanup fails
+        try {
+            cleanupContainersAndVolumes()
+        } catch (Exception containerException) {
+            logError("Container cleanup also failed: ${containerException.message}")
+        }
+    }
+}
+
+/**
+ * Execute infrastructure cleanup using consolidated script
+ *
+ * @param cleanupReason Reason for cleanup: 'deployment_failure', 'timeout', 'aborted'
+ */
+def executeInfrastructureCleanup(String failureType) {
+    def cleanupReason = failureType in ['timeout', 'aborted'] ? failureType : 'deployment_failure'
+
+    def cleanupScript = '''
+#!/bin/bash
+set -e
+# Source the consolidated cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
+# Execute cleanup
+perform_cleanup "${CLEANUP_REASON}" "${TF_WORKSPACE}" "true"
+'''
+
+    def cleanupEnvVars = [
+        'CLEANUP_REASON': cleanupReason,
+        'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
+        'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
+        'TF_WORKSPACE': env.TF_WORKSPACE,
+        'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
+        'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
+    ]
+
+    try {
+        dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
+        logInfo("Infrastructure cleanup completed for ${failureType}")
+    } catch (Exception e) {
+        logError("Infrastructure cleanup failed: ${e.message}")
+        throw e
+    }
+}
+
+/**
+ * Archive artifacts based on failure type
+ *
+ * @param failureType Type of failure to determine which artifacts to archive
+ */
+def archiveFailureArtifactsByType(String failureType) {
+    def artifactMap = [
+        'deployment': [
+            'tfplan-backup',
+            '*.log',
+            'error-*.txt',
+            'infrastructure-outputs.json'
+        ],
+        'ansible_prep': [
+            'group_vars.tar.gz',
+            'ansible-error-logs.txt',
+            'ansible-debug-info.txt'
+        ],
+        'rke2': [
+            'ansible-inventory.yml',
+            'rke2-deployment-error-logs.txt',
+            'kubectl-setup-error-logs.txt',
+            'ssh-setup-error-logs.txt'
+        ],
+        'rancher': [
+            'ansible-inventory.yml',
+            'rancher-deployment-error-logs.txt',
+            'rancher-validation-error-logs.txt',
+            'rancher-debug-info.txt'
+        ],
+        'timeout': [
+            '*.log',
+            'tfplan-backup',
+            'error-*.txt',
+            'timeout-debug-info.txt'
+        ],
+        'aborted': [
+            '*.log',
+            'aborted-state-*.txt'
+        ]
+    ]
+
+    def artifacts = artifactMap[failureType] ?: ['*.log', 'error-*.txt']
+
+    logInfo("Archiving ${failureType} failure artifacts")
+    archiveBuildArtifacts(artifacts)
 }
 
 def archiveRKE2DeploymentArtifacts() {
