@@ -507,6 +507,9 @@ pipeline {
                         // Create shared volume
                         createSharedVolume()
 
+                        // Copy SSH keys to container volume AFTER volume is created
+                        ensureSSHKeysInContainer()
+
                         // Validate parameters and environment
                         validateParameters()
                     }
@@ -584,9 +587,6 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/
                     logInfo('Preparing Ansible environment with consolidated script')
 
                     validateRequiredVariables(['QA_INFRA_WORK_PATH', 'ANSIBLE_VARS_FILENAME'])
-
-                    // Ensure SSH keys are available in container
-                    ensureSSHKeysInContainer()
 
                     def timeoutMinutes = env.ANSIBLE_TIMEOUT ?
                             Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
@@ -1019,25 +1019,58 @@ def createSharedVolume() {
 
 def ensureSSHKeysInContainer() {
     logInfo('Ensuring SSH keys are available in container')
-    
-    if (!env.SSH_KEY_PATH || !fileExists(env.SSH_KEY_PATH)) {
-        logWarning('SSH keys not found in workspace')
+
+    def sshKeyName = env.AWS_SSH_KEY_NAME
+    if (!sshKeyName) {
+        logWarning('AWS_SSH_KEY_NAME not set, cannot copy SSH keys')
         return
     }
-    
+
+    def sshDir = "./tests/.ssh"
+    def keyPath = "${sshDir}/${sshKeyName}"
+
+    // Debug: Check what exists
+    sh """
+        echo "Checking for SSH keys..."
+        echo "SSH Directory: ${sshDir}"
+        echo "Key Name: ${sshKeyName}"
+        echo "Expected Path: ${keyPath}"
+        ls -la ${sshDir}/ || echo "SSH directory not found"
+        test -f ${keyPath} && echo "SSH key file EXISTS" || echo "SSH key file NOT FOUND"
+    """
+
+    if (!fileExists(keyPath)) {
+        logWarning("SSH key not found at: ${keyPath}")
+        logWarning('Keys may not have been created properly')
+
+        // Try to recreate them
+        withCredentials(getCredentialsList()) {
+            try {
+                setupSSHKeysSecure()
+                logInfo('SSH keys recreated')
+            } catch (Exception e) {
+                logError("Failed to recreate SSH keys: ${e.message}")
+                return
+            }
+        }
+    }
+
     try {
         // Copy SSH keys into container volume
         sh """
+            echo "Copying SSH keys to container volume..."
             docker run --rm \\
                 -v ${env.VALIDATION_VOLUME}:/target \\
-                -v \$(pwd)/tests/.ssh:/source \\
+                -v \$(pwd)/${sshDir}:/source:ro \\
                 alpine:latest \\
                 sh -c '
+                    set -x
                     mkdir -p /target/.ssh
                     chmod 700 /target/.ssh
-                    cp -r /source/* /target/.ssh/
-                    chmod 600 /target/.ssh/*
-                    echo "SSH keys copied to container volume"
+                    cp -v /source/* /target/.ssh/ || { echo "Failed to copy keys"; exit 1; }
+                    chmod 600 /target/.ssh/* || true
+                    echo "SSH keys copied successfully"
+                    ls -la /target/.ssh/
                 '
         """
         logInfo('SSH keys successfully copied to container volume')
