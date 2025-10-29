@@ -32,4 +32,4 @@ export ELEMENTAL_NODE_IP=$(tofu output -raw public_dns)
 
 cd "$QAINFRA_SCRIPT_PATH/$ELEMENTAL_PLAYBOOK_PATH"
 
-ansible-playbook "$ELEMENTAL_PLAYBOOK_FILE" -vvvv -e "@$ELEMENTAL_VARS_FILE" --extra-vars "elemental_node_public_ip=$ELEMENTAL_NODE_IP"
+ansible-playbook "$ELEMENTAL_PLAYBOOK_FILE" -vvvv -e "@$ELEMENTAL_VARS_FILE" --extra-vars "elemental_node_public_ip=$ELEMENTAL_NODE_IP" -i inventory.yml
