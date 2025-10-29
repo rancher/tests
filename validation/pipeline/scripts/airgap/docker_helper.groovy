@@ -59,27 +59,20 @@ class DockerExecutionHelper implements Serializable {
 
         def escapedContainerName = containerName.replaceAll('[^a-zA-Z0-9_-]', '_')
 
-        if (pipeline.env.DEBUG?.toBoolean()) {
-            prepareDebugHelper()
-        }
-
         def volumeMounts = collectVolumeMounts(envFilePath, scriptFile, inventoryMount)
         def volumeMountStr = volumeMounts.join(
-            """ \\
-            """
+                """ \\
+                """
         )
 
         def baseCmd = """docker run --rm \\
-            ${volumeMountStr} \\
-            --name ${escapedContainerName} \\
-            -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
-            ${envVars} \\
-            \"${pipeline.env.IMAGE_NAME.trim()}\"""".stripIndent().trim()
+                ${volumeMountStr} \\
+                --name ${escapedContainerName} \\
+                -e QA_INFRA_WORK_PATH=/root/go/src/github.com/rancher/qa-infra-automation${workspaceEnv} \\
+                ${envVars} \\
+                \"${pipeline.env.IMAGE_NAME.trim()}\"""".stripIndent().trim()
 
-        def executionCmd = buildPrimaryExecutionCommand()
-        if (!pipeline.env.DEBUG?.toBoolean()) {
-            executionCmd = """/bin/bash -c 'exec /bin/bash /tmp/script.sh'"""
-        }
+        def executionCmd = '/bin/bash /tmp/script.sh'
 
         return "${baseCmd} ${executionCmd}"
     }
@@ -246,10 +239,6 @@ class DockerExecutionHelper implements Serializable {
             mounts.add("-v \"${envFilePath}:/tmp/.env\"")
         }
 
-        if (pipeline.env.DEBUG?.toBoolean() && pipeline.fileExists('./tmp_debug_env_check.sh')) {
-            mounts.add("-v \"${pipeline.pwd()}/tmp_debug_env_check.sh:/tmp/debug_env_check.sh\"")
-        }
-
         if (inventoryMount) {
             mounts.add(inventoryMount.trim())
         }
@@ -288,10 +277,6 @@ class DockerExecutionHelper implements Serializable {
             mounts.add("-v \"${pipeline.pwd()}/${scriptFile}:/tmp/script.sh\"")
         }
 
-        if (pipeline.env.DEBUG?.toBoolean() && pipeline.fileExists('./tmp_debug_env_check.sh')) {
-            mounts.add("-v \"${pipeline.pwd()}/tmp_debug_env_check.sh:/tmp/debug_env_check.sh\"")
-        }
-
         if (inventoryMount) {
             mounts.add(inventoryMount.trim())
         }
@@ -313,58 +298,12 @@ class DockerExecutionHelper implements Serializable {
         }
     }
 
-    private void prepareDebugHelper() {
-        try {
-            if (pipeline.fileExists('validation/pipeline/scripts/airgap/debug_env_check.sh')) {
-                pipeline.sh '''
-                    cp validation/pipeline/scripts/airgap/debug_env_check.sh ./tmp_debug_env_check.sh || true
-                    chmod +x ./tmp_debug_env_check.sh || true
-                '''
-                pipeline.logInfo('DEBUG helper copied to workspace: ./tmp_debug_env_check.sh')
-            } else {
-                pipeline.writeFile file: 'tmp_debug_env_check.sh', text: '''#!/bin/bash
-set -e
-echo "=== INLINE FALLBACK DEBUG SCRIPT ==="
-echo "Printing /tmp/.env contents (masked):"
-[ -f /tmp/.env ] && sed -n '1,200p' /tmp/.env || echo "/tmp/.env not found"
-echo "Printing environment (selected keys):"
-env | egrep 'AWS|S3|TF|RANCHER|RKE2|HOSTNAME' || env
-echo "=== END DEBUG ==="
-'''
-                pipeline.sh 'chmod +x ./tmp_debug_env_check.sh || true'
-                pipeline.logInfo('FALLBACK debug helper created at ./tmp_debug_env_check.sh')
-            }
-        } catch (Exception err) {
-            pipeline.logWarning("Failed to prepare debug helper in workspace: ${err}")
-        }
-    }
-
     private String buildPrimaryExecutionCommand() {
-        return '''/bin/bash -c '
-        echo "=== DEBUG: Container started ==="
-        echo "Current user: $(whoami)"
-        echo "Current working directory: $(pwd)"
-        echo "Environment file location: /tmp/.env"
-        echo "Checking if /tmp/.env exists:"
-        ls -la /tmp/.env || echo "FILE NOT FOUND"
-        echo "Directory contents of /tmp:"
-        ls -la /tmp/
-        echo "=== END DEBUG ==="
-        echo "Executing script: /tmp/script.sh"
-        /bin/bash /tmp/debug_env_check.sh && exec /bin/bash /tmp/script.sh
-    '''
+        return '/bin/bash /tmp/script.sh'
     }
 
     private String buildFallbackExecutionCommand() {
-        return '''/bin/bash -c '
-        echo "=== DEBUG: Container started (FALLBACK MODE) ==="
-        echo "Current user: $(whoami)"
-        echo "Current working directory: $(pwd)"
-        echo "Environment variables passed directly"
-        echo "=== END DEBUG ==="
-        echo "Executing script: /tmp/script.sh"
-        /bin/bash /tmp/debug_env_check.sh && exec /bin/bash /tmp/script.sh
-    '''
+        return '/bin/bash /tmp/script.sh'
     }
 
     private String resolveInventoryMount() {

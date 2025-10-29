@@ -90,53 +90,22 @@ main() {
     exit 1
   }
 
-echo 'DEBUG: Current working directory:'
-pwd
+  log_info 'Initializing OpenTofu with S3 backend configuration...'
 
-echo 'DEBUG: Contents of tofu/aws/modules/airgap directory:'
-ls -la tofu/aws/modules/airgap/
-
-echo 'DEBUG: Checking if backend.tfvars file exists:'
-if [ -f "tofu/aws/modules/airgap/${TERRAFORM_BACKEND_VARS_FILENAME}" ]; then
-    echo "DEBUG: backend.tfvars file exists, contents:"
-    cat "tofu/aws/modules/airgap/${TERRAFORM_BACKEND_VARS_FILENAME}"
-else
-    echo "DEBUG: backend.tfvars file does NOT exist"
-fi
-
-echo 'DEBUG: Checking if backend.tf file exists:'
-if [ -f "tofu/aws/modules/airgap/backend.tf" ]; then
-    echo "DEBUG: backend.tf file exists, contents:"
-    cat "tofu/aws/modules/airgap/backend.tf"
-else
-    echo "DEBUG: backend.tf file does NOT exist"
-fi
-
-echo 'DEBUG: All .tf and .tfvars files in directory:'
-find tofu/aws/modules/airgap/ -name "*.tf" -o -name "*.tfvars" | while read file; do
-    echo "=== $file ==="
-    cat "$file"
-    echo
-done
-
-echo '=== END DEBUG ==='
-
-echo 'Initializing OpenTofu with S3 backend configuration...'
-
-# Check if backend.tf exists and use appropriate initialization method
-if [ -f "tofu/aws/modules/airgap/backend.tf" ]; then
-    echo "Using backend.tf configuration"
+  # Check if backend.tf exists and use appropriate initialization method
+  if [ -f "tofu/aws/modules/airgap/backend.tf" ]; then
+    log_info "Using backend.tf configuration"
     tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade
-elif [ -f "tofu/aws/modules/airgap/${TERRAFORM_BACKEND_VARS_FILENAME}" ]; then
-    echo "Using backend.tfvars configuration"
+  elif [ -f "tofu/aws/modules/airgap/${TERRAFORM_BACKEND_VARS_FILENAME}" ]; then
+    log_info "Using backend.tfvars configuration"
     tofu -chdir=tofu/aws/modules/airgap init -backend-config="${TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade
-else
-    echo "ERROR: Neither backend.tf nor backend.tfvars found"
+  else
+    log_error "Neither backend.tf nor backend.tfvars found"
     exit 1
-fi
+  fi
 
-echo 'Verifying initialization success...'
-tofu -chdir=tofu/aws/modules/airgap providers
+  log_info 'Verifying initialization success...'
+  tofu -chdir=tofu/aws/modules/airgap providers
 
   log_info "OpenTofu initialization completed successfully"
 }
