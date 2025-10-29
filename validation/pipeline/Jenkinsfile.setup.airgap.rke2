@@ -234,7 +234,7 @@ pipeline {
         // Configuration files
         ANSIBLE_VARS_FILENAME = 'vars.yaml'
         TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
-        TERRAFORM_BACKEND_VARS_FILENAME = 'backend.tfvars'
+        TERRAFORM_BACKEND_CONFIG_FILENAME = 'backend.tf'
         ENV_FILE = '.env'
 
         // Terraform workspace
@@ -377,7 +377,7 @@ pipeline {
                     // Validate required variables inline
                     validateRequiredVariables([
                             'QA_INFRA_WORK_PATH', 'TF_WORKSPACE',
-                            'TERRAFORM_VARS_FILENAME', 'TERRAFORM_BACKEND_VARS_FILENAME'
+                            'TERRAFORM_VARS_FILENAME', 'TERRAFORM_BACKEND_CONFIG_FILENAME'
                     ])
 
                     // Generate configuration files
@@ -620,7 +620,7 @@ perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
                         'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
                         'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
                         'TF_WORKSPACE': env.TF_WORKSPACE,
-                        'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
+                        'TERRAFORM_BACKEND_CONFIG_FILENAME': env.TERRAFORM_BACKEND_CONFIG_FILENAME,
                         'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
                     ]
                     dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
@@ -647,7 +647,7 @@ perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
                         'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
                         'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
                         'TF_WORKSPACE': env.TF_WORKSPACE,
-                        'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
+                        'TERRAFORM_BACKEND_CONFIG_FILENAME': env.TERRAFORM_BACKEND_CONFIG_FILENAME,
                         'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
                     ]
                     dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
@@ -1219,7 +1219,7 @@ perform_cleanup "${CLEANUP_REASON}" "${TF_WORKSPACE}" "true"
         'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
         'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
         'TF_WORKSPACE': env.TF_WORKSPACE,
-        'TERRAFORM_BACKEND_VARS_FILENAME': env.TERRAFORM_BACKEND_VARS_FILENAME,
+        'TERRAFORM_BACKEND_CONFIG_FILENAME': env.TERRAFORM_BACKEND_CONFIG_FILENAME,
         'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
     ]
 
@@ -1488,17 +1488,8 @@ terraform {
   }
 }
 """
-            writeFile file: 'backend.tf', text: backendConfig
-            logInfo('S3 backend configuration written to: backend.tf')
-
-//            // Generate backend.tfvars content from S3 parameters for compatibility
-//            def backendVars = """
-//bucket = "${env.S3_BUCKET_NAME}"
-//key    = "${env.S3_KEY_PREFIX}"
-//region = "${env.S3_REGION}"
-//"""
-//            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
-//            logInfo("S3 backend variables written to: ${env.TERRAFORM_BACKEND_VARS_FILENAME}")
+            writeFile file: env.TERRAFORM_BACKEND_CONFIG_FILENAME, text: backendConfig
+            logInfo("S3 backend configuration written to: ${env.TERRAFORM_BACKEND_CONFIG_FILENAME}")
         }
     }
 }
