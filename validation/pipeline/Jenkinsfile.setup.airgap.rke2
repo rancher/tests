@@ -55,6 +55,8 @@ def configureEnvironmentComplete() {
     logInfo("Rancher Hostname: ${env.RANCHER_HOSTNAME}")
     
     // Step 3: Configure credentials and generate files
+    // NOTE: SSH keys must be created AFTER deleteDir() is called
+    // This function is called AFTER workspace cleanup
     withCredentials(getCredentialsList()) {
         setupSSHKeysSecure()
         generateEnvironmentFileComplete()
@@ -416,11 +418,11 @@ pipeline {
         stage('Initialize Pipeline') {
             steps {
                 script {
+                    // Clean workspace
+                    deleteDir()
+
                     // Complete environment configuration
                     configureEnvironmentComplete()
-
-                    // Clean workspace after environment setup
-                    deleteDir()
 
                     logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
                     logInfo("Docker image: ${env.IMAGE_NAME}")
