@@ -239,6 +239,24 @@ def dockerHelper() {
     return dockerHelperInstance
 }
 
+// CI helpers loader (Phase 0 scaffold)
+__ciHelpersRef = null
+
+def ciHelpers() {
+    if (__ciHelpersRef == null) {
+        def candidates = [
+            'validation/pipeline/ci/helpers.groovy',
+            'tests/validation/pipeline/ci/helpers.groovy'
+        ]
+        for (p in candidates) {
+            try {
+                if (fileExists(p)) { __ciHelpersRef = load(p); break }
+            } catch (ignored) {}
+        }
+    }
+    return __ciHelpersRef
+}
+
 pipeline {
     agent any
 
@@ -413,6 +431,19 @@ pipeline {
 
                     // Complete environment configuration
                     configureEnvironmentComplete()
+
+                    // Optionally load config/params.yaml for scaffolding
+                    try {
+                        def helpers = ciHelpers()
+                        if (helpers) {
+                            def cfg = helpers.readParamsYaml(this, 'config/params.yaml')
+                            if (cfg && cfg instanceof Map && !cfg.isEmpty()) {
+                                logInfo("Loaded config/params.yaml with ${cfg.keySet().size()} keys")
+                            }
+                        }
+                    } catch (ignored) {
+                        logWarning('config/params.yaml not found or unreadable')
+                    }
 
                     logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
                     logInfo("Docker image: ${env.IMAGE_NAME}")

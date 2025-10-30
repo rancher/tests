@@ -1,0 +1,18 @@
+# Centralized parameters for Airgap RKE2 pipelines
+# Phase 0 scaffold - values mirror Jenkins defaults; adjust per environment
+
+rke2_version: "v1.28.8+rke2r1"
+rancher_version: "v2.9-head"
+
+rancher_test_repo_url: "https://github.com/rancher/tests.git"
+rancher_test_repo_branch: "main"
+qa_infra_repo_url: "https://github.com/rancher/qa-infra-automation.git"
+qa_infra_repo_branch: "main"
+
+s3_bucket_name: "rancher-terraform-state"
+s3_region: "us-east-1"
+s3_key_prefix: "jenkins-airgap-rke2/terraform.tfstate"
+
+hostname_prefix: "airgap-ansible-jenkins"
+private_registry_url: ""
+private_registry_username: "default-user"
