@@ -16,6 +16,11 @@ for c in "${COMMON_CANDIDATES[@]}"; do
   fi
 done
 
+# Load generated env if present
+if command -v load_env >/dev/null 2>&1; then load_env scripts/.env || true; fi
+# Standard error trap
+trap 'echo "build_qa_infra.sh failed at line $LINENO" >&2' ERR
+
 show_help() {
     cat <<EOF
 Usage: $0 [options] [env_file]
@@ -77,7 +82,7 @@ REPO_ROOT=$(pwd)
 # If first argument is an env file, load it
 if [[ -n "${1:-}" && -f "$1" ]]; then
     echo "Loading overrides from $1"
-    set -a 
+    set -a
     source "$1"
     set +a
 fi
@@ -110,7 +115,8 @@ fi
 
 : "${DOWNSTREAM_CLUSTER_SCRIPT_PATH:=/root/go/src/github.com/rancher/tests/validation/pipeline/scripts}"
 # --- Terraform Steps ---
-tofu -chdir="$TERRAFORM_DIR" init -input=false
+[ -f "$TFVARS_FILE" ] || { echo "Error: TFVARS file not found: $TFVARS_FILE"; exit 1; }
+retry 3 10 tofu -chdir="$TERRAFORM_DIR" init -input=false
 
 # Create and select the Terraform workspace
 tofu -chdir="$TERRAFORM_DIR" workspace new "$WORKSPACE_NAME" || tofu -chdir="$TERRAFORM_DIR" workspace select "$WORKSPACE_NAME"
@@ -128,8 +134,7 @@ export ANSIBLE_CONFIG="$ANSIBLE_CONFIG"
 export ANSIBLE_PRIVATE_KEY_FILE="$PRIVATE_KEY_FILE"
 
 # Apply the Terraform configuration
-tofu -chdir="$TERRAFORM_DIR" apply -auto-approve -var-file="$TFVARS_FILE"
-if [ $? -ne 0 ]; then
+if ! retry 3 15 tofu -chdir="$TERRAFORM_DIR" apply -auto-approve -var-file="$TFVARS_FILE"; then
     echo "Error: Terraform apply failed."
     exit 1
 fi
@@ -146,18 +151,9 @@ while [ $attempt -lt $max_attempts ]; do
     echo "Attempt $attempt: Running RKE2 playbook..."
     ansible-playbook -i "$TERRAFORM_INVENTORY" "$RKE2_PLAYBOOK_PATH" -vvvv -e "@$VARS_FILE" --skip-tags gather_facts
     rke2_exit_code=$?
-    if [ $rke2_exit_code -ne 0 ]; then
-        echo "RKE2 playbook failed on attempt $attempt."
-        if [ $attempt -lt $max_attempts ]; then
-            echo "Waiting 60 seconds before retrying..."
-            sleep 60
-        fi
-    else
-        echo "RKE2 playbook succeeded on attempt $attempt."
-        break
-    fi
-    sleep 30
-done
+else
+    rke2_exit_code=0
+fi
 
 if [ $attempt -eq $max_attempts ] && [ $rke2_exit_code -ne 0 ] && [[ $CLEANUP == "true" ]]; then
     echo "Error: RKE2 playbook failed after $max_attempts attempts."

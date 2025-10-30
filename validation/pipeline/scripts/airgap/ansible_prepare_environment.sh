@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 
 # Ansible Environment Preparation Script
 # Consolidated script that handles group_vars generation, inventory setup, and SSH key configuration
