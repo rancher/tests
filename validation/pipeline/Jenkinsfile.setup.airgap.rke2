@@ -444,28 +444,8 @@ pipeline {
         stage('Initialize Pipeline') {
             steps {
                 script {
-                    // Clean workspace
-                    deleteDir()
-
-                    // Complete environment configuration
-                    configureEnvironmentComplete()
-
-                    // Optionally load config/params.yaml for scaffolding
-                    try {
-                        def helpers = ciHelpers()
-                        if (helpers) {
-                            def cfg = helpers.readParamsYaml(this, 'config/params.yaml')
-                            if (cfg && cfg instanceof Map && !cfg.isEmpty()) {
-                                logInfo("Loaded config/params.yaml with ${cfg.keySet().size()} keys")
-                            }
-                        }
-                    } catch (ignored) {
-                        logWarning('config/params.yaml not found or unreadable')
-                    }
-
-                    logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
-                    logInfo("Docker image: ${env.IMAGE_NAME}")
-                    logInfo("Volume: ${env.VALIDATION_VOLUME}")
+                    def s = ciAirgap()
+                    s.setupEnv(this)
                 }
             }
         }
@@ -539,58 +519,8 @@ pipeline {
         stage('Deploy Infrastructure') {
             steps {
                 script {
-                    logInfo('Deploying infrastructure')
-
-                    // Validate required variables inline
-                    validateRequiredVariables([
-                            'QA_INFRA_WORK_PATH', 'TF_WORKSPACE',
-                            'TERRAFORM_VARS_FILENAME', 'TERRAFORM_BACKEND_CONFIG_FILENAME'
-                    ])
-
-                    // Generate configuration files
-                    generateTofuConfiguration()
-
-                    def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
-                            Integer.parseInt(env.TERRAFORM_TIMEOUT) : PipelineConfig.TERRAFORM_TIMEOUT_MINUTES
-
-                    timeout(time: timeoutMinutes, unit: 'MINUTES') {
-                        try {
-                            // Direct script execution - no wrapper function
-                            def infraScript = '''
-#!/bin/bash
-set -e
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_infrastructure_deploy.sh
-'''
-
-                            def infraEnvVars = [
-                                    'RKE2_VERSION': env.RKE2_VERSION,
-                                    'RANCHER_VERSION': env.RANCHER_VERSION,
-                                    'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
-                                    'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
-                                    'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
-                                    'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
-                                    'UPLOAD_CONFIG_TO_S3': 'true',
-                                    'S3_BUCKET_NAME': env.S3_BUCKET_NAME,
-                                    'S3_REGION': env.S3_REGION,
-                                    'S3_KEY_PREFIX': env.S3_KEY_PREFIX,
-                                    'AWS_REGION': env.AWS_REGION,
-                                    'AWS_ACCESS_KEY_ID': env.AWS_ACCESS_KEY_ID,
-                                    'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
-                                    'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
-                                    'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
-                            ]
-
-                            dockerHelper().executeScriptInContainer(infraScript, infraEnvVars)
-                            extractArtifactsFromDockerVolume()
-                            logInfo('Infrastructure deployed successfully')
-
-                        } catch (InterruptedException ignored) {
-                            handleFailureCleanup('timeout')
-                        } catch (Exception e) {
-                            logError("Infrastructure deployment failed: ${e.message}")
-                            handleFailureCleanup('deployment')
-                        }
-                    }
+                    def s = ciAirgap()
+                    s.deployInfrastructure(this)
                 }
             }
             post {
@@ -603,37 +533,8 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/
         stage('Prepare Ansible Environment') {
             steps {
                 script {
-                    logInfo('Preparing Ansible environment with consolidated script')
-
-                    validateRequiredVariables(['QA_INFRA_WORK_PATH', 'ANSIBLE_VARS_FILENAME'])
-
-                    def timeoutMinutes = env.ANSIBLE_TIMEOUT ?
-                            Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
-
-                    timeout(time: timeoutMinutes, unit: 'MINUTES') {
-                        // Direct script execution - no wrapper
-                        def ansiblePrepScript = '''
-#!/bin/bash
-set -e
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_prepare_environment.sh
-'''
-
-                        def ansiblePrepEnvVars = [
-                                'ANSIBLE_VARIABLES': env.ANSIBLE_VARIABLES,
-                                'RKE2_VERSION': env.RKE2_VERSION,
-                                'RANCHER_VERSION': env.RANCHER_VERSION,
-                                'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
-                                'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
-                                'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL,
-                                'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME,
-                                'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD,
-                                'SKIP_YAML_VALIDATION': env.SKIP_YAML_VALIDATION,
-                                'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
-                                'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
-                        ]
-
-                        dockerHelper().executeScriptInContainer(ansiblePrepScript, ansiblePrepEnvVars)
-                    }
+                    def s = ciAirgap()
+                    s.prepareAnsibleEnv(this)
                 }
             }
             post {
@@ -646,38 +547,8 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/
         stage('Deploy RKE2 with Ansible') {
             steps {
                 script {
-                    logInfo('Deploying RKE2 cluster with consolidated script')
-
-                    validateRequiredVariables(['QA_INFRA_WORK_PATH', 'ANSIBLE_VARS_FILENAME'])
-
-                    def timeoutMinutes = env.ANSIBLE_TIMEOUT ?
-                            Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
-
-                    timeout(time: timeoutMinutes, unit: 'MINUTES') {
-                        try {
-                            // Direct script execution - no wrapper
-                            def rke2Script = '''
-#!/bin/bash
-set -e
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_deploy_rke2.sh
-'''
-
-                            def rke2EnvVars = [
-                                    'RKE2_VERSION': env.RKE2_VERSION,
-                                    'SKIP_VALIDATION': 'false',
-                                    'AWS_SSH_PEM_KEY': env.AWS_SSH_PEM_KEY,
-                                    'AWS_SSH_KEY_NAME': env.AWS_SSH_KEY_NAME
-                            ]
-
-                            dockerHelper().executeScriptInContainer(rke2Script, rke2EnvVars)
-                            logInfo('RKE2 deployment completed successfully')
-
-                        } catch (Exception e) {
-                            logError("RKE2 deployment failed: ${e.message}")
-                            handleFailureCleanup('rke2')
-                            throw e
-                        }
-                    }
+                    def s = ciAirgap()
+                    s.deployRKE2(this)
                 }
             }
             post {
@@ -690,38 +561,8 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/
         stage('Deploy Rancher with Ansible') {
             steps {
                 script {
-                    logInfo('Deploying Rancher with consolidated script')
-
-                    validateRequiredVariables(['QA_INFRA_WORK_PATH', 'ANSIBLE_VARS_FILENAME'])
-
-                    def timeoutMinutes = env.ANSIBLE_TIMEOUT ?
-                            Integer.parseInt(env.ANSIBLE_TIMEOUT) : PipelineConfig.ANSIBLE_TIMEOUT_MINUTES
-
-                    timeout(time: timeoutMinutes, unit: 'MINUTES') {
-                        try {
-                            // Direct script execution - no wrapper
-                            def rancherScript = '''
-#!/bin/bash
-set -e
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_deploy_rancher.sh
-'''
-
-                            def rancherEnvVars = [
-                                    'RANCHER_VERSION': env.RANCHER_VERSION,
-                                    'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
-                                    'RANCHER_HOSTNAME': env.RANCHER_HOSTNAME,
-                                    'SKIP_VERIFICATION': 'false'
-                            ]
-
-                            dockerHelper().executeScriptInContainer(rancherScript, rancherEnvVars)
-                            logInfo('Rancher deployment completed successfully')
-
-                        } catch (Exception e) {
-                            logError("Rancher deployment failed: ${e.message}")
-                            handleFailureCleanup('rancher')
-                            throw e
-                        }
-                    }
+                    def s = ciAirgap()
+                    s.deployRancher(this)
                 }
             }
             post {

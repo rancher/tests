@@ -48,9 +48,18 @@ validate_prerequisites() {
     fi
   fi
 
-  [[ -n "${QA_INFRA_WORK_PATH:-}" ]] || { log_error "QA_INFRA_WORK_PATH not set"; exit 1; }
-  [[ -d "${QA_INFRA_WORK_PATH}" ]] || { log_error "QA_INFRA_WORK_PATH directory not found"; exit 1; }
-  command -v tofu >/dev/null || { log_error "tofu not found"; exit 1; }
+  [[ -n "${QA_INFRA_WORK_PATH:-}" ]] || {
+    log_error "QA_INFRA_WORK_PATH not set"
+    exit 1
+  }
+  [[ -d "${QA_INFRA_WORK_PATH}" ]] || {
+    log_error "QA_INFRA_WORK_PATH directory not found"
+    exit 1
+  }
+  command -v tofu >/dev/null || {
+    log_error "tofu not found"
+    exit 1
+  }
 }
 
 # =============================================================================
@@ -67,7 +76,7 @@ main() {
   if [[ -f "$ENV_FILE" ]]; then
     log_info "Sourcing environment file: $ENV_FILE"
     source "$ENV_FILE"
-    
+
     # Export the sourced variables explicitly to ensure they're available
     export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
     export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"

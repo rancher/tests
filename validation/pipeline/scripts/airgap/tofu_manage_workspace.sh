@@ -40,13 +40,19 @@ validate_prerequisites() {
     fi
   fi
 
-  command -v tofu >/dev/null 2>&1 || { log_error "tofu binary not found in PATH"; exit 1; }
+  command -v tofu >/dev/null 2>&1 || {
+    log_error "tofu binary not found in PATH"
+    exit 1
+  }
   [[ -n "${TF_WORKSPACE:-}" ]] || log_warning "TF_WORKSPACE empty - ensure you set the target workspace"
 }
 
 manage_workspace() {
   local workspace_name="${1:-$TF_WORKSPACE}"
-  [[ -n "$workspace_name" ]] || { log_error "Workspace name not provided"; exit 1; }
+  [[ -n "$workspace_name" ]] || {
+    log_error "Workspace name not provided"
+    exit 1
+  }
 
   log_info "Workspace management starting: $workspace_name"
   log_info "QA_INFRA_WORK_PATH=$QA_INFRA_WORK_PATH"
