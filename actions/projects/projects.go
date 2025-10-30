@@ -196,8 +196,13 @@ func WaitForProjectIDUpdate(client *rancher.Client, clusterID, projectName, name
 		projectsapi.ProjectIDAnnotation: projectName,
 	}
 
-	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
-		namespace, pollErr := namespaces.GetNamespaceByName(client, clusterID, namespaceName)
+	downstreamContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
+		namespace, pollErr := downstreamContext.Core.Namespace().Get(namespaceName, metav1.GetOptions{})
 		if pollErr != nil {
 			return false, pollErr
 		}
