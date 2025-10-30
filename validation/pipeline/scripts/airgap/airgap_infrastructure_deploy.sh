@@ -184,18 +184,37 @@ handle_inventory_file() {
 # S3 UPLOAD FUNCTION
 # =============================================================================
 
+# Upload configuration file to S3
+# Arguments:
+#   $1 - config_file path (optional, defaults to $TERRAFORM_VARS_FILENAME)
+# Required Environment Variables:
+#   - AWS_ACCESS_KEY_ID
+#   - AWS_SECRET_ACCESS_KEY
+#   - S3_BUCKET_NAME
+#   - S3_REGION
+#   - TF_WORKSPACE
+# Returns:
+#   0 on success, 1 on failure
 upload_config_to_s3() {
     local config_file="${1:-$TERRAFORM_VARS_FILENAME}"
     local s3_key="env:/$TF_WORKSPACE/config/cluster.tfvars"
-
+    
     log_info "Uploading configuration file to S3: s3://$S3_BUCKET_NAME/$s3_key"
-
-    # Validate AWS credentials
-    validate_required_vars "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "S3_BUCKET_NAME"
-
+    
+    # Validate AWS credentials and required variables
+    validate_required_vars "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "S3_BUCKET_NAME" "S3_REGION" "TF_WORKSPACE"
+    
     if [[ -f "$config_file" ]]; then
         if aws s3 cp "$config_file" "s3://$S3_BUCKET_NAME/$s3_key" --region "$S3_REGION"; then
-            log_success "Configuration uploaded to S3 successfully"
+            # Verify the upload succeeded
+            if aws s3 ls "s3://$S3_BUCKET_NAME/$s3_key" --region "$S3_REGION" >/dev/null 2>&1; then
+                log_success "Configuration uploaded to S3 successfully"
+                log_info "Accessible at: s3://$S3_BUCKET_NAME/$s3_key"
+                return 0
+            else
+                log_error "Upload reported success but file verification failed"
+                return 1
+            fi
         else
             log_error "Failed to upload configuration to S3"
             return 1
