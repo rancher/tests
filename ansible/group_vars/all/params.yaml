@@ -7,15 +7,12 @@ RANCHER_TEST_REPO_URL: "https://github.com/rancher/tests.git"
 RANCHER_TEST_REPO_BRANCH: "main"
 QA_INFRA_REPO_URL: "https://github.com/rancher/qa-infra-automation.git"
 QA_INFRA_REPO_BRANCH: "main"
-
 PRIVATE_REGISTRY_URL: ""
 PRIVATE_REGISTRY_USERNAME: "default-user"
 PRIVATE_REGISTRY_PASSWORD: ""
-
 S3_BUCKET_NAME: "rancher-terraform-state"
 S3_REGION: "us-east-1"
 S3_KEY_PREFIX: "jenkins-airgap-rke2/"
-
 HOSTNAME_PREFIX: "airgap-ansible-jenkins"
 SHARED_VOLUME_PATH: "/root/shared"
 QA_INFRA_WORK_PATH: "/root/go/src/github.com/rancher/qa-infra-automation"
