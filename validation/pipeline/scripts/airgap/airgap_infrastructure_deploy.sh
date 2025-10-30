@@ -9,16 +9,25 @@ set -Eeuo pipefail
 # CONSTANTS AND LIBRARY SOURCING
 # =============================================================================
 
-SCRIPT_NAME="$(basename "$0")"
+SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME
-SCRIPT_DIR="$(dirname "$0")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
 readonly QA_INFRA_CLONE_PATH
 
-# Source common library first
+# Source common library first (try multiple locations)
 # shellcheck disable=SC1090
-source "$(dirname "$0")/../../../lib/common.sh"
+{
+  COMMON_CANDIDATES=(
+    "${SCRIPT_DIR}/../../../lib/common.sh"
+    "/root/go/src/github.com/rancher/tests/scripts/lib/common.sh"
+    "/root/go/src/github.com/rancher/tests/validation/scripts/lib/common.sh"
+  )
+  for c in "${COMMON_CANDIDATES[@]}"; do
+    if [ -f "$c" ]; then . "$c" && log_info "Sourced common helpers from $c" && break; fi
+  done
+} || true
 
 # Source airgap library
 source_airgap_lib || exit 1

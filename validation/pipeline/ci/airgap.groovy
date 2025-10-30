@@ -10,7 +10,7 @@
 def configureEnv(ctx) {
   ctx.logInfo('Configuring deployment environment (library)')
   ctx.withCredentials(ctx.getCredentialsList()) {
-    ctx.validateSensitiveDataHandling()
+    // No container usage here; image may not exist yet
   }
 }
 
@@ -21,6 +21,8 @@ def prepareInfra(ctx) {
     ctx.createSharedVolume()
     ctx.ensureSSHKeysInContainer()
     ctx.validateParameters()
+    // Validate sensitive data handling after image is available
+    ctx.validateSensitiveDataHandling()
   }
 }
 
