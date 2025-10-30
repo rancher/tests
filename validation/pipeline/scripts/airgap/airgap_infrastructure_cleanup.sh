@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
+IFS=$'\n\t'
 
 # Airgap Infrastructure Cleanup Script
 # Consolidated script that handles infrastructure destruction and workspace management

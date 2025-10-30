@@ -3,7 +3,8 @@
 # Common functions and utilities for airgap Rancher/RKE2 deployment
 # This library consolidates duplicated functionality across multiple scripts
 
-set -e
+set -Eeuo pipefail
+IFS=$'\n\t'
 
 # =============================================================================
 # GLOBAL VARIABLES AND CONFIGURATION
@@ -34,27 +35,32 @@ readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
 readonly NC='\033[0m' # No Color
 
-# Logging functions
+# Logging functions (use printf for portable escapes)
 log_info() {
-  echo -e "${BLUE}[INFO]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
+  local msg="${1:-}"
+  printf '%b\n' "${BLUE}[INFO]${NC} $(date '+%Y-%m-%d %H:%M:%S') - ${msg}"
 }
 
 log_success() {
-  echo -e "${GREEN}[SUCCESS]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
+  local msg="${1:-}"
+  printf '%b\n' "${GREEN}[SUCCESS]${NC} $(date '+%Y-%m-%d %H:%M:%S') - ${msg}"
 }
 
 log_warning() {
-  echo -e "${YELLOW}[WARNING]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
+  local msg="${1:-}"
+  printf '%b\n' "${YELLOW}[WARNING]${NC} $(date '+%Y-%m-%d %H:%M:%S') - ${msg}"
 }
 
 log_error() {
-  echo -e "${RED}[ERROR]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1" >&2
+  local msg="${1:-}"
+  printf '%b\n' "${RED}[ERROR]${NC} $(date '+%Y-%m-%d %H:%M:%S') - ${msg}" >&2
 }
 
 # Debug logging (only shows if DEBUG=true)
 log_debug() {
   if [[ "${DEBUG:-false}" == "true" ]]; then
-    echo -e "${BLUE}[DEBUG]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
+    local msg="${1:-}"
+    printf '%b\n' "${BLUE}[DEBUG]${NC} $(date '+%Y-%m-%d %H:%M:%S') - ${msg}"
   fi
 }
 
