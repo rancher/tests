@@ -257,6 +257,24 @@ def ciHelpers() {
     return __ciHelpersRef
 }
 
+// Airgap steps loader (Phase 2)
+__ciAirgapRef = null
+
+def ciAirgap() {
+    if (__ciAirgapRef == null) {
+        def candidates = [
+            'validation/pipeline/ci/airgap.groovy',
+            'tests/validation/pipeline/ci/airgap.groovy'
+        ]
+        for (p in candidates) {
+            try {
+                if (fileExists(p)) { __ciAirgapRef = load(p); break }
+            } catch (ignored) {}
+        }
+    }
+    return __ciAirgapRef
+}
+
 pipeline {
     agent any
 
@@ -503,14 +521,8 @@ pipeline {
         stage('Configure Environment') {
             steps {
                 script {
-                    logInfo('Configuring deployment environment')
-
-                    // Configure credentials and environment files
-                    withCredentials(getCredentialsList()) {
-
-                        // Validate sensitive data handling and security measures
-                        validateSensitiveDataHandling()
-                    }
+                    def s = ciAirgap()
+                    s.configureEnv(this)
                 }
             }
         }
@@ -518,22 +530,8 @@ pipeline {
         stage('Prepare Infrastructure') {
             steps {
                 script {
-                    logInfo('Preparing infrastructure components')
-
-                    // Configure credentials for Docker operations
-                    withCredentials(getCredentialsList()) {
-                        // Build Docker image with proper tagging
-                        buildDockerImage()
-
-                        // Create shared volume
-                        createSharedVolume()
-
-                        // Copy SSH keys to container volume AFTER volume is created
-                        ensureSSHKeysInContainer()
-
-                        // Validate parameters and environment
-                        validateParameters()
-                    }
+                    def s = ciAirgap()
+                    s.prepareInfra(this)
                 }
             }
         }
