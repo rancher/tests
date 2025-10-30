@@ -20,7 +20,10 @@ export S3_KEY_PREFIX="${S3_KEY_PREFIX:-jenkins-airgap-rke2}"
 export QA_INFRA_PATH="${QA_INFRA_WORK_PATH}"
 export TOFU_MODULE_PATH="${QA_INFRA_PATH}/tofu/aws/modules/airgap"
 export REMOTE_TOFU_MODULE_PATH="/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap"
-export SHARED_VOLUME_PATH="/root"
+if [ -z "${SHARED_VOLUME_PATH+x}" ]; then
+  SHARED_VOLUME_PATH="/root"
+fi
+export SHARED_VOLUME_PATH
 
 # =============================================================================
 # LOGGING AND DEBUG FUNCTIONS
