@@ -1,58 +1,34 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 
 # Airgap Infrastructure Deployment Script
 # Consolidated script that handles planning, applying, validating, and backing up infrastructure
 # Replaces: airgap_plan_infrastructure.sh, airgap_apply_infrastructure.sh, airgap_validate_infrastructure.sh, airgap_backup_state.sh
 
 # =============================================================================
-# CONSTANTS
+# CONSTANTS AND LIBRARY SOURCING
 # =============================================================================
 
 readonly SCRIPT_NAME="$(basename "$0")"
 readonly SCRIPT_DIR="$(dirname "$0")"
 readonly QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
 
-# =============================================================================
-# LOGGING FUNCTIONS
-# =============================================================================
+# Source common library first
+# shellcheck disable=SC1090
+source "$(dirname "$0")/../../../lib/common.sh"
 
-# Logging functions will be provided by airgap_lib.sh
+# Source airgap library
+source_airgap_lib || exit 1
 
 # =============================================================================
 # PREREQUISITE VALIDATION
 # =============================================================================
 
 validate_prerequisites() {
-  # If logging helper already exists, assume airgap library is loaded
-  if type log_info >/dev/null 2>&1; then
-    # Still validate required binaries
-    command -v tofu >/dev/null || { log_error "tofu not found"; exit 1; }
-    command -v aws >/dev/null || { log_error "aws CLI not found"; exit 1; }
-    return 0
-  fi
-
-  local lib_candidates=(
-    "${SCRIPT_DIR}/airgap_lib.sh"
-    "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_lib.sh"
-    "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
-    "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
-  )
-
-  for lib in "${lib_candidates[@]}"; do
-    if [[ -f "$lib" ]]; then
-      # shellcheck disable=SC1090
-      source "$lib"
-      log_info "Sourced airgap library from: $lib"
-      break
-    fi
-  done
-
-  if ! type log_info >/dev/null 2>&1; then
-    log_error "airgap_lib.sh not found in expected locations: ${lib_candidates[*]}"
-    exit 1
-  fi
-
+  # Validate required binaries using common helper
+  require_env "TOFU_MODULE_PATH" "REMOTE_TOFU_MODULE_PATH"
+  
+  # Check required binaries
   command -v tofu >/dev/null || { log_error "tofu not found"; exit 1; }
   command -v aws >/dev/null || { log_error "aws CLI not found"; exit 1; }
 }
@@ -279,55 +255,59 @@ EOF
 # =============================================================================
 
 parse_arguments() {
-    local workspace="$TF_WORKSPACE"
-    local var_file="$TERRAFORM_VARS_FILENAME"
-    local use_remote_path="true"
-    local upload_to_s3="true"
+    local usage="Usage: $SCRIPT_NAME [OPTIONS]
 
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            -w|--workspace)
-                workspace="$2"
-                shift 2
-                ;;
-            -v|--var-file)
-                var_file="$2"
-                shift 2
-                ;;
-            -l|--local-path)
-                use_remote_path="false"
-                shift
-                ;;
-            --no-s3-upload)
-                upload_to_s3="false"
-                shift
-                ;;
-            --debug)
-                export DEBUG="true"
-                shift
-                ;;
-            -h|--help)
-                show_help
-                exit 0
-                ;;
-            *)
-                log_error "Unknown option: $1"
-                show_help
-                exit 1
-                ;;
-        esac
-    done
+Airgap Infrastructure Deployment Script
+This script consolidates infrastructure planning, deployment, validation, and backup operations.
 
+OPTIONS:
+    -w, --workspace WORKSPACE    Terraform workspace name (default: \$TF_WORKSPACE)
+    -v, --var-file FILE         Terraform variables file (default: \$TERRAFORM_VARS_FILENAME)
+    -l, --local-path           Use local module path instead of remote
+    -h, --help                 Show this help message
+    --no-s3-upload            Skip S3 upload of configuration file
+    --debug                   Enable debug logging
+
+ENVIRONMENT VARIABLES:
+    TF_WORKSPACE                  Terraform workspace name
+    TERRAFORM_VARS_FILENAME       Terraform variables file name
+    TERRAFORM_BACKEND_VARS_FILENAME Terraform backend variables file name
+    QA_INFRA_WORK_PATH           Path to qa-infra-automation repository
+    S3_BUCKET_NAME               S3 bucket for state storage
+    S3_REGION                    S3 region
+    S3_KEY_PREFIX                S3 key prefix
+    AWS_ACCESS_KEY_ID            AWS access key
+    AWS_SECRET_ACCESS_KEY        AWS secret key
+    AWS_REGION                   AWS region
+    DEBUG                        Enable debug logging (true/false)
+    UPLOAD_CONFIG_TO_S3          Upload config to S3 (true/false, default: true)
+
+EXAMPLES:
+    # Deploy with default settings
+    $SCRIPT_NAME
+
+    # Deploy with specific workspace and variables
+    $SCRIPT_NAME -w my-workspace -v my-vars.tfvars
+
+    # Deploy using local path and debug logging
+    DEBUG=true $SCRIPT_NAME -l --debug
+
+    # Deploy without S3 upload
+    $SCRIPT_NAME --no-s3-upload"
+
+    # Parse arguments using common helper
+    parse_args "$usage" "$@"
+    
     # Export variables for use in functions
-    export TF_WORKSPACE="$workspace"
-    export TERRAFORM_VARS_FILENAME="$var_file"
-    export UPLOAD_CONFIG_TO_S3="$upload_to_s3"
+    export TF_WORKSPACE="${PARSED_ARGS[0]:-$TF_WORKSPACE}"
+    export TERRAFORM_VARS_FILENAME="${PARSED_ARGS[1]:-$TERRAFORM_VARS_FILENAME}"
+    export UPLOAD_CONFIG_TO_S3="${PARSED_ARGS[2]:-true}"
 
     log_info "Configuration:"
-    log_info "  Workspace: $workspace"
-    log_info "  Variables file: $var_file"
-    log_info "  Use remote path: $use_remote_path"
-    log_info "  Upload to S3: $upload_to_s3"
+    log_info "  Workspace: ${TF_WORKSPACE}"
+    log_info "  Variables file: ${TERRAFORM_VARS_FILENAME}"
+    log_info "  Use remote path: ${PARSED_ARGS[2]:-true}"
+    log_info "  Upload to S3: ${UPLOAD_CONFIG_TO_S3}"
     log_info "  Debug mode: ${DEBUG:-false}"
 }
 

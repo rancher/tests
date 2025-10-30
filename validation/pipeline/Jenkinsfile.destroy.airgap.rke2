@@ -282,6 +282,23 @@ pipeline {
 /**
  * CONSOLIDATED SCRIPT HELPER FUNCTIONS
  */
+ 
+ // Lazy loader for CI helpers (mirrors pattern in setup Jenkinsfile)
+ __ciHelpersRef = null
+ def ciHelpers() {
+     if (__ciHelpersRef == null) {
+         def candidates = [
+             'validation/pipeline/ci/helpers.groovy',
+             'tests/validation/pipeline/ci/helpers.groovy'
+         ]
+         for (p in candidates) {
+             try {
+                 if (fileExists(p)) { __ciHelpersRef = load(p); break }
+             } catch (ignored) {}
+         }
+     }
+     return __ciHelpersRef
+ }
 
 def destroyInfrastructureWithConsolidatedScript() {
     logInfo('Executing infrastructure destruction with consolidated script')
@@ -480,74 +497,74 @@ def createSharedVolume() {
 }
 
 def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = false) {
-  def timestamp = System.currentTimeMillis()
-  def containerName = "${env.BUILD_CONTAINER_NAME}-script-${timestamp}"
-  def scriptFile = "docker-script-${timestamp}.sh"
-  def credentialEnvFile = null
-
-  writeFile file: scriptFile, text: scriptContent
-
-  try {
-    def envVars = ''
-    extraEnv.each { key, value ->
-      envVars += " -e ${key}=${value}"
+    // Delegate execution to CI helpers to centralize credential handling and docker command construction
+    def helpers = ciHelpers()
+    if (helpers) {
+        return helpers.executeScriptInContainer(this, scriptContent, extraEnv, skipWorkspaceEnv)
     }
+    // Fallback to local implementation if helpers not available (preserve behavior)
+    def timestamp = System.currentTimeMillis()
+    def containerName = "${env.BUILD_CONTAINER_NAME}-script-${timestamp}"
+    def scriptFile = "docker-script-${timestamp}.sh"
+    def credentialEnvFile = null
 
-    def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE}"
+    writeFile file: scriptFile, text: scriptContent
 
-    // Ensure S3 variables are explicitly passed to container
-    def s3BucketName = env.S3_BUCKET_NAME ?: params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'
-    def s3KeyPrefix = env.S3_KEY_PREFIX ?: params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'
-    def s3Region = env.S3_REGION ?: params.S3_REGION ?: 'us-east-2'
-    def awsRegion = env.AWS_REGION ?: params.S3_REGION ?: 'us-east-2'
-
-    // Execute Docker command within withCredentials block to avoid interpolation
-    withCredentials([
-      string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-      string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
-    ]) {
-      // Create a temporary environment file with credentials
-      credentialEnvFile = createCredentialEnvironmentFile()
-      
-      // Build the base Docker command
-      def dockerCmd = """
-              docker run --rm \\
-                  -v ${env.VALIDATION_VOLUME}:/root \\
-                  -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
-                  --name ${containerName} \\
-                  -t --env-file ${env.ENV_FILE} \\
-                  -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \\
-                  -e TF_WORKSPACE=${env.TF_WORKSPACE} \\
-                  -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME} \\
-                  -e S3_BUCKET_NAME="${s3BucketName}" \\
-                  -e S3_KEY_PREFIX="${s3KeyPrefix}" \\
-                  -e S3_REGION="${s3Region}" \\
-                  -e AWS_REGION="${awsRegion}" ${envVars} \\
-                  ${env.IMAGE_NAME} \\
-                  sh /tmp/script.sh
-          """
-      
-      // Add credential environment file to Docker command without exposing credentials in logs
-      def modifiedDockerCmd = addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile)
-      
-      sh modifiedDockerCmd
-    }
-    } catch (Exception e) {
-    logError("Script execution failed: ${e.message}")
-    throw e
-    } finally {
-    sh "rm -f ${scriptFile}"
-    
-    // Cleanup credential environment file
     try {
-      if (credentialEnvFile && fileExists(credentialEnvFile)) {
-        sh "shred -vfz -n 3 ${credentialEnvFile} 2>/dev/null || rm -f ${credentialEnvFile}"
-        logInfo("Credential environment file securely shredded")
+      def envVars = ''
+      extraEnv.each { key, value ->
+        envVars += " -e ${key}=${value}"
       }
-    } catch (Exception cleanupException) {
-      logWarning("Failed to cleanup credential environment file: ${cleanupException.message}")
+
+      def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE}"
+
+      def s3BucketName = env.S3_BUCKET_NAME ?: params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'
+      def s3KeyPrefix = env.S3_KEY_PREFIX ?: params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'
+      def s3Region = env.S3_REGION ?: params.S3_REGION ?: 'us-east-2'
+      def awsRegion = env.AWS_REGION ?: params.S3_REGION ?: 'us-east-2'
+
+      withCredentials([
+        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+      ]) {
+        credentialEnvFile = createCredentialEnvironmentFile()
+
+        def dockerCmd = """
+                docker run --rm \\
+                    -v ${env.VALIDATION_VOLUME}:/root \\
+                    -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+                    --name ${containerName} \\
+                    -t --env-file ${env.ENV_FILE} \\
+                    -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \\
+                    -e TF_WORKSPACE=${env.TF_WORKSPACE} \\
+                    -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME} \\
+                    -e S3_BUCKET_NAME="${s3BucketName}" \\
+                    -e S3_KEY_PREFIX="${s3KeyPrefix}" \\
+                    -e S3_REGION="${s3Region}" \\
+                    -e AWS_REGION="${awsRegion}" ${envVars} \\
+                    ${env.IMAGE_NAME} \\
+                    sh /tmp/script.sh
+            """
+
+        def modifiedDockerCmd = addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile)
+
+        sh modifiedDockerCmd
+      }
+      } catch (Exception e) {
+      logError("Script execution failed: ${e.message}")
+      throw e
+      } finally {
+      sh "rm -f ${scriptFile}"
+
+      try {
+        if (credentialEnvFile && fileExists(credentialEnvFile)) {
+          sh "shred -vfz -n 3 ${credentialEnvFile} 2>/dev/null || rm -f ${credentialEnvFile}"
+          logInfo("Credential environment file securely shredded")
+        }
+      } catch (Exception cleanupException) {
+        logWarning("Failed to cleanup credential environment file: ${cleanupException.message}")
+      }
     }
-  }
 }
 
 
@@ -1146,53 +1163,44 @@ def getAwsRegion() {
 }
 
 def createCredentialEnvironmentFile() {
-  // Create a temporary environment file with credentials
-  def timestamp = System.currentTimeMillis()
-  def credentialEnvFile = "docker-credentials-${timestamp}.env"
-  
-  def envContent = []
-  
-  // Add AWS credentials
-  if (env.AWS_ACCESS_KEY_ID) {
-    envContent.add("AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}")
-  }
-  if (env.AWS_SECRET_ACCESS_KEY) {
-    envContent.add("AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}")
-  }
-  
-  // Write the environment file
-  writeFile file: credentialEnvFile, text: envContent.join('\n')
-  
-  // Set secure permissions
-  sh "chmod 600 ${credentialEnvFile}"
-  
-  logInfo("Created credential environment file: ${credentialEnvFile}")
-  return credentialEnvFile
+    // Delegate to CI helper implementation for consistency and single source of truth
+    def helpers = ciHelpers()
+    if (helpers) {
+        return helpers.createCredentialEnvironmentFile(this)
+    } else {
+        // Fallback: minimal local implementation (keeps previous behavior)
+        def timestamp = System.currentTimeMillis()
+        def credentialEnvFile = "docker-credentials-${timestamp}.env"
+        def envContent = []
+        if (env.AWS_ACCESS_KEY_ID) { envContent.add("AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}") }
+        if (env.AWS_SECRET_ACCESS_KEY) { envContent.add("AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}") }
+        writeFile file: credentialEnvFile, text: envContent.join('\n')
+        sh "chmod 600 ${credentialEnvFile}"
+        logInfo("Created credential environment file (fallback): ${credentialEnvFile}")
+        return credentialEnvFile
+    }
 }
 
 def addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile) {
-  // Add credential environment file to Docker command without exposing credentials in logs
-  def modifiedCmd = dockerCmd
-  
-  if (credentialEnvFile) {
-    // Find the position where we should insert the credential environment file
-    // This should be after the container name but before the image name
-    def insertionPoint = modifiedCmd.lastIndexOf('--name')
-    if (insertionPoint != -1) {
-      // Find the end of the --name parameter
-      def nameEndIndex = modifiedCmd.indexOf(' ', insertionPoint)
-      if (nameEndIndex != -1) {
-        // Find the next space after the container name
-        def nextSpaceIndex = modifiedCmd.indexOf(' ', nameEndIndex + 1)
-        if (nextSpaceIndex != -1) {
-          // Insert the credential environment file here
-          modifiedCmd = modifiedCmd.substring(0, nextSpaceIndex) +
-                       ' \\\n              --env-file ' + credentialEnvFile +
-                       modifiedCmd.substring(nextSpaceIndex)
-        }
-      }
+    def helpers = ciHelpers()
+    if (helpers) {
+        return helpers.addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile)
     }
-  }
-  
-  return modifiedCmd
+    // Fallback to prior behavior
+    def modifiedCmd = dockerCmd
+    if (credentialEnvFile) {
+        def insertionPoint = modifiedCmd.lastIndexOf('--name')
+        if (insertionPoint != -1) {
+            def nameEndIndex = modifiedCmd.indexOf(' ', insertionPoint)
+            if (nameEndIndex != -1) {
+                def nextSpaceIndex = modifiedCmd.indexOf(' ', nameEndIndex + 1)
+                if (nextSpaceIndex != -1) {
+                    modifiedCmd = modifiedCmd.substring(0, nextSpaceIndex) +
+                                 ' \\\n              --env-file ' + credentialEnvFile +
+                                 modifiedCmd.substring(nextSpaceIndex)
+                }
+            }
+        }
+    }
+    return modifiedCmd
 }
