@@ -17,9 +17,10 @@ def configureEnv(ctx) {
 def prepareInfra(ctx) {
   ctx.logInfo('Preparing infrastructure components (library)')
   ctx.withCredentials(ctx.getCredentialsList()) {
-    ctx.buildDockerImage()
-    ctx.createSharedVolume()
-    ctx.ensureSSHKeysInContainer()
+    // Use library-local implementations to reduce Jenkinsfile surface area
+    buildDockerImage(ctx)
+    createSharedVolume(ctx)
+    ensureSSHKeysInContainer(ctx)
     ctx.validateParameters()
     // Validate sensitive data handling after image is available
     ctx.validateSensitiveDataHandling()
@@ -44,6 +45,57 @@ def setupEnv(ctx) {
   ctx.logInfo("Docker image: ${ctx.env.IMAGE_NAME}")
   ctx.logInfo("Volume: ${ctx.env.VALIDATION_VOLUME}")
 }
+ 
+/**
+ * Checkout repositories used by the pipeline
+ */
+def checkoutRepositories(ctx) {
+  ctx.logInfo('Checking out source repositories (library)')
+ 
+  // Checkout Rancher Tests Repository
+  ctx.dir('./tests') {
+    ctx.logInfo("Cloning rancher tests repository from ${ctx.env.RANCHER_TEST_REPO_URL}")
+    ctx.checkout([
+      $class: 'GitSCM',
+      branches: [[name: "*/${ctx.params.RANCHER_TEST_REPO_BRANCH}"]],
+      extensions: [
+        [$class: 'CleanCheckout'],
+        [$class: 'CloneOption', depth: 1, shallow: true]
+      ],
+      userRemoteConfigs: [[
+        url: ctx.env.RANCHER_TEST_REPO_URL,
+      ]]
+    ])
+  }
+ 
+  // Checkout QA Infrastructure Repository
+  ctx.dir('./qa-infra-automation') {
+    ctx.logInfo("Cloning qa-infra-automation repository from ${ctx.env.QA_INFRA_REPO}")
+    ctx.logInfo("Using branch: ${ctx.params.QA_INFRA_REPO_BRANCH}")
+    ctx.checkout([
+      $class: 'GitSCM',
+      branches: [[name: "*/${ctx.params.QA_INFRA_REPO_BRANCH}"]],
+      extensions: [
+        [$class: 'CleanCheckout'],
+        [$class: 'CloneOption', depth: 1, shallow: true]
+      ],
+      userRemoteConfigs: [[
+        url: ctx.env.QA_INFRA_REPO,
+      ]]
+    ])
+    // Verify which branch was actually checked out
+    try {
+      def actualBranch = ctx.sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+      def latestCommit = ctx.sh(script: 'git log -1 --oneline', returnStdout: true).trim()
+      ctx.logInfo("Checked out branch: ${actualBranch}")
+      ctx.logInfo("Latest commit: ${latestCommit}")
+    } catch (ignored) {
+      ctx.logWarning('Unable to determine branch/commit in QA infra repo')
+    }
+  }
+ 
+  ctx.logInfo('Repository checkout completed successfully (library)')
+}
 
 // Deploy infrastructure (extracted from Jenkinsfile 'Deploy Infrastructure' stage)
 def deployInfrastructure(ctx) {
@@ -53,10 +105,10 @@ def deployInfrastructure(ctx) {
       'QA_INFRA_WORK_PATH', 'TF_WORKSPACE',
       'TERRAFORM_VARS_FILENAME', 'TERRAFORM_BACKEND_CONFIG_FILENAME'
     ])
-
-    // Generate configuration files in repo
-    ctx.generateTofuConfiguration()
-
+ 
+    // Generate configuration files in repo (library-local)
+    generateTofuConfiguration(ctx)
+ 
     // Build inline script that the container will execute
     def infraScript = '''
 #!/bin/bash
@@ -75,14 +127,15 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/
       'S3_REGION': ctx.env.S3_REGION,
       'S3_KEY_PREFIX': ctx.env.S3_KEY_PREFIX,
       'AWS_REGION': ctx.env.AWS_REGION,
-      'AWS_ACCESS_KEY_ID': ctx.env.AWS_ACCESS_KEY_ID,
-      'AWS_SECRET_ACCESS_KEY': ctx.env.AWS_SECRET_ACCESS_KEY,
+      // Credentials and sensitive data are passed into the docker container
+      // via the pipeline's credential handling within executeScriptInContainer
       'AWS_SSH_PEM_KEY': ctx.env.AWS_SSH_PEM_KEY,
       'AWS_SSH_KEY_NAME': ctx.env.AWS_SSH_KEY_NAME
     ]
-
+ 
     ctx.dockerHelper().executeScriptInContainer(infraScript, infraEnvVars)
-    ctx.extractArtifactsFromDockerVolume()
+    // Use library-local artifact extraction to centralize behavior
+    extractArtifactsFromDockerVolume(ctx)
     ctx.logInfo('Infrastructure deployed successfully (library)')
   } catch (Exception e) {
     ctx.logError("Infrastructure deployment failed (library): ${e.message}")
@@ -190,6 +243,226 @@ def archiveCommonArtifacts(ctx, artifactList = []) {
     ctx.archiveBuildArtifacts(artifactList)
   } catch (Exception e) {
     ctx.logWarning("archiveCommonArtifacts failed: ${e.message}")
+  }
+}
+
+def buildDockerImage(ctx) {
+  ctx.logInfo("Building Docker image: ${ctx.env.IMAGE_NAME}")
+  ctx.dir('.') {
+    // Best-effort configuration step (quiet)
+    try {
+      ctx.sh './tests/validation/configure.sh > /dev/null 2>&1 || true'
+    } catch (ignored) {}
+    def buildDate = ''
+    def vcsRef = ''
+    try { buildDate = ctx.sh(script: "date -u +'%Y-%m-%dT%H:%M:%SZ'", returnStdout: true).trim() } catch (ignored) {}
+    try { vcsRef = ctx.sh(script: 'git rev-parse --short HEAD 2>/dev/null || echo "unknown"', returnStdout: true).trim() } catch (ignored) {}
+    ctx.sh """
+        docker build . \\
+            -f ./tests/validation/Dockerfile.tofu.e2e \\
+            -t ${ctx.env.IMAGE_NAME} \\
+            --build-arg BUILD_DATE=${buildDate} \\
+            --build-arg VCS_REF=${vcsRef} \\
+            --label "pipeline.build.number=${ctx.env.BUILD_NUMBER}" \\
+            --label "pipeline.job.name=${ctx.env.JOB_NAME}" \\
+            --quiet
+    """
+  }
+  ctx.logInfo('Docker image built successfully (library)')
+}
+
+def createSharedVolume(ctx) {
+  ctx.logInfo("Creating shared volume: ${ctx.env.VALIDATION_VOLUME}")
+  ctx.sh "docker volume create --name ${ctx.env.VALIDATION_VOLUME} || true"
+}
+
+def ensureSSHKeysInContainer(ctx) {
+  ctx.logInfo('Ensuring SSH keys are available in container (library)')
+  def sshKeyName = ctx.env.AWS_SSH_KEY_NAME
+  if (!sshKeyName) {
+    ctx.logWarning('AWS_SSH_KEY_NAME not set, cannot copy SSH keys')
+    return
+  }
+  def sshDir = "./tests/.ssh"
+  def keyPath = "${sshDir}/${sshKeyName}"
+  if (!ctx.fileExists(keyPath)) {
+    ctx.logWarning("SSH key not found at: ${keyPath}")
+    // Try to recreate them
+    ctx.withCredentials(ctx.getCredentialsList()) {
+      try {
+        // call pipeline-level setup (may create files under workspace)
+        if (ctx.metaClass.respondsTo(ctx, 'setupSSHKeysSecure')) {
+          ctx.setupSSHKeysSecure()
+        } else if (ctx.metaClass.respondsTo(ctx, 'setupSSHKeys')) {
+          ctx.setupSSHKeys()
+        } else {
+          ctx.logWarning('No setupSSHKeys hook available in pipeline context')
+        }
+        ctx.logInfo('SSH keys recreated (library)')
+      } catch (Exception e) {
+        ctx.logError("Failed to recreate SSH keys: ${e.message}")
+        return
+      }
+    }
+  }
+
+  try {
+    ctx.sh """
+      docker run --rm \\
+        -v ${ctx.env.VALIDATION_VOLUME}:/target \\
+        -v \$(pwd)/${sshDir}:/source:ro \\
+        alpine:latest \\
+        sh -c '
+          mkdir -p /target/.ssh
+          chmod 700 /target/.ssh
+          cp /source/* /target/.ssh/ || { echo "Failed to copy keys"; exit 1; }
+          chmod 600 /target/.ssh/* || true
+          echo "SSH keys copied successfully"
+        '
+    """
+    ctx.logInfo('SSH keys successfully copied to container volume (library)')
+  } catch (Exception e) {
+    ctx.logError("Failed to copy SSH keys to container: ${e.message}")
+    throw e
+  }
+}
+
+def cleanupContainersAndVolumes(ctx) {
+  ctx.logInfo('Cleaning up Docker containers and volumes (library)')
+  try {
+    ctx.sh """
+        docker ps -aq --filter "name=${ctx.env.BUILD_CONTAINER_NAME}" | xargs -r docker stop || true
+        docker ps -aq --filter "name=${ctx.env.BUILD_CONTAINER_NAME}" | xargs -r docker rm -v || true
+        docker rmi -f ${ctx.env.IMAGE_NAME} || true
+        docker volume rm -f ${ctx.env.VALIDATION_VOLUME} || true
+        docker system prune -f || true
+    """
+  } catch (Exception e) {
+    ctx.logWarning("Docker cleanup encountered issues: ${e.message}")
+  }
+  // attempt ssh cleanup if pipeline provides it
+  try { if (ctx.metaClass.respondsTo(ctx, 'cleanupSSHKeys')) { ctx.cleanupSSHKeys() } } catch (ignored) {}
+  // shred env file if exists
+  try {
+    if (ctx.fileExists(ctx.env.ENV_FILE)) {
+      ctx.sh "shred -vfz -n 3 ${ctx.env.ENV_FILE} 2>/dev/null || rm -f ${ctx.env.ENV_FILE}"
+      ctx.logInfo('Environment file securely shredded (library)')
+    }
+  } catch (ignored) {}
+}
+
+def extractArtifactsFromDockerVolume(ctx) {
+  ctx.logInfo('Extracting artifacts from Docker shared volume to Jenkins workspace (library)')
+  try {
+    def timestamp = System.currentTimeMillis()
+    def extractorContainerName = "${ctx.env.BUILD_CONTAINER_NAME}-extractor-${timestamp}"
+    ctx.sh """
+        docker run --rm \\
+            -v ${ctx.env.VALIDATION_VOLUME}:/source \\
+            -v \$(pwd):/dest \\
+            --name ${extractorContainerName} \\
+            -e TERRAFORM_VARS_FILENAME=${ctx.env.TERRAFORM_VARS_FILENAME} \\
+            alpine:latest \\
+            sh -c '
+                [ -f /source/infrastructure-outputs.json ] && cp /source/infrastructure-outputs.json /dest/ || true
+                if [ -f /source/ansible/rke2/airgap/inventory.yml ]; then
+                    cp /source/ansible/rke2/airgap/inventory.yml /dest/ansible-inventory.yml
+                elif [ -f /source/ansible-inventory.yml ]; then
+                    cp /source/ansible-inventory.yml /dest/
+                fi
+                [ -f "/source/${ctx.env.TERRAFORM_VARS_FILENAME}" ] && cp "/source/${ctx.env.TERRAFORM_VARS_FILENAME}" /dest/ || true
+                [ -f /source/terraform.tfstate ] && cp /source/terraform.tfstate /dest/ || true
+                [ -f /source/terraform-state-primary.tfstate ] && cp /source/terraform-state-primary.tfstate /dest/ || true
+                for backup_file in /source/terraform-state-backup-*.tfstate /source/tfstate-backup-*.tfstate; do
+                    [ -f "\\$backup_file" ] && cp "\\$backup_file" /dest/ || true
+                done
+                if [ -f /source/kubeconfig.yaml ]; then
+                    cp /source/kubeconfig.yaml /dest/
+                elif [ -f /source/group_vars/kubeconfig.yaml ]; then
+                    cp /source/group_vars/kubeconfig.yaml /dest/
+                fi
+                if [ -f /source/group_vars/all.yml ]; then
+                    mkdir -p /dest/group_vars
+                    cp /source/group_vars/all.yml /dest/group_vars/all.yml
+                fi
+            '
+    """
+    generateDeploymentSummary(ctx)
+    ctx.logInfo('Artifact extraction completed successfully (library)')
+  } catch (Exception e) {
+    ctx.logError("Artifact extraction failed: ${e.message}")
+    ctx.logWarning('Build will continue, but some artifacts may not be available for archival (library)')
+  }
+}
+
+def generateDeploymentSummary(ctx) {
+  ctx.logInfo('Generating deployment summary (library)')
+  try {
+    def timestamp = new Date().format('yyyy-MM-dd HH:mm:ss')
+    def summary = [
+      deployment_info: [
+        timestamp: timestamp,
+        build_number: ctx.env.BUILD_NUMBER,
+        job_name: ctx.env.JOB_NAME,
+        workspace: ctx.env.TF_WORKSPACE,
+        rke2_version: ctx.env.RKE2_VERSION,
+        rancher_version: ctx.env.RANCHER_VERSION,
+        rancher_hostname: ctx.env.RANCHER_HOSTNAME
+      ],
+      infrastructure: [
+        terraform_vars_file: ctx.env.TERRAFORM_VARS_FILENAME,
+        s3_bucket: ctx.env.S3_BUCKET_NAME,
+        s3_region: ctx.env.S3_REGION,
+        hostname_prefix: ctx.env.HOSTNAME_PREFIX
+      ],
+      artifacts_generated: []
+    ]
+    def artifactFiles = [
+      'infrastructure-outputs.json',
+      'ansible-inventory.yml',
+      ctx.env.TERRAFORM_VARS_FILENAME,
+      'terraform.tfstate'
+    ]
+    artifactFiles.each { fileName ->
+      if (ctx.fileExists(fileName)) {
+        summary.artifacts_generated.add(fileName)
+      }
+    }
+    def summaryJson = groovy.json.JsonOutput.toJson(summary)
+    ctx.writeFile file: 'deployment-summary.json', text: groovy.json.JsonOutput.prettyPrint(summaryJson)
+    ctx.logInfo('Deployment summary generated successfully (library)')
+  } catch (Exception e) {
+    ctx.logWarning("Failed to generate deployment summary: ${e.message}")
+  }
+}
+
+def generateTofuConfiguration(ctx) {
+  ctx.logInfo('Generating Terraform configuration (library)')
+  if (!ctx.env.TERRAFORM_CONFIG) { ctx.error('TERRAFORM_CONFIG environment variable is not set') }
+  if (!ctx.env.S3_BUCKET_NAME) { ctx.error('S3_BUCKET_NAME environment variable is not set') }
+  if (!ctx.env.S3_REGION) { ctx.error('S3_REGION environment variable is not set') }
+  if (!ctx.env.S3_KEY_PREFIX) { ctx.error('S3_KEY_PREFIX environment variable is not set') }
+  ctx.sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
+  def terraformConfig = ctx.env.TERRAFORM_CONFIG
+  terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', ctx.env.AWS_SECRET_ACCESS_KEY ?: '')
+  terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', ctx.env.AWS_ACCESS_KEY_ID ?: '')
+  terraformConfig = terraformConfig.replace('${HOSTNAME_PREFIX}', ctx.env.HOSTNAME_PREFIX ?: '')
+  ctx.dir('./qa-infra-automation') {
+    ctx.dir('./tofu/aws/modules/airgap') {
+      ctx.writeFile file: ctx.env.TERRAFORM_VARS_FILENAME, text: terraformConfig
+      ctx.logInfo("Terraform configuration written to: ${ctx.env.TERRAFORM_VARS_FILENAME}")
+      def backendConfig = """
+terraform {
+  backend "s3" {
+    bucket = "${ctx.env.S3_BUCKET_NAME}"
+    key    = "${ctx.env.S3_KEY_PREFIX}"
+    region = "${ctx.env.S3_REGION}"
+  }
+}
+"""
+      ctx.writeFile file: ctx.env.TERRAFORM_BACKEND_CONFIG_FILENAME, text: backendConfig
+      ctx.logInfo("S3 backend configuration written to: ${ctx.env.TERRAFORM_BACKEND_CONFIG_FILENAME}")
+    }
   }
 }
 
