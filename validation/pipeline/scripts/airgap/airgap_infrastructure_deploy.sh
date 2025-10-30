@@ -321,8 +321,11 @@ EXAMPLES:
   export TERRAFORM_VARS_FILENAME="${PARSED_ARGS[1]:-$TERRAFORM_VARS_FILENAME}"
   # Set use_remote_path from parsed args, default to true
   use_remote_path="${PARSED_ARGS[2]:-true}"
-  export UPLOAD_CONFIG_TO_S3="${PARSED_ARGS[2]:-true}"
-
+  # Prefer explicit environment variable for UPLOAD_CONFIG_TO_S3 (set by caller),
+  # otherwise default to true. This avoids accidentally reusing the use_remote_path
+  # parsed value and ensures Jenkins-provided env overrides take precedence.
+  export UPLOAD_CONFIG_TO_S3="${UPLOAD_CONFIG_TO_S3:-true}"
+ 
   log_info "Configuration:"
   log_info "  Workspace: ${TF_WORKSPACE}"
   log_info "  Variables file: ${TERRAFORM_VARS_FILENAME}"
