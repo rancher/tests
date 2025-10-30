@@ -474,7 +474,10 @@ parse_arguments() {
   export TF_WORKSPACE="$workspace"
   export TERRAFORM_VARS_FILENAME="$var_file"
   export CLEANUP_WORKSPACE="$cleanup_workspace"
-
+  # Export the path selection so callers (and main) can reference it even though
+  # parse_arguments used a local variable.
+  export USE_REMOTE_PATH="$use_remote_path"
+  
   log_info "Configuration:"
   log_info "  Workspace: $workspace"
   log_info "  Variables file: $var_file"
@@ -503,8 +506,9 @@ main() {
   wait_for_confirmation "Press Enter to start infrastructure cleanup..."
 
   # Run the cleanup
-  cleanup_infrastructure "$TF_WORKSPACE" "$TERRAFORM_VARS_FILENAME" "$use_remote_path" "$CLEANUP_WORKSPACE"
-
+  # Use exported USE_REMOTE_PATH (fallback to true if unset) to avoid unbound variable errors
+  cleanup_infrastructure "$TF_WORKSPACE" "$TERRAFORM_VARS_FILENAME" "${USE_REMOTE_PATH:-true}" "$CLEANUP_WORKSPACE"
+  
   log_info "Infrastructure cleanup completed"
 }
 
