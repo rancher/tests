@@ -1,4 +1,20 @@
 #!/bin/bash
+set -Eeuo pipefail
+
+# Try to source common helpers if available
+COMMON_CANDIDATES=(
+  "./scripts/lib/common.sh"
+  "../../scripts/lib/common.sh"
+  "../../../../scripts/lib/common.sh"
+  "/root/go/src/github.com/rancher/tests/scripts/lib/common.sh"
+)
+for c in "${COMMON_CANDIDATES[@]}"; do
+  if [ -f "$c" ]; then
+    # shellcheck disable=SC1090
+    . "$c" && log_info "Sourced common helpers from $c" || true
+    break
+  fi
+done
 
 show_help() {
     cat <<EOF
