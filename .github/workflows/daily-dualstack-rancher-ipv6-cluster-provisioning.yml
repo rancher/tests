@@ -1,5 +1,5 @@
 ---
-name: Hostbusters Daily Dualstack Rancher IPv6 Cluster Provisioning
+name: Daily Dualstack Rancher IPv6 Cluster Provisioning
 
 on:
   schedule:

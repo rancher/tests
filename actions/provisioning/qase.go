@@ -31,6 +31,7 @@ func GetProvisioningSchemaParams(client *rancher.Client, cattleConfig map[string
 		getProviderParam(clusterConfig),
 		getK8sParam(clusterConfig),
 		getCNIParam(clusterConfig),
+		getTurtlesParam(terraformConfig),
 	)
 
 	return params
@@ -52,6 +53,7 @@ func GetCustomSchemaParams(client *rancher.Client, cattleConfig map[string]any) 
 		getProviderParam(clusterConfig),
 		getK8sParam(clusterConfig),
 		getCNIParam(clusterConfig),
+		getTurtlesParam(terraformConfig),
 	)
 
 	return params
@@ -175,4 +177,29 @@ func getProviderParam(clusterConfig *clusters.ClusterConfig) upstream.TestCasePa
 
 func getCNIParam(clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
 	return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "CNI", Values: []string{clusterConfig.CNI}}}
+}
+
+func getTurtlesParam(terraform *config.TerraformConfig) upstream.TestCaseParameterCreate {
+	var prevTurtles, turtles, upgradedTurtles, title, value string
+
+	if terraform.Standalone != nil && terraform.Standalone.FeatureFlags != nil {
+		if terraform.Standalone.FeatureFlags.UpgradedTurtles == "" {
+			turtles = terraform.Standalone.FeatureFlags.Turtles
+
+			title = "Turtles status: "
+			value = turtles
+
+			return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: title, Values: []string{value}}}
+		} else if terraform.Standalone.FeatureFlags.UpgradedTurtles != "" {
+			upgradedTurtles = terraform.Standalone.FeatureFlags.UpgradedTurtles
+			prevTurtles = terraform.Standalone.FeatureFlags.Turtles
+
+			title = "Turtles status pre-upgrade: " + prevTurtles + " to Turtles status post-upgrade: "
+			value = upgradedTurtles
+
+			return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: title, Values: []string{value}}}
+		}
+	}
+
+	return upstream.TestCaseParameterCreate{}
 }

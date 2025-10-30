@@ -1,5 +1,5 @@
 ---
-name: Hostbusters Daily Cluster Provisioning
+name: Daily Cluster Provisioning
 
 on:
   schedule:

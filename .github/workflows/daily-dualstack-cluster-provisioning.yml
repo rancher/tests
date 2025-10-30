@@ -1,5 +1,5 @@
 ---
-name: Hostbusters Daily Dualstack Cluster Provisioning
+name: Daily Dualstack Cluster Provisioning
 
 on:
   schedule:

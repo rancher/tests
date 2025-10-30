@@ -1,5 +1,5 @@
 ---
-name: Hostbusters QA Recurring Runs
+name: Recurring Runs
 
 on:
   schedule:

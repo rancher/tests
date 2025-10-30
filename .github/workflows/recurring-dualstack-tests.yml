@@ -1,5 +1,5 @@
 ---
-name: Hostbusters QA Dualstack Recurring Runs
+name: Dualstack Recurring Runs
 
 on:
   schedule:
