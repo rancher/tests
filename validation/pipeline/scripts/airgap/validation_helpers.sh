@@ -1,4 +1,6 @@
 #!/bin/bash
+set -Eeuo pipefail
+IFS=$'\n\t'
 
 # ========================================
 # VALIDATION HELPER FUNCTIONS
@@ -6,9 +8,9 @@
 
 # Validate RKE2 version format
 validate_rke2_version() {
-  local version="$1"
-  if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\+rke2r[0-9]+$ ]]; then
-    echo "ERROR: RKE2_VERSION '$version' does not match expected format (e.g., v1.28.8+rke2r1)"
+  local version="${1:-}"
+  if [[ ! "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\+rke2r[0-9]+$ ]]; then
+    printf '%s\n' "ERROR: RKE2_VERSION '${version}' does not match expected format (e.g., v1.28.8+rke2r1)" >&2
     return 1
   fi
   return 0
@@ -16,9 +18,9 @@ validate_rke2_version() {
 
 # Validate Rancher version format
 validate_rancher_version() {
-  local version="$1"
-  if [[ ! "$version" =~ ^(v[0-9]+\.[0-9]+(-head|\.[0-9]+)?|head)$ ]]; then
-    echo "ERROR: RANCHER_VERSION '$version' does not match expected format (e.g., v2.10-head, v2.11.0, head)"
+  local version="${1:-}"
+  if [[ ! "${version}" =~ ^(v[0-9]+\.[0-9]+(-head|\.[0-9]+)?|head)$ ]]; then
+    printf '%s\n' "ERROR: RANCHER_VERSION '${version}' does not match expected format (e.g., v2.10-head, v2.11.0, head)" >&2
     return 1
   fi
   return 0
