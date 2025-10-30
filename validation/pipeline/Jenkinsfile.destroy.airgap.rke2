@@ -299,6 +299,23 @@ pipeline {
      }
      return __ciHelpersRef
  }
+ 
+ // Lazy loader for CI airgap steps (parity with setup pipeline)
+ __ciAirgapRef = null
+ def ciAirgap() {
+     if (__ciAirgapRef == null) {
+         def candidates = [
+             'validation/pipeline/ci/airgap.groovy',
+             'tests/validation/pipeline/ci/airgap.groovy'
+         ]
+         for (p in candidates) {
+             try {
+                 if (fileExists(p)) { __ciAirgapRef = load(p); break }
+             } catch (ignored) {}
+         }
+     }
+     return __ciAirgapRef
+ }
 
 def destroyInfrastructureWithConsolidatedScript() {
     logInfo('Executing infrastructure destruction with consolidated script')
