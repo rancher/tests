@@ -1199,6 +1199,7 @@ def extractArtifactsFromDockerVolume() {
                 -v ${env.VALIDATION_VOLUME}:/source \\
                 -v \$(pwd):/dest \\
                 --name ${extractorContainerName} \\
+                -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME} \\
                 alpine:latest \\
                 sh -c '
                     # Copy infrastructure outputs if exists
@@ -1212,7 +1213,7 @@ def extractArtifactsFromDockerVolume() {
                     fi
 
                     # Copy terraform vars file if exists
-                    [ -f /source/\${env.TERRAFORM_VARS_FILENAME} ] && cp /source/\${env.TERRAFORM_VARS_FILENAME} /dest/ || true
+                    [ -f "/source/${TERRAFORM_VARS_FILENAME}" ] && cp "/source/${TERRAFORM_VARS_FILENAME}" /dest/ || true
 
                     # Copy terraform state files if they exist
                     [ -f /source/terraform.tfstate ] && cp /source/terraform.tfstate /dest/ || true

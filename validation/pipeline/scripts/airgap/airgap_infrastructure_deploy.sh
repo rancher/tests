@@ -319,12 +319,14 @@ EXAMPLES:
   # Export variables for use in functions
   export TF_WORKSPACE="${PARSED_ARGS[0]:-$TF_WORKSPACE}"
   export TERRAFORM_VARS_FILENAME="${PARSED_ARGS[1]:-$TERRAFORM_VARS_FILENAME}"
+  # Set use_remote_path from parsed args, default to true
+  use_remote_path="${PARSED_ARGS[2]:-true}"
   export UPLOAD_CONFIG_TO_S3="${PARSED_ARGS[2]:-true}"
 
   log_info "Configuration:"
   log_info "  Workspace: ${TF_WORKSPACE}"
   log_info "  Variables file: ${TERRAFORM_VARS_FILENAME}"
-  log_info "  Use remote path: ${PARSED_ARGS[2]:-true}"
+  log_info "  Use remote path: ${use_remote_path}"
   log_info "  Upload to S3: ${UPLOAD_CONFIG_TO_S3}"
   log_info "  Debug mode: ${DEBUG:-false}"
 }
