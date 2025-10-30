@@ -504,27 +504,24 @@ class DockerExecutionHelper implements Serializable {
         if (!credentialEnvFile) {
             return dockerCmd
         }
-
-        // Find a good insertion point after the --name <container> section so
-        // we keep the env-file close to the container metadata options.
-        def insertionPoint = dockerCmd.lastIndexOf('--name')
-        if (insertionPoint == -1) {
-            return dockerCmd
+        try {
+            // Insert before the image name token so Docker treats it as an option
+            def imageToken = "\"${pipeline.env.IMAGE_NAME?.trim()}\""
+            if (imageToken?.trim()) {
+                def idx = dockerCmd.indexOf(imageToken)
+                if (idx > 0) {
+                    return dockerCmd.substring(0, idx) + " --env-file ${credentialEnvFile} " + dockerCmd.substring(idx)
+                }
+            }
+            // Fallback: insert before the exec command
+            def binIdx = dockerCmd.indexOf(' /bin/bash ')
+            if (binIdx > 0) {
+                return dockerCmd.substring(0, binIdx).trim() + " --env-file ${credentialEnvFile}" + dockerCmd.substring(binIdx)
+            }
+        } catch (Exception ignored) {
+            // ignore and append at end
         }
-
-        def nameEndIndex = dockerCmd.indexOf(' ', insertionPoint)
-        if (nameEndIndex == -1) {
-            return dockerCmd
-        }
-
-        def nextSpaceIndex = dockerCmd.indexOf(' ', nameEndIndex + 1)
-        if (nextSpaceIndex == -1) {
-            return dockerCmd
-        }
-
-    // Simpler approach: append the env-file flag at the end to avoid
-    // fragile string insertion logic that can break quoting during load.
-    return dockerCmd + " --env-file ${credentialEnvFile}"
+        return dockerCmd + " --env-file ${credentialEnvFile}"
     }
 
     private String escapeForShell(String value) {
