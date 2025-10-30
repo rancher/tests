@@ -192,14 +192,14 @@ download_cluster_tfvars_from_s3() {
   local varfile="${2:-${TERRAFORM_VARS_FILENAME:-cluster.tfvars}}"
   local target_module="${3:-${TOFU_MODULE_PATH}}"
   local dest_shared="${SHARED_VOLUME_PATH}/${varfile}"
-  
+
   # Ensure shared volume path exists and is writable before download/copy
   if ! mkdir -p "${SHARED_VOLUME_PATH}" 2>/dev/null; then
     log_warning "Could not create or access shared volume directory: ${SHARED_VOLUME_PATH}"
   else
     log_debug "Ensured shared volume directory exists: ${SHARED_VOLUME_PATH}"
   fi
-  
+
   if [[ -z "${S3_BUCKET_NAME}" || -z "${S3_REGION}" || -z "${workspace}" ]]; then
     log_warning "Missing S3 parameters or workspace; cannot download ${varfile}"
     return 1
@@ -398,7 +398,7 @@ generate_plan() {
   fi
 
   log_success "Plan generated successfully ($plan_size bytes): $plan_output"
-  
+
   # Copy plan to shared volume if path is different
   if [[ "$module_path" != "$SHARED_VOLUME_PATH" ]]; then
     # Ensure the shared volume directory exists before copying
@@ -526,7 +526,7 @@ backup_state() {
     cp -f "$state_file" "$backup_file"
     cp -f "$state_file" "$SHARED_VOLUME_PATH/terraform-state-primary.tfstate"
     cp -f "$state_file" "$SHARED_VOLUME_PATH/terraform.tfstate"
-    
+
     local state_size
     state_size=$(stat -c%s "$state_file" 2>/dev/null || echo 0)
     log_success "Local state backed up ($state_size bytes)"
@@ -565,21 +565,21 @@ backup_state() {
 generate_outputs() {
   local module_path="${1:-$TOFU_MODULE_PATH}"
   local output_file="${2:-$SHARED_VOLUME_PATH/infrastructure-outputs.json}"
-  
+
   log_info "Generating outputs from: $module_path"
-  
+
   cd "$module_path" || {
     log_error "Failed to change to directory: $module_path"
     return 1
   }
-  
+
   # Ensure output directory exists
   local output_dir
   output_dir="$(dirname "$output_file")"
   if ! mkdir -p "$output_dir" 2>/dev/null; then
     log_warning "Could not create output directory: $output_dir"
   fi
-  
+
   # Generate outputs
   if tofu output -json >"$output_file" 2>&1; then
     local output_size
