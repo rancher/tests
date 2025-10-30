@@ -97,9 +97,22 @@ cleanup_infrastructure() {
 
   # Validate required variables
   validate_required_vars "QA_INFRA_WORK_PATH" "TF_WORKSPACE"
-
-  # Create cleanup log
-  local cleanup_log="$SHARED_VOLUME_PATH/infrastructure-cleanup.log"
+  
+  # Ensure shared volume path exists and is writable (avoid write failures)
+  local shared_path="${SHARED_VOLUME_PATH:-/root/shared}"
+  log_info "Shared volume path resolved to: ${shared_path}"
+  if mkdir -p "${shared_path}" 2>/dev/null; then
+    # Try to set restrictive permissions but don't fail if it fails
+    chmod 700 "${shared_path}" 2>/dev/null || true
+    log_info "Ensured shared volume directory exists: ${shared_path}"
+  else
+    log_warning "Could not create or access shared volume directory: ${shared_path}. Falling back to /tmp"
+    shared_path="/tmp"
+    mkdir -p "${shared_path}" 2>/dev/null || true
+  fi
+  
+  # Create cleanup log in the shared path
+  local cleanup_log="${shared_path}/infrastructure-cleanup.log"
   cat >"$cleanup_log" <<EOF
 # Infrastructure Cleanup Log
 # Generated on: $(date)
