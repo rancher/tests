@@ -291,12 +291,19 @@ def ensureSSHKeysInContainer(ctx) {
     ctx.withCredentials(ctx.getCredentialsList()) {
       try {
         // call pipeline-level setup (may create files under workspace)
-        if (ctx.metaClass.respondsTo(ctx, 'setupSSHKeysSecure')) {
+        // Avoid using metaClass on the pipeline Binding (sandbox restrictions).
+        // Instead, attempt the preferred hook and fall back, catching MissingMethodException.
+        try {
           ctx.setupSSHKeysSecure()
-        } else if (ctx.metaClass.respondsTo(ctx, 'setupSSHKeys')) {
-          ctx.setupSSHKeys()
-        } else {
-          ctx.logWarning('No setupSSHKeys hook available in pipeline context')
+        } catch (groovy.lang.MissingMethodException | java.lang.NoSuchMethodError ignored1) {
+          try {
+            ctx.setupSSHKeys()
+          } catch (groovy.lang.MissingMethodException | java.lang.NoSuchMethodError ignored2) {
+            ctx.logWarning('No setupSSHKeys hook available in pipeline context')
+          }
+        } catch (Exception e) {
+          // If the hook exists but failed, surface the error up the usual path
+          throw e
         }
         ctx.logInfo('SSH keys recreated (library)')
       } catch (Exception e) {
@@ -341,7 +348,13 @@ def cleanupContainersAndVolumes(ctx) {
     ctx.logWarning("Docker cleanup encountered issues: ${e.message}")
   }
   // attempt ssh cleanup if pipeline provides it
-  try { if (ctx.metaClass.respondsTo(ctx, 'cleanupSSHKeys')) { ctx.cleanupSSHKeys() } } catch (ignored) {}
+  try {
+    ctx.cleanupSSHKeys()
+  } catch (groovy.lang.MissingMethodException | java.lang.NoSuchMethodError ignored) {
+    // noop - cleanup hook not provided by pipeline
+  } catch (Exception ignored) {
+    // ignore any cleanup errors to avoid masking primary failures
+  }
   // shred env file if exists
   try {
     if (ctx.fileExists(ctx.env.ENV_FILE)) {
