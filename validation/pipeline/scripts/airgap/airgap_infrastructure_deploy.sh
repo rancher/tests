@@ -9,9 +9,12 @@ set -Eeuo pipefail
 # CONSTANTS AND LIBRARY SOURCING
 # =============================================================================
 
-readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_DIR="$(dirname "$0")"
-readonly QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
+SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_NAME
+SCRIPT_DIR="$(dirname "$0")"
+readonly SCRIPT_DIR
+QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
+readonly QA_INFRA_CLONE_PATH
 
 # Source common library first
 # shellcheck disable=SC1090
@@ -27,10 +30,16 @@ source_airgap_lib || exit 1
 validate_prerequisites() {
   # Validate required binaries using common helper
   require_env "TOFU_MODULE_PATH" "REMOTE_TOFU_MODULE_PATH"
-  
+
   # Check required binaries
-  command -v tofu >/dev/null || { log_error "tofu not found"; exit 1; }
-  command -v aws >/dev/null || { log_error "aws CLI not found"; exit 1; }
+  command -v tofu >/dev/null || {
+    log_error "tofu not found"
+    exit 1
+  }
+  command -v aws >/dev/null || {
+    log_error "aws CLI not found"
+    exit 1
+  }
 }
 
 # =============================================================================
@@ -44,55 +53,55 @@ validate_prerequisites() {
 # =============================================================================
 
 deploy_infrastructure() {
-    local workspace_name="${1:-$TF_WORKSPACE}"
-    local var_file="${2:-$TERRAFORM_VARS_FILENAME}"
-    local use_remote_path="${3:-true}"
+  local workspace_name="${1:-$TF_WORKSPACE}"
+  local var_file="${2:-$TERRAFORM_VARS_FILENAME}"
+  local use_remote_path="${3:-true}"
 
-    log_info "Starting infrastructure deployment for workspace: $workspace_name"
+  log_info "Starting infrastructure deployment for workspace: $workspace_name"
 
-    # Determine which module path to use
-    local module_path
-    if [[ "$use_remote_path" == "true" ]]; then
-        module_path="$REMOTE_TOFU_MODULE_PATH"
-        log_info "Using remote module path: $module_path"
-    else
-        module_path="$TOFU_MODULE_PATH"
-        log_info "Using local module path: $module_path"
-    fi
+  # Determine which module path to use
+  local module_path
+  if [[ "$use_remote_path" == "true" ]]; then
+    module_path="$REMOTE_TOFU_MODULE_PATH"
+    log_info "Using remote module path: $module_path"
+  else
+    module_path="$TOFU_MODULE_PATH"
+    log_info "Using local module path: $module_path"
+  fi
 
-    # Validate required variables
-    validate_required_vars "QA_INFRA_WORK_PATH" "TF_WORKSPACE" "TERRAFORM_VARS_FILENAME" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_REGION"
+  # Validate required variables
+  validate_required_vars "QA_INFRA_WORK_PATH" "TF_WORKSPACE" "TERRAFORM_VARS_FILENAME" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_REGION"
 
-    # Manage workspace first (before backend initialization)
-    manage_workspace "$workspace_name" "$module_path"
+  # Manage workspace first (before backend initialization)
+  manage_workspace "$workspace_name" "$module_path"
 
-    # Initialize OpenTofu (now that workspace exists)
-    initialize_tofu "$module_path"
+  # Initialize OpenTofu (now that workspace exists)
+  initialize_tofu "$module_path"
 
-    # Generate and apply plan
-    log_info "=== Infrastructure Planning Phase ==="
-    generate_plan "$module_path" "$var_file" "tfplan"
+  # Generate and apply plan
+  log_info "=== Infrastructure Planning Phase ==="
+  generate_plan "$module_path" "$var_file" "tfplan"
 
-    log_info "=== Infrastructure Deployment Phase ==="
-    apply_plan "$module_path" "tfplan"
+  log_info "=== Infrastructure Deployment Phase ==="
+  apply_plan "$module_path" "tfplan"
 
-    # Backup state and generate outputs
-    log_info "=== State Backup and Validation Phase ==="
-    backup_state "$module_path"
-    generate_outputs "$module_path"
+  # Backup state and generate outputs
+  log_info "=== State Backup and Validation Phase ==="
+  backup_state "$module_path"
+  generate_outputs "$module_path"
 
-    # Validate the deployment
-    validate_infrastructure "$module_path"
+  # Validate the deployment
+  validate_infrastructure "$module_path"
 
-    # Handle inventory file generation
-    handle_inventory_file "$module_path"
+  # Handle inventory file generation
+  handle_inventory_file "$module_path"
 
-    # Upload configuration to S3 if enabled
-    if [[ "${UPLOAD_CONFIG_TO_S3:-true}" == "true" ]]; then
-        upload_config_to_s3
-    fi
+  # Upload configuration to S3 if enabled
+  if [[ "${UPLOAD_CONFIG_TO_S3:-true}" == "true" ]]; then
+    upload_config_to_s3
+  fi
 
-    log_success "Infrastructure deployment completed successfully"
+  log_success "Infrastructure deployment completed successfully"
 }
 
 # =============================================================================
@@ -100,60 +109,60 @@ deploy_infrastructure() {
 # =============================================================================
 
 handle_inventory_file() {
-    local qa_repo_root="${QA_INFRA_WORK_PATH}"
-    local module_path="${1:-$REMOTE_TOFU_MODULE_PATH}"
-    local shared_inventory="$SHARED_VOLUME_PATH/ansible-inventory.yml"
-    local ansible_inventory="/root/ansible/rke2/airgap/inventory.yml"
+  local qa_repo_root="${QA_INFRA_WORK_PATH}"
+  local module_path="${1:-$REMOTE_TOFU_MODULE_PATH}"
+  local shared_inventory="$SHARED_VOLUME_PATH/ansible-inventory.yml"
+  local ansible_inventory="/root/ansible/rke2/airgap/inventory.yml"
 
-    log_info "Handling inventory file generated by tofu module"
+  log_info "Handling inventory file generated by tofu module"
 
-    local inventory_candidates=(
-        "$qa_repo_root/ansible/rke2/airgap/inventory/inventory.yml"
-        "$qa_repo_root/ansible/rke2/airgap/inventory/inventory.yaml"
-    )
+  local inventory_candidates=(
+    "$qa_repo_root/ansible/rke2/airgap/inventory/inventory.yml"
+    "$qa_repo_root/ansible/rke2/airgap/inventory/inventory.yaml"
+  )
 
-    local inventory_file=""
-    for candidate in "${inventory_candidates[@]}"; do
-        if [[ -f "$candidate" && -s "$candidate" ]]; then
-            inventory_file="$candidate"
-            break
-        fi
-    done
-
-    if [[ -z "$inventory_file" ]]; then
-        log_error "Expected inventory file not found"
-        log_warning "Checked the following locations:"
-        printf "  - %s\n" "${inventory_candidates[@]}"
-        return 1
+  local inventory_file=""
+  for candidate in "${inventory_candidates[@]}"; do
+    if [[ -f "$candidate" && -s "$candidate" ]]; then
+      inventory_file="$candidate"
+      break
     fi
+  done
 
-    log_success "Inventory file located: $inventory_file"
+  if [[ -z "$inventory_file" ]]; then
+    log_error "Expected inventory file not found"
+    log_warning "Checked the following locations:"
+    printf "  - %s\n" "${inventory_candidates[@]}"
+    return 1
+  fi
 
-    cp "$inventory_file" "$shared_inventory"
-    log_info "Inventory copied to shared volume: $shared_inventory"
+  log_success "Inventory file located: $inventory_file"
 
-    mkdir -p "$(dirname "$ansible_inventory")"
-    cp "$inventory_file" "$ansible_inventory"
-    log_info "Inventory copied to Ansible location: $ansible_inventory"
+  cp "$inventory_file" "$shared_inventory"
+  log_info "Inventory copied to shared volume: $shared_inventory"
 
-    log_info "=== Inventory File Preview ==="
-    local inventory_lines
-    inventory_lines=$(wc -l < "$inventory_file")
-    log_info "Inventory file has $inventory_lines lines"
-    if [[ $inventory_lines -le 50 ]]; then
-        cat "$inventory_file"
-    else
-        head -20 "$inventory_file"
-        log_info "... ($((inventory_lines - 40)) lines omitted) ..."
-        tail -20 "$inventory_file"
-    fi
-    log_info "=== End Inventory Preview ==="
+  mkdir -p "$(dirname "$ansible_inventory")"
+  cp "$inventory_file" "$ansible_inventory"
+  log_info "Inventory copied to Ansible location: $ansible_inventory"
 
-    if validate_yaml_syntax "$inventory_file"; then
-        log_success "Inventory file syntax validated successfully"
-    else
-        log_warning "Inventory file has syntax warnings, continuing"
-    fi
+  log_info "=== Inventory File Preview ==="
+  local inventory_lines
+  inventory_lines=$(wc -l <"$inventory_file")
+  log_info "Inventory file has $inventory_lines lines"
+  if [[ $inventory_lines -le 50 ]]; then
+    cat "$inventory_file"
+  else
+    head -20 "$inventory_file"
+    log_info "... ($((inventory_lines - 40)) lines omitted) ..."
+    tail -20 "$inventory_file"
+  fi
+  log_info "=== End Inventory Preview ==="
+
+  if validate_yaml_syntax "$inventory_file"; then
+    log_success "Inventory file syntax validated successfully"
+  else
+    log_warning "Inventory file has syntax warnings, continuing"
+  fi
 }
 
 # =============================================================================
@@ -172,33 +181,33 @@ handle_inventory_file() {
 # Returns:
 #   0 on success, 1 on failure
 upload_config_to_s3() {
-    local config_file="${1:-$TERRAFORM_VARS_FILENAME}"
-    local s3_key="env:/$TF_WORKSPACE/config/cluster.tfvars"
-    
-    log_info "Uploading configuration file to S3: s3://$S3_BUCKET_NAME/$s3_key"
-    
-    # Validate AWS credentials and required variables
-    validate_required_vars "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "S3_BUCKET_NAME" "S3_REGION" "TF_WORKSPACE"
-    
-    if [[ -f "$config_file" ]]; then
-        if aws s3 cp "$config_file" "s3://$S3_BUCKET_NAME/$s3_key" --region "$S3_REGION"; then
-            # Verify the upload succeeded
-            if aws s3 ls "s3://$S3_BUCKET_NAME/$s3_key" --region "$S3_REGION" >/dev/null 2>&1; then
-                log_success "Configuration uploaded to S3 successfully"
-                log_info "Accessible at: s3://$S3_BUCKET_NAME/$s3_key"
-                return 0
-            else
-                log_error "Upload reported success but file verification failed"
-                return 1
-            fi
-        else
-            log_error "Failed to upload configuration to S3"
-            return 1
-        fi
-    else
-        log_error "Configuration file not found: $config_file"
+  local config_file="${1:-$TERRAFORM_VARS_FILENAME}"
+  local s3_key="env:/$TF_WORKSPACE/config/cluster.tfvars"
+
+  log_info "Uploading configuration file to S3: s3://$S3_BUCKET_NAME/$s3_key"
+
+  # Validate AWS credentials and required variables
+  validate_required_vars "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "S3_BUCKET_NAME" "S3_REGION" "TF_WORKSPACE"
+
+  if [[ -f "$config_file" ]]; then
+    if aws s3 cp "$config_file" "s3://$S3_BUCKET_NAME/$s3_key" --region "$S3_REGION"; then
+      # Verify the upload succeeded
+      if aws s3 ls "s3://$S3_BUCKET_NAME/$s3_key" --region "$S3_REGION" >/dev/null 2>&1; then
+        log_success "Configuration uploaded to S3 successfully"
+        log_info "Accessible at: s3://$S3_BUCKET_NAME/$s3_key"
+        return 0
+      else
+        log_error "Upload reported success but file verification failed"
         return 1
+      fi
+    else
+      log_error "Failed to upload configuration to S3"
+      return 1
     fi
+  else
+    log_error "Configuration file not found: $config_file"
+    return 1
+  fi
 }
 
 # =============================================================================
@@ -206,7 +215,7 @@ upload_config_to_s3() {
 # =============================================================================
 
 show_help() {
-    cat << EOF
+  cat <<EOF
 Usage: $SCRIPT_NAME [OPTIONS]
 
 Airgap Infrastructure Deployment Script
@@ -255,7 +264,7 @@ EOF
 # =============================================================================
 
 parse_arguments() {
-    local usage="Usage: $SCRIPT_NAME [OPTIONS]
+  local usage="Usage: $SCRIPT_NAME [OPTIONS]
 
 Airgap Infrastructure Deployment Script
 This script consolidates infrastructure planning, deployment, validation, and backup operations.
@@ -295,20 +304,20 @@ EXAMPLES:
     # Deploy without S3 upload
     $SCRIPT_NAME --no-s3-upload"
 
-    # Parse arguments using common helper
-    parse_args "$usage" "$@"
-    
-    # Export variables for use in functions
-    export TF_WORKSPACE="${PARSED_ARGS[0]:-$TF_WORKSPACE}"
-    export TERRAFORM_VARS_FILENAME="${PARSED_ARGS[1]:-$TERRAFORM_VARS_FILENAME}"
-    export UPLOAD_CONFIG_TO_S3="${PARSED_ARGS[2]:-true}"
+  # Parse arguments using common helper
+  parse_args "$usage" "$@"
 
-    log_info "Configuration:"
-    log_info "  Workspace: ${TF_WORKSPACE}"
-    log_info "  Variables file: ${TERRAFORM_VARS_FILENAME}"
-    log_info "  Use remote path: ${PARSED_ARGS[2]:-true}"
-    log_info "  Upload to S3: ${UPLOAD_CONFIG_TO_S3}"
-    log_info "  Debug mode: ${DEBUG:-false}"
+  # Export variables for use in functions
+  export TF_WORKSPACE="${PARSED_ARGS[0]:-$TF_WORKSPACE}"
+  export TERRAFORM_VARS_FILENAME="${PARSED_ARGS[1]:-$TERRAFORM_VARS_FILENAME}"
+  export UPLOAD_CONFIG_TO_S3="${PARSED_ARGS[2]:-true}"
+
+  log_info "Configuration:"
+  log_info "  Workspace: ${TF_WORKSPACE}"
+  log_info "  Variables file: ${TERRAFORM_VARS_FILENAME}"
+  log_info "  Use remote path: ${PARSED_ARGS[2]:-true}"
+  log_info "  Upload to S3: ${UPLOAD_CONFIG_TO_S3}"
+  log_info "  Debug mode: ${DEBUG:-false}"
 }
 
 # =============================================================================

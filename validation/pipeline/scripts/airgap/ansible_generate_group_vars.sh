@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
+IFS=$'\n\t'
 
 # Ansible Group Variables Generation Script
 # This script generates the Ansible group_vars/all.yml file from the ANSIBLE_VARIABLES environment variable
@@ -9,9 +10,12 @@ set -e
 # CONSTANTS
 # =============================================================================
 
-readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_DIR="$(dirname "$0")"
-readonly OUTPUT_DIR="${ANSIBLE_OUTPUT_DIR:-/root/ansible/rke2/airgap/group_vars}"
+SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_NAME
+SCRIPT_DIR="$(dirname "$0")"
+readonly SCRIPT_DIR
+OUTPUT_DIR="${ANSIBLE_OUTPUT_DIR:-/root/ansible/rke2/airgap/group_vars}"
+readonly OUTPUT_DIR
 
 # =============================================================================
 # PREREQUISITE VALIDATION
@@ -20,7 +24,10 @@ readonly OUTPUT_DIR="${ANSIBLE_OUTPUT_DIR:-/root/ansible/rke2/airgap/group_vars}
 validate_prerequisites() {
   # If logging helper already exists, assume airgap library is loaded
   if type log_info >/dev/null 2>&1; then
-    [[ -n "${ANSIBLE_VARIABLES:-}" ]] || { log_error "ANSIBLE_VARIABLES not set"; exit 1; }
+    [[ -n "${ANSIBLE_VARIABLES:-}" ]] || {
+      log_error "ANSIBLE_VARIABLES not set"
+      exit 1
+    }
     return 0
   fi
 
@@ -45,7 +52,10 @@ validate_prerequisites() {
     exit 1
   fi
 
-  [[ -n "${ANSIBLE_VARIABLES:-}" ]] || { log_error "ANSIBLE_VARIABLES not set"; exit 1; }
+  [[ -n "${ANSIBLE_VARIABLES:-}" ]] || {
+    log_error "ANSIBLE_VARIABLES not set"
+    exit 1
+  }
 }
 
 # =============================================================================
@@ -77,7 +87,7 @@ main() {
     log_info "=== Group Variables Generation Summary ==="
     log_info "Generated files:"
     if [[ -f "$OUTPUT_DIR/all.yml" ]]; then
-      log_info "  - $OUTPUT_DIR/all.yml ($(wc -l < "$OUTPUT_DIR/all.yml") lines)"
+      log_info "  - $OUTPUT_DIR/all.yml ($(wc -l <"$OUTPUT_DIR/all.yml") lines)"
     fi
 
     # Show first few lines of generated content

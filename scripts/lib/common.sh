@@ -5,7 +5,8 @@ IFS=$'\n\t'
 # Common shell library for CI pipelines
 # Provides logging, argument parsing, environment validation and helpers
 
-readonly COMMON_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMMON_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly COMMON_LIB_DIR
 readonly SHARED_VOLUME_PATH="${SHARED_VOLUME_PATH:-/root/shared}"
 
 # Logging helpers
@@ -110,27 +111,42 @@ wait_for_confirmation() {
 
 # Simple parse_args implementation that fills PARSED_ARGS array
 parse_args() {
-  local usage="$1"; shift || true
+  local usage="$1"
+  shift || true
+  # shellcheck disable=SC2034
   PARSED_ARGS=()
   local use_local="false"
   local no_s3="false"
   while [ $# -gt 0 ]; do
     case "$1" in
-      -w|--workspace)
-        PARSED_ARGS[0]="$2"; shift 2;;
-      -v|--var-file)
-        PARSED_ARGS[1]="$2"; shift 2;;
-      -l|--local-path)
-        use_local="true"; shift;;
+      -w | --workspace)
+        PARSED_ARGS[0]="$2"
+        shift 2
+        ;;
+      -v | --var-file)
+        PARSED_ARGS[1]="$2"
+        shift 2
+        ;;
+      -l | --local-path)
+        use_local="true"
+        shift
+        ;;
       --no-s3-upload)
-        no_s3="true"; shift;;
-      --debug|-d)
-        DEBUG=true; shift;;
-      -h|--help)
-        printf '%s\n' "$usage"; exit 0;;
+        no_s3="true"
+        shift
+        ;;
+      --debug | -d)
+        DEBUG=true
+        shift
+        ;;
+      -h | --help)
+        printf '%s\n' "$usage"
+        exit 0
+        ;;
       *)
         # ignore unknown, advance
-        shift;;
+        shift
+        ;;
     esac
   done
   PARSED_ARGS[2]="${use_local}"
