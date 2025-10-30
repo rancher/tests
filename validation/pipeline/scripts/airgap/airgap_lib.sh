@@ -393,10 +393,14 @@ generate_plan() {
   fi
 
   log_success "Plan generated successfully ($plan_size bytes): $plan_output"
-
+  
   # Copy plan to shared volume if path is different
   if [[ "$module_path" != "$SHARED_VOLUME_PATH" ]]; then
-    cp "$plan_output" "$SHARED_VOLUME_PATH/${plan_output}-backup"
+    # Ensure the shared volume directory exists before copying
+    if ! mkdir -p "$SHARED_VOLUME_PATH" 2>/dev/null; then
+      log_warning "Could not create shared volume directory: $SHARED_VOLUME_PATH (copy may fail)"
+    fi
+    cp -f "$plan_output" "$SHARED_VOLUME_PATH/${plan_output}-backup"
     log_info "Plan backed up to shared volume"
   fi
 }
