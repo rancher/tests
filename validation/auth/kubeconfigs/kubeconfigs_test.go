@@ -42,7 +42,7 @@ func (kc *KubeconfigTestSuite) SetupSuite() {
 	require.NoError(kc.T(), err)
 	kc.client = client
 
-	log.Info("Getting cluster name from the config file and append cluster details in rbos")
+	log.Info("Getting cluster name from the config file and append cluster details in kc")
 	clusterName := client.RancherConfig.ClusterName
 	require.NotEmptyf(kc.T(), clusterName, "Cluster name to install should be set")
 	clusterID, err := clusters.GetClusterIDByName(kc.client, clusterName)

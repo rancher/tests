@@ -63,10 +63,10 @@ require (
 	github.com/harvester/harvester v1.5.0
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/rancher/backup-restore-operator v1.2.1
-	github.com/rancher/fleet/pkg/apis v0.13.0
+	github.com/rancher/fleet/pkg/apis v0.14.0-alpha.3
 	github.com/rancher/norman v0.7.0
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20251003203259-669abb78af51
+	github.com/rancher/shepherd v0.0.0-20251015044355-8c54bf0aaf31
 	github.com/rancher/tests/actions v0.0.0-20251006163815-7499db2c8b31
 	github.com/rancher/tfp-automation v0.0.0-20251016221424-5aafbe545b8e
 	github.com/sirupsen/logrus v1.9.3
