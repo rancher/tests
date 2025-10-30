@@ -1,0 +1,1198 @@
+#!/usr/bin/env groovy
+
+/**
+ * Infrastructure Destruction Jenkinsfile for Airgap RKE2
+ *
+ * This pipeline is designed to safely destroy infrastructure created by
+ * the main airgap RKE2 deployment pipeline. It retrives Terraform state
+ * from S3 backend and performs controlled destruction.
+ */
+
+pipeline {
+    agent any
+
+    // Global pipeline options
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 2, unit: 'HOURS')
+        timestamps()
+        ansiColor('xterm')
+        skipStagesAfterUnstable()
+    }
+
+    parameters {
+        string(
+            name: 'TARGET_WORKSPACE',
+            defaultValue: '',
+            description: 'Terraform workspace to destroy (e.g., jenkins_airgap_ansible_workspace_123)'
+        )
+        string(
+            name: 'RANCHER_TEST_REPO_URL',
+            defaultValue: 'https://github.com/rancher/tests',
+            description: 'URL of rancher/tests repository'
+        )
+        string(
+            name: 'RANCHER_TEST_REPO_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of rancher/tests repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_URL',
+            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            description: 'URL of qa-infra-automation repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-infra-automation repository'
+        )
+        string(
+            name: 'S3_BUCKET_NAME',
+            defaultValue: 'jenkins-terraform-state-storage',
+            description: 'S3 bucket name where Terraform state is stored'
+        )
+        string(
+            name: 'S3_KEY_PREFIX',
+            defaultValue: 'jenkins-airgap-rke2/terraform.tfstate',
+            description: 'S3 key prefix for the Terraform state files'
+        )
+        string(
+            name: 'S3_REGION',
+            defaultValue: 'us-east-2',
+            description: 'AWS region where the S3 bucket is located'
+        )
+    }
+
+    environment {
+        // Default S3 configuration - use parameters with fallbacks
+        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'}"
+        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'}"
+        S3_REGION = "${params.S3_REGION ?: 'us-east-2'}"
+        AWS_REGION = "${params.S3_REGION ?: 'us-east-2'}"
+
+        // Repository configurations
+        RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
+        QA_INFRA_REPO = "${params.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation'}"
+        QA_INFRA_WORK_PATH = '/root/go/src/github.com/rancher/qa-infra-automation'
+        ROOT_PATH = '/root/go/src/github.com/rancher/tests/'
+
+        // Computed values
+        JOB_SHORT_NAME = "${getShortJobName()}"
+        BUILD_CONTAINER_NAME = "${JOB_SHORT_NAME}${BUILD_NUMBER}-destroy"
+        IMAGE_NAME = "rancher-destroy-${JOB_SHORT_NAME}${BUILD_NUMBER}"
+        VALIDATION_VOLUME = "DestroySharedVolume-${JOB_SHORT_NAME}${BUILD_NUMBER}"
+
+        // Target workspace from parameters
+        TARGET_WORKSPACE = "${params.TARGET_WORKSPACE}"
+        TF_WORKSPACE = "${params.TARGET_WORKSPACE}"
+
+        // Timeouts (in minutes)
+        TERRAFORM_TIMEOUT = '30'
+
+        // Configuration files
+        TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
+        TERRAFORM_BACKEND_VARS_FILENAME = 'backend.tfvars'
+        ENV_FILE = '.env'
+    }
+
+    stages {
+        stage('Initialize Pipeline') {
+      steps {
+        script {
+          logInfo('Initializing pipeline')
+          // Validate parameters and environment
+          validateParameters()
+
+          // Clean workspace
+          deleteDir()
+
+          logInfo('Pipeline initialized successfully')
+          logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
+          logInfo("Docker image: ${env.IMAGE_NAME}")
+          logInfo("Volume: ${env.VALIDATION_VOLUME}")
+        }
+      }
+        }
+
+        stage('Checkout Repositories') {
+      steps {
+        script {
+          logInfo('Checking out source repositories')
+
+          // Checkout Rancher Tests Repository
+          dir('./tests') {
+            logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
+            checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
+                            extensions: [
+                                [$class: 'CleanCheckout'],
+                                [$class: 'CloneOption', depth: 1, shallow: true]
+                            ],
+                            userRemoteConfigs: [[
+                                url: env.RANCHER_TEST_REPO_URL,
+                            ]]
+                        ])
+          }
+
+          // Checkout QA Infrastructure Repository
+          dir('./qa-infra-automation') {
+            logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
+            checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
+                            extensions: [
+                                [$class: 'CleanCheckout'],
+                                [$class: 'CloneOption', depth: 1, shallow: true]
+                            ],
+                            userRemoteConfigs: [[
+                                url: env.QA_INFRA_REPO,
+                            ]]
+                        ])
+          }
+
+          logInfo('Repository checkout completed successfully')
+        }
+      }
+        }
+
+        stage('Configure Environment') {
+      steps {
+        script {
+          logInfo('Configuring deployment environment')
+
+          // Configure credentials and environment files
+          withCredentials(getCredentialsList()) {
+            // Generate environment file with AWS credentials
+            generateDestructionEnvironmentFile()
+
+            // Setup SSH keys securely
+            setupSSHKeys()
+
+            // Build Docker image with proper tagging
+            buildDockerImage()
+
+            // Create shared volume
+            createSharedVolume()
+          }
+        }
+      }
+        }
+
+        stage('Infrastructure Destruction') {
+      steps {
+        script {
+          logInfo('Performing infrastructure destruction using consolidated script')
+
+          // Configuration validation
+          def requiredVars = [
+                        'QA_INFRA_WORK_PATH',
+                        'TF_WORKSPACE',
+                        'TERRAFORM_VARS_FILENAME',
+                        'TERRAFORM_BACKEND_VARS_FILENAME',
+                        'TERRAFORM_TIMEOUT'
+                    ]
+          validateRequiredVariables(requiredVars)
+
+          // Generate and copy backend configuration before running destroy
+          logInfo('Generating OpenTofu backend configuration')
+          generateTofuBackendConfiguration()
+          
+          logInfo('Initializing OpenTofu with backend configuration')
+          initializeOpenTofu()
+
+          // Enhanced timeout with reasonable defaults
+          def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
+                        Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
+
+          timeout(time: timeoutMinutes, unit: 'MINUTES') {
+            try {
+              // Infrastructure destruction using consolidated script
+              destroyInfrastructureWithConsolidatedScript()
+
+              logInfo('Infrastructure destruction process completed.')
+              archiveDestructionResults()
+            }
+            catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+              logError("Infrastructure destruction timed out after ${timeoutMinutes} minutes")
+              logError("Timeout exception details: ${e.message}")
+              try {
+                archiveDestructionFailureArtifacts()
+              } catch (Exception cleanupException) {
+                logError("Failed to perform infrastructure cleanup: ${cleanupException.message}")
+              }
+            } catch (Exception e) {
+              logError("Infrastructure destruction failed: ${e.message}")
+              archiveDestructionFailureArtifacts()
+              throw e
+            }
+          }
+        }
+      }
+      post {
+        failure {
+          script {
+            logError('Infrastructure destruction operations failed')
+            archiveDestructionFailureArtifacts()
+          }
+        }
+      }
+        }
+    }
+    post {
+        always {
+      script {
+        logInfo('Starting post-destruction cleanup')
+
+        // Archive important artifacts
+        archiveBuildArtifacts([
+                    'destruction-plan.txt',
+                    'destruction-summary.json',
+                    'destruction-logs.txt'
+                ])
+
+        // Cleanup containers and volumes
+        cleanupContainersAndVolumes()
+      }
+        }
+
+        success {
+      script {
+        logInfo('Destruction pipeline completed successfully')
+        
+        // Clean up S3 workspace directory after successful destruction
+        cleanupS3WorkspaceDirectory()
+      }
+        }
+
+        failure {
+      script {
+        logError('Destruction pipeline failed')
+      }
+        }
+
+        aborted {
+      script {
+        logWarning('Destruction pipeline was aborted')
+      }
+        }
+    }
+}
+
+/**
+ * CONSOLIDATED SCRIPT HELPER FUNCTIONS
+ */
+
+def destroyInfrastructureWithConsolidatedScript() {
+    logInfo('Executing infrastructure destruction with consolidated script')
+
+    def scriptContent = '''
+#!/bin/bash
+set -e
+# Source the consolidated infrastructure cleanup script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_infrastructure_cleanup.sh
+'''
+
+    // Pass required environment variables to container
+    def extraEnvVars = [
+        'CLEANUP_WORKSPACE': 'true',
+        'DESTROY_ON_FAILURE': 'true'
+    ]
+
+    executeScriptInContainer(scriptContent, extraEnvVars)
+}
+
+/**
+ * DESTRUCTION-SPECIFIC HELPER FUNCTIONS
+ */
+
+def validateParameters() {
+  // Validate required parameters
+  if (!params.TARGET_WORKSPACE || params.TARGET_WORKSPACE.trim().isEmpty()) {
+    error('TARGET_WORKSPACE parameter is required for destruction')
+  }
+  if (!params.RANCHER_TEST_REPO_URL) {
+    error('RANCHER_TEST_REPO_URL parameter is required')
+  }
+  if (!params.QA_INFRA_REPO_URL) {
+    error('QA_INFRA_REPO_URL parameter is required')
+  }
+
+  logInfo('Parameters validated successfully')
+  logInfo("Target workspace: ${params.TARGET_WORKSPACE}")
+}
+
+def validateRequiredVariables(requiredVars) {
+  logInfo('Validating required environment variables')
+
+  def missingVars = []
+  requiredVars.each { varName ->
+        def varValue = env."${varName}"
+        if (!varValue || varValue.trim().isEmpty()) {
+      missingVars.add(varName)
+        }
+  }
+
+  if (!missingVars.isEmpty()) {
+    def errorMsg = "Missing required environment variables: ${missingVars.join(', ')}"
+    logError(errorMsg)
+    error(errorMsg)
+  }
+
+  logInfo('All required variables validated successfully')
+}
+
+def validateInfrastructurePrerequisites() {
+  logInfo('Validating infrastructure prerequisites')
+
+  try {
+    def scriptPath = 'tests/validation/pipeline/scripts/airgap/tofu_validate_prerequisites.sh'
+    def scriptContent = readFile(file: scriptPath)
+    executeScriptInContainer(scriptContent)
+    logInfo('All infrastructure prerequisites validated')
+    } catch (Exception e) {
+    def errorMsg = "Infrastructure prerequisites validation failed: ${e.message}"
+    logError(errorMsg)
+    error(errorMsg)
+  }
+}
+
+
+def getShortJobName() {
+  def jobName = "${env.JOB_NAME}"
+  if (jobName.contains('/')) {
+    def lastSlashIndex = jobName.lastIndexOf('/')
+    return jobName.substring(lastSlashIndex + 1)
+  }
+  return jobName
+}
+
+def getCredentialsList() {
+  return [
+        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+    ]
+}
+
+def generateDestructionEnvironmentFile() {
+  logInfo('Generating environment file for destruction containers')
+
+  // Debug logging for S3 variables
+  logInfo("S3_BUCKET_NAME: '${env.S3_BUCKET_NAME}'")
+  logInfo("S3_KEY_PREFIX: '${env.S3_KEY_PREFIX}'")
+  logInfo("S3_REGION: '${env.S3_REGION}'")
+  logInfo("AWS_REGION: '${env.AWS_REGION}'")
+
+  // Ensure S3 variables have values by using parameter fallbacks
+  def s3BucketName = env.S3_BUCKET_NAME ?: params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'
+  def s3KeyPrefix = env.S3_KEY_PREFIX ?: params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'
+  def s3Region = env.S3_REGION ?: params.S3_REGION ?: 'us-east-2'
+  def awsRegion = env.AWS_REGION ?: params.S3_REGION ?: 'us-east-2'
+
+  logInfo("Using S3_BUCKET_NAME: '${s3BucketName}'")
+  logInfo("Using S3_KEY_PREFIX: '${s3KeyPrefix}'")
+  logInfo("Using S3_REGION: '${s3Region}'")
+  logInfo("Using AWS_REGION: '${awsRegion}'")
+
+  // Build environment content securely WITHOUT credentials
+  // Credentials will be passed via withCredentials block
+  def envLines = [
+        '# Environment variables for infrastructure destruction containers',
+        '# NOTE: All sensitive credentials are passed via Jenkins withCredentials block for security',
+        "TARGET_WORKSPACE=${env.TARGET_WORKSPACE}",
+        "BUILD_NUMBER=${env.BUILD_NUMBER}",
+        "JOB_NAME=${env.JOB_NAME}",
+        "QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}",
+        "TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}",
+        "S3_BUCKET_NAME=${s3BucketName}",
+        "S3_KEY_PREFIX=${s3KeyPrefix}",
+        "S3_REGION=${s3Region}",
+        "AWS_REGION=${awsRegion}",
+        '',
+        '# AWS Credentials excluded - will be passed via withCredentials',
+        '',
+        '# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)',
+        'TF_VAR_aws_region=' + awsRegion
+    ]
+
+  def envContent = envLines.join('\n')
+  writeFile file: env.ENV_FILE, text: envContent
+  logInfo("Environment file created: ${env.ENV_FILE}")
+
+  // Verify the file was created correctly
+  def fileContent = readFile file: env.ENV_FILE
+  logInfo('Environment file content preview:')
+  def lines = fileContent.split('\n')
+  for (int i = 0; i < Math.min(10, lines.size()); i++) {
+    logInfo(lines[i])
+  }
+}
+
+def setupSSHKeys() {
+  if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
+    logInfo('Setting up SSH keys')
+
+    dir('./tests/.ssh') {
+      def decodedKey = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
+      writeFile file: env.AWS_SSH_KEY_NAME, text: decodedKey
+      sh "chmod 600 ${env.AWS_SSH_KEY_NAME}"
+    }
+
+    logInfo('SSH keys configured successfully')
+  }
+}
+
+def buildDockerImage() {
+  logInfo("Building Docker image: ${env.IMAGE_NAME}")
+
+  // Ensure required directories exist before Docker build
+  sh 'ls -la ./tests || echo "tests directory not found"'
+  sh 'ls -la ./qa-infra-automation || echo "qa-infra-automation directory not found"'
+
+  // Verify the Dockerfile exists
+  sh 'ls -la ./tests/validation/Dockerfile.tofu.e2e || echo "Dockerfile not found"'
+
+  dir('./') {
+        sh './tests/validation/configure.sh > /dev/null 2>&1'
+
+        // Execute shell commands separately to avoid Jenkins parsing issues
+        def buildDate = sh(script: "date -u +'%Y-%m-%dT%H:%M:%SZ'", returnStdout: true).trim()
+        def vcsRef = sh(script: 'git rev-parse --short HEAD 2>/dev/null || echo "unknown"', returnStdout: true).trim()
+
+        sh """
+            docker build . \\
+                -f ./tests/validation/Dockerfile.tofu.e2e \\
+                -t ${env.IMAGE_NAME} \\
+                --build-arg BUILD_DATE=${buildDate} \\
+                --build-arg VCS_REF=${vcsRef} \\
+                --label "pipeline.build.number=${env.BUILD_NUMBER}" \\
+                --label "pipeline.job.name=${env.JOB_NAME}" \\
+                --quiet
+        """
+  }
+
+  logInfo('Docker image built successfully')
+}
+
+def createSharedVolume() {
+  logInfo("Creating shared volume: ${env.VALIDATION_VOLUME}")
+  sh "docker volume create --name ${env.VALIDATION_VOLUME}"
+}
+
+def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = false) {
+  def timestamp = System.currentTimeMillis()
+  def containerName = "${env.BUILD_CONTAINER_NAME}-script-${timestamp}"
+  def scriptFile = "docker-script-${timestamp}.sh"
+  def credentialEnvFile = null
+
+  writeFile file: scriptFile, text: scriptContent
+
+  try {
+    def envVars = ''
+    extraEnv.each { key, value ->
+      envVars += " -e ${key}=${value}"
+    }
+
+    def workspaceEnv = skipWorkspaceEnv ? '' : " -e TF_WORKSPACE=${env.TF_WORKSPACE}"
+
+    // Ensure S3 variables are explicitly passed to container
+    def s3BucketName = env.S3_BUCKET_NAME ?: params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'
+    def s3KeyPrefix = env.S3_KEY_PREFIX ?: params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'
+    def s3Region = env.S3_REGION ?: params.S3_REGION ?: 'us-east-2'
+    def awsRegion = env.AWS_REGION ?: params.S3_REGION ?: 'us-east-2'
+
+    // Execute Docker command within withCredentials block to avoid interpolation
+    withCredentials([
+      string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+      string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+    ]) {
+      // Create a temporary environment file with credentials
+      credentialEnvFile = createCredentialEnvironmentFile()
+      
+      // Build the base Docker command
+      def dockerCmd = """
+              docker run --rm \\
+                  -v ${env.VALIDATION_VOLUME}:/root \\
+                  -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+                  --name ${containerName} \\
+                  -t --env-file ${env.ENV_FILE} \\
+                  -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \\
+                  -e TF_WORKSPACE=${env.TF_WORKSPACE} \\
+                  -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME} \\
+                  -e S3_BUCKET_NAME="${s3BucketName}" \\
+                  -e S3_KEY_PREFIX="${s3KeyPrefix}" \\
+                  -e S3_REGION="${s3Region}" \\
+                  -e AWS_REGION="${awsRegion}" ${envVars} \\
+                  ${env.IMAGE_NAME} \\
+                  sh /tmp/script.sh
+          """
+      
+      // Add credential environment file to Docker command without exposing credentials in logs
+      def modifiedDockerCmd = addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile)
+      
+      sh modifiedDockerCmd
+    }
+    } catch (Exception e) {
+    logError("Script execution failed: ${e.message}")
+    throw e
+    } finally {
+    sh "rm -f ${scriptFile}"
+    
+    // Cleanup credential environment file
+    try {
+      if (credentialEnvFile && fileExists(credentialEnvFile)) {
+        sh "shred -vfz -n 3 ${credentialEnvFile} 2>/dev/null || rm -f ${credentialEnvFile}"
+        logInfo("Credential environment file securely shredded")
+      }
+    } catch (Exception cleanupException) {
+      logWarning("Failed to cleanup credential environment file: ${cleanupException.message}")
+    }
+  }
+}
+
+
+
+def generateTofuConfiguration() {
+  logInfo('Generating OpenTofu configuration files')
+
+  // The cluster.tfvars file was downloaded to the container's shared volume
+  // We need to copy it from the container to the host filesystem
+  def hostConfigPath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+  def containerConfigPath = "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+  
+  logInfo("Copying terraform config from container to host...")
+  logInfo("Host path: ${hostConfigPath}")
+  logInfo("Container path: ${containerConfigPath}")
+  
+  try {
+    // Create the directory structure on host if it doesn't exist
+    sh "mkdir -p ./qa-infra-automation/tofu/aws/modules/airgap"
+    
+    // First, let's check if the file exists in the container
+    logInfo("Checking if file exists in container...")
+    sh """
+      docker run --rm \
+        -v ${env.VALIDATION_VOLUME}:/root \
+        ${env.IMAGE_NAME} \
+        test -f ${containerConfigPath} && echo "File exists in container" || echo "File does NOT exist in container"
+    """
+    
+    // List the contents of the directory in the container
+    logInfo("Listing contents of container directory...")
+    sh """
+      docker run --rm \
+        -v ${env.VALIDATION_VOLUME}:/root \
+        ${env.IMAGE_NAME} \
+        ls -la ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/ || echo "Directory does not exist"
+    """
+    
+    // Copy the file from the container to the host using a temporary container
+    logInfo("Copying file from container to host...")
+    sh """
+      docker run --rm \
+        -v ${env.VALIDATION_VOLUME}:/root \
+        -v ${pwd()}/qa-infra-automation/tofu/aws/modules/airgap:/host_output \
+        ${env.IMAGE_NAME} \
+        cp ${containerConfigPath} /host_output/${env.TERRAFORM_VARS_FILENAME}
+    """
+    
+    logInfo("Terraform configuration copied from container to host")
+    
+    // Verify the file was copied to the host
+    logInfo("Verifying file was copied to host...")
+    sh "ls -la ${hostConfigPath} || echo 'File not found on host'"
+    
+    // Now read the file from the host path
+    def terraformConfig = readFile file: hostConfigPath
+    logInfo("Terraform configuration loaded from: ${hostConfigPath}")
+    logInfo("File content preview (first 200 chars): ${terraformConfig.take(200)}...")
+
+    // Replace any placeholder variables with actual values
+    terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
+
+    // Write the configuration file back to the expected location
+    writeFile file: hostConfigPath, text: terraformConfig
+    logInfo("Terraform configuration processed and written to: ${hostConfigPath}")
+    
+  } catch (Exception e) {
+    logError("Failed to copy terraform config from container: ${e.message}")
+    
+    // Fallback: try to read directly from host path if it exists
+    try {
+      def terraformConfig = readFile file: hostConfigPath
+      logInfo("Terraform configuration found on host at: ${hostConfigPath}")
+      
+      terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
+      terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
+      terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
+      
+      writeFile file: hostConfigPath, text: terraformConfig
+      logInfo("Terraform configuration processed from host path")
+    } catch (Exception e2) {
+      logError("Failed to read terraform config from host path: ${e2.message}")
+      error("Unable to find or copy terraform configuration file ${env.TERRAFORM_VARS_FILENAME}")
+    }
+  }
+}
+
+def generateTofuBackendConfiguration() {
+  logInfo('Generating Tofu configuration')
+
+  // Ensure S3 backend parameters are set
+  if (!env.S3_BUCKET_NAME) { error('S3_BUCKET_NAME environment variable is not set') }
+  if (!env.S3_REGION) { error('S3_REGION environment variable is not set') }
+  if (!env.S3_KEY_PREFIX) { error('S3_KEY_PREFIX environment variable is not set') }
+
+  logInfo("S3 Backend Configuration:")
+  logInfo("  Bucket: ${env.S3_BUCKET_NAME}")
+  logInfo("  Key: ${env.S3_KEY_PREFIX}")
+  logInfo("  Region: ${env.S3_REGION}")
+
+  sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
+
+  // Write both backend.tf and backend.tfvars files to host
+  def hostBackendPath = "./qa-infra-automation/tofu/aws/modules/airgap/backend.tf"
+  def hostBackendVarsPath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_BACKEND_VARS_FILENAME}"
+  def containerBackendPath = "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/backend.tf"
+  def containerBackendVarsPath = "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_BACKEND_VARS_FILENAME}"
+  
+  dir('./qa-infra-automation') {
+        dir('./tofu/aws/modules/airgap') {
+      // Generate backend.tf content with S3 backend configuration
+      def backendTf = """
+terraform {
+  backend "s3" {
+    bucket = "${env.S3_BUCKET_NAME}"
+    key    = "${env.S3_KEY_PREFIX}"
+    region = "${env.S3_REGION}"
+  }
+}
+"""
+      writeFile file: 'backend.tf', text: backendTf
+      logInfo("S3 backend.tf configuration written to host")
+      
+      // Also generate backend.tfvars for backward compatibility
+      def backendVars = """
+bucket = "${env.S3_BUCKET_NAME}"
+key    = "${env.S3_KEY_PREFIX}"
+region = "${env.S3_REGION}"
+"""
+      writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
+      logInfo("S3 backend.tfvars configuration written to host")
+      
+      // Show the content for debugging
+      logInfo("Backend.tf content:")
+      logInfo(backendTf)
+      logInfo("Backend.tfvars content:")
+      logInfo(backendVars)
+        }
+  }
+  
+  // Now copy both backend configuration files from host to container
+  logInfo("Copying backend configuration files from host to container...")
+  
+  try {
+    // Copy backend.tf
+    sh """
+      docker run --rm \
+        -v ${env.VALIDATION_VOLUME}:/root \
+        -v ${pwd()}/qa-infra-automation/tofu/aws/modules/airgap:/host_input \
+        ${env.IMAGE_NAME} \
+        cp /host_input/backend.tf ${containerBackendPath}
+    """
+    
+    // Copy backend.tfvars
+    sh """
+      docker run --rm \
+        -v ${env.VALIDATION_VOLUME}:/root \
+        -v ${pwd()}/qa-infra-automation/tofu/aws/modules/airgap:/host_input \
+        ${env.IMAGE_NAME} \
+        cp /host_input/${env.TERRAFORM_BACKEND_VARS_FILENAME} ${containerBackendVarsPath}
+    """
+    
+    logInfo("Backend configuration files copied to container")
+    
+    // Verify the files were copied to container
+    sh """
+      docker run --rm \
+        -v ${env.VALIDATION_VOLUME}:/root \
+        ${env.IMAGE_NAME} \
+        test -f ${containerBackendPath} && echo "backend.tf exists in container" || echo "backend.tf does NOT exist in container"
+    """
+    
+    sh """
+      docker run --rm \
+        -v ${env.VALIDATION_VOLUME}:/root \
+        ${env.IMAGE_NAME} \
+        test -f ${containerBackendVarsPath} && echo "backend.tfvars exists in container" || echo "backend.tfvars does NOT exist in container"
+    """
+    
+    // Show the file content in container
+    logInfo("Backend.tf content in container:")
+    sh """
+      docker run --rm \
+        -v ${env.VALIDATION_VOLUME}:/root \
+        ${env.IMAGE_NAME} \
+        cat ${containerBackendPath}
+    """
+    
+  } catch (Exception e) {
+    logError("Failed to copy backend configuration to container: ${e.message}")
+    error("Unable to copy backend configuration files to container")
+  }
+}
+
+def downloadClusterTfvarsFromS3() {
+  logInfo('Downloading cluster.tfvars from S3 workspace')
+
+  withCredentials([
+    string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+  ]) {
+    // Script will try multiple likely S3 keys/locations and download the first match.
+    def downloadScript = """
+#!/bin/bash
+set -e
+
+VARFILE="${env.TERRAFORM_VARS_FILENAME}"
+BUCKET="${env.S3_BUCKET_NAME}"
+REGION="${env.S3_REGION}"
+WORKSPACE="${env.TF_WORKSPACE}"
+SHARED="/root"
+MODULE_PATH="${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap"
+
+echo "Attempting to locate \${VARFILE} for workspace '\${WORKSPACE}' in s3://\${BUCKET}/"
+
+candidates=(
+  "env:/\${WORKSPACE}/\${VARFILE}"
+  "env:/\${WORKSPACE}/config/\${VARFILE}"
+  "\${WORKSPACE}/\${VARFILE}"
+  "\${WORKSPACE}/config/\${VARFILE}"
+  "config/\${VARFILE}"
+  "\${VARFILE}"
+)
+
+found=0
+for key in "\${candidates[@]}"; do
+  echo "Checking s3://\${BUCKET}/\${key}"
+  if aws s3 ls "s3://\${BUCKET}/\${key}" --region "\${REGION}" >/dev/null 2>&1; then
+    echo "Found at s3://\${BUCKET}/\${key}, downloading..."
+    aws s3 cp "s3://\${BUCKET}/\${key}" "\${SHARED}/\${VARFILE}" --region "\${REGION}"
+    mkdir -p "\${MODULE_PATH}"
+    cp "\${SHARED}/\${VARFILE}" "\${MODULE_PATH}/\${VARFILE}"
+    echo "Downloaded and copied \${VARFILE} to \${MODULE_PATH}/\${VARFILE}"
+    found=1
+    break
+  fi
+done
+
+if [[ "\${found}" -ne 1 ]]; then
+  echo "WARNING: Could not locate \${VARFILE} in S3 workspace s3://\${BUCKET}/ (checked \${#candidates[@]} locations)."
+  echo "Available files (partial):"
+  aws s3 ls "s3://\${BUCKET}/env:/\${WORKSPACE}/" --recursive --region "\${REGION}" 2>/dev/null || aws s3 ls "s3://\${BUCKET}/\${WORKSPACE}/" --recursive --region "\${REGION}" 2>/dev/null || true
+  echo "Proceeding without creating fallback var file; destruction scripts will handle missing vars appropriately."
+fi
+"""
+
+    def timestamp = System.currentTimeMillis()
+    def scriptFile = "download-cluster-tfvars-${timestamp}.sh"
+    def containerName = "${env.BUILD_CONTAINER_NAME}-download-${timestamp}"
+
+    writeFile file: scriptFile, text: downloadScript
+
+    try {
+      sh """
+        docker run --rm \\
+          -v ${env.VALIDATION_VOLUME}:/root \\
+          -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+          --name ${containerName} \\
+          -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \\
+          -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \\
+          -e AWS_DEFAULT_REGION="${env.AWS_REGION}" \\
+          -e S3_BUCKET_NAME="${env.S3_BUCKET_NAME}" \\
+          -e S3_REGION="${env.S3_REGION}" \\
+          -e TF_WORKSPACE="${env.TF_WORKSPACE}" \\
+          -e TERRAFORM_VARS_FILENAME="${env.TERRAFORM_VARS_FILENAME}" \\
+          -e TARGET_WORKSPACE="${env.TARGET_WORKSPACE}" \\
+          ${env.IMAGE_NAME} \\
+          sh /tmp/script.sh
+      """
+      logInfo('cluster.tfvars download attempt completed')
+    } catch (Exception e) {
+      logError("Failed to execute download script: ${e.message}")
+      logWarning('Proceeding without cluster.tfvars; downstream scripts will decide next steps')
+    } finally {
+      sh "rm -f ${scriptFile}"
+    }
+  }
+}
+
+def initializeOpenTofu() {
+  // Download cluster.tfvars from S3 workspace before initialization
+  downloadClusterTfvarsFromS3()
+
+  logInfo('Initializing OpenTofu with S3 backend')
+
+  def scriptPath = 'tests/validation/pipeline/scripts/airgap/tofu_initialize.sh'
+  def scriptContent = readFile(file: scriptPath)
+  executeScriptInContainer(scriptContent, [:], true)
+}
+
+def manageWorkspace() {
+  logInfo("Deleting OpenTofu workspace: ${env.TF_WORKSPACE}")
+
+  def scriptPath = 'tests/validation/pipeline/scripts/airgap/tofu_delete_workspace.sh'
+  def scriptContent = readFile(file: scriptPath)
+  executeScriptInContainer(scriptContent)
+}
+
+
+def archiveDestructionResults() {
+  logInfo('Archiving destruction results')
+
+  try {
+    sh '''
+            # Try to copy destruction results if container exists
+            CONTAINER_ID=$(docker ps -aqf "name=''' + env.BUILD_CONTAINER_NAME + '''")
+            if [ -n "$CONTAINER_ID" ]; then
+                docker cp $CONTAINER_ID:''' + env.QA_INFRA_WORK_PATH + '''/destruction-summary.json ./
+                echo "Destruction results archived successfully"
+            else
+                echo "No container found to archive results from"
+            fi
+        '''
+    } catch (Exception e) {
+    logError("Failed to archive destruction results: ${e.message}")
+  }
+}
+
+def archiveDestructionFailureArtifacts() {
+  logInfo('Archiving destruction failure artifacts')
+
+  try {
+    def debugCommands = [
+            "cd ${env.QA_INFRA_WORK_PATH}",
+            'tofu -chdir=tofu/aws/modules/airgap workspace list > workspace-list.txt 2>&1 || echo "No workspace list available"',
+            "tofu -chdir=tofu/aws/modules/airgap state list > remaining-resources.txt 2>&1 || echo 'No state available'",
+            "echo 'Destruction failure artifact collection completed'"
+        ]
+
+    executeInContainer(debugCommands)
+
+    sh """
+            # Try to copy failure artifacts if container exists
+            CONTAINER_ID=\$(docker ps -aqf "name=${env.BUILD_CONTAINER_NAME}\$")
+            if [ -n \"\$CONTAINER_ID\" ]; then
+                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/workspace-list.txt ./
+                docker cp \$CONTAINER_ID:${env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./
+            else
+                echo \"No container found to archive failure artifacts from\"
+            fi
+        """
+
+    archiveArtifacts artifacts: 'workspace-list.txt,remaining-resources.txt', allowEmptyArchive: true
+    } catch (Exception e) {
+    logError("Failed to archive failure artifacts: ${e.message}")
+  }
+}
+
+def executeInContainer(commands) {
+  def commandString = commands.join(' && ')
+  def timestamp = System.currentTimeMillis()
+  def containerName = "${env.BUILD_CONTAINER_NAME}-${timestamp}"
+  def scriptFile = "destroy-commands-${timestamp}.sh"
+  def credentialEnvFile = null
+
+  writeFile file: scriptFile, text: commandString
+
+  // Execute Docker command within withCredentials block to avoid interpolation
+  withCredentials([
+    string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+  ]) {
+    // Create a temporary environment file with credentials
+    credentialEnvFile = createCredentialEnvironmentFile()
+    
+    // Build the base Docker command
+    def dockerCmd = """
+          docker run --rm \\
+              -v ${env.VALIDATION_VOLUME}:/root \\
+              -v ${pwd()}/${scriptFile}:/tmp/script.sh \\
+              --name ${containerName} \\
+              -t --env-file ${env.ENV_FILE} \\
+              -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \\
+              -e TF_WORKSPACE=${env.TARGET_WORKSPACE} \\
+              ${env.IMAGE_NAME} \\
+              sh /tmp/script.sh
+      """
+    
+    // Add credential environment file to Docker command without exposing credentials in logs
+    def modifiedDockerCmd = addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile)
+    
+    sh modifiedDockerCmd
+  }
+
+  sh "rm -f ${scriptFile}"
+  
+  // Cleanup credential environment file
+  try {
+    if (credentialEnvFile && fileExists(credentialEnvFile)) {
+      sh "shred -vfz -n 3 ${credentialEnvFile} 2>/dev/null || rm -f ${credentialEnvFile}"
+      logInfo("Credential environment file securely shredded")
+    }
+  } catch (Exception e) {
+    logWarning("Failed to cleanup credential environment file: ${e.message}")
+  }
+}
+
+def cleanupContainersAndVolumes() {
+  logInfo('Cleaning up Docker containers and volumes')
+
+  try {
+    sh """
+            # Stop and remove containers
+            docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker stop || true
+            docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker rm -v || true
+
+            # Remove the Docker image
+            docker rmi -f ${env.IMAGE_NAME} || true
+
+            # Remove the shared volume
+            docker volume rm -f ${env.VALIDATION_VOLUME} || true
+
+            # Clean up dangling resources
+            docker system prune -f || true
+        """
+    } catch (Exception e) {
+    logError("Docker cleanup failed: ${e.message}")
+  }
+}
+
+def archiveBuildArtifacts(artifacts) {
+  try {
+    archiveArtifacts artifacts: artifacts.join(','), allowEmptyArchive: true
+    logInfo("Artifacts archived: ${artifacts.join(', ')}")
+    } catch (Exception e) {
+    logError("Failed to archive artifacts: ${e.message}")
+  }
+}
+
+def cleanupS3WorkspaceDirectory() {
+  logInfo('Cleaning up S3 workspace directory and terraform state after successful destruction')
+  
+  try {
+    // Validate required S3 variables are available
+    def requiredS3Vars = ['S3_BUCKET_NAME', 'S3_REGION', 'S3_KEY_PREFIX', 'TF_WORKSPACE']
+    validateRequiredVariables(requiredS3Vars)
+    
+    logInfo("Preparing to clean up S3 directory: env:/${env.TF_WORKSPACE}")
+    logInfo("S3 Bucket: ${env.S3_BUCKET_NAME}")
+    logInfo("S3 Region: ${env.S3_REGION}")
+    logInfo("S3 Key Prefix (terraform.tfstate): ${env.S3_KEY_PREFIX}")
+    
+    // Execute S3 cleanup using official AWS CLI Docker image
+    withCredentials([
+      string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+      string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+    ]) {
+      sh """
+        echo '=== S3 Cleanup Complete ==='
+        echo "Target workspace: ${env.TF_WORKSPACE}"
+        echo "S3 bucket: ${env.S3_BUCKET_NAME}"
+        echo "S3 region: ${env.S3_REGION}"
+        echo "Terraform state file: ${env.S3_KEY_PREFIX}"
+        
+        # Create cleanup script with proper escaping
+        cat > s3_cleanup.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        # Clean up workspace directory (contains cluster.tfvars and other config files)
+        echo "Checking if workspace directory exists..."
+        if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --region "${env.S3_REGION}" 2>/dev/null; then
+            echo "Workspace directory found: s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/"
+            
+            # List contents before deletion for logging
+            echo "Workspace contents to be deleted:"
+            aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_REGION}" || echo "No contents found"
+            
+            # Delete entire workspace directory
+            echo "Deleting workspace directory..."
+            aws s3 rm "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_REGION}"
+            
+            # Verify deletion
+            echo "Verifying workspace deletion..."
+            if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --region "${env.S3_REGION}" 2>/dev/null; then
+                echo "ERROR: Failed to delete workspace directory"
+                exit 1
+            else
+                echo "[OK] Successfully deleted workspace directory"
+            fi
+        else
+            echo "[INFO] Workspace directory does not exist in S3 - nothing to clean up"
+        fi
+        
+        # Clean up terraform state file (stored at S3_KEY_PREFIX)
+        echo ""
+        echo "Checking if terraform state file exists..."
+        if aws s3 ls "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_REGION}" 2>/dev/null; then
+            echo "Terraform state file found: s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}"
+            
+            # Delete terraform state file
+            echo "Deleting terraform state file..."
+            aws s3 rm "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_REGION}"
+            
+            # Verify deletion
+            echo "Verifying terraform state deletion..."
+            if aws s3 ls "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_REGION}" 2>/dev/null; then
+                echo "ERROR: Failed to delete terraform state file"
+                exit 1
+            else
+                echo "[OK] Successfully deleted terraform state file"
+            fi
+        else
+            echo "[INFO] Terraform state file does not exist in S3 - nothing to clean up"
+        fi
+        
+        echo "=== S3 Cleanup Complete ==="
+        EOF
+        
+        # Run AWS CLI in Docker container to execute cleanup script
+        docker run --rm \\
+          -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \\
+          -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \\
+          -e AWS_DEFAULT_REGION="${env.S3_REGION}" \\
+          -e S3_BUCKET_NAME="${env.S3_BUCKET_NAME}" \\
+          -e S3_KEY_PREFIX="${env.S3_KEY_PREFIX}" \\
+          -e TF_WORKSPACE="${env.TF_WORKSPACE}" \\
+          -v \$(pwd)/s3_cleanup.sh:/tmp/s3_cleanup.sh \\
+          amazon/aws-cli:latest \\
+          sh /tmp/s3_cleanup.sh
+        
+        # Cleanup local script
+        rm -f s3_cleanup.sh
+        
+        echo '=== S3 Cleanup Complete ==='
+      """
+    }
+    
+    logInfo('S3 cleanup completed successfully')
+    
+  } catch (Exception e) {
+    logError("S3 cleanup failed: ${e.message}")
+    logWarning('Manual cleanup may be required for S3 resources')
+    // Don't fail the build, just log the warning
+  }
+}
+
+/**
+ * LOGGING FUNCTIONS
+ */
+
+def logInfo(message) {
+  echo "[INFO] [INFO] ${new Date().format('HH:mm:ss')} - ${message}"
+}
+
+def logError(message) {
+  echo "[FAIL] [ERROR] ${new Date().format('HH:mm:ss')} - ${message}"
+}
+
+def logWarning(message) {
+  echo "[WARN] [WARNING] ${new Date().format('HH:mm:ss')} - ${message}"
+}
+
+def logDebug(message) {
+  if (params.LOG_LEVEL == 'DEBUG' || params.LOG_LEVEL == 'VERBOSE') {
+    echo "[SEARCH] [DEBUG] ${new Date().format('HH:mm:ss')} - ${message}"
+  }
+}
+
+/**
+ * Helper functions for robust environment variable assignment
+ */
+
+def getS3BucketName() {
+  def paramValue = params.S3_BUCKET_NAME
+  if (paramValue && paramValue.trim()) {
+    return paramValue.trim()
+  }
+  return 'jenkins-terraform-state-storage'
+}
+
+def getS3KeyPrefix() {
+  def paramValue = params.S3_KEY_PREFIX
+  if (paramValue && paramValue.trim()) {
+    return paramValue.trim()
+  }
+  return 'jenkins-airgap-rke2/terraform.tfstate'
+}
+
+def getS3Region() {
+  def paramValue = params.S3_REGION
+  if (paramValue && paramValue.trim()) {
+    return paramValue.trim()
+  }
+  return 'us-east-2'
+}
+
+def getAwsRegion() {
+  def paramValue = params.S3_REGION
+  if (paramValue && paramValue.trim()) {
+    return paramValue.trim()
+  }
+  return 'us-east-2'
+}
+
+def createCredentialEnvironmentFile() {
+  // Create a temporary environment file with credentials
+  def timestamp = System.currentTimeMillis()
+  def credentialEnvFile = "docker-credentials-${timestamp}.env"
+  
+  def envContent = []
+  
+  // Add AWS credentials
+  if (env.AWS_ACCESS_KEY_ID) {
+    envContent.add("AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}")
+  }
+  if (env.AWS_SECRET_ACCESS_KEY) {
+    envContent.add("AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}")
+  }
+  
+  // Write the environment file
+  writeFile file: credentialEnvFile, text: envContent.join('\n')
+  
+  // Set secure permissions
+  sh "chmod 600 ${credentialEnvFile}"
+  
+  logInfo("Created credential environment file: ${credentialEnvFile}")
+  return credentialEnvFile
+}
+
+def addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile) {
+  // Add credential environment file to Docker command without exposing credentials in logs
+  def modifiedCmd = dockerCmd
+  
+  if (credentialEnvFile) {
+    // Find the position where we should insert the credential environment file
+    // This should be after the container name but before the image name
+    def insertionPoint = modifiedCmd.lastIndexOf('--name')
+    if (insertionPoint != -1) {
+      // Find the end of the --name parameter
+      def nameEndIndex = modifiedCmd.indexOf(' ', insertionPoint)
+      if (nameEndIndex != -1) {
+        // Find the next space after the container name
+        def nextSpaceIndex = modifiedCmd.indexOf(' ', nameEndIndex + 1)
+        if (nextSpaceIndex != -1) {
+          // Insert the credential environment file here
+          modifiedCmd = modifiedCmd.substring(0, nextSpaceIndex) +
+                       ' \\\n              --env-file ' + credentialEnvFile +
+                       modifiedCmd.substring(nextSpaceIndex)
+        }
+      }
+    }
+  }
+  
+  return modifiedCmd
+}
