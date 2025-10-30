@@ -27,10 +27,8 @@ if [ $? -ne 0 ] && [[ $CLEANUP == "true" ]]; then
     exit 1
 fi
 
-chmod 600 $ELEMENTAL_KEY_FILE
-
-export ELEMENTAL_NODE_IP=$(tofu output -raw public_dns)
+export ELEMENTAL_NODE_IP=$(tofu output -raw public_ip)
 
 cd "$QAINFRA_SCRIPT_PATH/$ELEMENTAL_PLAYBOOK_PATH"
 
-ansible-playbook "$ELEMENTAL_PLAYBOOK_FILE" -vvvv -e "@$ELEMENTAL_VARS_FILE" --extra-vars "elemental_node_public_ip=$ELEMENTAL_NODE_IP" -i inventory.yml
+ansible-playbook "$ELEMENTAL_PLAYBOOK_FILE" -e "@$ELEMENTAL_VARS_FILE" --extra-vars "elemental_node_public_ip=$ELEMENTAL_NODE_IP" -i inventory.yml
