@@ -8,6 +8,11 @@
  * from S3 backend and performs controlled destruction.
  */
 
+// Ensure lazy loader binding variables exist before the pipeline block.
+// Some Jenkins evaluations reference helpers early; declare refs up-front
+__ciHelpersRef = null
+__ciAirgapRef = null
+
 pipeline {
     agent any
 
