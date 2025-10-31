@@ -222,6 +222,7 @@ pipeline {
                     ]
                     validateRequiredVariables(requiredVars)
 
+                    // TODO: Remove this if destruction works.
                     // Generate and copy backend configuration before running destroy
                     // logInfo('Generating OpenTofu backend configuration')
                     // generateTofuBackendConfiguration()

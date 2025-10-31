@@ -213,18 +213,18 @@ download_cluster_tfvars_from_s3() {
 
     log_info "Attempting to download ${varfile} from S3 workspace s3://${S3_BUCKET_NAME}/env:/${workspace}/"
 
-    if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace}/${varfile}" --region "${S3_REGION}" >/dev/null 2>&1; then
-        if aws s3 cp "s3://${S3_BUCKET_NAME}/env:/${workspace}/${varfile}" "${dest_shared}" --region "${S3_REGION}"; then
+    if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace}/config/${varfile}" --region "${S3_REGION}" >/dev/null 2>&1; then
+        if aws s3 cp "s3://${S3_BUCKET_NAME}/env:/${workspace}/config/${varfile}" "${dest_shared}" --region "${S3_REGION}"; then
             mkdir -p "${target_module}"
             cp "${dest_shared}" "${target_module}/${varfile}"
             log_success "Downloaded and copied ${varfile} to ${target_module}/${varfile}"
             return 0
         else
-            log_warning "aws s3 cp failed for s3://${S3_BUCKET_NAME}/env:/${workspace}/${varfile}"
+            log_warning "aws s3 cp failed for s3://${S3_BUCKET_NAME}/env:/${workspace}/config/${varfile}"
             return 1
         fi
     else
-        log_warning "${varfile} not found in S3 workspace s3://${S3_BUCKET_NAME}/env:/${workspace}/"
+        log_warning "${varfile} not found in S3 workspace s3://${S3_BUCKET_NAME}/env:/${workspace}/config/"
         return 1
     fi
 }
