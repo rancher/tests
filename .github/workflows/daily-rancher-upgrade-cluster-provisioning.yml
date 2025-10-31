@@ -237,7 +237,6 @@ jobs:
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -546,7 +545,6 @@ jobs:
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -854,7 +852,6 @@ jobs:
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES_PRIME }}]
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
