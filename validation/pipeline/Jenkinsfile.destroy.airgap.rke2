@@ -550,10 +550,17 @@ def buildDockerImage() {
 def createSharedVolume() {
     // Strict: delegate to library; fail fast if library missing
     def lib = ciAirgap()
-    if (!lib || !lib.metaClass.respondsTo(lib, 'createSharedVolume')) {
-        error('Required library function ci/airgap.groovy::createSharedVolume not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
+    try {
+        if (lib) {
+            lib.createSharedVolume(this)
+            return
+        }
+    } catch (groovy.lang.MissingMethodException | java.lang.NoSuchMethodError ignored) {
+        // will surface unified error below
+    } catch (Exception e) {
+        error("Library createSharedVolume invocation failed: ${e.message}")
     }
-    lib.createSharedVolume(this)
+    error('Required library function ci/airgap.groovy::createSharedVolume not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
 }
 
 def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = false) {
@@ -632,10 +639,17 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 def generateTofuConfiguration() {
     // Strict: delegate to library; fail fast if library missing
     def lib = ciAirgap()
-    if (!lib || !lib.metaClass.respondsTo(lib, 'generateTofuConfiguration')) {
-        error('Required library function ci/airgap.groovy::generateTofuConfiguration not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
+    try {
+        if (lib) {
+            lib.generateTofuConfiguration(this)
+            return
+        }
+    } catch (groovy.lang.MissingMethodException | java.lang.NoSuchMethodError ignored) {
+        // fallthrough to unified error below
+    } catch (Exception e) {
+        error("Library generateTofuConfiguration invocation failed: ${e.message}")
     }
-    lib.generateTofuConfiguration(this)
+    error('Required library function ci/airgap.groovy::generateTofuConfiguration not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
 }
 
 def generateTofuBackendConfiguration() {
@@ -963,10 +977,17 @@ def executeInContainer(commands) {
 def cleanupContainersAndVolumes() {
     // Strict: delegate to library cleanup implementation; fail fast if missing
     def lib = ciAirgap()
-    if (!lib || !lib.metaClass.respondsTo(lib, 'cleanupContainersAndVolumes')) {
-        error('Required library function ci/airgap.groovy::cleanupContainersAndVolumes not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
+    try {
+        if (lib) {
+            lib.cleanupContainersAndVolumes(this)
+            return
+        }
+    } catch (groovy.lang.MissingMethodException | java.lang.NoSuchMethodError ignored) {
+        // fallthrough to unified error below
+    } catch (Exception e) {
+        error("Library cleanupContainersAndVolumes invocation failed: ${e.message}")
     }
-    lib.cleanupContainersAndVolumes(this)
+    error('Required library function ci/airgap.groovy::cleanupContainersAndVolumes not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
 }
 
 def archiveBuildArtifacts(artifacts) {
