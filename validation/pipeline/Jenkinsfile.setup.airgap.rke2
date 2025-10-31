@@ -842,45 +842,83 @@ def ensureSSHKeysInContainer() {
     logInfo('Ensuring SSH keys are available in container')
 
     def sshKeyName = env.AWS_SSH_KEY_NAME
-    if (!sshKeyName) {
-        logWarning('AWS_SSH_KEY_NAME not set, cannot copy SSH keys')
-        return
-    }
-
     def sshDir = "./tests/.ssh"
-    def keyPath = "${sshDir}/${sshKeyName}"
+    def keyPath = sshKeyName ? "${sshDir}/${sshKeyName}" : null
 
-    if (!fileExists(keyPath)) {
-        logWarning("SSH key not found at: ${keyPath}")
-        
-        // Try to recreate them
-        withCredentials(getCredentialsList()) {
-            try {
-                setupSSHKeysSecure()
-                logInfo('SSH keys recreated')
-            } catch (Exception e) {
-                logError("Failed to recreate SSH keys: ${e.message}")
-                return
+    if (!sshKeyName || !fileExists(keyPath)) {
+        if (!sshKeyName) {
+            logWarning('AWS_SSH_KEY_NAME not set, attempting to provide keys')
+        } else {
+            logWarning("SSH key not found at: ${keyPath}")
+        }
+
+        // Try to recreate them from credentials if available
+        def recreated = false
+        try {
+            withCredentials(getCredentialsList()) {
+                try {
+                    setupSSHKeysSecure()
+                    recreated = true
+                    logInfo('SSH keys recreated from credentials')
+                } catch (Exception e) {
+                    logWarning("Failed to recreate SSH keys from credentials: ${e.message}")
+                }
+            }
+        } catch (ignored) {
+            // withCredentials may fail outside node context; ignore and proceed to fallback
+        }
+
+        // Re-evaluate key path after attempted recreation
+        if (recreated && sshKeyName) {
+            keyPath = "${sshDir}/${sshKeyName}"
+        }
+
+        // If still missing, generate an ephemeral SSH keypair so containers have a usable key
+        if (!keyPath || !fileExists(keyPath)) {
+            logWarning('No SSH key present; generating ephemeral SSH keypair for this run')
+            dir(sshDir) {
+                sh """
+                    mkdir -p . && chmod 700 .
+                    set -e
+                    # Generate ephemeral key without passphrase; overwrite if exists
+                    ssh-keygen -t rsa -b 2048 -N "" -f ephemeral_jenkins_key -q || true
+                    chmod 600 ephemeral_jenkins_key || true
+                    chmod 644 ephemeral_jenkins_key.pub || true
+                """
+                // Use ephemeral key for subsequent copy
+                keyPath = "${sshDir}/ephemeral_jenkins_key"
+                sshKeyName = 'ephemeral_jenkins_key'
+                logInfo("Ephemeral SSH key generated: ${keyPath}")
             }
         }
     }
 
+    if (!keyPath || !fileExists(keyPath)) {
+        logWarning('Still no SSH key available after attempts; continuing without copying keys')
+        return
+    }
+
     try {
-        // Copy SSH keys into container volume
+        // Copy SSH keys into container volume.
+        // Use a safe shell check to avoid 'cp' failing when /source is empty.
         sh """
             docker run --rm \\
                 -v ${env.VALIDATION_VOLUME}:/target \\
                 -v \$(pwd)/${sshDir}:/source:ro \\
                 alpine:latest \\
                 sh -c '
-                    mkdir -p /target/.ssh
-                    chmod 700 /target/.ssh
-                    cp /source/* /target/.ssh/ || { echo "Failed to copy keys"; exit 1; }
-                    chmod 600 /target/.ssh/* || true
-                    echo "SSH keys copied successfully"
+                    if [ -d /source ] && [ -n "$(ls -A /source 2>/dev/null)" ]; then
+                        mkdir -p /target/.ssh
+                        chmod 700 /target/.ssh
+                        cp /source/* /target/.ssh/ || { echo "Failed to copy keys"; exit 1; }
+                        chmod 600 /target/.ssh/* || true
+                        echo "SSH keys copied successfully"
+                    else
+                        echo "No SSH keys found in source directory; skipping copy"
+                    fi
                 '
         """
-        logInfo('SSH keys successfully copied to container volume')
+        logInfo('SSH keys successfully copied to container volume (or skipped if none present)')
     } catch (Exception e) {
         logError("Failed to copy SSH keys to container: ${e.message}")
         throw e
