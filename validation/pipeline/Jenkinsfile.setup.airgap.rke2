@@ -811,56 +811,21 @@ def cleanupSSHKeys() {
 // ========================================
 
 def buildDockerImage() {
-    // Prefer library implementation when available to keep Jenkinsfile slim
-    try {
-        def s = ciAirgap()
-        if (s && s.metaClass.respondsTo(s, 'buildDockerImage')) {
-            s.buildDockerImage(this)
-            return
-        }
-    } catch (ignored) {}
-
-    // Fallback implementation (kept for environments without the library)
-    logInfo("Building Docker image: ${env.IMAGE_NAME}")
-
-    dir(PipelineConfig.DOCKER_BUILD_CONTEXT) {
-        // Best-effort configuration step (quiet)
-        try {
-            sh './tests/validation/configure.sh > /dev/null 2>&1 || true'
-        } catch (ignored) {}
-
-        def buildDate = ''
-        def vcsRef = ''
-        try { buildDate = sh(script: "date -u +'%Y-%m-%dT%H:%M:%SZ'", returnStdout: true).trim() } catch (ignored) {}
-        try { vcsRef = sh(script: 'git rev-parse --short HEAD 2>/dev/null || echo "unknown"', returnStdout: true).trim() } catch (ignored) {}
-
-        sh """
-            docker build . \\
-                -f ${PipelineConfig.DOCKERFILE_PATH} \\
-                -t ${env.IMAGE_NAME} \\
-                --build-arg BUILD_DATE=${buildDate} \\
-                --build-arg VCS_REF=${vcsRef} \\
-                --label "pipeline.build.number=${env.BUILD_NUMBER}" \\
-                --label "pipeline.job.name=${env.JOB_NAME}" \\
-                --quiet
-        """
+    // Strict: library MUST provide implementation for buildDockerImage
+    def s = ciAirgap()
+    if (!s || !s.metaClass.respondsTo(s, 'buildDockerImage')) {
+        error('Required library function ci/airgap.groovy::buildDockerImage not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
     }
-
-    logInfo('Docker image built successfully')
+    s.buildDockerImage(this)
 }
 
 def createSharedVolume() {
-    // Prefer library implementation when available to keep Jenkinsfile slim
-    try {
-        def s = ciAirgap()
-        if (s && s.metaClass.respondsTo(s, 'createSharedVolume')) {
-            s.createSharedVolume(this)
-            return
-        }
-    } catch (ignored) {}
-
-    logInfo("Creating shared volume: ${env.VALIDATION_VOLUME}")
-    sh "docker volume create --name ${env.VALIDATION_VOLUME}"
+    // Strict: delegate to library; fail fast if library missing
+    def s = ciAirgap()
+    if (!s || !s.metaClass.respondsTo(s, 'createSharedVolume')) {
+        error('Required library function ci/airgap.groovy::createSharedVolume not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
+    }
+    s.createSharedVolume(this)
 }
 
 def ensureSSHKeysInContainer() {
@@ -951,42 +916,12 @@ def ensureSSHKeysInContainer() {
 }
 
 def cleanupContainersAndVolumes() {
-    // Prefer library cleanup implementation when available
-    try {
-        def s = ciAirgap()
-        if (s && s.metaClass.respondsTo(s, 'cleanupContainersAndVolumes')) {
-            s.cleanupContainersAndVolumes(this)
-            return
-        }
-    } catch (ignored) {}
- 
-    logInfo('Cleaning up Docker containers and volumes (fallback)')
-    try {
-        if (env.NODE_NAME) {
-            sh """
-                docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker stop || true
-                docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker rm -v || true
-                docker rmi -f ${env.IMAGE_NAME} || true
-                docker volume rm -f ${env.VALIDATION_VOLUME} || true
-                docker system prune -f || true
-            """
-        } else {
-            logWarning('No node context available for Docker cleanup')
-        }
-    } catch (Exception e) {
-        logError("Docker cleanup failed: ${e.message}")
+    // Strict: delegate to library cleanup implementation; fail fast if missing
+    def s = ciAirgap()
+    if (!s || !s.metaClass.respondsTo(s, 'cleanupContainersAndVolumes')) {
+        error('Required library function ci/airgap.groovy::cleanupContainersAndVolumes not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
     }
- 
-    try {
-        cleanupSSHKeys()
-    } catch (ignored) {}
- 
-    try {
-        if (fileExists(env.ENV_FILE)) {
-            sh "shred -vfz -n 3 ${env.ENV_FILE} 2>/dev/null || rm -f ${env.ENV_FILE}"
-            logInfo('Environment file securely shredded')
-        }
-    } catch (ignored) {}
+    s.cleanupContainersAndVolumes(this)
 }
 
 // ========================================
@@ -1309,40 +1244,10 @@ def generateDeploymentSummary() {
 // ========================================
 
 def generateTofuConfiguration() {
-    // Prefer library implementation when available
-    try {
-        def s = ciAirgap()
-        if (s && s.metaClass.respondsTo(s, 'generateTofuConfiguration')) {
-            s.generateTofuConfiguration(this)
-            return
-        }
-    } catch (ignored) {}
- 
-    logInfo('Generating Terraform configuration (fallback)')
-    if (!env.TERRAFORM_CONFIG) { error('TERRAFORM_CONFIG environment variable is not set') }
-    if (!env.S3_BUCKET_NAME) { error('S3_BUCKET_NAME environment variable is not set') }
-    if (!env.S3_REGION) { error('S3_REGION environment variable is not set') }
-    if (!env.S3_KEY_PREFIX) { error('S3_KEY_PREFIX environment variable is not set') }
-    sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
-    def terraformConfig = env.TERRAFORM_CONFIG
-    terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
-    terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
-    terraformConfig = terraformConfig.replace('${HOSTNAME_PREFIX}', env.HOSTNAME_PREFIX ?: '')
-    dir('./qa-infra-automation') {
-        dir('./tofu/aws/modules/airgap') {
-            writeFile file: env.TERRAFORM_VARS_FILENAME, text: terraformConfig
-            logInfo("Terraform configuration written to: ${env.TERRAFORM_VARS_FILENAME}")
-            def backendConfig = """
-terraform {
-  backend "s3" {
-    bucket = "${env.S3_BUCKET_NAME}"
-    key    = "${env.S3_KEY_PREFIX}"
-    region = "${env.S3_REGION}"
-  }
-}
-"""
-            writeFile file: env.TERRAFORM_BACKEND_CONFIG_FILENAME, text: backendConfig
-            logInfo("S3 backend configuration written to: ${env.TERRAFORM_BACKEND_CONFIG_FILENAME}")
-        }
+    // Strict: delegate to library; fail fast if library missing
+    def s = ciAirgap()
+    if (!s || !s.metaClass.respondsTo(s, 'generateTofuConfiguration')) {
+        error('Required library function ci/airgap.groovy::generateTofuConfiguration not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
     }
+    s.generateTofuConfiguration(this)
 }

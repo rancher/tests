@@ -548,17 +548,12 @@ def buildDockerImage() {
 }
 
 def createSharedVolume() {
-    // Delegate to library when available
-    try {
-        def lib = ciAirgap()
-        if (lib) {
-            lib.createSharedVolume(this)
-            return
-        }
-    } catch (ignored) {}
- 
-    logInfo("Creating shared volume: ${env.VALIDATION_VOLUME}")
-    sh "docker volume create --name ${env.VALIDATION_VOLUME}"
+    // Strict: delegate to library; fail fast if library missing
+    def lib = ciAirgap()
+    if (!lib || !lib.metaClass.respondsTo(lib, 'createSharedVolume')) {
+        error('Required library function ci/airgap.groovy::createSharedVolume not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
+    }
+    lib.createSharedVolume(this)
 }
 
 def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = false) {
@@ -635,97 +630,12 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 
 
 def generateTofuConfiguration() {
-    // Prefer library implementation to ensure parity with setup pipeline
-    try {
-        def lib = ciAirgap()
-        if (lib) {
-            lib.generateTofuConfiguration(this)
-            return
-        }
-    } catch (ignored) {}
- 
-    logInfo('Generating OpenTofu configuration files')
- 
-    // The cluster.tfvars file was downloaded to the container's shared volume
-    // We need to copy it from the container to the host filesystem
-    def hostConfigPath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
-    def containerConfigPath = "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
-    
-    logInfo("Copying terraform config from container to host...")
-    logInfo("Host path: ${hostConfigPath}")
-    logInfo("Container path: ${containerConfigPath}")
-    
-    try {
-      // Create the directory structure on host if it doesn't exist
-      sh "mkdir -p ./qa-infra-automation/tofu/aws/modules/airgap"
-      
-      // First, let's check if the file exists in the container
-      logInfo("Checking if file exists in container...")
-      sh """
-        docker run --rm \
-          -v ${env.VALIDATION_VOLUME}:/root \
-          ${env.IMAGE_NAME} \
-          test -f ${containerConfigPath} && echo "File exists in container" || echo "File does NOT exist in container"
-      """
-      
-      // List the contents of the directory in the container
-      logInfo("Listing contents of container directory...")
-      sh """
-        docker run --rm \
-          -v ${env.VALIDATION_VOLUME}:/root \
-          ${env.IMAGE_NAME} \
-          ls -la ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/ || echo "Directory does not exist"
-      """
-      
-      // Copy the file from the container to the host using a temporary container
-      logInfo("Copying file from container to host...")
-      sh """
-        docker run --rm \
-          -v ${env.VALIDATION_VOLUME}:/root \
-          -v ${pwd()}/qa-infra-automation/tofu/aws/modules/airgap:/host_output \
-          ${env.IMAGE_NAME} \
-          cp ${containerConfigPath} /host_output/${env.TERRAFORM_VARS_FILENAME}
-      """
-      
-      logInfo("Terraform configuration copied from container to host")
-      
-      // Verify the file was copied to the host
-      logInfo("Verifying file was copied to host...")
-      sh "ls -la ${hostConfigPath} || echo 'File not found on host'"
-      
-      // Now read the file from the host path
-      def terraformConfig = readFile file: hostConfigPath
-      logInfo("Terraform configuration loaded from: ${hostConfigPath}")
-      logInfo("File content preview (first 200 chars): ${terraformConfig.take(200)}...")
-   
-      // Replace any placeholder variables with actual values
-      terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
-      terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
-      terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
-   
-      // Write the configuration file back to the expected location
-      writeFile file: hostConfigPath, text: terraformConfig
-      logInfo("Terraform configuration processed and written to: ${hostConfigPath}")
-      
-    } catch (Exception e) {
-      logError("Failed to copy terraform config from container: ${e.message}")
-      
-      // Fallback: try to read directly from host path if it exists
-      try {
-        def terraformConfig = readFile file: hostConfigPath
-        logInfo("Terraform configuration found on host at: ${hostConfigPath}")
-        
-        terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
-        terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
-        terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
-        
-        writeFile file: hostConfigPath, text: terraformConfig
-        logInfo("Terraform configuration processed from host path")
-      } catch (Exception e2) {
-        logError("Failed to read terraform config from host path: ${e2.message}")
-        error("Unable to find or copy terraform configuration file ${env.TERRAFORM_VARS_FILENAME}")
-      }
+    // Strict: delegate to library; fail fast if library missing
+    def lib = ciAirgap()
+    if (!lib || !lib.metaClass.respondsTo(lib, 'generateTofuConfiguration')) {
+        error('Required library function ci/airgap.groovy::generateTofuConfiguration not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
     }
+    lib.generateTofuConfiguration(this)
 }
 
 def generateTofuBackendConfiguration() {
@@ -1051,35 +961,12 @@ def executeInContainer(commands) {
 }
 
 def cleanupContainersAndVolumes() {
-    // Prefer library implementation for consistent cleanup behavior
-    try {
-        def lib = ciAirgap()
-        if (lib) {
-            lib.cleanupContainersAndVolumes(this)
-            return
-        }
-    } catch (ignored) {}
- 
-    logInfo('Cleaning up Docker containers and volumes')
- 
-    try {
-        sh """
-            # Stop and remove containers
-            docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker stop || true
-            docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker rm -v || true
- 
-            # Remove the Docker image
-            docker rmi -f ${env.IMAGE_NAME} || true
- 
-            # Remove the shared volume
-            docker volume rm -f ${env.VALIDATION_VOLUME} || true
- 
-            # Clean up dangling resources
-            docker system prune -f || true
-        """
-    } catch (Exception e) {
-        logError("Docker cleanup failed: ${e.message}")
+    // Strict: delegate to library cleanup implementation; fail fast if missing
+    def lib = ciAirgap()
+    if (!lib || !lib.metaClass.respondsTo(lib, 'cleanupContainersAndVolumes')) {
+        error('Required library function ci/airgap.groovy::cleanupContainersAndVolumes not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
     }
+    lib.cleanupContainersAndVolumes(this)
 }
 
 def archiveBuildArtifacts(artifacts) {
