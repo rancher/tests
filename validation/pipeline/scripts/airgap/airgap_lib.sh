@@ -172,11 +172,24 @@ generate_backend_files() {
         return 1
     }
 
+    # Normalize S3 backend key to prefer workspace-scoped keys when TF_WORKSPACE is set.
+    # If S3_KEY_PREFIX already uses the env:/ workspace prefix, keep it as-is.
+    # If a simple filename or non-workspace key was provided and TF_WORKSPACE is set,
+    # rewrite to env:/<workspace>/<basename> so OpenTofu initializes against the correct object.
+    local backend_key="${S3_KEY_PREFIX}"
+    if [[ -n "${TF_WORKSPACE:-}" && ! "${backend_key}" =~ ^env:/ ]]; then
+        # Use basename to handle whether the provided key contains path segments.
+        local base_key
+        base_key="$(basename "${backend_key}")"
+        backend_key="env:/${TF_WORKSPACE}/${base_key}"
+        log_debug "Normalized S3 backend key to workspace-aware path: ${backend_key}"
+    fi
+
     cat >"${module_path}/backend.tf" <<EOF
 terraform {
   backend "s3" {
     bucket = "${S3_BUCKET_NAME}"
-    key    = "${S3_KEY_PREFIX}"
+    key    = "${backend_key}"
     region = "${S3_REGION}"
   }
 }
@@ -184,11 +197,11 @@ EOF
 
     cat >"${module_path}/${backend_vars_filename}" <<EOF
 bucket = "${S3_BUCKET_NAME}"
-key    = "${S3_KEY_PREFIX}"
+key    = "${backend_key}"
 region = "${S3_REGION}"
 EOF
 
-    log_info "Generated backend.tf and ${backend_vars_filename} in ${module_path}"
+    log_info "Generated backend.tf and ${backend_vars_filename} in ${module_path} (key=${backend_key})"
     return 0
 }
 
