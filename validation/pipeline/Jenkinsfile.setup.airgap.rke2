@@ -903,7 +903,7 @@ def ensureSSHKeysInContainer() {
         // Use a safe shell check to avoid 'cp' failing when /source is empty.
         sh """
             docker run --rm \\
-                -v ${env.VALIDATION_VOLUME}:/target \\
+                -v \${env.VALIDATION_VOLUME}:/target \\
                 -v \$(pwd)/\${sshDir}:/source:ro \\
                 alpine:latest \\
                 sh -c '
