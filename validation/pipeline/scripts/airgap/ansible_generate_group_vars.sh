@@ -22,40 +22,40 @@ readonly OUTPUT_DIR
 # =============================================================================
 
 validate_prerequisites() {
-  # If logging helper already exists, assume airgap library is loaded
-  if type log_info >/dev/null 2>&1; then
-    [[ -n "${ANSIBLE_VARIABLES:-}" ]] || {
-      log_error "ANSIBLE_VARIABLES not set"
-      exit 1
-    }
-    return 0
-  fi
-
-  local lib_candidates=(
-    "${SCRIPT_DIR}/airgap_lib.sh"
-    "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_lib.sh"
-    "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
-    "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
-  )
-
-  for lib in "${lib_candidates[@]}"; do
-    if [[ -f "$lib" ]]; then
-      # shellcheck disable=SC1090
-      source "$lib"
-      log_info "Sourced airgap library from: $lib"
-      break
+    # If logging helper already exists, assume airgap library is loaded
+    if type log_info >/dev/null 2>&1; then
+        [[ -n "${ANSIBLE_VARIABLES:-}" ]] || {
+            log_error "ANSIBLE_VARIABLES not set"
+            exit 1
+        }
+        return 0
     fi
-  done
 
-  if ! type log_info >/dev/null 2>&1; then
-    log_error "airgap_lib.sh not found in expected locations: ${lib_candidates[*]}"
-    exit 1
-  fi
+    local lib_candidates=(
+        "${SCRIPT_DIR}/airgap_lib.sh"
+        "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_lib.sh"
+        "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+        "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+    )
 
-  [[ -n "${ANSIBLE_VARIABLES:-}" ]] || {
-    log_error "ANSIBLE_VARIABLES not set"
-    exit 1
-  }
+    for lib in "${lib_candidates[@]}"; do
+        if [[ -f "$lib" ]]; then
+            # shellcheck disable=SC1090
+            source "$lib"
+            log_info "Sourced airgap library from: $lib"
+            break
+        fi
+    done
+
+    if ! type log_info >/dev/null 2>&1; then
+        log_error "airgap_lib.sh not found in expected locations: ${lib_candidates[*]}"
+        exit 1
+    fi
+
+    [[ -n "${ANSIBLE_VARIABLES:-}" ]] || {
+        log_error "ANSIBLE_VARIABLES not set"
+        exit 1
+    }
 }
 
 # =============================================================================
@@ -70,38 +70,38 @@ validate_prerequisites() {
 # =============================================================================
 
 main() {
-  # Validate prerequisites
-  validate_prerequisites
+    # Validate prerequisites
+    validate_prerequisites
 
-  log_info "Starting group variables generation with $SCRIPT_NAME"
+    log_info "Starting group variables generation with $SCRIPT_NAME"
 
-  # Validate required environment variables
-  validate_required_vars "ANSIBLE_VARIABLES"
+    # Validate required environment variables
+    validate_required_vars "ANSIBLE_VARIABLES"
 
-  log_info "Configuration:"
-  log_info "  Output directory: $OUTPUT_DIR"
-  log_info "  ANSIBLE_VARIABLES size: ${#ANSIBLE_VARIABLES} bytes"
+    log_info "Configuration:"
+    log_info "  Output directory: $OUTPUT_DIR"
+    log_info "  ANSIBLE_VARIABLES size: ${#ANSIBLE_VARIABLES} bytes"
 
-  # Generate the group_vars using the airgap library function
-  if generate_group_vars "$OUTPUT_DIR"; then
-    log_info "=== Group Variables Generation Summary ==="
-    log_info "Generated files:"
-    if [[ -f "$OUTPUT_DIR/all.yml" ]]; then
-      log_info "  - $OUTPUT_DIR/all.yml ($(wc -l <"$OUTPUT_DIR/all.yml") lines)"
+    # Generate the group_vars using the airgap library function
+    if generate_group_vars "$OUTPUT_DIR"; then
+        log_info "=== Group Variables Generation Summary ==="
+        log_info "Generated files:"
+        if [[ -f "$OUTPUT_DIR/all.yml" ]]; then
+            log_info "  - $OUTPUT_DIR/all.yml ($(wc -l <"$OUTPUT_DIR/all.yml") lines)"
+        fi
+
+        # Show first few lines of generated content
+        if [[ -f "$OUTPUT_DIR/all.yml" ]]; then
+            log_info "=== Generated Content Preview ==="
+            head -10 "$OUTPUT_DIR/all.yml"
+            log_info "=== End Preview ==="
+        fi
+
+        log_info "Group variables generation completed successfully"
+    else
+        log_error "Failed to generate group variables"
+        exit 1
     fi
-
-    # Show first few lines of generated content
-    if [[ -f "$OUTPUT_DIR/all.yml" ]]; then
-      log_info "=== Generated Content Preview ==="
-      head -10 "$OUTPUT_DIR/all.yml"
-      log_info "=== End Preview ==="
-    fi
-
-    log_info "Group variables generation completed successfully"
-  else
-    log_error "Failed to generate group variables"
-    exit 1
-  fi
 }
 
 # Error handling
