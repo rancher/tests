@@ -689,8 +689,6 @@ terraform {
             // Show the content for debugging
             logInfo("Backend.tf content:")
             logInfo(backendTf)
-            logInfo("Backend.tfvars content:")
-            logInfo(backendVars)
         }
     }
   
