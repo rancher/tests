@@ -877,6 +877,18 @@ def initializeOpenTofu() {
   def scriptPath = 'tests/validation/pipeline/scripts/airgap/tofu_initialize.sh'
   def scriptContent = readFile(file: scriptPath)
   executeScriptInContainer(scriptContent, [:], true)
+
+  // Run a reconfigure init to accept backend changes and avoid "Backend configuration changed" errors.
+  // This performs: tofu -chdir=tofu/aws/modules/airgap init -reconfigure
+  logInfo('Running OpenTofu reconfigure init to accept backend changes')
+  def reconfigureScript = """#!/bin/bash
+set -e
+# Switch to module directory inside the container and reconfigure the backend
+cd ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap || { echo "Module path not found: ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap"; exit 1; }
+tofu init -reconfigure
+"""
+  executeScriptInContainer(reconfigureScript, [:], true)
+  logInfo('OpenTofu reconfigure init completed')
 }
 
 def manageWorkspace() {
