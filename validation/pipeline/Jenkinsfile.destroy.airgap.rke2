@@ -452,6 +452,21 @@ def generateDestructionEnvironmentFile() {
     def s3Region = env.S3_REGION ?: params.S3_REGION ?: 'us-east-2'
     def awsRegion = env.AWS_REGION ?: params.S3_REGION ?: 'us-east-2'
 
+    // If a TARGET_WORKSPACE is provided, prefer a workspace-scoped backend key unless
+    // the supplied key already uses the env:/ workspace prefix. This aligns the
+    // backend key with where cluster.tfvars and workspace-specific state are stored.
+    def workspace = env.TARGET_WORKSPACE ?: params.TARGET_WORKSPACE ?: ''
+    if (workspace?.trim()) {
+        if (!(s3KeyPrefix?.startsWith('env:/'))) {
+            def parts = s3KeyPrefix.tokenize('/')
+            def baseKey = parts ? parts[-1] : s3KeyPrefix
+            s3KeyPrefix = "env:/${workspace}/${baseKey}"
+            logInfo("Normalized S3_KEY_PREFIX to workspace-aware value: '${s3KeyPrefix}'")
+        } else {
+            logInfo("S3_KEY_PREFIX already workspace-scoped: '${s3KeyPrefix}'")
+        }
+    }
+
     logInfo("Using S3_BUCKET_NAME: '${s3BucketName}'")
     logInfo("Using S3_KEY_PREFIX: '${s3KeyPrefix}'")
     logInfo("Using S3_REGION: '${s3Region}'")
