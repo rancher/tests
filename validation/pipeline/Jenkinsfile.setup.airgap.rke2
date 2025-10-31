@@ -907,7 +907,7 @@ def ensureSSHKeysInContainer() {
                 -v \$(pwd)/\${sshDir}:/source:ro \\
                 alpine:latest \\
                 sh -c '
-                    if [ -d /source ] && [ -n "$(ls -A /source 2>/dev/null)" ]; then
+                    if [ -d /source ] && [ -n "\$(ls -A /source 2>/dev/null)" ]; then
                         mkdir -p /target/.ssh
                         chmod 700 /target/.ssh
                         cp /source/* /target/.ssh/ || { echo "Failed to copy keys"; exit 1; }
