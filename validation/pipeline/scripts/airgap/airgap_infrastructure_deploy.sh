@@ -192,13 +192,24 @@ handle_inventory_file() {
 upload_config_to_s3() {
   local config_file="${1:-$TERRAFORM_VARS_FILENAME}"
   local s3_key="env:/$TF_WORKSPACE/config/cluster.tfvars"
-
+ 
   log_info "Uploading configuration file to S3: s3://$S3_BUCKET_NAME/$s3_key"
-
+ 
   # Validate AWS credentials and required variables
   validate_required_vars "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "S3_BUCKET_NAME" "S3_REGION" "TF_WORKSPACE"
-
-  if [[ -f "$config_file" ]]; then
+ 
+  if [[ ! -f "$config_file" ]]; then
+    log_error "Configuration file not found: $config_file"
+    return 1
+  fi
+ 
+  # Retry logic with exponential backoff to handle transient S3 errors
+  local attempt=1
+  local max_attempts=3
+  local wait_sec=5
+ 
+  while true; do
+    log_info "Attempt ${attempt}/${max_attempts} to upload ${config_file} to s3://$S3_BUCKET_NAME/$s3_key"
     if aws s3 cp "$config_file" "s3://$S3_BUCKET_NAME/$s3_key" --region "$S3_REGION"; then
       # Verify the upload succeeded
       if aws s3 ls "s3://$S3_BUCKET_NAME/$s3_key" --region "$S3_REGION" >/dev/null 2>&1; then
@@ -206,17 +217,25 @@ upload_config_to_s3() {
         log_info "Accessible at: s3://$S3_BUCKET_NAME/$s3_key"
         return 0
       else
-        log_error "Upload reported success but file verification failed"
-        return 1
+        log_warning "Upload reported success but verification failed (attempt ${attempt})"
       fi
     else
-      log_error "Failed to upload configuration to S3"
+      log_warning "aws s3 cp failed on attempt ${attempt}"
+    fi
+ 
+    if (( attempt >= max_attempts )); then
+      log_error "Failed to upload configuration after ${max_attempts} attempts"
+      # Provide a diagnostic listing to help debugging (non-fatal to callers that handle failures)
+      log_info "Listing available keys under s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/ (partial):"
+      aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/" --recursive --region "${S3_REGION}" 2>/dev/null || true
       return 1
     fi
-  else
-    log_error "Configuration file not found: $config_file"
-    return 1
-  fi
+ 
+    log_info "Retrying in ${wait_sec}s..."
+    sleep "${wait_sec}"
+    wait_sec=$((wait_sec * 2))
+    attempt=$((attempt + 1))
+  done
 }
 
 # =============================================================================
