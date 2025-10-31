@@ -7,6 +7,29 @@
  * the main airgap RKE2 deployment pipeline. It retrives Terraform state
  * from S3 backend and performs controlled destruction.
  */
+ 
+// ========================================
+// CONSTANTS AND CONFIGURATION (parity with setup pipeline)
+// ========================================
+class PipelineConfig {
+    static final String DEFAULT_HOSTNAME_PREFIX = 'airgap-ansible-jenkins'
+    static final String DEFAULT_RKE2_VERSION = 'v1.28.8+rke2r1'
+    static final String DEFAULT_RANCHER_VERSION = 'v2.9-head'
+    static final String DEFAULT_RANCHER_TEST_REPO = 'https://github.com/rancher/tests.git'
+    static final String DEFAULT_QA_INFRA_REPO = 'https://github.com/rancher/qa-infra-automation.git'
+    static final String DEFAULT_S3_BUCKET = 'rancher-terraform-state'
+    static final String DEFAULT_S3_REGION = 'us-east-1'
+    static final String CONTAINER_NAME_PREFIX = 'rancher-ansible-airgap'
+    static final String SHARED_VOLUME_PREFIX = 'validation-volume'
+    static final String DOCKER_BUILD_CONTEXT = '.'
+    static final String DOCKERFILE_PATH = 'tests/validation/Dockerfile.tofu.e2e'
+    static final int TERRAFORM_TIMEOUT_MINUTES = 60
+    static final int ANSIBLE_TIMEOUT_MINUTES = 90
+    static final int VALIDATION_TIMEOUT_MINUTES = 30
+    static final String LOG_PREFIX_INFO = '[INFO]'
+    static final String LOG_PREFIX_ERROR = '[ERROR]'
+    static final String LOG_PREFIX_WARNING = '[WARNING]'
+}
 
 // Ensure lazy loader binding variables exist before the pipeline block.
 // Some Jenkins evaluations reference helpers early; declare refs up-front
@@ -482,22 +505,33 @@ def setupSSHKeys() {
 }
 
 def buildDockerImage() {
-  logInfo("Building Docker image: ${env.IMAGE_NAME}")
-
-  // Ensure required directories exist before Docker build
-  sh 'ls -la ./tests || echo "tests directory not found"'
-  sh 'ls -la ./qa-infra-automation || echo "qa-infra-automation directory not found"'
-
-  // Verify the Dockerfile exists
-  sh 'ls -la ./tests/validation/Dockerfile.tofu.e2e || echo "Dockerfile not found"'
-
-  dir('./') {
+    // Prefer library implementation to keep Jenkinsfiles thin and consistent
+    try {
+        def lib = ciAirgap()
+        if (lib) {
+            lib.buildDockerImage(this)
+            return
+        }
+    } catch (ignored) {
+        // fall back to local implementation if library not available
+    }
+ 
+    logInfo("Building Docker image: ${env.IMAGE_NAME}")
+ 
+    // Ensure required directories exist before Docker build
+    sh 'ls -la ./tests || echo "tests directory not found"'
+    sh 'ls -la ./qa-infra-automation || echo "qa-infra-automation directory not found"'
+ 
+    // Verify the Dockerfile exists
+    sh 'ls -la ./tests/validation/Dockerfile.tofu.e2e || echo "Dockerfile not found"'
+ 
+    dir('./') {
         sh './tests/validation/configure.sh > /dev/null 2>&1'
-
+ 
         // Execute shell commands separately to avoid Jenkins parsing issues
         def buildDate = sh(script: "date -u +'%Y-%m-%dT%H:%M:%SZ'", returnStdout: true).trim()
         def vcsRef = sh(script: 'git rev-parse --short HEAD 2>/dev/null || echo "unknown"', returnStdout: true).trim()
-
+ 
         sh """
             docker build . \\
                 -f ./tests/validation/Dockerfile.tofu.e2e \\
@@ -508,14 +542,23 @@ def buildDockerImage() {
                 --label "pipeline.job.name=${env.JOB_NAME}" \\
                 --quiet
         """
-  }
-
-  logInfo('Docker image built successfully')
+    }
+ 
+    logInfo('Docker image built successfully')
 }
 
 def createSharedVolume() {
-  logInfo("Creating shared volume: ${env.VALIDATION_VOLUME}")
-  sh "docker volume create --name ${env.VALIDATION_VOLUME}"
+    // Delegate to library when available
+    try {
+        def lib = ciAirgap()
+        if (lib) {
+            lib.createSharedVolume(this)
+            return
+        }
+    } catch (ignored) {}
+ 
+    logInfo("Creating shared volume: ${env.VALIDATION_VOLUME}")
+    sh "docker volume create --name ${env.VALIDATION_VOLUME}"
 }
 
 def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = false) {
@@ -592,88 +635,97 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 
 
 def generateTofuConfiguration() {
-  logInfo('Generating OpenTofu configuration files')
-
-  // The cluster.tfvars file was downloaded to the container's shared volume
-  // We need to copy it from the container to the host filesystem
-  def hostConfigPath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
-  def containerConfigPath = "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
-  
-  logInfo("Copying terraform config from container to host...")
-  logInfo("Host path: ${hostConfigPath}")
-  logInfo("Container path: ${containerConfigPath}")
-  
-  try {
-    // Create the directory structure on host if it doesn't exist
-    sh "mkdir -p ./qa-infra-automation/tofu/aws/modules/airgap"
-    
-    // First, let's check if the file exists in the container
-    logInfo("Checking if file exists in container...")
-    sh """
-      docker run --rm \
-        -v ${env.VALIDATION_VOLUME}:/root \
-        ${env.IMAGE_NAME} \
-        test -f ${containerConfigPath} && echo "File exists in container" || echo "File does NOT exist in container"
-    """
-    
-    // List the contents of the directory in the container
-    logInfo("Listing contents of container directory...")
-    sh """
-      docker run --rm \
-        -v ${env.VALIDATION_VOLUME}:/root \
-        ${env.IMAGE_NAME} \
-        ls -la ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/ || echo "Directory does not exist"
-    """
-    
-    // Copy the file from the container to the host using a temporary container
-    logInfo("Copying file from container to host...")
-    sh """
-      docker run --rm \
-        -v ${env.VALIDATION_VOLUME}:/root \
-        -v ${pwd()}/qa-infra-automation/tofu/aws/modules/airgap:/host_output \
-        ${env.IMAGE_NAME} \
-        cp ${containerConfigPath} /host_output/${env.TERRAFORM_VARS_FILENAME}
-    """
-    
-    logInfo("Terraform configuration copied from container to host")
-    
-    // Verify the file was copied to the host
-    logInfo("Verifying file was copied to host...")
-    sh "ls -la ${hostConfigPath} || echo 'File not found on host'"
-    
-    // Now read the file from the host path
-    def terraformConfig = readFile file: hostConfigPath
-    logInfo("Terraform configuration loaded from: ${hostConfigPath}")
-    logInfo("File content preview (first 200 chars): ${terraformConfig.take(200)}...")
-
-    // Replace any placeholder variables with actual values
-    terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
-    terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
-    terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
-
-    // Write the configuration file back to the expected location
-    writeFile file: hostConfigPath, text: terraformConfig
-    logInfo("Terraform configuration processed and written to: ${hostConfigPath}")
-    
-  } catch (Exception e) {
-    logError("Failed to copy terraform config from container: ${e.message}")
-    
-    // Fallback: try to read directly from host path if it exists
+    // Prefer library implementation to ensure parity with setup pipeline
     try {
-      def terraformConfig = readFile file: hostConfigPath
-      logInfo("Terraform configuration found on host at: ${hostConfigPath}")
+        def lib = ciAirgap()
+        if (lib) {
+            lib.generateTofuConfiguration(this)
+            return
+        }
+    } catch (ignored) {}
+ 
+    logInfo('Generating OpenTofu configuration files')
+ 
+    // The cluster.tfvars file was downloaded to the container's shared volume
+    // We need to copy it from the container to the host filesystem
+    def hostConfigPath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+    def containerConfigPath = "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_VARS_FILENAME}"
+    
+    logInfo("Copying terraform config from container to host...")
+    logInfo("Host path: ${hostConfigPath}")
+    logInfo("Container path: ${containerConfigPath}")
+    
+    try {
+      // Create the directory structure on host if it doesn't exist
+      sh "mkdir -p ./qa-infra-automation/tofu/aws/modules/airgap"
       
+      // First, let's check if the file exists in the container
+      logInfo("Checking if file exists in container...")
+      sh """
+        docker run --rm \
+          -v ${env.VALIDATION_VOLUME}:/root \
+          ${env.IMAGE_NAME} \
+          test -f ${containerConfigPath} && echo "File exists in container" || echo "File does NOT exist in container"
+      """
+      
+      // List the contents of the directory in the container
+      logInfo("Listing contents of container directory...")
+      sh """
+        docker run --rm \
+          -v ${env.VALIDATION_VOLUME}:/root \
+          ${env.IMAGE_NAME} \
+          ls -la ${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/ || echo "Directory does not exist"
+      """
+      
+      // Copy the file from the container to the host using a temporary container
+      logInfo("Copying file from container to host...")
+      sh """
+        docker run --rm \
+          -v ${env.VALIDATION_VOLUME}:/root \
+          -v ${pwd()}/qa-infra-automation/tofu/aws/modules/airgap:/host_output \
+          ${env.IMAGE_NAME} \
+          cp ${containerConfigPath} /host_output/${env.TERRAFORM_VARS_FILENAME}
+      """
+      
+      logInfo("Terraform configuration copied from container to host")
+      
+      // Verify the file was copied to the host
+      logInfo("Verifying file was copied to host...")
+      sh "ls -la ${hostConfigPath} || echo 'File not found on host'"
+      
+      // Now read the file from the host path
+      def terraformConfig = readFile file: hostConfigPath
+      logInfo("Terraform configuration loaded from: ${hostConfigPath}")
+      logInfo("File content preview (first 200 chars): ${terraformConfig.take(200)}...")
+   
+      // Replace any placeholder variables with actual values
       terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
       terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
       terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
-      
+   
+      // Write the configuration file back to the expected location
       writeFile file: hostConfigPath, text: terraformConfig
-      logInfo("Terraform configuration processed from host path")
-    } catch (Exception e2) {
-      logError("Failed to read terraform config from host path: ${e2.message}")
-      error("Unable to find or copy terraform configuration file ${env.TERRAFORM_VARS_FILENAME}")
+      logInfo("Terraform configuration processed and written to: ${hostConfigPath}")
+      
+    } catch (Exception e) {
+      logError("Failed to copy terraform config from container: ${e.message}")
+      
+      // Fallback: try to read directly from host path if it exists
+      try {
+        def terraformConfig = readFile file: hostConfigPath
+        logInfo("Terraform configuration found on host at: ${hostConfigPath}")
+        
+        terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
+        terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
+        terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION ?: '')
+        
+        writeFile file: hostConfigPath, text: terraformConfig
+        logInfo("Terraform configuration processed from host path")
+      } catch (Exception e2) {
+        logError("Failed to read terraform config from host path: ${e2.message}")
+        error("Unable to find or copy terraform configuration file ${env.TERRAFORM_VARS_FILENAME}")
+      }
     }
-  }
 }
 
 def generateTofuBackendConfiguration() {
@@ -999,26 +1051,35 @@ def executeInContainer(commands) {
 }
 
 def cleanupContainersAndVolumes() {
-  logInfo('Cleaning up Docker containers and volumes')
-
-  try {
-    sh """
+    // Prefer library implementation for consistent cleanup behavior
+    try {
+        def lib = ciAirgap()
+        if (lib) {
+            lib.cleanupContainersAndVolumes(this)
+            return
+        }
+    } catch (ignored) {}
+ 
+    logInfo('Cleaning up Docker containers and volumes')
+ 
+    try {
+        sh """
             # Stop and remove containers
             docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker stop || true
             docker ps -aq --filter "name=${env.BUILD_CONTAINER_NAME}" | xargs -r docker rm -v || true
-
+ 
             # Remove the Docker image
             docker rmi -f ${env.IMAGE_NAME} || true
-
+ 
             # Remove the shared volume
             docker volume rm -f ${env.VALIDATION_VOLUME} || true
-
+ 
             # Clean up dangling resources
             docker system prune -f || true
         """
     } catch (Exception e) {
-    logError("Docker cleanup failed: ${e.message}")
-  }
+        logError("Docker cleanup failed: ${e.message}")
+    }
 }
 
 def archiveBuildArtifacts(artifacts) {
@@ -1142,22 +1203,26 @@ def cleanupS3WorkspaceDirectory() {
  * LOGGING FUNCTIONS
  */
 
-def logInfo(message) {
-  echo "[INFO] [INFO] ${new Date().format('HH:mm:ss')} - ${message}"
+def logInfo(msg) {
+    echo "${PipelineConfig.LOG_PREFIX_INFO} ${getTimestamp()} ${msg}"
 }
 
-def logError(message) {
-  echo "[FAIL] [ERROR] ${new Date().format('HH:mm:ss')} - ${message}"
+def logError(msg) {
+    echo "${PipelineConfig.LOG_PREFIX_ERROR} ${getTimestamp()} ${msg}"
 }
 
-def logWarning(message) {
-  echo "[WARN] [WARNING] ${new Date().format('HH:mm:ss')} - ${message}"
+def logWarning(msg) {
+    echo "${PipelineConfig.LOG_PREFIX_WARNING} ${getTimestamp()} ${msg}"
 }
 
-def logDebug(message) {
-  if (params.LOG_LEVEL == 'DEBUG' || params.LOG_LEVEL == 'VERBOSE') {
-    echo "[SEARCH] [DEBUG] ${new Date().format('HH:mm:ss')} - ${message}"
-  }
+def logDebug(msg) {
+    if (params.LOG_LEVEL == 'DEBUG' || params.LOG_LEVEL == 'VERBOSE') {
+        echo "[DEBUG] ${getTimestamp()} - ${msg}"
+    }
+}
+
+static def getTimestamp() {
+    return new Date().format('yyyy-MM-dd HH:mm:ss')
 }
 
 /**
