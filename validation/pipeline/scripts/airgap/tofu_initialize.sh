@@ -104,23 +104,61 @@ main() {
   # Check if backend.tf exists and use appropriate initialization method
   if [ -f "tofu/aws/modules/airgap/backend.tf" ]; then
     log_info "Using backend.tf configuration"
-    # Attempt init with -reconfigure to accept backend changes; fall back if it fails
-    if ! tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure; then
-      log_warning "tofu init -reconfigure failed; retrying standard init"
-      tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade || {
-        log_error "tofu init failed for backend.tf"
-        exit 1
-      }
+    # Try init with -reconfigure and inspect output for backend-migration hints.
+    set +e
+    init_output=$(tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure 2>&1)
+    init_rc=$?
+    set -e
+    if [ $init_rc -ne 0 ]; then
+      log_warning "tofu init -reconfigure failed (rc=${init_rc})"
+      log_debug "tofu init output: ${init_output}"
+      # If output indicates a backend migration is required, try init with -migrate-state
+      if echo "${init_output}" | grep -qiE "backend configuration|backend changed|migrate"; then
+        log_info "Detected backend change/migration requirement; attempting init with -reconfigure -migrate-state"
+        if tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade -reconfigure -migrate-state 2>&1; then
+          log_success "tofu init -reconfigure -migrate-state succeeded"
+        else
+          log_warning "tofu init -reconfigure -migrate-state failed; falling back to standard init"
+          if ! tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade; then
+            log_error "tofu init failed for backend.tf after retries"
+            exit 1
+          fi
+        fi
+      else
+        log_info "Backend change not detected; retrying standard init"
+        if ! tofu -chdir=tofu/aws/modules/airgap init -input=false -upgrade; then
+          log_error "tofu init failed for backend.tf"
+          exit 1
+        fi
+      fi
     fi
   elif [ -f "tofu/aws/modules/airgap/${TERRAFORM_BACKEND_VARS_FILENAME}" ]; then
     log_info "Using backend.tfvars configuration"
-    # Attempt init with backend-config and -reconfigure to accept backend changes; fall back if it fails
-    if ! tofu -chdir=tofu/aws/modules/airgap init -backend-config="${TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade -reconfigure; then
-      log_warning "tofu init with backend-config -reconfigure failed; retrying without -reconfigure"
-      tofu -chdir=tofu/aws/modules/airgap init -backend-config="${TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade || {
-        log_error "tofu init failed for backend.tfvars"
-        exit 1
-      }
+    set +e
+    init_output=$(tofu -chdir=tofu/aws/modules/airgap init -backend-config="${TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade -reconfigure 2>&1)
+    init_rc=$?
+    set -e
+    if [ $init_rc -ne 0 ]; then
+      log_warning "tofu init with backend-config -reconfigure failed (rc=${init_rc})"
+      log_debug "tofu init output: ${init_output}"
+      if echo "${init_output}" | grep -qiE "backend configuration|backend changed|migrate"; then
+        log_info "Detected backend change/migration requirement; attempting init with -reconfigure -migrate-state and backend-config"
+        if tofu -chdir=tofu/aws/modules/airgap init -backend-config="${TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade -reconfigure -migrate-state 2>&1; then
+          log_success "tofu init with backend-config -reconfigure -migrate-state succeeded"
+        else
+          log_warning "tofu init with backend-config -reconfigure -migrate-state failed; retrying without -reconfigure"
+          if ! tofu -chdir=tofu/aws/modules/airgap init -backend-config="${TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade; then
+            log_error "tofu init failed for backend.tfvars after retries"
+            exit 1
+          fi
+        fi
+      else
+        log_info "Backend change not detected; retrying standard init with backend-config"
+        if ! tofu -chdir=tofu/aws/modules/airgap init -backend-config="${TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade; then
+          log_error "tofu init failed for backend.tfvars"
+          exit 1
+        fi
+      fi
     fi
   else
     log_error "Neither backend.tf nor backend.tfvars found"
