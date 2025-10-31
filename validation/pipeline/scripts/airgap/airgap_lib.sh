@@ -141,7 +141,7 @@ initialize_tofu() {
     # Check for backend configuration
     if [[ -f "backend.tf" ]]; then
         log_info "Using backend.tf configuration"
-        tofu init -input=false -upgrade
+        tofu init -input=false -reconfigure
     elif [[ -n "${TERRAFORM_BACKEND_VARS_FILENAME}" && -f "${TERRAFORM_BACKEND_VARS_FILENAME}" ]]; then
         log_info "Using backend.tfvars configuration: ${TERRAFORM_BACKEND_VARS_FILENAME}"
         tofu init -backend-config="${TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade
