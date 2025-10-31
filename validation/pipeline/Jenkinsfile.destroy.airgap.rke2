@@ -669,9 +669,7 @@ def generateTofuBackendConfiguration() {
 
     // Write both backend.tf and backend.tfvars files to host
     def hostBackendPath = "./qa-infra-automation/tofu/aws/modules/airgap/backend.tf"
-    def hostBackendVarsPath = "./qa-infra-automation/tofu/aws/modules/airgap/${env.TERRAFORM_BACKEND_VARS_FILENAME}"
     def containerBackendPath = "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/backend.tf"
-    def containerBackendVarsPath = "${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/${env.TERRAFORM_BACKEND_VARS_FILENAME}"
   
     dir('./qa-infra-automation') {
         dir('./tofu/aws/modules/airgap') {
@@ -687,15 +685,6 @@ terraform {
 """
             writeFile file: 'backend.tf', text: backendTf
             logInfo("S3 backend.tf configuration written to host")
-      
-            // Also generate backend.tfvars for backward compatibility
-            def backendVars = """
-bucket = "${env.S3_BUCKET_NAME}"
-key    = "${env.S3_KEY_PREFIX}"
-region = "${env.S3_REGION}"
-"""
-            writeFile file: env.TERRAFORM_BACKEND_VARS_FILENAME, text: backendVars
-            logInfo("S3 backend.tfvars configuration written to host")
       
             // Show the content for debugging
             logInfo("Backend.tf content:")
@@ -718,15 +707,6 @@ region = "${env.S3_REGION}"
         cp /host_input/backend.tf ${containerBackendPath}
     """
     
-        // Copy backend.tfvars
-        sh """
-      docker run --rm \
-        -v ${env.VALIDATION_VOLUME}:/root \
-        -v ${pwd()}/qa-infra-automation/tofu/aws/modules/airgap:/host_input \
-        ${env.IMAGE_NAME} \
-        cp /host_input/${env.TERRAFORM_BACKEND_VARS_FILENAME} ${containerBackendVarsPath}
-    """
-    
         logInfo("Backend configuration files copied to container")
     
         // Verify the files were copied to container
@@ -735,13 +715,6 @@ region = "${env.S3_REGION}"
         -v ${env.VALIDATION_VOLUME}:/root \
         ${env.IMAGE_NAME} \
         test -f ${containerBackendPath} && echo "backend.tf exists in container" || echo "backend.tf does NOT exist in container"
-    """
-    
-        sh """
-      docker run --rm \
-        -v ${env.VALIDATION_VOLUME}:/root \
-        ${env.IMAGE_NAME} \
-        test -f ${containerBackendVarsPath} && echo "backend.tfvars exists in container" || echo "backend.tfvars does NOT exist in container"
     """
     
         // Show the file content in container
