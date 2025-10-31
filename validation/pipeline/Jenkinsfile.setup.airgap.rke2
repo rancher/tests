@@ -904,7 +904,7 @@ def ensureSSHKeysInContainer() {
         sh """
             docker run --rm \\
                 -v ${env.VALIDATION_VOLUME}:/target \\
-                -v \$(pwd)/${sshDir}:/source:ro \\
+                -v \$(pwd)/\${sshDir}:/source:ro \\
                 alpine:latest \\
                 sh -c '
                     if [ -d /source ] && [ -n "$(ls -A /source 2>/dev/null)" ]; then
