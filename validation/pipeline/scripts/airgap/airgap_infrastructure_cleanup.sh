@@ -99,7 +99,7 @@ cleanup_infrastructure() {
     validate_required_vars "QA_INFRA_WORK_PATH" "TF_WORKSPACE"
 
     # Ensure shared volume path exists and is writable (avoid write failures)
-    local shared_path="${SHARED_VOLUME_PATH:-/root/shared}"
+    local shared_path="${SHARED_VOLUME_PATH:-/root}"
     log_info "Shared volume path resolved to: ${shared_path}"
     if mkdir -p "${shared_path}" 2>/dev/null; then
         # Try to set restrictive permissions but don't fail if it fails
