@@ -22,6 +22,8 @@ ARG ARN_ROLE
 ENV ARN_ROLE=$ARN_ROLE
 ARG QA_IAM_WEBHOOK
 ENV QA_IAM_WEBHOOK=$QA_IAM_WEBHOOK
+ARG ROUTE53_LONGLIVING
+ENV ROUTE53_LONGLIVING=$ROUTE53_LONGLIVING
 
 ENV TZ="America/New_York date"
 
@@ -67,6 +69,7 @@ CMD set -e; \
         sed -i "s/DONOTDELETEKEYS/${DONOTDELETE_KEYS}/g" "$i"; \
         sed -i "s|SQSURL|${SQS_URL}|g" "$i"; \
         sed -i "s|QAIAMWEBHOOK|${QA_IAM_WEBHOOK}|g" "$i"; \
+        sed -i "s|ROUTE53LONGLIVING|${ROUTE53_LONGLIVING}|g" "$i"; \
     done; \
     echo "Using USER_KEYS=${USER_KEYS}"; \
     if [ "$CUSTODIAN_YAML" = "aws.yaml" ] || [ "$CUSTODIAN_YAML" = "untag-to-delete.yaml" ]; then \

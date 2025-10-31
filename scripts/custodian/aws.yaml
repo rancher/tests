@@ -86,7 +86,7 @@ policies:
   actions:
     - type: terminate
 
-# EKS Policies
+# EKS Policies Disclaimer
 # Note: cannot manage EKS nodegroups at this time, but the
 # above ec2 policies should take care of any nodes
 
@@ -180,7 +180,7 @@ policies:
 - name: mark-unknown-nlbs-for-deletion
   resource: app-elb
   filters:
-     # nlb name not in accepted user keys
+    # nlb name not in accepted user keys
     - type: value
       key: LoadBalancerName
       op: regex
@@ -341,7 +341,6 @@ policies:
     - type: delete
 
 # key-pairs
-
 - name: mark-unknown-unused-keypairs-for-deletion
   resource: aws.key-pair
   description: |
@@ -419,6 +418,67 @@ policies:
       - type: marked-for-op
         tag: ec2_unknown_user
         op: delete
+      - type: marked-for-op
+        tag: ec2_known_user
+        op: delete
+  actions:
+    - type: delete
+
+# Elastic IPs
+- name: schedule-release-elasticip
+  resource: network-addr
+  filters:
+    - type: value
+      key: "length(Tags[?Key=='DoNotDelete'])"
+      value: 0
+      op: eq
+    - type: value
+      key: "length(Tags[?Key=='ec2_known_user'])"
+      value: 0
+      op: eq
+  actions:
+    - type: mark-for-op
+      tag: ec2_known_user
+      op: release
+      # extending by 1 day to avoid deleting before associated resources are cleaned up
+      days: 3
+
+- name: release-expired-elasticip
+  resource: network-addr
+  description: |
+    Delete any marked elasticips which have been 
+    marked for deletion for more than 1 day.
+  filters:
+      - type: marked-for-op
+        tag: ec2_known_user
+        op: release
+  actions:
+    - type: release
+
+# Target Groups
+- name: schedule-delete-targetgroup
+  resource: app-elb-target-group
+  filters:
+    - type: value
+      key: "length(Tags[?Key=='DoNotDelete'])"
+      value: 0
+      op: eq
+    - type: value
+      key: "length(Tags[?Key=='ec2_known_user'])"
+      value: 0
+      op: eq
+  actions:
+    - type: mark-for-op
+      tag: ec2_known_user
+      op: delete
+      # extending by 1 day to avoid deleting before associated resources are cleaned up
+      days: 3
+- name: ec2-delete-targetgrpup
+  resource: app-elb-target-group
+  description: |
+    Delete any marked targetGroups which have been 
+    marked for deletion for more than 1 day.
+  filters:
       - type: marked-for-op
         tag: ec2_known_user
         op: delete

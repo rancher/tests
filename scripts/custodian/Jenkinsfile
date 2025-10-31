@@ -43,6 +43,7 @@ node("vsphere-vpn-1") {
         string(credentialsId: 'QA_IAM_WEBHOOK', variable: 'QA_IAM_WEBHOOK'),
         string(credentialsId: 'SQS_URL', variable: 'SQS_URL'),
         string(credentialsId: 'ARN_ROLE', variable: 'ARN_ROLE'),
+        string(credentialsId: 'ROUTE53_LONGLIVING', variable: 'ROUTE53_LONGLIVING'),
 
         string(credentialsId: 'DONOTDELETE_KEYS', variable: 'DONOTDELETE_KEYS'),
         string(credentialsId: 'USER_KEYS', variable: 'USER_KEYS'),
@@ -90,7 +91,8 @@ docker build -t ${imageName} -f Dockerfile . \
   --build-arg GOOGLE_CLOUD_PROJECT='${GOOGLE_CLOUD_PROJECT}' \
   --build-arg QA_IAM_WEBHOOK='${QA_IAM_WEBHOOK}' \
   --build-arg SQS_URL='${SQS_URL}' \
-  --build-arg ARN_ROLE='${ARN_ROLE}'
+  --build-arg ARN_ROLE='${ARN_ROLE}' \
+  --build-arg ROUTE53_LONGLIVING='${ROUTE53_LONGLIVING}'
 """
               } catch (err) {
                 echo 'Docker Build had partial failures...'
@@ -108,7 +110,12 @@ docker build -t ${imageName} -f Dockerfile . \
               if ("${CUSTODIAN_YAML}" != "${linodeScript}" && "${CUSTODIAN_YAML}" != "${awsMonthly}") {
                 sh "docker run --privileged --name ${testContainer} -e CUSTODIAN_YAML=\"${CUSTODIAN_YAML}\" -e DONOTDELETE_KEYS=\"${DONOTDELETE_KEYS}\" -e QA_IAM_WEBHOOK=\"${QA_IAM_WEBHOOK}\" -e USER_KEYS=\"${USER_KEYS}\" ${imageName}"
               } else if ("${CUSTODIAN_YAML}" == "${awsMonthly}") {
-                sh "docker run --privileged --name ${testContainer} -e CUSTODIAN_YAML=\"${awsMonthly}\" -e OVERRIDE_REGION=\"us-east-2\" -e DONOTDELETE_KEYS=\"${DONOTDELETE_KEYS}\" -e QA_IAM_WEBHOOK=\"${QA_IAM_WEBHOOK}\" -e USER_KEYS=\"${USER_KEYS}\" ${imageName} "
+                def today = new Date()
+                def dayOfMonth = today.format('d') as int
+                def dayOfWeek = today.format('u') as int
+                if (dayOfWeek == 6 && dayOfMonth <= 7) {
+                  sh "docker run --privileged --name ${testContainer} -e CUSTODIAN_YAML=\"${awsMonthly}\" -e OVERRIDE_REGION=\"us-east-2\" -e DONOTDELETE_KEYS=\"${DONOTDELETE_KEYS}\" -e QA_IAM_WEBHOOK=\"${QA_IAM_WEBHOOK}\" -e USER_KEYS=\"${USER_KEYS}\" ${imageName} "
+                }
               } else {
                 sh ". ${linodeScript}"
               }

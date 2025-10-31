@@ -1,4 +1,31 @@
 policies:
+- name: cleanup-non-longliving-records
+  resource: aws.rrset
+  description: |
+    Delete all A and CNAME records that do NOT contain "mower" or "baler" in the name.
+  filters:
+    # Only remove A and CNAME types
+    - type: value
+      key: Type
+      op: in
+      value: ["A", "CNAME"]
+    - not:
+      - type: value
+        key: Name
+        op: regex
+        value: '.*(ROUTE53LONGLIVING).*'
+  actions:
+    - type: notify
+      template: default
+      priority_header: '2'
+      subject: Route 53 Removals
+      to:
+        - caleb.warren@suse.com
+      transport:
+        type: sqs
+        queue: SQSURL
+    - type: delete
+
 - name: iam-qa-aws-key-too-old
   resource: iam-user
   filters:
@@ -17,6 +44,15 @@ policies:
       subject: AWS Rancher QA Org -- Access Key Policy Violations
       to:
         - ecm-qase@suse.com
+      transport:
+        type: sqs
+        queue: SQSURL
+    - type: notify
+      template: aws-iam-email-template
+      priority_header: '2'
+      subject: AWS Rancher QA Org -- Access Key Policy Violations
+      to:
+        - caleb.warren@suse.com
       transport:
         type: sqs
         queue: SQSURL
