@@ -15,13 +15,14 @@ export AWS_REGION="${AWS_REGION:-us-east-2}"
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-2}"
 export S3_BUCKET_NAME="${S3_BUCKET_NAME:-jenkins-terraform-state-storage}"
 export S3_REGION="${S3_REGION:-us-east-2}"
-export S3_KEY_PREFIX="${S3_KEY_PREFIX:-jenkins-airgap-rke2}"
+# Default S3 key should include the terraform state filename to match pipeline defaults
+export S3_KEY_PREFIX="${S3_KEY_PREFIX:-jenkins-airgap-rke2/terraform.tfstate}"
 
 # Common paths
 export QA_INFRA_PATH="${QA_INFRA_WORK_PATH}"
 export TOFU_MODULE_PATH="${QA_INFRA_PATH}/tofu/aws/modules/airgap"
 export REMOTE_TOFU_MODULE_PATH="/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap"
-SHARED_VOLUME_PATH="${SHARED_VOLUME_PATH:-/root/shared}"
+SHARED_VOLUME_PATH="${SHARED_VOLUME_PATH:-/root}"
 export SHARED_VOLUME_PATH
 
 # =============================================================================
