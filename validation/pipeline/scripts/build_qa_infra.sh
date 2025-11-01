@@ -162,7 +162,7 @@ export KUBECONFIG="$KUBECONFIG_FILE"
 # --- Rancher Playbook ---
 
 # Run the Rancher playbook
-ansible-playbook "$RANCHER_PLAYBOOK_PATH" -vvvv -e "@$VARS_FILE"
+ansible-playbook "$RANCHER_PLAYBOOK_PATH" -e "@$VARS_FILE"
 if [ $? -ne 0 ] && [[ $CLEANUP == "true" ]]; then
     echo "Error: Rancher playbook failed."
     tofu -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$TFVARS_FILE"

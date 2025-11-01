@@ -172,16 +172,23 @@ func parseTestResults(outputs []testresult.GoTestOutput) map[string]*testresult.
 // reportTestQases updates a qase test run with the results of a set of tests
 func reportTestQases(qaseService *qase.Service, testRunID int32) error {
 	resultsOutputs, err := readTestResults()
+	fmt.Println("resultsOutputs")
+	fmt.Println(resultsOutputs)
+
 	if err != nil {
 		return nil
 	}
 
 	goTestResults := parseTestResults(resultsOutputs)
+	fmt.Println("goTestResults")
+	fmt.Println(goTestResults)
 
 	qaseTestCases, err := getAllAutomationTestCases(qaseService)
 	if err != nil {
 		return err
 	}
+	fmt.Println("qaseTestCases")
+	fmt.Println(qaseTestCases)
 
 	for _, goTestResult := range goTestResults {
 		if testQase, ok := qaseTestCases[goTestResult.Name]; ok {

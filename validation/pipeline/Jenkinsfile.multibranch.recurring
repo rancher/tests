@@ -108,8 +108,10 @@ node {
                   for( String testTag : rancherImageTags ) {
                     def hostname = "${hostnamePrefix}${hostnameSuffix[testTag]}"
                     def rancherHostName = "${hostname}.qa.rancher.space"
+                    def rancherVersion = tagChartMap.get(testTag)
+                    rancherVersion = (rancherVersion in [null, '']) ? testTag : rancherVersion
 
-                    sh "./yq e '.rancher_version = \"${tagChartMap[testTag]}\"' -i ${ansibleConfigPath}"
+                    sh "./yq e '.rancher_version = \"${rancherVersion}\"' -i ${ansibleConfigPath}"
                     sh "./yq e '.rancher_image_tag = \"${testTag}\"' -i ${ansibleConfigPath}"
                     sh "sed -i 's|^aws_hostname_prefix = \".*\"|aws_hostname_prefix = \"${hostname}\"|' ${terraformConfigPath}"
 
