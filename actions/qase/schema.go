@@ -17,7 +17,10 @@ import (
 // GetSchemas retrieves the tests from schemas.yaml files defined within each Go package.
 func GetSchemas(basePath string) ([]TestSuiteSchema, error) {
 	var suiteSchemas []TestSuiteSchema
+	fmt.Printf("GetSchemas")
 	err := filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
+		fmt.Printf(basePath)
+		fmt.Printf(info.Name())
 		if strings.Contains(info.Name(), schemas) {
 			var fileSuiteSchemas []TestSuiteSchema
 
@@ -26,10 +29,22 @@ func GetSchemas(basePath string) ([]TestSuiteSchema, error) {
 				return err
 			}
 
+			fmt.Printf(string(fileContent))
+
 			err = yaml.Unmarshal(fileContent, &fileSuiteSchemas)
 			if err != nil {
 				return err
 			}
+
+			fmt.Println("Schemas")
+			fmt.Println(fileSuiteSchemas[0])
+			fmt.Println("Cases")
+			fmt.Println(fileSuiteSchemas[0].Cases[0])
+			fmt.Println("CustomField")
+			fmt.Println(fileSuiteSchemas[0].Cases[0].CustomField)
+			fmt.Println(fileSuiteSchemas[0].Cases[0].GetCustomFieldOk())
+			fmt.Println(fileSuiteSchemas[0].Cases[0].GetCustomField())
+			fmt.Println(fileSuiteSchemas[0].Cases[0].HasCustomField())
 
 			suiteSchemas = append(suiteSchemas, fileSuiteSchemas...)
 		}
@@ -102,15 +117,22 @@ func UpdateSchemaParameters(testName string, params []upstream.TestCaseParameter
 
 // GetTestSchema searches a set of suite schemas for a specific test
 func GetTestSchema(testName string, suiteSchemas []TestSuiteSchema) (*upstream.TestCaseCreate, error) {
+	fmt.Println("GetTestSchema")
+	fmt.Println(testName)
 	for _, suiteSchema := range suiteSchemas {
 		for _, testCase := range suiteSchema.Cases {
+			fmt.Println(testCase.Title)
 			if testCase.Title == testName {
 				return &testCase, nil
 			}
 
+			fmt.Println("Customfield")
+			fmt.Println(testCase.CustomField)
 			if testCase.CustomField != nil {
 				customField := *testCase.CustomField
+				fmt.Println(strconv.Itoa(int(AutomationTestNameID)))
 				automationTestName, ok := customField[strconv.Itoa(int(AutomationTestNameID))]
+				fmt.Println(automationTestName)
 				if ok && automationTestName == testName {
 					return &testCase, nil
 				}
