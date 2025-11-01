@@ -106,7 +106,9 @@ node {
                     returnStdout: true
                   ).trim()
                   for( String testTag : rancherImageTags ) {
-                    def hostname = "${hostnamePrefix}${hostnameSuffix[testTag]}"
+                    def testHostnameSuffix = hostnameSuffix[testTag]
+                    testHostnameSuffix = (testHostnameSuffix == null) ? '' : testHostnameSuffix
+                    def hostname = "${hostnamePrefix}${testHostnameSuffix}"
                     def rancherHostName = "${hostname}.qa.rancher.space"
                     def rancherVersion = tagChartMap.get(testTag)
                     rancherVersion = (rancherVersion in [null, '']) ? testTag : rancherVersion
