@@ -180,7 +180,7 @@ initialize_tofu() {
     # Attempt initialization
     set +e  # Don't exit on error, handle it gracefully
     local init_output
-    init_output=$($init_cmd 2>&1)
+    init_output=$(eval "$init_cmd" 2>&1)
     local init_rc=$?
     set -e
 
