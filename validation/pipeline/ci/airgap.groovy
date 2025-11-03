@@ -265,7 +265,7 @@ def buildDockerImage(ctx) {
             --build-arg VCS_REF=${vcsRef} \\
             --label "pipeline.build.number=${ctx.env.BUILD_NUMBER}" \\
             --label "pipeline.job.name=${ctx.env.JOB_NAME}" \\
-            --quiet
+            --no-cache
     """
   }
   ctx.logInfo('Docker image built successfully (library)')
