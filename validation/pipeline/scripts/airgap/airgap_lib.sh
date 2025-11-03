@@ -324,28 +324,49 @@ manage_workspace() {
     }
 
     # First, do a basic initialization without backend if needed
+    # IMPORTANT: Temporarily unset TF_WORKSPACE only for this init since workspace doesn't exist yet
     if [[ ! -f ".terraform" ]] || [[ ! -d ".terraform" ]]; then
         log_info "Terraform not initialized, doing basic init first"
-        tofu init -input=false -upgrade || {
+        log_debug "Temporarily clearing TF_WORKSPACE for initial backend init"
+        
+        local saved_workspace="${TF_WORKSPACE:-}"
+        unset TF_WORKSPACE
+        
+        if tofu init -input=false -upgrade 2>&1; then
+            log_debug "Initial init successful, restoring TF_WORKSPACE=${saved_workspace}"
+            export TF_WORKSPACE="$saved_workspace"
+        else
+            export TF_WORKSPACE="$saved_workspace"
             log_error "Failed to initialize Terraform for workspace management"
             return 1
-        }
+        fi
     fi
 
     # Check if workspace exists
+    log_debug "Checking if workspace exists: $workspace_name"
     local workspace_exists
     workspace_exists=$(tofu workspace list 2>/dev/null | grep -w "$workspace_name" || true)
 
     if [[ -z "$workspace_exists" ]]; then
         log_info "Creating workspace: $workspace_name"
-        tofu workspace new "$workspace_name"
-        log_success "Workspace created: $workspace_name"
+        if tofu workspace new "$workspace_name" 2>&1; then
+            log_success "Workspace created: $workspace_name"
+        else
+            log_error "Failed to create workspace: $workspace_name"
+            return 1
+        fi
     else
         log_info "Workspace already exists: $workspace_name"
     fi
 
     # Select the workspace
-    tofu workspace select "$workspace_name"
+    log_debug "Selecting workspace: $workspace_name"
+    if tofu workspace select "$workspace_name" 2>&1; then
+        log_debug "Workspace selection successful"
+    else
+        log_error "Failed to select workspace: $workspace_name"
+        return 1
+    fi
 
     # Verify workspace selection
     local current_workspace
