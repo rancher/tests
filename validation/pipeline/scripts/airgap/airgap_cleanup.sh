@@ -169,8 +169,18 @@ gather_cleanup_state() {
             return 1
         }
 
+        # For deployment failures, workspace may not exist yet - that's ok
+        local allow_missing="false"
+        if [[ "$cleanup_type" == "deployment_failure" ]]; then
+            allow_missing="true"
+            log_cleanup "Deployment failure cleanup - workspace may not exist yet"
+        fi
+
         # Initialize to access state
-        if initialize_tofu "$TOFU_MODULE_PATH"; then
+        local init_result=0
+        initialize_tofu "$TOFU_MODULE_PATH" "$allow_missing" || init_result=$?
+        
+        if [[ $init_result -eq 0 ]]; then
             log_cleanup "Terraform initialized successfully"
 
             # Get current workspace
@@ -195,9 +205,13 @@ gather_cleanup_state() {
             else
                 log_cleanup "Failed to extract Terraform outputs"
             fi
-
+        elif [[ $init_result -eq 2 ]]; then
+            log_cleanup "No state found - workspace was never created (return code 2)"
+            log_cleanup "This is expected for early deployment failures"
+            # Create empty state list to indicate no resources
+            echo "" > "$SHARED_VOLUME_PATH/pre-cleanup-state-list.txt"
         else
-            log_cleanup "WARNING: Terraform initialization failed during state gathering"
+            log_cleanup "WARNING: Terraform initialization failed during state gathering (return code $init_result)"
         fi
     fi
 
@@ -573,26 +587,59 @@ manual_infrastructure_destruction() {
         return 1
     }
 
-    # Initialize Terraform
-    if initialize_tofu "$TOFU_MODULE_PATH"; then
-        log_cleanup "Terraform initialized for manual destruction"
+    # Check if state exists first
+    local state_list_file="$SHARED_VOLUME_PATH/pre-cleanup-state-list.txt"
+    if [[ -f "$state_list_file" ]]; then
+        local resource_count
+        resource_count=$(wc -l <"$state_list_file" | tr -d ' ')
+        if [[ $resource_count -eq 0 ]]; then
+            log_cleanup "No resources found in state - skipping destruction"
+            log_cleanup "Workspace may have never been created or was already cleaned up"
+            return 0
+        fi
+        log_cleanup "State contains $resource_count resources to destroy"
+    fi
 
-        # Select workspace using improved function
-        if select_workspace "$workspace" "$TOFU_MODULE_PATH" "false"; then
-            log_cleanup "Selected workspace: $workspace"
+    # Initialize Terraform (allow missing workspace for deployment failures)
+    local init_result=0
+    initialize_tofu "$TOFU_MODULE_PATH" "true" || init_result=$?
+    
+    if [[ $init_result -eq 2 ]]; then
+        log_cleanup "Workspace never existed - no infrastructure to destroy"
+        return 0
+    elif [[ $init_result -ne 0 ]]; then
+        log_cleanup "Failed to initialize Terraform for manual destruction"
+        return 1
+    fi
 
-            # Attempt destruction
-            if tofu destroy -auto-approve -var-file="$TERRAFORM_VARS_FILENAME"; then
-                log_cleanup "[OK] Manual infrastructure destruction completed"
-            else
-                log_cleanup "[FAIL] Manual infrastructure destruction failed"
-            fi
-        else
-            log_cleanup "Failed to select workspace for destruction: $workspace"
-            log_cleanup "This may indicate the workspace was already cleaned up or never existed"
+    log_cleanup "Terraform initialized for manual destruction"
+
+    # Verify we have resources to destroy
+    local current_resources=0
+    if tofu state list >"$SHARED_VOLUME_PATH/current-state-list.txt" 2>/dev/null; then
+        current_resources=$(wc -l <"$SHARED_VOLUME_PATH/current-state-list.txt" | tr -d ' ')
+        log_cleanup "Current state contains $current_resources resources"
+        
+        if [[ $current_resources -eq 0 ]]; then
+            log_cleanup "No resources to destroy in current state"
+            return 0
         fi
     else
-        log_cleanup "Failed to initialize Terraform for manual destruction"
+        log_cleanup "Failed to get state list - cannot verify resources"
+    fi
+
+    # Attempt destruction
+    local var_file_arg=""
+    if [[ -n "$TERRAFORM_VARS_FILENAME" && -f "$TERRAFORM_VARS_FILENAME" ]]; then
+        var_file_arg="-var-file=$TERRAFORM_VARS_FILENAME"
+        log_cleanup "Using var file: $TERRAFORM_VARS_FILENAME"
+    fi
+    
+    if tofu destroy -auto-approve $var_file_arg 2>&1 | tee "$SHARED_VOLUME_PATH/destruction-output.log"; then
+        log_cleanup "[OK] Manual infrastructure destruction completed"
+    else
+        log_cleanup "[FAIL] Manual infrastructure destruction failed"
+        log_cleanup "Check destruction-output.log for details"
     fi
 }
 

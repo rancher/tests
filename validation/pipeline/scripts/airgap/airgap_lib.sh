@@ -153,8 +153,11 @@ log_workspace_context() {
 # Initialize OpenTofu with proper backend configuration
 initialize_tofu() {
     local module_path="${1:-$TOFU_MODULE_PATH}"
+    local allow_missing_workspace="${2:-false}"  # For deployment failure scenarios
 
     log_info "Initializing OpenTofu in: $module_path"
+    log_debug "TF_WORKSPACE: ${TF_WORKSPACE:-<unset>}"
+    log_debug "Allow missing workspace: $allow_missing_workspace"
 
     cd "$module_path" || {
         log_error "Failed to change to directory: $module_path"
@@ -162,18 +165,54 @@ initialize_tofu() {
     }
 
     # Check for backend configuration
+    local init_cmd=""
     if [[ -f "backend.tf" ]]; then
         log_info "Using backend.tf configuration"
-        tofu init -input=false -reconfigure
+        init_cmd="tofu init -input=false -reconfigure"
     elif [[ -n "${TERRAFORM_BACKEND_VARS_FILENAME}" && -f "${TERRAFORM_BACKEND_VARS_FILENAME}" ]]; then
         log_info "Using backend.tfvars configuration: ${TERRAFORM_BACKEND_VARS_FILENAME}"
-        tofu init -backend-config="${TERRAFORM_BACKEND_VARS_FILENAME}" -input=false -upgrade
+        init_cmd="tofu init -backend-config=${TERRAFORM_BACKEND_VARS_FILENAME} -input=false -reconfigure"
     else
         log_error "Neither backend.tf nor backend.tfvars found"
         return 1
     fi
 
-    log_success "OpenTofu initialization completed"
+    # Attempt initialization
+    set +e  # Don't exit on error, handle it gracefully
+    local init_output
+    init_output=$($init_cmd 2>&1)
+    local init_rc=$?
+    set -e
+
+    if [[ $init_rc -eq 0 ]]; then
+        log_success "OpenTofu initialization completed"
+        return 0
+    else
+        # Check if error is due to non-existent workspace
+        if echo "$init_output" | grep -q "does not exist"; then
+            if [[ "$allow_missing_workspace" == "true" ]]; then
+                log_warning "Workspace does not exist in backend, but this is expected for cleanup"
+                log_info "Checking if any local resources exist..."
+                
+                # Try to init without backend to see if there's any local state
+                if [[ -f ".terraform/terraform.tfstate" ]] || [[ -f "terraform.tfstate" ]]; then
+                    log_warning "Local state files found, attempting recovery"
+                    return 0
+                else
+                    log_info "No state found - workspace was never created"
+                    return 2  # Special return code for "no state"
+                fi
+            else
+                log_error "Workspace does not exist in backend: ${TF_WORKSPACE}"
+                log_error "Init output: $init_output"
+                return 1
+            fi
+        else
+            log_error "OpenTofu initialization failed"
+            log_error "Init output: $init_output"
+            return 1
+        fi
+    fi
 }
 
 # =============================================================================
