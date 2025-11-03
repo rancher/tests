@@ -83,7 +83,7 @@ main() {
         export AWS_REGION="${AWS_REGION:-us-east-2}"
         export AWS_DEFAULT_REGION="${AWS_REGION:-us-east-2}"
         export S3_BUCKET_NAME="${S3_BUCKET_NAME}"
-        export S3_REGION="${S3_REGION}"
+        export S3_BUCKET_REGION="${S3_BUCKET_REGION}"
         export S3_KEY_PREFIX="${S3_KEY_PREFIX}"
     else
         log_info "Environment file not found at $ENV_FILE, using Docker environment variables"

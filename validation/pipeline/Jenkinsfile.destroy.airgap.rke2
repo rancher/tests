@@ -18,7 +18,7 @@ class PipelineConfig {
     static final String DEFAULT_RANCHER_TEST_REPO = 'https://github.com/rancher/tests.git'
     static final String DEFAULT_QA_INFRA_REPO = 'https://github.com/rancher/qa-infra-automation.git'
     static final String DEFAULT_S3_BUCKET = 'rancher-terraform-state'
-    static final String DEFAULT_S3_REGION = 'us-east-1'
+    static final String DEFAULT_S3_BUCKET_REGION = 'us-east-1'
     static final String CONTAINER_NAME_PREFIX = 'rancher-ansible-airgap'
     static final String SHARED_VOLUME_PREFIX = 'validation-volume'
     static final String DOCKER_BUILD_CONTEXT = '.'
@@ -85,7 +85,7 @@ pipeline {
             description: 'S3 key prefix for the Terraform state files'
         )
         string(
-            name: 'S3_REGION',
+            name: 'S3_BUCKET_REGION',
             defaultValue: 'us-east-2',
             description: 'AWS region where the S3 bucket is located'
         )
@@ -95,8 +95,8 @@ pipeline {
         // Default S3 configuration - use parameters with fallbacks
         S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'}"
         S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'}"
-        S3_REGION = "${params.S3_REGION ?: 'us-east-2'}"
-        AWS_REGION = "${params.S3_REGION ?: 'us-east-2'}"
+        S3_BUCKET_REGION = "${params.S3_BUCKET_REGION ?: 'us-east-2'}"
+        AWS_REGION = "${params.S3_BUCKET_REGION ?: 'us-east-2'}"
 
         // Repository configurations
         RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
@@ -213,7 +213,7 @@ pipeline {
                     logInfo('Performing infrastructure destruction using consolidated script')
                     logInfo("Target workspace for destruction: ${env.TF_WORKSPACE}")
                     logInfo("S3 Bucket: ${env.S3_BUCKET_NAME}")
-                    logInfo("S3 Region: ${env.S3_REGION}")
+                    logInfo("S3 Region: ${env.S3_BUCKET_REGION}")
 
                     // Configuration validation
                     def requiredVars = [
@@ -446,14 +446,14 @@ def generateDestructionEnvironmentFile() {
     // Debug logging for S3 variables
     logInfo("S3_BUCKET_NAME: '${env.S3_BUCKET_NAME}'")
     logInfo("S3_KEY_PREFIX: '${env.S3_KEY_PREFIX}'")
-    logInfo("S3_REGION: '${env.S3_REGION}'")
+    logInfo("S3_BUCKET_REGION: '${env.S3_BUCKET_REGION}'")
     logInfo("AWS_REGION: '${env.AWS_REGION}'")
 
     // Ensure S3 variables have values by using parameter fallbacks
     def s3BucketName = env.S3_BUCKET_NAME ?: params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'
     def s3KeyPrefix = env.S3_KEY_PREFIX ?: params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'
-    def s3Region = env.S3_REGION ?: params.S3_REGION ?: 'us-east-2'
-    def awsRegion = env.AWS_REGION ?: params.S3_REGION ?: 'us-east-2'
+    def s3BucketRegion = env.S3_BUCKET_REGION ?: params.S3_BUCKET_REGION ?: 'us-east-2'
+    def awsRegion = env.AWS_REGION ?: params.S3_BUCKET_REGION ?: 'us-east-2'
 
     // If a TARGET_WORKSPACE is provided, prefer a workspace-scoped backend key unless
     // the supplied key already uses the env:/ workspace prefix. This aligns the
@@ -472,7 +472,7 @@ def generateDestructionEnvironmentFile() {
 
     logInfo("Using S3_BUCKET_NAME: '${s3BucketName}'")
     logInfo("Using S3_KEY_PREFIX: '${s3KeyPrefix}'")
-    logInfo("Using S3_REGION: '${s3Region}'")
+    logInfo("Using S3_BUCKET_REGION: '${s3BucketRegion}'")
     logInfo("Using AWS_REGION: '${awsRegion}'")
 
     // Build environment content securely WITHOUT credentials
@@ -487,7 +487,7 @@ def generateDestructionEnvironmentFile() {
         "TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}",
         "S3_BUCKET_NAME=${s3BucketName}",
         "S3_KEY_PREFIX=${s3KeyPrefix}",
-        "S3_REGION=${s3Region}",
+        "S3_BUCKET_REGION=${s3BucketRegion}",
         "AWS_REGION=${awsRegion}",
         '',
         '# AWS Credentials excluded - will be passed via withCredentials',
@@ -606,8 +606,8 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
 
         def s3BucketName = env.S3_BUCKET_NAME ?: params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'
         def s3KeyPrefix = env.S3_KEY_PREFIX ?: params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'
-        def s3Region = env.S3_REGION ?: params.S3_REGION ?: 'us-east-2'
-        def awsRegion = env.AWS_REGION ?: params.S3_REGION ?: 'us-east-2'
+        def s3BucketRegion = env.S3_BUCKET_REGION ?: params.S3_BUCKET_REGION ?: 'us-east-2'
+        def awsRegion = env.AWS_REGION ?: params.S3_BUCKET_REGION ?: 'us-east-2'
 
         withCredentials([
         string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
@@ -627,7 +627,7 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
                     -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME} \\
                     -e S3_BUCKET_NAME="${s3BucketName}" \\
                     -e S3_KEY_PREFIX="${s3KeyPrefix}" \\
-                    -e S3_REGION="${s3Region}" \\
+                    -e S3_BUCKET_REGION="${s3BucketRegion}" \\
                     -e AWS_REGION="${awsRegion}" ${envVars} ${workspaceEnv} \\
                     ${env.IMAGE_NAME} \\
                     sh /tmp/script.sh
@@ -677,13 +677,13 @@ def generateTofuBackendConfiguration() {
 
     // Ensure S3 backend parameters are set
     if (!env.S3_BUCKET_NAME) { error('S3_BUCKET_NAME environment variable is not set') }
-    if (!env.S3_REGION) { error('S3_REGION environment variable is not set') }
+    if (!env.S3_BUCKET_REGION) { error('S3_BUCKET_REGION environment variable is not set') }
     if (!env.S3_KEY_PREFIX) { error('S3_KEY_PREFIX environment variable is not set') }
 
     logInfo("S3 Backend Configuration:")
     logInfo("  Bucket: ${env.S3_BUCKET_NAME}")
     logInfo("  Key: ${env.S3_KEY_PREFIX}")
-    logInfo("  Region: ${env.S3_REGION}")
+    logInfo("  Region: ${env.S3_BUCKET_REGION}")
 
     sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
 
@@ -699,7 +699,7 @@ terraform {
   backend "s3" {
     bucket = "${env.S3_BUCKET_NAME}"
     key    = "${env.S3_KEY_PREFIX}"
-    region = "${env.S3_REGION}"
+    region = "${env.S3_BUCKET_REGION}"
   }
 }
 """
@@ -764,7 +764,7 @@ set -e
 
 VARFILE="${env.TERRAFORM_VARS_FILENAME}"
 BUCKET="${env.S3_BUCKET_NAME}"
-REGION="${env.S3_REGION}"
+REGION="${env.S3_BUCKET_REGION}"
 WORKSPACE="${env.TF_WORKSPACE}"
 SHARED="/root"
 MODULE_PATH="${env.QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap"
@@ -818,7 +818,7 @@ fi
           -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \\
           -e AWS_DEFAULT_REGION="${env.AWS_REGION}" \\
           -e S3_BUCKET_NAME="${env.S3_BUCKET_NAME}" \\
-          -e S3_REGION="${env.S3_REGION}" \\
+          -e S3_BUCKET_REGION="${env.S3_BUCKET_REGION}" \\
           -e TF_WORKSPACE="${env.TF_WORKSPACE}" \\
           -e TERRAFORM_VARS_FILENAME="${env.TERRAFORM_VARS_FILENAME}" \\
           -e TARGET_WORKSPACE="${env.TARGET_WORKSPACE}" \\
@@ -995,12 +995,12 @@ def cleanupS3WorkspaceDirectory() {
   
     try {
         // Validate required S3 variables are available
-        def requiredS3Vars = ['S3_BUCKET_NAME', 'S3_REGION', 'S3_KEY_PREFIX', 'TF_WORKSPACE']
+        def requiredS3Vars = ['S3_BUCKET_NAME', 'S3_BUCKET_REGION', 'S3_KEY_PREFIX', 'TF_WORKSPACE']
         validateRequiredVariables(requiredS3Vars)
     
         logInfo("Preparing to clean up S3 directory: env:/${env.TF_WORKSPACE}")
         logInfo("S3 Bucket: ${env.S3_BUCKET_NAME}")
-        logInfo("S3 Region: ${env.S3_REGION}")
+        logInfo("S3 Region: ${env.S3_BUCKET_REGION}")
         logInfo("S3 Key Prefix (terraform.tfstate): ${env.S3_KEY_PREFIX}")
     
         // Execute S3 cleanup using official AWS CLI Docker image
@@ -1012,7 +1012,7 @@ def cleanupS3WorkspaceDirectory() {
         echo '=== S3 Cleanup Complete ==='
         echo "Target workspace: ${env.TF_WORKSPACE}"
         echo "S3 bucket: ${env.S3_BUCKET_NAME}"
-        echo "S3 region: ${env.S3_REGION}"
+        echo "S3 region: ${env.S3_BUCKET_REGION}"
         echo "Terraform state file: ${env.S3_KEY_PREFIX}"
         
         # Create cleanup script with proper escaping
@@ -1022,20 +1022,20 @@ def cleanupS3WorkspaceDirectory() {
         
         # Clean up workspace directory (contains cluster.tfvars and other config files)
         echo "Checking if workspace directory exists..."
-        if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --region "${env.S3_REGION}" 2>/dev/null; then
+        if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --region "${env.S3_BUCKET_REGION}" 2>/dev/null; then
             echo "Workspace directory found: s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/"
             
             # List contents before deletion for logging
             echo "Workspace contents to be deleted:"
-            aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_REGION}" || echo "No contents found"
+            aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_BUCKET_REGION}" || echo "No contents found"
             
             # Delete entire workspace directory
             echo "Deleting workspace directory..."
-            aws s3 rm "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_REGION}"
+            aws s3 rm "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_BUCKET_REGION}"
             
             # Verify deletion
             echo "Verifying workspace deletion..."
-            if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --region "${env.S3_REGION}" 2>/dev/null; then
+            if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --region "${env.S3_BUCKET_REGION}" 2>/dev/null; then
                 echo "ERROR: Failed to delete workspace directory"
                 exit 1
             else
@@ -1048,16 +1048,16 @@ def cleanupS3WorkspaceDirectory() {
         # Clean up terraform state file (stored at S3_KEY_PREFIX)
         echo ""
         echo "Checking if terraform state file exists..."
-        if aws s3 ls "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_REGION}" 2>/dev/null; then
+        if aws s3 ls "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_BUCKET_REGION}" 2>/dev/null; then
             echo "Terraform state file found: s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}"
             
             # Delete terraform state file
             echo "Deleting terraform state file..."
-            aws s3 rm "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_REGION}"
+            aws s3 rm "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_BUCKET_REGION}"
             
             # Verify deletion
             echo "Verifying terraform state deletion..."
-            if aws s3 ls "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_REGION}" 2>/dev/null; then
+            if aws s3 ls "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_BUCKET_REGION}" 2>/dev/null; then
                 echo "ERROR: Failed to delete terraform state file"
                 exit 1
             else
@@ -1074,7 +1074,7 @@ def cleanupS3WorkspaceDirectory() {
         docker run --rm \\
           -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \\
           -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \\
-          -e AWS_DEFAULT_REGION="${env.S3_REGION}" \\
+          -e AWS_DEFAULT_REGION="${env.S3_BUCKET_REGION}" \\
           -e S3_BUCKET_NAME="${env.S3_BUCKET_NAME}" \\
           -e S3_KEY_PREFIX="${env.S3_KEY_PREFIX}" \\
           -e TF_WORKSPACE="${env.TF_WORKSPACE}" \\
@@ -1144,8 +1144,8 @@ def getS3KeyPrefix() {
     return 'jenkins-airgap-rke2/terraform.tfstate'
 }
 
-def getS3Region() {
-    def paramValue = params.S3_REGION
+def getS3BucketRegion() {
+    def paramValue = params.S3_BUCKET_REGION
     if (paramValue && paramValue.trim()) {
         return paramValue.trim()
     }
@@ -1153,7 +1153,7 @@ def getS3Region() {
 }
 
 def getAwsRegion() {
-    def paramValue = params.S3_REGION
+    def paramValue = params.S3_BUCKET_REGION
     if (paramValue && paramValue.trim()) {
         return paramValue.trim()
     }

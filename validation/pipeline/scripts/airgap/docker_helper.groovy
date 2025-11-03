@@ -460,7 +460,7 @@ class DockerExecutionHelper implements Serializable {
         return key in [
             'AWS_REGION',
             'S3_BUCKET_NAME',
-            'S3_REGION',
+            'S3_BUCKET_REGION',
             'S3_KEY_PREFIX',
             'ANSIBLE_VARIABLES',
             'RKE2_VERSION',

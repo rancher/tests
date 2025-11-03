@@ -216,7 +216,7 @@ EOF
             log_cleanup "TF_WORKSPACE env var: ${TF_WORKSPACE}"
             log_cleanup "Expected workspace: $workspace_name"
             log_cleanup "Checking S3 for state file..."
-            if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate" --region "${S3_REGION}" 2>/dev/null; then
+            if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate" --region "${S3_BUCKET_REGION}" 2>/dev/null; then
                 log_cleanup "State file EXISTS in S3, but appears empty or not loaded correctly"
             else
                 log_cleanup "State file DOES NOT EXIST in S3 at: s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate"

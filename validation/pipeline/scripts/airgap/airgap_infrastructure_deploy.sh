@@ -185,7 +185,7 @@ handle_inventory_file() {
 #   - AWS_ACCESS_KEY_ID
 #   - AWS_SECRET_ACCESS_KEY
 #   - S3_BUCKET_NAME
-#   - S3_REGION
+#   - S3_BUCKET_REGION
 #   - TF_WORKSPACE
 # Returns:
 #   0 on success, 1 on failure
@@ -196,7 +196,7 @@ upload_config_to_s3() {
     log_info "Uploading configuration file to S3: s3://$S3_BUCKET_NAME/$s3_key"
 
     # Validate AWS credentials and required variables
-    validate_required_vars "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "S3_BUCKET_NAME" "S3_REGION" "TF_WORKSPACE"
+    validate_required_vars "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "S3_BUCKET_NAME" "S3_BUCKET_REGION" "TF_WORKSPACE"
 
     if [[ ! -f "$config_file" ]]; then
         log_error "Configuration file not found: $config_file"
@@ -210,9 +210,9 @@ upload_config_to_s3() {
 
     while true; do
         log_info "Attempt ${attempt}/${max_attempts} to upload ${config_file} to s3://$S3_BUCKET_NAME/$s3_key"
-        if aws s3 cp "$config_file" "s3://$S3_BUCKET_NAME/$s3_key" --region "$S3_REGION"; then
+        if aws s3 cp "$config_file" "s3://$S3_BUCKET_NAME/$s3_key" --region "$S3_BUCKET_REGION"; then
             # Verify the upload succeeded
-            if aws s3 ls "s3://$S3_BUCKET_NAME/$s3_key" --region "$S3_REGION" >/dev/null 2>&1; then
+            if aws s3 ls "s3://$S3_BUCKET_NAME/$s3_key" --region "$S3_BUCKET_REGION" >/dev/null 2>&1; then
                 log_success "Configuration uploaded to S3 successfully"
                 log_info "Accessible at: s3://$S3_BUCKET_NAME/$s3_key"
                 return 0
@@ -227,7 +227,7 @@ upload_config_to_s3() {
             log_error "Failed to upload configuration after ${max_attempts} attempts"
             # Provide a diagnostic listing to help debugging (non-fatal to callers that handle failures)
             log_info "Listing available keys under s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/ (partial):"
-            aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/" --recursive --region "${S3_REGION}" 2>/dev/null || true
+            aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/" --recursive --region "${S3_BUCKET_REGION}" 2>/dev/null || true
             return 1
         fi
 
@@ -263,7 +263,7 @@ ENVIRONMENT VARIABLES:
     TERRAFORM_BACKEND_VARS_FILENAME Terraform backend variables file name
     QA_INFRA_WORK_PATH           Path to qa-infra-automation repository
     S3_BUCKET_NAME               S3 bucket for state storage
-    S3_REGION                    S3 region
+    S3_BUCKET_REGION             S3 bucket region
     S3_KEY_PREFIX                S3 key prefix
     AWS_ACCESS_KEY_ID            AWS access key
     AWS_SECRET_ACCESS_KEY        AWS secret key
@@ -311,7 +311,7 @@ ENVIRONMENT VARIABLES:
     TERRAFORM_BACKEND_VARS_FILENAME Terraform backend variables file name
     QA_INFRA_WORK_PATH           Path to qa-infra-automation repository
     S3_BUCKET_NAME               S3 bucket for state storage
-    S3_REGION                    S3 region
+    S3_BUCKET_REGION             S3 bucket region
     S3_KEY_PREFIX                S3 key prefix
     AWS_ACCESS_KEY_ID            AWS access key
     AWS_SECRET_ACCESS_KEY        AWS secret key

@@ -22,7 +22,7 @@ class PipelineConfig {
     static final String DEFAULT_RANCHER_TEST_REPO = 'https://github.com/rancher/tests.git'
     static final String DEFAULT_QA_INFRA_REPO = 'https://github.com/rancher/qa-infra-automation.git'
     static final String DEFAULT_S3_BUCKET = 'rancher-terraform-state'
-    static final String DEFAULT_S3_REGION = 'us-east-1'
+    static final String DEFAULT_S3_BUCKET_REGION = 'us-east-1'
     static final String CONTAINER_NAME_PREFIX = 'rancher-ansible-airgap'
     static final String SHARED_VOLUME_PREFIX = 'validation-volume'
     static final String DOCKER_BUILD_CONTEXT = '.'
@@ -165,7 +165,7 @@ def generateEnvironmentFileComplete() {
         '',
         '# S3 Backend',
         "S3_BUCKET_NAME=${env.S3_BUCKET_NAME}",
-        "S3_REGION=${env.S3_REGION}",
+        "S3_BUCKET_REGION=${env.S3_BUCKET_REGION}",
         "S3_KEY_PREFIX=${env.S3_KEY_PREFIX}",
         '',
         "AWS_SSH_KEY_NAME=${env.AWS_SSH_KEY_NAME ?: ''}",
@@ -346,8 +346,8 @@ pipeline {
             description: 'S3 key prefix for the Terraform state files'
         )
         string(
-            name: 'S3_REGION',
-            defaultValue: PipelineConfig.DEFAULT_S3_REGION,
+            name: 'S3_BUCKET_REGION',
+            defaultValue: PipelineConfig.DEFAULT_S3_BUCKET_REGION,
             description: 'AWS region where the S3 bucket is located'
         )
         string(
@@ -427,8 +427,8 @@ pipeline {
 
         // Backend configuration (S3 backend parameters)
         S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: PipelineConfig.DEFAULT_S3_BUCKET}"
-        S3_REGION = "${params.S3_REGION ?: PipelineConfig.DEFAULT_S3_REGION}"
-        AWS_REGION = "${params.S3_REGION ?: PipelineConfig.DEFAULT_S3_REGION}"
+        S3_BUCKET_REGION = "${params.S3_BUCKET_REGION ?: PipelineConfig.DEFAULT_S3_BUCKET_REGION}"
+        AWS_REGION = "${params.S3_BUCKET_REGION ?: PipelineConfig.DEFAULT_S3_BUCKET_REGION}"
         S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2'}"
 
         // Hostname prefix
@@ -1209,7 +1209,7 @@ def generateDeploymentSummary() {
             infrastructure: [
                 terraform_vars_file: env.TERRAFORM_VARS_FILENAME,
                 s3_bucket: env.S3_BUCKET_NAME,
-                s3_region: env.S3_REGION,
+                s3_bucket_region: env.S3_BUCKET_REGION,
                 hostname_prefix: env.HOSTNAME_PREFIX
             ],
             artifacts_generated: []

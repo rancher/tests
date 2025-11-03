@@ -124,7 +124,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/
       'PRIVATE_REGISTRY_USERNAME': ctx.env.PRIVATE_REGISTRY_USERNAME,
       'UPLOAD_CONFIG_TO_S3': 'true',
       'S3_BUCKET_NAME': ctx.env.S3_BUCKET_NAME,
-      'S3_REGION': ctx.env.S3_REGION,
+      'S3_BUCKET_REGION': ctx.env.S3_BUCKET_REGION,
       'S3_KEY_PREFIX': ctx.env.S3_KEY_PREFIX,
       'AWS_REGION': ctx.env.AWS_REGION,
       // Credentials and sensitive data are passed into the docker container
@@ -425,7 +425,7 @@ def generateDeploymentSummary(ctx) {
       infrastructure: [
         terraform_vars_file: ctx.env.TERRAFORM_VARS_FILENAME,
         s3_bucket: ctx.env.S3_BUCKET_NAME,
-        s3_region: ctx.env.S3_REGION,
+        s3_bucket_region: ctx.env.S3_BUCKET_REGION,
         hostname_prefix: ctx.env.HOSTNAME_PREFIX
       ],
       artifacts_generated: []
@@ -453,7 +453,7 @@ def generateTofuConfiguration(ctx) {
   ctx.logInfo('Generating Terraform configuration (library)')
   if (!ctx.env.TERRAFORM_CONFIG) { ctx.error('TERRAFORM_CONFIG environment variable is not set') }
   if (!ctx.env.S3_BUCKET_NAME) { ctx.error('S3_BUCKET_NAME environment variable is not set') }
-  if (!ctx.env.S3_REGION) { ctx.error('S3_REGION environment variable is not set') }
+  if (!ctx.env.S3_BUCKET_REGION) { ctx.error('S3_BUCKET_REGION environment variable is not set') }
   if (!ctx.env.S3_KEY_PREFIX) { ctx.error('S3_KEY_PREFIX environment variable is not set') }
   ctx.sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
   def terraformConfig = ctx.env.TERRAFORM_CONFIG
@@ -469,7 +469,7 @@ terraform {
   backend "s3" {
     bucket = "${ctx.env.S3_BUCKET_NAME}"
     key    = "${ctx.env.S3_KEY_PREFIX}"
-    region = "${ctx.env.S3_REGION}"
+    region = "${ctx.env.S3_BUCKET_REGION}"
   }
 }
 """

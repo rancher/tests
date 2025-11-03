@@ -14,7 +14,7 @@ IFS=$'\n\t'
 export AWS_REGION="${AWS_REGION:-us-east-2}"
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-2}"
 export S3_BUCKET_NAME="${S3_BUCKET_NAME:-jenkins-terraform-state-storage}"
-export S3_REGION="${S3_REGION:-us-east-2}"
+export S3_BUCKET_REGION="${S3_BUCKET_REGION:-us-east-2}"
 # Default S3 key should include the terraform state filename to match pipeline defaults
 export S3_KEY_PREFIX="${S3_KEY_PREFIX:-jenkins-airgap-rke2/terraform.tfstate}"
 
@@ -78,7 +78,7 @@ load_environment() {
         source "$env_file"
 
         # Export all variables to ensure they're available to child processes
-        export S3_BUCKET_NAME S3_REGION S3_KEY_PREFIX TF_WORKSPACE
+        export S3_BUCKET_NAME S3_BUCKET_REGION S3_KEY_PREFIX TF_WORKSPACE
         export TERRAFORM_VARS_FILENAME TERRAFORM_BACKEND_VARS_FILENAME
 
         log_debug "Environment file loaded successfully"
@@ -139,9 +139,9 @@ log_workspace_context() {
         log_info "OpenTofu workspace show: $current_ws"
     fi
     
-    if [[ -n "${S3_BUCKET_NAME:-}" && -n "${TF_WORKSPACE:-}" && -n "${S3_REGION:-}" ]]; then
+    if [[ -n "${S3_BUCKET_NAME:-}" && -n "${TF_WORKSPACE:-}" && -n "${S3_BUCKET_REGION:-}" ]]; then
         log_info "Checking S3 state: s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/terraform.tfstate"
-        if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/terraform.tfstate" --region "${S3_REGION}" >/dev/null 2>&1; then
+        if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/terraform.tfstate" --region "${S3_BUCKET_REGION}" >/dev/null 2>&1; then
             log_info "✓ Remote state EXISTS in S3"
         else
             log_warning "✗ Remote state NOT FOUND in S3"
@@ -180,13 +180,13 @@ initialize_tofu() {
 # BACKEND & S3 HELPERS
 # =============================================================================
 # Generate backend.tf and backend.tfvars files in a given module path.
-# Uses S3_BUCKET_NAME, S3_REGION, S3_KEY_PREFIX and TERRAFORM_BACKEND_VARS_FILENAME.
+# Uses S3_BUCKET_NAME, S3_BUCKET_REGION, S3_KEY_PREFIX and TERRAFORM_BACKEND_VARS_FILENAME.
 generate_backend_files() {
     local module_path="${1:-$TOFU_MODULE_PATH}"
     local backend_vars_filename="${TERRAFORM_BACKEND_VARS_FILENAME:-backend.tfvars}"
 
-    if [[ -z "${S3_BUCKET_NAME}" || -z "${S3_REGION}" || -z "${S3_KEY_PREFIX}" ]]; then
-        log_error "S3 backend parameters are not all set (S3_BUCKET_NAME,S3_REGION,S3_KEY_PREFIX)"
+    if [[ -z "${S3_BUCKET_NAME}" || -z "${S3_BUCKET_REGION}" || -z "${S3_KEY_PREFIX}" ]]; then
+        log_error "S3 backend parameters are not all set (S3_BUCKET_NAME,S3_BUCKET_REGION,S3_KEY_PREFIX)"
         return 1
     fi
 
@@ -213,7 +213,7 @@ terraform {
   backend "s3" {
     bucket = "${S3_BUCKET_NAME}"
     key    = "${backend_key}"
-    region = "${S3_REGION}"
+    region = "${S3_BUCKET_REGION}"
   }
 }
 EOF
@@ -221,7 +221,7 @@ EOF
     cat >"${module_path}/${backend_vars_filename}" <<EOF
 bucket = "${S3_BUCKET_NAME}"
 key    = "${backend_key}"
-region = "${S3_REGION}"
+region = "${S3_BUCKET_REGION}"
 EOF
 
     log_info "Generated backend.tf and ${backend_vars_filename} in ${module_path} (key=${backend_key})"
@@ -243,15 +243,15 @@ download_cluster_tfvars_from_s3() {
         log_debug "Ensured shared volume directory exists: ${SHARED_VOLUME_PATH}"
     fi
 
-    if [[ -z "${S3_BUCKET_NAME}" || -z "${S3_REGION}" || -z "${workspace}" ]]; then
+    if [[ -z "${S3_BUCKET_NAME}" || -z "${S3_BUCKET_REGION}" || -z "${workspace}" ]]; then
         log_warning "Missing S3 parameters or workspace; cannot download ${varfile}"
         return 1
     fi
 
     log_info "Attempting to download ${varfile} from S3 workspace s3://${S3_BUCKET_NAME}/env:/${workspace}/"
 
-    if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace}/config/${varfile}" --region "${S3_REGION}" >/dev/null 2>&1; then
-        if aws s3 cp "s3://${S3_BUCKET_NAME}/env:/${workspace}/config/${varfile}" "${dest_shared}" --region "${S3_REGION}"; then
+    if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace}/config/${varfile}" --region "${S3_BUCKET_REGION}" >/dev/null 2>&1; then
+        if aws s3 cp "s3://${S3_BUCKET_NAME}/env:/${workspace}/config/${varfile}" "${dest_shared}" --region "${S3_BUCKET_REGION}"; then
             mkdir -p "${target_module}"
             cp "${dest_shared}" "${target_module}/${varfile}"
             log_success "Downloaded and copied ${varfile} to ${target_module}/${varfile}"
@@ -366,7 +366,7 @@ select_workspace() {
         else
             log_warning "Workspace does not exist: $workspace_name"
             log_info "Checking if state exists in S3 for workspace: $workspace_name"
-            if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate" --region "${S3_REGION}" >/dev/null 2>&1; then
+            if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate" --region "${S3_BUCKET_REGION}" >/dev/null 2>&1; then
                 log_info "Remote state found in S3, workspace will be created during init"
             else
                 log_error "No local or remote state found for workspace: $workspace_name"
@@ -558,9 +558,9 @@ cleanup_workspace() {
     fi
 
     # Optionally clean up remote state file in S3
-    if [[ -n "${S3_BUCKET_NAME}" && -n "${S3_REGION}" ]]; then
+    if [[ -n "${S3_BUCKET_NAME}" && -n "${S3_BUCKET_REGION}" ]]; then
         log_info "Cleaning up remote state file in S3"
-        if aws s3 rm "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate" --region "${S3_REGION}" 2>/dev/null; then
+        if aws s3 rm "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate" --region "${S3_BUCKET_REGION}" 2>/dev/null; then
             log_success "Remote state file deleted from S3"
         else
             log_info "Remote state file may not exist or already deleted"
