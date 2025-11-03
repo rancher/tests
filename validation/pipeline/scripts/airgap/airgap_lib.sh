@@ -816,10 +816,11 @@ EOF
         "PRIVATE_REGISTRY_URL" "PRIVATE_REGISTRY_USERNAME" "PRIVATE_REGISTRY_PASSWORD")
 
     for var_name in "${var_names[@]}"; do
-        if [[ -n "${!var_name}" ]]; then
+        # Use safer indirect expansion that won't fail with set -u
+        if [[ -n "${!var_name:-}" ]]; then
             local replacement
-            replacement="$(echo "${!var_name}" | sed 's/[[\.*^$()+?{|]/\\&/g')"
-            processed_vars="$(echo "$processed_vars" | sed "s/\\\${$var_name}/$replacement/g")"
+            replacement="$(echo "${!var_name}" | sed 's/[[\\.*^$()+?{|]/\\\\&/g')"
+            processed_vars="$(echo "$processed_vars" | sed "s/\\\\\${$var_name}/$replacement/g")"
         fi
     done
 
