@@ -3,7 +3,7 @@ name: IPv6 Recurring Runs
 
 on:
   schedule:
-    - cron: "0 11 * * 1"
+    - cron: "0 11 * * 5"
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -139,6 +139,7 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
+          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_13 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
 
       - name: Create config.yaml

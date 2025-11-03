@@ -3,7 +3,7 @@ name: Turtles Upgraded Rancher Cluster Provisioning
 
 on:
   schedule:
-    - cron: "0 12 * * 1-5"  
+    - cron: "0 12 * * 3"  
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -456,7 +456,7 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_12 }}
+          qase_recurring_id: "${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}"
 
       - name: Create config.yaml
         run: |
