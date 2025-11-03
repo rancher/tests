@@ -138,6 +138,19 @@ EOF
     log_cleanup "Gathering pre-cleanup infrastructure state..."
     gather_cleanup_information "$module_path" "$cleanup_log"
 
+    # Set workspace context BEFORE any initialization
+    if [[ -n "$workspace_name" ]]; then
+        log_cleanup "Setting workspace context: $workspace_name"
+        export TF_WORKSPACE="$workspace_name"
+        log_cleanup "TF_WORKSPACE exported: ${TF_WORKSPACE}"
+        
+        # Log initial workspace context
+        log_workspace_context "Pre-Init Workspace Context"
+    else
+        log_cleanup "ERROR: No workspace name provided for cleanup"
+        return 1
+    fi
+
     # Ensure backend files and var file are available before initializing OpenTofu
     log_cleanup "Ensuring backend configuration and terraform var file are present in module path"
 
@@ -155,29 +168,69 @@ EOF
         log_cleanup "WARNING: Failed to generate backend configuration in module path"
     fi
 
-    # Initialize OpenTofu
+    # Clean any stale terraform metadata to ensure fresh init with correct workspace
+    log_cleanup "Cleaning stale Terraform metadata"
+    cd "$module_path" || {
+        log_cleanup "ERROR: Failed to change to module path: $module_path"
+        return 1
+    }
+    rm -rf .terraform .terraform.lock.hcl 2>/dev/null || true
+
+    # Initialize OpenTofu with workspace context already set
+    log_cleanup "Initializing OpenTofu with workspace: ${TF_WORKSPACE}"
     if initialize_tofu "$module_path"; then
         log_cleanup "OpenTofu initialization successful"
     else
-        log_cleanup "WARNING: OpenTofu initialization failed, proceeding with cleanup"
+        log_cleanup "ERROR: OpenTofu initialization failed"
+        return 1
     fi
 
-    # Select workspace if specified
-    if [[ -n "$workspace_name" ]]; then
-        log_cleanup "Switching to workspace: $workspace_name"
-        export TF_WORKSPACE="$workspace_name"
+    # Log workspace context after initialization
+    cd "$module_path" || return 1
+    log_workspace_context "Post-Init Workspace Context"
 
-        # Use improved workspace selection function
-        if select_workspace "$workspace_name" "$module_path" "false"; then
-            log_cleanup "Successfully switched to workspace: $workspace_name"
-        else
-            log_cleanup "WARNING: Could not switch to workspace $workspace_name (may not exist)"
-            log_cleanup "Proceeding with cleanup in current workspace"
+    # Verify workspace was selected correctly
+    local current_workspace
+    current_workspace=$(tofu workspace show 2>/dev/null || echo "unknown")
+    log_cleanup "Current workspace after init: $current_workspace"
+    
+    if [[ "$current_workspace" != "$workspace_name" ]]; then
+        log_cleanup "WARNING: Workspace mismatch! Expected: $workspace_name, Current: $current_workspace"
+    fi
+
+    # Verify state has resources before attempting destroy
+    log_cleanup "Verifying infrastructure state before destroy..."
+    cd "$module_path" || {
+        log_cleanup "ERROR: Failed to change to module path: $module_path"
+        return 1
+    }
+    
+    local resource_count=0
+    if tofu state list >"$SHARED_VOLUME_PATH/pre-destroy-resources.txt" 2>/dev/null; then
+        resource_count=$(wc -l <"$SHARED_VOLUME_PATH/pre-destroy-resources.txt" | tr -d ' ')
+        log_cleanup "State contains $resource_count resources"
+        
+        if [[ $resource_count -eq 0 ]]; then
+            log_cleanup "ERROR: State is empty! No resources to destroy."
+            log_cleanup "Current workspace: $(tofu workspace show 2>/dev/null || echo 'unknown')"
+            log_cleanup "TF_WORKSPACE env var: ${TF_WORKSPACE}"
+            log_cleanup "Expected workspace: $workspace_name"
+            log_cleanup "Checking S3 for state file..."
+            if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate" --region "${S3_REGION}" 2>/dev/null; then
+                log_cleanup "State file EXISTS in S3, but appears empty or not loaded correctly"
+            else
+                log_cleanup "State file DOES NOT EXIST in S3 at: s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate"
+            fi
+            return 1
         fi
+    else
+        log_cleanup "ERROR: Failed to retrieve state list"
+        log_cleanup "Current workspace: $(tofu workspace show 2>/dev/null || echo 'unknown')"
+        return 1
     fi
 
     # Perform infrastructure destruction
-    log_cleanup "Starting infrastructure destruction..."
+    log_cleanup "Starting infrastructure destruction of $resource_count resources..."
     if destroy_infrastructure "$module_path" "$var_file"; then
         log_cleanup "[OK] Infrastructure destruction completed successfully"
     else

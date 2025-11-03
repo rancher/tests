@@ -127,6 +127,29 @@ validate_required_vars() {
 # TERRAFORM/OPENTOFU FUNCTIONS
 # =============================================================================
 
+# Log workspace context for debugging
+log_workspace_context() {
+    local context_label="${1:-Workspace Context}"
+    log_info "=== $context_label ==="
+    log_info "TF_WORKSPACE env var: ${TF_WORKSPACE:-<unset>}"
+    
+    if command -v tofu >/dev/null 2>&1; then
+        local current_ws
+        current_ws=$(tofu workspace show 2>/dev/null || echo "<not initialized>")
+        log_info "OpenTofu workspace show: $current_ws"
+    fi
+    
+    if [[ -n "${S3_BUCKET_NAME:-}" && -n "${TF_WORKSPACE:-}" && -n "${S3_REGION:-}" ]]; then
+        log_info "Checking S3 state: s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/terraform.tfstate"
+        if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/terraform.tfstate" --region "${S3_REGION}" >/dev/null 2>&1; then
+            log_info "✓ Remote state EXISTS in S3"
+        else
+            log_warning "✗ Remote state NOT FOUND in S3"
+        fi
+    fi
+    log_info "========================"
+}
+
 # Initialize OpenTofu with proper backend configuration
 initialize_tofu() {
     local module_path="${1:-$TOFU_MODULE_PATH}"
@@ -254,15 +277,12 @@ manage_workspace() {
     fi
 
     log_info "Managing workspace: $workspace_name"
+    log_debug "TF_WORKSPACE is currently: ${TF_WORKSPACE:-<unset>}"
 
     cd "$module_path" || {
         log_error "Failed to change to directory: $module_path"
         return 1
     }
-
-    # Temporarily unset TF_WORKSPACE to avoid automatic selection
-    local current_tf_workspace="$TF_WORKSPACE"
-    unset TF_WORKSPACE
 
     # First, do a basic initialization without backend if needed
     if [[ ! -f ".terraform" ]] || [[ ! -d ".terraform" ]]; then
@@ -288,9 +308,6 @@ manage_workspace() {
     # Select the workspace
     tofu workspace select "$workspace_name"
 
-    # Restore TF_WORKSPACE
-    export TF_WORKSPACE="$current_tf_workspace"
-
     # Verify workspace selection
     local current_workspace
     current_workspace=$(tofu workspace show)
@@ -315,15 +332,12 @@ select_workspace() {
     fi
 
     log_info "Selecting workspace: $workspace_name"
+    log_debug "TF_WORKSPACE is currently: ${TF_WORKSPACE:-<unset>}"
 
     cd "$module_path" || {
         log_error "Failed to change to directory: $module_path"
         return 1
     }
-
-    # Temporarily unset TF_WORKSPACE to avoid automatic selection conflicts
-    local current_tf_workspace="$TF_WORKSPACE"
-    unset TF_WORKSPACE
 
     # Ensure Terraform is initialized
     if [[ ! -f ".terraform" ]] || [[ ! -d ".terraform" ]]; then
@@ -344,16 +358,20 @@ select_workspace() {
             log_info "Workspace does not exist, creating: $workspace_name"
             if tofu workspace new "$workspace_name" 2>/dev/null; then
                 log_success "Workspace created and selected: $workspace_name"
-                export TF_WORKSPACE="$current_tf_workspace"
                 return 0
             else
                 log_error "Failed to create workspace: $workspace_name"
-                export TF_WORKSPACE="$current_tf_workspace"
                 return 1
             fi
         else
             log_warning "Workspace does not exist: $workspace_name"
-            export TF_WORKSPACE="$current_tf_workspace"
+            log_info "Checking if state exists in S3 for workspace: $workspace_name"
+            if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate" --region "${S3_REGION}" >/dev/null 2>&1; then
+                log_info "Remote state found in S3, workspace will be created during init"
+            else
+                log_error "No local or remote state found for workspace: $workspace_name"
+                return 1
+            fi
             return 1
         fi
     fi
@@ -361,7 +379,6 @@ select_workspace() {
     # Select the workspace
     if tofu workspace select "$workspace_name" 2>/dev/null; then
         log_success "Workspace selected: $workspace_name"
-        export TF_WORKSPACE="$current_tf_workspace"
 
         # Verify selection
         local current_workspace
@@ -375,7 +392,6 @@ select_workspace() {
         fi
     else
         log_error "Failed to select workspace: $workspace_name"
-        export TF_WORKSPACE="$current_tf_workspace"
         return 1
     fi
 }
@@ -501,6 +517,11 @@ cleanup_workspace() {
     local workspace_name="${1:-$TF_WORKSPACE}"
     local module_path="${2:-$TOFU_MODULE_PATH}"
 
+    if [[ -z "$workspace_name" ]]; then
+        log_error "Workspace name is required for cleanup"
+        return 1
+    fi
+
     log_info "Cleaning up workspace: $workspace_name"
 
     cd "$module_path" || {
@@ -508,12 +529,43 @@ cleanup_workspace() {
         return 1
     }
 
-    # Switch to default workspace
-    unset TF_WORKSPACE
-    tofu workspace select default || log_warning "Could not switch to default workspace"
+    # Show current workspace before cleanup
+    local current_ws
+    current_ws=$(tofu workspace show 2>/dev/null || echo "unknown")
+    log_info "Current workspace before cleanup: $current_ws"
 
-    # Delete the workspace
-    tofu workspace delete "$workspace_name" || log_warning "Could not delete workspace: $workspace_name"
+    # Switch to default workspace (create if it doesn't exist)
+    log_info "Switching to default workspace"
+    if ! tofu workspace select default 2>/dev/null; then
+        log_info "Default workspace doesn't exist, creating it"
+        if ! tofu workspace new default 2>/dev/null; then
+            log_warning "Could not create default workspace, attempting to continue"
+        fi
+    fi
+
+    # Verify we're on default now
+    current_ws=$(tofu workspace show 2>/dev/null || echo "unknown")
+    if [[ "$current_ws" != "default" ]]; then
+        log_warning "Not on default workspace (currently on: $current_ws), workspace deletion may fail"
+    fi
+
+    # Delete the target workspace
+    log_info "Deleting workspace: $workspace_name"
+    if tofu workspace delete "$workspace_name" 2>&1; then
+        log_success "Workspace deleted successfully: $workspace_name"
+    else
+        log_warning "Could not delete workspace: $workspace_name (it may not exist locally)"
+    fi
+
+    # Optionally clean up remote state file in S3
+    if [[ -n "${S3_BUCKET_NAME}" && -n "${S3_REGION}" ]]; then
+        log_info "Cleaning up remote state file in S3"
+        if aws s3 rm "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate" --region "${S3_REGION}" 2>/dev/null; then
+            log_success "Remote state file deleted from S3"
+        else
+            log_info "Remote state file may not exist or already deleted"
+        fi
+    fi
 
     log_success "Workspace cleanup completed"
 }
@@ -883,7 +935,7 @@ initialize_airgap_environment() {
 # Export all functions for use in other scripts
 export -f log_info log_success log_warning log_error log_debug
 export -f load_environment export_aws_credentials validate_required_vars
-export -f initialize_tofu manage_workspace select_workspace generate_plan apply_plan destroy_infrastructure cleanup_workspace generate_backend_files download_cluster_tfvars_from_s3
+export -f log_workspace_context initialize_tofu manage_workspace select_workspace generate_plan apply_plan destroy_infrastructure cleanup_workspace generate_backend_files download_cluster_tfvars_from_s3
 export -f backup_state generate_outputs validate_infrastructure
 export -f generate_group_vars validate_yaml_syntax setup_ssh_keys
 export -f backup_file create_cleanup_archive wait_for_confirmation

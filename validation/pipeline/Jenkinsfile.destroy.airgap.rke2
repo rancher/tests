@@ -110,7 +110,7 @@ pipeline {
         IMAGE_NAME = "rancher-destroy-${JOB_SHORT_NAME}${BUILD_NUMBER}"
         VALIDATION_VOLUME = "DestroySharedVolume-${JOB_SHORT_NAME}${BUILD_NUMBER}"
 
-        // Target workspace from parameters
+        // Target workspace from parameters - CRITICAL: Set this before any tofu operations
         TARGET_WORKSPACE = "${params.TARGET_WORKSPACE}"
         TF_WORKSPACE = "${params.TARGET_WORKSPACE}"
 
@@ -211,6 +211,9 @@ pipeline {
             steps {
                 script {
                     logInfo('Performing infrastructure destruction using consolidated script')
+                    logInfo("Target workspace for destruction: ${env.TF_WORKSPACE}")
+                    logInfo("S3 Bucket: ${env.S3_BUCKET_NAME}")
+                    logInfo("S3 Region: ${env.S3_REGION}")
 
                     // Configuration validation
                     def requiredVars = [
@@ -620,11 +623,12 @@ def executeScriptInContainer(scriptContent, extraEnv = [:], skipWorkspaceEnv = f
                     -t --env-file ${env.ENV_FILE} \\
                     -e QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH} \\
                     -e TF_WORKSPACE=${env.TF_WORKSPACE} \\
+                    -e TARGET_WORKSPACE=${env.TARGET_WORKSPACE} \\
                     -e TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME} \\
                     -e S3_BUCKET_NAME="${s3BucketName}" \\
                     -e S3_KEY_PREFIX="${s3KeyPrefix}" \\
                     -e S3_REGION="${s3Region}" \\
-                    -e AWS_REGION="${awsRegion}" ${envVars} \\
+                    -e AWS_REGION="${awsRegion}" ${envVars} ${workspaceEnv} \\
                     ${env.IMAGE_NAME} \\
                     sh /tmp/script.sh
             """
