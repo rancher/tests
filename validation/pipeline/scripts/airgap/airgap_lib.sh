@@ -22,8 +22,8 @@ export S3_KEY_PREFIX="${S3_KEY_PREFIX:-jenkins-airgap-rke2/terraform.tfstate}"
 export QA_INFRA_PATH="${QA_INFRA_WORK_PATH}"
 export TOFU_MODULE_PATH="${QA_INFRA_PATH}/tofu/aws/modules/airgap"
 export REMOTE_TOFU_MODULE_PATH="/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap"
-SHARED_VOLUME_PATH="${SHARED_VOLUME_PATH:-/root}"
-export SHARED_VOLUME_PATH
+# SHARED_VOLUME_PATH is already set by common.sh (readonly), use default if not set
+: "${SHARED_VOLUME_PATH:=/root}"
 
 # =============================================================================
 # LOGGING AND DEBUG FUNCTIONS
