@@ -359,11 +359,16 @@ manage_workspace() {
         log_info "Workspace already exists: $workspace_name"
     fi
 
-    # Select the workspace
+    # Select the workspace (temporarily unset TF_WORKSPACE to avoid override)
     log_debug "Selecting workspace: $workspace_name"
+    local saved_workspace="${TF_WORKSPACE:-}"
+    unset TF_WORKSPACE
+    
     if tofu workspace select "$workspace_name" 2>&1; then
         log_debug "Workspace selection successful"
+        export TF_WORKSPACE="$saved_workspace"
     else
+        export TF_WORKSPACE="$saved_workspace"
         log_error "Failed to select workspace: $workspace_name"
         return 1
     fi
