@@ -1020,7 +1020,7 @@ def cleanupS3WorkspaceDirectory() {
         #!/bin/bash
         set -e
         
-        # Clean up workspace directory (contains cluster.tfvars and other config files)
+        # Clean up entire workspace directory (contains cluster.tfvars, config files, and state file)
         echo "Checking if workspace directory exists..."
         if aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --region "${env.S3_BUCKET_REGION}" 2>/dev/null; then
             echo "Workspace directory found: s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/"
@@ -1029,8 +1029,8 @@ def cleanupS3WorkspaceDirectory() {
             echo "Workspace contents to be deleted:"
             aws s3 ls "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_BUCKET_REGION}" || echo "No contents found"
             
-            # Delete entire workspace directory
-            echo "Deleting workspace directory..."
+            # Delete entire workspace directory recursively (includes state file)
+            echo "Deleting workspace directory and all contents..."
             aws s3 rm "s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/" --recursive --region "${env.S3_BUCKET_REGION}"
             
             # Verify deletion
@@ -1039,32 +1039,10 @@ def cleanupS3WorkspaceDirectory() {
                 echo "ERROR: Failed to delete workspace directory"
                 exit 1
             else
-                echo "[OK] Successfully deleted workspace directory"
+                echo "[OK] Successfully deleted workspace directory: s3://${env.S3_BUCKET_NAME}/env:/${env.TF_WORKSPACE}/"
             fi
         else
             echo "[INFO] Workspace directory does not exist in S3 - nothing to clean up"
-        fi
-        
-        # Clean up terraform state file (stored at S3_KEY_PREFIX)
-        echo ""
-        echo "Checking if terraform state file exists..."
-        if aws s3 ls "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_BUCKET_REGION}" 2>/dev/null; then
-            echo "Terraform state file found: s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}"
-            
-            # Delete terraform state file
-            echo "Deleting terraform state file..."
-            aws s3 rm "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_BUCKET_REGION}"
-            
-            # Verify deletion
-            echo "Verifying terraform state deletion..."
-            if aws s3 ls "s3://${env.S3_BUCKET_NAME}/${env.S3_KEY_PREFIX}" --region "${env.S3_BUCKET_REGION}" 2>/dev/null; then
-                echo "ERROR: Failed to delete terraform state file"
-                exit 1
-            else
-                echo "[OK] Successfully deleted terraform state file"
-            fi
-        else
-            echo "[INFO] Terraform state file does not exist in S3 - nothing to clean up"
         fi
         
         echo "=== S3 Cleanup Complete ==="
