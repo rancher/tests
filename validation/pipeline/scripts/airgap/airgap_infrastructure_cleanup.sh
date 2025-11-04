@@ -211,17 +211,19 @@ EOF
         log_cleanup "State contains $resource_count resources"
         
         if [[ $resource_count -eq 0 ]]; then
-            log_cleanup "ERROR: State is empty! No resources to destroy."
+            log_cleanup "State is empty - infrastructure already cleaned up"
             log_cleanup "Current workspace: $(tofu workspace show 2>/dev/null || echo 'unknown')"
             log_cleanup "TF_WORKSPACE env var: ${TF_WORKSPACE}"
             log_cleanup "Expected workspace: $workspace_name"
             log_cleanup "Checking S3 for state file..."
             if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate" --region "${S3_BUCKET_REGION}" 2>/dev/null; then
-                log_cleanup "State file EXISTS in S3, but appears empty or not loaded correctly"
+                log_cleanup "State file EXISTS in S3 - infrastructure was previously destroyed"
             else
-                log_cleanup "State file DOES NOT EXIST in S3 at: s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate"
+                log_cleanup "State file DOES NOT EXIST in S3 - workspace never had infrastructure"
             fi
-            return 1
+            
+            # Empty state is not an error - skip destroy and proceed to workspace cleanup
+            log_cleanup "Skipping infrastructure destruction (nothing to destroy)"
         fi
     else
         log_cleanup "ERROR: Failed to retrieve state list"
@@ -229,23 +231,27 @@ EOF
         return 1
     fi
 
-    # Perform infrastructure destruction
-    log_cleanup "Starting infrastructure destruction of $resource_count resources..."
-    if destroy_infrastructure "$module_path" "$var_file"; then
-        log_cleanup "[OK] Infrastructure destruction completed successfully"
-    else
-        log_cleanup "[FAIL] Infrastructure destruction failed or had issues"
+    # Perform infrastructure destruction only if there are resources
+    if [[ $resource_count -gt 0 ]]; then
+        log_cleanup "Starting infrastructure destruction of $resource_count resources..."
+        if destroy_infrastructure "$module_path" "$var_file"; then
+            log_cleanup "[OK] Infrastructure destruction completed successfully"
+        else
+            log_cleanup "[FAIL] Infrastructure destruction failed or had issues"
 
-        # Try to get remaining resources
-        if tofu state list >"$SHARED_VOLUME_PATH/remaining-resources.txt" 2>/dev/null; then
-            local remaining_count
-            remaining_count=$(wc -l <"$SHARED_VOLUME_PATH/remaining-resources.txt")
-            log_cleanup "Remaining resources: $remaining_count"
-            if [[ $remaining_count -gt 0 ]]; then
-                log_cleanup "Remaining resources list:"
-                cat "$SHARED_VOLUME_PATH/remaining-resources.txt" >>"$cleanup_log"
+            # Try to get remaining resources
+            if tofu state list >"$SHARED_VOLUME_PATH/remaining-resources.txt" 2>/dev/null; then
+                local remaining_count
+                remaining_count=$(wc -l <"$SHARED_VOLUME_PATH/remaining-resources.txt")
+                log_cleanup "Remaining resources: $remaining_count"
+                if [[ $remaining_count -gt 0 ]]; then
+                    log_cleanup "Remaining resources list:"
+                    cat "$SHARED_VOLUME_PATH/remaining-resources.txt" >>"$cleanup_log"
+                fi
             fi
         fi
+    else
+        log_cleanup "No resources to destroy - state is empty"
     fi
 
     # Clean up workspace if requested
