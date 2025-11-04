@@ -629,13 +629,24 @@ cleanup_workspace() {
         log_warning "Could not delete workspace: $workspace_name (it may not exist locally)"
     fi
 
-    # Optionally clean up remote state file in S3
+    # Clean up entire workspace directory in S3 (includes state file, config files, etc.)
     if [[ -n "${S3_BUCKET_NAME}" && -n "${S3_BUCKET_REGION}" ]]; then
-        log_info "Cleaning up remote state file in S3"
-        if aws s3 rm "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/terraform.tfstate" --region "${S3_BUCKET_REGION}" 2>/dev/null; then
-            log_success "Remote state file deleted from S3"
+        log_info "Cleaning up workspace directory in S3: s3://${S3_BUCKET_NAME}/env:/${workspace_name}/"
+        
+        # Check if directory exists
+        if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/" --region "${S3_BUCKET_REGION}" >/dev/null 2>&1; then
+            # List contents for logging
+            log_info "Workspace directory contents:"
+            aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/" --recursive --region "${S3_BUCKET_REGION}" 2>/dev/null || true
+            
+            # Delete entire workspace directory recursively
+            if aws s3 rm "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/" --recursive --region "${S3_BUCKET_REGION}" 2>/dev/null; then
+                log_success "Workspace directory deleted from S3: s3://${S3_BUCKET_NAME}/env:/${workspace_name}/"
+            else
+                log_warning "Failed to delete workspace directory from S3"
+            fi
         else
-            log_info "Remote state file may not exist or already deleted"
+            log_info "Workspace directory does not exist in S3 (already deleted or never created)"
         fi
     fi
 
