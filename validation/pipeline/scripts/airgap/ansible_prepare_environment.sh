@@ -262,7 +262,7 @@ validate_inventory_file() {
 
     # Total nodes count
     local total_nodes
-    total_nodes=$(grep -E -c "rke2-(server|agent)-[0-9]+" "$inventory_file")
+    total_nodes=$(grep -E -c "rke2-(server|agent)-[0-9]+" "$inventory_file" || echo "0")
     log_info "  Total RKE2 nodes: $total_nodes"
 
     # Validate structure
