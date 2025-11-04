@@ -35,12 +35,13 @@ env:
   HOSTNAME_PREFIX: "gha6-prov"
 
 jobs:
-  head:
+  v2-13:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head'))
-    name: head
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head')) ||
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13'))
+    name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: latest
 
@@ -282,12 +283,12 @@ jobs:
       - name: Creating Rancher server
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
-      - name: Run Daily IPv6 Cluster Provisioning tests
+      - name: Run IPv6 Cluster Provisioning tests
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-daily-ipv6-provisioning
+        uses: ./.github/actions/run-hostbusters-ipv6-provisioning
 
       - name: Cleanup Infrastructure
         if: always()

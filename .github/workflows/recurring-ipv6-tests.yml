@@ -35,12 +35,13 @@ env:
   HOSTNAME_PREFIX: "gha6-recur"
 
 jobs:
-  head:
+  v2-13:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head'))
-    name: head
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head')) ||
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13'))
+    name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: latest
     strategy:

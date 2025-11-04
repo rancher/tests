@@ -43,14 +43,14 @@ env:
   HOSTNAME_PREFIX: "gha-tprov"
 
 jobs:
-  head-off:
+  v2-13-off:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
       (github.event.inputs.run_all_variations == 'true' && startsWith(github.event.inputs.rancher_version, 'head')) ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head')) &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.upgraded_turtles, 'false'))
-    name: ${{ vars.RELEASED_RANCHER_VERSION_2_12 }} -> head - turtles OFF
+    name: ${{ vars.RELEASED_RANCHER_VERSION_2_12 }} -> v2-13 - turtles OFF
     runs-on: ubuntu-latest
     environment: latest
 
@@ -249,7 +249,6 @@ jobs:
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -355,14 +354,14 @@ jobs:
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-  head-on:
+  v2-13-on:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
       (github.event.inputs.run_all_variations == 'true' && startsWith(github.event.inputs.rancher_version, 'head')) ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head')) &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.upgraded_turtles, 'true'))
-    name: ${{ vars.RELEASED_RANCHER_VERSION_2_12 }} -> head - turtles ON
+    name: ${{ vars.RELEASED_RANCHER_VERSION_2_12 }} -> v2-13 - turtles ON
     runs-on: ubuntu-latest
     environment: latest
 
@@ -561,7 +560,6 @@ jobs:
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -667,14 +665,14 @@ jobs:
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-  head-toggled-on:
+  v2-13-toggled-on:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
       (github.event.inputs.run_all_variations == 'true' && startsWith(github.event.inputs.rancher_version, 'head')) ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head')) &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.upgraded_turtles, 'toggledOn'))
-    name: ${{ vars.RELEASED_RANCHER_VERSION_2_12 }} -> head - turtles toggled ON
+    name: ${{ vars.RELEASED_RANCHER_VERSION_2_12 }} -> v2-13 - turtles toggled ON
     runs-on: ubuntu-latest
     environment: latest
 
@@ -873,7 +871,6 @@ jobs:
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -1185,7 +1182,6 @@ jobs:
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
