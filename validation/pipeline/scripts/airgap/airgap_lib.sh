@@ -234,17 +234,24 @@ generate_backend_files() {
         return 1
     }
 
-    # Normalize S3 backend key to prefer workspace-scoped keys when TF_WORKSPACE is set.
-    # If S3_KEY_PREFIX already uses the env:/ workspace prefix, keep it as-is.
-    # If a simple filename or non-workspace key was provided and TF_WORKSPACE is set,
-    # rewrite to env:/<workspace>/<basename> so OpenTofu initializes against the correct object.
+    # When TF_WORKSPACE is set, OpenTofu/Terraform automatically uses workspace prefixes.
+    # The backend key should be a simple path WITHOUT the env:/ prefix because OpenTofu
+    # will add "env:/<workspace>/" automatically when TF_WORKSPACE is set.
+    # If S3_KEY_PREFIX already has env:/ prefix, strip it to avoid double prefixing.
     local backend_key="${S3_KEY_PREFIX}"
-    if [[ -n "${TF_WORKSPACE:-}" && ! "${backend_key}" =~ ^env:/ ]]; then
-        # Use basename to handle whether the provided key contains path segments.
-        local base_key
-        base_key="$(basename "${backend_key}")"
-        backend_key="env:/${TF_WORKSPACE}/${base_key}"
-        log_debug "Normalized S3 backend key to workspace-aware path: ${backend_key}"
+    if [[ -n "${TF_WORKSPACE:-}" ]]; then
+        # Strip env:/<workspace>/ prefix if present
+        if [[ "${backend_key}" =~ ^env:/([^/]+)/(.+)$ ]]; then
+            backend_key="${BASH_REMATCH[2]}"
+            log_debug "Stripped env:/ prefix from S3_KEY_PREFIX, using: ${backend_key}"
+        elif [[ "${backend_key}" =~ ^env:/(.+)$ ]]; then
+            backend_key="${BASH_REMATCH[1]}"
+            log_debug "Stripped env:/ prefix from S3_KEY_PREFIX, using: ${backend_key}"
+        else
+            # Use basename to handle whether the provided key contains path segments.
+            backend_key="$(basename "${backend_key}")"
+            log_debug "Using simple backend key (OpenTofu will add workspace prefix): ${backend_key}"
+        fi
     fi
 
     cat >"${module_path}/backend.tf" <<EOF
