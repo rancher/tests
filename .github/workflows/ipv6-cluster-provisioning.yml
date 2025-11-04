@@ -1,9 +1,9 @@
 ---
-name: Daily Dualstack Rancher IPv6 Cluster Provisioning
+name: IPv6 Cluster Provisioning
 
 on:
   schedule:
-    - cron: "0 9 * * 1"
+    - cron: "0 8 * * 1"
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -154,7 +154,7 @@ jobs:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
             awsConfig:
-              ami: "${{ secrets.AWS_AMI }}"
+              ami: "${{ secrets.AWS_IPV6_AMI }}"
               awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
@@ -167,13 +167,15 @@ jobs:
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
               awsUser: "${{ secrets.AWS_USER }}"
-              clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
+              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              enablePrimaryIPv6: true
+              httpProtocolIPv6: "enabled"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
               timeout: "${{ vars.TIMEOUT }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
+              ipAddressType: "${{ vars.IPV6_ADDRESS_TYPE }}"
               loadBalancerType: "${{ vars.LOAD_BALANCER_DUALSTACK_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+              targetType: "${{ vars.TARGET_IPV6_TYPE }}"
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
@@ -282,7 +284,7 @@ jobs:
       - name: Creating Rancher server
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
-      - name: Run Daily IPv6 Cluster Provisioning tests
+      - name: Run Daily IPv6 Provisioning tests
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
@@ -291,7 +293,7 @@ jobs:
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/dualstack/aws
+        working-directory: tfp-automation/modules/ipv6/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials

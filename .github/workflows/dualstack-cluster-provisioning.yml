@@ -1,9 +1,9 @@
 ---
-name: Daily IPv6 Cluster Provisioning
+name: Dualstack Cluster Provisioning
 
 on:
   schedule:
-    - cron: "0 8 * * 1"
+    - cron: "0 9 * * 1"
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -32,7 +32,7 @@ permissions:
 
 env:
   CLOUD_PROVIDER_VERSION: "5.95.0"
-  HOSTNAME_PREFIX: "gha6-prov"
+  HOSTNAME_PREFIX: "gha-ds-prov"
 
 jobs:
   head:
@@ -154,7 +154,7 @@ jobs:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
             awsConfig:
-              ami: "${{ secrets.AWS_IPV6_AMI }}"
+              ami: "${{ secrets.AWS_AMI }}"
               awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
@@ -167,15 +167,13 @@ jobs:
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
               awsUser: "${{ secrets.AWS_USER }}"
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
-              enablePrimaryIPv6: true
-              httpProtocolIPv6: "enabled"
+              clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
               timeout: "${{ vars.TIMEOUT }}"
-              ipAddressType: "${{ vars.IPV6_ADDRESS_TYPE }}"
+              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
               loadBalancerType: "${{ vars.LOAD_BALANCER_DUALSTACK_TYPE }}"
-              targetType: "${{ vars.TARGET_IPV6_TYPE }}"
+              targetType: "${{ vars.TARGET_TYPE }}"
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
@@ -202,9 +200,9 @@ jobs:
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             compliance: true
             networking:
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
-              stackPreference: "${{ vars.STACK_PREFERENCE_IPV6 }}"
+              clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
+              stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
             registries:
               rke2Registries:
                 mirrors:
@@ -225,20 +223,21 @@ jobs:
             region: "${{ secrets.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_IPV6_AMI }}"
+              ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
               enablePrimaryIPv6: true
               httpProtocolIpv6: "enabled"
               ipv6AddressOnly: true
               ipv6AddressCount: "1"
               instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
+              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.IPV6_AWS_ZONE_LETTER }}"
+              zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
-              subnetId: "${{ secrets.AWS_IPV6_SUBNET_ID }}"
+              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -247,7 +246,7 @@ jobs:
             awsEC2Config:
               - instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_IPV6_AMI }}"
+                awsAMI: "${{ secrets.AWS_DUALSTACK_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
@@ -284,16 +283,16 @@ jobs:
       - name: Creating Rancher server
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
-      - name: Run Daily IPv6 Provisioning tests
+      - name: Run Daily Dualstack Provisioning tests
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-daily-ipv6-provisioning
+        uses: ./.github/actions/run-hostbusters-daily-dualstack-provisioning
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/ipv6/aws
+        working-directory: tfp-automation/modules/dualstack/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
