@@ -83,7 +83,7 @@ def configureEnvironmentComplete() {
     env.RKE2_VERSION = params.RKE2_VERSION
     env.RANCHER_VERSION = params.RANCHER_VERSION
     env.TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
-    env.RANCHER_HOSTNAME = "${params.HOSTNAME_PREFIX ?: PipelineConfig.DEFAULT_HOSTNAME_PREFIX}.qa.rancher.space"
+    env.RANCHER_HOSTNAME = "${params.HOSTNAME_PREFIX ?: common().PipelineConfig.DEFAULT_HOSTNAME_PREFIX}.qa.rancher.space"
     
     common().logInfo("RKE2 Version: ${env.RKE2_VERSION}")
     common().logInfo("Rancher Version: ${env.RANCHER_VERSION}")
@@ -293,17 +293,17 @@ pipeline {
     parameters {
         string(
             name: 'RKE2_VERSION',
-            defaultValue: PipelineConfig.DEFAULT_RKE2_VERSION,
+            defaultValue: common().PipelineConfig.DEFAULT_RKE2_VERSION,
             description: 'RKE2 version to deploy (e.g., v1.28.8+rke2r1, v1.29.5+rke2r1, v1.30.2+rke2r1)'
         )
         string(
             name: 'RANCHER_VERSION',
-            defaultValue: PipelineConfig.DEFAULT_RANCHER_VERSION,
+            defaultValue: common().PipelineConfig.DEFAULT_RANCHER_VERSION,
             description: 'Rancher version to deploy (e.g., head, v2.10-head, v2.11.0, v2.9-head)'
         )
         string(
             name: 'RANCHER_TEST_REPO_URL',
-            defaultValue: PipelineConfig.DEFAULT_RANCHER_TEST_REPO,
+            defaultValue: common().PipelineConfig.DEFAULT_RANCHER_TEST_REPO,
             description: 'URL of rancher/tests repository'
         )
         string(
@@ -313,7 +313,7 @@ pipeline {
         )
         string(
             name: 'QA_INFRA_REPO_URL',
-            defaultValue: PipelineConfig.DEFAULT_QA_INFRA_REPO,
+            defaultValue: common().PipelineConfig.DEFAULT_QA_INFRA_REPO,
             description: 'URL of qa-infra-automation repository'
         )
         string(
@@ -338,7 +338,7 @@ pipeline {
         )
         string(
             name: 'S3_BUCKET_NAME',
-            defaultValue: PipelineConfig.DEFAULT_S3_BUCKET,
+            defaultValue: common().PipelineConfig.DEFAULT_S3_BUCKET,
             description: 'S3 bucket name where Terraform state is stored'
         )
         string(
@@ -348,12 +348,12 @@ pipeline {
         )
         string(
             name: 'S3_BUCKET_REGION',
-            defaultValue: PipelineConfig.DEFAULT_S3_BUCKET_REGION,
+            defaultValue: common().PipelineConfig.DEFAULT_S3_BUCKET_REGION,
             description: 'AWS region where the S3 bucket is located'
         )
         string(
             name: 'HOSTNAME_PREFIX',
-            defaultValue: PipelineConfig.DEFAULT_HOSTNAME_PREFIX,
+            defaultValue: common().PipelineConfig.DEFAULT_HOSTNAME_PREFIX,
             description: 'Hostname prefix for *.qa.rancher.space and other AWS resources'
         )
         booleanParam(
@@ -385,8 +385,8 @@ pipeline {
     // Global environment variables
     environment {
         // Repository configurations
-        RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: PipelineConfig.DEFAULT_RANCHER_TEST_REPO}"
-        QA_INFRA_REPO = "${params.QA_INFRA_REPO_URL ?: PipelineConfig.DEFAULT_QA_INFRA_REPO}"
+        RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: common().PipelineConfig.DEFAULT_RANCHER_TEST_REPO}"
+        QA_INFRA_REPO = "${params.QA_INFRA_REPO_URL ?: common().PipelineConfig.DEFAULT_QA_INFRA_REPO}"
 
         // Private registry configurations
         PRIVATE_REGISTRY_URL = "${params.PRIVATE_REGISTRY_URL ?: ''}"
@@ -408,9 +408,9 @@ pipeline {
 
         // Computed values
         JOB_SHORT_NAME = "${getShortJobName()}"
-        BUILD_CONTAINER_NAME = "${PipelineConfig.CONTAINER_NAME_PREFIX}-${env.JOB_SHORT_NAME}${env.BUILD_NUMBER}"
+        BUILD_CONTAINER_NAME = "${common().PipelineConfig.CONTAINER_NAME_PREFIX}-${env.JOB_SHORT_NAME}${env.BUILD_NUMBER}"
         IMAGE_NAME = "rancher-ansible-airgap-setup-${env.JOB_SHORT_NAME}${env.BUILD_NUMBER}"
-        VALIDATION_VOLUME = "${PipelineConfig.SHARED_VOLUME_PREFIX}-${env.JOB_SHORT_NAME}${env.BUILD_NUMBER}"
+        VALIDATION_VOLUME = "${common().PipelineConfig.SHARED_VOLUME_PREFIX}-${env.JOB_SHORT_NAME}${env.BUILD_NUMBER}"
 
         // Configuration files
         ANSIBLE_VARS_FILENAME = 'vars.yaml'
@@ -422,19 +422,19 @@ pipeline {
         TF_WORKSPACE = "jenkins_airgap_ansible_workspace_${env.BUILD_NUMBER}"
 
         // Timeouts (in minutes)
-        TERRAFORM_TIMEOUT = "${PipelineConfig.TERRAFORM_TIMEOUT_MINUTES}"
-        ANSIBLE_TIMEOUT = "${PipelineConfig.ANSIBLE_TIMEOUT_MINUTES}"
-        VALIDATION_TIMEOUT = "${PipelineConfig.VALIDATION_TIMEOUT_MINUTES}"
+        TERRAFORM_TIMEOUT = "${common().PipelineConfig.TERRAFORM_TIMEOUT_MINUTES}"
+        ANSIBLE_TIMEOUT = "${common().PipelineConfig.ANSIBLE_TIMEOUT_MINUTES}"
+        VALIDATION_TIMEOUT = "${common().PipelineConfig.VALIDATION_TIMEOUT_MINUTES}"
 
         // Backend configuration (S3 backend parameters)
-        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: PipelineConfig.DEFAULT_S3_BUCKET}"
-        S3_BUCKET_REGION = "${params.S3_BUCKET_REGION ?: PipelineConfig.DEFAULT_S3_BUCKET_REGION}"
-        AWS_REGION = "${params.S3_BUCKET_REGION ?: PipelineConfig.DEFAULT_S3_BUCKET_REGION}"
+        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: common().PipelineConfig.DEFAULT_S3_BUCKET}"
+        S3_BUCKET_REGION = "${params.S3_BUCKET_REGION ?: common().PipelineConfig.DEFAULT_S3_BUCKET_REGION}"
+        AWS_REGION = "${params.S3_BUCKET_REGION ?: common().PipelineConfig.DEFAULT_S3_BUCKET_REGION}"
         S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2'}"
 
         // Hostname prefix
-        HOSTNAME_PREFIX = "${params.HOSTNAME_PREFIX ?: PipelineConfig.DEFAULT_HOSTNAME_PREFIX}"
-        RANCHER_HOSTNAME = "${(params.HOSTNAME_PREFIX ?: PipelineConfig.DEFAULT_HOSTNAME_PREFIX)}.qa.rancher.space"
+        HOSTNAME_PREFIX = "${params.HOSTNAME_PREFIX ?: common().PipelineConfig.DEFAULT_HOSTNAME_PREFIX}"
+        RANCHER_HOSTNAME = "${(params.HOSTNAME_PREFIX ?: common().PipelineConfig.DEFAULT_HOSTNAME_PREFIX)}.qa.rancher.space"
 
         // Configuration content from parameters
         TERRAFORM_CONFIG = "${params.TERRAFORM_CONFIG ?: ''}"
