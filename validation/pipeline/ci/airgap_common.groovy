@@ -20,21 +20,11 @@
  * Centralized pipeline configuration constants
  * Shared across setup and destroy pipelines
  */
-class PipelineConfig {
-    static final String DEFAULT_HOSTNAME_PREFIX = 'airgap-ansible-jenkins'
-    static final String DEFAULT_RKE2_VERSION = 'v1.28.8+rke2r1'
-    static final String DEFAULT_RANCHER_VERSION = 'v2.9-head'
-    static final String DEFAULT_RANCHER_TEST_REPO = 'https://github.com/rancher/tests.git'
-    static final String DEFAULT_QA_INFRA_REPO = 'https://github.com/rancher/qa-infra-automation.git'
+class CommonConfig {
     static final String DEFAULT_S3_BUCKET = 'rancher-terraform-state'
     static final String DEFAULT_S3_BUCKET_REGION = 'us-east-1'
-    static final String CONTAINER_NAME_PREFIX = 'rancher-ansible-airgap'
-    static final String SHARED_VOLUME_PREFIX = 'validation-volume'
     static final String DOCKER_BUILD_CONTEXT = '.'
     static final String DOCKERFILE_PATH = 'tests/validation/Dockerfile.tofu.e2e'
-    static final int TERRAFORM_TIMEOUT_MINUTES = 60
-    static final int ANSIBLE_TIMEOUT_MINUTES = 90
-    static final int VALIDATION_TIMEOUT_MINUTES = 30
     static final String LOG_PREFIX_INFO = '[INFO]'
     static final String LOG_PREFIX_ERROR = '[ERROR]'
     static final String LOG_PREFIX_WARNING = '[WARNING]'
@@ -53,62 +43,8 @@ def init(pipelineContext) {
 }
 
 // ========================================
-// LOGGING FUNCTIONS
-// ========================================
-
-/**
- * Log informational message with timestamp
- */
-def logInfo(msg) {
-    context.echo "${PipelineConfig.LOG_PREFIX_INFO} ${getTimestamp()} ${msg}"
-}
-
-/**
- * Log error message with timestamp
- */
-def logError(msg) {
-    context.echo "${PipelineConfig.LOG_PREFIX_ERROR} ${getTimestamp()} ${msg}"
-}
-
-/**
- * Log warning message with timestamp
- */
-def logWarning(msg) {
-    context.echo "${PipelineConfig.LOG_PREFIX_WARNING} ${getTimestamp()} ${msg}"
-}
-
-/**
- * Log debug message (optional - requires DEBUG param)
- */
-def logDebug(msg) {
-    if (context.params.DEBUG || context.env.DEBUG?.toBoolean()) {
-        context.echo "[DEBUG] ${getTimestamp()} ${msg}"
-    }
-}
-
-/**
- * Get current timestamp in standard format
- */
-static def getTimestamp() {
-    return new Date().format('yyyy-MM-dd HH:mm:ss')
-}
-
-// ========================================
 // UTILITY FUNCTIONS
 // ========================================
-
-/**
- * Extract short job name from full job path
- * Handles Jenkins folder structure (e.g., "folder/subfolder/job" → "job")
- */
-def getShortJobName() {
-    def jobName = "${context.env.JOB_NAME}"
-    if (jobName.contains('/')) {
-        def lastSlashIndex = jobName.lastIndexOf('/')
-        return jobName.substring(lastSlashIndex + 1)
-    }
-    return jobName
-}
 
 /**
  * Get environment variable or parameter with fallback to default
@@ -144,9 +80,9 @@ def getEnvOrParam(name, defaultValue = null) {
  */
 def getS3Config() {
     return [
-            bucket: getEnvOrParam('S3_BUCKET_NAME', PipelineConfig.DEFAULT_S3_BUCKET),
+            bucket: getEnvOrParam('S3_BUCKET_NAME', CommonConfig.DEFAULT_S3_BUCKET),
             keyPrefix: getEnvOrParam('S3_KEY_PREFIX', 'jenkins-airgap-rke2/terraform.tfstate'),
-            region: getEnvOrParam('S3_BUCKET_REGION', PipelineConfig.DEFAULT_S3_BUCKET_REGION)
+            region: getEnvOrParam('S3_BUCKET_REGION', CommonConfig.DEFAULT_S3_BUCKET_REGION)
     ]
 }
 

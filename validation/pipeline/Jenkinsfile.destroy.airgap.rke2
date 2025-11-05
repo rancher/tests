@@ -11,7 +11,7 @@
 // ========================================
 // CONSTANTS AND CONFIGURATION (parity with setup pipeline)
 // ========================================
-class PipelineConfig {
+class PipelineConstants {
     static final String DEFAULT_HOSTNAME_PREFIX = 'airgap-ansible-jenkins'
     static final String DEFAULT_RKE2_VERSION = 'v1.28.8+rke2r1'
     static final String DEFAULT_RANCHER_VERSION = 'v2.9-head'
@@ -224,14 +224,6 @@ pipeline {
                         'TERRAFORM_TIMEOUT'
                     ]
                     validateRequiredVariables(requiredVars)
-
-                    // TODO: Remove this if destruction works.
-                    // Generate and copy backend configuration before running destroy
-                    // logInfo('Generating OpenTofu backend configuration')
-                    // generateTofuBackendConfiguration()
-          
-                    // logInfo('Initializing OpenTofu with backend configuration')
-                    // initializeOpenTofu()
 
                     // Enhanced timeout with reasonable defaults
                     def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
@@ -1081,21 +1073,15 @@ def cleanupS3WorkspaceDirectory() {
  */
 
 def logInfo(msg) {
-    echo "${PipelineConfig.LOG_PREFIX_INFO} ${getTimestamp()} ${msg}"
+    echo "${PipelineConstants.LOG_PREFIX_INFO} ${getTimestamp()} ${msg}"
 }
 
 def logError(msg) {
-    echo "${PipelineConfig.LOG_PREFIX_ERROR} ${getTimestamp()} ${msg}"
+    echo "${PipelineConstants.LOG_PREFIX_ERROR} ${getTimestamp()} ${msg}"
 }
 
 def logWarning(msg) {
-    echo "${PipelineConfig.LOG_PREFIX_WARNING} ${getTimestamp()} ${msg}"
-}
-
-def logDebug(msg) {
-    if (params.LOG_LEVEL == 'DEBUG' || params.LOG_LEVEL == 'VERBOSE') {
-        echo "[DEBUG] ${getTimestamp()} - ${msg}"
-    }
+    echo "${PipelineConstants.LOG_PREFIX_WARNING} ${getTimestamp()} ${msg}"
 }
 
 static def getTimestamp() {
