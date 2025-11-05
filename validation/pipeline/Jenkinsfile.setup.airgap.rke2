@@ -37,7 +37,6 @@ def common() {
 }
 
 __ciHelpersRef = null
-
 def ciHelpers() {
     if (__ciHelpersRef == null) {
         def candidates = [
@@ -54,7 +53,6 @@ def ciHelpers() {
 }
 
 __ciAirgapRef = null
-
 def ciAirgap() {
     if (__ciAirgapRef == null) {
         def candidates = [
@@ -68,6 +66,41 @@ def ciAirgap() {
         }
     }
     return __ciAirgapRef
+}
+
+// Lazily-loadable Docker helper accessor (must be defined before pipeline execution)
+dockerHelperInstance = null
+
+def dockerHelper() {
+    if (dockerHelperInstance == null) {
+        // Try a few likely locations for the helper file. Jenkins may perform
+        // additional checkouts (into subdirs like 'tests') which moves file
+        // paths around during the run; be tolerant and try multiple candidates.
+        def candidates = [
+                'validation/pipeline/ci/docker_helper.groovy',
+                'tests/validation/pipeline/ci/docker_helper.groovy'
+        ]
+
+        def helperPath = null
+        for (p in candidates) {
+            try {
+                if (fileExists(p)) {
+                    helperPath = p
+                    break
+                }
+            } catch (ignored) {
+                // fileExists may not be available outside node context; ignore and continue
+            }
+        }
+
+        if (helperPath == null) {
+            error("docker_helper.groovy not found in workspace at any of: ${candidates}")
+        }
+
+        def helperScript = load(helperPath)
+        dockerHelperInstance = helperScript.init(this)
+    }
+    return dockerHelperInstance
 }
 
 // ========================================
@@ -238,43 +271,6 @@ def extractAWSVariablesFromTerraformConfig() {
 // ========================================
 // PIPELINE DEFINITION
 // ========================================
-
-// Lazily-loadable Docker helper accessor (must be defined before pipeline execution)
-dockerHelperInstance = null
-
-def dockerHelper() {
-    if (dockerHelperInstance == null) {
-        // Try a few likely locations for the helper file. Jenkins may perform
-        // additional checkouts (into subdirs like 'tests') which moves file
-        // paths around during the run; be tolerant and try multiple candidates.
-        def candidates = [
-            'validation/pipeline/ci/docker_helper.groovy',
-            'tests/validation/pipeline/ci/docker_helper.groovy'
-        ]
-
-        def helperPath = null
-        for (p in candidates) {
-            try {
-                if (fileExists(p)) {
-                    helperPath = p
-                    break
-                }
-            } catch (ignored) {
-                // fileExists may not be available outside node context; ignore and continue
-            }
-        }
-
-        if (helperPath == null) {
-            error("docker_helper.groovy not found in workspace at any of: ${candidates}")
-        }
-
-        def helperScript = load(helperPath)
-        dockerHelperInstance = helperScript.init(this)
-    }
-    return dockerHelperInstance
-}
-
-
 
 pipeline {
     agent any
