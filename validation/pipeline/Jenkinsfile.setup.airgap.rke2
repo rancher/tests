@@ -213,8 +213,8 @@ def dockerHelper() {
         // additional checkouts (into subdirs like 'tests') which moves file
         // paths around during the run; be tolerant and try multiple candidates.
         def candidates = [
-            'validation/pipeline/scripts/airgap/docker_helper.groovy',
-            'tests/validation/pipeline/scripts/airgap/docker_helper.groovy'
+            'validation/pipeline/ci/docker_helper.groovy',
+            'tests/validation/pipeline/ci/docker_helper.groovy'
         ]
 
         def helperPath = null
