@@ -17,8 +17,8 @@ __commonRef = null
 def common() {
     if (__commonRef == null) {
         def candidates = [
-                'validation/pipeline/common/airgap_common.groovy',
-                'tests/validation/pipeline/common/airgap_common.groovy'
+                'validation/pipeline/ci/airgap_common.groovy',
+                'tests/validation/pipeline/ci/airgap_common.groovy'
         ]
         for (p in candidates) {
             try {
