@@ -316,7 +316,7 @@ jobs:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-daily-provisioning
+        uses: ./.github/actions/run-hostbusters-provisioning
 
       - name: Cleanup Infrastructure
         if: always()
@@ -623,7 +623,7 @@ jobs:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-daily-provisioning
+        uses: ./.github/actions/run-hostbusters-provisioning
 
       - name: Cleanup Infrastructure
         if: always()
@@ -930,7 +930,7 @@ jobs:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-daily-provisioning
+        uses: ./.github/actions/run-hostbusters-provisioning
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1237,7 +1237,7 @@ jobs:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-daily-provisioning
+        uses: ./.github/actions/run-hostbusters-provisioning
 
       - name: Cleanup Infrastructure
         if: always()
