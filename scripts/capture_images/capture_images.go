@@ -13,7 +13,6 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
-	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 
 	corev1 "k8s.io/api/core/v1"
@@ -99,17 +98,15 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM)
 
-	rancherConfig := new(rancher.Config)
-	config.LoadConfig(rancher.ConfigurationFileKey, rancherConfig)
-
-	client, err := rancher.NewClientForConfig("", rancherConfig, session.NewSession())
+	client, err := rancher.NewClient("", session.NewSession())
 	if err != nil {
 		panic(fmt.Errorf("Error creating client: %w", err))
 	}
 
+	clusterName := client.RancherConfig.ClusterName
 	clusterList := []ClusterInfo{}
 
-	if rancherConfig.ClusterName != "" {
+	if clusterName != "" {
 		localClusterID, err := clusters.GetClusterIDByName(client, "local")
 		if err != nil {
 			panic(fmt.Errorf("Error getting local cluster ID: %w", err))
@@ -117,13 +114,13 @@ func main() {
 
 		clusterList = append(clusterList, ClusterInfo{Name: "local", ID: localClusterID})
 
-		if rancherConfig.ClusterName != "local" {
-			clusterID, err := clusters.GetClusterIDByName(client, rancherConfig.ClusterName)
+		if clusterName != "local" {
+			clusterID, err := clusters.GetClusterIDByName(client, clusterName)
 			if err != nil {
 				panic(fmt.Errorf("Error getting local cluster ID: %w", err))
 			}
 
-			clusterList = append(clusterList, ClusterInfo{rancherConfig.ClusterName, clusterID})
+			clusterList = append(clusterList, ClusterInfo{clusterName, clusterID})
 		}
 	} else {
 		allClusters, err := client.Management.Cluster.List(nil)
