@@ -12,6 +12,11 @@
  *
 **/
 
+// Load shared library
+def common = load('validation/pipeline/ci/airgap_common.groovy')
+common = common.init(this)
+
+
 // ========================================
 // CONSTANTS AND CONFIGURATION
 // ========================================
@@ -25,8 +30,6 @@ class PipelineConfig {
     static final String DEFAULT_S3_BUCKET_REGION = 'us-east-1'
     static final String CONTAINER_NAME_PREFIX = 'rancher-ansible-airgap'
     static final String SHARED_VOLUME_PREFIX = 'validation-volume'
-    static final String DOCKER_BUILD_CONTEXT = '.'
-    static final String DOCKERFILE_PATH = 'tests/validation/Dockerfile.tofu.e2e'
     static final int TERRAFORM_TIMEOUT_MINUTES = 60
     static final int ANSIBLE_TIMEOUT_MINUTES = 90
     static final int VALIDATION_TIMEOUT_MINUTES = 30
