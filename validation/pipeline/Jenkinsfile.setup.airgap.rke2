@@ -937,117 +937,23 @@ def cleanupContainersAndVolumes() {
  * Defines all artifact types and their associated files
  */
 @NonCPS
-static def getArtifactDefinitions() {
-    return [
-        'infrastructure': [
-            'infrastructure-outputs.json',
-            'ansible-inventory.yml',
-            '*.tfvars'
-        ],
-        'ansible_prep': [
-            'group_vars.tar.gz',
-            'group_vars/all.yml',
-            'ansible-preparation-report.txt'
-        ],
-        'rke2_deployment': [
-            'kubeconfig.yaml',
-            'rke2_deployment_report.txt',
-            'rke2_deployment.log',
-            'kubectl-setup-logs.txt'
-        ],
-        'rancher_deployment': [
-            'rancher-deployment-logs.txt',
-            'rancher-validation-logs.txt',
-            'deployment-summary.json'
-        ],
-        'failure_common': [
-            '*.log',
-            'error-*.txt',
-            'ansible-debug-info.txt'
-        ],
-        'failure_infrastructure': [
-            'tfplan-backup',
-            'infrastructure-outputs.json'
-        ],
-        'failure_ansible': [
-            'ansible-inventory.yml',
-            'ansible-error-logs.txt',
-            'ssh-setup-error-logs.txt'
-        ],
-        'failure_rke2': [
-            'rke2-deployment-error-logs.txt',
-            'kubectl-setup-error-logs.txt'
-        ],
-        'failure_rancher': [
-            'rancher-deployment-error-logs.txt',
-            'rancher-validation-logs.txt',
-            'rancher-debug-info.txt'
-        ],
-        'success_complete': [
-            'kubeconfig.yaml',
-            'infrastructure-outputs.json',
-            'ansible-inventory.yml',
-            'deployment-summary.json'
-        ]
-    ]
-}
 
 /**
  * Archive artifacts based on type
  */
 def archiveArtifactsByType(String artifactType, List additionalFiles = []) {
-    def artifactDefs = getArtifactDefinitions()
-    
-    if (!artifactDefs.containsKey(artifactType)) {
-        logWarning("Unknown artifact type: ${artifactType}, using failure_common")
-        artifactType = 'failure_common'
-    }
-    
-    def artifactList = artifactDefs[artifactType] + additionalFiles
-    
-    logInfo("Archiving ${artifactType} artifacts")
-    try {
-        archiveArtifacts(
-            artifacts: artifactList.join(','),
-            allowEmptyArchive: true,
-            fingerprint: true,
-            onlyIfSuccessful: false
-        )
-    } catch (Exception e) {
-        logError("Failed to archive ${artifactType} artifacts: ${e.message}")
-    }
+    try { ciAirgap().archiveArtifactsByType(this, artifactType, additionalFiles) } catch (ignored) { }
 }
 
 /**
  * Archive failure artifacts - combines common + specific
  */
 def archiveFailureArtifactsByType(String failureType) {
-    def typeMap = [
-        'deployment': 'failure_infrastructure',
-        'ansible_prep': 'failure_ansible',
-        'rke2': 'failure_rke2',
-        'rancher': 'failure_rancher',
-        'timeout': 'failure_infrastructure',
-        'aborted': 'failure_common'
-    ]
-    
-    def specificType = typeMap[failureType] ?: 'failure_common'
-    archiveArtifactsByType(specificType)
-    
-    if (specificType != 'failure_common') {
-        archiveArtifactsByType('failure_common')
-    }
+    try { ciAirgap().archiveFailureArtifactsByType(this, failureType) } catch (ignored) { }
 }
 
 def archiveBuildArtifacts(List artifacts) {
-    try {
-        archiveArtifacts(
-            artifacts: artifacts.join(','),
-            allowEmptyArchive: true
-        )
-    } catch (Exception e) {
-        logError("Failed to archive artifacts: ${e.message}")
-    }
+    try { ciAirgap().archiveBuildArtifacts(this, artifacts) } catch (ignored) { }
 }
 
 /**

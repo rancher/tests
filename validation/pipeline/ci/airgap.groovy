@@ -479,4 +479,91 @@ terraform {
   }
 }
 
+// Basic logging helpers (library)
+def logInfo(ctx, String msg) { ctx.echo "[INFO] ${new Date().format('yyyy-MM-dd HH:mm:ss')} ${msg}" }
+def logWarning(ctx, String msg) { ctx.echo "[WARNING] ${new Date().format('yyyy-MM-dd HH:mm:ss')} ${msg}" }
+def logError(ctx, String msg) { ctx.echo "[ERROR] ${new Date().format('yyyy-MM-dd HH:mm:ss')} ${msg}" }
+
+// Central artifact defs
+@NonCPS
+static def getArtifactDefinitions() {
+  return [
+    'infrastructure': [ 'infrastructure-outputs.json', 'ansible-inventory.yml', '*.tfvars' ],
+    'ansible_prep': [ 'group_vars.tar.gz', 'group_vars/all.yml', 'ansible-preparation-report.txt' ],
+    'rke2_deployment': [ 'kubeconfig.yaml', 'rke2_deployment_report.txt', 'rke2_deployment.log', 'kubectl-setup-logs.txt' ],
+    'rancher_deployment': [ 'rancher-deployment-logs.txt', 'rancher-validation-logs.txt', 'deployment-summary.json' ],
+    'failure_common': [ '*.log', 'error-*.txt', 'ansible-debug-info.txt' ],
+    'failure_infrastructure': [ 'tfplan-backup', 'infrastructure-outputs.json' ],
+    'failure_ansible': [ 'ansible-inventory.yml', 'ansible-error-logs.txt', 'ssh-setup-error-logs.txt' ],
+    'failure_rke2': [ 'rke2-deployment-error-logs.txt', 'kubectl-setup-error-logs.txt' ],
+    'failure_rancher': [ 'rancher-deployment-error-logs.txt', 'rancher-validation-logs.txt', 'rancher-debug-info.txt' ],
+    'success_complete': [ 'kubeconfig.yaml', 'infrastructure-outputs.json', 'ansible-inventory.yml', 'deployment-summary.json' ]
+  ]
+}
+
+def archiveArtifactsByType(ctx, String artifactType, List additionalFiles = []) {
+  def defs = getArtifactDefinitions()
+  if (!defs.containsKey(artifactType)) { artifactType = 'failure_common' }
+  def artifactList = defs[artifactType] + additionalFiles
+  try {
+    ctx.archiveArtifacts(
+      artifacts: artifactList.join(','),
+      allowEmptyArchive: true,
+      fingerprint: true,
+      onlyIfSuccessful: false
+    )
+  } catch (Exception e) {
+    logWarning(ctx, "Failed to archive ${artifactType} artifacts: ${e.message}")
+  }
+}
+
+def archiveFailureArtifactsByType(ctx, String failureType) {
+  def typeMap = [
+    'deployment': 'failure_infrastructure',
+    'ansible_prep': 'failure_ansible',
+    'rke2': 'failure_rke2',
+    'rancher': 'failure_rancher',
+    'timeout': 'failure_infrastructure',
+    'aborted': 'failure_common'
+  ]
+  def specific = typeMap[failureType] ?: 'failure_common'
+  archiveArtifactsByType(ctx, specific)
+  if (specific != 'failure_common') { archiveArtifactsByType(ctx, 'failure_common') }
+}
+
+// Archive a list of artifacts from pipeline context
+def archiveBuildArtifacts(ctx, List artifactList = []) {
+  try {
+    ctx.archiveArtifacts(
+      artifacts: artifactList.join(','),
+      allowEmptyArchive: true
+    )
+  } catch (Exception e) {
+    ctx.echo "[WARN] Failed to archive artifacts: ${e.message}"
+  }
+}
+
+// Execute infrastructure cleanup using consolidated script
+// Mirrors Jenkinsfile fallback behavior
+def executeInfrastructureCleanup(ctx, String failureType) {
+  def cleanupReason = ['timeout','aborted'].contains(failureType) ? failureType : 'deployment_failure'
+  def cleanupScript = '''
+#!/bin/bash
+set -e
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
+perform_cleanup "${CLEANUP_REASON}" "${TF_WORKSPACE}" "true"
+'''
+  def cleanupEnvVars = [
+    'CLEANUP_REASON'                   : cleanupReason,
+    'DESTROY_ON_FAILURE'               : ctx.env.DESTROY_ON_FAILURE,
+    'QA_INFRA_WORK_PATH'               : ctx.env.QA_INFRA_WORK_PATH,
+    'TF_WORKSPACE'                     : ctx.env.TF_WORKSPACE,
+    'TERRAFORM_BACKEND_CONFIG_FILENAME': ctx.env.TERRAFORM_BACKEND_CONFIG_FILENAME,
+    'TERRAFORM_VARS_FILENAME'          : ctx.env.TERRAFORM_VARS_FILENAME
+  ]
+  def helper = ctx.dockerHelper()
+  helper.executeScriptInContainer(cleanupScript, cleanupEnvVars)
+  ctx.echo("[INFO] Infrastructure cleanup completed for ${failureType}")
+}
+
 return this
