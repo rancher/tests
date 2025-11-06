@@ -803,11 +803,18 @@ def cleanupSSHKeys() {
 
 def cleanupContainersAndVolumes() {
     // Strict: delegate to library cleanup implementation; fail fast if missing
-    def airgap = ciAirgap()
-    if (!airgap || !airgap.metaClass.respondsTo(airgap, 'cleanupContainersAndVolumes')) {
-        error('Required library function ci/airgap.groovy::cleanupContainersAndVolumes not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
+    try {
+        def airgap = ciAirgap()
+        if (airgap && airgap instanceof groovy.lang.Script) {
+            airgap.cleanupContainersAndVolumes(this)
+            return
+        }
+    } catch (groovy.lang.MissingMethodException e) {
+        logError("Required library function ci/airgap.groovy::cleanupContainersAndVolumes not available: ${e.message}")
+    } catch (Exception e) {
+        logError("Library function invocation failed: ${e.message}")
     }
-    airgap.cleanupContainersAndVolumes(this)
+    error('Required library function ci/airgap.groovy::cleanupContainersAndVolumes not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
 }
 
 // ========================================
@@ -980,12 +987,15 @@ def executeInfrastructureCleanup(String failureType) {
     // Delegate to library implementation when available
     try {
         def airgap = ciAirgap()
-        if (airgap && airgap.metaClass.respondsTo(airgap, 'executeInfrastructureCleanup')) {
+        if (airgap && airgap instanceof groovy.lang.Script) {
             airgap.executeInfrastructureCleanup(this, failureType)
             return
         }
-    } catch (ignored) {}
- 
+    } catch (Exception e) {
+        logWarning("Library implementation not available: ${e.message}")
+    }
+
+    // Fallback implementation
     def cleanupReason = failureType in ['timeout', 'aborted'] ? failureType : 'deployment_failure'
     def cleanupScript = '''
 #!/bin/bash
