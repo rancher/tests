@@ -1095,20 +1095,22 @@ def handleFailureCleanup(String failureType) {
  * @param cleanupReason Reason for cleanup: 'deployment_failure', 'timeout', 'aborted'
  */
 def executeInfrastructureCleanup(String failureType) {
-    // Delegate to library implementation when available
-    try {
-        def airgap = ciAirgap()
-        if (airgap && airgap instanceof groovy.lang.Script) {
-            airgap.executeInfrastructureCleanup(this, failureType)
-            return
-        }
-    } catch (Exception e) {
-        logWarning("Library implementation not available: ${e.message}")
-    }
 
-    // Fallback implementation
-    def cleanupReason = failureType in ['timeout', 'aborted'] ? failureType : 'deployment_failure'
-    def cleanupScript = '''
+    script {
+        // Delegate to library implementation when available
+        try {
+            def airgap = ciAirgap()
+            if (airgap && airgap instanceof groovy.lang.Script) {
+                airgap.executeInfrastructureCleanup(this, failureType)
+                return
+            }
+        } catch (Exception e) {
+            logWarning("Library implementation not available: ${e.message}")
+        }
+
+        // Fallback implementation
+        def cleanupReason = failureType in ['timeout', 'aborted'] ? failureType : 'deployment_failure'
+        def cleanupScript = '''
 #!/bin/bash
 set -e
 # Source the consolidated cleanup script
@@ -1116,21 +1118,22 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/
 # Execute cleanup
 perform_cleanup "${CLEANUP_REASON}" "${TF_WORKSPACE}" "true"
 '''
-    def cleanupEnvVars = [
-        'CLEANUP_REASON': cleanupReason,
-        'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
-        'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-        'TF_WORKSPACE': env.TF_WORKSPACE,
-        'TERRAFORM_BACKEND_CONFIG_FILENAME': env.TERRAFORM_BACKEND_CONFIG_FILENAME,
-        'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
-    ]
-    try {
-        def helper = dockerHelper()
-        helper.executeScriptInContainer(cleanupScript, cleanupEnvVars)
-        logInfo("Infrastructure cleanup completed for ${failureType} (fallback)")
-    } catch (Exception e) {
-        logError("Infrastructure cleanup failed: ${e.message}")
-        throw e
+        def cleanupEnvVars = [
+                'CLEANUP_REASON'                   : cleanupReason,
+                'DESTROY_ON_FAILURE'               : env.DESTROY_ON_FAILURE,
+                'QA_INFRA_WORK_PATH'               : env.QA_INFRA_WORK_PATH,
+                'TF_WORKSPACE'                     : env.TF_WORKSPACE,
+                'TERRAFORM_BACKEND_CONFIG_FILENAME': env.TERRAFORM_BACKEND_CONFIG_FILENAME,
+                'TERRAFORM_VARS_FILENAME'          : env.TERRAFORM_VARS_FILENAME
+        ]
+        try {
+            def helper = dockerHelper()
+            helper.executeScriptInContainer(cleanupScript, cleanupEnvVars)
+            logInfo("Infrastructure cleanup completed for ${failureType} (fallback)")
+        } catch (Exception e) {
+            logError("Infrastructure cleanup failed: ${e.message}")
+            throw e
+        }
     }
 }
 
