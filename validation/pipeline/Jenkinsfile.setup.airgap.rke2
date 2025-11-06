@@ -652,6 +652,35 @@ static def getTimestamp() {
 // PARAMETER VALIDATION FUNCTIONS
 // ========================================
 
+def validateParameters() {
+    logInfo('Validating pipeline parameters using external script')
+
+    def validationScript = '''
+#!/bin/bash
+set -e
+# Source the external validation helper script
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/validation_helpers.sh
+# Run parameter validation
+validate_pipeline_parameters
+'''
+
+    def validationEnvVars = [
+            'RKE2_VERSION': params.RKE2_VERSION,
+            'RANCHER_VERSION': params.RANCHER_VERSION,
+            'RANCHER_TEST_REPO_URL': params.RANCHER_TEST_REPO_URL,
+            'QA_INFRA_REPO_URL': params.QA_INFRA_REPO_URL,
+    ]
+
+    try {
+        dockerHelper().executeScriptInContainer(validationScript, validationEnvVars)
+        logInfo('All parameters validated successfully')
+    } catch (Exception e) {
+        def errorMsg = "Parameter validation failed: ${e.message}"
+        logError(errorMsg)
+        error(errorMsg)
+    }
+}
+
 def validateRequiredVariables(List<String> requiredVars) {
     logInfo('Validating required environment variables')
 
