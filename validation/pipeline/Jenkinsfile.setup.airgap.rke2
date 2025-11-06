@@ -271,11 +271,13 @@ def extractAWSVariablesFromTerraformConfig() {
 // ========================================
 
 pipeline {
-    options { durabilityHint('PERFORMANCE_OPTIMIZED'); disableConcurrentBuilds() }
     agent any
 
     // Global pipeline options
     options {
+        durabilityHint('PERFORMANCE_OPTIMIZED')
+        disableConcurrentBuilds()
+
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timeout(time: 3, unit: 'HOURS')
         timestamps()
