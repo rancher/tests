@@ -443,7 +443,6 @@ pipeline {
             steps {
                 script {
 
-                    // ✅ Load the library NOW (workspace exists)
                     def commonCandidates = [
                             'validation/pipeline/ci/airgap_common.groovy',
                             'tests/validation/pipeline/ci/airgap_common.groovy'
@@ -463,8 +462,8 @@ pipeline {
                         error("airgap_common.groovy not found at any of: ${commonCandidates}")
                     }
 
-                    def s = ciAirgap()
-                    s.setupEnv(this)
+                    def airgap = ciAirgap()
+                    airgap.setupEnv(this)
                 }
             }
         }
@@ -472,8 +471,8 @@ pipeline {
         stage('Checkout Repositories') {
             steps {
                 script {
-                    def s = ciAirgap()
-                    s.checkoutRepositories(this)
+                    def airgap = ciAirgap()
+                    airgap.checkoutRepositories(this)
                 }
             }
         }
@@ -481,8 +480,8 @@ pipeline {
         stage('Configure Environment') {
             steps {
                 script {
-                    def s = ciAirgap()
-                    s.configureEnv(this)
+                    def airgap = ciAirgap()
+                    airgap.configureEnv(this)
                 }
             }
         }
@@ -490,8 +489,8 @@ pipeline {
         stage('Prepare Infrastructure') {
             steps {
                 script {
-                    def s = ciAirgap()
-                    s.prepareInfra(this)
+                    def airgap = ciAirgap()
+                    airgap.prepareInfra(this)
                 }
             }
         }
@@ -499,8 +498,8 @@ pipeline {
         stage('Deploy Infrastructure') {
             steps {
                 script {
-                    def s = ciAirgap()
-                    s.deployInfrastructure(this)
+                    def airgap = ciAirgap()
+                    airgap.deployInfrastructure(this)
                 }
             }
             post {
@@ -513,8 +512,8 @@ pipeline {
         stage('Prepare Ansible Environment') {
             steps {
                 script {
-                    def s = ciAirgap()
-                    s.prepareAnsibleEnv(this)
+                    def airgap = ciAirgap()
+                    airgap.prepareAnsibleEnv(this)
                 }
             }
             post {
@@ -527,8 +526,8 @@ pipeline {
         stage('Deploy RKE2 with Ansible') {
             steps {
                 script {
-                    def s = ciAirgap()
-                    s.deployRKE2(this)
+                    def airgap = ciAirgap()
+                    airgap.deployRKE2(this)
                 }
             }
             post {
@@ -541,8 +540,8 @@ pipeline {
         stage('Deploy Rancher with Ansible') {
             steps {
                 script {
-                    def s = ciAirgap()
-                    s.deployRancher(this)
+                    def airgap = ciAirgap()
+                    airgap.deployRancher(this)
                 }
             }
             post {
@@ -834,20 +833,20 @@ def cleanupSSHKeys() {
 
 def buildDockerImage() {
     // Strict: library MUST provide implementation for buildDockerImage
-    def s = ciAirgap()
-    if (!s || !s.metaClass.respondsTo(s, 'buildDockerImage')) {
+    def airgap = ciAirgap()
+    if (!airgap || !airgap.metaClass.respondsTo(airgap, 'buildDockerImage')) {
         error('Required library function ci/airgap.groovy::buildDockerImage not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
     }
-    s.buildDockerImage(this)
+    airgap.buildDockerImage(this)
 }
 
 def createSharedVolume() {
     // Strict: delegate to library; fail fast if library missing
-    def s = ciAirgap()
-    if (!s || !s.metaClass.respondsTo(s, 'createSharedVolume')) {
+    def airgap = ciAirgap()
+    if (!airgap || !airgap.metaClass.respondsTo(airgap, 'createSharedVolume')) {
         error('Required library function ci/airgap.groovy::createSharedVolume not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
     }
-    s.createSharedVolume(this)
+    airgap.createSharedVolume(this)
 }
 
 def ensureSSHKeysInContainer() {
@@ -939,11 +938,11 @@ def ensureSSHKeysInContainer() {
 
 def cleanupContainersAndVolumes() {
     // Strict: delegate to library cleanup implementation; fail fast if missing
-    def s = ciAirgap()
-    if (!s || !s.metaClass.respondsTo(s, 'cleanupContainersAndVolumes')) {
+    def airgap = ciAirgap()
+    if (!airgap || !airgap.metaClass.respondsTo(airgap, 'cleanupContainersAndVolumes')) {
         error('Required library function ci/airgap.groovy::cleanupContainersAndVolumes not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
     }
-    s.cleanupContainersAndVolumes(this)
+    airgap.cleanupContainersAndVolumes(this)
 }
 
 // ========================================
@@ -1115,9 +1114,9 @@ def handleFailureCleanup(String failureType) {
 def executeInfrastructureCleanup(String failureType) {
     // Delegate to library implementation when available
     try {
-        def s = ciAirgap()
-        if (s && s.metaClass.respondsTo(s, 'executeInfrastructureCleanup')) {
-            s.executeInfrastructureCleanup(this, failureType)
+        def airgap = ciAirgap()
+        if (airgap && airgap.metaClass.respondsTo(airgap, 'executeInfrastructureCleanup')) {
+            airgap.executeInfrastructureCleanup(this, failureType)
             return
         }
     } catch (ignored) {}
@@ -1267,9 +1266,9 @@ def generateDeploymentSummary() {
 
 def generateTofuConfiguration() {
     // Strict: delegate to library; fail fast if library missing
-    def s = ciAirgap()
-    if (!s || !s.metaClass.respondsTo(s, 'generateTofuConfiguration')) {
+    def airgap = ciAirgap()
+    if (!airgap || !airgap.metaClass.respondsTo(airgap, 'generateTofuConfiguration')) {
         error('Required library function ci/airgap.groovy::generateTofuConfiguration not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
     }
-    s.generateTofuConfiguration(this)
+    airgap.generateTofuConfiguration(this)
 }
