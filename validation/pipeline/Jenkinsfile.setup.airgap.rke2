@@ -12,9 +12,6 @@
  *
 **/
 
-// Declare library variables (will be loaded in first stage)
-def common
-
 /**
  * Centralized pipeline configuration constants
  * Shared across setup and destroy pipelines
@@ -442,26 +439,6 @@ pipeline {
         stage('Initialize Pipeline') {
             steps {
                 script {
-
-                    def commonCandidates = [
-                            'validation/pipeline/ci/airgap_common.groovy',
-                            'tests/validation/pipeline/ci/airgap_common.groovy'
-                    ]
-
-                    for (path in commonCandidates) {
-                        if (fileExists(path)) {
-                            logInfo("Loading common library from: ${path}")
-                            common = load(path)
-                            common = common.init(this)
-                            logInfo("Common library loaded successfully")
-                            break
-                        }
-                    }
-
-                    if (!common) {
-                        error("airgap_common.groovy not found at any of: ${commonCandidates}")
-                    }
-
                     def airgap = ciAirgap()
                     airgap.setupEnv(this)
                 }
