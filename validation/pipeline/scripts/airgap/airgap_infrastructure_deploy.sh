@@ -22,7 +22,8 @@ readonly QA_INFRA_CLONE_PATH
     COMMON_CANDIDATES=(
         "${SCRIPT_DIR}/../../../lib/common.sh"
         "/root/go/src/github.com/rancher/tests/scripts/lib/common.sh"
-        "/root/go/src/github.com/rancher/tests/validation/scripts/lib/common.sh"
+        "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/lib/common.sh"
+        "/root/go/src/github.com/rancher/tests/scripts/lib/common.sh"
     )
     for c in "${COMMON_CANDIDATES[@]}"; do
         if [ -f "$c" ]; then . "$c" && log_info "Sourced common helpers from $c" && break; fi

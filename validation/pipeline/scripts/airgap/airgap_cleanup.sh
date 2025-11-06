@@ -635,7 +635,7 @@ manual_infrastructure_destruction() {
         log_cleanup "Using var file: $TERRAFORM_VARS_FILENAME"
     fi
     
-    if tofu destroy -auto-approve $var_file_arg 2>&1 | tee "$SHARED_VOLUME_PATH/destruction-output.log"; then
+    if tofu destroy -auto-approve "$var_file_arg" 2>&1 | tee "$SHARED_VOLUME_PATH/destruction-output.log"; then
         log_cleanup "[OK] Manual infrastructure destruction completed"
     else
         log_cleanup "[FAIL] Manual infrastructure destruction failed"

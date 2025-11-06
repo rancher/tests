@@ -2,6 +2,19 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+# Try to source common shell library for consistent logging helpers (optional)
+# shellcheck disable=SC1090
+if ! type log_info >/dev/null 2>&1; then
+  COMMON_CANDIDATES=(
+    "${SCRIPT_DIR:-.}/../../../scripts/lib/common.sh" \
+    "/root/go/src/github.com/rancher/tests/scripts/lib/common.sh" \
+    "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/lib/common.sh"
+  )
+  for c in "${COMMON_CANDIDATES[@]}"; do
+    [ -f "$c" ] && . "$c" && break
+  done
+fi
+
 # ========================================
 # VALIDATION HELPER FUNCTIONS
 # ========================================

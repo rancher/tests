@@ -1,9 +1,36 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
+IFS=$'\n\t'
 
 # Ansible RKE2 Deployment Script
 # Consolidated script that handles RKE2 tarball deployment and validation
 # Replaces: ansible_run_rke2_deployment.sh, ansible_setup_kubectl.sh, ansible_validate_rancher.sh
+
+# =============================================================================
+# SCRIPT CONFIGURATION
+# =============================================================================
+
+SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_NAME
+SCRIPT_DIR="$(dirname "$0")"
+readonly SCRIPT_DIR
+QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
+readonly QA_INFRA_CLONE_PATH
+RKE2_PLAYBOOK="$QA_INFRA_CLONE_PATH/ansible/rke2/airgap/playbooks/deploy/rke2-tarball-playbook.yml"
+readonly RKE2_PLAYBOOK
+
+# Try to source common shell library for logging/helpers first
+# shellcheck disable=SC1090
+if ! type log_info >/dev/null 2>&1; then
+    COMMON_CANDIDATES=(
+        "${SCRIPT_DIR}/../../../lib/common.sh" \
+        "/root/go/src/github.com/rancher/tests/scripts/lib/common.sh" \
+        "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/lib/common.sh"
+    )
+    for c in "${COMMON_CANDIDATES[@]}"; do
+        [ -f "$c" ] && . "$c" && break
+    done
+fi
 
 # Load the airgap library (try multiple candidate locations)
 # shellcheck disable=SC1090
@@ -28,19 +55,6 @@ if ! type log_info >/dev/null 2>&1; then
         exit 1
     fi
 fi
-
-# =============================================================================
-# SCRIPT CONFIGURATION
-# =============================================================================
-
-SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_NAME
-SCRIPT_DIR="$(dirname "$0")"
-readonly SCRIPT_DIR
-QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
-readonly QA_INFRA_CLONE_PATH
-RKE2_PLAYBOOK="$QA_INFRA_CLONE_PATH/ansible/rke2/airgap/playbooks/deploy/rke2-tarball-playbook.yml"
-readonly RKE2_PLAYBOOK
 
 # =============================================================================
 # RKE2 DEPLOYMENT

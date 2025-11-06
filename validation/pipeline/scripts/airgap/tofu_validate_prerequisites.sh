@@ -73,7 +73,7 @@ main() {
     log_info "Current working directory: $(pwd)"
     log_info "Listing tofu module directory (if present):"
     if [[ -d "${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap" ]]; then
-        ls -la "${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/" | head -50 || true
+        find "${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap/" -maxdepth 1 -mindepth 1 -printf '%f\n' | head -50 || true
     else
         log_warning "Module directory not found: ${QA_INFRA_WORK_PATH}/tofu/aws/modules/airgap"
     fi

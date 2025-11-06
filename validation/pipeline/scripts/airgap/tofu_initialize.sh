@@ -8,9 +8,12 @@ set -e
 # CONSTANTS
 # =============================================================================
 
-readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_DIR="$(dirname "$0")"
-readonly ENV_FILE="/tmp/.env"
+SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_NAME
+SCRIPT_DIR="$(dirname "$0")"
+readonly SCRIPT_DIR
+ENV_FILE="/tmp/.env"
+readonly ENV_FILE
 
 # =============================================================================
 # LOGGING FUNCTIONS

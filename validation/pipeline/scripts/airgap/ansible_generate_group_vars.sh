@@ -17,6 +17,19 @@ readonly SCRIPT_DIR
 OUTPUT_DIR="${ANSIBLE_OUTPUT_DIR:-/root/ansible/rke2/airgap/group_vars}"
 readonly OUTPUT_DIR
 
+# Try to source common shell library for logging/helpers
+# shellcheck disable=SC1090
+if ! type log_info >/dev/null 2>&1; then
+    COMMON_CANDIDATES=(
+        "${SCRIPT_DIR}/../../../lib/common.sh" \
+        "/root/go/src/github.com/rancher/tests/scripts/lib/common.sh" \
+        "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/lib/common.sh"
+    )
+    for c in "${COMMON_CANDIDATES[@]}"; do
+        [ -f "$c" ] && . "$c" && break
+    done
+fi
+
 # =============================================================================
 # PREREQUISITE VALIDATION
 # =============================================================================

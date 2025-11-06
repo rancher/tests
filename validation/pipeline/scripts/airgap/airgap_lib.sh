@@ -490,7 +490,7 @@ generate_plan() {
     fi
 
     # Generate plan
-    tofu plan $var_file_arg -input=false -out="$plan_output"
+    tofu plan "$var_file_arg" -input=false -out="$plan_output"
 
     # Verify plan file exists and is not empty
     if [[ ! -f "$plan_output" ]]; then
@@ -569,7 +569,7 @@ destroy_infrastructure() {
     fi
 
     # Perform destruction
-    if tofu destroy $var_file_arg -auto-approve -input=false; then
+    if tofu destroy "$var_file_arg" -auto-approve -input=false; then
         log_success "Infrastructure destroyed successfully"
 
         # Clean up workspace if requested
