@@ -13,9 +13,6 @@ on:
       cluster_name:
         description: "Downstream cluster name"
         required: true
-      kubernetes_version:
-        description: "Kubernetes version for the cluster (e.g. 1.32.8)"
-        required: true
       test_packages:
         description: "Comma-separated test package paths (e.g. validation/rbac,validation/projects)"
         required: true
@@ -98,7 +95,6 @@ jobs:
             "-F" "rancher_host=${{ github.event.inputs.rancher_host }}"
             "-F" "admin_token=${{ github.event.inputs.admin_token }}"
             "-F" "cluster_name=${{ github.event.inputs.cluster_name }}"
-            "-F" "kubernetes_version=${{ github.event.inputs.kubernetes_version }}" 
             "-F" "test_package=${{ steps.parse.outputs.current_pkg }}"
             "-F" "run_all_tests=${{ github.event.inputs.run_all_tests }}"
             "-F" "test_selector=${{ github.event.inputs.test_selector }}"
@@ -148,7 +144,6 @@ jobs:
                 rancher_hosts: "${{ github.event.inputs.rancher_host }}",
                 admin_tokens: "${{ github.event.inputs.admin_token }}",
                 cluster_names: "${{ github.event.inputs.cluster_name }}",
-                kubernetes_versions: "${{ github.event.inputs.kubernetes_version }}",
                 test_packages: "${{ steps.parse.outputs.remaining_packages }}",
                 run_all_tests: "${{ github.event.inputs.run_all_tests }}",
                 recursive_tests: "false",

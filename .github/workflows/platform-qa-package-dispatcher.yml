@@ -12,9 +12,6 @@ on:
       cluster_names:
         description: "Comma-separated downstream cluster names (same order as Rancher hosts)"
         required: true
-      kubernetes_versions:
-        description: "Comma-separated Kubernetes versions (same order as Rancher hosts) Example: 1.31.11,1.32.8"
-        required: true
       test_packages:
         description: "Comma-separated test package paths (e.g. validation/rbac,validation/projects)"
         required: true
@@ -96,7 +93,6 @@ jobs:
             const hosts = "${{ github.event.inputs.rancher_hosts }}".split(',').map(s => s.trim());
             const tokens = "${{ github.event.inputs.admin_tokens }}".split(',').map(s => s.trim());
             const clusters = "${{ github.event.inputs.cluster_names }}".split(',').map(s => s.trim());
-            const kubernetesVersions = "${{ github.event.inputs.kubernetes_versions }}".split(',').map(s => s.trim());
             const qaseRunsRaw = "${{ github.event.inputs.qase_test_run_ids }}";
             const qaseRuns = qaseRunsRaw ? qaseRunsRaw.split(',').map(s => s.trim()) : [];
 
@@ -105,9 +101,6 @@ jobs:
             if (hosts.length !== tokens.length || tokens.length !== clusters.length) {
               throw new Error("Input lengths for rancher_hosts, admin_tokens, and cluster_names must match");
             }
-            if (kubernetesVersions.length !== hosts.length) {
-              throw new Error("Kubernetes versions count must match rancher_hosts count");
-            }
 
             for (let i = 0; i < hosts.length; i++) {
               const host = hosts[i];
@@ -115,7 +108,6 @@ jobs:
               const cluster = clusters[i];
               const qaseRun = qaseRuns[i] || "";
               const reportToQase = qaseRun !== "" ? "true" : "false";
-              const k8sVersion = kubernetesVersions[i] || "";
 
               console.log(`🚀 Dispatching for host=${host}, cluster=${cluster}, packages=${test_packages}`);
 
@@ -123,7 +115,6 @@ jobs:
                 rancher_host: host,
                 admin_token: token,
                 cluster_name: cluster,
-                kubernetes_version: k8sVersion,
                 test_packages,
                 run_all_tests: "${{ github.event.inputs.run_all_tests }}",
                 test_selector: "${{ github.event.inputs.test_selector }}",

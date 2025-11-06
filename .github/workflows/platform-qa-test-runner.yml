@@ -13,10 +13,6 @@ on:
       cluster_name:
         description: "Downstream cluster name"
         required: true
-      kubernetes_version:
-        description: "Kubernetes version for the cluster (e.g. 1.32.8)"
-        required: true
-        default: "1.32.8"
       test_package:
         description: "Single test package path (e.g. validation/rbac)"
         required: true
@@ -85,7 +81,6 @@ jobs:
     env:
       RANCHER_HOST: ${{ github.event.inputs.rancher_host }}
       CLUSTER_NAME: ${{ github.event.inputs.cluster_name }}
-      KUBERNETES_VERSION: ${{ github.event.inputs.kubernetes_version }}
       TEST_PACKAGE: ${{ github.event.inputs.test_package }}
       RUN_ALL_TESTS: ${{ github.event.inputs.run_all_tests }}
       EXCLUDE_TEST_FILES: ${{ github.event.inputs.exclude_test_files }}
@@ -123,12 +118,21 @@ jobs:
           chmod 600 ~/.ssh/$SSH_PRIVATE_KEY_NAME.pem
           echo "SSH_PRIVATE_KEY_PATH=$HOME/.ssh" >> $GITHUB_ENV
 
+      - name: Get Rancher version
+        run: bash .github/scripts/platform-qa-get-rancher-version.sh
+        env:
+          RANCHER_HOST: ${{ env.RANCHER_HOST }}
+
+      - name: Get supported Kubernetes version
+        run: bash .github/scripts/get-k8s-version.sh
+        env:
+          RANCHER_SHORT_VERSION: ${{ env.RANCHER_SHORT_VERSION }}
+
       - name: Preprocess variables and set environment
         id: set-env
         shell: bash
         run: |
-          INPUT_K8s_VERSION="${{ github.event.inputs.kubernetes_version }}"
-          CLEAN_VERSION="${INPUT_K8s_VERSION#v}"
+          CLEAN_VERSION="${K8S_VERSION#v}"
 
           echo "RKE2_VERSION=v${CLEAN_VERSION}+rke2r1" >> $GITHUB_ENV
           echo "K3S_VERSION=v${CLEAN_VERSION}+k3s1" >> $GITHUB_ENV
@@ -141,11 +145,6 @@ jobs:
 
       - name: Create cattle config
         run: bash .github/scripts/platform-qa-create-cattle-config.sh
-
-      - name: Get Rancher version
-        run: bash .github/scripts/platform-qa-get-rancher-version.sh
-        env:
-          RANCHER_HOST: ${{ env.RANCHER_HOST }}
 
       - name: Run all tests in package
         if: github.event.inputs.run_all_tests == 'true'
