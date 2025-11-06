@@ -51,6 +51,21 @@ if ! type log_info >/dev/null 2>&1; then
         exit 1
     fi
 fi
+# Ensure generate_group_vars is available even if common.sh provided logging only
+if ! type generate_group_vars >/dev/null 2>&1; then
+    airgap_candidates=(
+        "${SCRIPT_DIR}/airgap_lib.sh" \
+        "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_lib.sh" \
+        "/root/go/src/github.com/rancher/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh" \
+        "/root/qa-infra-automation/validation/pipeline/scripts/airgap_lib.sh"
+    )
+    for lib in "${airgap_candidates[@]}"; do
+        [[ -f "$lib" ]] || continue
+        # shellcheck disable=SC1090
+        source "$lib"
+        type generate_group_vars >/dev/null 2>&1 && break
+    done
+fi
 
 # =============================================================================
 # ANSIBLE ENVIRONMENT PREPARATION
