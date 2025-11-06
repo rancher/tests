@@ -1048,9 +1048,7 @@ perform_cleanup "${CLEANUP_REASON}" "${TF_WORKSPACE}" "true"
 // ARTIFACT EXTRACTION FUNCTIONS
 // ========================================
 
-/* extractArtifactsFromDockerVolume now delegated to ciAirgap library */
-// def extractArtifactsFromDockerVolume() { DELEGATED }
-    logInfo('Extracting artifacts from Docker shared volume to Jenkins workspace')
+/* extractArtifactsFromDockerVolume delegated to ciAirgap library */
 
     try {
         // Create a temporary container to copy files from the shared volume
@@ -1102,59 +1100,4 @@ perform_cleanup "${CLEANUP_REASON}" "${TF_WORKSPACE}" "true"
                 '
         """
 
-        generateDeploymentSummary()
-        logInfo('Artifact extraction completed successfully')
-    } catch (Exception e) {
-        logError("Artifact extraction failed: ${e.message}")
-        logWarning('Build will continue, but some artifacts may not be available for archival')
-    }
-}
-
-/* generateDeploymentSummary now delegated to ciAirgap library */
-// def generateDeploymentSummary() { DELEGATED }
-    logInfo('Generating deployment summary')
-
-    try {
-        def timestamp = new Date().format('yyyy-MM-dd HH:mm:ss')
-        def summary = [
-            deployment_info: [
-                timestamp: timestamp,
-                build_number: env.BUILD_NUMBER,
-                job_name: env.JOB_NAME,
-                workspace: env.TF_WORKSPACE,
-                rke2_version: env.RKE2_VERSION,
-                rancher_version: env.RANCHER_VERSION,
-                rancher_hostname: env.RANCHER_HOSTNAME
-            ],
-            infrastructure: [
-                terraform_vars_file: env.TERRAFORM_VARS_FILENAME,
-                s3_bucket: env.S3_BUCKET_NAME,
-                s3_bucket_region: env.S3_BUCKET_REGION,
-                hostname_prefix: env.HOSTNAME_PREFIX
-            ],
-            artifacts_generated: []
-        ]
-
-        // Check which artifacts were successfully generated
-        def artifactFiles = [
-            'infrastructure-outputs.json',
-            'ansible-inventory.yml',
-            env.TERRAFORM_VARS_FILENAME,
-            'terraform.tfstate'
-        ]
-
-        artifactFiles.each { fileName ->
-            if (fileExists(fileName)) {
-                summary.artifacts_generated.add(fileName)
-            }
-        }
-
-        def summaryJson = groovy.json.JsonOutput.toJson(summary)
-        writeFile file: 'deployment-summary.json', text: groovy.json.JsonOutput.prettyPrint(summaryJson)
-
-        logInfo('Deployment summary generated successfully')
-    } catch (Exception e) {
-        logError("Failed to generate deployment summary: ${e.message}")
-        logError("Exception details: ${e}")
-    }
-}
+        /* generateDeploymentSummary delegated to ciAirgap library */
