@@ -630,24 +630,31 @@ cleanup_workspace() {
     fi
 
     # Clean up entire workspace directory in S3 (includes state file, config files, etc.)
-    if [[ -n "${S3_BUCKET_NAME}" && -n "${S3_BUCKET_REGION}" ]]; then
-        log_info "Cleaning up workspace directory in S3: s3://${S3_BUCKET_NAME}/env:/${workspace_name}/"
-        
-        # Check if directory exists
-        if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/" --region "${S3_BUCKET_REGION}" >/dev/null 2>&1; then
-            # List contents for logging
-            log_info "Workspace directory contents:"
-            aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/" --recursive --region "${S3_BUCKET_REGION}" 2>/dev/null || true
-            
-            # Delete entire workspace directory recursively
-            if aws s3 rm "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/" --recursive --region "${S3_BUCKET_REGION}" 2>/dev/null; then
-                log_success "Workspace directory deleted from S3: s3://${S3_BUCKET_NAME}/env:/${workspace_name}/"
-            else
-                log_warning "Failed to delete workspace directory from S3"
-            fi
+    # SAFETY: Disabled by default to avoid accidental deletion of other workspaces.
+    # Set FORCE_S3_WORKSPACE_DELETE=true to enable.
+    if [[ "${FORCE_S3_WORKSPACE_DELETE:-false}" == "true" && -n "${S3_BUCKET_NAME}" && -n "${S3_BUCKET_REGION}" ]]; then
+        # Extra guardrails: ensure workspace_name looks sane and not root-like
+        if [[ -z "${workspace_name}" || "${workspace_name}" == "/" || "${workspace_name}" == "." ]]; then
+            log_warning "Unsafe workspace_name detected; skipping S3 workspace deletion"
         else
-            log_info "Workspace directory does not exist in S3 (already deleted or never created)"
+            log_info "Cleaning up workspace directory in S3: s3://${S3_BUCKET_NAME}/env:/${workspace_name}/"
+            # Check if directory exists
+            if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/" --region "${S3_BUCKET_REGION}" >/dev/null 2>&1; then
+                # List contents for logging
+                log_info "Workspace directory contents:"
+                aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/" --recursive --region "${S3_BUCKET_REGION}" 2>/dev/null || true
+                # Delete entire workspace directory recursively
+                if aws s3 rm "s3://${S3_BUCKET_NAME}/env:/${workspace_name}/" --recursive --region "${S3_BUCKET_REGION}" 2>/dev/null; then
+                    log_success "Workspace directory deleted from S3: s3://${S3_BUCKET_NAME}/env:/${workspace_name}/"
+                else
+                    log_warning "Failed to delete workspace directory from S3"
+                fi
+            else
+                log_info "Workspace directory does not exist in S3 (already deleted or never created)"
+            fi
         fi
+    else
+        log_info "Skipping S3 workspace directory deletion (FORCE_S3_WORKSPACE_DELETE not true)"
     fi
 
     log_success "Workspace cleanup completed"

@@ -352,7 +352,7 @@ pipeline {
         )
         booleanParam(
             name: 'DESTROY_ON_FAILURE',
-            defaultValue: true,
+            defaultValue: false,
             description: 'Destroy infrastructure when Ansible playbooks fail (automatic cleanup)'
         )
         text(
