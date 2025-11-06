@@ -1069,7 +1069,7 @@ def handleFailureCleanup(String failureType) {
         // Execute infrastructure cleanup if enabled
         if (env.DESTROY_ON_FAILURE?.toBoolean()) {
             logInfo('DESTROY_ON_FAILURE is true - executing consolidated cleanup')
-            executeInfrastructureCleanup(failureType)
+            this.executeInfrastructureCleanup(failureType)
         } else {
             logWarning('DESTROY_ON_FAILURE is false - manual cleanup required')
             logWarning("Please clean up resources in workspace: ${env.TF_WORKSPACE}")
@@ -1125,7 +1125,8 @@ perform_cleanup "${CLEANUP_REASON}" "${TF_WORKSPACE}" "true"
         'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
     ]
     try {
-        dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
+        def helper = dockerHelper()
+        helper.executeScriptInContainer(cleanupScript, cleanupEnvVars)
         logInfo("Infrastructure cleanup completed for ${failureType} (fallback)")
     } catch (Exception e) {
         logError("Infrastructure cleanup failed: ${e.message}")
