@@ -271,6 +271,7 @@ def extractAWSVariablesFromTerraformConfig() {
 // ========================================
 
 pipeline {
+    options { durabilityHint('PERFORMANCE_OPTIMIZED'); disableConcurrentBuilds() }
     agent any
 
     // Global pipeline options
@@ -967,7 +968,7 @@ def handleFailureCleanup(String failureType) {
 
     try {
         // Extract artifacts before cleanup
-        extractArtifactsFromDockerVolume()
+        try { ciAirgap().extractArtifactsFromDockerVolume(this) } catch (ignored) { }
 
         // Archive failure-specific artifacts
         archiveFailureArtifactsByType(failureType)
@@ -1000,7 +1001,7 @@ def handleFailureCleanup(String failureType) {
  *
  * @param cleanupReason Reason for cleanup: 'deployment_failure', 'timeout', 'aborted'
  */
-def executeInfrastructureCleanup(String failureType) {
+def executeInfrastructureCleanup(String failureType) { // already delegated; fallback kept minimal
 
     script {
         // Delegate to library implementation when available
@@ -1047,7 +1048,8 @@ perform_cleanup "${CLEANUP_REASON}" "${TF_WORKSPACE}" "true"
 // ARTIFACT EXTRACTION FUNCTIONS
 // ========================================
 
-def extractArtifactsFromDockerVolume() {
+/* extractArtifactsFromDockerVolume now delegated to ciAirgap library */
+// def extractArtifactsFromDockerVolume() { DELEGATED }
     logInfo('Extracting artifacts from Docker shared volume to Jenkins workspace')
 
     try {
@@ -1108,7 +1110,8 @@ def extractArtifactsFromDockerVolume() {
     }
 }
 
-def generateDeploymentSummary() {
+/* generateDeploymentSummary now delegated to ciAirgap library */
+// def generateDeploymentSummary() { DELEGATED }
     logInfo('Generating deployment summary')
 
     try {
