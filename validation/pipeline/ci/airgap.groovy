@@ -369,21 +369,24 @@ def extractArtifactsFromDockerVolume(ctx) {
   try {
     def timestamp = System.currentTimeMillis()
     def extractorContainerName = "${ctx.env.BUILD_CONTAINER_NAME}-extractor-${timestamp}"
+    def artifactsDir = 'artifacts'
     ctx.sh """
+        mkdir -p ${artifactsDir}
         docker run --rm \\
             -v ${ctx.env.VALIDATION_VOLUME}:/source \\
-            -v \$(pwd):/dest \\
+            -v \$(pwd)/${artifactsDir}:/dest:rw \\
             --name ${extractorContainerName} \\
             -e TERRAFORM_VARS_FILENAME=${ctx.env.TERRAFORM_VARS_FILENAME} \\
             alpine:latest \\
             sh -c '
+                mkdir -p /dest /dest/group_vars
                 [ -f /source/infrastructure-outputs.json ] && cp /source/infrastructure-outputs.json /dest/ || true
                 if [ -f /source/ansible/rke2/airgap/inventory.yml ]; then
                     cp /source/ansible/rke2/airgap/inventory.yml /dest/ansible-inventory.yml
                 elif [ -f /source/ansible-inventory.yml ]; then
                     cp /source/ansible-inventory.yml /dest/
                 fi
-                [ -f "/source/${ctx.env.TERRAFORM_VARS_FILENAME}" ] && cp "/source/${ctx.env.TERRAFORM_VARS_FILENAME}" /dest/ || true
+                [ -f "/source/${TERRAFORM_VARS_FILENAME}" ] && cp "/source/${TERRAFORM_VARS_FILENAME}" /dest/ || true
                 [ -f /source/terraform.tfstate ] && cp /source/terraform.tfstate /dest/ || true
                 [ -f /source/terraform-state-primary.tfstate ] && cp /source/terraform-state-primary.tfstate /dest/ || true
                 for backup_file in /source/terraform-state-backup-*.tfstate /source/tfstate-backup-*.tfstate; do
@@ -395,7 +398,6 @@ def extractArtifactsFromDockerVolume(ctx) {
                     cp /source/group_vars/kubeconfig.yaml /dest/
                 fi
                 if [ -f /source/group_vars/all.yml ]; then
-                    mkdir -p /dest/group_vars
                     cp /source/group_vars/all.yml /dest/group_vars/all.yml
                 fi
             '
@@ -411,6 +413,8 @@ def extractArtifactsFromDockerVolume(ctx) {
 def generateDeploymentSummary(ctx) {
   ctx.logInfo('Generating deployment summary (library)')
   try {
+    def artifactsDir = 'artifacts'
+    ctx.sh "mkdir -p ${artifactsDir}"
     def timestamp = new Date().format('yyyy-MM-dd HH:mm:ss')
     def summary = [
       deployment_info: [
@@ -431,10 +435,10 @@ def generateDeploymentSummary(ctx) {
       artifacts_generated: []
     ]
     def artifactFiles = [
-      'infrastructure-outputs.json',
-      'ansible-inventory.yml',
-      ctx.env.TERRAFORM_VARS_FILENAME,
-      'terraform.tfstate'
+      'artifacts/infrastructure-outputs.json',
+      'artifacts/ansible-inventory.yml',
+      "artifacts/${ctx.env.TERRAFORM_VARS_FILENAME}",
+      'artifacts/terraform.tfstate'
     ]
     artifactFiles.each { fileName ->
       if (ctx.fileExists(fileName)) {
@@ -442,7 +446,7 @@ def generateDeploymentSummary(ctx) {
       }
     }
     def summaryJson = groovy.json.JsonOutput.toJson(summary)
-    ctx.writeFile file: 'deployment-summary.json', text: groovy.json.JsonOutput.prettyPrint(summaryJson)
+    ctx.writeFile file: 'artifacts/deployment-summary.json', text: groovy.json.JsonOutput.prettyPrint(summaryJson)
     ctx.logInfo('Deployment summary generated successfully (library)')
   } catch (Exception e) {
     ctx.logWarning("Failed to generate deployment summary: ${e.message}")
@@ -499,15 +503,15 @@ def logError(ctx, String msg) { ctx.echo "[ERROR] ${new Date().format('yyyy-MM-d
 @NonCPS
 static def getArtifactDefinitions() {
   return [
-    'infrastructure': [ 'infrastructure-outputs.json', 'ansible-inventory.yml', '*.tfvars' ],
+    'infrastructure': [ 'artifacts/infrastructure-outputs.json', 'artifacts/ansible-inventory.yml', 'artifacts/*.tfvars', 'artifacts/*.tfvars.json' ],
     'ansible_prep': [ 'group_vars.tar.gz', 'group_vars/all.yml', 'ansible-preparation-report.txt' ],
-    'rke2_deployment': [ 'kubeconfig.yaml', 'rke2_deployment_report.txt', 'rke2_deployment.log', 'kubectl-setup-logs.txt' ],
-    'rancher_deployment': [ 'rancher-deployment-logs.txt', 'rancher-validation-logs.txt', 'deployment-summary.json' ],
-    'failure_common': [ '*.log', 'error-*.txt', 'ansible-debug-info.txt' ],
-    'failure_infrastructure': [ 'tfplan-backup', 'infrastructure-outputs.json' ],
-    'failure_ansible': [ 'ansible-inventory.yml', 'ansible-error-logs.txt', 'ssh-setup-error-logs.txt' ],
-    'failure_rke2': [ 'rke2-deployment-error-logs.txt', 'kubectl-setup-error-logs.txt' ],
-    'failure_rancher': [ 'rancher-deployment-error-logs.txt', 'rancher-validation-logs.txt', 'rancher-debug-info.txt' ],
+    'rke2_deployment': [ 'artifacts/kubeconfig.yaml', 'artifacts/rke2_deployment_report.txt', 'artifacts/rke2_deployment.log', 'artifacts/kubectl-setup-logs.txt' ],
+    'rancher_deployment': [ 'artifacts/rancher-deployment-logs.txt', 'artifacts/rancher-validation-logs.txt', 'artifacts/deployment-summary.json' ],
+    'failure_common': [ 'artifacts/*.log', 'artifacts/error-*.txt', 'artifacts/ansible-debug-info.txt' ],
+    'failure_infrastructure': [ 'artifacts/tfplan-backup', 'artifacts/infrastructure-outputs.json' ],
+    'failure_ansible': [ 'artifacts/ansible-inventory.yml', 'artifacts/ansible-error-logs.txt', 'artifacts/ssh-setup-error-logs.txt' ],
+    'failure_rke2': [ 'artifacts/rke2-deployment-error-logs.txt', 'artifacts/kubectl-setup-error-logs.txt' ],
+    'failure_rancher': [ 'artifacts/rancher-deployment-error-logs.txt', 'artifacts/rancher-validation-logs.txt', 'artifacts/rancher-debug-info.txt' ],
     'success_complete': [ 'kubeconfig.yaml', 'infrastructure-outputs.json', 'ansible-inventory.yml', 'deployment-summary.json' ]
   ]
 }

@@ -538,13 +538,7 @@ pipeline {
                 logInfo('Starting post-build cleanup')
 
                 // Archive important artifacts (excluding sensitive tfstate and tfvars files)
-                archiveBuildArtifacts([
-                    'kubeconfig.yaml',
-                    'infrastructure-outputs.json',
-                    'ansible-inventory.yml',
-                    'ansible-logs.txt',
-                    'deployment-summary.json'
-                ])
+                archiveBuildArtifacts(['artifacts/**'])
 
                 // Always cleanup containers and volumes
                 try {
