@@ -389,8 +389,8 @@ def extractArtifactsFromDockerVolume(ctx) {
                 [ -f "/source/${TERRAFORM_VARS_FILENAME}" ] && cp "/source/${TERRAFORM_VARS_FILENAME}" /dest/ || true
                 [ -f /source/terraform.tfstate ] && cp /source/terraform.tfstate /dest/ || true
                 [ -f /source/terraform-state-primary.tfstate ] && cp /source/terraform-state-primary.tfstate /dest/ || true
-                for backup_file in /source/terraform-state-backup-*.tfstate /source/tfstate-backup-*.tfstate; do
-                    [ -f "\\$backup_file" ] && cp "\\$backup_file" /dest/ || true
+                for f in /source/terraform-state-backup-*.tfstate /source/tfstate-backup-*.tfstate; do
+                    [ -f "$f" ] && cp "$f" /dest/ || true
                 done
                 if [ -f /source/kubeconfig.yaml ]; then
                     cp /source/kubeconfig.yaml /dest/
