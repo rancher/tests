@@ -28,3 +28,30 @@ lint:
 	printf "Running hadolint...\n"; \
 	command -v hadolint >/dev/null 2>&1 && hadolint Dockerfile* || true; \
 	printf "Lint complete.\n"
+
+# Convenience OpenTofu targets (best-effort; repo uses external QA infra)
+MODULE_PATH ?= $(QA_INFRA_WORK_PATH)/tofu/aws/modules/airgap
+
+plan:
+	@if [ -z "$(QA_INFRA_WORK_PATH)" ] || [ ! -d "$(MODULE_PATH)" ]; then \
+		echo "Set QA_INFRA_WORK_PATH to qa-infra-automation clone (skipping)"; exit 0; fi; \
+	command -v tofu >/dev/null 2>&1 || { echo "tofu not found (skipping)"; exit 0; }; \
+	tofu -chdir="$(MODULE_PATH)" plan -input=false || true
+
+apply:
+	@if [ -z "$(QA_INFRA_WORK_PATH)" ] || [ ! -d "$(MODULE_PATH)" ]; then \
+		echo "Set QA_INFRA_WORK_PATH to qa-infra-automation clone (skipping)"; exit 0; fi; \
+	command -v tofu >/dev/null 2>&1 || { echo "tofu not found (skipping)"; exit 0; }; \
+	tofu -chdir="$(MODULE_PATH)" apply -auto-approve -input=false || true
+
+validate:
+	@if [ -z "$(QA_INFRA_WORK_PATH)" ] || [ ! -d "$(MODULE_PATH)" ]; then \
+		echo "Set QA_INFRA_WORK_PATH to qa-infra-automation clone (skipping)"; exit 0; fi; \
+	command -v tofu >/dev/null 2>&1 || { echo "tofu not found (skipping)"; exit 0; }; \
+	tofu -chdir="$(MODULE_PATH)" validate || true
+
+destroy:
+	@if [ -z "$(QA_INFRA_WORK_PATH)" ] || [ ! -d "$(MODULE_PATH)" ]; then \
+		echo "Set QA_INFRA_WORK_PATH to qa-infra-automation clone (skipping)"; exit 0; fi; \
+	command -v tofu >/dev/null 2>&1 || { echo "tofu not found (skipping)"; exit 0; }; \
+	tofu -chdir="$(MODULE_PATH)" destroy -auto-approve || true

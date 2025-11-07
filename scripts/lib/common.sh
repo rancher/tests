@@ -86,9 +86,48 @@ source_airgap_lib() {
     return 1
 }
 
+# Simple die helper
+_die() { printf '%s %s\n' "[FATAL]" "$*" >&2; exit 1; }
+
+# Retry helper: retry <attempts> <sleep_seconds> -- cmd args...
+retry() {
+    local attempts="$1"; shift || true
+    local sleep_s="$1"; shift || true
+    [ "$1" = "--" ] && shift || true
+    local n=1
+    until "$@"; do
+        if [ "$n" -ge "$attempts" ]; then return 1; fi
+        log_warning "retry: attempt $n failed; sleeping ${sleep_s}s and retrying..."
+        sleep "$sleep_s" || true
+        n=$((n+1))
+    done
+}
+
+# Load key=value environment file and export
+load_env() {
+    local env_file="${1:-scripts/.env}"
+    if [ -f "$env_file" ]; then
+        log_info "Loading environment from $env_file"
+        # shellcheck disable=SC2046,SC2163
+        set -a && . "$env_file" && set +a
+    else
+        log_debug "Env file not found: $env_file (skipping)"
+    fi
+}
+
+# YAML/JSON getters (best-effort)
+yaml_get() { command -v yq >/dev/null 2>&1 || return 1; yq e "$2" "$1"; }
+json_get() { command -v jq >/dev/null 2>&1 || return 1; jq -r "$2" "$1"; }
+
 # Initialize airgap environment - placeholder for repo-specific setup
 initialize_airgap_environment() {
     log_info "Initializing airgap environment"
+    # Optionally load environment
+    if [ -n "${ENV_FILE:-}" ]; then
+        load_env "${ENV_FILE}"
+    else
+        load_env "scripts/.env"
+    fi
     # ensure QA_INFRA_WORK_PATH exists
     if [ -n "${QA_INFRA_WORK_PATH:-}" ] && [ -d "$QA_INFRA_WORK_PATH" ]; then
         log_debug "QA infra path exists: $QA_INFRA_WORK_PATH"
@@ -97,6 +136,9 @@ initialize_airgap_environment() {
     fi
     return 0
 }
+
+# Export a few new helpers
+export -f retry load_env yaml_get json_get _die
 
 # Wait for confirmation (no-op in non-interactive CI)
 wait_for_confirmation() {
