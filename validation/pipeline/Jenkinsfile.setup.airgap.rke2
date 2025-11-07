@@ -537,8 +537,10 @@ pipeline {
             script {
                 logInfo('Starting post-build cleanup')
 
-                // Archive important artifacts (excluding sensitive tfstate and tfvars files)
-                archiveBuildArtifacts(['artifacts/**'])
+                // Ensure artifacts are extracted before archiving
+                try { ciAirgap().extractArtifactsFromDockerVolume(this) } catch (ignored) { }
+                // Archive important artifacts (fallback to legacy names if artifacts/ missing)
+                archiveBuildArtifacts(['artifacts/**','infrastructure-outputs.json','ansible-inventory.yml','kubeconfig.yaml','deployment-summary.json'])
 
                 // Always cleanup containers and volumes
                 try {
