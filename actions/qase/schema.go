@@ -26,6 +26,10 @@ func GetSchemas(basePath string) ([]TestSuiteSchema, error) {
 				return err
 			}
 
+			fileContentString := string(fileContent)
+			fileContentString = strings.ReplaceAll(fileContentString, "custom_field", "customfield")
+			fileContent = []byte(fileContentString)
+
 			err = yaml.Unmarshal(fileContent, &fileSuiteSchemas)
 			if err != nil {
 				return err
