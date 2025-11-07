@@ -451,20 +451,30 @@ def generateDeploymentSummary(ctx) {
 
 def generateTofuConfiguration(ctx) {
   ctx.logInfo('Generating Terraform configuration (library)')
-  if (!ctx.env.TERRAFORM_CONFIG) { ctx.error('TERRAFORM_CONFIG environment variable is not set') }
   if (!ctx.env.S3_BUCKET_NAME) { ctx.error('S3_BUCKET_NAME environment variable is not set') }
   if (!ctx.env.S3_BUCKET_REGION) { ctx.error('S3_BUCKET_REGION environment variable is not set') }
   if (!ctx.env.S3_KEY_PREFIX) { ctx.error('S3_KEY_PREFIX environment variable is not set') }
   ctx.sh 'mkdir -p qa-infra-automation/tofu/aws/modules/airgap'
-  def terraformConfig = ctx.env.TERRAFORM_CONFIG
-  terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', ctx.env.AWS_SECRET_ACCESS_KEY ?: '')
-  terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', ctx.env.AWS_ACCESS_KEY_ID ?: '')
-  terraformConfig = terraformConfig.replace('${HOSTNAME_PREFIX}', ctx.env.HOSTNAME_PREFIX ?: '')
-  ctx.dir('./qa-infra-automation') {
-    ctx.dir('./tofu/aws/modules/airgap') {
+
+  def wroteVars = false
+  // Preferred: inline TERRAFORM_CONFIG from Jenkins parameter
+  if (ctx.env.TERRAFORM_CONFIG) {
+    def terraformConfig = ctx.env.TERRAFORM_CONFIG
+    terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', ctx.env.AWS_SECRET_ACCESS_KEY ?: '')
+    terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', ctx.env.AWS_ACCESS_KEY_ID ?: '')
+    terraformConfig = terraformConfig.replace('${HOSTNAME_PREFIX}', ctx.env.HOSTNAME_PREFIX ?: '')
+    ctx.dir('./qa-infra-automation/tofu/aws/modules/airgap') {
       ctx.writeFile file: ctx.env.TERRAFORM_VARS_FILENAME, text: terraformConfig
       ctx.logInfo("Terraform configuration written to: ${ctx.env.TERRAFORM_VARS_FILENAME}")
-      def backendConfig = """
+      wroteVars = true
+    }
+  } else {
+    ctx.error('TERRAFORM_CONFIG environment variable is not set')
+  }
+
+  // Backend config (always write)
+  ctx.dir('./qa-infra-automation/tofu/aws/modules/airgap') {
+    def backendConfig = """
 terraform {
   backend "s3" {
     bucket = "${ctx.env.S3_BUCKET_NAME}"
@@ -473,10 +483,11 @@ terraform {
   }
 }
 """
-      ctx.writeFile file: ctx.env.TERRAFORM_BACKEND_CONFIG_FILENAME, text: backendConfig
-      ctx.logInfo("S3 backend configuration written to: ${ctx.env.TERRAFORM_BACKEND_CONFIG_FILENAME}")
-    }
+    ctx.writeFile file: ctx.env.TERRAFORM_BACKEND_CONFIG_FILENAME, text: backendConfig
+    ctx.logInfo("S3 backend configuration written to: ${ctx.env.TERRAFORM_BACKEND_CONFIG_FILENAME}")
   }
+
+  if (!wroteVars) { ctx.error('Failed to prepare Terraform variables file') }
 }
 
 // Basic logging helpers (library)
