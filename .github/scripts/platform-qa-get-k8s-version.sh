@@ -33,8 +33,6 @@ if [ -z "$K8S_VERSION" ]; then
 fi
 
 echo "Supported range from Rancher: $RANGE"
-echo "All supported K8s versions:"
-echo "$K8S_VERSIONS"
 echo "Minimum supported K8s version: $MIN_K8S"
 echo "Maximum supported K8s version: $MAX_K8S"
 echo "K8s version picked for testing: $K8S_VERSION"
