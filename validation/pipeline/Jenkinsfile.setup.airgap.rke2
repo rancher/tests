@@ -530,6 +530,15 @@ pipeline {
                 }
             }
         }
+
+        stage('Validate Cluster') {
+            steps {
+                script {
+                    def airgap = ciAirgap()
+                    airgap.runValidation(this)
+                }
+            }
+        }
     }
 
     post {

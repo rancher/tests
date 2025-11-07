@@ -400,6 +400,10 @@ def extractArtifactsFromDockerVolume(ctx) {
                 if [ -f /source/group_vars/all.yml ]; then
                     cp /source/group_vars/all.yml /dest/group_vars/all.yml
                 fi
+                # Copy validation diagnostics if present
+                if [ -d /source/validation ]; then
+                    cp -r /source/validation /dest/validation
+                fi
             '
     """
     generateDeploymentSummary(ctx)
@@ -512,7 +516,7 @@ static def getArtifactDefinitions() {
     'failure_ansible': [ 'artifacts/ansible-inventory.yml', 'artifacts/ansible-error-logs.txt', 'artifacts/ssh-setup-error-logs.txt' ],
     'failure_rke2': [ 'artifacts/rke2-deployment-error-logs.txt', 'artifacts/kubectl-setup-error-logs.txt' ],
     'failure_rancher': [ 'artifacts/rancher-deployment-error-logs.txt', 'artifacts/rancher-validation-logs.txt', 'artifacts/rancher-debug-info.txt' ],
-    'success_complete': [ 'kubeconfig.yaml', 'infrastructure-outputs.json', 'ansible-inventory.yml', 'deployment-summary.json' ]
+    'success_complete': [ 'artifacts/kubeconfig.yaml', 'artifacts/infrastructure-outputs.json', 'artifacts/ansible-inventory.yml', 'artifacts/deployment-summary.json', 'artifacts/validation/**' ]
   ]
 }
 
@@ -579,6 +583,23 @@ perform_cleanup "${CLEANUP_REASON}" "${TF_WORKSPACE}" "true"
   def helper = ctx.dockerHelper()
   helper.executeScriptInContainer(cleanupScript, cleanupEnvVars)
   ctx.echo("[INFO] Infrastructure cleanup completed for ${failureType}")
+}
+
+// Run basic post-deploy validation (kubectl waits and diagnostics)
+def runValidation(ctx) {
+  ctx.logInfo('Running post-deploy validation (library)')
+  def validateScript = '''
+#!/bin/bash
+set -euo pipefail
+source /root/go/src/github.com/rancher/tests/scripts/validate_cluster.sh
+'''
+  def envVars = [ 'KUBECONFIG': '/source/kubeconfig.yaml' ]
+  try {
+    ctx.dockerHelper().executeScriptInContainer(validateScript, envVars)
+    ctx.logInfo('Cluster validation completed (library)')
+  } catch (Exception e) {
+    ctx.logWarning("Cluster validation encountered issues: ${e.message}")
+  }
 }
 
 return this
