@@ -366,53 +366,111 @@ def cleanupContainersAndVolumes(ctx) {
 
 def extractArtifactsFromDockerVolume(ctx) {
   ctx.logInfo('Extracting artifacts from Docker shared volume to Jenkins workspace (library)')
+  
+  // Validate required environment variables
+  def requiredVars = ['VALIDATION_VOLUME', 'BUILD_CONTAINER_NAME', 'TERRAFORM_VARS_FILENAME']
+  requiredVars.each { var ->
+    if (!ctx.env[var]) {
+      ctx.error("Required environment variable ${var} is not set")
+    }
+  }
+  
   try {
-    def timestamp = System.currentTimeMillis()
-    def extractorContainerName = "${ctx.env.BUILD_CONTAINER_NAME}-extractor-${timestamp}"
+    // Generate unique container name with UUID to prevent collisions
+    def extractorContainerName = "${ctx.env.BUILD_CONTAINER_NAME}-extractor-${UUID.randomUUID().toString()}"
     def artifactsDir = 'artifacts'
+    
+    // Create artifacts directory with proper error handling
+    ctx.sh "mkdir -p ${artifactsDir}"
+    
+    // Build shell script with proper escaping and validation
+    def extractionScript = """
+#!/bin/sh
+set -e  # Exit on any error
+
+# Create destination directories
+mkdir -p /dest /dest/group_vars
+
+# Function to safely copy file with logging
+safe_copy() {
+    local src="\$1"
+    local dest="\$2"
+    local description="\$3"
+    
+    if [ -f "\$src" ]; then
+        if cp "\$src" "\$dest" 2>/dev/null; then
+            echo "✓ Copied \$description: \$src -> \$dest"
+        else
+            echo "✗ Failed to copy \$description: \$src" >&2
+            return 1
+        fi
+    else
+        echo "- Skipping \$description (not found): \$src"
+    fi
+}
+
+# Extract infrastructure outputs
+safe_copy "/source/infrastructure-outputs.json" "/dest/" "infrastructure outputs" || \\
+safe_copy "/source/shared/infrastructure-outputs.json" "/dest/" "shared infrastructure outputs"
+
+# Extract Ansible inventory
+safe_copy "/source/ansible/rke2/airgap/inventory.yml" "/dest/ansible-inventory.yml" "Ansible inventory" || \\
+safe_copy "/source/ansible-inventory.yml" "/dest/" "Ansible inventory (root)"
+
+# Extract Terraform variables file
+safe_copy "/source/${ctx.env.TERRAFORM_VARS_FILENAME}" "/dest/" "Terraform variables file" || true
+
+# Extract Terraform state files
+safe_copy "/source/terraform.tfstate" "/dest/" "Terraform state" || \\
+safe_copy "/source/shared/terraform.tfstate" "/dest/" "shared Terraform state"
+
+safe_copy "/source/terraform-state-primary.tfstate" "/dest/" "primary Terraform state" || \\
+safe_copy "/source/shared/terraform-state-primary.tfstate" "/dest/" "shared primary Terraform state"
+
+# Extract backup state files
+for f in /source/terraform-state-backup-*.tfstate /source/tfstate-backup-*.tfstate; do
+    if [ -f "\$f" ]; then
+        safe_copy "\$f" "/dest/" "backup state file" || true
+    fi
+done
+
+# Extract kubeconfig with fallback search
+if ! safe_copy "/source/kubeconfig.yaml" "/dest/" "kubeconfig"; then
+    if ! safe_copy "/source/shared/kubeconfig.yaml" "/dest/" "shared kubeconfig"; then
+        if ! safe_copy "/source/group_vars/kubeconfig.yaml" "/dest/" "group_vars kubeconfig"; then
+            # Fallback recursive search for kubeconfig
+            kc_path=\$(find /source -maxdepth 6 -type f -name "kubeconfig*" 2>/dev/null | head -1 || true)
+            if [ -n "\$kc_path" ]; then
+                safe_copy "\$kc_path" "/dest/kubeconfig.yaml" "found kubeconfig" || true
+            else
+                echo "- No kubeconfig found in any location"
+            fi
+        fi
+    fi
+fi
+
+# Extract Ansible group variables
+safe_copy "/source/group_vars/all.yml" "/dest/group_vars/" "Ansible group variables"
+
+echo "Artifact extraction completed successfully"
+"""
+    
+    // Execute Docker container with proper environment variable passing
     ctx.sh """
-        mkdir -p ${artifactsDir}
         docker run --rm \\
             -v ${ctx.env.VALIDATION_VOLUME}:/source \\
             -v \$(pwd)/${artifactsDir}:/dest:rw \\
             --name ${extractorContainerName} \\
-            -e TERRAFORM_VARS_FILENAME=${ctx.env.TERRAFORM_VARS_FILENAME} \\
+            -e TERRAFORM_VARS_FILENAME="${ctx.env.TERRAFORM_VARS_FILENAME}" \\
             alpine:latest \\
-            sh -c '
-                mkdir -p /dest /dest/group_vars
-                if [ -f /source/infrastructure-outputs.json ]; then cp /source/infrastructure-outputs.json /dest/; elif [ -f /source/shared/infrastructure-outputs.json ]; then cp /source/shared/infrastructure-outputs.json /dest/; fi
-                if [ -f /source/ansible/rke2/airgap/inventory.yml ]; then
-                    cp /source/ansible/rke2/airgap/inventory.yml /dest/ansible-inventory.yml
-                elif [ -f /source/ansible-inventory.yml ]; then
-                    cp /source/ansible-inventory.yml /dest/
-                fi
-                [ -f "/source/\$TERRAFORM_VARS_FILENAME" ] && cp "/source/\$TERRAFORM_VARS_FILENAME" /dest/ || true
-                if [ -f /source/terraform.tfstate ]; then cp /source/terraform.tfstate /dest/; elif [ -f /source/shared/terraform.tfstate ]; then cp /source/shared/terraform.tfstate /dest/; fi
-                if [ -f /source/terraform-state-primary.tfstate ]; then cp /source/terraform-state-primary.tfstate /dest/; elif [ -f /source/shared/terraform-state-primary.tfstate ]; then cp /source/shared/terraform-state-primary.tfstate /dest/; fi
-                for f in /source/terraform-state-backup-*.tfstate /source/tfstate-backup-*.tfstate; do
-                    [ -f "\$f" ] && cp "\$f" /dest/ || true
-                done
-                if [ -f /source/kubeconfig.yaml ]; then
-                    cp /source/kubeconfig.yaml /dest/
-                elif [ -f /source/shared/kubeconfig.yaml ]; then
-                    cp /source/shared/kubeconfig.yaml /dest/
-                elif [ -f /source/group_vars/kubeconfig.yaml ]; then
-                    cp /source/group_vars/kubeconfig.yaml /dest/
-                else
-                    # Fallback recursive search for kubeconfig
-                    kc_path=$(find /source -maxdepth 6 -type f -name kubeconfig\* 2>/dev/null | head -1 || true)
-                    if [ -n "$kc_path" ]; then cp "$kc_path" /dest/kubeconfig.yaml || true; fi
-                fi
-                if [ -f /source/group_vars/all.yml ]; then
-                    cp /source/group_vars/all.yml /dest/group_vars/all.yml
-                fi
-
-            '
+            sh -c '${extractionScript}'
     """
+    
     generateDeploymentSummary(ctx)
     ctx.logInfo('Artifact extraction completed successfully (library)')
   } catch (Exception e) {
     ctx.logError("Artifact extraction failed: ${e.message}")
+    ctx.logError("Stack trace: ${e.getStackTrace()}")
     ctx.logWarning('Build will continue, but some artifacts may not be available for archival (library)')
   }
 }
