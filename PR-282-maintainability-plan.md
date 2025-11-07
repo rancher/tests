@@ -30,12 +30,6 @@ Last updated: 2025-10-30
 Record results in PR description as “Baseline Metrics” to show improvement deltas.
 
 ## Target Architecture and Conventions
-- Single source of truth for versions and settings:
-  - config/params.yaml for immutable inputs (k8s/RKE2 version, image mirror endpoints, registry creds, OS image IDs, etc.).
-  - Derived artifacts generated from params.yaml:
-    - terraform.tfvars.json (infra)
-    - group_vars/all/params.yaml (Ansible)
-    - scripts/.env (Shell)
 - Common shell library:
   - scripts/lib/common.sh containing: strict-mode, logging, retries/backoff, json/yaml helpers, file locking, trap/cleanup, env loading.
 - Idempotency-first:
@@ -46,13 +40,7 @@ Record results in PR description as “Baseline Metrics” to show improvement d
 ## Refactor Workstreams (apply in order, minimize diff per commit)
 
 1) Centralize configuration
-- Add config/params.yaml with current hard-coded values lifted from scripts/Jenkins/Terraform/Ansible.
-- Add a tiny generation layer using yq/envsubst (no new language):
-  - make generate: 
-    - yq -o=json '.' config/params.yaml > terraform/terraform.tfvars.json
-    - yq '.' config/params.yaml > ansible/group_vars/all/params.yaml
-    - yq 'to_entries | .[] | "\(.key)=\(.value)"' config/params.yaml > scripts/.env
-- Replace scattered literals with lookups from the generated artifacts.
+- Configuration is handled in the Jenkins UI
 
 2) Shell consolidation and cleanup
 - Create scripts/lib/common.sh with:
@@ -77,27 +65,16 @@ Record results in PR description as “Baseline Metrics” to show improvement d
 - Add post actions for archiving artifacts: manifests, images.txt, tf plans, kubeconfigs.
 
 4) Terraform/OpenTofu moduleization
-- Extract duplicated resources into terraform/modules/* (networking, compute, registry mirror, security groups, etc.).
-- Convert repeated resources into for_each/maps fed from terraform.tfvars.json.
-- Add variable validations, default tags/labels, and outputs for handoff (IPs, kubeconfig path locations).
-- Ensure fmt/tflint pass; minimize provider blocks by using shared providers.
+- Terraform is defined in a separate repo
 
 5) Ansible role hygiene
-- Move task files into roles: roles/rke2-common, roles/airgap-cache, roles/node-prep, roles/helm-install.
-- Replace shell with modules: get_url, unarchive, copy, template, systemd, ufw/firewalld, selinux.
-- Use templates/ for RKE2 config.yaml and registries.yaml; variables come from group_vars/all/params.yaml.
-- Ensure idempotency with changed_when/creates/only_if.
-- Add tags: prep,rke2,mirror,validate; ansible-lint clean.
+- This will be handled in a separate repo
 
 6) Docker images (if applicable)
 - Multi-stage builds; pin base images; shared base where practical; .dockerignore.
 - Add LABEL org.opencontainers.image.* metadata; hadolint clean.
 
-7) RKE2 airgap specifics
-- Mirror images once per version; cache under artifacts/ with content-addressable paths (version/sha256) and checksum files.
-- Keep an images.lock manifest committed for determinism; verify before use.
-- Pre-bundle helm charts tarballs; verify signatures if available.
-- Run minimal conformance/smoke: nodes Ready, core DNS, metrics-server, kube-proxy, containerd health.
+
 
 ## Step-by-Step Plan for PR #282
 
@@ -118,14 +95,10 @@ Phase 2: Jenkins pipeline thinning
 - Add artifact archiving and timestamps; parallelize independent stages (e.g., image mirror vs infra plan if feasible).
 
 Phase 3: Terraform/OpenTofu modules
-- Extract modules; convert N copies -> for_each.
-- Introduce terraform.tfvars.json generation; fmt/tflint/validate clean.
-- Keep resource addresses stable to avoid churn; document migration if needed.
+- handled in another Repo
 
 Phase 4: Ansible roles
-- Create roles and move tasks; replace shell with modules.
-- Template rke2 config/registries; variables from group_vars/all/params.yaml.
-- ansible-lint clean; confirm idempotency with two consecutive runs.
+- handle in another repo
 
 Phase 5: Docker/Artifacts polish
 - Normalize Dockerfiles; multi-stage; labels; hadolint clean.
