@@ -398,6 +398,10 @@ def extractArtifactsFromDockerVolume(ctx) {
                     cp /source/shared/kubeconfig.yaml /dest/
                 elif [ -f /source/group_vars/kubeconfig.yaml ]; then
                     cp /source/group_vars/kubeconfig.yaml /dest/
+                else
+                    # Fallback recursive search for kubeconfig
+                    kc_path=$(find /source -maxdepth 6 -type f -name kubeconfig\* 2>/dev/null | head -1 || true)
+                    if [ -n "$kc_path" ]; then cp "$kc_path" /dest/kubeconfig.yaml || true; fi
                 fi
                 if [ -f /source/group_vars/all.yml ]; then
                     cp /source/group_vars/all.yml /dest/group_vars/all.yml

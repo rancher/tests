@@ -323,6 +323,8 @@ setup_kubectl_access() {
         "/root/ansible/rke2/airgap/kubeconfig.yaml"
         "/root/qa-infra-automation/ansible/rke2/airgap/kubeconfig"
         "/root/qa-infra-automation/ansible/rke2/airgap/kubeconfig.yaml"
+        "/root/.kube/config"
+        "/root/.kube/kubeconfig"
         "$SHARED_VOLUME_PATH/kubeconfig"
     )
 
@@ -335,8 +337,12 @@ setup_kubectl_access() {
     done
 
     if [[ -z "$found" ]]; then
-        log_warning "Kubeconfig not found (non-fatal). Checked: ${candidates[*]}"
-        return 0
+        # Fallback: search recursively for kubeconfig files
+        found="$(find /root/ansible/rke2/airgap -maxdepth 5 -type f -name 'kubeconfig*' 2>/dev/null | head -1 || true)"
+        if [[ -z "$found" ]]; then
+            log_warning "Kubeconfig not found (non-fatal). Checked: ${candidates[*]} and recursive search"
+            return 0
+        fi
     fi
 
     if cp "$found" "$target_config" 2>/dev/null; then
