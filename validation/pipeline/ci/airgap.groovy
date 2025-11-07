@@ -45,13 +45,13 @@ def setupEnv(ctx) {
   ctx.logInfo("Docker image: ${ctx.env.IMAGE_NAME}")
   ctx.logInfo("Volume: ${ctx.env.VALIDATION_VOLUME}")
 }
- 
+
 /**
  * Checkout repositories used by the pipeline
  */
 def checkoutRepositories(ctx) {
   ctx.logInfo('Checking out source repositories (library)')
- 
+
   // Checkout Rancher Tests Repository
   ctx.dir('./tests') {
     ctx.logInfo("Cloning rancher tests repository from ${ctx.env.RANCHER_TEST_REPO_URL}")
@@ -67,7 +67,7 @@ def checkoutRepositories(ctx) {
       ]]
     ])
   }
- 
+
   // Checkout QA Infrastructure Repository
   ctx.dir('./qa-infra-automation') {
     ctx.logInfo("Cloning qa-infra-automation repository from ${ctx.env.QA_INFRA_REPO}")
@@ -93,7 +93,7 @@ def checkoutRepositories(ctx) {
       ctx.logWarning('Unable to determine branch/commit in QA infra repo')
     }
   }
- 
+
   ctx.logInfo('Repository checkout completed successfully (library)')
 }
 
@@ -105,10 +105,10 @@ def deployInfrastructure(ctx) {
       'QA_INFRA_WORK_PATH', 'TF_WORKSPACE',
       'TERRAFORM_VARS_FILENAME', 'TERRAFORM_BACKEND_CONFIG_FILENAME'
     ])
- 
+
     // Generate configuration files in repo (library-local)
     generateTofuConfiguration(ctx)
- 
+
     // Build inline script that the container will execute
     def infraScript = '''
 #!/bin/bash
@@ -132,7 +132,7 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/
       'AWS_SSH_PEM_KEY': ctx.env.AWS_SSH_PEM_KEY,
       'AWS_SSH_KEY_NAME': ctx.env.AWS_SSH_KEY_NAME
     ]
- 
+
     ctx.dockerHelper().executeScriptInContainer(infraScript, infraEnvVars)
     // Use library-local artifact extraction to centralize behavior
     extractArtifactsFromDockerVolume(ctx)
@@ -510,7 +510,7 @@ def logError(ctx, String msg) { ctx.echo "[ERROR] ${new Date().format('yyyy-MM-d
 @NonCPS
 static def getArtifactDefinitions() {
   return [
-    'infrastructure': [ 'artifacts/infrastructure-outputs.json', 'artifacts/ansible-inventory.yml', 'artifacts/*.tfvars', 'artifacts/*.tfvars.json' ],
+    'infrastructure': [ 'artifacts/infrastructure-outputs.json', 'artifacts/ansible-inventory.yml', 'artifacts/*.tfvars', 'artifacts/*.tfvars.json', '!artifacts/terraform-state-primary.tfstate' ],
     'ansible_prep': [ 'group_vars.tar.gz', 'group_vars/all.yml', 'ansible-preparation-report.txt' ],
     'rke2_deployment': [ 'artifacts/kubeconfig.yaml', 'artifacts/rke2_deployment_report.txt', 'artifacts/rke2_deployment.log', 'artifacts/kubectl-setup-logs.txt' ],
     'rancher_deployment': [ 'artifacts/rancher-deployment-logs.txt', 'artifacts/rancher-validation-logs.txt', 'artifacts/deployment-summary.json' ],
