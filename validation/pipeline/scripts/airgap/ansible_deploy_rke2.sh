@@ -317,18 +317,35 @@ manual_node_role_check() {
 setup_kubectl_access() {
     log_info "Staging kubeconfig for downstream use"
 
-    local source_config="/root/ansible/rke2/airgap/kubeconfig"
     local target_config="$SHARED_VOLUME_PATH/kubeconfig.yaml"
+    local candidates=(
+        "/root/ansible/rke2/airgap/kubeconfig"
+        "/root/ansible/rke2/airgap/kubeconfig.yaml"
+        "/root/qa-infra-automation/ansible/rke2/airgap/kubeconfig"
+        "/root/qa-infra-automation/ansible/rke2/airgap/kubeconfig.yaml"
+        "$SHARED_VOLUME_PATH/kubeconfig"
+    )
 
-    if [[ -f "$source_config" ]]; then
-        cp "$source_config" "$target_config"
-        chmod 644 "$target_config"
-        log_success "Kubeconfig copied to shared volume: $target_config"
-        log_info "Kubernetes connectivity must be verified from the bastion host. Jenkins agents do not have network access to airgapped nodes."
-    else
-        log_warning "Expected kubeconfig not found at $source_config"
-        return 1
+    local found=""
+    for c in "${candidates[@]}"; do
+        if [[ -f "$c" && -s "$c" ]]; then
+            found="$c"
+            break
+        fi
+    done
+
+    if [[ -z "$found" ]]; then
+        log_warning "Kubeconfig not found (non-fatal). Checked: ${candidates[*]}"
+        return 0
     fi
+
+    if cp "$found" "$target_config" 2>/dev/null; then
+        chmod 644 "$target_config" || true
+        log_success "Kubeconfig staged: $target_config (source: $found)"
+    else
+        log_warning "Failed to copy kubeconfig from $found (non-fatal)"
+    fi
+    return 0
 }
 
 # =============================================================================
