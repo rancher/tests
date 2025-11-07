@@ -380,20 +380,22 @@ def extractArtifactsFromDockerVolume(ctx) {
             alpine:latest \\
             sh -c '
                 mkdir -p /dest /dest/group_vars
-                [ -f /source/infrastructure-outputs.json ] && cp /source/infrastructure-outputs.json /dest/ || true
+                if [ -f /source/infrastructure-outputs.json ]; then cp /source/infrastructure-outputs.json /dest/; elif [ -f /source/shared/infrastructure-outputs.json ]; then cp /source/shared/infrastructure-outputs.json /dest/; fi
                 if [ -f /source/ansible/rke2/airgap/inventory.yml ]; then
                     cp /source/ansible/rke2/airgap/inventory.yml /dest/ansible-inventory.yml
                 elif [ -f /source/ansible-inventory.yml ]; then
                     cp /source/ansible-inventory.yml /dest/
                 fi
                 [ -f "/source/\$TERRAFORM_VARS_FILENAME" ] && cp "/source/\$TERRAFORM_VARS_FILENAME" /dest/ || true
-                [ -f /source/terraform.tfstate ] && cp /source/terraform.tfstate /dest/ || true
-                [ -f /source/terraform-state-primary.tfstate ] && cp /source/terraform-state-primary.tfstate /dest/ || true
+                if [ -f /source/terraform.tfstate ]; then cp /source/terraform.tfstate /dest/; elif [ -f /source/shared/terraform.tfstate ]; then cp /source/shared/terraform.tfstate /dest/; fi
+                if [ -f /source/terraform-state-primary.tfstate ]; then cp /source/terraform-state-primary.tfstate /dest/; elif [ -f /source/shared/terraform-state-primary.tfstate ]; then cp /source/shared/terraform-state-primary.tfstate /dest/; fi
                 for f in /source/terraform-state-backup-*.tfstate /source/tfstate-backup-*.tfstate; do
                     [ -f "\$f" ] && cp "\$f" /dest/ || true
                 done
                 if [ -f /source/kubeconfig.yaml ]; then
                     cp /source/kubeconfig.yaml /dest/
+                elif [ -f /source/shared/kubeconfig.yaml ]; then
+                    cp /source/shared/kubeconfig.yaml /dest/
                 elif [ -f /source/group_vars/kubeconfig.yaml ]; then
                     cp /source/group_vars/kubeconfig.yaml /dest/
                 fi
