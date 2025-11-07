@@ -124,7 +124,7 @@ jobs:
           RANCHER_HOST: ${{ env.RANCHER_HOST }}
 
       - name: Get supported Kubernetes version
-        run: bash .github/scripts/get-k8s-version.sh
+        run: bash .github/scripts/platform-qa-get-k8s-version.sh
         env:
           RANCHER_SHORT_VERSION: ${{ env.RANCHER_SHORT_VERSION }}
 
