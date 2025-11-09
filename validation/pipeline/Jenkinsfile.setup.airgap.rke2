@@ -141,8 +141,13 @@ def toWorkspaceAbsolute(String path, String workspaceRoot) {
   if (!path) {
     return null
   }
-  def file = new File(path)
-  return file.isAbsolute() ? path : "${workspaceRoot}/${path}"
+  if (path.startsWith('/') || path.startsWith('\\') || path ==~ /^[A-Za-z]:[\\/].*/) {
+    return path
+  }
+  if (workspaceRoot?.trim()) {
+    return workspaceRoot.endsWith('/') ? "${workspaceRoot}${path}" : "${workspaceRoot}/${path}"
+  }
+  return path
 }
 
 // ========================================
