@@ -10,7 +10,7 @@
 def configureEnv(ctx) {
   ctx.logInfo('Configuring deployment environment (library)')
   ctx.withCredentials(ctx.getCredentialsList()) {
-    // No container usage here; image may not exist yet
+  // No container usage here; image may not exist yet
   }
 }
 
@@ -252,11 +252,11 @@ def buildDockerImage(ctx) {
     // Best-effort configuration step (quiet)
     try {
       ctx.sh './tests/validation/configure.sh > /dev/null 2>&1 || true'
-    } catch (ignored) {}
+    } catch (ignored) { }
     def buildDate = ''
     def vcsRef = ''
-    try { buildDate = ctx.sh(script: "date -u +'%Y-%m-%dT%H:%M:%SZ'", returnStdout: true).trim() } catch (ignored) {}
-    try { vcsRef = ctx.sh(script: 'git rev-parse --short HEAD 2>/dev/null || echo "unknown"', returnStdout: true).trim() } catch (ignored) {}
+    try { buildDate = ctx.sh(script: "date -u +'%Y-%m-%dT%H:%M:%SZ'", returnStdout: true).trim() } catch (ignored) { }
+    try { vcsRef = ctx.sh(script: 'git rev-parse --short HEAD 2>/dev/null || echo "unknown"', returnStdout: true).trim() } catch (ignored) { }
     ctx.sh """
         docker build . \\
             -f ./tests/validation/Dockerfile.tofu.e2e \\
@@ -267,9 +267,9 @@ def buildDockerImage(ctx) {
             --label "pipeline.job.name=${ctx.env.JOB_NAME}" \\
             --quiet
     """
-  }
+    }
   ctx.logInfo('Docker image built successfully (library)')
-}
+  }
 
 def createSharedVolume(ctx) {
   ctx.logInfo("Creating shared volume: ${ctx.env.VALIDATION_VOLUME}")
@@ -283,7 +283,7 @@ def ensureSSHKeysInContainer(ctx) {
     ctx.logWarning('AWS_SSH_KEY_NAME not set, cannot copy SSH keys')
     return
   }
-  def sshDir = "./tests/.ssh"
+  def sshDir = './tests/.ssh'
   def keyPath = "${sshDir}/${sshKeyName}"
   if (!ctx.fileExists(keyPath)) {
     ctx.logWarning("SSH key not found at: ${keyPath}")
@@ -351,9 +351,9 @@ def cleanupContainersAndVolumes(ctx) {
   try {
     ctx.cleanupSSHKeys()
   } catch (groovy.lang.MissingMethodException | java.lang.NoSuchMethodError ignored) {
-    // noop - cleanup hook not provided by pipeline
+  // noop - cleanup hook not provided by pipeline
   } catch (Exception ignored) {
-    // ignore any cleanup errors to avoid masking primary failures
+  // ignore any cleanup errors to avoid masking primary failures
   }
   // shred env file if exists
   try {
@@ -361,28 +361,29 @@ def cleanupContainersAndVolumes(ctx) {
       ctx.sh "shred -vfz -n 3 ${ctx.env.ENV_FILE} 2>/dev/null || rm -f ${ctx.env.ENV_FILE}"
       ctx.logInfo('Environment file securely shredded (library)')
     }
-  } catch (ignored) {}
-}
+  } catch (ignored) { }
+  }
 
 def extractArtifactsFromDockerVolume(ctx) {
   ctx.logInfo('Extracting artifacts from Docker shared volume to Jenkins workspace (library)')
-  
+
   // Validate required environment variables
   def requiredVars = ['VALIDATION_VOLUME', 'BUILD_CONTAINER_NAME', 'TERRAFORM_VARS_FILENAME']
   requiredVars.each { var ->
-    if (!ctx.env[var]) {
+    def value = ctx.env.get(var)
+    if (!value) {
       ctx.error("Required environment variable ${var} is not set")
     }
   }
-  
+
   try {
     // Generate unique container name with UUID to prevent collisions
     def extractorContainerName = "${ctx.env.BUILD_CONTAINER_NAME}-extractor-${UUID.randomUUID().toString()}"
     def artifactsDir = 'artifacts'
-    
+
     // Create artifacts directory with proper error handling
     ctx.sh "mkdir -p ${artifactsDir}"
-    
+
     // Build shell script with proper escaping and validation
     def extractionScript = """
 #!/bin/sh
@@ -396,7 +397,7 @@ safe_copy() {
     local src="\$1"
     local dest="\$2"
     local description="\$3"
-    
+
     if [ -f "\$src" ]; then
         if cp "\$src" "\$dest" 2>/dev/null; then
             echo "✓ Copied \$description: \$src -> \$dest"
@@ -454,7 +455,7 @@ safe_copy "/source/group_vars/all.yml" "/dest/group_vars/" "Ansible group variab
 
 echo "Artifact extraction completed successfully"
 """
-    
+
     // Execute Docker container with proper environment variable passing
     ctx.sh """
         docker run --rm \\
@@ -465,7 +466,7 @@ echo "Artifact extraction completed successfully"
             alpine:latest \\
             sh -c '${extractionScript}'
     """
-    
+
     generateDeploymentSummary(ctx)
     ctx.logInfo('Artifact extraction completed successfully (library)')
   } catch (Exception e) {
@@ -626,7 +627,7 @@ def archiveBuildArtifacts(ctx, List artifactList = []) {
 // Execute infrastructure cleanup using consolidated script
 // Mirrors Jenkinsfile fallback behavior
 def executeInfrastructureCleanup(ctx, String failureType) {
-  def cleanupReason = ['timeout','aborted'].contains(failureType) ? failureType : 'deployment_failure'
+  def cleanupReason = ['timeout', 'aborted'].contains(failureType) ? failureType : 'deployment_failure'
   def cleanupScript = '''
 #!/bin/bash
 set -e
@@ -645,6 +646,5 @@ perform_cleanup "${CLEANUP_REASON}" "${TF_WORKSPACE}" "true"
   helper.executeScriptInContainer(cleanupScript, cleanupEnvVars)
   ctx.echo("[INFO] Infrastructure cleanup completed for ${failureType}")
 }
-
 
 return this
