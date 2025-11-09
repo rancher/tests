@@ -69,9 +69,18 @@ validate_yaml_syntax() {
 
 # Robust library sourcing for airgap helpers
 source_airgap_lib() {
+    if [ -n "${AIRGAP_LIB_PATH:-}" ] && [ -f "${AIRGAP_LIB_PATH}" ]; then
+        # shellcheck disable=SC1090,SC1091
+        source "${AIRGAP_LIB_PATH}" || return 1
+        log_debug "Sourced airgap library via override: ${AIRGAP_LIB_PATH}"
+        return 0
+    fi
+
     local candidates=(
         "${COMMON_LIB_DIR}/../pipeline/scripts/airgap/airgap_lib.sh"
         "${COMMON_LIB_DIR}/../../validation/pipeline/scripts/airgap/airgap_lib.sh"
+        "${COMMON_LIB_DIR}/../../tests/validation/pipeline/scripts/airgap/airgap_lib.sh"
+        "${COMMON_LIB_DIR}/../../tests/pipeline/scripts/airgap/airgap_lib.sh"
         "${COMMON_LIB_DIR}/../../validation/pipeline/ci/airgap.groovy"
     )
     for p in "${candidates[@]}"; do

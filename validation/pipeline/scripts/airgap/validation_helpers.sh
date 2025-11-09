@@ -2,17 +2,35 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+# Resolve script directory for portable sourcing
+SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
+SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_PATH}")" && pwd)"
+readonly SCRIPT_DIR
+
 # Try to source common shell library for consistent logging helpers (optional)
 # shellcheck disable=SC1090
-if ! type log_info >/dev/null 2>&1; then
-  COMMON_CANDIDATES=(
-    "${SCRIPT_DIR:-.}/../../../scripts/lib/common.sh" \
-    "/root/go/src/github.com/rancher/tests/scripts/lib/common.sh" \
-    "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/lib/common.sh"
-  )
-  for c in "${COMMON_CANDIDATES[@]}"; do
-    [ -f "$c" ] && . "$c" && break
-  done
+if [ -n "${COMMON_HELPER_PATH:-}" ] && [ -f "${COMMON_HELPER_PATH}" ]; then
+    . "${COMMON_HELPER_PATH}"
+elif ! type log_info >/dev/null 2>&1; then
+    COMMON_CANDIDATES=(
+        "${SCRIPT_DIR}/../../../scripts/lib/common.sh" \
+        "${SCRIPT_DIR}/../../../../scripts/lib/common.sh" \
+        "${SCRIPT_DIR}/../../../../tests/scripts/lib/common.sh" \
+        "/root/go/src/github.com/rancher/tests/scripts/lib/common.sh" \
+        "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/lib/common.sh" \
+        "/root/go/src/github.com/rancher/tests/tests/scripts/lib/common.sh"
+    )
+    if [ -n "${WORKSPACE_ROOT:-}" ]; then
+        COMMON_CANDIDATES+=(
+            "${WORKSPACE_ROOT}/scripts/lib/common.sh"
+            "${WORKSPACE_ROOT}/validation/pipeline/scripts/lib/common.sh"
+            "${WORKSPACE_ROOT}/tests/scripts/lib/common.sh"
+            "${WORKSPACE_ROOT}/tests/validation/pipeline/scripts/lib/common.sh"
+        )
+    fi
+    for c in "${COMMON_CANDIDATES[@]}"; do
+        [ -f "$c" ] && . "$c" && break
+    done
 fi
 
 # ========================================

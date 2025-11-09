@@ -19,12 +19,26 @@ readonly QA_INFRA_CLONE_PATH
 # Source common library first (try multiple locations)
 # shellcheck disable=SC1090
 {
-    COMMON_CANDIDATES=(
+    COMMON_CANDIDATES=()
+    if [ -n "${COMMON_HELPER_PATH:-}" ]; then
+        COMMON_CANDIDATES+=("${COMMON_HELPER_PATH}")
+    fi
+    COMMON_CANDIDATES+=(
         "${SCRIPT_DIR}/../../../lib/common.sh"
+        "${SCRIPT_DIR}/../../../../scripts/lib/common.sh"
+        "${SCRIPT_DIR}/../../../../tests/scripts/lib/common.sh"
         "/root/go/src/github.com/rancher/tests/scripts/lib/common.sh"
         "/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/lib/common.sh"
-        "/root/go/src/github.com/rancher/tests/scripts/lib/common.sh"
+        "/root/go/src/github.com/rancher/tests/tests/scripts/lib/common.sh"
     )
+    if [ -n "${WORKSPACE_ROOT:-}" ]; then
+        COMMON_CANDIDATES+=(
+            "${WORKSPACE_ROOT}/scripts/lib/common.sh"
+            "${WORKSPACE_ROOT}/validation/pipeline/scripts/lib/common.sh"
+            "${WORKSPACE_ROOT}/tests/scripts/lib/common.sh"
+            "${WORKSPACE_ROOT}/tests/validation/pipeline/scripts/lib/common.sh"
+        )
+    fi
     for c in "${COMMON_CANDIDATES[@]}"; do
         if [ -f "$c" ]; then . "$c" && log_info "Sourced common helpers from $c" && break; fi
     done
