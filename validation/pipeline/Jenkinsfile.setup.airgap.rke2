@@ -150,6 +150,46 @@ def toWorkspaceAbsolute(String path, String workspaceRoot) {
   return path
 }
 
+def runValidationHelper(String label, Map<String, String> envVars = [:], String helperInvocation, boolean helperRequired = true) {
+  def workspaceRoot = pwd()
+  def helperCandidate = resolveValidationHelperPath(helperRequired)
+  if (!helperCandidate) {
+    logWarning("validation_helpers.sh not found; skipping ${label}")
+    return false
+  }
+
+  def helperPath = toWorkspaceAbsolute(helperCandidate, workspaceRoot)
+  def commonHelperCandidate = resolveCommonLibraryPath(false)
+  def envList = []
+
+  envVars?.each { key, value ->
+    envList << "${key}=${value ?: ''}"
+  }
+
+  envList << "VALIDATION_HELPER_PATH=${helperPath}"
+  envList << "WORKSPACE_ROOT=${workspaceRoot}"
+
+  if (commonHelperCandidate) {
+    def commonHelperPath = toWorkspaceAbsolute(commonHelperCandidate, workspaceRoot)
+    envList << "COMMON_HELPER_PATH=${commonHelperPath}"
+  }
+
+  def scriptLines = [
+          '#!/bin/bash',
+          'set -Eeuo pipefail',
+          'source "${VALIDATION_HELPER_PATH}"'
+  ]
+  if (helperInvocation?.trim()) {
+    scriptLines << helperInvocation
+  }
+
+  withEnv(envList) {
+    sh(label: label, script: scriptLines.join('\n') + '\n')
+  }
+
+  return true
+}
+
 // ========================================
 // CONSOLIDATED ENVIRONMENT CONFIGURATION
 // ========================================
@@ -701,33 +741,17 @@ static def getTimestamp() {
 def validateParameters() {
   logInfo('Validating pipeline parameters using external script')
 
-  def workspaceRoot = pwd()
-  def helperPath = toWorkspaceAbsolute(resolveValidationHelperPath(true), workspaceRoot)
-  def commonHelperPath = toWorkspaceAbsolute(resolveCommonLibraryPath(false), workspaceRoot)
-
-  def validationEnvVars = [
-            'RKE2_VERSION'        : params.RKE2_VERSION ?: '',
-            'RANCHER_VERSION'     : params.RANCHER_VERSION ?: '',
-            'RANCHER_TEST_REPO_URL': params.RANCHER_TEST_REPO_URL ?: '',
-            'QA_INFRA_REPO_URL'   : params.QA_INFRA_REPO_URL ?: '',
-            'VALIDATION_HELPER_PATH': helperPath,
-            'WORKSPACE_ROOT'      : workspaceRoot
-    ]
-
-  def envList = validationEnvVars.collect { k, v -> "${k}=${v}" }
-  if (commonHelperPath) {
-    envList += "COMMON_HELPER_PATH=${commonHelperPath}"
-  }
-
   try {
-    withEnv(envList) {
-      sh(label: 'Validate pipeline parameters', script: '''
-#!/bin/bash
-set -Eeuo pipefail
-source "${VALIDATION_HELPER_PATH}"
-validate_pipeline_parameters
-''')
-    }
+    runValidationHelper(
+            'Validate pipeline parameters',
+            [
+                    'RKE2_VERSION'        : params.RKE2_VERSION ?: '',
+                    'RANCHER_VERSION'     : params.RANCHER_VERSION ?: '',
+                    'RANCHER_TEST_REPO_URL': params.RANCHER_TEST_REPO_URL ?: '',
+                    'QA_INFRA_REPO_URL'   : params.QA_INFRA_REPO_URL ?: ''
+            ],
+            'validate_pipeline_parameters'
+    )
     logInfo('All parameters validated successfully')
     } catch (Exception e) {
     def errorMsg = "Parameter validation failed: ${e.message}"
@@ -739,29 +763,19 @@ validate_pipeline_parameters
 def validateRequiredVariables(List<String> requiredVars) {
   logInfo('Validating required environment variables')
 
-  def workspaceRoot = pwd()
-  def helperPath = toWorkspaceAbsolute(resolveValidationHelperPath(true), workspaceRoot)
-  def commonHelperPath = toWorkspaceAbsolute(resolveCommonLibraryPath(false), workspaceRoot)
+  def envVars = requiredVars.collectEntries { [(it): env."${it}" ?: ''] }
+  envVars['ENV_FILE'] = env.ENV_FILE ?: ''
+  envVars['SSH_KEY_PATH'] = env.SSH_KEY_PATH ?: ''
 
-  def envVars = [:]
-  requiredVars.each { varName -> envVars[varName] = env."${varName}" ?: '' }
-  envVars['VALIDATION_HELPER_PATH'] = helperPath
-  envVars['WORKSPACE_ROOT'] = workspaceRoot
-
-  def envList = envVars.collect { k, v -> "${k}=${v}" }
-  if (commonHelperPath) {
-    envList += "COMMON_HELPER_PATH=${commonHelperPath}"
-  }
+  def args = requiredVars.collect { "\"${it}\"" }.join(' ')
+  def invocation = args ? "validate_required_variables ${args}" : 'validate_required_variables'
 
   try {
-    withEnv(envList) {
-      sh(label: 'Validate required environment variables', script: """
-#!/bin/bash
-set -Eeuo pipefail
-source "${VALIDATION_HELPER_PATH}"
-validate_required_variables ${requiredVars.join(' ')}
-""")
-    }
+    runValidationHelper(
+            'Validate required environment variables',
+            envVars,
+            invocation
+    )
     logInfo('All required variables validated successfully')
     } catch (Exception e) {
     def errorMsg = "Required variables validation failed: ${e.message}"
@@ -773,36 +787,18 @@ validate_required_variables ${requiredVars.join(' ')}
 def validateSensitiveDataHandling() {
   logInfo('Validating sensitive data handling using external script')
 
-  def workspaceRoot = pwd()
-  def resolvedHelper = resolveValidationHelperPath(false)
-  if (!resolvedHelper) {
-    logWarning('validation_helpers.sh not found in workspace; skipping sensitive data validation')
-    return
-  }
-
-  def helperPath = toWorkspaceAbsolute(resolvedHelper, workspaceRoot)
-  def commonHelperPath = toWorkspaceAbsolute(resolveCommonLibraryPath(false), workspaceRoot)
-
-  def validationEnvVars = [
-            'ENV_FILE'            : env.ENV_FILE,
-            'SSH_KEY_PATH'        : env.SSH_KEY_PATH ?: '',
-            'VALIDATION_HELPER_PATH': helperPath,
-            'WORKSPACE_ROOT'      : workspaceRoot
-    ]
-
-  def envList = validationEnvVars.collect { k, v -> "${k}=${v}" }
-  if (commonHelperPath) {
-    envList += "COMMON_HELPER_PATH=${commonHelperPath}"
-  }
-
   try {
-    withEnv(envList) {
-      sh(label: 'Validate sensitive data handling', script: '''
-#!/bin/bash
-set -Eeuo pipefail
-source "${VALIDATION_HELPER_PATH}"
-validate_sensitive_data_handling "${ENV_FILE}"
-''')
+    def invoked = runValidationHelper(
+            'Validate sensitive data handling',
+            [
+                    'ENV_FILE': env.ENV_FILE ?: '',
+                    'SSH_KEY_PATH': env.SSH_KEY_PATH ?: ''
+            ],
+            'validate_sensitive_data_handling "${ENV_FILE}"',
+            false
+    )
+    if (!invoked) {
+      return
     }
     logInfo('Sensitive data handling validated successfully')
     } catch (Exception e) {
