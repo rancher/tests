@@ -74,19 +74,19 @@ def executeScriptInContainer(ctx, scriptContent, extraEnv = [:], skipWorkspaceEn
         // Create credential env file via helper
         credentialEnvFile = createCredentialEnvironmentFile(ctx)
 
-        def dockerCmd = """
-          docker run --rm \\
-              -v ${ctx.env.VALIDATION_VOLUME}:/root \\
-              -v ${ctx.pwd()}/${scriptFile}:/tmp/script.sh \\
-              --name ${containerName} \\
-              -t --env-file ${ctx.env.ENV_FILE} \\
-              -e QA_INFRA_WORK_PATH=${ctx.env.QA_INFRA_WORK_PATH} \\
-              -e TF_WORKSPACE=${ctx.env.TF_WORKSPACE} \\
-              -e TERRAFORM_VARS_FILENAME=${ctx.env.TERRAFORM_VARS_FILENAME} \\
-              ${envVars} \\
-              ${ctx.env.IMAGE_NAME} \\
-              sh /tmp/script.sh
-      """
+                def dockerCmd = """
+                    docker run --rm \\
+                            -v ${ctx.env.VALIDATION_VOLUME}:/root \\
+                            -v ${ctx.pwd()}/${scriptFile}:/tmp/script.sh \\
+                            --name ${containerName} \\
+                            --env-file ${ctx.env.ENV_FILE} \\
+                            -e QA_INFRA_WORK_PATH=${ctx.env.QA_INFRA_WORK_PATH} \\
+                            -e TF_WORKSPACE=${ctx.env.TF_WORKSPACE} \\
+                            -e TERRAFORM_VARS_FILENAME=${ctx.env.TERRAFORM_VARS_FILENAME} \\
+                            ${envVars} \\
+                            ${ctx.env.IMAGE_NAME} \\
+                            sh /tmp/script.sh
+            """
 
         def modified = addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile)
         ctx.sh modified
@@ -112,17 +112,17 @@ def executeInContainer(ctx, commands) {
     ctx.writeFile file: scriptFile, text: commandString
     try {
         credentialEnvFile = createCredentialEnvironmentFile(ctx)
-        def dockerCmd = """
-          docker run --rm \\
-              -v ${ctx.env.VALIDATION_VOLUME}:/root \\
-              -v ${ctx.pwd()}/${scriptFile}:/tmp/script.sh \\
-              --name ${containerName} \\
-              -t --env-file ${ctx.env.ENV_FILE} \\
-              -e QA_INFRA_WORK_PATH=${ctx.env.QA_INFRA_WORK_PATH} \\
-              -e TF_WORKSPACE=${ctx.env.TARGET_WORKSPACE} \\
-              ${ctx.env.IMAGE_NAME} \\
-              sh /tmp/script.sh
-      """
+                def dockerCmd = """
+                    docker run --rm \\
+                            -v ${ctx.env.VALIDATION_VOLUME}:/root \\
+                            -v ${ctx.pwd()}/${scriptFile}:/tmp/script.sh \\
+                            --name ${containerName} \\
+                            --env-file ${ctx.env.ENV_FILE} \\
+                            -e QA_INFRA_WORK_PATH=${ctx.env.QA_INFRA_WORK_PATH} \\
+                            -e TF_WORKSPACE=${ctx.env.TARGET_WORKSPACE} \\
+                            ${ctx.env.IMAGE_NAME} \\
+                            sh /tmp/script.sh
+            """
         def modified = addCredentialEnvFileToDockerCommand(dockerCmd, credentialEnvFile)
         ctx.sh modified
     } finally {
