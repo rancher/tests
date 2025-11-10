@@ -736,7 +736,9 @@ def runCleanupWorkflow(ctx, Map options = [:]) {
     'USE_REMOTE_PATH'         : (options.useLocalPath ? 'false' : 'true'),
     'CLEANUP_WORKSPACE'       : (options.cleanWorkspace == false ? 'false' : 'true'),
     'DEBUG'                   : (options.debug ? 'true' : 'false'),
-    'DESTROY_ON_FAILURE'      : (options.destroyOnFailure ? 'true' : 'false')
+    'DESTROY_ON_FAILURE'      : (options.destroyOnFailure ? 'true' : 'false'),
+    'REMOTE_TOFU_MODULE_PATH' : ctx.env.REMOTE_TOFU_MODULE_PATH ?: '/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap',
+    'TOFU_MODULE_PATH'        : ctx.env.TOFU_MODULE_PATH ?: '/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap'
   ].findAll { it.value != null }
 
   def helpers = ctx.ciHelpers()
