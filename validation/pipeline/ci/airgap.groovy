@@ -623,7 +623,10 @@ def generateDestructionEnvironmentFile(ctx) {
 
   try {
     def preview = ctx.readFile(file: ctx.env.ENV_FILE).split('\n')
-    preview.take(Math.min(10, preview.size())).each { ctx.logInfo(it) }
+    def limit = preview.length < 10 ? preview.length : 10
+    for (int i = 0; i < limit; i++) {
+      ctx.logInfo(preview[i])
+    }
   } catch (Exception ignored) {
     ctx.logWarning('Unable to read environment file for preview (library)')
   }
@@ -721,9 +724,9 @@ def runCleanupWorkflow(ctx, Map options = [:]) {
     'fi'
   ]
   if (commandArgs?.trim()) {
-    scriptLines << 'exec "$cleanup_script" ' + commandArgs.trim()
+    scriptLines << 'exec /bin/bash "$cleanup_script" ' + commandArgs.trim()
   } else {
-    scriptLines << 'exec "$cleanup_script"'
+    scriptLines << 'exec /bin/bash "$cleanup_script"'
   }
   def scriptContent = scriptLines.join('\n') + '\n'
 
