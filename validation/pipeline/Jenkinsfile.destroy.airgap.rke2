@@ -194,9 +194,9 @@ pipeline {
           // Configure credentials and environment files
           withCredentials(getCredentialsList()) {
             def airgap = ciAirgap()
-            if (airgap?.respondsTo('configureDestructionEnvironment', this)) {
-              airgap.configureDestructionEnvironment(this)
-                        } else {
+            if (callLibraryMethod(airgap, 'configureDestructionEnvironment', this)) {
+            // Shared helper handled environment preparation
+            } else {
               // Fallback to local helpers for backwards compatibility
               generateDestructionEnvironmentFile()
               setupSSHKeys()
@@ -232,33 +232,28 @@ pipeline {
 
           timeout(time: timeoutMinutes, unit: 'MINUTES') {
             def airgap = ciAirgap()
-            if (!airgap?.respondsTo('destroyInfrastructure', this)) {
-              error('Required library function ci/airgap.groovy::destroyInfrastructure not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
-            }
 
             try {
-              airgap.destroyInfrastructure(this)
+              if (!callLibraryMethod(airgap, 'destroyInfrastructure', this)) {
+                error('Required library function ci/airgap.groovy::destroyInfrastructure not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
+              }
               logInfo('Infrastructure destruction process completed.')
 
-              if (airgap?.respondsTo('archiveDestructionResults', this)) {
-                airgap.archiveDestructionResults(this)
+              if (!callLibraryMethod(airgap, 'archiveDestructionResults', this)) {
+                logWarning('Archive destruction results helper missing; skipping shared archive step')
               }
                         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
               logError("Infrastructure destruction timed out after ${timeoutMinutes} minutes")
               logError("Timeout exception details: ${e.message}")
 
-              if (airgap?.respondsTo('archiveDestructionFailureArtifacts', this)) {
-                try {
-                  airgap.archiveDestructionFailureArtifacts(this)
-                                } catch (Exception cleanupException) {
-                  logError("Failed to perform infrastructure cleanup: ${cleanupException.message}")
-                }
+              if (!callLibraryMethod(airgap, 'archiveDestructionFailureArtifacts', this)) {
+                logWarning('Archive destruction failure helper missing; skipping shared cleanup step')
               }
                         } catch (Exception e) {
               logError("Infrastructure destruction failed: ${e.message}")
 
-              if (airgap?.respondsTo('archiveDestructionFailureArtifacts', this)) {
-                airgap.archiveDestructionFailureArtifacts(this)
+              if (!callLibraryMethod(airgap, 'archiveDestructionFailureArtifacts', this)) {
+                logWarning('Archive destruction failure helper missing during exception handling; skipping shared cleanup step')
               }
 
               throw e
@@ -271,8 +266,8 @@ pipeline {
           script {
             logError('Infrastructure destruction operations failed')
             def airgap = ciAirgap()
-            if (airgap?.respondsTo('archiveDestructionFailureArtifacts', this)) {
-              airgap.archiveDestructionFailureArtifacts(this)
+            if (!callLibraryMethod(airgap, 'archiveDestructionFailureArtifacts', this)) {
+              logWarning('Archive destruction failure helper missing in post block; skipping shared cleanup step')
             }
           }
         }
@@ -302,9 +297,7 @@ pipeline {
 
         // Clean up S3 workspace directory after successful destruction
         def airgap = ciAirgap()
-        if (airgap?.respondsTo('cleanupS3WorkspaceDirectory', this)) {
-          airgap.cleanupS3WorkspaceDirectory(this)
-                } else {
+        if (!callLibraryMethod(airgap, 'cleanupS3WorkspaceDirectory', this)) {
           logWarning('Shared cleanup helper unavailable; using local fallback')
           cleanupS3WorkspaceDirectory()
         }
@@ -362,6 +355,23 @@ def ciAirgap() {
     }
   return __ciAirgapRef
   }
+
+// Invoke a method on the loaded library if it exists; return true when invoked, false when missing.
+// We intentionally catch MissingMethodException to avoid sandboxed metaClass access.
+def callLibraryMethod(lib, String methodName, Object... args) {
+  if (!lib) {
+    return false
+  }
+  try {
+    lib."${methodName}"(*args)
+    return true
+    } catch (MissingMethodException e) {
+    if (e.method == methodName) {
+      return false
+    }
+    throw e
+  }
+}
 
 /**
  * DESTRUCTION-SPECIFIC HELPER FUNCTIONS
