@@ -367,13 +367,14 @@ def cleanupContainersAndVolumes(ctx) {
 def extractArtifactsFromDockerVolume(ctx) {
   ctx.logInfo('Extracting artifacts from Docker shared volume to Jenkins workspace (library)')
 
-  // Validate required environment variables
-  def requiredVars = ['VALIDATION_VOLUME', 'BUILD_CONTAINER_NAME', 'TERRAFORM_VARS_FILENAME']
-  requiredVars.each { var ->
-    def value = ctx.env.get(var)
-    if (!value) {
-      ctx.error("Required environment variable ${var} is not set")
-    }
+  if (!ctx.env.VALIDATION_VOLUME) {
+    ctx.error('Required environment variable VALIDATION_VOLUME is not set')
+  }
+  if (!ctx.env.BUILD_CONTAINER_NAME) {
+    ctx.error('Required environment variable BUILD_CONTAINER_NAME is not set')
+  }
+  if (!ctx.env.TERRAFORM_VARS_FILENAME) {
+    ctx.error('Required environment variable TERRAFORM_VARS_FILENAME is not set')
   }
 
   try {
