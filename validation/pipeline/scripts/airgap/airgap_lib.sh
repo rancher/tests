@@ -6,6 +6,19 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+# Ensure common logging/helpers are available when the library is sourced directly
+if ! declare -F log_info >/dev/null 2>&1; then
+    AIRGAP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    COMMON_LIB_PATH="${AIRGAP_LIB_DIR}/../../../../scripts/lib/common.sh"
+    if [[ -f "${COMMON_LIB_PATH}" ]]; then
+        # shellcheck disable=SC1090
+        source "${COMMON_LIB_PATH}"
+    else
+        >&2 echo "common.sh not found for airgap library: ${COMMON_LIB_PATH}"
+        return 1 2>/dev/null || exit 1
+    fi
+fi
+
 # =============================================================================
 # GLOBAL VARIABLES AND CONFIGURATION
 # =============================================================================
