@@ -645,30 +645,155 @@ def ensureDestructionSSHKeys(ctx) {
   ctx.logInfo('SSH keys configured successfully (library)')
 }
 
-def destroyInfrastructure(ctx) {
-  ctx.logInfo('Executing infrastructure destruction with consolidated script (library)')
+// Cleanup orchestration helpers
+def shellQuote(value) {
+  if (value == null) {
+    return "''"
+  }
+  def text = value.toString()
+  if (text.isEmpty()) {
+    return "''"
+  }
+  return "'" + text.replace("'", "'\"'\"'") + "'"
+}
 
-  def scriptContent = '''
-#!/bin/bash
-set -Eeuo pipefail
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_infrastructure_cleanup.sh
-'''
+def mergeCleanupOptions(ctx, Map options = [:]) {
+  def merged = [:]
+  if (options) {
+    merged.putAll(options)
+  }
+  if (!merged.containsKey('workspace') && ctx.env.TF_WORKSPACE) {
+    merged.workspace = ctx.env.TF_WORKSPACE
+  }
+  if (!merged.containsKey('varFile') && ctx.env.TERRAFORM_VARS_FILENAME) {
+    merged.varFile = ctx.env.TERRAFORM_VARS_FILENAME
+  }
+  if (!merged.containsKey('cleanWorkspace')) {
+    def envValue = ctx.env.CLEANUP_WORKSPACE
+    merged.cleanWorkspace = envValue ? !envValue.equalsIgnoreCase('false') : true
+  }
+  if (!merged.containsKey('useLocalPath')) {
+    def envValue = ctx.env.USE_REMOTE_PATH
+    merged.useLocalPath = envValue ? envValue.equalsIgnoreCase('false') : false
+  }
+  if (!merged.containsKey('debug')) {
+    def envValue = ctx.env.DEBUG
+    merged.debug = envValue ? envValue.equalsIgnoreCase('true') : false
+  }
+  if (!merged.containsKey('destroyOnFailure')) {
+    merged.destroyOnFailure = true
+  }
+  if (!merged.containsKey('verify')) {
+    merged.verify = true
+  }
+  return merged
+}
 
-  def extraEnvVars = [
-    'CLEANUP_WORKSPACE': 'true',
-    'DESTROY_ON_FAILURE': 'true'
+def buildCleanupArguments(Map options) {
+  def args = []
+  if (options.workspace) {
+    args << "--workspace ${shellQuote(options.workspace)}"
+  }
+  if (options.varFile) {
+    args << "--var-file ${shellQuote(options.varFile)}"
+  }
+  if (options.useLocalPath) {
+    args << '--local-path'
+  }
+  if (options.containsKey('cleanWorkspace') && options.cleanWorkspace == false) {
+    args << '--no-workspace-cleanup'
+  }
+  if (options.debug) {
+    args << '--debug'
+  }
+  return args.join(' ')
+}
+
+def runCleanupWorkflow(ctx, Map options = [:]) {
+  def commandArgs = buildCleanupArguments(options)
+  def scriptLines = [
+    '#!/bin/bash',
+    'set -Eeuo pipefail',
+    'cleanup_script="/root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_infrastructure_cleanup.sh"',
+    'if [ ! -f "${cleanup_script}" ]; then',
+    '  echo "[ERROR] Cleanup script not found: ${cleanup_script}" >&2',
+    '  exit 1',
+    'fi',
+    commandArgs ? "exec \"${cleanup_script}\" ${commandArgs}" : 'exec "${cleanup_script}"'
   ]
+  def scriptContent = scriptLines.join('\n') + '\n'
+
+  def extraEnv = [
+    'TF_WORKSPACE'            : options.workspace ?: ctx.env.TF_WORKSPACE,
+    'TERRAFORM_VARS_FILENAME' : options.varFile ?: ctx.env.TERRAFORM_VARS_FILENAME,
+    'USE_REMOTE_PATH'         : (options.useLocalPath ? 'false' : 'true'),
+    'CLEANUP_WORKSPACE'       : (options.cleanWorkspace == false ? 'false' : 'true'),
+    'DEBUG'                   : (options.debug ? 'true' : 'false'),
+    'DESTROY_ON_FAILURE'      : (options.destroyOnFailure ? 'true' : 'false')
+  ].findAll { it.value != null }
 
   def helpers = ctx.ciHelpers()
   if (helpers) {
-    helpers.executeScriptInContainer(ctx, scriptContent, extraEnvVars)
+    helpers.executeScriptInContainer(ctx, scriptContent, extraEnv)
   } else if (ctx.metaClass.respondsTo(ctx, 'executeScriptInContainer')) {
-    ctx.executeScriptInContainer(scriptContent, extraEnvVars)
+    ctx.executeScriptInContainer(scriptContent, extraEnv)
   } else {
-    ctx.error('No execution helper available for destruction script')
+    ctx.error('No execution helper available for destruction script (library)')
+  }
+  ctx.logInfo('Infrastructure cleanup workflow executed (library)')
+}
+
+def verifyCleanupState(ctx, Map options = [:]) {
+  def scriptContent = '''
+#!/bin/bash
+set -Eeuo pipefail
+cd "${QA_INFRA_WORK_PATH}"
+STATE_OUTPUT="/root/post-cleanup-state.txt"
+if tofu -chdir=tofu/aws/modules/airgap state list > "${STATE_OUTPUT}" 2>&1; then
+  remaining=$(wc -l < "${STATE_OUTPUT}" | tr -d ' ')
+  echo "[INFO] Remaining OpenTofu resources after cleanup: ${remaining}"
+  if [ "${remaining}" -gt 0 ]; then
+    echo "[ERROR] Resources still present after cleanup:"
+    cat "${STATE_OUTPUT}"
+    exit 2
+  fi
+  rm -f "${STATE_OUTPUT}" || true
+else
+  echo "[WARNING] Unable to inspect OpenTofu state; skipping verification."
+fi
+'''
+
+  def extraEnv = [
+    'TF_WORKSPACE'            : options.workspace ?: ctx.env.TF_WORKSPACE,
+    'TERRAFORM_VARS_FILENAME' : options.varFile ?: ctx.env.TERRAFORM_VARS_FILENAME,
+    'DEBUG'                   : (options.debug ? 'true' : 'false')
+  ].findAll { it.value != null }
+
+  def helpers = ctx.ciHelpers()
+  if (helpers) {
+    helpers.executeScriptInContainer(ctx, scriptContent, extraEnv)
+  } else if (ctx.metaClass.respondsTo(ctx, 'executeScriptInContainer')) {
+    ctx.executeScriptInContainer(scriptContent, extraEnv)
+  } else {
+    ctx.error('No execution helper available for cleanup verification (library)')
+  }
+  ctx.logInfo('Post-cleanup state verification completed (library)')
+  return true
+}
+
+def destroyInfrastructure(ctx, Map options = [:]) {
+  def cleanupOptions = mergeCleanupOptions(ctx, options)
+  ctx.logInfo('Executing infrastructure destruction workflow (library)')
+
+  runCleanupWorkflow(ctx, cleanupOptions)
+
+  if (cleanupOptions.verify) {
+    verifyCleanupState(ctx, cleanupOptions)
+  } else {
+    ctx.logInfo('Skipping cleanup verification per configuration (library)')
   }
 
-  ctx.logInfo('Infrastructure destruction script completed (library)')
+  return true
 }
 
 def archiveDestructionResults(ctx) {

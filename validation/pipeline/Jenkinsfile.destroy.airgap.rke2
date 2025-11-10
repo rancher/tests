@@ -226,9 +226,21 @@ pipeline {
 
           timeout(time: timeoutMinutes, unit: 'MINUTES') {
             def airgap = ciAirgap()
+            def debugFlag = false
+            if (env.DEBUG) {
+              debugFlag = env.DEBUG.equalsIgnoreCase('true')
+            }
+            def destroyOptions = [
+                        workspace: env.TF_WORKSPACE,
+                        varFile: env.TERRAFORM_VARS_FILENAME,
+                        cleanWorkspace: true,
+                        useLocalPath: false,
+                        debug: debugFlag,
+                        verify: true
+                    ]
 
             try {
-              if (!callLibraryMethod(airgap, 'destroyInfrastructure', this)) {
+              if (!callLibraryMethod(airgap, 'destroyInfrastructure', this, destroyOptions)) {
                 error('Required library function ci/airgap.groovy::destroyInfrastructure not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
               }
               logInfo('Infrastructure destruction process completed.')
