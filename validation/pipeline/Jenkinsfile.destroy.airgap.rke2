@@ -194,7 +194,7 @@ pipeline {
           // Configure credentials and environment files
           withCredentials(getCredentialsList()) {
             def airgap = ciAirgap()
-            if (airgap && airgap.metaClass.respondsTo(airgap, 'configureDestructionEnvironment')) {
+            if (airgap?.respondsTo('configureDestructionEnvironment', this)) {
               airgap.configureDestructionEnvironment(this)
                         } else {
               // Fallback to local helpers for backwards compatibility
@@ -232,7 +232,7 @@ pipeline {
 
           timeout(time: timeoutMinutes, unit: 'MINUTES') {
             def airgap = ciAirgap()
-            if (!airgap || !airgap.metaClass.respondsTo(airgap, 'destroyInfrastructure')) {
+            if (!airgap?.respondsTo('destroyInfrastructure', this)) {
               error('Required library function ci/airgap.groovy::destroyInfrastructure not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
             }
 
@@ -240,14 +240,14 @@ pipeline {
               airgap.destroyInfrastructure(this)
               logInfo('Infrastructure destruction process completed.')
 
-              if (airgap.metaClass.respondsTo(airgap, 'archiveDestructionResults')) {
+              if (airgap?.respondsTo('archiveDestructionResults', this)) {
                 airgap.archiveDestructionResults(this)
               }
                         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
               logError("Infrastructure destruction timed out after ${timeoutMinutes} minutes")
               logError("Timeout exception details: ${e.message}")
 
-              if (airgap.metaClass.respondsTo(airgap, 'archiveDestructionFailureArtifacts')) {
+              if (airgap?.respondsTo('archiveDestructionFailureArtifacts', this)) {
                 try {
                   airgap.archiveDestructionFailureArtifacts(this)
                                 } catch (Exception cleanupException) {
@@ -257,7 +257,7 @@ pipeline {
                         } catch (Exception e) {
               logError("Infrastructure destruction failed: ${e.message}")
 
-              if (airgap.metaClass.respondsTo(airgap, 'archiveDestructionFailureArtifacts')) {
+              if (airgap?.respondsTo('archiveDestructionFailureArtifacts', this)) {
                 airgap.archiveDestructionFailureArtifacts(this)
               }
 
@@ -271,7 +271,7 @@ pipeline {
           script {
             logError('Infrastructure destruction operations failed')
             def airgap = ciAirgap()
-            if (airgap && airgap.metaClass.respondsTo(airgap, 'archiveDestructionFailureArtifacts')) {
+            if (airgap?.respondsTo('archiveDestructionFailureArtifacts', this)) {
               airgap.archiveDestructionFailureArtifacts(this)
             }
           }
@@ -302,7 +302,7 @@ pipeline {
 
         // Clean up S3 workspace directory after successful destruction
         def airgap = ciAirgap()
-        if (airgap && airgap.metaClass.respondsTo(airgap, 'cleanupS3WorkspaceDirectory')) {
+        if (airgap?.respondsTo('cleanupS3WorkspaceDirectory', this)) {
           airgap.cleanupS3WorkspaceDirectory(this)
                 } else {
           logWarning('Shared cleanup helper unavailable; using local fallback')
