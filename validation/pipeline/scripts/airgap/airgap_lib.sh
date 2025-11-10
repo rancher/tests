@@ -26,44 +26,28 @@ export REMOTE_TOFU_MODULE_PATH="/root/go/src/github.com/rancher/qa-infra-automat
 : "${SHARED_VOLUME_PATH:=/root/shared}"
 
 # =============================================================================
-# LOGGING AND DEBUG FUNCTIONS
+# LOGGING AND DEBUG CONFIGURATION
 # =============================================================================
 
-# Colors for output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m' # No Color
+# Enable colored, timestamped logging for airgap scripts
+LOG_COLOR_ENABLED="${LOG_COLOR_ENABLED:-true}"
+: "${LOG_TIMESTAMP_FORMAT:=%Y-%m-%d %H:%M:%S}"
 
-# Logging functions (use printf for portable escapes)
-log_info() {
-    local msg="${1:-}"
-    printf '%b\n' "${BLUE}[INFO]${NC} $(date '+%Y-%m-%d %H:%M:%S') - ${msg}"
-}
-
-log_success() {
-    local msg="${1:-}"
-    printf '%b\n' "${GREEN}[SUCCESS]${NC} $(date '+%Y-%m-%d %H:%M:%S') - ${msg}"
-}
-
-log_warning() {
-    local msg="${1:-}"
-    printf '%b\n' "${YELLOW}[WARNING]${NC} $(date '+%Y-%m-%d %H:%M:%S') - ${msg}"
-}
-
-log_error() {
-    local msg="${1:-}"
-    printf '%b\n' "${RED}[ERROR]${NC} $(date '+%Y-%m-%d %H:%M:%S') - ${msg}" >&2
-}
-
-# Debug logging (only shows if DEBUG=true)
-log_debug() {
-    if [[ "${DEBUG:-false}" == "true" ]]; then
-        local msg="${1:-}"
-        printf '%b\n' "${BLUE}[DEBUG]${NC} $(date '+%Y-%m-%d %H:%M:%S') - ${msg}"
-    fi
-}
+if [[ "${LOG_COLOR_ENABLED}" == "true" ]]; then
+    # shellcheck disable=SC2034
+    LOG_PREFIX_INFO="\033[0;34m[INFO]\033[0m"
+    # shellcheck disable=SC2034
+    LOG_PREFIX_SUCCESS="\033[0;32m[SUCCESS]\033[0m"
+    # shellcheck disable=SC2034
+    LOG_PREFIX_WARNING="\033[1;33m[WARNING]\033[0m"
+    # shellcheck disable=SC2034
+    LOG_PREFIX_ERROR="\033[0;31m[ERROR]\033[0m"
+    # shellcheck disable=SC2034
+    LOG_PREFIX_DEBUG="\033[0;34m[DEBUG]\033[0m"
+else
+    # shellcheck disable=SC2034
+    LOG_PREFIX_SUCCESS="[SUCCESS]"
+fi
 
 # =============================================================================
 # ENVIRONMENT AND CONFIGURATION FUNCTIONS
@@ -104,25 +88,6 @@ export_aws_credentials() {
     log_debug "AWS credentials configured"
 }
 
-# Validate required environment variables
-validate_required_vars() {
-    local required_vars=("$@")
-    local missing_vars=()
-
-    for var in "${required_vars[@]}"; do
-        if [[ -z "${!var}" ]]; then
-            missing_vars+=("$var")
-        fi
-    done
-
-    if [[ ${#missing_vars[@]} -gt 0 ]]; then
-        log_error "Missing required environment variables: ${missing_vars[*]}"
-        return 1
-    fi
-
-    log_debug "All required variables are set: ${required_vars[*]}"
-}
-
 # =============================================================================
 # TERRAFORM/OPENTOFU FUNCTIONS
 # =============================================================================
@@ -132,13 +97,13 @@ log_workspace_context() {
     local context_label="${1:-Workspace Context}"
     log_info "=== $context_label ==="
     log_info "TF_WORKSPACE env var: ${TF_WORKSPACE:-<unset>}"
-    
+
     if command -v tofu >/dev/null 2>&1; then
         local current_ws
         current_ws=$(tofu workspace show 2>/dev/null || echo "<not initialized>")
         log_info "OpenTofu workspace show: $current_ws"
     fi
-    
+
     if [[ -n "${S3_BUCKET_NAME:-}" && -n "${TF_WORKSPACE:-}" && -n "${S3_BUCKET_REGION:-}" ]]; then
         log_info "Checking S3 state: s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/terraform.tfstate"
         if aws s3 ls "s3://${S3_BUCKET_NAME}/env:/${TF_WORKSPACE}/terraform.tfstate" --region "${S3_BUCKET_REGION}" >/dev/null 2>&1; then
@@ -193,7 +158,7 @@ initialize_tofu() {
             if [[ "$allow_missing_workspace" == "true" ]]; then
                 log_warning "Workspace does not exist in backend, but this is expected for cleanup"
                 log_info "Checking if any local resources exist..."
-                
+
                 # Try to init without backend to see if there's any local state
                 if [[ -f ".terraform/terraform.tfstate" ]] || [[ -f "terraform.tfstate" ]]; then
                     log_warning "Local state files found, attempting recovery"
@@ -335,10 +300,10 @@ manage_workspace() {
     if [[ ! -f ".terraform" ]] || [[ ! -d ".terraform" ]]; then
         log_info "Terraform not initialized, doing basic init first"
         log_debug "Temporarily clearing TF_WORKSPACE for initial backend init"
-        
+
         local saved_workspace="${TF_WORKSPACE:-}"
         unset TF_WORKSPACE
-        
+
         if tofu init -input=false -upgrade 2>&1; then
             log_debug "Initial init successful, restoring TF_WORKSPACE=${saved_workspace}"
             export TF_WORKSPACE="$saved_workspace"
@@ -370,7 +335,7 @@ manage_workspace() {
     log_debug "Selecting workspace: $workspace_name"
     local saved_workspace="${TF_WORKSPACE:-}"
     unset TF_WORKSPACE
-    
+
     if tofu workspace select "$workspace_name" 2>&1; then
         log_debug "Workspace selection successful"
         export TF_WORKSPACE="$saved_workspace"

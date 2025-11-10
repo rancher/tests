@@ -9,28 +9,65 @@ COMMON_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly COMMON_LIB_DIR
 readonly SHARED_VOLUME_PATH="${SHARED_VOLUME_PATH:-/root/shared}"
 
+# Logging configuration (allows callers to override prefixes/colors)
+if [ "${LOG_COLOR_ENABLED:-false}" = "true" ]; then
+    : "${LOG_PREFIX_INFO:=\033[0;34m[INFO]\033[0m}"
+    : "${LOG_PREFIX_WARNING:=\033[1;33m[WARNING]\033[0m}"
+    : "${LOG_PREFIX_ERROR:=\033[0;31m[ERROR]\033[0m}"
+    : "${LOG_PREFIX_SUCCESS:=\033[0;32m[OK]\033[0m}"
+    : "${LOG_PREFIX_DEBUG:=\033[0;36m[DEBUG]\033[0m}"
+else
+    : "${LOG_PREFIX_INFO:=[INFO]}"
+    : "${LOG_PREFIX_WARNING:=[WARNING]}"
+    : "${LOG_PREFIX_ERROR:=[ERROR]}"
+    : "${LOG_PREFIX_SUCCESS:=[OK]}"
+    : "${LOG_PREFIX_DEBUG:=[DEBUG]}"
+fi
+
+: "${LOG_MESSAGE_SEPARATOR:=" - "}"
+
+_log_format_message() {
+    local message="$*"
+    if [ -n "${LOG_TIMESTAMP_FORMAT:-}" ]; then
+        local ts
+        ts="$(date "+${LOG_TIMESTAMP_FORMAT}")"
+        message="${ts}${LOG_MESSAGE_SEPARATOR}${message}"
+    fi
+    printf '%s' "${message}"
+}
+
 # Logging helpers
 log_info() {
-    printf '%s %s\n' "[INFO]" "$*" >&2
+    local formatted
+    formatted="$(_log_format_message "$@")"
+    printf '%b %s\n' "${LOG_PREFIX_INFO}" "${formatted}" >&2
 }
 
 log_warn() {
-    printf '%s %s\n' "[WARNING]" "$*" >&2
+    local formatted
+    formatted="$(_log_format_message "$@")"
+    printf '%b %s\n' "${LOG_PREFIX_WARNING}" "${formatted}" >&2
 }
 
 log_warning() { log_warn "$@"; }
 
 log_error() {
-    printf '%s %s\n' "[ERROR]" "$*" >&2
+    local formatted
+    formatted="$(_log_format_message "$@")"
+    printf '%b %s\n' "${LOG_PREFIX_ERROR}" "${formatted}" >&2
 }
 
 log_success() {
-    printf '%s %s\n' "[OK]" "$*" >&2
+    local formatted
+    formatted="$(_log_format_message "$@")"
+    printf '%b %s\n' "${LOG_PREFIX_SUCCESS}" "${formatted}" >&2
 }
 
 log_debug() {
     if [ "${DEBUG:-false}" = "true" ] || [ "${DEBUG:-}" = "1" ]; then
-        printf '%s %s\n' "[DEBUG]" "$*" >&2
+        local formatted
+        formatted="$(_log_format_message "$@")"
+        printf '%b %s\n' "${LOG_PREFIX_DEBUG}" "${formatted}" >&2
     fi
 }
 
