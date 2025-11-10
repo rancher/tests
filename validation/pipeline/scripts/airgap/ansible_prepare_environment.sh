@@ -277,7 +277,7 @@ validate_inventory_file() {
 
     # Total nodes count
     local total_nodes
-    total_nodes=$(grep -E -c "rke2-(server|agent)-[0-9]+" "$inventory_file" || true)
+    total_nodes=$(grep -E -c "rancher_node_[0-9]+" "$inventory_file" || true)
     if [[ -z "$total_nodes" ]]; then
         total_nodes="0"
     fi
