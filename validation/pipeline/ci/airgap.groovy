@@ -561,6 +561,218 @@ terraform {
   if (!wroteVars) { ctx.error('Failed to prepare Terraform variables file') }
 }
 
+// ========================================
+// Destruction pipeline helpers
+// ========================================
+
+def configureDestructionEnvironment(ctx) {
+  ctx.logInfo('Configuring destruction environment (library)')
+  generateDestructionEnvironmentFile(ctx)
+  ensureDestructionSSHKeys(ctx)
+  buildDockerImage(ctx)
+  createSharedVolume(ctx)
+  ctx.logInfo('Destruction environment configured successfully (library)')
+}
+
+def generateDestructionEnvironmentFile(ctx) {
+  ctx.logInfo('Generating environment file for destruction containers (library)')
+
+  def s3BucketName = ctx.env.S3_BUCKET_NAME ?: ctx.params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'
+  def s3KeyPrefix = ctx.env.S3_KEY_PREFIX ?: ctx.params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'
+  def s3BucketRegion = ctx.env.S3_BUCKET_REGION ?: ctx.params.S3_BUCKET_REGION ?: 'us-east-2'
+  def awsRegion = ctx.env.AWS_REGION ?: ctx.params.S3_BUCKET_REGION ?: 'us-east-2'
+  def workspace = ctx.env.TARGET_WORKSPACE ?: ctx.params.TARGET_WORKSPACE ?: ''
+
+  if (workspace?.trim()) {
+    if (!(s3KeyPrefix?.startsWith('env:/'))) {
+      def parts = s3KeyPrefix.tokenize('/')
+      def baseKey = parts ? parts[-1] : s3KeyPrefix
+      s3KeyPrefix = "env:/${workspace}/${baseKey}"
+      ctx.logInfo("Normalized S3_KEY_PREFIX to workspace-aware value: '${s3KeyPrefix}'")
+    } else {
+      ctx.logInfo("S3_KEY_PREFIX already workspace-scoped: '${s3KeyPrefix}'")
+    }
+  }
+
+  ctx.logInfo("Using S3_BUCKET_NAME: '${s3BucketName}'")
+  ctx.logInfo("Using S3_KEY_PREFIX: '${s3KeyPrefix}'")
+  ctx.logInfo("Using S3_BUCKET_REGION: '${s3BucketRegion}'")
+  ctx.logInfo("Using AWS_REGION: '${awsRegion}'")
+
+  def envLines = [
+    '# Environment variables for infrastructure destruction containers',
+    '# NOTE: All sensitive credentials are passed via Jenkins withCredentials block for security',
+    "TARGET_WORKSPACE=${ctx.env.TARGET_WORKSPACE}",
+    "BUILD_NUMBER=${ctx.env.BUILD_NUMBER}",
+    "JOB_NAME=${ctx.env.JOB_NAME}",
+    "QA_INFRA_WORK_PATH=${ctx.env.QA_INFRA_WORK_PATH}",
+    "TERRAFORM_VARS_FILENAME=${ctx.env.TERRAFORM_VARS_FILENAME}",
+    "S3_BUCKET_NAME=${s3BucketName}",
+    "S3_KEY_PREFIX=${s3KeyPrefix}",
+    "S3_BUCKET_REGION=${s3BucketRegion}",
+    "AWS_REGION=${awsRegion}",
+    '',
+    '# AWS Credentials excluded - will be passed via withCredentials',
+    '',
+    '# Terraform Variables for OpenTofu (TF_VAR_ prefix for automatic variable population)',
+    'TF_VAR_aws_region=' + awsRegion
+  ]
+
+  ctx.writeFile file: ctx.env.ENV_FILE, text: envLines.join('\n')
+  ctx.logInfo("Environment file created: ${ctx.env.ENV_FILE}")
+
+  try {
+    def preview = ctx.readFile(file: ctx.env.ENV_FILE).split('\n')
+    preview.take(Math.min(10, preview.size())).each { ctx.logInfo(it) }
+  } catch (Exception ignored) {
+    ctx.logWarning('Unable to read environment file for preview (library)')
+  }
+}
+
+def ensureDestructionSSHKeys(ctx) {
+  if (!ctx.env.AWS_SSH_PEM_KEY || !ctx.env.AWS_SSH_KEY_NAME) {
+    ctx.logWarning('SSH key credentials not available; skipping SSH key setup (library)')
+    return
+  }
+
+  ctx.logInfo('Setting up SSH keys for destruction workflow (library)')
+  ctx.dir('./tests/.ssh') {
+    ctx.sh 'mkdir -p . && chmod 700 .'
+    def decodedKey = new String(ctx.env.AWS_SSH_PEM_KEY.decodeBase64())
+    ctx.writeFile file: ctx.env.AWS_SSH_KEY_NAME, text: decodedKey
+    ctx.sh "chmod 600 ${ctx.env.AWS_SSH_KEY_NAME}"
+  }
+  ctx.logInfo('SSH keys configured successfully (library)')
+}
+
+def destroyInfrastructure(ctx) {
+  ctx.logInfo('Executing infrastructure destruction with consolidated script (library)')
+
+  def scriptContent = '''
+#!/bin/bash
+set -Eeuo pipefail
+source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_infrastructure_cleanup.sh
+'''
+
+  def extraEnvVars = [
+    'CLEANUP_WORKSPACE': 'true',
+    'DESTROY_ON_FAILURE': 'true'
+  ]
+
+  def helpers = ctx.ciHelpers()
+  if (helpers) {
+    helpers.executeScriptInContainer(ctx, scriptContent, extraEnvVars)
+  } else if (ctx.metaClass.respondsTo(ctx, 'executeScriptInContainer')) {
+    ctx.executeScriptInContainer(scriptContent, extraEnvVars)
+  } else {
+    ctx.error('No execution helper available for destruction script')
+  }
+
+  ctx.logInfo('Infrastructure destruction script completed (library)')
+}
+
+def archiveDestructionResults(ctx) {
+  ctx.logInfo('Archiving destruction results (library)')
+  try {
+    ctx.sh """
+      CONTAINER_ID=\$(docker ps -aqf "name=${ctx.env.BUILD_CONTAINER_NAME}")
+      if [ -n "\${CONTAINER_ID}" ]; then
+        docker cp \${CONTAINER_ID}:${ctx.env.QA_INFRA_WORK_PATH}/destruction-summary.json ./ || true
+        echo "Destruction results archived successfully"
+      else
+        echo "No container found to archive results from"
+      fi
+    """
+  } catch (Exception e) {
+    ctx.logError("Failed to archive destruction results: ${e.message}")
+  }
+}
+
+def archiveDestructionFailureArtifacts(ctx) {
+  ctx.logInfo('Archiving destruction failure artifacts (library)')
+  try {
+    def commands = [
+      "cd ${ctx.env.QA_INFRA_WORK_PATH}",
+      'tofu -chdir=tofu/aws/modules/airgap workspace list > workspace-list.txt 2>&1 || echo "No workspace list available"',
+      'tofu -chdir=tofu/aws/modules/airgap state list > remaining-resources.txt 2>&1 || echo "No state available"',
+      "echo 'Destruction failure artifact collection completed'"
+    ]
+
+    def helpers = ctx.ciHelpers()
+    if (helpers) {
+      helpers.executeInContainer(ctx, commands)
+    } else if (ctx.metaClass.respondsTo(ctx, 'executeInContainer')) {
+      ctx.executeInContainer(commands)
+    } else {
+      ctx.logWarning('No container execution helper available; skipping detailed failure artifact collection (library)')
+      return
+    }
+
+    ctx.sh """
+      CONTAINER_ID=\$(docker ps -aqf "name=${ctx.env.BUILD_CONTAINER_NAME}")
+      if [ -n "\${CONTAINER_ID}" ]; then
+        docker cp \${CONTAINER_ID}:${ctx.env.QA_INFRA_WORK_PATH}/workspace-list.txt ./ || true
+        docker cp \${CONTAINER_ID}:${ctx.env.QA_INFRA_WORK_PATH}/remaining-resources.txt ./ || true
+      else
+        echo "No container found to archive failure artifacts from"
+      fi
+    """
+
+    ctx.archiveArtifacts artifacts: 'workspace-list.txt,remaining-resources.txt', allowEmptyArchive: true
+  } catch (Exception e) {
+    ctx.logError("Failed to archive failure artifacts: ${e.message}")
+  }
+}
+
+def cleanupS3WorkspaceDirectory(ctx) {
+  ctx.logInfo('Cleaning up S3 workspace directory after destruction (library)')
+
+  def required = ['S3_BUCKET_NAME', 'S3_BUCKET_REGION', 'S3_KEY_PREFIX', 'TF_WORKSPACE']
+  def missing = required.findAll { !(ctx.env."${it}"?.trim()) }
+  if (!missing.isEmpty()) {
+    ctx.logWarning("Skipping S3 cleanup due to missing variables: ${missing.join(', ')} (library)")
+    return
+  }
+
+  ctx.withCredentials([
+    ctx.string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+    ctx.string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+  ]) {
+    ctx.sh """
+      cat > s3_cleanup.sh <<'EOF'
+      #!/bin/bash
+      set -e
+
+      if aws s3 ls "s3://${ctx.env.S3_BUCKET_NAME}/env:/${ctx.env.TF_WORKSPACE}/" --region "${ctx.env.S3_BUCKET_REGION}" 2>/dev/null; then
+        echo "Workspace directory found: s3://${ctx.env.S3_BUCKET_NAME}/env:/${ctx.env.TF_WORKSPACE}/"
+        aws s3 ls "s3://${ctx.env.S3_BUCKET_NAME}/env:/${ctx.env.TF_WORKSPACE}/" --recursive --region "${ctx.env.S3_BUCKET_REGION}" || echo 'No contents found'
+        aws s3 rm "s3://${ctx.env.S3_BUCKET_NAME}/env:/${ctx.env.TF_WORKSPACE}/" --recursive --region "${ctx.env.S3_BUCKET_REGION}"
+        if aws s3 ls "s3://${ctx.env.S3_BUCKET_NAME}/env:/${ctx.env.TF_WORKSPACE}/" --region "${ctx.env.S3_BUCKET_REGION}" 2>/dev/null; then
+          echo 'ERROR: Failed to delete workspace directory'
+          exit 1
+        else
+          echo "[OK] Successfully deleted workspace directory: s3://${ctx.env.S3_BUCKET_NAME}/env:/${ctx.env.TF_WORKSPACE}/"
+        fi
+      else
+        echo '[INFO] Workspace directory does not exist in S3 - nothing to clean up'
+      fi
+      EOF
+
+      docker run --rm \
+        -e AWS_ACCESS_KEY_ID="${ctx.env.AWS_ACCESS_KEY_ID}" \
+        -e AWS_SECRET_ACCESS_KEY="${ctx.env.AWS_SECRET_ACCESS_KEY}" \
+        -e AWS_DEFAULT_REGION="${ctx.env.S3_BUCKET_REGION}" \
+        -v \$(pwd)/s3_cleanup.sh:/tmp/s3_cleanup.sh \
+        amazon/aws-cli:latest \
+        sh /tmp/s3_cleanup.sh
+
+      rm -f s3_cleanup.sh
+    """
+  }
+
+  ctx.logInfo('S3 cleanup completed successfully (library)')
+}
+
 // Basic logging helpers (library)
 def logInfo(ctx, String msg) { ctx.echo "[INFO] ${new Date().format('yyyy-MM-dd HH:mm:ss')} ${msg}" }
 def logWarning(ctx, String msg) { ctx.echo "[WARNING] ${new Date().format('yyyy-MM-dd HH:mm:ss')} ${msg}" }
