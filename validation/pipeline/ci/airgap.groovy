@@ -718,9 +718,13 @@ def runCleanupWorkflow(ctx, Map options = [:]) {
     'if [ ! -f "${cleanup_script}" ]; then',
     '  echo "[ERROR] Cleanup script not found: ${cleanup_script}" >&2',
     '  exit 1',
-    'fi',
-    commandArgs ? "exec \"${cleanup_script}\" ${commandArgs}" : 'exec "${cleanup_script}"'
+    'fi'
   ]
+  if (commandArgs?.trim()) {
+    scriptLines << 'exec "$cleanup_script" ' + commandArgs.trim()
+  } else {
+    scriptLines << 'exec "$cleanup_script"'
+  }
   def scriptContent = scriptLines.join('\n') + '\n'
 
   def extraEnv = [
