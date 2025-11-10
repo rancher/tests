@@ -247,34 +247,6 @@ validate_inventory_file() {
 
     log_info "=== Inventory File Analysis ==="
 
-    # Check for required groups
-    local has_servers=false
-    local has_agents=false
-
-    if grep -q "rke2_servers:" "$inventory_file"; then
-        has_servers=true
-        local server_count
-        server_count=$(grep -A 20 "rke2_servers:" "$inventory_file" | grep -c "rke2-server-")
-        log_info "  [OK] rke2_servers group found ($server_count nodes)"
-    else
-        log_warning "  [FAIL] rke2_servers group not found"
-    fi
-
-    if grep -q "rke2_agents:" "$inventory_file"; then
-        has_agents=true
-        local agent_count
-        agent_count=$(grep -A 20 "rke2_agents:" "$inventory_file" | grep -c "rke2-agent-")
-        log_info "  [OK] rke2_agents group found ($agent_count nodes)"
-    else
-        log_warning "  [FAIL] rke2_agents group not found"
-    fi
-
-    # Check for legacy structure
-    if grep -q "airgap_nodes:" "$inventory_file" && ! grep -q "rke2_servers:" "$inventory_file"; then
-        log_warning "  [WARN] Using legacy inventory structure (airgap_nodes only)"
-        log_warning "    This may cause all nodes to become control-plane nodes"
-    fi
-
     # Total nodes count
     local total_nodes
     total_nodes=$(grep -E -c "rancher_node_[0-9]+" "$inventory_file" || true)
@@ -287,13 +259,6 @@ validate_inventory_file() {
     if [[ $total_nodes -eq 0 ]]; then
         log_error "No RKE2 nodes found in inventory file"
         return 1
-    fi
-
-    if [[ "$has_servers" == "true" && "$has_agents" == "true" ]]; then
-        log_success "Proper server/agent role separation detected"
-    elif [[ $total_nodes -gt 1 ]]; then
-        log_warning "Multiple nodes detected but no role separation"
-        log_warning "This will likely result in all nodes becoming control-plane nodes"
     fi
 
     # Show inventory content (truncated if too large)
