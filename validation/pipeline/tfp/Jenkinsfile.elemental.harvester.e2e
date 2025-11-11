@@ -98,6 +98,10 @@ node("harvester-vpn-1") {
               terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC)
               terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS)
               ansibleConfig = ansibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
+              elementalTerraformConfig = elementalTerraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+              elementalTerraformConfig = elementalTerraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+              elementalAnsibleConfig = elementalAnsibleConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+              elementalAnsibleConfig = elementalAnsibleConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
 
 
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
@@ -115,14 +119,14 @@ node("harvester-vpn-1") {
                 dir ("./ansible") {
                   writeFile file: ansibleVarsFilename, text: ansibleConfig
                 }
-                dir ("./ansible/rancher/downstream/elemental") {
+                dir ("./ansible/rancher/downstream/elemental/harvester") {
                   writeFile file: ansibleVarsFilename, text: elementalAnsibleConfig
                   writeFile file: elementalConfigFile, text: elementalConfig
                 }
                 dir ("./tofu/aws/modules/cluster_nodes") {
                   writeFile file: terraformVarsfilename, text: terraformConfig
                 }
-                dir ("./tofu/gcp/modules/elemental_nodes") {
+                dir ("./tofu/aws/modules/s3") {
                   writeFile file: elementalTerraformVarsfilename, text: elementalTerraformConfig
                 }
               }

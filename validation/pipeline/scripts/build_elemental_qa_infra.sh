@@ -10,7 +10,6 @@ echo "Create elemental infra"
 : "${ELEMENTAL_PLAYBOOK_PATH:=ansible/rancher/downstream/elemental/ec2}"
 : "${ELEMENTAL_PLAYBOOK_FILE:=elemental-playbook.yml}"
 : "${ELEMENTAL_VARS_FILE:=vars.yaml}"
-: "${ELEMENTAL_KEY_FILE:=private_key.pem}"
 
 cd "$QAINFRA_SCRIPT_PATH/$ELEMENTAL_TOFU_PATH"
 

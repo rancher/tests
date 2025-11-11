@@ -1,16 +1,15 @@
 #!/bin/bash
 set -ex
 
-echo "Create elemental infra"
+echo "Create elemental harvester infra"
 
 : "${CLEANUP:=true}"
 : "${ELEMENTAL_TFVARS_FILE:=elemental.tfvars}"
-: "${ELEMENTAL_TOFU_PATH:=tofu/gcp/modules/elemental_nodes}"
+: "${ELEMENTAL_TOFU_PATH:=tofu/aws/modules/s3}"
 : "${QAINFRA_SCRIPT_PATH:=/root/go/src/github.com/rancher/qa-infra-automation}"
-: "${ELEMENTAL_PLAYBOOK_PATH:=ansible/rancher/downstream/elemental}"
+: "${ELEMENTAL_PLAYBOOK_PATH:=ansible/rancher/downstream/elemental/harvester}"
 : "${ELEMENTAL_PLAYBOOK_FILE:=elemental-playbook.yml}"
 : "${ELEMENTAL_VARS_FILE:=vars.yaml}"
-: "${ELEMENTAL_KEY_FILE:=private_key.pem}"
 
 cd "$QAINFRA_SCRIPT_PATH/$ELEMENTAL_TOFU_PATH"
 
@@ -27,8 +26,6 @@ if [ $? -ne 0 ] && [[ $CLEANUP == "true" ]]; then
     exit 1
 fi
 
-export ELEMENTAL_NODE_IP=$(tofu output -raw public_ip)
-
 cd "$QAINFRA_SCRIPT_PATH/$ELEMENTAL_PLAYBOOK_PATH"
 
-ansible-playbook "$ELEMENTAL_PLAYBOOK_FILE" -e "@$ELEMENTAL_VARS_FILE" --extra-vars "elemental_node_public_ip=$ELEMENTAL_NODE_IP" -i inventory.yml
+ansible-playbook "$ELEMENTAL_PLAYBOOK_FILE" -e "@$ELEMENTAL_VARS_FILE"
