@@ -73,11 +73,11 @@ func VerifyReadyDaemonsetPods(t *testing.T, client *rancher.Client, cluster *v1.
 func VerifyClusterPods(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
 	status := &provv1.ClusterStatus{}
 	err := steveV1.ConvertToK8sType(cluster.Status, status)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	downstreamClient, err := client.Steve.ProxyDownstream(status.ClusterName)
-	assert.NoError(t, err)
-	assert.NotNil(t, downstreamClient)
+	require.NoError(t, err)
+	require.NotNil(t, downstreamClient)
 
 	var podErrors []error
 	steveClient := downstreamClient.SteveType(stevetypes.Pod)
@@ -131,5 +131,5 @@ func VerifyClusterPods(t *testing.T, client *rancher.Client, cluster *steveV1.St
 		}
 	}
 
-	assert.Empty(t, podErrors, "Pod error list is not empty")
+	require.Empty(t, podErrors, "Pod error list is not empty")
 }

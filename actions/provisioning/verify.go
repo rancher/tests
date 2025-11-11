@@ -72,12 +72,12 @@ func VerifyRKE1Cluster(t *testing.T, client *rancher.Client, clustersConfig *clu
 	err = wait.WatchWait(watchInterface, checkFunc)
 	require.NoError(t, err)
 
-	assert.Equal(t, clustersConfig.KubernetesVersion, cluster.RancherKubernetesEngineConfig.Version)
+	require.Equal(t, clustersConfig.KubernetesVersion, cluster.RancherKubernetesEngineConfig.Version)
 
 	clusterToken, err := clusters.CheckServiceAccountTokenSecret(client, cluster.Name)
 	reports.TimeoutRKEReport(cluster, err)
 	require.NoError(t, err)
-	assert.NotEmpty(t, clusterToken)
+	require.NotEmpty(t, clusterToken)
 
 	err = nodestat.AllManagementNodeReady(client, cluster.ID, defaults.ThirtyMinuteTimeout)
 	reports.TimeoutRKEReport(cluster, err)
@@ -96,7 +96,7 @@ func VerifyRKE1Cluster(t *testing.T, client *rancher.Client, clustersConfig *clu
 				havePrefix, err := registries.CheckAllClusterPodsForRegistryPrefix(client, cluster.ID, registry.URL)
 				reports.TimeoutRKEReport(cluster, err)
 				require.NoError(t, err)
-				assert.True(t, havePrefix)
+				require.True(t, havePrefix)
 			}
 		}
 	}
@@ -141,22 +141,22 @@ func VerifyClusterReady(t *testing.T, client *rancher.Client, cluster *steveV1.S
 		checkFunc := shepherdclusters.IsProvisioningClusterReady
 		err = wait.WatchWait(watchInterface, checkFunc)
 		if err != nil {
-			logrus.Warningf("Unable to get cluster status (%s): %v . Retrying", cluster.Name, err)
+			logrus.Warningf("Unable to get cluster status (%s): %v. Retrying", cluster.Name, err)
 			return false, nil
 		}
 
 		return true, nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	logrus.Debugf("Waiting for all machines to be ready on cluster (%s)", cluster.Name)
 	err = nodestat.AllMachineReady(client, cluster.ID, defaults.FiveMinuteTimeout)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	logrus.Debugf("Verifying cluster token (%s)", cluster.Name)
 	clusterToken, err := clusters.CheckServiceAccountTokenSecret(client, cluster.Name)
-	assert.NoError(t, err)
-	assert.Equal(t, true, clusterToken)
+	require.NoError(t, err)
+	require.Equal(t, true, clusterToken)
 }
 
 func VerifyPSACT(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
@@ -166,28 +166,28 @@ func VerifyPSACT(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPI
 
 	clusterSpec := &provv1.ClusterSpec{}
 	err = steveV1.ConvertToK8sType(cluster.Spec, clusterSpec)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotEmpty(t, clusterSpec.DefaultPodSecurityAdmissionConfigurationTemplateName)
 
 	err = psadeploy.CreateNginxDeployment(client, status.ClusterName, clusterSpec.DefaultPodSecurityAdmissionConfigurationTemplateName)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // VerifyCluster validates that a non-rke1 cluster and its resources are in a good state, matching a given config.
 func VerifyDynamicCluster(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
 	client, err := client.ReLogin()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	status := &provv1.ClusterStatus{}
 	err = steveV1.ConvertToK8sType(cluster.Status, status)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	clusterSpec := &provv1.ClusterSpec{}
 	err = steveV1.ConvertToK8sType(cluster.Spec, clusterSpec)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	isRancherPrivilaged := clusterSpec.DefaultPodSecurityAdmissionConfigurationTemplateName == string(provisioninginput.RancherPrivileged)
 	isRancherRestricted := clusterSpec.DefaultPodSecurityAdmissionConfigurationTemplateName == string(provisioninginput.RancherRestricted)
@@ -199,8 +199,8 @@ func VerifyDynamicCluster(t *testing.T, client *rancher.Client, cluster *steveV1
 	if clusterSpec.RKEConfig.Registries != nil {
 		for registryName := range clusterSpec.RKEConfig.Registries.Configs {
 			havePrefix, err := registries.CheckAllClusterPodsForRegistryPrefix(client, status.ClusterName, registryName)
-			assert.NoError(t, err)
-			assert.True(t, havePrefix)
+			require.NoError(t, err)
+			require.True(t, havePrefix)
 		}
 	}
 
@@ -233,7 +233,7 @@ func VerifyHostedCluster(t *testing.T, client *rancher.Client, cluster *manageme
 	clusterToken, err := clusters.CheckServiceAccountTokenSecret(client, cluster.Name)
 	reports.TimeoutRKEReport(cluster, err)
 	require.NoError(t, err)
-	assert.NotEmpty(t, clusterToken)
+	require.NotEmpty(t, clusterToken)
 
 	err = nodestat.AllManagementNodeReady(client, cluster.ID, defaults.ThirtyMinuteTimeout)
 	reports.TimeoutRKEReport(cluster, err)
@@ -300,22 +300,22 @@ func VerifyDeleteRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterID 
 func VerifyACE(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
 	status := &provv1.ClusterStatus{}
 	err := steveV1.ConvertToK8sType(cluster.Status, status)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	clusterObject, err := client.Management.Cluster.ByID(status.ClusterName)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	client, err = client.ReLogin()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	kubeConfig, err := kubeconfig.GetKubeconfig(client, clusterObject.ID)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	original, err := client.SwitchContext(clusterObject.Name, kubeConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	originalResp, err := original.Resource(corev1.SchemeGroupVersion.WithResource("pods")).Namespace("").List(context.TODO(), metav1.ListOptions{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	for _, pod := range originalResp.Items {
 		logrus.Debugf("Pod %v", pod.GetName())
@@ -323,7 +323,7 @@ func VerifyACE(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIOb
 
 	// each control plane has a context. For ACE, we should check these contexts
 	contexts, err := kubeconfig.GetContexts(kubeConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var contextNames []string
 	for context := range contexts {
@@ -334,10 +334,10 @@ func VerifyACE(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIOb
 
 	for _, contextName := range contextNames {
 		dynamic, err := client.SwitchContext(contextName, kubeConfig)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		resp, err := dynamic.Resource(corev1.SchemeGroupVersion.WithResource("pods")).Namespace("").List(context.TODO(), metav1.ListOptions{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		logrus.Infof("Switched Context to %v", contextName)
 		for _, pod := range resp.Items {
@@ -350,13 +350,13 @@ func VerifyACE(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIOb
 func VerifyHostnameLength(t *testing.T, client *rancher.Client, clusterObject *steveV1.SteveAPIObject) {
 	clusterSpec := &provv1.ClusterSpec{}
 	err := steveV1.ConvertToK8sType(clusterObject.Spec, clusterSpec)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	for _, mp := range clusterSpec.RKEConfig.MachinePools {
 		machineName := wranglername.SafeConcatName(clusterObject.Name, mp.Name)
 
 		machineResp, err := client.Steve.SteveType(stevetypes.Machine).List(nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		var machinePool *steveV1.SteveAPIObject
 		for _, machine := range machineResp.Data {
@@ -364,18 +364,18 @@ func VerifyHostnameLength(t *testing.T, client *rancher.Client, clusterObject *s
 				machinePool = &machine
 			}
 		}
-		assert.NotNil(t, machinePool)
+		require.NotNil(t, machinePool)
 
 		capiMachine := capi.Machine{}
 		err = steveV1.ConvertToK8sType(machinePool.JSONResp, &capiMachine)
-		assert.NoError(t, err)
-		assert.NotNil(t, capiMachine.Status.NodeRef)
+		require.NoError(t, err)
+		require.NotNil(t, capiMachine.Status.NodeRef)
 
 		dynamic, err := client.GetRancherDynamicClient()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		gv, err := schema.ParseGroupVersion(capiMachine.Spec.InfrastructureRef.APIVersion)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		gvr := schema.GroupVersionResource{
 			Group:    gv.Group,
@@ -384,7 +384,7 @@ func VerifyHostnameLength(t *testing.T, client *rancher.Client, clusterObject *s
 		}
 
 		ustr, err := dynamic.Resource(gvr).Namespace(capiMachine.Namespace).Get(context.TODO(), capiMachine.Spec.InfrastructureRef.Name, metav1.GetOptions{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		limit := hostnameLimit
 		if mp.HostnameLengthLimit != 0 {
@@ -393,9 +393,9 @@ func VerifyHostnameLength(t *testing.T, client *rancher.Client, clusterObject *s
 			limit = clusterSpec.RKEConfig.MachinePoolDefaults.HostnameLengthLimit
 		}
 
-		assert.True(t, len(capiMachine.Status.NodeRef.Name) <= limit)
+		require.True(t, len(capiMachine.Status.NodeRef.Name) <= limit)
 		if len(ustr.GetName()) < limit {
-			assert.True(t, capiMachine.Status.NodeRef.Name == ustr.GetName())
+			require.True(t, capiMachine.Status.NodeRef.Name == ustr.GetName())
 		}
 
 		logrus.Debugf("Hostname: %s, HostnameLimit: %v", capiMachine.Status.NodeRef.Name, limit)
@@ -418,25 +418,25 @@ func VerifyUpgrade(t *testing.T, updatedCluster *bundledclusters.BundledCluster,
 func VerifyDataDirectories(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
 	clusterSpec := &provv1.ClusterSpec{}
 	err := steveV1.ConvertToK8sType(cluster.Spec, clusterSpec)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, clusterSpec.RKEConfig.DataDirectories)
 
 	client, err = client.ReLogin()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	status := &provv1.ClusterStatus{}
 	err = steveV1.ConvertToK8sType(cluster.Status, status)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	steveClient, err := client.Steve.ProxyDownstream(status.ClusterName)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	nodesSteveObjList, err := steveClient.SteveType(stevetypes.Node).List(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	for _, machine := range nodesSteveObjList.Data {
 		clusterNode, err := sshkeys.GetSSHNodeFromMachine(client, &machine)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		_, err = clusterNode.ExecuteCommand(fmt.Sprintf("sudo ls %s", clusterSpec.RKEConfig.DataDirectories.K8sDistro))
 		assert.NoError(t, err)

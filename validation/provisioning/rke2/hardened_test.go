@@ -27,7 +27,7 @@ import (
 	cis "github.com/rancher/tests/validation/provisioning/resources/cisbenchmark"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type hardenedTest struct {
@@ -45,26 +45,26 @@ func hardenedSetup(t *testing.T) hardenedTest {
 	r.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r.client = client
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r.cattleConfig, err = defaults.SetK8sDefault(client, defaults.RKE2, r.cattleConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	return r
 }
@@ -109,7 +109,7 @@ func TestHardened(t *testing.T) {
 			logrus.Infof("Provisioning cluster")
 			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
 			reports.TimeoutClusterReport(cluster, err)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, r.client, cluster)
@@ -126,17 +126,17 @@ func TestHardened(t *testing.T) {
 
 			clusterMeta, err := extensionscluster.NewClusterMeta(tt.client, cluster.Name)
 			reports.TimeoutClusterReport(cluster, err)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			latestHardenedChartVersion, err := tt.client.Catalog.GetLatestChartVersion(chartName, catalog.RancherChartRepo)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			project, err := projects.GetProjectByName(tt.client, clusterMeta.ID, cis.System)
 			reports.TimeoutClusterReport(cluster, err)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			r.project = project
-			assert.Equal(t, r.project.Name, cis.System)
+			require.Equal(t, r.project.Name, cis.System)
 
 			r.chartInstallOptions = &charts.InstallOptions{
 				Cluster:   clusterMeta,

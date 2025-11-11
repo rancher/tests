@@ -25,7 +25,7 @@ import (
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type autoScalingTest struct {
@@ -41,11 +41,11 @@ func autoScalingSetup(t *testing.T) autoScalingTest {
 	s.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	s.client = client
 
 	s.standardUserClient, _, _, err = standard.CreateStandardUser(s.client)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
@@ -95,24 +95,24 @@ func TestAutoScalingUp(t *testing.T) {
 
 			logrus.Infof("Provisioning %s cluster", tt.clusterType)
 			cluster, err := resources.ProvisionRKE2K3SCluster(t, s.client, tt.clusterType, clusterConfig, nil, true, false)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster autoscaler (%s)", cluster.Name)
 			scaling.VerifyAutoscaler(t, s.client, cluster)
 
 			v3ClusterID, err := shepherdClusters.GetClusterIDByName(s.client, cluster.Name)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			_, namespace, err := projects.CreateProjectAndNamespace(s.client, v3ClusterID)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Info("Creating unscheduleable deployement")
 			_, err = deployment.CreateDeployment(s.client, v3ClusterID, namespace.Name, 1000, "", "", false, false, false, false)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Waiting for cluster to scale (%s)", cluster.Name)
 			err = scaling.WatchAndWaitForAutoscaling(s.client, cluster, tt.maxNodeCount, time.Minute*10)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, s.client, cluster)
@@ -169,7 +169,7 @@ func TestAutoScalingDown(t *testing.T) {
 
 			logrus.Infof("Provisioning %s cluster", tt.clusterType)
 			cluster, err := resources.ProvisionRKE2K3SCluster(t, tt.client, tt.clusterType, clusterConfig, nil, true, false)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, tt.client, cluster)
@@ -178,23 +178,23 @@ func TestAutoScalingDown(t *testing.T) {
 			scaling.VerifyAutoscaler(t, s.client, cluster)
 
 			v3ClusterID, err := shepherdClusters.GetClusterIDByName(tt.client, cluster.Name)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			_, namespace, err := projects.CreateProjectAndNamespace(tt.client, v3ClusterID)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Info("Creating unscheduleable deployement")
 			unscheduleableDeployment, err := deployment.CreateDeployment(tt.client, v3ClusterID, namespace.Name, 1000, "", "", false, false, false, false)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			time.Sleep(time.Second * 60)
 			logrus.Infof("Deleting deployment (%s)", unscheduleableDeployment.Name)
 			err = deployment.DeleteDeployment(tt.client, v3ClusterID, unscheduleableDeployment)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Waiting for cluster to scale (%s)", cluster.Name)
 			err = scaling.WatchAndWaitForAutoscaling(tt.client, cluster, tt.minNodeCount, time.Hour*2)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, tt.client, cluster)
@@ -254,28 +254,28 @@ func TestAutoScalingPause(t *testing.T) {
 
 			logrus.Infof("Provisioning %s cluster", tt.clusterType)
 			cluster, err := resources.ProvisionRKE2K3SCluster(t, s.client, tt.clusterType, clusterConfig, nil, true, false)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Pausing cluster autoscaler (%s)", cluster.Name)
 			err = scaling.PauseAutoscaler(s.client, cluster)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster autoscaler (%s)", cluster.Name)
 			scaling.VerifyAutoscaler(t, s.client, cluster)
 
 			v3ClusterID, err := shepherdClusters.GetClusterIDByName(s.client, cluster.Name)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			_, namespace, err := projects.CreateProjectAndNamespace(s.client, v3ClusterID)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Info("Creating unscheduleable deployement")
 			_, err = deployment.CreateDeployment(s.client, v3ClusterID, namespace.Name, 1000, "", "", false, false, false, false)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster does not scale (%s)", cluster.Name)
 			err = scaling.WatchAndWaitForAutoscaling(s.client, cluster, tt.maxNodeCount, time.Minute*10)
-			assert.Error(t, err)
+			require.Error(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, s.client, cluster)
