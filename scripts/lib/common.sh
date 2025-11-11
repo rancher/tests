@@ -71,6 +71,12 @@ log_debug() {
     fi
 }
 
+# Ensure QA_INFRA_WORK_PATH has a predictable default for airgap scripts
+if [ -z "${QA_INFRA_WORK_PATH:-}" ]; then
+    export QA_INFRA_WORK_PATH="/root/qa-infra-automation"
+    log_debug "QA_INFRA_WORK_PATH not provided; defaulting to ${QA_INFRA_WORK_PATH}"
+fi
+
 # Simple require_env - ensure variables are set and non-empty
 require_env() {
     local missing=()
