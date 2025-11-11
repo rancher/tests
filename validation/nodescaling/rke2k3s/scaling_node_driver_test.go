@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
@@ -72,9 +71,6 @@ func (s *NodeScalingTestSuite) SetupSuite() {
 	k3sClusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, k3sClusterConfig)
 
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, s.cattleConfig, awsEC2Configs)
-
 	s.scalingConfig = new(scalinginput.Config)
 	config.LoadConfig(scalinginput.ConfigurationFileKey, s.scalingConfig)
 
@@ -92,11 +88,11 @@ func (s *NodeScalingTestSuite) SetupSuite() {
 	k3sClusterConfig.MachinePools = nodeRolesStandard
 
 	logrus.Info("Provisioning RKE2 cluster")
-	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), s.rke2ClusterConfig, awsEC2Configs, true, false)
+	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), s.rke2ClusterConfig, nil, true, false)
 	require.NoError(s.T(), err)
 
 	logrus.Info("Provisioning K3S cluster")
-	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), k3sClusterConfig, awsEC2Configs, true, false)
+	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), k3sClusterConfig, nil, true, false)
 	require.NoError(s.T(), err)
 }
 

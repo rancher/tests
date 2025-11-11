@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
@@ -64,9 +63,6 @@ func (s *AutoReplaceSuite) SetupSuite() {
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, clusterConfig)
 
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, s.cattleConfig, awsEC2Configs)
-
 	nodeRolesStandard := []provisioninginput.MachinePools{
 		provisioninginput.EtcdMachinePool,
 		provisioninginput.ControlPlaneMachinePool,
@@ -80,11 +76,11 @@ func (s *AutoReplaceSuite) SetupSuite() {
 	clusterConfig.MachinePools = nodeRolesStandard
 
 	logrus.Info("Provisioning RKE2 cluster")
-	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), clusterConfig, awsEC2Configs, true, false)
+	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), clusterConfig, nil, true, false)
 	require.NoError(s.T(), err)
 
 	logrus.Info("Provisioning K3S cluster")
-	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), clusterConfig, awsEC2Configs, true, false)
+	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), clusterConfig, nil, true, false)
 	require.NoError(s.T(), err)
 }
 
