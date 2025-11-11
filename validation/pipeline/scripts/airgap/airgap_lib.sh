@@ -32,6 +32,12 @@ export S3_BUCKET_REGION="${S3_BUCKET_REGION:-us-east-2}"
 export S3_KEY_PREFIX="${S3_KEY_PREFIX:-jenkins-airgap-rke2/terraform.tfstate}"
 
 # Common paths
+if [[ -z "${QA_INFRA_WORK_PATH:-}" ]]; then
+    QA_INFRA_WORK_PATH="/root/qa-infra-automation"
+    log_debug "QA_INFRA_WORK_PATH not provided; defaulting to ${QA_INFRA_WORK_PATH}"
+fi
+
+export QA_INFRA_WORK_PATH
 export QA_INFRA_PATH="${QA_INFRA_WORK_PATH}"
 export TOFU_MODULE_PATH="${QA_INFRA_PATH}/tofu/aws/modules/airgap"
 export REMOTE_TOFU_MODULE_PATH="/root/go/src/github.com/rancher/qa-infra-automation/tofu/aws/modules/airgap"
