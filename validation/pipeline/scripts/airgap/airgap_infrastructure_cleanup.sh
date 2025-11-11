@@ -60,6 +60,21 @@ validate_prerequisites() {
         exit 1
     fi
 
+    # Ensure QA_INFRA_WORK_PATH is populated so downstream helpers resolve modules correctly
+    if [[ -z "${QA_INFRA_WORK_PATH:-}" ]]; then
+        if [[ -d "${QA_INFRA_CLONE_PATH}" ]]; then
+            QA_INFRA_WORK_PATH="${QA_INFRA_CLONE_PATH}"
+        else
+            QA_INFRA_WORK_PATH="/root/qa-infra-automation"
+        fi
+        export QA_INFRA_WORK_PATH
+        log_info "QA_INFRA_WORK_PATH not set; defaulting to ${QA_INFRA_WORK_PATH}"
+    fi
+
+    if [[ ! -d "${QA_INFRA_WORK_PATH}" ]]; then
+        log_warning "QA_INFRA_WORK_PATH (${QA_INFRA_WORK_PATH}) does not exist; continuing but downstream operations may fail"
+    fi
+
     # Ensure the full airgap library is loaded so helper functions (e.g. log_workspace_context) are available
     if type source_airgap_lib >/dev/null 2>&1; then
         source_airgap_lib || true
