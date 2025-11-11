@@ -60,6 +60,11 @@ validate_prerequisites() {
         exit 1
     fi
 
+    # Ensure the full airgap library is loaded so helper functions (e.g. log_workspace_context) are available
+    if type source_airgap_lib >/dev/null 2>&1; then
+        source_airgap_lib || true
+    fi
+
     # Ensure required tools are available
     command -v tofu >/dev/null || {
         log_error "tofu not found"
@@ -143,7 +148,7 @@ EOF
         log_cleanup "Setting workspace context: $workspace_name"
         export TF_WORKSPACE="$workspace_name"
         log_cleanup "TF_WORKSPACE exported: ${TF_WORKSPACE}"
-        
+
         # Log initial workspace context
         log_workspace_context "Pre-Init Workspace Context"
     else
@@ -193,7 +198,7 @@ EOF
     local current_workspace
     current_workspace=$(tofu workspace show 2>/dev/null || echo "unknown")
     log_cleanup "Current workspace after init: $current_workspace"
-    
+
     if [[ "$current_workspace" != "$workspace_name" ]]; then
         log_cleanup "WARNING: Workspace mismatch! Expected: $workspace_name, Current: $current_workspace"
     fi
@@ -204,12 +209,12 @@ EOF
         log_cleanup "ERROR: Failed to change to module path: $module_path"
         return 1
     }
-    
+
     local resource_count=0
     if tofu state list >"$SHARED_VOLUME_PATH/pre-destroy-resources.txt" 2>/dev/null; then
         resource_count=$(wc -l <"$SHARED_VOLUME_PATH/pre-destroy-resources.txt" | tr -d ' ')
         log_cleanup "State contains $resource_count resources"
-        
+
         if [[ $resource_count -eq 0 ]]; then
             log_cleanup "State is empty - infrastructure already cleaned up"
             log_cleanup "Current workspace: $(tofu workspace show 2>/dev/null || echo 'unknown')"
@@ -221,7 +226,7 @@ EOF
             else
                 log_cleanup "State file DOES NOT EXIST in S3 - workspace never had infrastructure"
             fi
-            
+
             # Empty state is not an error - skip destroy and proceed to workspace cleanup
             log_cleanup "Skipping infrastructure destruction (nothing to destroy)"
         fi
