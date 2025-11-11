@@ -9,39 +9,6 @@ lint:
 	command -v shellcheck >/dev/null 2>&1 && shellcheck -S style scripts/**/*.sh || true; \
 	printf "Running shfmt...\n"; \
 	command -v shfmt >/dev/null 2>&1 && shfmt -d -i 2 -ci scripts || true; \
-	printf "Running terraform fmt...\n"; \
-	command -v tofu >/dev/null 2>&1 && tofu fmt -recursive -check || true; \
-	printf "Running tflint...\n"; \
-	command -v tflint >/dev/null 2>&1 && tflint --recursive || true; \
-	printf "Running ansible-lint...\n"; \
-	command -v ansible-lint >/dev/null 2>&1 && ansible-lint -q || true; \
 	printf "Running hadolint...\n"; \
 	command -v hadolint >/dev/null 2>&1 && hadolint Dockerfile* || true; \
 	printf "Lint complete.\n"
-
-# Convenience OpenTofu targets (best-effort; repo uses external QA infra)
-MODULE_PATH ?= $(QA_INFRA_WORK_PATH)/tofu/aws/modules/airgap
-
-plan:
-	@if [ -z "$(QA_INFRA_WORK_PATH)" ] || [ ! -d "$(MODULE_PATH)" ]; then \
-		echo "Set QA_INFRA_WORK_PATH to qa-infra-automation clone (skipping)"; exit 0; fi; \
-	command -v tofu >/dev/null 2>&1 || { echo "tofu not found (skipping)"; exit 0; }; \
-	tofu -chdir="$(MODULE_PATH)" plan -input=false || true
-
-apply:
-	@if [ -z "$(QA_INFRA_WORK_PATH)" ] || [ ! -d "$(MODULE_PATH)" ]; then \
-		echo "Set QA_INFRA_WORK_PATH to qa-infra-automation clone (skipping)"; exit 0; fi; \
-	command -v tofu >/dev/null 2>&1 || { echo "tofu not found (skipping)"; exit 0; }; \
-	tofu -chdir="$(MODULE_PATH)" apply -auto-approve -input=false || true
-
-validate:
-	@if [ -z "$(QA_INFRA_WORK_PATH)" ] || [ ! -d "$(MODULE_PATH)" ]; then \
-		echo "Set QA_INFRA_WORK_PATH to qa-infra-automation clone (skipping)"; exit 0; fi; \
-	command -v tofu >/dev/null 2>&1 || { echo "tofu not found (skipping)"; exit 0; }; \
-	tofu -chdir="$(MODULE_PATH)" validate || true
-
-destroy:
-	@if [ -z "$(QA_INFRA_WORK_PATH)" ] || [ ! -d "$(MODULE_PATH)" ]; then \
-		echo "Set QA_INFRA_WORK_PATH to qa-infra-automation clone (skipping)"; exit 0; fi; \
-	command -v tofu >/dev/null 2>&1 || { echo "tofu not found (skipping)"; exit 0; }; \
-	tofu -chdir="$(MODULE_PATH)" destroy -auto-approve || true

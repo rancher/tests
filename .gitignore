@@ -3,14 +3,3 @@
 .idea/
 .kube/
 *.pem
-shellcheck-report.txt
-.baseline/.baseline-files.txt
-.baseline/ansible-lint.txt
-.baseline/cloc.txt
-.baseline/dockerfiles.txt
-.baseline/hadolint.txt
-.baseline/sh-list.txt
-.baseline/shellcheck.txt
-.baseline/shfmt.txt
-.baseline/terraform_fmt.txt
-.baseline/tflint.txt
