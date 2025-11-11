@@ -6,9 +6,6 @@ on:
       rancher_hosts:
         description: "Comma-separated Rancher hosts. Example: cluster1.qa.rancher.space,cluster2.qa.rancher.space"
         required: true
-      admin_tokens:
-        description: "Comma-separated Admin API tokens (same order as Rancher hosts)"
-        required: true
       cluster_names:
         description: "Comma-separated downstream cluster names (same order as Rancher hosts)"
         required: true
@@ -51,14 +48,6 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Mask admin tokens
-        shell: bash
-        run: |
-          IFS=',' read -ra TOKENS <<< "${{ github.event.inputs.admin_tokens }}"
-          for token in "${TOKENS[@]}"; do
-            echo "::add-mask::$token"
-          done
-
       - name: Flatten package list (only if recursive)
         id: flatten-pkg
         if: ${{ github.event.inputs.recursive_tests == 'true' }}
@@ -91,20 +80,18 @@ jobs:
             const workflow_id = "platform-qa-package-runner.yml";
             const ref = "main"; 
             const hosts = "${{ github.event.inputs.rancher_hosts }}".split(',').map(s => s.trim());
-            const tokens = "${{ github.event.inputs.admin_tokens }}".split(',').map(s => s.trim());
             const clusters = "${{ github.event.inputs.cluster_names }}".split(',').map(s => s.trim());
             const qaseRunsRaw = "${{ github.event.inputs.qase_test_run_ids }}";
             const qaseRuns = qaseRunsRaw ? qaseRunsRaw.split(',').map(s => s.trim()) : [];
 
             const test_packages = "${{ steps.flatten-pkg.outputs.test_packages || github.event.inputs.test_packages }}";
 
-            if (hosts.length !== tokens.length || tokens.length !== clusters.length) {
-              throw new Error("Input lengths for rancher_hosts, admin_tokens, and cluster_names must match");
+            if (hosts.length !== clusters.length) {
+              throw new Error("Input lengths for rancher_hosts and cluster_names must match");
             }
 
             for (let i = 0; i < hosts.length; i++) {
               const host = hosts[i];
-              const token = tokens[i];
               const cluster = clusters[i];
               const qaseRun = qaseRuns[i] || "";
               const reportToQase = qaseRun !== "" ? "true" : "false";
@@ -113,7 +100,6 @@ jobs:
 
               const inputs = {
                 rancher_host: host,
-                admin_token: token,
                 cluster_name: cluster,
                 test_packages,
                 run_all_tests: "${{ github.event.inputs.run_all_tests }}",

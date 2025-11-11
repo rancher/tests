@@ -7,9 +7,6 @@ on:
       rancher_host:
         description: "Rancher host (e.g. mycluster.qa.rancher.space)"
         required: true
-      admin_token:
-        description: "Admin token for Rancher API access"
-        required: true
       cluster_name:
         description: "Downstream cluster name"
         required: true
@@ -61,12 +58,6 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Mask admin token
-        shell: bash
-        run: |
-          echo "::add-mask::${{ github.event.inputs.admin_token }}" && \
-          echo "RANCHER_ADMIN_TOKEN=${{ github.event.inputs.admin_token }}" >> $GITHUB_ENV
-
       - name: Parse current and remaining packages
         id: parse
         run: |
@@ -93,7 +84,6 @@ jobs:
         run: |
           INPUTS=(
             "-F" "rancher_host=${{ github.event.inputs.rancher_host }}"
-            "-F" "admin_token=${{ github.event.inputs.admin_token }}"
             "-F" "cluster_name=${{ github.event.inputs.cluster_name }}"
             "-F" "test_package=${{ steps.parse.outputs.current_pkg }}"
             "-F" "run_all_tests=${{ github.event.inputs.run_all_tests }}"
@@ -144,7 +134,6 @@ jobs:
               ref: "main",
               inputs: {
                 rancher_hosts: "${{ github.event.inputs.rancher_host }}",
-                admin_tokens: "${{ github.event.inputs.admin_token }}",
                 cluster_names: "${{ github.event.inputs.cluster_name }}",
                 test_packages: "${{ steps.parse.outputs.remaining_packages }}",
                 run_all_tests: "${{ github.event.inputs.run_all_tests }}",

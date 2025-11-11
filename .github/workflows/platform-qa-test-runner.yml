@@ -7,9 +7,6 @@ on:
       rancher_host:
         description: "Rancher host (e.g. mycluster.qa.rancher.space)"
         required: true
-      admin_token:
-        description: "Admin token for Rancher API access"
-        required: true
       cluster_name:
         description: "Downstream cluster name"
         required: true
@@ -104,12 +101,6 @@ jobs:
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
 
-      - name: Mask admin token
-        shell: bash
-        run: |
-          echo "::add-mask::${{ github.event.inputs.admin_token }}" && \
-          echo "RANCHER_ADMIN_TOKEN=${{ github.event.inputs.admin_token }}" >> $GITHUB_ENV
-
       - name: Create SSH key file
         shell: bash
         run: |
@@ -118,15 +109,14 @@ jobs:
           chmod 600 ~/.ssh/$SSH_PRIVATE_KEY_NAME.pem
           echo "SSH_PRIVATE_KEY_PATH=$HOME/.ssh" >> $GITHUB_ENV
 
+      - name: Create Rancher admin token
+        run: bash .github/scripts/platform-qa-create-rancher-token.sh
+
       - name: Get Rancher version
         run: bash .github/scripts/platform-qa-get-rancher-version.sh
-        env:
-          RANCHER_HOST: ${{ env.RANCHER_HOST }}
 
       - name: Get supported Kubernetes version
         run: bash .github/scripts/platform-qa-get-k8s-version.sh
-        env:
-          RANCHER_SHORT_VERSION: ${{ env.RANCHER_SHORT_VERSION }}
 
       - name: Preprocess variables and set environment
         id: set-env
@@ -147,7 +137,7 @@ jobs:
         run: bash .github/scripts/platform-qa-create-cattle-config.sh
 
       - name: Run all tests in package
-        if: github.event.inputs.run_all_tests == 'true'
+        if: ${{ github.event.inputs.run_all_tests == 'true' }}
         env:
           CATTLE_TEST_CONFIG: ${{ github.workspace }}/cattle-config.yaml
         run: |
@@ -208,7 +198,7 @@ jobs:
           echo "   Results: $GITHUB_WORKSPACE/results-${PACKAGE//\//-}.json"
           
       - name: Run single test with selector
-        if: github.event.inputs.run_all_tests == 'false'
+        if: ${{ github.event.inputs.run_all_tests == 'false' }}
         env:
           CATTLE_TEST_CONFIG: ${{ github.workspace }}/cattle-config.yaml
         run: |
@@ -238,7 +228,7 @@ jobs:
           echo "   Results: $GITHUB_WORKSPACE/results-${PACKAGE//\//-}.json"
           
       - name: Report results to Qase
-        if: github.event.inputs.report_to_qase == 'true'
+        if: ${{ github.event.inputs.report_to_qase == 'true' }}
         run: |
           PACKAGE="$TEST_PACKAGE"
           if [ -z "$QASE_TEST_RUN_ID" ]; then
@@ -259,3 +249,9 @@ jobs:
             echo "❌ One or more tests failed in package $TEST_PACKAGE"
             exit 1
           fi
+
+      - name: Remove SSH key
+        if: always()
+        run: |
+          echo "Removing SSH private key..."
+          rm -f ~/.ssh/$SSH_PRIVATE_KEY_NAME.pem
