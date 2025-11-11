@@ -1,4 +1,4 @@
-//go:build validation || recurring
+//go:build validation
 
 //nolint:forbidigo
 package rke2k3s
