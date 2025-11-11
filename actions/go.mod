@@ -8,8 +8,8 @@ replace (
 	github.com/docker/distribution => github.com/docker/distribution v2.8.2+incompatible // rancher-machine requires a replace is set
 	github.com/docker/docker => github.com/docker/docker v20.10.27+incompatible // rancher-machine requires a replace is set
 
-	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20251029210211-fd1057ed2062
-	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20251029210211-fd1057ed2062
+	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20251111120454-f829d8f1dc83
+	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20251111120454-f829d8f1dc83
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
 	go.opentelemetry.io/otel => go.opentelemetry.io/otel v1.28.0
@@ -47,7 +47,7 @@ replace (
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.34.1
 	k8s.io/kubectl => k8s.io/kubectl v0.34.1
 	k8s.io/kubelet => k8s.io/kubelet v0.34.1
-	k8s.io/kubernetes => k8s.io/kubernetes v1.32.0
+	k8s.io/kubernetes => k8s.io/kubernetes v1.34.1
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.34.1
 	k8s.io/metrics => k8s.io/metrics v0.34.1
 	k8s.io/mount-utils => k8s.io/mount-utils v0.34.1
@@ -59,14 +59,14 @@ replace (
 
 require (
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20251106204618-0f330e53bbc0
+	github.com/rancher/shepherd v0.0.0-20251111151559-050d62ead063
 	github.com/rancher/tfp-automation v0.0.0-20251110211856-605fbb257d46
 )
 
 require (
-	github.com/aws/aws-sdk-go v1.55.6
+	github.com/aws/aws-sdk-go v1.55.8
 	github.com/pkg/errors v0.9.1
-	github.com/rancher/norman v0.7.1
+	github.com/rancher/norman v0.8.0
 	github.com/rancher/rancher v0.0.0-20250806201723-9a7af3779b9d
 	github.com/rancher/wrangler v1.1.2
 	github.com/sirupsen/logrus v1.9.3
@@ -76,7 +76,7 @@ require (
 	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
+	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/cluster-api v1.10.6
 )
 
@@ -84,7 +84,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
-	github.com/rancher/ali-operator v0.0.5 // indirect
+	github.com/rancher/ali-operator v1.13.0-rc.2 // indirect
 	gopkg.in/validator.v2 v2.0.1 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 	k8s.io/component-helpers v0.34.1 // indirect
@@ -173,20 +173,20 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rancher/aks-operator v1.13.0-rc.1 // indirect
-	github.com/rancher/apiserver v0.7.0 // indirect
-	github.com/rancher/eks-operator v1.13.0-rc.1 // indirect
+	github.com/rancher/aks-operator v1.13.0-rc.4 // indirect
+	github.com/rancher/apiserver v0.7.7 // indirect
+	github.com/rancher/eks-operator v1.13.0-rc.4 // indirect
 	github.com/rancher/fleet/pkg/apis v0.14.0-rc.1 // indirect
-	github.com/rancher/gke-operator v1.13.0-rc.1 // indirect
+	github.com/rancher/gke-operator v1.13.0-rc.3 // indirect
 	github.com/rancher/lasso v0.2.5 // indirect
 	github.com/rancher/rke v1.8.0-rc.4 // indirect
-	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250710162344-185ff9f785cd // indirect
+	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078 // indirect
 	github.com/rancher/wrangler/v3 v3.3.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
-	github.com/spf13/cobra v1.9.1 // indirect
-	github.com/spf13/pflag v1.0.6 // indirect
+	github.com/spf13/cobra v1.10.1 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
 	go.etcd.io/etcd/api/v3 v3.6.4 // indirect
@@ -224,7 +224,7 @@ require (
 	k8s.io/kube-openapi v0.31.5 // indirect
 	k8s.io/kubectl v0.34.1 // indirect
 	k8s.io/kubernetes v1.34.1 // indirect
-	k8s.io/pod-security-admission v0.33.2 // indirect
+	k8s.io/pod-security-admission v0.34.1 // indirect
 	sigs.k8s.io/cli-utils v0.37.2 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/kustomize/api v0.20.1 // indirect
