@@ -14,7 +14,7 @@ SCRIPT_NAME="$(basename "$0")"
 readonly SCRIPT_NAME
 SCRIPT_DIR="$(dirname "$0")"
 readonly SCRIPT_DIR
-QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
+QA_INFRA_CLONE_PATH="${QA_INFRA_WORK_PATH:-/root/qa-infra-automation}"
 readonly QA_INFRA_CLONE_PATH
 CLEANUP_TYPE="${CLEANUP_TYPE:-deployment_failure}" # deployment_failure, timeout, manual
 DESTROY_ON_FAILURE="${DESTROY_ON_FAILURE:-true}"
@@ -179,7 +179,7 @@ gather_cleanup_state() {
         # Initialize to access state
         local init_result=0
         initialize_tofu "$TOFU_MODULE_PATH" "$allow_missing" || init_result=$?
-        
+
         if [[ $init_result -eq 0 ]]; then
             log_cleanup "Terraform initialized successfully"
 
@@ -603,7 +603,7 @@ manual_infrastructure_destruction() {
     # Initialize Terraform (allow missing workspace for deployment failures)
     local init_result=0
     initialize_tofu "$TOFU_MODULE_PATH" "true" || init_result=$?
-    
+
     if [[ $init_result -eq 2 ]]; then
         log_cleanup "Workspace never existed - no infrastructure to destroy"
         return 0
@@ -619,7 +619,7 @@ manual_infrastructure_destruction() {
     if tofu state list >"$SHARED_VOLUME_PATH/current-state-list.txt" 2>/dev/null; then
         current_resources=$(wc -l <"$SHARED_VOLUME_PATH/current-state-list.txt" | tr -d ' ')
         log_cleanup "Current state contains $current_resources resources"
-        
+
         if [[ $current_resources -eq 0 ]]; then
             log_cleanup "No resources to destroy in current state"
             return 0
@@ -634,7 +634,7 @@ manual_infrastructure_destruction() {
         var_file_arg="-var-file=$TERRAFORM_VARS_FILENAME"
         log_cleanup "Using var file: $TERRAFORM_VARS_FILENAME"
     fi
-    
+
     if tofu destroy -auto-approve "$var_file_arg" 2>&1 | tee "$SHARED_VOLUME_PATH/destruction-output.log"; then
         log_cleanup "[OK] Manual infrastructure destruction completed"
     else

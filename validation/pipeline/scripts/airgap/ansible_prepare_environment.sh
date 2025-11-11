@@ -19,7 +19,7 @@ QA_INFRA_REPO_URL="${QA_INFRA_REPO_URL:-https://github.com/rancher/qa-infra-auto
 readonly QA_INFRA_REPO_URL
 QA_INFRA_REPO_BRANCH="${QA_INFRA_REPO_BRANCH:-main}"
 readonly QA_INFRA_REPO_BRANCH
-QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
+QA_INFRA_CLONE_PATH="${QA_INFRA_WORK_PATH:-/root/qa-infra-automation}"
 readonly QA_INFRA_CLONE_PATH
 
 # Load the shared/common airgap library (try common.sh first, then legacy airgap_lib.sh)

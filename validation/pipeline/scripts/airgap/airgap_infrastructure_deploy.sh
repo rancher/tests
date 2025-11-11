@@ -13,7 +13,7 @@ SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
-QA_INFRA_CLONE_PATH="/root/qa-infra-automation"
+QA_INFRA_CLONE_PATH="${QA_INFRA_WORK_PATH:-/root/qa-infra-automation}"
 readonly QA_INFRA_CLONE_PATH
 
 # Source common library first (try multiple locations)
