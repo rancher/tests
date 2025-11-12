@@ -13,18 +13,20 @@ Upload the Elemental ISO image to Harvester so it can be used when creating the 
 When creating a new VM in Harvester, configure it with the following settings:
 
 ### **Basics**
-- **CPU**: `4`
+- **Multi Instance**: ✅
+- **Count**: `3`
+- **CPU**: `8`
 - **Memory**: `8 GiB`
 
 ### **Volumes**
 1. **Boot Volume (ISO)**
    - **Type**: `cd-rom`
-   - **Size**: `40 GiB`
+   - **Size**: `1 GiB`
    - **Image**: *Elemental ISO image*
    - **Bus**: `SATA`
 2. **Disk Volume**
    - **Type**: `disk`
-   - **Size**: `40 GiB`
+   - **Size**: `60 GiB`
    - **Storage Class**: `harvester-longhorn`
    - **Bus**: `VirtIO`
 
@@ -33,14 +35,15 @@ When creating a new VM in Harvester, configure it with the following settings:
   - **Name**: `default`
   - **Model**: `virtio`
   - **Network**: `Management Network`
-  - **Type**: `masquerade`
+  - **Type**: `bridge`
 
 ### **Advanced Options**
 - **OS Type**: `Linux`
-- **Enable USB Tablet**: ✅
 - **Install Guest Agent**: ✅
 - **Enable TPM**: ✅
+- **Enable TPM Persistent State**: ✅
 - **Boot in EFI mode**: ✅
+- **EFI Persistent State**: ✅
 - **Secure Boot**: ✅
 
 ---
