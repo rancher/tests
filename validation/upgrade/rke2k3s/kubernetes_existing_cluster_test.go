@@ -18,22 +18,18 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
-	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/validation/upgrade"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	upstream "go.qase.io/qase-api-client"
 )
 
 type UpgradeKubernetesExistingClusterTestSuite struct {
 	suite.Suite
-	session           *session.Session
-	client            *rancher.Client
-	cattleConfig      map[string]any
+	session       *session.Session
+	client        *rancher.Client
+	cattleConfig  map[string]any
 	clusterConfig *clusters.ClusterConfig
-	clusterObject       *v1.SteveAPIObject
+	clusterObject *v1.SteveAPIObject
 }
 
 func (u *UpgradeKubernetesExistingClusterTestSuite) TearDownSuite() {
@@ -90,15 +86,6 @@ func (u *UpgradeKubernetesExistingClusterTestSuite) TestUpgradeKubernetesExistin
 		u.Run(tt.name, func() {
 			upgrade.DownstreamCluster(&u.Suite, tt.name, u.client, clusterResp.Name, tt.clusterConfig, tt.clusterID, tt.clusterConfig.KubernetesVersion, false)
 		})
-
-		upgradedK8sParam := upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "UpgradedK8sVersion", Values: []string{tt.clusterConfig.KubernetesVersion}}}
-		params := provisioning.GetProvisioningSchemaParams(u.client, u.cattleConfig)
-		params = append(params, upgradedK8sParam)
-
-		err = qase.UpdateSchemaParameters(tt.name, params)
-		if err != nil {
-			logrus.Warningf("Failed to upload schema parameters %s", err)
-		}
 	}
 }
 

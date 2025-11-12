@@ -14,9 +14,6 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/etcdsnapshot"
 	"github.com/rancher/tests/actions/logging"
-	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/qase"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -96,12 +93,6 @@ func (s *SnapshotRestoreExistingClusterTestSuite) TestSnapshotRestoreExistingClu
 			err := etcdsnapshot.CreateAndValidateSnapshotRestore(s.client, cluster.Name, tt.etcdSnapshot, "nginx")
 			require.NoError(s.T(), err)
 		})
-
-		params := provisioning.GetProvisioningSchemaParams(s.client, s.cattleConfig)
-		err = qase.UpdateSchemaParameters(tt.name, params)
-		if err != nil {
-			logrus.Warningf("Failed to upload schema parameters %s", err)
-		}
 	}
 }
 

@@ -14,7 +14,6 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/validation/certificates"
 	"github.com/sirupsen/logrus"
@@ -78,12 +77,6 @@ func (c *CertRotationExistingClusterTestSuite) TestCertRotationExistingCluster()
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			pods.VerifyClusterPods(c.T(), c.client, cluster)
 		})
-
-		params := provisioning.GetProvisioningSchemaParams(c.client, c.cattleConfig)
-		err = qase.UpdateSchemaParameters(tt.name, params)
-		if err != nil {
-			logrus.Warningf("Failed to upload schema parameters %s", err)
-		}
 	}
 }
 
