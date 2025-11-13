@@ -1,5 +1,5 @@
 #!/usr/bin/env groovy
-@Library('qa-jenkins-library') qaLib
+@Library('qa-jenkins-library') _
 
 class PipelineConstants {
 
@@ -97,7 +97,7 @@ pipeline {
           logInfo('Initializing destruction pipeline')
           validateParameters()
 
-          destroyPipeline = qaLib.airgapDestroy.pipeline(this)
+          destroyPipeline = airgapDestroy.pipeline(this)
           destroyPipeline.initialize(composeDestroyContext())
 
           logInfo('Pipeline initialization complete')
