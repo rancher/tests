@@ -220,11 +220,14 @@ def primeLocalAirgapLibrary() {
     return
   }
 
+  def baseLoader = this.class.classLoader
+  def loader = baseLoader instanceof groovy.lang.GroovyClassLoader ? baseLoader : new groovy.lang.GroovyClassLoader(baseLoader)
+
   fileList.split('\n').each { relPath ->
     def normalized = relPath.trim()
     if (normalized) {
       def code = readFile(normalized)
-      evaluate(code)
+      loader.parseClass(code)
     }
   }
 
