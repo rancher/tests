@@ -1,47 +1,45 @@
 #!/usr/bin/env groovy
+@Library('qa-jenkins-library') qaLib
 
-/**
- * Infrastructure Destruction Jenkinsfile for Airgap RKE2
- *
- * This pipeline is designed to safely destroy infrastructure created by
- * the main airgap RKE2 deployment pipeline. It retrives Terraform state
- * from S3 backend and performs controlled destruction.
- */
+import org.rancher.qa.airgap.PipelineDefaults
 
-// ========================================
-// CONSTANTS AND CONFIGURATION (parity with setup pipeline)
-// ========================================
 class PipelineConstants {
 
-  static final String DEFAULT_HOSTNAME_PREFIX = 'airgap-ansible-jenkins'
-  static final String DEFAULT_RKE2_VERSION = 'v1.28.8+rke2r1'
-  static final String DEFAULT_RANCHER_VERSION = 'v2.9-head'
-  static final String DEFAULT_RANCHER_TEST_REPO = 'https://github.com/rancher/tests.git'
-  static final String DEFAULT_QA_INFRA_REPO = 'https://github.com/rancher/qa-infra-automation.git'
-  static final String DEFAULT_S3_BUCKET = 'rancher-terraform-state'
-  static final String DEFAULT_S3_BUCKET_REGION = 'us-east-1'
-  static final String CONTAINER_NAME_PREFIX = 'rancher-ansible-airgap'
-  static final String SHARED_VOLUME_PREFIX = 'validation-volume'
-  static final String DOCKER_BUILD_CONTEXT = '.'
-  static final String DOCKERFILE_PATH = 'tests/validation/Dockerfile.tofu.e2e'
-  static final int TERRAFORM_TIMEOUT_MINUTES = 60
-  static final int ANSIBLE_TIMEOUT_MINUTES = 90
-  static final int VALIDATION_TIMEOUT_MINUTES = 30
   static final String LOG_PREFIX_INFO = '[INFO]'
   static final String LOG_PREFIX_ERROR = '[ERROR]'
   static final String LOG_PREFIX_WARNING = '[WARNING]'
 
 }
 
-// Ensure lazy loader binding variables exist before the pipeline block.
-// Some Jenkins evaluations reference helpers early; declare refs up-front
-__ciHelpersRef = null
-__ciAirgapRef = null
+def destroyPipeline
+
+def composeDestroyContext() {
+  [
+    TARGET_WORKSPACE        : params.TARGET_WORKSPACE?.trim(),
+    TF_WORKSPACE            : params.TARGET_WORKSPACE?.trim(),
+    RANCHER_TEST_REPO_URL   : params.RANCHER_TEST_REPO_URL,
+    RANCHER_TEST_REPO_BRANCH: params.RANCHER_TEST_REPO_BRANCH,
+    QA_INFRA_REPO_URL       : params.QA_INFRA_REPO_URL,
+    QA_INFRA_REPO_BRANCH    : params.QA_INFRA_REPO_BRANCH,
+    S3_BUCKET_NAME          : getS3BucketName(),
+    S3_KEY_PREFIX           : getS3KeyPrefix(),
+    S3_BUCKET_REGION        : getS3BucketRegion(),
+    AWS_REGION              : getAwsRegion(),
+    QA_INFRA_WORK_PATH      : '/root/go/src/github.com/rancher/qa-infra-automation',
+    artifactPatterns        : [
+      'destruction-summary.json',
+      'destruction-plan.txt',
+      'infrastructure-cleanup-report.txt',
+      'workspace-list.txt',
+      'remaining-resources.txt',
+      'artifacts/**'
+    ]
+  ]
+}
 
 pipeline {
     agent any
 
-    // Global pipeline options
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timeout(time: 2, unit: 'HOURS')
@@ -93,53 +91,17 @@ pipeline {
         )
     }
 
-    environment {
-        // Default S3 configuration - use parameters with fallbacks
-        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: 'jenkins-terraform-state-storage'}"
-        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2/terraform.tfstate'}"
-        S3_BUCKET_REGION = "${params.S3_BUCKET_REGION ?: 'us-east-2'}"
-        AWS_REGION = "${params.S3_BUCKET_REGION ?: 'us-east-2'}"
-
-        // Repository configurations
-        RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'}"
-        QA_INFRA_REPO = "${params.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation'}"
-        QA_INFRA_WORK_PATH = '/root/go/src/github.com/rancher/qa-infra-automation'
-        ROOT_PATH = '/root/go/src/github.com/rancher/tests/'
-
-        // Computed values
-        JOB_SHORT_NAME = "${getShortJobName()}"
-        BUILD_CONTAINER_NAME = "${JOB_SHORT_NAME}${BUILD_NUMBER}-destroy"
-        IMAGE_NAME = "rancher-destroy-${JOB_SHORT_NAME}${BUILD_NUMBER}"
-        VALIDATION_VOLUME = "DestroySharedVolume-${JOB_SHORT_NAME}${BUILD_NUMBER}"
-
-        // Target workspace from parameters - CRITICAL: Set this before any tofu operations
-        TARGET_WORKSPACE = "${params.TARGET_WORKSPACE}"
-        TF_WORKSPACE = "${params.TARGET_WORKSPACE}"
-
-        // Timeouts (in minutes)
-        TERRAFORM_TIMEOUT = '30'
-
-        // Configuration files
-        TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
-        TERRAFORM_BACKEND_VARS_FILENAME = 'backend.tfvars'
-        ENV_FILE = '.env'
-    }
-
     stages {
         stage('Initialize Pipeline') {
       steps {
         script {
-          logInfo('Initializing pipeline')
-          // Validate parameters and environment
+          logInfo('Initializing destruction pipeline')
           validateParameters()
 
-          // Clean workspace
-          deleteDir()
+          destroyPipeline = qaLib.airgapDestroy.pipeline(this)
+          destroyPipeline.initialize(composeDestroyContext())
 
-          logInfo('Pipeline initialized successfully')
-          logInfo("Build container: ${env.BUILD_CONTAINER_NAME}")
-          logInfo("Docker image: ${env.IMAGE_NAME}")
-          logInfo("Volume: ${env.VALIDATION_VOLUME}")
+          logInfo('Pipeline initialization complete')
         }
       }
         }
@@ -148,56 +110,8 @@ pipeline {
       steps {
         script {
           logInfo('Checking out source repositories')
-
-          // Checkout Rancher Tests Repository
-          dir('./tests') {
-            logInfo("Cloning rancher tests repository from ${env.RANCHER_TEST_REPO_URL}")
-            checkout([
-                            $class: 'GitSCM',
-                            branches: [[name: "*/${params.RANCHER_TEST_REPO_BRANCH}"]],
-                            extensions: [
-                                [$class: 'CleanCheckout'],
-                                [$class: 'CloneOption', depth: 1, shallow: true]
-                            ],
-                            userRemoteConfigs: [[
-                                url: env.RANCHER_TEST_REPO_URL,
-                            ]]
-                        ])
-          }
-
-          // Checkout QA Infrastructure Repository
-          dir('./qa-infra-automation') {
-            logInfo("Cloning qa-infra-automation repository from ${env.QA_INFRA_REPO}")
-            checkout([
-                            $class: 'GitSCM',
-                            branches: [[name: "*/${params.QA_INFRA_REPO_BRANCH}"]],
-                            extensions: [
-                                [$class: 'CleanCheckout'],
-                                [$class: 'CloneOption', depth: 1, shallow: true]
-                            ],
-                            userRemoteConfigs: [[
-                                url: env.QA_INFRA_REPO,
-                            ]]
-                        ])
-          }
-
-          logInfo('Repository checkout completed successfully')
-        }
-      }
-        }
-
-        stage('Configure Environment') {
-      steps {
-        script {
-          logInfo('Configuring deployment environment')
-
-          // Configure credentials and environment files
-          withCredentials(getCredentialsList()) {
-            def airgap = ciAirgap()
-            if (!callLibraryMethod(airgap, 'configureDestructionEnvironment', this)) {
-              error('Required library function ci/airgap.groovy::configureDestructionEnvironment not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
-            }
-          }
+          requirePipeline().checkoutRepositories()
+          logInfo('Repositories checked out successfully')
         }
       }
         }
@@ -205,185 +119,63 @@ pipeline {
         stage('Infrastructure Destruction') {
       steps {
         script {
-          logInfo('Performing infrastructure destruction using consolidated script')
-          logInfo("Target workspace for destruction: ${env.TF_WORKSPACE}")
-          logInfo("S3 Bucket: ${env.S3_BUCKET_NAME}")
-          logInfo("S3 Region: ${env.S3_BUCKET_REGION}")
-
-          // Configuration validation
-          def requiredVars = [
-                        'QA_INFRA_WORK_PATH',
-                        'TF_WORKSPACE',
-                        'TERRAFORM_VARS_FILENAME',
-                        'TERRAFORM_BACKEND_VARS_FILENAME',
-                        'TERRAFORM_TIMEOUT'
-                    ]
-          validateRequiredVariables(requiredVars)
-
-          // Enhanced timeout with reasonable defaults
-          def timeoutMinutes = env.TERRAFORM_TIMEOUT ?
-                        Integer.parseInt(env.TERRAFORM_TIMEOUT) : 30
-
-          timeout(time: timeoutMinutes, unit: 'MINUTES') {
-            def airgap = ciAirgap()
-            def debugFlag = false
-            if (env.DEBUG) {
-              debugFlag = env.DEBUG.equalsIgnoreCase('true')
-            }
-            def destroyOptions = [
-                        workspace: env.TF_WORKSPACE,
-                        varFile: env.TERRAFORM_VARS_FILENAME,
-                        cleanWorkspace: true,
-                        useLocalPath: false,
-                        debug: debugFlag,
-                        verify: true
-                    ]
-
-            try {
-              if (!callLibraryMethod(airgap, 'destroyInfrastructure', this, destroyOptions)) {
-                error('Required library function ci/airgap.groovy::destroyInfrastructure not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
-              }
-              logInfo('Infrastructure destruction process completed.')
-
-              if (!callLibraryMethod(airgap, 'archiveDestructionResults', this)) {
-                logWarning('Archive destruction results helper missing; skipping shared archive step')
-              }
-                        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
-              logError("Infrastructure destruction timed out after ${timeoutMinutes} minutes")
-              logError("Timeout exception details: ${e.message}")
-
-              if (!callLibraryMethod(airgap, 'archiveDestructionFailureArtifacts', this)) {
-                logWarning('Archive destruction failure helper missing; skipping shared cleanup step')
-              }
-                        } catch (Exception e) {
-              logError("Infrastructure destruction failed: ${e.message}")
-
-              if (!callLibraryMethod(airgap, 'archiveDestructionFailureArtifacts', this)) {
-                logWarning('Archive destruction failure helper missing during exception handling; skipping shared cleanup step')
-              }
-
-              throw e
-            }
-          }
-        }
-      }
-      post {
-        failure {
-          script {
-            logError('Infrastructure destruction operations failed')
-            def airgap = ciAirgap()
-            if (!callLibraryMethod(airgap, 'archiveDestructionFailureArtifacts', this)) {
-              logWarning('Archive destruction failure helper missing in post block; skipping shared cleanup step')
-            }
-          }
+          logInfo("Destroying infrastructure for workspace: ${params.TARGET_WORKSPACE}")
+          requirePipeline().destroyInfrastructure()
+          logInfo('Infrastructure destruction completed')
         }
       }
         }
     }
+
     post {
-        always {
-      script {
-        logInfo('Starting post-destruction cleanup')
-
-        // Archive important artifacts
-        archiveBuildArtifacts([
-                    'destruction-plan.txt',
-                    'destruction-summary.json',
-                    'destruction-logs.txt'
-                ])
-
-        // Cleanup containers and volumes
-        cleanupContainersAndVolumes()
-      }
-        }
-
         success {
       script {
-        logInfo('Destruction pipeline completed successfully')
-
-        // Clean up S3 workspace directory after successful destruction
-        def airgap = ciAirgap()
-        if (!callLibraryMethod(airgap, 'cleanupS3WorkspaceDirectory', this)) {
-          error('Required library function ci/airgap.groovy::cleanupS3WorkspaceDirectory not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
-        }
+        logInfo('Pipeline succeeded; running cleanup with S3 purge')
+        performCleanup(true)
       }
         }
-
         failure {
       script {
-        logError('Destruction pipeline failed')
+        logWarning('Pipeline failed; running cleanup without S3 purge')
+        performCleanup(false)
       }
         }
-
         aborted {
       script {
-        logWarning('Destruction pipeline was aborted')
+        logWarning('Pipeline aborted; running cleanup without S3 purge')
+        performCleanup(false)
+      }
+        }
+        unstable {
+      script {
+        logWarning('Pipeline unstable; running cleanup without S3 purge')
+        performCleanup(false)
       }
         }
     }
 }
 
-/**
- * CONSOLIDATED SCRIPT HELPER FUNCTIONS
- */
-
- // Lazy loader for CI helpers (mirrors pattern in setup Jenkinsfile)
- __ciHelpersRef = null
-def ciHelpers() {
-  if (__ciHelpersRef == null) {
-    def candidates = [
-             'validation/pipeline/ci/helpers.groovy',
-             'tests/validation/pipeline/ci/helpers.groovy'
-         ]
-    for (p in candidates) {
-      try {
-        if (fileExists(p)) { __ciHelpersRef = load(p); break }
-             } catch (ignored) { }
-      }
-    }
-  return __ciHelpersRef
+def performCleanup(boolean cleanupS3) {
+  if (!destroyPipeline) {
+    logWarning('Destroy pipeline was never initialized; skipping cleanup')
+    return
   }
 
- // Lazy loader for CI airgap steps (parity with setup pipeline)
- __ciAirgapRef = null
-def ciAirgap() {
-  if (__ciAirgapRef == null) {
-    def candidates = [
-             'validation/pipeline/ci/airgap.groovy',
-             'tests/validation/pipeline/ci/airgap.groovy'
-         ]
-    for (p in candidates) {
-      try {
-        if (fileExists(p)) { __ciAirgapRef = load(p); break }
-             } catch (ignored) { }
-      }
-    }
-  return __ciAirgapRef
-  }
-
-// Invoke a method on the loaded library if it exists; return true when invoked, false when missing.
-// We intentionally catch MissingMethodException to avoid sandboxed metaClass access.
-def callLibraryMethod(lib, String methodName, Object... args) {
-  if (!lib) {
-    return false
-  }
   try {
-    lib."${methodName}"(*args)
-    return true
-    } catch (MissingMethodException e) {
-    if (e.method == methodName) {
-      return false
-    }
-    throw e
+    destroyPipeline.cleanup(cleanupS3)
+    } catch (hudson.AbortException e) {
+    logWarning("Cleanup encountered issues: ${e.message}")
   }
 }
 
-/**
- * DESTRUCTION-SPECIFIC HELPER FUNCTIONS
- */
+def requirePipeline() {
+  if (!destroyPipeline) {
+    error('Destroy pipeline has not been initialized')
+  }
+  destroyPipeline
+}
 
 def validateParameters() {
-  // Validate required parameters
   if (!params.TARGET_WORKSPACE || params.TARGET_WORKSPACE.trim().isEmpty()) {
     error('TARGET_WORKSPACE parameter is required for destruction')
   }
@@ -394,114 +186,42 @@ def validateParameters() {
     error('QA_INFRA_REPO_URL parameter is required')
   }
 
-  logInfo('Parameters validated successfully')
   logInfo("Target workspace: ${params.TARGET_WORKSPACE}")
+  logInfo("Destroying state from bucket ${getS3BucketName()} in region ${getS3BucketRegion()}")
 }
-
-def validateRequiredVariables(requiredVars) {
-  logInfo('Validating required environment variables')
-
-  def missingVars = []
-  requiredVars.each { varName ->
-        def varValue = env."${varName}"
-        if (!varValue || varValue.trim().isEmpty()) {
-      missingVars.add(varName)
-        }
-  }
-
-  if (!missingVars.isEmpty()) {
-    def errorMsg = "Missing required environment variables: ${missingVars.join(', ')}"
-    logError(errorMsg)
-    error(errorMsg)
-  }
-
-  logInfo('All required variables validated successfully')
-}
-
-def getShortJobName() {
-  def jobName = "${env.JOB_NAME}"
-  if (jobName.contains('/')) {
-    def lastSlashIndex = jobName.lastIndexOf('/')
-    return jobName.substring(lastSlashIndex + 1)
-  }
-  return jobName
-}
-
-def getCredentialsList() {
-  return [
-        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-    ]
-}
-
-def archiveBuildArtifacts(artifacts) {
-  try {
-    archiveArtifacts artifacts: artifacts.join(','), allowEmptyArchive: true
-    logInfo("Artifacts archived: ${artifacts.join(', ')}")
-  } catch (Exception e) {
-    logError("Failed to archive artifacts: ${e.message}")
-  }
-}
-
-def cleanupContainersAndVolumes() {
-  def airgap = ciAirgap()
-  if (!callLibraryMethod(airgap, 'cleanupContainersAndVolumes', this)) {
-    error('Required library function ci/airgap.groovy::cleanupContainersAndVolumes not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
-  }
-}
-
-/**
- * LOGGING FUNCTIONS
- */
-
-def logInfo(msg) {
-  echo "${PipelineConstants.LOG_PREFIX_INFO} ${getTimestamp()} ${msg}"
-}
-
-def logError(msg) {
-  echo "${PipelineConstants.LOG_PREFIX_ERROR} ${getTimestamp()} ${msg}"
-}
-
-def logWarning(msg) {
-  echo "${PipelineConstants.LOG_PREFIX_WARNING} ${getTimestamp()} ${msg}"
-}
-
-static def getTimestamp() {
-  return new Date().format('yyyy-MM-dd HH:mm:ss')
-}
-
-/**
- * Helper functions for robust environment variable assignment
- */
 
 def getS3BucketName() {
-  def paramValue = params.S3_BUCKET_NAME
-  if (paramValue && paramValue.trim()) {
-    return paramValue.trim()
-  }
-  return 'jenkins-terraform-state-storage'
+  def value = params.S3_BUCKET_NAME?.trim()
+  value ? value : 'jenkins-terraform-state-storage'
 }
 
 def getS3KeyPrefix() {
-  def paramValue = params.S3_KEY_PREFIX
-  if (paramValue && paramValue.trim()) {
-    return paramValue.trim()
-  }
-  return 'jenkins-airgap-rke2/terraform.tfstate'
+  def value = params.S3_KEY_PREFIX?.trim()
+  value ? value : 'jenkins-airgap-rke2/terraform.tfstate'
 }
 
 def getS3BucketRegion() {
-  def paramValue = params.S3_BUCKET_REGION
-  if (paramValue && paramValue.trim()) {
-    return paramValue.trim()
-  }
-  return 'us-east-2'
+  def value = params.S3_BUCKET_REGION?.trim()
+  value ? value : PipelineDefaults.DEFAULT_S3_BUCKET_REGION
 }
 
 def getAwsRegion() {
-  def paramValue = params.S3_BUCKET_REGION
-  if (paramValue && paramValue.trim()) {
-    return paramValue.trim()
-  }
-  return 'us-east-2'
+  def value = params.S3_BUCKET_REGION?.trim()
+  value ? value : PipelineDefaults.DEFAULT_S3_BUCKET_REGION
+}
+
+def logInfo(msg) {
+  echo "${PipelineConstants.LOG_PREFIX_INFO} ${timestamp()} ${msg}"
+}
+
+def logError(msg) {
+  echo "${PipelineConstants.LOG_PREFIX_ERROR} ${timestamp()} ${msg}"
+}
+
+def logWarning(msg) {
+  echo "${PipelineConstants.LOG_PREFIX_WARNING} ${timestamp()} ${msg}"
+}
+
+def timestamp() {
+  new Date().format('yyyy-MM-dd HH:mm:ss')
 }
