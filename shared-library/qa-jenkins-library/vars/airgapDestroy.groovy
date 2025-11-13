@@ -163,7 +163,7 @@ perform_cleanup \"${reason}\" \"${state.TF_WORKSPACE}\" \"true\"
 
     private void syncEnvFromContext(List<String> keys) {
         keys.each { key ->
-            def value = state[key]
+            def value = this.@state[key]
             if (value != null) {
                 steps.env."${key}" = value.toString()
             }
