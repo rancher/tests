@@ -1,5 +1,6 @@
-#!/usr/bin/env groovy
 @Library('qa-jenkins-library') _
+
+import groovy.transform.Field
 
 class PipelineConstants {
 
@@ -10,7 +11,7 @@ class PipelineConstants {
 
 }
 
-def destroyPipeline
+@Field def destroyPipeline
 
 def composeDestroyContext() {
   [
