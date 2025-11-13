@@ -13,6 +13,7 @@ class PipelineConstants {
 
 @Field def destroyPipeline
 @Field def airgapDestroyHelper
+@Field boolean localAirgapLibraryPrimed = false
 
 def composeDestroyContext() {
   [
@@ -179,6 +180,8 @@ def resolveAirgapDestroy() {
     return airgapDestroyHelper
   }
 
+  primeLocalAirgapLibrary()
+
   def candidates = [
     'shared-library/qa-jenkins-library/vars/airgapDestroy.groovy',
     'tests/shared-library/qa-jenkins-library/vars/airgapDestroy.groovy'
@@ -193,6 +196,25 @@ def resolveAirgapDestroy() {
   }
 
   error('airgapDestroy helper is not available from shared library or workspace')
+}
+
+def primeLocalAirgapLibrary() {
+  if (localAirgapLibraryPrimed) {
+    return
+  }
+
+  def srcRoot = 'shared-library/qa-jenkins-library/src'
+  if (!fileExists(srcRoot)) {
+    return
+  }
+
+  def files = findFiles(glob: 'shared-library/qa-jenkins-library/src/**/*.groovy')
+  files.each { file ->
+    def code = readFile(file.path)
+    evaluate(code)
+  }
+
+  localAirgapLibraryPrimed = true
 }
 
 def requirePipeline() {
