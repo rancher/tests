@@ -43,6 +43,10 @@ class AirgapDestroyPipeline implements Serializable {
     void checkoutRepositories() {
         ensureState()
         logInfo('Checking out repositories')
+        def testsRepoBranch = this.@state.RANCHER_TEST_REPO_BRANCH ?: 'main'
+        def testsRepoUrl = this.@state.RANCHER_TEST_REPO_URL ?: PipelineDefaults.DEFAULT_RANCHER_TEST_REPO
+        def infraRepoBranch = this.@state.QA_INFRA_REPO_BRANCH ?: 'main'
+        def infraRepoUrl = this.@state.QA_INFRA_REPO_URL ?: PipelineDefaults.DEFAULT_QA_INFRA_REPO
         def checkoutExtensions = [
             [$class: 'CleanCheckout'],
             [$class: 'CloneOption', depth: 1, shallow: true]
@@ -51,18 +55,18 @@ class AirgapDestroyPipeline implements Serializable {
         steps.dir('./tests') {
             steps.checkout([
                 $class: 'GitSCM',
-                branches: [[name: "*/${state.RANCHER_TEST_REPO_BRANCH ?: 'main'}"]],
+                branches: [[name: "*/${testsRepoBranch}"]],
                 extensions: checkoutExtensions,
-                userRemoteConfigs: [[url: state.RANCHER_TEST_REPO_URL ?: PipelineDefaults.DEFAULT_RANCHER_TEST_REPO]]
+                userRemoteConfigs: [[url: testsRepoUrl]]
             ])
         }
 
         steps.dir('./qa-infra-automation') {
             steps.checkout([
                 $class: 'GitSCM',
-                branches: [[name: "*/${state.QA_INFRA_REPO_BRANCH ?: 'main'}"]],
+                branches: [[name: "*/${infraRepoBranch}"]],
                 extensions: checkoutExtensions,
-                userRemoteConfigs: [[url: state.QA_INFRA_REPO_URL ?: PipelineDefaults.DEFAULT_QA_INFRA_REPO]]
+                userRemoteConfigs: [[url: infraRepoUrl]]
             ])
         }
     }
