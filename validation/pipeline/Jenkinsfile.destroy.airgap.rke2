@@ -100,7 +100,7 @@ pipeline {
           logInfo('Initializing destruction pipeline')
           validateParameters()
 
-                    destroyPipeline = resolveAirgapDestroy().pipeline(this)
+          destroyPipeline = resolveAirgapDestroy().pipeline(this)
           destroyPipeline.initialize(composeDestroyContext())
 
           logInfo('Pipeline initialization complete')
@@ -208,10 +208,24 @@ def primeLocalAirgapLibrary() {
     return
   }
 
-  def files = findFiles(glob: 'shared-library/qa-jenkins-library/src/**/*.groovy')
-  files.each { file ->
-    def code = readFile(file.path)
-    evaluate(code)
+  def fileList = ''
+  if (isUnix()) {
+    fileList = sh(returnStdout: true, script: "find ${srcRoot} -type f -name '*.groovy' || true").trim()
+  } else {
+    fileList = bat(returnStdout: true, script: "@echo off\r\nfor /r ${srcRoot.replace('/', '\\')} %%f in (*.groovy) do @echo %%f").trim()
+  }
+  if (!fileList) {
+    logWarning("No Groovy sources found under ${srcRoot}; skipping priming step")
+    localAirgapLibraryPrimed = true
+    return
+  }
+
+  fileList.split('\n').each { relPath ->
+    def normalized = relPath.trim()
+    if (normalized) {
+      def code = readFile(normalized)
+      evaluate(code)
+    }
   }
 
   localAirgapLibraryPrimed = true
