@@ -12,6 +12,7 @@ class PipelineConstants {
 }
 
 @Field def destroyPipeline
+@Field def airgapDestroyHelper
 
 def composeDestroyContext() {
   [
@@ -98,7 +99,7 @@ pipeline {
           logInfo('Initializing destruction pipeline')
           validateParameters()
 
-          destroyPipeline = airgapDestroy.pipeline(this)
+                    destroyPipeline = resolveAirgapDestroy().pipeline(this)
           destroyPipeline.initialize(composeDestroyContext())
 
           logInfo('Pipeline initialization complete')
@@ -166,6 +167,32 @@ def performCleanup(boolean cleanupS3) {
     } catch (hudson.AbortException e) {
     logWarning("Cleanup encountered issues: ${e.message}")
   }
+}
+
+def resolveAirgapDestroy() {
+  if (airgapDestroyHelper) {
+    return airgapDestroyHelper
+  }
+
+  if (binding?.hasVariable('airgapDestroy') && binding.getVariable('airgapDestroy')) {
+    airgapDestroyHelper = binding.getVariable('airgapDestroy')
+    return airgapDestroyHelper
+  }
+
+  def candidates = [
+    'shared-library/qa-jenkins-library/vars/airgapDestroy.groovy',
+    'tests/shared-library/qa-jenkins-library/vars/airgapDestroy.groovy'
+  ]
+
+  for (path in candidates) {
+    if (fileExists(path)) {
+      airgapDestroyHelper = load(path)
+      logInfo("Loaded airgapDestroy helper from ${path}")
+      return airgapDestroyHelper
+    }
+  }
+
+  error('airgapDestroy helper is not available from shared library or workspace')
 }
 
 def requirePipeline() {
