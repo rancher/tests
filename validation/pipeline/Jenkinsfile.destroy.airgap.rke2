@@ -1,13 +1,12 @@
 #!/usr/bin/env groovy
 @Library('qa-jenkins-library') qaLib
 
-import org.rancher.qa.airgap.PipelineDefaults
-
 class PipelineConstants {
 
   static final String LOG_PREFIX_INFO = '[INFO]'
   static final String LOG_PREFIX_ERROR = '[ERROR]'
   static final String LOG_PREFIX_WARNING = '[WARNING]'
+  static final String DEFAULT_S3_BUCKET_REGION = 'us-east-2'
 
 }
 
@@ -202,12 +201,12 @@ def getS3KeyPrefix() {
 
 def getS3BucketRegion() {
   def value = params.S3_BUCKET_REGION?.trim()
-  value ? value : PipelineDefaults.DEFAULT_S3_BUCKET_REGION
+  value ? value : PipelineConstants.DEFAULT_S3_BUCKET_REGION
 }
 
 def getAwsRegion() {
   def value = params.S3_BUCKET_REGION?.trim()
-  value ? value : PipelineDefaults.DEFAULT_S3_BUCKET_REGION
+  value ? value : PipelineConstants.DEFAULT_S3_BUCKET_REGION
 }
 
 def logInfo(msg) {
