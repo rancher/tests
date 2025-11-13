@@ -227,7 +227,7 @@ class EnvironmentManager implements Serializable {
         logInfo("Ephemeral SSH key generated at ${ctx.SSH_KEY_PATH}")
     }
 
-    private void ensureDestroySshKeys(Map ctx) {
+    void ensureDestroySshKeys(Map ctx) {
         if (!steps.env.AWS_SSH_PEM_KEY || !steps.env.AWS_SSH_KEY_NAME) {
             logWarning('SSH key credentials not available; skipping destroy SSH key setup')
             return

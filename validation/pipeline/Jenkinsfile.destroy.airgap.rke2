@@ -120,6 +120,15 @@ pipeline {
       }
         }
 
+        stage('Prepare Container') {
+      steps {
+        script {
+          logInfo('Preparing container resources for destroy workflow')
+          requirePipeline().prepareContainerResources()
+        }
+      }
+        }
+
         stage('Infrastructure Destruction') {
       steps {
         script {

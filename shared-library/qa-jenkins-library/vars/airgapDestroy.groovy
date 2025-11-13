@@ -32,13 +32,11 @@ class AirgapDestroyPipeline implements Serializable {
         steps.deleteDir()
         state = ctxWithDefaults(ctx)
         envManager.configureDestroyEnvironment(state)
-        dockerManager.buildImage(state.IMAGE_NAME)
-        dockerManager.createSharedVolume(state.VALIDATION_VOLUME)
-        dockerManager.stageSshKeys(state.VALIDATION_VOLUME)
         syncEnvFromContext(['BUILD_CONTAINER_NAME', 'IMAGE_NAME', 'VALIDATION_VOLUME', 'TF_WORKSPACE'])
         logInfo("Build container: ${state.BUILD_CONTAINER_NAME}")
         logInfo("Docker image: ${state.IMAGE_NAME}")
         logInfo("Volume: ${state.VALIDATION_VOLUME}")
+        state.CONTAINER_PREPARED = false
         return state
     }
 
@@ -71,8 +69,31 @@ class AirgapDestroyPipeline implements Serializable {
 
     void destroyInfrastructure() {
         ensureState()
+        if (!state.CONTAINER_PREPARED) {
+            prepareContainerResources()
+        }
         validationManager.ensureRequiredVariables(state, ['QA_INFRA_WORK_PATH', 'TERRAFORM_VARS_FILENAME', 'ENV_FILE'])
         infraManager.destroyInfrastructure(extraEnv: makeDestroyEnv())
+    }
+
+    void prepareContainerResources() {
+        ensureState()
+        if (state.CONTAINER_PREPARED) {
+            logInfo('Container resources already prepared; skipping rebuild')
+            return
+        }
+
+        logInfo('Preparing container resources for destroy workflow')
+        dockerManager.buildImage(state.IMAGE_NAME)
+        dockerManager.createSharedVolume(state.VALIDATION_VOLUME)
+
+        steps.withCredentials(defaultCredentialBindings()) {
+            envManager.ensureDestroySshKeys(state)
+            dockerManager.stageSshKeys(state.VALIDATION_VOLUME)
+        }
+
+        state.CONTAINER_PREPARED = true
+        logInfo('Container resources ready')
     }
 
     void cleanup(boolean cleanupS3 = false) {
@@ -205,6 +226,15 @@ fi'
 
     private void logInfo(String msg) {
         steps.echo "${PipelineDefaults.LOG_PREFIX_INFO} ${timestamp()} ${msg}"
+    }
+
+    private List defaultCredentialBindings() {
+        [
+            steps.string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+            steps.string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+            steps.string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+            steps.string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
+        ]
     }
 
     private static String timestamp() {
