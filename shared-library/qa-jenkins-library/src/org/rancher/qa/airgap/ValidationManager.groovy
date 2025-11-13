@@ -1,6 +1,6 @@
-import hudson.AbortException
-
 package org.rancher.qa.airgap
+
+import hudson.AbortException
 
 /**
  * Provides access to validation helper scripts that live in the rancher/tests repository.
@@ -122,7 +122,7 @@ class ValidationManager implements Serializable {
                     return candidate
                 }
             } catch (groovy.lang.MissingMethodException | AbortException ignored) {
-                // fileExists may not be available outside node context; continue
+            // fileExists may not be available outside node context; continue
             }
         }
         if (required) {
@@ -159,4 +159,5 @@ class ValidationManager implements Serializable {
     private static String timestamp() {
         new Date().format('yyyy-MM-dd HH:mm:ss')
     }
+
 }

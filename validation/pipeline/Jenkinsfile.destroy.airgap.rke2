@@ -1,6 +1,10 @@
-@Library('qa-jenkins-library') _
-
 import groovy.transform.Field
+
+@Field final String QA_LIBRARY_REF = (System.getenv('QA_JENKINS_LIBRARY_REF') ?: 'main').trim()
+
+//TODO: Revert this after testing
+//library("qa-jenkins-library@${QA_LIBRARY_REF}")
+library("qa-jenkins-library@feature/airgap-destroy-pipeline")
 
 class PipelineConstants {
 
@@ -183,7 +187,7 @@ def resolveAirgapDestroy() {
   }
 
   try {
-    def lib = library('qa-jenkins-library@main')
+    def lib = library("qa-jenkins-library@${QA_LIBRARY_REF}")
     if (lib?.hasProperty('airgapDestroy')) {
       airgapDestroyHelper = lib.airgapDestroy
       return airgapDestroyHelper
