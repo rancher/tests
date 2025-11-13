@@ -146,7 +146,7 @@ class DockerManager implements Serializable {
 
         def credentialFlag = credentialEnvFile ? " --env-file ${credentialEnvFile}" : ''
         def command = ['docker', 'run', '--rm']
-        command += mounts.collect { ['-v', it.tokenize(':', false).join(':')] }.flatten()
+        command += mounts.collect { ['-v', it.tokenize(':').join(':')] }.flatten()
         command += ['--name', containerName]
         command += envArgs
         command << imageName
