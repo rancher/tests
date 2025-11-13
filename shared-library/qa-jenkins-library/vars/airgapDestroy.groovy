@@ -73,7 +73,7 @@ class AirgapDestroyPipeline implements Serializable {
 
     void destroyInfrastructure() {
         ensureState()
-        if (!state.CONTAINER_PREPARED) {
+        if (!this.@state.CONTAINER_PREPARED) {
             prepareContainerResources()
         }
         validationManager.ensureRequiredVariables(state, ['QA_INFRA_WORK_PATH', 'TERRAFORM_VARS_FILENAME', 'ENV_FILE'])
@@ -82,21 +82,23 @@ class AirgapDestroyPipeline implements Serializable {
 
     void prepareContainerResources() {
         ensureState()
-        if (state.CONTAINER_PREPARED) {
+        if (this.@state.CONTAINER_PREPARED) {
             logInfo('Container resources already prepared; skipping rebuild')
             return
         }
 
         logInfo('Preparing container resources for destroy workflow')
-        dockerManager.buildImage(state.IMAGE_NAME)
-        dockerManager.createSharedVolume(state.VALIDATION_VOLUME)
+        def imageName = this.@state.IMAGE_NAME
+        def volumeName = this.@state.VALIDATION_VOLUME
+        dockerManager.buildImage(imageName)
+        dockerManager.createSharedVolume(volumeName)
 
         steps.withCredentials(defaultCredentialBindings()) {
-            envManager.ensureDestroySshKeys(state)
-            dockerManager.stageSshKeys(state.VALIDATION_VOLUME)
+            envManager.ensureDestroySshKeys(this.@state)
+            dockerManager.stageSshKeys(volumeName)
         }
 
-        state.CONTAINER_PREPARED = true
+        this.@state.CONTAINER_PREPARED = true
         logInfo('Container resources ready')
     }
 
@@ -185,29 +187,30 @@ perform_cleanup \"${reason}\" \"${state.TF_WORKSPACE}\" \"true\"
     }
 
     private void cleanupS3Workspace() {
+        def currentState = this.@state
         def required = ['S3_BUCKET_NAME', 'S3_BUCKET_REGION', 'S3_KEY_PREFIX', 'TF_WORKSPACE']
-        def missing = required.findAll { !state[it] }
+        def missing = required.findAll { !currentState[it] }
         if (missing) {
             def message = "Skipping S3 cleanup due to missing variables: ${missing.join(', ')}"
             steps.echo "${PipelineDefaults.LOG_PREFIX_WARNING} ${timestamp()} ${message}"
             return
         }
 
+        def bucket = currentState.S3_BUCKET_NAME
+        def region = currentState.S3_BUCKET_REGION
+        def workspace = currentState.TF_WORKSPACE
+
         steps.withCredentials([
                 steps.string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
                 steps.string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
             ]) {
-                def bucket = state.S3_BUCKET_NAME
-                def region = state.S3_BUCKET_REGION
-                def workspace = state.TF_WORKSPACE
-
                 def script = """#!/bin/bash
 set -euo pipefail
 
 docker run --rm \\
     -e AWS_ACCESS_KEY_ID=\"${'$'}{AWS_ACCESS_KEY_ID}\" \\
     -e AWS_SECRET_ACCESS_KEY=\"${'$'}{AWS_SECRET_ACCESS_KEY}\" \\
-    -e AWS_DEFAULT_REGION=\"${state.S3_BUCKET_REGION}\" \\
+    -e AWS_DEFAULT_REGION=\"${region}\" \\
     amazon/aws-cli:latest \\
     sh -c 'set -euo pipefail
     if aws s3 ls "s3://${bucket}/env:/${workspace}/" --region "${region}" 2>/dev/null; then
