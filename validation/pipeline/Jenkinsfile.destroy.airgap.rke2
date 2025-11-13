@@ -13,7 +13,6 @@ class PipelineConstants {
 
 @Field def destroyPipeline
 @Field def airgapDestroyHelper
-@Field boolean localAirgapLibraryPrimed = false
 
 def composeDestroyContext() {
   [
@@ -175,63 +174,42 @@ def resolveAirgapDestroy() {
     return airgapDestroyHelper
   }
 
-  if (binding?.hasVariable('airgapDestroy') && binding.getVariable('airgapDestroy')) {
-    airgapDestroyHelper = binding.getVariable('airgapDestroy')
-    return airgapDestroyHelper
-  }
-
-  primeLocalAirgapLibrary()
-
-  def candidates = [
-    'shared-library/qa-jenkins-library/vars/airgapDestroy.groovy',
-    'tests/shared-library/qa-jenkins-library/vars/airgapDestroy.groovy'
-  ]
-
-  for (path in candidates) {
-    if (fileExists(path)) {
-      airgapDestroyHelper = load(path)
-      logInfo("Loaded airgapDestroy helper from ${path}")
+  if (binding?.hasVariable('airgapDestroy')) {
+    def helper = binding.getVariable('airgapDestroy')
+    if (helper) {
+      airgapDestroyHelper = helper
       return airgapDestroyHelper
     }
   }
 
-  error('airgapDestroy helper is not available from shared library or workspace')
-}
-
-def primeLocalAirgapLibrary() {
-  if (localAirgapLibraryPrimed) {
-    return
+  try {
+    def lib = library('qa-jenkins-library@main')
+    if (lib?.hasProperty('airgapDestroy')) {
+      airgapDestroyHelper = lib.airgapDestroy
+      return airgapDestroyHelper
+    }
+    } catch (Exception e) {
+    logWarning("Dynamic shared-library load failed: ${e.message}")
   }
 
-  def srcRoot = 'shared-library/qa-jenkins-library/src'
-  if (!fileExists(srcRoot)) {
-    return
-  }
+  def candidates = [
+        'shared-library/qa-jenkins-library/vars/airgapDestroy.groovy',
+        'tests/shared-library/qa-jenkins-library/vars/airgapDestroy.groovy'
+    ]
 
-  def fileList = ''
-  if (isUnix()) {
-    fileList = sh(returnStdout: true, script: "find ${srcRoot} -type f -name '*.groovy' || true").trim()
-  } else {
-    fileList = bat(returnStdout: true, script: "@echo off\r\nfor /r ${srcRoot.replace('/', '\\')} %%f in (*.groovy) do @echo %%f").trim()
-  }
-  if (!fileList) {
-    logWarning("No Groovy sources found under ${srcRoot}; skipping priming step")
-    localAirgapLibraryPrimed = true
-    return
-  }
-
-  def baseLoader = this.class.classLoader
-  def loader = baseLoader instanceof groovy.lang.GroovyClassLoader ? baseLoader : new groovy.lang.GroovyClassLoader(baseLoader)
-
-  fileList.split('\n').each { relPath ->
-    def normalized = relPath.trim()
-    if (normalized) {
-      def code = readFile(normalized)
-      loader.parseClass(code)
+  for (path in candidates) {
+    if (fileExists(path)) {
+      try {
+        airgapDestroyHelper = load(path)
+        logInfo("Loaded airgapDestroy helper from ${path}")
+        return airgapDestroyHelper
+            } catch (Exception loadError) {
+        logWarning("Failed to load airgapDestroy helper from ${path}: ${loadError.message}")
+      }
     }
   }
 
-  localAirgapLibraryPrimed = true
+  error('airgapDestroy helper is not available from shared library or workspace; ensure qa-jenkins-library is configured')
 }
 
 def requirePipeline() {
