@@ -282,19 +282,7 @@ def resolveSetupPipeline() {
     try {
         return airgapSetup.pipeline(this)
     } catch (MissingPropertyException ignore) {
-        logWarning('Shared library step airgapSetup not found; instantiating pipeline directly')
-        return instantiatePipelineFallback()
-    }
-}
-
-def instantiatePipelineFallback() {
-    try {
-        def pipelineClass = this.class.classLoader.loadClass('org.rancher.qa.airgap.AirgapSetupPipeline')
-        return pipelineClass.newInstance(this)
-    } catch (ClassNotFoundException cnfe) {
-        error("Shared library class org.rancher.qa.airgap.AirgapSetupPipeline not available: ${cnfe.message}")
-    } catch (Exception ex) {
-        error("Failed to construct AirgapSetupPipeline: ${ex.message}")
+        error('Shared library step airgapSetup not found. Ensure qa-jenkins-library@feature/airgap-destroy-pipeline includes vars/airgapSetup.groovy or update QA_JENKINS_LIBRARY_REF to a commit containing it.')
     }
 }
 
