@@ -1,5 +1,5 @@
 name: Platform QA Test Runner with Qase Reporting
-run-name: "Cluster ${{ github.event.inputs.rancher_host }} - Pkg ${{ github.event.inputs.test_package }}"
+run-name: "PlatformQA - ${{ github.event.inputs.rancher_host }} - ${{ github.event.inputs.test_package }}"
 
 on:
   workflow_dispatch:
