@@ -1,371 +1,43 @@
-#!/usr/bin/env groovy
+import groovy.transform.Field
+import org.rancher.qa.airgap.PipelineDefaults
 
-/**
- * Ansible Airgap Setup Jenkinsfile
- * Based on Jenkinsfile.recurring but adapted for airgap RKE2 infrastructure setup
- *
- * This pipeline sets up airgap RKE2 infrastructure using Ansible and OpenTofu
- * with enhanced error handling and proper workspace management.
- *
- * The pipeline uses the ANSIBLE_VARIABLES parameter to provide the complete
- * group_vars/all.yml content for Ansible configuration.
- *
-**/
+//@Field final String QA_LIBRARY_REF = (System.getenv('QA_JENKINS_LIBRARY_REF') ?: 'main').trim()
 
-/**
- * Centralized pipeline configuration constants
- * Shared across setup and destroy pipelines
- */
-class PipelineConstants {
+//TODO: Revert this after testing
+//library("qa-jenkins-library@${QA_LIBRARY_REF}")
+library('qa-jenkins-library@feature/airgap-destroy-pipeline')
 
-  static final String DEFAULT_HOSTNAME_PREFIX = 'airgap-ansible-jenkins'
-  static final String DEFAULT_RKE2_VERSION = 'v1.28.8+rke2r1'
-  static final String DEFAULT_RANCHER_VERSION = 'v2.9-head'
-  static final String DEFAULT_RANCHER_TEST_REPO = 'https://github.com/rancher/tests.git'
-  static final String DEFAULT_QA_INFRA_REPO = 'https://github.com/rancher/qa-infra-automation.git'
-  static final String DEFAULT_S3_BUCKET = 'rancher-terraform-state'
-  static final String DEFAULT_S3_BUCKET_REGION = 'us-east-1'
-  static final String CONTAINER_NAME_PREFIX = 'rancher-ansible-airgap'
-  static final String SHARED_VOLUME_PREFIX = 'validation-volume'
-  static final int TERRAFORM_TIMEOUT_MINUTES = 60
-  static final int ANSIBLE_TIMEOUT_MINUTES = 90
-  static final int VALIDATION_TIMEOUT_MINUTES = 30
-  static final String LOG_PREFIX_INFO = '[INFO]'
-  static final String LOG_PREFIX_ERROR = '[ERROR]'
-  static final String LOG_PREFIX_WARNING = '[WARNING]'
+@Field def setupPipeline
 
-}
-
-__ciHelpersRef = null
-def ciHelpers() {
-  if (__ciHelpersRef == null) {
-    def candidates = [
-                'validation/pipeline/ci/helpers.groovy',
-                'tests/validation/pipeline/ci/helpers.groovy'
-        ]
-    for (p in candidates) {
-      try {
-        if (fileExists(p)) { __ciHelpersRef = load(p); break }
-            } catch (ignored) { }
-      }
-    }
-  return __ciHelpersRef
-  }
-
-__ciAirgapRef = null
-def ciAirgap() {
-  if (__ciAirgapRef == null) {
-    def candidates = [
-                'validation/pipeline/ci/airgap.groovy',
-                'tests/validation/pipeline/ci/airgap.groovy'
-        ]
-    for (p in candidates) {
-      try {
-        if (fileExists(p)) { __ciAirgapRef = load(p); break }
-            } catch (ignored) { }
-      }
-    }
-  return __ciAirgapRef
-  }
-
-// Lazily-loadable Docker helper accessor (must be defined before pipeline execution)
-dockerHelperInstance = null
-
-def dockerHelper() {
-  if (dockerHelperInstance == null) {
-    // Try a few likely locations for the helper file. Jenkins may perform
-    // additional checkouts (into subdirs like 'tests') which moves file
-    // paths around during the run; be tolerant and try multiple candidates.
-    def candidates = [
-                'validation/pipeline/ci/docker_helper.groovy',
-                'tests/validation/pipeline/ci/docker_helper.groovy'
-        ]
-
-    def helperPath = null
-    for (p in candidates) {
-      try {
-        if (fileExists(p)) {
-          helperPath = p
-          break
-        }
-            } catch (ignored) {
-      // fileExists may not be available outside node context; ignore and continue
-      }
-    }
-
-    if (helperPath == null) {
-      error("docker_helper.groovy not found in workspace at any of: ${candidates}")
-    }
-
-    def helperScript = load(helperPath)
-    dockerHelperInstance = helperScript.init(this)
-  }
-  return dockerHelperInstance
-}
-
-def resolveWorkspacePath(List<String> candidates, boolean required = true) {
-  for (candidate in candidates) {
-    try {
-      if (fileExists(candidate)) {
-        return candidate
-      }
-        } catch (ignored) {
-    // fileExists not available outside node context; ignore
-    }
-  }
-
-  if (required) {
-    error("Required workspace file not found. Checked: ${candidates}")
-  }
-  return null
-}
-
-def resolveValidationHelperPath(boolean required = true) {
-  return resolveWorkspacePath([
-            'validation/pipeline/scripts/airgap/validation_helpers.sh',
-            'tests/validation/pipeline/scripts/airgap/validation_helpers.sh'
-    ], required)
-}
-
-def resolveCommonLibraryPath(boolean required = false) {
-  def candidates = [
-            'scripts/lib/common.sh',
-            'validation/pipeline/scripts/lib/common.sh',
-            'tests/scripts/lib/common.sh',
-            'tests/validation/pipeline/scripts/lib/common.sh'
-    ]
-  return resolveWorkspacePath(candidates, required)
-}
-
-def toWorkspaceAbsolute(String path, String workspaceRoot) {
-  if (!path) {
-    return null
-  }
-  if (path.startsWith('/') || path.startsWith('\\') || path ==~ /^[A-Za-z]:[\\/].*/) {
-    return path
-  }
-  if (workspaceRoot?.trim()) {
-    return workspaceRoot.endsWith('/') ? "${workspaceRoot}${path}" : "${workspaceRoot}/${path}"
-  }
-  return path
-}
-
-def runValidationHelper(String label, Map<String, String> envVars = [:], String helperInvocation, boolean helperRequired = true) {
-  def workspaceRoot = pwd()
-  def helperCandidate = resolveValidationHelperPath(helperRequired)
-  if (!helperCandidate) {
-    logWarning("validation_helpers.sh not found; skipping ${label}")
-    return false
-  }
-
-  def helperPath = toWorkspaceAbsolute(helperCandidate, workspaceRoot)
-  def commonHelperCandidate = resolveCommonLibraryPath(false)
-  def envList = []
-
-  envVars?.each { key, value ->
-    envList << "${key}=${value ?: ''}"
-  }
-
-  envList << "VALIDATION_HELPER_PATH=${helperPath}"
-  envList << "WORKSPACE_ROOT=${workspaceRoot}"
-
-  if (commonHelperCandidate) {
-    def commonHelperPath = toWorkspaceAbsolute(commonHelperCandidate, workspaceRoot)
-    envList << "COMMON_HELPER_PATH=${commonHelperPath}"
-  }
-
-  def scriptLines = [
-          '#!/bin/bash',
-          'set -Eeuo pipefail',
-          'source "${VALIDATION_HELPER_PATH}"'
+def composeSetupContext() {
+    [
+    RKE2_VERSION             : params.RKE2_VERSION?.trim(),
+    RANCHER_VERSION          : params.RANCHER_VERSION?.trim(),
+    RANCHER_TEST_REPO_URL    : params.RANCHER_TEST_REPO_URL?.trim(),
+    RANCHER_TEST_REPO_BRANCH : params.RANCHER_TEST_REPO_BRANCH?.trim(),
+    QA_INFRA_REPO_URL        : params.QA_INFRA_REPO_URL?.trim(),
+    QA_INFRA_REPO_BRANCH     : params.QA_INFRA_REPO_BRANCH?.trim(),
+    PRIVATE_REGISTRY_URL     : params.PRIVATE_REGISTRY_URL?.trim(),
+    PRIVATE_REGISTRY_USERNAME: params.PRIVATE_REGISTRY_USERNAME?.trim(),
+    PRIVATE_REGISTRY_PASSWORD: params.PRIVATE_REGISTRY_PASSWORD ?: '',
+    S3_BUCKET_NAME           : params.S3_BUCKET_NAME?.trim(),
+    S3_KEY_PREFIX            : params.S3_KEY_PREFIX?.trim(),
+    S3_BUCKET_REGION         : params.S3_BUCKET_REGION?.trim(),
+    HOSTNAME_PREFIX          : params.HOSTNAME_PREFIX?.trim(),
+    DESTROY_ON_FAILURE       : params.DESTROY_ON_FAILURE?.toString(),
+    TERRAFORM_CONFIG         : params.TERRAFORM_CONFIG ?: '',
+    ANSIBLE_VARIABLES        : params.ANSIBLE_VARIABLES ?: '',
+    SKIP_YAML_VALIDATION     : params.SKIP_YAML_VALIDATION?.toString(),
+    DEBUG                    : params.DEBUG?.toString()
   ]
-  if (helperInvocation?.trim()) {
-    scriptLines << helperInvocation
-  }
-
-  withEnv(envList) {
-    sh(label: label, script: scriptLines.join('\n') + '\n')
-  }
-
-  return true
 }
-
-// ========================================
-// CONSOLIDATED ENVIRONMENT CONFIGURATION
-// ========================================
-def configureEnvironmentComplete() {
-  logInfo('Configuring complete environment setup')
-
-  // Step 1: Read and validate Ansible variables
-  readAndValidateAnsibleVariables()
-
-  // Step 2: Setup dynamic environment variables
-  env.RKE2_VERSION = params.RKE2_VERSION
-  env.RANCHER_VERSION = params.RANCHER_VERSION
-  env.TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
-  env.RANCHER_HOSTNAME = "${params.HOSTNAME_PREFIX ?: PipelineConstants.DEFAULT_HOSTNAME_PREFIX}.qa.rancher.space"
-
-  logInfo("RKE2 Version: ${env.RKE2_VERSION}")
-  logInfo("Rancher Version: ${env.RANCHER_VERSION}")
-  logInfo("Rancher Hostname: ${env.RANCHER_HOSTNAME}")
-
-  // Step 3: Configure credentials and generate files
-  // NOTE: SSH keys must be created AFTER deleteDir() is called
-  // This function is called AFTER workspace cleanup
-  withCredentials(getCredentialsList()) {
-        setupSSHKeysSecure()
-        generateEnvironmentFileComplete()
-        validateSensitiveDataHandling()
-  }
-
-  logInfo('Environment configuration completed successfully')
-}
-
-/**
- * Read and validate Ansible variables from parameter
- */
-def readAndValidateAnsibleVariables() {
-  if (!params.ANSIBLE_VARIABLES || !params.ANSIBLE_VARIABLES.trim()) {
-    error('ANSIBLE_VARIABLES parameter is required but was not provided')
-  }
-
-  def ansibleVarsContent = params.ANSIBLE_VARIABLES.trim()
-  logInfo("Ansible variables loaded: ${ansibleVarsContent.length()} bytes")
-
-  env.ANSIBLE_VARIABLES = ansibleVarsContent
-}
-
-/**
- * Setup SSH keys with secure handling
- */
-def setupSSHKeysSecure() {
-  if (!env.AWS_SSH_PEM_KEY || !env.AWS_SSH_KEY_NAME) {
-    logWarning('SSH key configuration skipped - credentials not available')
-    return
-  }
-
-  logInfo('Setting up SSH keys')
-
-  try {
-    // Create SSH directory in workspace
-    dir('./tests/.ssh') {
-      sh 'mkdir -p . && chmod 700 .'
-
-      def decodedKey = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
-      writeFile file: env.AWS_SSH_KEY_NAME, text: decodedKey
-
-      sh "chmod 600 ${env.AWS_SSH_KEY_NAME}"
-      sh "chown \$(whoami):\$(whoami) ${env.AWS_SSH_KEY_NAME} 2>/dev/null || true"
-
-      // Validate key format
-      def keyContent = sh(script: "head -1 ${env.AWS_SSH_KEY_NAME}", returnStdout: true).trim()
-      if (!keyContent.startsWith('-----BEGIN')) {
-        logWarning('SSH key format validation warning - unexpected format')
-      }
-
-      // Also generate public key for SSH operations
-      sh """
-                if [ -f "${env.AWS_SSH_KEY_NAME}" ]; then
-                    ssh-keygen -f "${env.AWS_SSH_KEY_NAME}" -y > "${env.AWS_SSH_KEY_NAME}.pub" || echo "Failed to generate public key"
-                    chmod 644 "${env.AWS_SSH_KEY_NAME}.pub" 2>/dev/null || true
-                fi
-            """
-    }
-
-    env.SSH_KEY_PATH = "./tests/.ssh/${env.AWS_SSH_KEY_NAME}"
-    logInfo('SSH keys configured successfully')
-    } catch (Exception e) {
-    logError("SSH key setup failed: ${e.message}")
-    cleanupSSHKeys()
-    throw e
-  }
-}
-
-/**
- * Generate complete environment file for container execution
- */
-def generateEnvironmentFileComplete() {
-  logInfo('Generating environment file')
-
-  // Parse Terraform config for AWS variables
-  def awsVars = extractAWSVariablesFromTerraformConfig()
-
-  def envLines = [
-        '# Environment Configuration - Credentials passed via withCredentials',
-        "TF_WORKSPACE=${env.TF_WORKSPACE}",
-        "BUILD_NUMBER=${env.BUILD_NUMBER}",
-        "JOB_NAME=${env.JOB_NAME}",
-        "TERRAFORM_TIMEOUT=${env.TERRAFORM_TIMEOUT}",
-        "ANSIBLE_TIMEOUT=${env.ANSIBLE_TIMEOUT}",
-        "QA_INFRA_WORK_PATH=${env.QA_INFRA_WORK_PATH}",
-        "TERRAFORM_VARS_FILENAME=${env.TERRAFORM_VARS_FILENAME}",
-        "ANSIBLE_VARS_FILENAME=${env.ANSIBLE_VARS_FILENAME}",
-        "RKE2_VERSION=${env.RKE2_VERSION}",
-        "RANCHER_VERSION=${env.RANCHER_VERSION}",
-        "HOSTNAME_PREFIX=${env.HOSTNAME_PREFIX}",
-        "RANCHER_HOSTNAME=${env.RANCHER_HOSTNAME}",
-        "PRIVATE_REGISTRY_URL=${env.PRIVATE_REGISTRY_URL}",
-        "PRIVATE_REGISTRY_USERNAME=${env.PRIVATE_REGISTRY_USERNAME}",
-        '',
-        '# Ansible Configuration',
-        "ANSIBLE_VARIABLES=${env.ANSIBLE_VARIABLES}",
-        '',
-        '# AWS Configuration',
-        "AWS_REGION=${env.AWS_REGION}",
-        "AWS_AMI=${awsVars['AWS_AMI'] ?: ''}",
-        "AWS_HOSTNAME_PREFIX=${awsVars['AWS_HOSTNAME_PREFIX'] ?: env.HOSTNAME_PREFIX}",
-        "AWS_SSH_USER=${awsVars['AWS_SSH_USER'] ?: 'ec2-user'}",
-        "INSTANCE_TYPE=${awsVars['INSTANCE_TYPE'] ?: 't3.large'}",
-        '',
-        '# S3 Backend',
-        "S3_BUCKET_NAME=${env.S3_BUCKET_NAME}",
-        "S3_BUCKET_REGION=${env.S3_BUCKET_REGION}",
-        "S3_KEY_PREFIX=${env.S3_KEY_PREFIX}",
-        '',
-        "AWS_SSH_KEY_NAME=${env.AWS_SSH_KEY_NAME ?: ''}",
-        '# Sensitive credentials passed via withCredentials block'
-    ]
-
-  writeFile file: env.ENV_FILE, text: envLines.join('\n')
-  logInfo("Environment file created: ${env.ENV_FILE}")
-}
-
-/**
- * Extract AWS variables from Terraform config parameter
- */
-def extractAWSVariablesFromTerraformConfig() {
-  def awsVars = [:]
-
-  if (!env.TERRAFORM_CONFIG) {
-    return awsVars
-  }
-
-  def config = env.TERRAFORM_CONFIG
-  def pattern = ~/(\w+)\s*=\s*"([^"]*)"/
-
-  config.eachMatch(pattern) { match ->
-        def varName = match[1]
-        def varValue = match[2]
-        if (varName.startsWith('AWS_') || varName == 'INSTANCE_TYPE') {
-      awsVars[varName] = varValue
-        }
-  }
-
-  return awsVars
-}
-
-// ========================================
-// PIPELINE DEFINITION
-// ========================================
 
 pipeline {
     agent any
 
-    // Global pipeline options
     options {
         durabilityHint('PERFORMANCE_OPTIMIZED')
         disableConcurrentBuilds()
-
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timeout(time: 3, unit: 'HOURS')
         timestamps()
@@ -374,21 +46,20 @@ pipeline {
         retry(1)
     }
 
-    // Environment-specific parameters
     parameters {
         string(
             name: 'RKE2_VERSION',
-            defaultValue: PipelineConstants.DEFAULT_RKE2_VERSION,
+            defaultValue: PipelineDefaults.DEFAULT_RKE2_VERSION,
             description: 'RKE2 version to deploy (e.g., v1.28.8+rke2r1, v1.29.5+rke2r1, v1.30.2+rke2r1)'
         )
         string(
             name: 'RANCHER_VERSION',
-            defaultValue: PipelineConstants.DEFAULT_RANCHER_VERSION,
+            defaultValue: PipelineDefaults.DEFAULT_RANCHER_VERSION,
             description: 'Rancher version to deploy (e.g., head, v2.10-head, v2.11.0, v2.9-head)'
         )
         string(
             name: 'RANCHER_TEST_REPO_URL',
-            defaultValue: PipelineConstants.DEFAULT_RANCHER_TEST_REPO,
+            defaultValue: PipelineDefaults.DEFAULT_RANCHER_TEST_REPO,
             description: 'URL of rancher/tests repository'
         )
         string(
@@ -398,7 +69,7 @@ pipeline {
         )
         string(
             name: 'QA_INFRA_REPO_URL',
-            defaultValue: PipelineConstants.DEFAULT_QA_INFRA_REPO,
+            defaultValue: PipelineDefaults.DEFAULT_QA_INFRA_REPO,
             description: 'URL of qa-infra-automation repository'
         )
         string(
@@ -423,7 +94,7 @@ pipeline {
         )
         string(
             name: 'S3_BUCKET_NAME',
-            defaultValue: PipelineConstants.DEFAULT_S3_BUCKET,
+            defaultValue: PipelineDefaults.DEFAULT_S3_BUCKET,
             description: 'S3 bucket name where Terraform state is stored'
         )
         string(
@@ -433,12 +104,12 @@ pipeline {
         )
         string(
             name: 'S3_BUCKET_REGION',
-            defaultValue: PipelineConstants.DEFAULT_S3_BUCKET_REGION,
+            defaultValue: PipelineDefaults.DEFAULT_S3_BUCKET_REGION,
             description: 'AWS region where the S3 bucket is located'
         )
         string(
             name: 'HOSTNAME_PREFIX',
-            defaultValue: PipelineConstants.DEFAULT_HOSTNAME_PREFIX,
+            defaultValue: PipelineDefaults.DEFAULT_HOSTNAME_PREFIX,
             description: 'Hostname prefix for *.qa.rancher.space and other AWS resources'
         )
         booleanParam(
@@ -453,7 +124,7 @@ pipeline {
         )
         text(
             name: 'ANSIBLE_VARIABLES',
-            description: 'These config values are for the rancher instance use for the recurring runs.'
+            description: 'Complete group_vars/all.yml content for Ansible configuration.'
         )
         booleanParam(
             name: 'SKIP_YAML_VALIDATION',
@@ -467,615 +138,166 @@ pipeline {
         )
     }
 
-    // Global environment variables
-    environment {
-        // Repository configurations
-        RANCHER_TEST_REPO_URL = "${params.RANCHER_TEST_REPO_URL ?: PipelineConstants.DEFAULT_RANCHER_TEST_REPO}"
-        QA_INFRA_REPO = "${params.QA_INFRA_REPO_URL ?: PipelineConstants.DEFAULT_QA_INFRA_REPO}"
-
-        // Private registry configurations
-        PRIVATE_REGISTRY_URL = "${params.PRIVATE_REGISTRY_URL ?: ''}"
-        PRIVATE_REGISTRY_USERNAME = "${params.PRIVATE_REGISTRY_USERNAME ?: 'default-user'}"
-        PRIVATE_REGISTRY_PASSWORD = "${params.PRIVATE_REGISTRY_PASSWORD ?: ''}"
-
-        // Path configurations
-        ROOT_PATH = '/root/go/src/github.com/rancher/tests/'
-        QA_INFRA_WORK_PATH = '/root/go/src/github.com/rancher/qa-infra-automation'
-
-        // Cleanup configurations
-        DESTROY_ON_FAILURE = "${params.DESTROY_ON_FAILURE}"
-
-        // Skip strict YAML Validation
-        SKIP_YAML_VALIDATION = "${params.SKIP_YAML_VALIDATION}"
-
-        // Debug mode
-        DEBUG = "${params.DEBUG}"
-
-        // Computed values
-        JOB_SHORT_NAME = "${getShortJobName()}"
-        BUILD_CONTAINER_NAME = "${PipelineConstants.CONTAINER_NAME_PREFIX}-${env.JOB_SHORT_NAME}${env.BUILD_NUMBER}"
-        IMAGE_NAME = "rancher-ansible-airgap-setup-${env.JOB_SHORT_NAME}${env.BUILD_NUMBER}"
-        VALIDATION_VOLUME = "${PipelineConstants.SHARED_VOLUME_PREFIX}-${env.JOB_SHORT_NAME}${env.BUILD_NUMBER}"
-
-        // Configuration files
-        ANSIBLE_VARS_FILENAME = 'vars.yaml'
-        TERRAFORM_VARS_FILENAME = 'cluster.tfvars'
-        TERRAFORM_BACKEND_CONFIG_FILENAME = 'backend.tf'
-        ENV_FILE = '.env'
-
-        // Terraform workspace
-        TF_WORKSPACE = "jenkins_airgap_ansible_workspace_${env.BUILD_NUMBER}"
-
-        // Timeouts (in minutes)
-        TERRAFORM_TIMEOUT = "${PipelineConstants.TERRAFORM_TIMEOUT_MINUTES}"
-        ANSIBLE_TIMEOUT = "${PipelineConstants.ANSIBLE_TIMEOUT_MINUTES}"
-        VALIDATION_TIMEOUT = "${PipelineConstants.VALIDATION_TIMEOUT_MINUTES}"
-
-        // Backend configuration (S3 backend parameters)
-        S3_BUCKET_NAME = "${params.S3_BUCKET_NAME ?: PipelineConstants.DEFAULT_S3_BUCKET}"
-        S3_BUCKET_REGION = "${params.S3_BUCKET_REGION ?: PipelineConstants.DEFAULT_S3_BUCKET_REGION}"
-        AWS_REGION = "${params.S3_BUCKET_REGION ?: PipelineConstants.DEFAULT_S3_BUCKET_REGION}"
-        S3_KEY_PREFIX = "${params.S3_KEY_PREFIX ?: 'jenkins-airgap-rke2'}"
-
-        // Hostname prefix
-        HOSTNAME_PREFIX = "${params.HOSTNAME_PREFIX ?: PipelineConstants.DEFAULT_HOSTNAME_PREFIX}"
-        RANCHER_HOSTNAME = "${(params.HOSTNAME_PREFIX ?: PipelineConstants.DEFAULT_HOSTNAME_PREFIX)}.qa.rancher.space"
-
-        // Configuration content from parameters
-        TERRAFORM_CONFIG = "${params.TERRAFORM_CONFIG ?: ''}"
-        ANSIBLE_VARIABLES = "${params.ANSIBLE_VARIABLES ?: ''}"
-    }
-
     stages {
         stage('Initialize Pipeline') {
-      steps {
-        script {
-          def airgap = ciAirgap()
-          airgap.setupEnv(this)
-        }
-      }
+            steps {
+                script {
+                    logInfo('Initializing setup pipeline')
+                    setupPipeline = airgapSetup.pipeline(this)
+                    setupPipeline.initialize(composeSetupContext())
+                    logInfo('Pipeline initialization complete')
+                }
+            }
         }
 
         stage('Checkout Repositories') {
-      steps {
-        script {
-          def airgap = ciAirgap()
-          airgap.checkoutRepositories(this)
-        }
-      }
+            steps {
+                script {
+                    logInfo('Checking out source repositories')
+                    requirePipeline().checkoutRepositories()
+                    logInfo('Repositories checked out successfully')
+                }
+            }
         }
 
         stage('Configure Environment') {
-      steps {
-        script {
-          def airgap = ciAirgap()
-          airgap.configureEnv(this)
-        }
-      }
+            steps {
+                script {
+                    logInfo('Validating environment configuration')
+                    requirePipeline().configureEnvironment()
+                }
+            }
         }
 
         stage('Prepare Infrastructure') {
-      steps {
-        script {
-          def airgap = ciAirgap()
-          airgap.prepareInfra(this)
-        }
-      }
+            steps {
+                script {
+                    logInfo('Preparing infrastructure resources')
+                    requirePipeline().prepareInfrastructure()
+                }
+            }
         }
 
         stage('Deploy Infrastructure') {
-      steps {
-        script {
-          def airgap = ciAirgap()
-          airgap.deployInfrastructure(this)
-        }
-      }
-      post {
-        failure {
-          script { handleFailureCleanup('deployment') }
-        }
-      }
+            steps {
+                script {
+                    logInfo('Deploying infrastructure via OpenTofu')
+                    runStageWithCleanup('deployment') {
+                        requirePipeline().deployInfrastructure()
+                        logInfo('Infrastructure deployment completed')
+                    }
+                }
+            }
         }
 
         stage('Prepare Ansible Environment') {
-      steps {
-        script {
-          def airgap = ciAirgap()
-          airgap.prepareAnsibleEnv(this)
-        }
-      }
-      post {
-        failure {
-          script { handleFailureCleanup('ansible_prep') }
-        }
-      }
+            steps {
+                script {
+                    logInfo('Preparing Ansible environment')
+                    runStageWithCleanup('ansible_prep') {
+                        requirePipeline().prepareAnsibleEnvironment()
+                    }
+                }
+            }
         }
 
         stage('Deploy RKE2 with Ansible') {
-      steps {
-        script {
-          def airgap = ciAirgap()
-          airgap.deployRKE2(this)
-        }
-      }
-      post {
-        failure {
-          script { handleFailureCleanup('rke2') }
-        }
-      }
+            steps {
+                script {
+                    logInfo('Deploying RKE2 cluster')
+                    runStageWithCleanup('rke2') {
+                        requirePipeline().deployRke2()
+                    }
+                }
+            }
         }
 
         stage('Deploy Rancher with Ansible') {
-      steps {
-        script {
-          def airgap = ciAirgap()
-          airgap.deployRancher(this)
-        }
-      }
-      post {
-        failure {
-          script { handleFailureCleanup('rancher') }
-        }
-      }
+            steps {
+                script {
+                    logInfo('Deploying Rancher components')
+                    runStageWithCleanup('rancher') {
+                        requirePipeline().deployRancher()
+                    }
+                }
+            }
         }
     }
 
     post {
         always {
-      script {
-        logInfo('Starting post-build cleanup')
-
-        // Ensure artifacts are extracted before archiving
-        try { ciAirgap().extractArtifactsFromDockerVolume(this) } catch (ignored) { }
-        // Archive important artifacts (fallback to legacy names if artifacts/ missing)
-        archiveBuildArtifacts(['artifacts/**', 'infrastructure-outputs.json', 'ansible-inventory.yml', 'kubeconfig.yaml', 'deployment-summary.json'])
-
-        // Always cleanup containers and volumes
-        try {
-          node {
-            cleanupContainersAndVolumes()
-          }
-                } catch (Exception e) {
-          logError("Node context not available for cleanup: ${e.message}")
-          try {
-            cleanupContainersAndVolumes()
-                    } catch (Exception cleanupException) {
-            logError("Cleanup failed: ${cleanupException.message}")
-          }
+            script { performCleanup() }
         }
-      }
-        }
-
         success {
-      script {
-        logInfo('Pipeline completed successfully')
-      }
+            script { logInfo('Pipeline completed successfully') }
         }
-
         failure {
-      script {
-        logError('Pipeline failed')
-
-        // Use consolidated cleanup script for failure
-        if (env.DESTROY_ON_FAILURE.toBoolean()) {
-          logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script for pipeline failure')
-          def cleanupScript = '''
-#!/bin/bash
-set -e
-# Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
-# Execute cleanup for deployment failure
-perform_cleanup "deployment_failure" "${TF_WORKSPACE}" "true"
-'''
-          def cleanupEnvVars = [
-                        'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
-                        'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-                        'TF_WORKSPACE': env.TF_WORKSPACE,
-                        'TERRAFORM_BACKEND_CONFIG_FILENAME': env.TERRAFORM_BACKEND_CONFIG_FILENAME,
-                        'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
-                    ]
-          dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
+            script {
+                logError('Pipeline failed')
+                if (setupPipeline) {
+                    requirePipeline().handleFailureCleanup('deployment')
+                }
+            }
         }
-      }
-        }
-
         aborted {
-      script {
-        logWarning('Pipeline was aborted')
-
-        // Use consolidated cleanup script for timeout/abort
-        if (env.DESTROY_ON_FAILURE.toBoolean()) {
-          logInfo('DESTROY_ON_FAILURE is true - using consolidated cleanup script for pipeline timeout')
-          def cleanupScript = '''
-#!/bin/bash
-set -e
-# Source the consolidated cleanup script
-source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/airgap_cleanup.sh
-# Execute cleanup for timeout
-perform_cleanup "timeout" "${TF_WORKSPACE}" "true"
-'''
-          def cleanupEnvVars = [
-                        'DESTROY_ON_FAILURE': env.DESTROY_ON_FAILURE,
-                        'QA_INFRA_WORK_PATH': env.QA_INFRA_WORK_PATH,
-                        'TF_WORKSPACE': env.TF_WORKSPACE,
-                        'TERRAFORM_BACKEND_CONFIG_FILENAME': env.TERRAFORM_BACKEND_CONFIG_FILENAME,
-                        'TERRAFORM_VARS_FILENAME': env.TERRAFORM_VARS_FILENAME
-                    ]
-          dockerHelper().executeScriptInContainer(cleanupScript, cleanupEnvVars)
+            script {
+                logWarning('Pipeline aborted')
+                if (setupPipeline) {
+                    requirePipeline().handleFailureCleanup('timeout')
+                }
+            }
         }
-      }
-        }
-
         unstable {
-      script {
-        logWarning('Pipeline completed with warnings')
-      }
+            script { logWarning('Pipeline completed with warnings') }
         }
     }
 }
 
-// ========================================
-// LOGGING UTILITY FUNCTIONS
-// ========================================
+@SuppressWarnings('CatchException')
+def performCleanup() {
+    if (!setupPipeline) {
+        logWarning('Setup pipeline was never initialized; skipping cleanup')
+        return
+    }
+
+    try {
+        setupPipeline.cleanupResources()
+  } catch (Exception e) {
+        logWarning("Cleanup encountered issues: ${e.message}")
+    }
+}
+
+@SuppressWarnings('CatchThrowable')
+def runStageWithCleanup(String reason, Closure block) {
+    try {
+        block.call()
+    } catch (Throwable err) {
+        if (setupPipeline) {
+            setupPipeline.handleFailureCleanup(reason)
+        }
+        throw err
+    }
+}
+
+def requirePipeline() {
+    if (!setupPipeline) {
+        error('Setup pipeline has not been initialized')
+    }
+    setupPipeline
+}
 
 def logInfo(msg) {
-  echo "${PipelineConstants.LOG_PREFIX_INFO} ${getTimestamp()} ${msg}"
+    echo "${PipelineDefaults.LOG_PREFIX_INFO} ${timestamp()} ${msg}"
 }
 
 def logError(msg) {
-  echo "${PipelineConstants.LOG_PREFIX_ERROR} ${getTimestamp()} ${msg}"
+    echo "${PipelineDefaults.LOG_PREFIX_ERROR} ${timestamp()} ${msg}"
 }
 
 def logWarning(msg) {
-  echo "${PipelineConstants.LOG_PREFIX_WARNING} ${getTimestamp()} ${msg}"
+    echo "${PipelineDefaults.LOG_PREFIX_WARNING} ${timestamp()} ${msg}"
 }
 
-static def getTimestamp() {
-  return new Date().format('yyyy-MM-dd HH:mm:ss')
-}
-
-// ========================================
-// PARAMETER VALIDATION FUNCTIONS
-// ========================================
-
-def validateParameters() {
-  logInfo('Validating pipeline parameters using external script')
-
-  try {
-    runValidationHelper(
-            'Validate pipeline parameters',
-            [
-                    'RKE2_VERSION'        : params.RKE2_VERSION ?: '',
-                    'RANCHER_VERSION'     : params.RANCHER_VERSION ?: '',
-                    'RANCHER_TEST_REPO_URL': params.RANCHER_TEST_REPO_URL ?: '',
-                    'QA_INFRA_REPO_URL'   : params.QA_INFRA_REPO_URL ?: ''
-            ],
-            'validate_pipeline_parameters'
-    )
-    logInfo('All parameters validated successfully')
-    } catch (Exception e) {
-    def errorMsg = "Parameter validation failed: ${e.message}"
-    logError(errorMsg)
-    error(errorMsg)
-  }
-}
-
-def validateRequiredVariables(List<String> requiredVars) {
-  logInfo('Validating required environment variables')
-
-  def envVars = requiredVars.collectEntries { [(it): env."${it}" ?: ''] }
-  envVars['ENV_FILE'] = env.ENV_FILE ?: ''
-  envVars['SSH_KEY_PATH'] = env.SSH_KEY_PATH ?: ''
-
-  def args = requiredVars.collect { "\"${it}\"" }.join(' ')
-  def invocation = args ? "validate_required_variables ${args}" : 'validate_required_variables'
-
-  try {
-    runValidationHelper(
-            'Validate required environment variables',
-            envVars,
-            invocation
-    )
-    logInfo('All required variables validated successfully')
-    } catch (Exception e) {
-    def errorMsg = "Required variables validation failed: ${e.message}"
-    logError(errorMsg)
-    error(errorMsg)
-  }
-}
-
-def validateSensitiveDataHandling() {
-  logInfo('Validating sensitive data handling using external script')
-
-  try {
-    def invoked = runValidationHelper(
-            'Validate sensitive data handling',
-            [
-                    'ENV_FILE': env.ENV_FILE ?: '',
-                    'SSH_KEY_PATH': env.SSH_KEY_PATH ?: ''
-            ],
-            'validate_sensitive_data_handling "${ENV_FILE}"',
-            false
-    )
-    if (!invoked) {
-      return
-    }
-    logInfo('Sensitive data handling validated successfully')
-    } catch (Exception e) {
-    // log warning but don't fail the build
-    logWarning("Sensitive data validation issues detected: ${e.message}")
-    logWarning('Review security measures and address any concerns')
-  }
-}
-
-// ========================================
-// ENVIRONMENT SETUP FUNCTIONS
-// ========================================
-
-def getCredentialsList() {
-  return [
-        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-        string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
-        string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
-    ]
-}
-
-/**
- * Extract short job name from full job path
- * Handles Jenkins folder structure (e.g., "folder/subfolder/job" → "job")
- */
-def getShortJobName() {
-  def jobName = "${env.JOB_NAME}"
-  if (jobName.contains('/')) {
-    def lastSlashIndex = jobName.lastIndexOf('/')
-    return jobName.substring(lastSlashIndex + 1)
-  }
-  return jobName
-}
-
-// ========================================
-// CONFIGURATION GENERATION FUNCTIONS
-// ========================================
-
-def cleanupSSHKeys() {
-  logInfo('Cleaning up SSH keys securely')
-
-  try {
-    // Get credentials for key name
-    withCredentials([
-            string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
-        ]) {
-      def awsSshKeyName = env.AWS_SSH_KEY_NAME
-
-      if (awsSshKeyName) {
-        def keyPath = "./tests/.ssh/${awsSshKeyName}"
-
-        if (fileExists(keyPath)) {
-          // Securely shred the key file if shred is available
-          try {
-            sh "shred -vfz -n 3 ${keyPath} 2>/dev/null || rm -f ${keyPath}"
-            logInfo("SSH key securely shredded: ${keyPath}")
-                    } catch (Exception ignored) {
-            // Fallback to secure delete
-            sh "rm -f ${keyPath}"
-            logWarning("SSH key deleted (shred unavailable): ${keyPath}")
-          }
-        }
-
-        // Clean up any temporary SSH files
-        sh 'rm -f ./tests/.ssh/known_hosts ./tests/.ssh/config 2>/dev/null || true'
-
-        // Ensure SSH directory is secure
-        if (fileExists('./tests/.ssh')) {
-          sh 'chmod 700 ./tests/.ssh 2>/dev/null || true'
-        }
-      }
-        }
-    } catch (Exception e) {
-    logWarning("SSH key cleanup encountered issues: ${e.message}")
-  // Continue with cleanup even if some steps fail
-  }
-
-  logInfo('SSH key cleanup completed')
-}
-
-// ========================================
-// DOCKER MANAGEMENT FUNCTIONS
-// ========================================
-
-def buildDockerImage() {
-  // Strict: library MUST provide implementation for buildDockerImage
-  def airgap = ciAirgap()
-  if (!airgap || !airgap.metaClass.respondsTo(airgap, 'buildDockerImage')) {
-    error('Required library function ci/airgap.groovy::buildDockerImage not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
-  }
-  airgap.buildDockerImage(this)
-}
-
-def createSharedVolume() {
-  // Strict: delegate to library; fail fast if library missing
-  def airgap = ciAirgap()
-  if (!airgap || !airgap.metaClass.respondsTo(airgap, 'createSharedVolume')) {
-    error('Required library function ci/airgap.groovy::createSharedVolume not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
-  }
-  airgap.createSharedVolume(this)
-}
-
-def ensureSSHKeysInContainer() {
-  logInfo('Ensuring SSH keys are available in container')
-
-  def sshKeyName = env.AWS_SSH_KEY_NAME
-  def sshDir = './tests/.ssh'
-  def keyPath = sshKeyName ? "${sshDir}/${sshKeyName}" : null
-
-  if (!sshKeyName || !fileExists(keyPath)) {
-    if (!sshKeyName) {
-      logWarning('AWS_SSH_KEY_NAME not set, attempting to provide keys')
-        } else {
-      logWarning("SSH key not found at: ${keyPath}")
-    }
-
-    // Try to recreate them from credentials if available
-    def recreated = false
-    try {
-      withCredentials(getCredentialsList()) {
-        try {
-          setupSSHKeysSecure()
-          recreated = true
-          logInfo('SSH keys recreated from credentials')
-                } catch (Exception e) {
-          logWarning("Failed to recreate SSH keys from credentials: ${e.message}")
-        }
-      }
-        } catch (ignored) {
-    // withCredentials may fail outside node context; ignore and proceed to fallback
-    }
-
-    // Re-evaluate key path after attempted recreation
-    if (recreated && sshKeyName) {
-      keyPath = "${sshDir}/${sshKeyName}"
-    }
-
-    // If still missing, generate an ephemeral SSH keypair so containers have a usable key
-    if (!keyPath || !fileExists(keyPath)) {
-      logWarning('No SSH key present; generating ephemeral SSH keypair for this run')
-      dir(sshDir) {
-        sh '''
-                    mkdir -p . && chmod 700 .
-                    set -e
-                    # Generate ephemeral key without passphrase; overwrite if exists
-                    ssh-keygen -t rsa -b 2048 -N "" -f ephemeral_jenkins_key -q || true
-                    chmod 600 ephemeral_jenkins_key || true
-                    chmod 644 ephemeral_jenkins_key.pub || true
-                '''
-        // Use ephemeral key for subsequent copy
-        keyPath = "${sshDir}/ephemeral_jenkins_key"
-        sshKeyName = 'ephemeral_jenkins_key'
-        logInfo("Ephemeral SSH key generated: ${keyPath}")
-      }
-    }
-  }
-
-  if (!keyPath || !fileExists(keyPath)) {
-    logWarning('Still no SSH key available after attempts; continuing without copying keys')
-    return
-  }
-
-  try {
-    // Copy SSH keys into container volume.
-    // Use a safe shell check to avoid 'cp' failing when /source is empty.
-    sh """
-            docker run --rm \\
-                -v \${env.VALIDATION_VOLUME}:/target \\
-                -v \$(pwd)/\${sshDir}:/source:ro \\
-                alpine:latest \\
-                sh -c '
-                    if [ -d /source ] && [ -n "\$(ls -A /source 2>/dev/null)" ]; then
-                        mkdir -p /target/.ssh
-                        chmod 700 /target/.ssh
-                        cp /source/* /target/.ssh/ || { echo "Failed to copy keys"; exit 1; }
-                        chmod 600 /target/.ssh/* || true
-                        echo "SSH keys copied successfully"
-                    else
-                        echo "No SSH keys found in source directory; skipping copy"
-                    fi
-                '
-        """
-    logInfo('SSH keys successfully copied to container volume (or skipped if none present)')
-    } catch (Exception e) {
-    logError("Failed to copy SSH keys to container: ${e.message}")
-    throw e
-  }
-}
-
-def cleanupContainersAndVolumes() {
-  // Strict: delegate to library cleanup implementation; fail fast if missing
-  try {
-    def airgap = ciAirgap()
-    if (airgap && airgap instanceof groovy.lang.Script) {
-      airgap.cleanupContainersAndVolumes(this)
-      return
-    }
-    } catch (groovy.lang.MissingMethodException e) {
-    logError("Required library function ci/airgap.groovy::cleanupContainersAndVolumes not available: ${e.message}")
-    } catch (Exception e) {
-    logError("Library function invocation failed: ${e.message}")
-  }
-  error('Required library function ci/airgap.groovy::cleanupContainersAndVolumes not available — aborting. Ensure validation/pipeline/ci/airgap.groovy is present and exported.')
-}
-
-// ========================================
-// UNIFIED ARTIFACT MANAGEMENT
-// ========================================
-
-/**
- * Centralized artifact configuration map
- * Defines all artifact types and their associated files
- */
-@NonCPS
-
-/**
- * Archive artifacts based on type
- */
-def archiveArtifactsByType(String artifactType, List additionalFiles = []) {
-  try { ciAirgap().archiveArtifactsByType(this, artifactType, additionalFiles) } catch (ignored) { }
-}
-
-/**
- * Archive failure artifacts - combines common + specific
- */
-def archiveFailureArtifactsByType(String failureType) {
-  try { ciAirgap().archiveFailureArtifactsByType(this, failureType) } catch (ignored) { }
-}
-
-def archiveBuildArtifacts(List artifacts) {
-  try { ciAirgap().archiveBuildArtifacts(this, artifacts) } catch (ignored) { }
-}
-
-/**
- * Unified cleanup handler for all failure scenarios
- * Replaces repetitive cleanup code in multiple post blocks
- *
- * @param failureType Type of failure: 'deployment', 'ansible_prep', 'rke2', 'rancher', 'timeout', 'aborted'
- */
-def handleFailureCleanup(String failureType) {
-  logError("${failureType} failure detected - initiating cleanup")
-
-  try {
-    // Extract artifacts before cleanup
-    try { ciAirgap().extractArtifactsFromDockerVolume(this) } catch (ignored) { }
-
-    // Archive failure-specific artifacts
-    archiveFailureArtifactsByType(failureType)
-
-    // Execute infrastructure cleanup if enabled
-    if (env.DESTROY_ON_FAILURE?.toBoolean()) {
-      logInfo('DESTROY_ON_FAILURE is true - executing consolidated cleanup')
-      this.executeInfrastructureCleanup(failureType)
-        } else {
-      logWarning('DESTROY_ON_FAILURE is false - manual cleanup required')
-      logWarning("Please clean up resources in workspace: ${env.TF_WORKSPACE}")
-    }
-
-    // Always cleanup containers and volumes
-    cleanupContainersAndVolumes()
-    } catch (Exception cleanupException) {
-    logError("Cleanup failed: ${cleanupException.message}")
-    // Attempt container cleanup even if infrastructure cleanup fails
-    try {
-      cleanupContainersAndVolumes()
-        } catch (Exception containerException) {
-      logError("Container cleanup also failed: ${containerException.message}")
-    }
-  }
-}
-
-/**
- * Execute infrastructure cleanup using consolidated script
- *
- * @param cleanupReason Reason for cleanup: 'deployment_failure', 'timeout', 'aborted'
- */
-def executeInfrastructureCleanup(String failureType) {
-  return ciAirgap().executeInfrastructureCleanup(this, failureType)
+def timestamp() {
+    new Date().format('yyyy-MM-dd HH:mm:ss')
 }
