@@ -1,7 +1,9 @@
 @Library('qa-jenkins-library@feature/airgap-destroy-pipeline') _
 
 import groovy.transform.Field
+import groovy.lang.MissingPropertyException
 import org.rancher.qa.airgap.PipelineDefaults
+import org.rancher.qa.airgap.AirgapSetupPipeline
 
 //@Field final String QA_LIBRARY_REF = (System.getenv('QA_JENKINS_LIBRARY_REF') ?: 'main').trim()
 
@@ -141,7 +143,7 @@ pipeline {
             steps {
                 script {
                     logInfo('Initializing setup pipeline')
-                    setupPipeline = airgapSetup.pipeline(this)
+                    setupPipeline = resolveSetupPipeline()
                     setupPipeline.initialize(composeSetupContext())
                     logInfo('Pipeline initialization complete')
                 }
@@ -274,6 +276,15 @@ def runStageWithCleanup(String reason, Closure block) {
             setupPipeline.handleFailureCleanup(reason)
         }
         throw err
+    }
+}
+
+def resolveSetupPipeline() {
+    try {
+        return airgapSetup.pipeline(this)
+    } catch (MissingPropertyException ignore) {
+        logWarning('Shared library step airgapSetup not found; instantiating pipeline directly')
+        return new AirgapSetupPipeline(this)
     }
 }
 
