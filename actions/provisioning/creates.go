@@ -195,6 +195,9 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 
 		return true, nil
 	})
+	if err != nil {
+		return createdCluster, err
+	}
 
 	if clientErr != nil {
 		return createdCluster, clientErr
@@ -921,18 +924,21 @@ func AddRKE2K3SCustomClusterNodes(client *rancher.Client, cluster *v1.SteveAPIOb
 		logrus.Trace(output)
 	}
 
-	err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		clusterResp, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(cluster.ID)
-		if err != nil {
-			return false, err
-		}
+	kubeProvisioningClient, err := client.GetKubeAPIProvisioningClient()
+	if err != nil {
+		return err
+	}
 
-		if clusterResp.ObjectMeta.State.Name == active &&
-			nodestat.AllMachineReady(client, cluster.ID, defaults.ThirtyMinuteTimeout) == nil {
-			return true, nil
-		}
-		return false, nil
+	result, err := kubeProvisioningClient.Clusters(namespaces.FleetDefault).Watch(context.TODO(), metav1.ListOptions{
+		FieldSelector:  "metadata.name=" + cluster.Name,
+		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 	})
+	if err != nil {
+		return err
+	}
+
+	checkFunc := shepherdclusters.IsProvisioningClusterReady
+	err = wait.WatchWait(result, checkFunc)
 	if err != nil {
 		return err
 	}

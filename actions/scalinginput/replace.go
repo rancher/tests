@@ -98,12 +98,19 @@ func ReplaceNodes(client *rancher.Client, clusterName string, isEtcd bool, isCon
 		}
 
 		logrus.Info("Waiting for node to be replaced")
-		err = clusters.WaitClusterToBeUpgraded(client, clusterID)
-		if err != nil {
-			return err
-		}
+		err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+			err = clusters.WaitClusterToBeUpgraded(client, clusterID)
+			if err != nil {
+				return false, nil
+			}
 
-		err = nodestat.AllMachineReady(client, clusterID, defaults.ThirtyMinuteTimeout)
+			err = nodestat.AllMachineReady(client, clusterID, defaults.ThirtyMinuteTimeout)
+			if err != nil {
+				return false, nil
+			}
+
+			return true, nil
+		})
 		if err != nil {
 			return err
 		}

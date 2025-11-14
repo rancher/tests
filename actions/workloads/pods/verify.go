@@ -19,7 +19,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -40,7 +39,7 @@ func VerifyReadyDaemonsetPods(t *testing.T, client *rancher.Client, cluster *v1.
 
 	daemonsetequals := false
 
-	err = wait.Poll(500*time.Millisecond, 5*time.Minute, func() (dameonsetequals bool, err error) {
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.TenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		daemonsets, err := client.Steve.SteveType(workloads.DaemonsetSteveType).ByID(status.ClusterName)
 		require.NoError(t, err)
 
@@ -124,6 +123,7 @@ func VerifyClusterPods(t *testing.T, client *rancher.Client, cluster *steveV1.St
 
 		return true, nil
 	})
+	require.NoError(t, err)
 
 	if len(podErrors) > 0 {
 		for _, err := range podErrors {
