@@ -1,11 +1,9 @@
+@Library('qa-jenkins-library@feature/airgap-destroy-pipeline') _
+
 import groovy.transform.Field
 import org.rancher.qa.airgap.PipelineDefaults
 
 //@Field final String QA_LIBRARY_REF = (System.getenv('QA_JENKINS_LIBRARY_REF') ?: 'main').trim()
-
-//TODO: Revert this after testing
-//library("qa-jenkins-library@${QA_LIBRARY_REF}")
-library('qa-jenkins-library@feature/airgap-destroy-pipeline')
 
 @Field def setupPipeline
 
