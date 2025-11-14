@@ -1,5 +1,5 @@
 name: Platform QA Test Runner with Qase Reporting
-run-name: Platform QA Test Runner - Cluster ${{ github.event.inputs.rancher_host }} - Package ${{ github.event.inputs.test_package }}
+run-name: "Cluster ${{ github.event.inputs.rancher_host }} - Pkg ${{ github.event.inputs.test_package }}"
 
 on:
   workflow_dispatch:
@@ -194,14 +194,17 @@ jobs:
           echo "$(date +'%T') — 🚀 Running tests in package $PACKAGE"
           echo "   Test Files: $FILTERED_TEST_FILES"
           echo "   With tags: $TAGS"
-
+          set +e
           stdbuf -oL gotestsum \
             --format=standard-verbose \
             --junitfile "$GITHUB_WORKSPACE/results-${PACKAGE//\//-}.xml" \
             --jsonfile "$GITHUB_WORKSPACE/results-${PACKAGE//\//-}.json" \
-            -- -v -tags="$TAGS" -timeout 6h $FILES_TO_COMPILE_AND_RUN || echo "$(date +'%T') ⚠️ Test failed in $PACKAGE"
+            -- -v -tags="$TAGS" -timeout 6h $FILES_TO_COMPILE_AND_RUN 
 
-          echo "✅ Finished tests for package $PACKAGE on cluster $RANCHER_HOST"
+          TEST_EXIT_CODE=$?
+          echo "TEST_EXIT_CODE=$TEST_EXIT_CODE" >> $GITHUB_ENV
+          set -e
+          echo "✅ Finished executing tests for package $PACKAGE on cluster $RANCHER_HOST"
           echo "   Results: $GITHUB_WORKSPACE/results-${PACKAGE//\//-}.json"
           
       - name: Run single test with selector
@@ -219,15 +222,19 @@ jobs:
           fi
           
           echo "▶ Running selector: '$TEST_SELECTOR' with tags: $TAGS for package: $PACKAGE"
-
+          set +e
           stdbuf -oL gotestsum \
             --format=standard-verbose \
             --junitfile "$GITHUB_WORKSPACE/results-${PACKAGE//\//-}.xml" \
             --jsonfile "$GITHUB_WORKSPACE/results-${PACKAGE//\//-}.json" \
             --packages="github.com/rancher/tests/$PACKAGE" \
-            -- -v -tags="$TAGS" -timeout 6h -run "$TEST_SELECTOR" || echo "$(date +'%T')  ⚠️ Test failed in $PACKAGE"
+            -- -v -tags="$TAGS" -timeout 6h -run "$TEST_SELECTOR" 
 
-          echo "✅ Finished tests for package $PACKAGE on cluster $RANCHER_HOST"
+          TEST_EXIT_CODE=$?
+          echo "TEST_EXIT_CODE=$TEST_EXIT_CODE" >> $GITHUB_ENV
+          set -e
+
+          echo "✅ Finished executing tests for package $PACKAGE on cluster $RANCHER_HOST"
           echo "   Results: $GITHUB_WORKSPACE/results-${PACKAGE//\//-}.json"
           
       - name: Report results to Qase
@@ -244,3 +251,11 @@ jobs:
             "$PACKAGE" \
             "$QASE_TEST_RUN_ID" \
             "$QASE_AUTOMATION_TOKEN"
+
+      - name: Fail workflow if any test failed
+        run: |
+          TEST_EXIT_CODE=${TEST_EXIT_CODE:-0}
+          if [ "${TEST_EXIT_CODE}" != "0" ]; then
+            echo "❌ One or more tests failed in package $TEST_PACKAGE"
+            exit 1
+          fi
