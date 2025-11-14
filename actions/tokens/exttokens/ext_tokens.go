@@ -46,6 +46,26 @@ func CreateExtToken(client *rancher.Client, ttlValue int64) (*extapi.Token, erro
 	return createdExtToken, nil
 }
 
+// CreateExtSessionToken creates an ext session token using Public API
+func CreateExtSessionToken(client *rancher.Client) (*extapi.Token, error) {
+	name := namegen.AppendRandomString("test-extsessiontoken")
+	extSessionToken := &extapi.Token{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: map[string]string{},
+		},
+		Spec: extapi.TokenSpec{
+			Kind: "session",
+		},
+	}
+
+	createdExtSessionToken, err := client.WranglerContext.Ext.Token().Create(extSessionToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ext session token %w", err)
+	}
+	return createdExtSessionToken, nil
+}
+
 // GetExtToken retrieves an ext token by name using GET API
 func GetExtToken(client *rancher.Client, name string) (*extapi.Token, error) {
 	extToken, err := client.WranglerContext.Ext.Token().Get(name, metav1.GetOptions{})

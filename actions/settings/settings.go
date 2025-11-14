@@ -11,8 +11,10 @@ import (
 )
 
 const (
-	AutoscalerChartRepo = "cluster-autoscaler-chart-repository"
-	AutoscalerImage     = "cluster-autoscaler-image"
+	AutoscalerChartRepo                  = "cluster-autoscaler-chart-repository"
+	AutoscalerImage                      = "cluster-autoscaler-image"
+	AuthUserSessionIdleTTlMinutesSetting = "auth-user-session-idle-ttl-minutes"
+	AuthTokenMaxTTLMinutesSetting        = "auth-token-max-ttl-minutes"
 )
 
 // GetGlobalSettingNames is a helper function to fetch a list of global setting names
