@@ -3,7 +3,6 @@
 import groovy.transform.Field
 import groovy.lang.MissingPropertyException
 import org.rancher.qa.airgap.PipelineDefaults
-import org.rancher.qa.airgap.AirgapSetupPipeline
 
 //@Field final String QA_LIBRARY_REF = (System.getenv('QA_JENKINS_LIBRARY_REF') ?: 'main').trim()
 
@@ -284,7 +283,18 @@ def resolveSetupPipeline() {
         return airgapSetup.pipeline(this)
     } catch (MissingPropertyException ignore) {
         logWarning('Shared library step airgapSetup not found; instantiating pipeline directly')
-        return new AirgapSetupPipeline(this)
+        return instantiatePipelineFallback()
+    }
+}
+
+def instantiatePipelineFallback() {
+    try {
+        def pipelineClass = this.class.classLoader.loadClass('org.rancher.qa.airgap.AirgapSetupPipeline')
+        return pipelineClass.newInstance(this)
+    } catch (ClassNotFoundException cnfe) {
+        error("Shared library class org.rancher.qa.airgap.AirgapSetupPipeline not available: ${cnfe.message}")
+    } catch (Exception ex) {
+        error("Failed to construct AirgapSetupPipeline: ${ex.message}")
     }
 }
 
