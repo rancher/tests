@@ -30,7 +30,7 @@ import (
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -53,20 +53,20 @@ func templateSetup(t *testing.T) templateTest {
 	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k.client = client
 
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	k.cattleConfig, err = configDefaults.LoadPackageDefaults(k.cattleConfig, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k.templateConfig = new(provisioninginput.TemplateConfig)
 	operations.LoadObjectFromMap(templateTestConfigKey, k.cattleConfig, k.templateConfig)
@@ -74,10 +74,10 @@ func templateSetup(t *testing.T) templateTest {
 	provider := provisioning.CreateProvider(k.templateConfig.TemplateProvider)
 	cloudCredentialConfig := cloudcredentials.LoadCloudCredential(k.templateConfig.TemplateProvider)
 	k.cloudCredentials, err = provider.CloudCredFunc(client, cloudCredentialConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	return k
 }
@@ -103,19 +103,19 @@ func TestTemplate(t *testing.T) {
 			t.Parallel()
 
 			_, err := steve.CreateAndWaitForResource(k.client, namespaces.FleetLocal+"/"+localCluster, stevetypes.ClusterRepo, k.templateConfig.Repo, stevestates.Active, 5*time.Second, defaults.FiveMinuteTimeout)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			k8sversions, err := kubernetesversions.Default(k.client, actionsDefaults.K3S, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			clusterName := namegenerator.AppendRandomString(actionsDefaults.K3S + "-template")
 
 			logrus.Infof("Provisioning template cluster (%s)", clusterName)
 			err = charts.InstallTemplateChart(k.client, k.templateConfig.Repo.ObjectMeta.Name, k.templateConfig.TemplateName, clusterName, k8sversions[0], k.cloudCredentials)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			_, cluster, err := clusters.GetProvisioningClusterByName(k.client, clusterName, namespaces.FleetDefault)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, k.client, cluster)

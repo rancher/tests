@@ -22,7 +22,6 @@ import (
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,19 +45,19 @@ func aceSetup(t *testing.T) aceTest {
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k.cattleConfig, err = defaults.SetK8sDefault(client, defaults.K3S, k.cattleConfig)
 	require.NoError(t, err)
 
 	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	return k
 }

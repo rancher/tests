@@ -178,10 +178,12 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 
 	logrus.Debugf("Get cluster object (%s)", clusterName)
 	var createdCluster *v1.SteveAPIObject
+	var clientErr error
 	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
 		adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
 		if err != nil {
 			logrus.Warningf("Unable to get admin cluster client (%s) retrying", clusterName)
+			clientErr = err
 			return false, nil
 		}
 
@@ -194,7 +196,11 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 		return true, nil
 	})
 
-	return createdCluster, err
+	if clientErr != nil {
+		return createdCluster, clientErr
+	}
+
+	return createdCluster, clientErr
 }
 
 // CreateProvisioningCustomCluster provisions a non-rke1 cluster using a 3rd party client for its nodes, then runs verify checks

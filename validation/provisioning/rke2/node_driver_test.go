@@ -21,7 +21,7 @@ import (
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type nodeDriverTest struct {
@@ -37,25 +37,25 @@ func nodeDriverSetup(t *testing.T) nodeDriverTest {
 	r.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	r.client = client
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.RKE2, r.cattleConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	return r
 }
@@ -101,7 +101,7 @@ func TestNodeDriver(t *testing.T) {
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 			clusterConfig.MachinePools = tt.machinePools
 
-			assert.NotNil(t, clusterConfig.Provider)
+			require.NotNil(t, clusterConfig.Provider)
 			if clusterConfig.Provider != "vsphere" && tt.isWindows {
 				t.Skip("Windows test requires access to vsphere")
 			}
@@ -112,7 +112,7 @@ func TestNodeDriver(t *testing.T) {
 
 			logrus.Info("Provisioning cluster")
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, r.client, cluster)

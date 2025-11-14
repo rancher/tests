@@ -8,7 +8,6 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -17,30 +16,26 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/scalinginput"
 	"github.com/rancher/tests/actions/workloads/pods"
-	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
-	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
-type AutoReplaceSuite struct {
+type AutoReplaceExistingClusterSuite struct {
 	suite.Suite
-	client       *rancher.Client
-	session      *session.Session
-	cattleConfig map[string]any
-	rke2Cluster  *v1.SteveAPIObject
-	k3sCluster   *v1.SteveAPIObject
+	client        *rancher.Client
+	session       *session.Session
+	cattleConfig  map[string]any
+	clusterObject *v1.SteveAPIObject
 }
 
-func (s *AutoReplaceSuite) TearDownSuite() {
+func (s *AutoReplaceExistingClusterSuite) TearDownSuite() {
 	s.session.Cleanup()
 }
 
-func (s *AutoReplaceSuite) SetupSuite() {
+func (s *AutoReplaceExistingClusterSuite) SetupSuite() {
 	testSession := session.NewSession()
 	s.session = testSession
 
@@ -48,9 +43,6 @@ func (s *AutoReplaceSuite) SetupSuite() {
 	require.NoError(s.T(), err)
 
 	s.client = client
-
-	standardUserClient, _, _, err := standard.CreateStandardUser(s.client)
-	require.NoError(s.T(), err)
 
 	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
@@ -63,39 +55,19 @@ func (s *AutoReplaceSuite) SetupSuite() {
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, clusterConfig)
 
-	nodeRolesStandard := []provisioninginput.MachinePools{
-		provisioninginput.EtcdMachinePool,
-		provisioninginput.ControlPlaneMachinePool,
-		provisioninginput.WorkerMachinePool,
-	}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-
-	clusterConfig.MachinePools = nodeRolesStandard
-
-	logrus.Info("Provisioning RKE2 cluster")
-	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), clusterConfig, nil, true, false)
-	require.NoError(s.T(), err)
-
-	logrus.Info("Provisioning K3S cluster")
-	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), clusterConfig, nil, true, false)
+	s.clusterObject, err = client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + s.client.RancherConfig.ClusterName)
 	require.NoError(s.T(), err)
 }
 
-func (s *AutoReplaceSuite) TestAutoReplace() {
+func (s *AutoReplaceExistingClusterSuite) TestAutoReplaceExistingCluster() {
 	tests := []struct {
 		name      string
 		role      string
 		clusterID string
 	}{
-		{"Auto_replace_RKE2_ETCD", "etcd", s.rke2Cluster.ID},
-		{"Auto_replace_RKE2_controlplane", "control-plane", s.rke2Cluster.ID},
-		{"Auto_replace_RKE2_worker", "worker", s.rke2Cluster.ID},
-		{"Auto_replace_K3S_ETCD", "etcd", s.k3sCluster.ID},
-		{"Auto_replace_K3S_controlplane", "control-plane", s.k3sCluster.ID},
-		{"Auto_replace_K3S_worker", "worker", s.k3sCluster.ID},
+		{"Auto_replace_RKE2_ETCD", "etcd", s.clusterObject.ID},
+		{"Auto_replace_RKE2_controlplane", "control-plane", s.clusterObject.ID},
+		{"Auto_replace_RKE2_worker", "worker", s.clusterObject.ID},
 	}
 
 	for _, tt := range tests {
@@ -115,6 +87,6 @@ func (s *AutoReplaceSuite) TestAutoReplace() {
 	}
 }
 
-func TestAutoReplaceSuite(t *testing.T) {
-	suite.Run(t, new(AutoReplaceSuite))
+func TestAutoReplaceExistingClusterSuite(t *testing.T) {
+	suite.Run(t, new(AutoReplaceExistingClusterSuite))
 }

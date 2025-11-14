@@ -33,8 +33,7 @@ func (ur *UserRetentionSettingsTestSuite) SetupSuite() {
 }
 
 func (ur *UserRetentionSettingsTestSuite) TearDownSuite() {
-	logrus.Info("Resetting user session settings")
-	err := updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, "0")
+	err := resetUserRetentionSettings(ur.client)
 	require.NoError(ur.T(), err)
 
 	ur.session.Cleanup()

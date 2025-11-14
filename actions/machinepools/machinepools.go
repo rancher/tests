@@ -261,6 +261,8 @@ func NewRKEMachinePool(machineObject v1.SteveAPIObject, pool Pools, machineConfi
 		UnhealthyNodeTimeout: machineConfig.UnhealthyNodeTimeout,
 		MaxUnhealthy:         machineConfig.MaxUnhealthy,
 		UnhealthyRange:       machineConfig.UnhealthyRange,
+		AutoscalingMinSize:   machineConfig.AutoscalingMinSize,
+		AutoscalingMaxSize:   machineConfig.AutoscalingMaxSize,
 		RKECommonNodeConfig: rkev1.RKECommonNodeConfig{
 			Labels: pool.NodeLabels,
 			Taints: pool.NodeTaints,
@@ -309,6 +311,8 @@ type MachinePoolConfig struct {
 	UnhealthyNodeTimeout *metav1.Duration `json:"unhealthyNodeTimeout,omitempty" yaml:"unhealthyNodeTimeout,omitempty"`
 	MaxUnhealthy         *string          `json:"maxUnhealthy,omitempty" yaml:"maxUnhealthy,omitempty"`
 	UnhealthyRange       *string          `json:"unhealthyRange,omitempty" yaml:"unhealthyRange,omitempty"`
+	AutoscalingMinSize   *int32           `json:"autoscalingMinSize,omitempty" yaml:"autoscalingMinSize,omitempty"`
+	AutoscalingMaxSize   *int32           `json:"autoscalingMaxSize,omitempty" yaml:"autoscalingMaxSize,omitempty"`
 }
 
 type Roles struct {

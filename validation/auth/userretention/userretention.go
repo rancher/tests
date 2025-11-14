@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/tests/actions/auth"
+	"github.com/rancher/tests/actions/settings"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -51,6 +52,41 @@ func setupUserRetentionSettings(client *rancher.Client, disableAfterValue string
 		return fmt.Errorf("failed to update user-retention-dry-run setting: %w", err)
 	}
 	logrus.Info("User retention settings setup completed")
+	return nil
+}
+
+func resetUserRetentionSettings(client *rancher.Client) error {
+	logrus.Infof("Resetting %s to default value", disableInactiveUserAfter)
+	err := settings.ResetGlobalSettingToDefaultValue(client, disableInactiveUserAfter)
+	if err != nil {
+		return fmt.Errorf("failed to update disable-inactive-user-after setting: %w", err)
+	}
+
+	logrus.Infof("Resetting %s to default value", deleteInactiveUserAfter)
+	err = settings.ResetGlobalSettingToDefaultValue(client, deleteInactiveUserAfter)
+	if err != nil {
+		return fmt.Errorf("failed to update delete-inactive-user-after setting: %w", err)
+	}
+
+	logrus.Infof("Resetting %s to default value", userRetentionCron)
+	err = settings.ResetGlobalSettingToDefaultValue(client, userRetentionCron)
+	if err != nil {
+		return fmt.Errorf("failed to update user-retention-cron setting: %w", err)
+	}
+
+	logrus.Infof("Resetting %s to default value", userRetentionDryRun)
+	err = settings.ResetGlobalSettingToDefaultValue(client, userRetentionDryRun)
+	if err != nil {
+		return fmt.Errorf("failed to update user-retention-dry-run setting: %w", err)
+	}
+
+	logrus.Infof("Resetting %s to default value", authUserSessionTTLMinutes)
+	err = settings.ResetGlobalSettingToDefaultValue(client, authUserSessionTTLMinutes)
+	if err != nil {
+		return fmt.Errorf("failed to update auth-user-session-ttl-minutes setting: %w", err)
+	}
+
+	logrus.Info("User retention settings reset to default values successfully")
 	return nil
 }
 
