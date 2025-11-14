@@ -17,6 +17,7 @@ class PipelineConstants {
 
 @Field def destroyPipeline
 
+// Build shared context map consumed by the destroy library.
 def composeDestroyContext() {
   [
     TARGET_WORKSPACE        : params.TARGET_WORKSPACE?.trim(),
@@ -168,6 +169,7 @@ pipeline {
     }
 }
 
+// Execute post-stage cleanup and optionally purge S3 state.
 def performCleanup(boolean cleanupS3) {
   if (!destroyPipeline) {
     logWarning('Destroy pipeline was never initialized; skipping cleanup')
@@ -181,6 +183,7 @@ def performCleanup(boolean cleanupS3) {
   }
 }
 
+// Guard stage execution by ensuring initialization succeeded.
 def requirePipeline() {
   if (!destroyPipeline) {
     error('Destroy pipeline has not been initialized')
@@ -188,6 +191,7 @@ def requirePipeline() {
   destroyPipeline
 }
 
+// Validate required user parameters before destruction starts.
 def validateParameters() {
   if (!params.TARGET_WORKSPACE || params.TARGET_WORKSPACE.trim().isEmpty()) {
     error('TARGET_WORKSPACE parameter is required for destruction')
@@ -203,38 +207,46 @@ def validateParameters() {
   logInfo("Destroying state from bucket ${getS3BucketName()} in region ${getS3BucketRegion()}")
 }
 
+// Derive S3 bucket name with sensible defaults.
 def getS3BucketName() {
   def value = params.S3_BUCKET_NAME?.trim()
   value ? value : 'jenkins-terraform-state-storage'
 }
 
+// Derive S3 key prefix with sensible defaults.
 def getS3KeyPrefix() {
   def value = params.S3_KEY_PREFIX?.trim()
   value ? value : 'jenkins-airgap-rke2/terraform.tfstate'
 }
 
+// Choose S3 region when not supplied by users.
 def getS3BucketRegion() {
   def value = params.S3_BUCKET_REGION?.trim()
   value ? value : PipelineConstants.DEFAULT_S3_BUCKET_REGION
 }
 
+// Mirror S3 region for AWS actions when missing.
 def getAwsRegion() {
   def value = params.S3_BUCKET_REGION?.trim()
   value ? value : PipelineConstants.DEFAULT_S3_BUCKET_REGION
 }
 
+// Emit info logs with consistent prefix and timestamp.
 def logInfo(msg) {
   echo "${PipelineConstants.LOG_PREFIX_INFO} ${timestamp()} ${msg}"
 }
 
+// Emit error logs with consistent prefix and timestamp.
 def logError(msg) {
   echo "${PipelineConstants.LOG_PREFIX_ERROR} ${timestamp()} ${msg}"
 }
 
+// Emit warning logs with consistent prefix and timestamp.
 def logWarning(msg) {
   echo "${PipelineConstants.LOG_PREFIX_WARNING} ${timestamp()} ${msg}"
 }
 
+// Provide shared timestamp formatting for log helpers.
 def timestamp() {
   new Date().format('yyyy-MM-dd HH:mm:ss')
 }
