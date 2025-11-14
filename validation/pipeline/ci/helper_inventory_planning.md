@@ -140,6 +140,7 @@ flowchart LR
 - [`callLibraryMethod()`](validation/pipeline/Jenkinsfile.destroy.airgap.rke2:365) invokes shared-library routines defensively, signalling when helpers are missing.
 
 #### Environment Preparation
+- [`composeDestroyContext()`](validation/pipeline/Jenkinsfile.destroy.airgap.rke2:22) assembles the parameter-derived context map passed into the shared destroy pipeline entry point.
 - [`validateParameters()`](validation/pipeline/Jenkinsfile.destroy.airgap.rke2:385) enforces required inputs such as `TARGET_WORKSPACE` and repository locations before teardown.
 - [`validateRequiredVariables()`](validation/pipeline/Jenkinsfile.destroy.airgap.rke2:401) ensures critical environment variables are populated prior to calling the library.
 - [`getShortJobName()`](validation/pipeline/Jenkinsfile.destroy.airgap.rke2:421) standardizes job identifiers for naming Docker artifacts.
@@ -152,4 +153,7 @@ flowchart LR
 
 #### Cleanup & Verification
 - [`cleanupContainersAndVolumes()`](validation/pipeline/Jenkinsfile.destroy.airgap.rke2:446) invokes the shared library cleanup routine after execution.
+- [`performCleanup()`](validation/pipeline/Jenkinsfile.destroy.airgap.rke2:167) runs post-stage destruction cleanup and optionally purges the S3 workspace path.
 - [`logInfo()`](validation/pipeline/Jenkinsfile.destroy.airgap.rke2:457), [`logError()`](validation/pipeline/Jenkinsfile.destroy.airgap.rke2:461), and [`logWarning()`](validation/pipeline/Jenkinsfile.destroy.airgap.rke2:465) provide consistent logging during teardown.
+- [`requirePipeline()`](validation/pipeline/Jenkinsfile.destroy.airgap.rke2:184) guards stage execution by ensuring the shared destroy pipeline instance was initialized.
+- [`timestamp()`](validation/pipeline/Jenkinsfile.destroy.airgap.rke2:471) supplies a common time format for log messages emitted during teardown.
