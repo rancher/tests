@@ -1,0 +1,35 @@
+- projects: [RANCHERINT]
+  suite: Workload
+  cases:
+  - title: "Pre-Upgrade cluster"
+    description: "Validate upgrading a downstream cluster to a higher specified K8s version in Rancher"
+    automation: 2
+    steps:
+    - action: "Provision a downstream cluster"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Perform pre-cluster provisioning checks"
+      expectedresult: ""
+      position: 2
+    - action: "Upgrade the K8s version of the downstream cluster"
+      expectedresult: "Validate that the upgrade was successful"
+      position: 3
+    custom_field:
+      "15": "TestWorkloadPreUpgrade"
+   - title: "Post-Upgrading cluster"
+    description: "Validate upgrading a downstream cluster to a higher specified K8s version in Rancher"
+    automation: 2
+    steps:
+    - action: "Provision a downstream cluster"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Perform post-cluster provisioning checks"
+      expectedresult: ""
+      position: 2
+    - action: "Upgrade the K8s version of the downstream cluster"
+      expectedresult: "Validate that the upgrade was successful"
+      position: 4
+    custom_field:
+      "15": "TestWorkloadPostUpgrade"
