@@ -111,7 +111,7 @@ jobs:
             RUN_ID=$(gh run list --workflow "Platform QA Test Runner with Qase Reporting" \
               --json databaseId,displayTitle,status,createdAt \
               --limit 5 \
-              --jq '[.[] | select(.displayTitle == "Platform QA Test Runner - Cluster '"$RANCHER_HOST"' - Package '"$PKG"'") | select(.status == "queued" or .status == "in_progress")] | sort_by(.createdAt) | last | .databaseId')
+              --jq '[.[] | select(.displayTitle == "PlatformQA - '"$RANCHER_HOST"' - '"$PKG"'") | select(.status == "queued" or .status == "in_progress")] | sort_by(.createdAt) | last | .databaseId')
 
             if [ -n "$RUN_ID" ]; then
               break
@@ -126,7 +126,10 @@ jobs:
           fi
 
           echo "⏳ Waiting for run $RUN_ID (cluster=$RANCHER_HOST, pkg=$PKG) to complete..."
-          gh run watch "$RUN_ID" --interval 60 --exit-status
+          gh run watch "$RUN_ID" --interval 60
+          
+          STATUS=$(gh run view "$RUN_ID" --json conclusion --jq '.conclusion')
+          echo "Final test-runner status: $STATUS"
 
       - name: Call Dispatcher for remaining packages
         if: ${{ steps.parse.outputs.remaining_packages }}
