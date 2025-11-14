@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -26,7 +25,7 @@ var (
 	testRunName             = os.Getenv(qase.TestRunNameEnvVar)
 	_, callerFilePath, _, _ = runtime.Caller(0)
 	basepath                = filepath.Join(filepath.Dir(callerFilePath), "..", "..", "..", "..")
-	validStatus             = []string{"passed", "failed", "skipped"}
+	validStatus             = map[string]string{"pass": "passed", "fail": "failed", "skip": "skipped"}
 )
 
 const (
@@ -137,11 +136,7 @@ func parseTestResults(outputs []testresult.GoTestOutput) map[string]*testresult.
 		} else if output.Action == "output" && tableTestName != "" {
 			goTestResult := finalTestResults[tableTestName]
 			goTestResult.StackTrace += output.Output
-		} else if output.Action == qase.SkipStatus {
-			if tableTestName != "" {
-				delete(finalTestResults, tableTestName)
-			}
-		} else if (output.Action == qase.FailStatus || output.Action == qase.PassStatus) && tableTestName != "" {
+		} else if (output.Action == qase.FailStatus || output.Action == qase.PassStatus || output.Action == qase.SkipStatus) && tableTestName != "" {
 			if tableTestName != "" {
 				goTestResult := finalTestResults[tableTestName]
 				goTestResult.StackTrace += output.Output
@@ -252,8 +247,8 @@ func updateTestInRun(client *upstream.APIClient, testResult testresult.GoTestRes
 		}
 	}
 
-	status := fmt.Sprintf("%sed", testResult.Status)
-	if !slices.Contains(validStatus, status) {
+	status, exists := validStatus[testResult.Status]
+	if !exists {
 		status = "failed"
 	}
 
