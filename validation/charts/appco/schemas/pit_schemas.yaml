@@ -1,0 +1,189 @@
+- projects: [RANCHERINT]
+  suite: AppCo
+  cases:
+  - title: "Install in SideCar Mode"
+    description: "Validate that Istio AppCo can be installed in Sidecar mode"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Namespace"
+      data: "Namespace name: istio-system"
+      expectedresult: "The 'istio-system' namespace is successfully created"
+      position: 2
+    - action: "Create Secret"
+      data: "Secret name: application-collection"
+      expectedresult: "The 'application-collection' secret exists in the 'istio-system' namespace"
+      position: 3
+    - action: "Install Istio AppCo in SideCar mode"
+      data: "helm install <release-name> oci://dp.apps.rancher.io charts/istio -n istio-system --set global.imagePullSecrets={application-collection}"
+      expectedresult: "Istio AppCo resources are installed successfully"
+      position: 4
+    - action: "Wait for Istio Deployments be running"
+      data: "kubectl get pods"
+      expectedresult: "All pods should be in 'Running' and 'Ready' state"
+      position: 5
+    custom_field:
+      "15": "TestSideCarInstallation"
+  - title: "Install in Ambient Mode"
+    description: "Validate that Istio AppCo can be installed in Ambient mode"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Namespace"
+      data: "Namespace name: istio-system"
+      expectedresult: "The 'istio-system' namespace is successfully created"
+      position: 2
+    - action: "Create Secret"
+      data: "Secret name: application-collection"
+      expectedresult: "The 'application-collection' secret exists in the 'istio-system' namespace"
+      position: 3
+    - action: "Install Istio Ambient mode"
+      data: "helm install <release-name> oci://dp.apps.rancher.io charts/istio -n istio-system --set global.imagePullSecrets={application-collection} --set cni.enabled=true,ztunnel.enabled=true --set istiod.cni.enabled=true --set cni.profile=ambient,istiod.profile=ambient,ztunnel.profile=ambient"
+      expectedresult: "Istio AppCo resources are installed successfully"
+      position: 4
+    - action: "Wait for Istio Deployments be running"
+      data: "kubectl get pods"
+      expectedresult: "All pods should be in 'Running' and 'Ready' state"
+      position: 5
+    custom_field:
+      "15": "TestAmbientInstallation"
+  - title: "Install in Standalone Mode"
+    description: "Validate that Istio AppCo can be installed in Standalone mode"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Namespace"
+      data: "Namespace name: istio-system"
+      expectedresult: "The 'istio-system' namespace is successfully created"
+      position: 2
+    - action: "Create Secret"
+      data: "Secret name: application-collection"
+      expectedresult: "The 'application-collection' secret exists in the 'istio-system' namespace"
+      position: 3
+    - action: "Install Istio Standalone mode"
+      data: "helm install <release-name> oci://dp.apps.rancher.io charts/istio -n istio-system --set global.imagePullSecrets={application-collection} --set base.enabled=false,istiod.enabled=false --set gateway.enabled=true"
+      expectedresult: "Istio AppCo resources are installed successfully"
+      position: 4
+    - action: "Wait for Istio Deployments be running"
+      data: "kubectl get pods"
+      expectedresult: "All pods should be in 'Running' and 'Ready' state"
+      position: 5
+    custom_field:
+      "15": "TestGatewayStandaloneInstallation"
+  - title: "Install with a different namespace"
+    description: "Validate that Istio AppCo can be installed in different namespace"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Namespace"
+      data: "Namespace name: istio-system"
+      expectedresult: "The 'istio-system' namespace is successfully created"
+      position: 2
+    - action: "Create Secret"
+      data: "Secret name: application-collection"
+      expectedresult: "The 'application-collection' secret exists in the 'istio-system' namespace"
+      position: 3
+    - action: "Install Istio in a different namespace"
+      data: "helm install <release-name> oci://dp.apps.rancher.io/charts/istio -n istio-system --set global.imagePullSecrets={application-collection} --set gateway.enabled=true,gateway.namespaceOverride=<namespace>"
+      expectedresult: "Istio AppCo resources are installed successfully"
+      position: 4
+    - action: "Wait for Istio Deployments be running"
+      data: "kubectl get pods"
+      expectedresult: "All pods should be in 'Running' and 'Ready' state"
+      position: 5
+    custom_field:
+      "15": "TestGatewayDiffNamespaceInstallation"
+  - title: "Upgrade in InPlace Mode"
+    description: "Validate that Istio AppCo can be installed in InPlace mode"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Namespace"
+      data: "Namespace name: istio-system"
+      expectedresult: "The 'istio-system' namespace is successfully created"
+      position: 2
+    - action: "Create Secret"
+      data: "Secret name: application-collection"
+      expectedresult: "The 'application-collection' secret exists in the 'istio-system' namespace"
+      position: 3
+    - action: "Install Istio InPlace mode"
+      data: "helm upgrade <release-name> oci://dp.apps.rancher.io/charts/istio -n istio-system --set global.imagePullSecrets={application-collection}"
+      expectedresult: "Istio AppCo resources are installed successfully"
+      position: 4
+    - action: "Wait for Istio Deployments be running"
+      data: "kubectl get pods"
+      expectedresult: "All pods should be in 'Running' and 'Ready' state"
+      position: 5
+    custom_field:
+      "15": "TestInPlaceUpgrade"
+  - title: "Upgrade with Canary"
+    description: "Validate that Istio AppCo can be installed in Canary mode"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Namespace"
+      data: "Namespace name: istio-system"
+      expectedresult: "The 'istio-system' namespace is successfully created"
+      position: 2
+    - action: "Create Secret"
+      data: "Secret name: application-collection"
+      expectedresult: "The 'application-collection' secret exists in the 'istio-system' namespace"
+      position: 3
+    - action: "Install Istio Canary mode"
+      data: "helm install <release-name> oci://dp.apps.rancher.io charts/istio -n istio-system --set global.imagePullSecrets={application-collection}"
+      expectedresult: "Istio AppCo resources are installed successfully"
+      position: 4
+    - action: "Update Istio Canary mode"
+      data: "helm install <release-name> oci://dp.apps.rancher.io charts/istio -n istio-system --set global.imagePullSecrets={application-collection}"
+      expectedresult: "Istio AppCo resources are updated successfully"
+      position: 5
+    - action: "Wait for Istio Deployments be running"
+      data: "kubectl get pods"
+      expectedresult: "All pods should be in 'Running' and 'Ready' state"
+      position: 6
+    custom_field:
+      "15": "TestInstallWithCanaryUpgrade"
+  - title: "Install using Fleet"
+    description: "Validate that Istio AppCo can be installed using Fleet"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Namespace"
+      data: "Namespace name: istio-system"
+      expectedresult: "The 'istio-system' namespace is successfully created"
+      position: 2
+    - action: "Create Secret"
+      data: "Secret name: application-collection"
+      expectedresult: "The 'application-collection' secret exists in the 'istio-system' namespace"
+      position: 3
+    - action: "Install Istio using fleet"
+      data: "https://github.com/rancher/fleet-examples/blob/master/appco/fleet.yaml"
+      expectedresult: "Istio AppCo resources are installed successfully"
+      position: 4
+    - action: "Wait for Istio Deployments be running"
+      data: "kubectl get pods"
+      expectedresult: "All pods should be in 'Running' and 'Ready' state"
+      position: 5
+    custom_field:
+      "15": "TestFleetInstallation"
