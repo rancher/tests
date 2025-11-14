@@ -42,6 +42,7 @@ const (
 	ProjectsCreate              Role = "projects-create"
 	ProjectsView                Role = "projects-view"
 	ManageWorkloads             Role = "workloads-manage"
+	ManageUsers                 Role = "users-manage"
 	ActiveStatus                     = "active"
 	ForbiddenError                   = "403 Forbidden"
 	RancherDeploymentNamespace       = "cattle-system"
@@ -77,6 +78,7 @@ const (
 	PSAWarnVersionLabelKey           = "pod-security.kubernetes.io/warn-version"
 	PSAAuditVersionLabelKey          = "pod-security.kubernetes.io/audit-version"
 	PSALatestValue                   = "latest"
+	CompletedSummary                 = "Completed"
 )
 
 func (r Role) String() string {
@@ -450,7 +452,7 @@ func WaitForCrtbStatus(client *rancher.Client, crtbNamespace, crtbName string) e
 			return false, nil
 		}
 
-		if crtb.Status.Summary == "Completed" {
+		if crtb.Status.Summary == CompletedSummary {
 			return true, nil
 		}
 
@@ -760,4 +762,92 @@ func CreateGroupProjectRoleTemplateBinding(client *rancher.Client, projectID str
 	}
 
 	return prtb, nil
+}
+
+// CreateGlobalRoleWithRules creates a global role with given name and rules using wrangler context
+func CreateGlobalRoleWithRules(client *rancher.Client, name string, rules []rbacv1.PolicyRule) (*v3.GlobalRole, error) {
+	role := &v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Rules: rules,
+	}
+
+	createdRole, err := client.WranglerContext.Mgmt.GlobalRole().Create(role)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create global role %s: %w", name, err)
+	}
+
+	return createdRole, nil
+}
+
+// CreateGlobalRoleBinding creates a global role binding for the user with the provided global role using wrangler context
+func CreateGlobalRoleBinding(client *rancher.Client, user *v3.User, globalRoleName string) (*v3.GlobalRoleBinding, error) {
+	grbObj := &v3.GlobalRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "grb-",
+		},
+		UserName:       user.Username,
+		GlobalRoleName: globalRoleName,
+	}
+
+	grb, err := client.WranglerContext.Mgmt.GlobalRoleBinding().Create(grbObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create global role binding for user %s and global role %s: %w", user.Name, globalRoleName, err)
+	}
+
+	err = WaitForGrbExistence(client, user.Username, globalRoleName)
+	if err != nil {
+		return nil, err
+	}
+
+	return grb, nil
+}
+
+// WaitForGrbExistence waits until the GlobalRoleBinding for the given user and role exists
+func WaitForGrbExistence(client *rancher.Client, username, roleName string) error {
+	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		grb, err := GetGlobalRoleBindingByUserAndRole(client, username, roleName)
+		if err != nil {
+			return false, nil
+		}
+
+		return grb != nil, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("timed out waiting for GRB for user %s and role %s to exist: %w", username, roleName, err)
+	}
+
+	return nil
+}
+
+// DeleteGlobalRoleBinding deletes a global role binding by name using wrangler context
+func DeleteGlobalRoleBinding(client *rancher.Client, grbName string) error {
+	err := client.WranglerContext.Mgmt.GlobalRoleBinding().Delete(grbName, nil)
+	if err != nil {
+		return fmt.Errorf("failed to delete global role binding %s: %w", grbName, err)
+	}
+
+	err = WaitForGlobalRoleBindingDeletion(client, grbName)
+	if err != nil {
+		return fmt.Errorf("global role binding %s not deleted in time: %w", grbName, err)
+	}
+
+	return nil
+}
+
+// WaitForGlobalRoleBindingDeletion waits until the GlobalRoleBinding is deleted
+func WaitForGlobalRoleBindingDeletion(client *rancher.Client, grbName string) error {
+	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		_, err = client.WranglerContext.Mgmt.GlobalRoleBinding().Get(grbName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return true, nil
+		}
+		if err != nil {
+			return false, nil
+		}
+		return false, nil
+	},
+	)
 }
