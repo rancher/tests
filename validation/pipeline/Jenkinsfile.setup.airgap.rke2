@@ -141,10 +141,8 @@ pipeline {
         stage('Initialize Pipeline') {
             steps {
                 script {
-                    logInfo('Initializing setup pipeline')
                     setupPipeline = resolveSetupPipeline()
-                    setupPipeline.initialize(composeSetupContext())
-                    logInfo('Pipeline initialization complete')
+                    attemptInitialize()
                 }
             }
         }
@@ -282,7 +280,21 @@ def resolveSetupPipeline() {
     try {
         return airgapSetup.pipeline(this)
     } catch (MissingPropertyException ignore) {
-        error('Shared library step airgapSetup not found. Ensure qa-jenkins-library@feature/airgap-destroy-pipeline includes vars/airgapSetup.groovy or update QA_JENKINS_LIBRARY_REF to a commit containing it.')
+        error('Shared library step airgapSetup not found. Ensure feature/airgap-destroy-pipeline contains vars/airgapSetup.groovy or update QA_JENKINS_LIBRARY_REF.')
+    }
+}
+
+// Extracted to reduce nested block depth and provide more granular error messaging
+def attemptInitialize() {
+    try {
+        setupPipeline.initialize(composeSetupContext())
+        logInfo('Pipeline initialization complete')
+    } catch (MissingPropertyException e) {
+        logError("Initialization failed (missing property): ${e.message}")
+        error('Initialization failed; aborting further stages')
+    } catch (RuntimeException e) {
+        logError("Initialization failed: ${e.message}")
+        error('Initialization failed; aborting further stages')
     }
 }
 
