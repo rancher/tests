@@ -908,19 +908,34 @@ setup_ssh_keys() {
 
         chmod 600 "$temp_key"
 
-        # Extract public key
+        # Extract public key into authorized_keys (single-node bastion access pattern)
         if ssh-keygen -y -f "$temp_key" >/root/.ssh/authorized_keys 2>/dev/null; then
             chmod 600 /root/.ssh/authorized_keys
-            log_success "SSH keys configured successfully"
         else
             log_error "Failed to extract public key from SSH private key"
             touch /root/.ssh/authorized_keys
             chmod 600 /root/.ssh/authorized_keys
-            return 1
         fi
 
-        # Clean up
-        rm -f "$temp_key"
+        # Persist private key so Ansible can use it for remote connections
+        local key_basename="${AWS_SSH_KEY_NAME:-deploy-key}"
+        # Ensure basename has no path components
+        key_basename="$(echo "$key_basename" | sed 's/[^A-Za-z0-9._-]/_/g')"
+        local private_target="/root/.ssh/${key_basename}.pem"
+        cp "$temp_key" "$private_target"
+        chmod 600 "$private_target"
+
+        # Provide conventional identity filenames if Ansible/playbooks use defaults
+        ln -sf "$private_target" /root/.ssh/id_rsa 2>/dev/null || true
+        ln -sf "$private_target" /root/.ssh/id_ed25519 2>/dev/null || true
+
+        # Export a hint variable for playbooks that may read it optionally
+        export ANSIBLE_PRIVATE_KEY_FILE="$private_target"
+
+        log_success "SSH private key staged for Ansible: ${private_target}"
+
+        # Securely remove temp file
+        shred -vfz -n 3 "$temp_key" 2>/dev/null || rm -f "$temp_key" || true
     else
         log_warning "AWS_SSH_PEM_KEY not set, creating empty authorized_keys"
         touch /root/.ssh/authorized_keys
