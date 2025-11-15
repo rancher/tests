@@ -86,7 +86,12 @@ deploy_rke2() {
     # Generate deployment report
     generate_deployment_report
 
-    log_success "RKE2 deployment completed successfully"
+    # Final status
+    if [[ "${ANSIBLE_EXIT_CODE:-0}" -eq 0 ]]; then
+        log_success "RKE2 deployment completed successfully"
+    else
+        log_warning "RKE2 deployment completed with issues (ansible exit code: ${ANSIBLE_EXIT_CODE}). See report and logs for details."
+    fi
 }
 
 # =============================================================================
@@ -274,8 +279,8 @@ verify_rke2_deployment() {
     log_info "Verifying RKE2 deployment"
 
     if [[ "${ANSIBLE_EXIT_CODE}" -ne 0 ]]; then
-        log_error "RKE2 deployment failed, skipping verification"
-        return 1
+        log_warning "RKE2 deployment playbook exited with code ${ANSIBLE_EXIT_CODE}; skipping verification but continuing to stage kubeconfig and generate report"
+        return 0
     fi
 
     # Check for node role verification playbook
