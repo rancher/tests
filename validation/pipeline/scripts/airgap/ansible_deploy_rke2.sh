@@ -192,9 +192,9 @@ validate_deployment_files() {
     log_info "=== Key Variables from group_vars ==="
     local key_vars=("rke2_version" "cluster_name" "tls_san")
     for var in "${key_vars[@]}"; do
-        if grep -q "^$var:" "$group_vars_file"; then
+        if grep -q "^$var:" "$group_vars_file" 2>/dev/null; then
             local value
-            value=$(grep "^$var:" "$group_vars_file" | cut -d':' -f2- | xargs)
+            value=$(grep "^$var:" "$group_vars_file" 2>/dev/null | cut -d':' -f2- | xargs)
             log_info "  $var: $value"
         else
             log_warning "  $var: not found"
