@@ -918,21 +918,22 @@ setup_ssh_keys() {
         fi
 
         # Persist private key so Ansible can use it for remote connections
-        local key_basename="${AWS_SSH_KEY_NAME:-deploy-key}"
-        # Ensure basename has no path components
-        key_basename="$(echo "$key_basename" | sed 's/[^A-Za-z0-9._-]/_/g')"
-        local private_target="/root/.ssh/${key_basename}.pem"
-        cp "$temp_key" "$private_target"
-        chmod 600 "$private_target"
+    local key_basename="${AWS_SSH_KEY_NAME:-deploy-key}"; key_basename="$(echo "$key_basename" | sed 's/[^A-Za-z0-9._-]/_/g')"
+    # Provide multiple filename variants to satisfy differing inventory expectations:
+    # 1. <name> (raw) 2. <name>.pem 3. conventional id_rsa / id_ed25519
+    local base_path="/root/.ssh/${key_basename}"
+    local pem_path="/root/.ssh/${key_basename}.pem"
+    cp "$temp_key" "$pem_path" && chmod 600 "$pem_path"
+    # Raw (no .pem) variant
+    cp "$temp_key" "$base_path" && chmod 600 "$base_path"
+    # Symlinks for conventional SSH defaults (best-effort)
+    ln -sf "$pem_path" /root/.ssh/id_rsa 2>/dev/null || true
+    ln -sf "$pem_path" /root/.ssh/id_ed25519 2>/dev/null || true
 
-        # Provide conventional identity filenames if Ansible/playbooks use defaults
-        ln -sf "$private_target" /root/.ssh/id_rsa 2>/dev/null || true
-        ln -sf "$private_target" /root/.ssh/id_ed25519 2>/dev/null || true
+    # Choose preferred exported key file (pem path) but fall back if needed
+    export ANSIBLE_PRIVATE_KEY_FILE="$pem_path"
 
-        # Export a hint variable for playbooks that may read it optionally
-        export ANSIBLE_PRIVATE_KEY_FILE="$private_target"
-
-        log_success "SSH private key staged for Ansible: ${private_target}"
+    log_success "SSH private key staged (variants): ${pem_path}, ${base_path}" 
 
         # Securely remove temp file
         shred -vfz -n 3 "$temp_key" 2>/dev/null || rm -f "$temp_key" || true
