@@ -1,0 +1,252 @@
+import groovy.transform.Field
+
+//@Field final String QA_LIBRARY_REF = (System.getenv('QA_JENKINS_LIBRARY_REF') ?: 'main').trim()
+
+//TODO: Revert this after testing
+//library("qa-jenkins-library@${QA_LIBRARY_REF}")
+library('qa-jenkins-library@feature/airgap-destroy-pipeline')
+
+class PipelineConstants {
+
+  static final String LOG_PREFIX_INFO = '[INFO]'
+  static final String LOG_PREFIX_ERROR = '[ERROR]'
+  static final String LOG_PREFIX_WARNING = '[WARNING]'
+  static final String DEFAULT_S3_BUCKET_REGION = 'us-east-2'
+
+}
+
+@Field def destroyPipeline
+
+// Build shared context map consumed by the destroy library.
+def composeDestroyContext() {
+  [
+    TARGET_WORKSPACE        : params.TARGET_WORKSPACE?.trim(),
+    TF_WORKSPACE            : params.TARGET_WORKSPACE?.trim(),
+    RANCHER_TEST_REPO_URL   : params.RANCHER_TEST_REPO_URL,
+    RANCHER_TEST_REPO_BRANCH: params.RANCHER_TEST_REPO_BRANCH,
+    QA_INFRA_REPO_URL       : params.QA_INFRA_REPO_URL,
+    QA_INFRA_REPO_BRANCH    : params.QA_INFRA_REPO_BRANCH,
+    S3_BUCKET_NAME          : getS3BucketName(),
+    S3_KEY_PREFIX           : getS3KeyPrefix(),
+    S3_BUCKET_REGION        : getS3BucketRegion(),
+    AWS_REGION              : getAwsRegion(),
+    QA_INFRA_WORK_PATH      : '/root/go/src/github.com/rancher/qa-infra-automation',
+    artifactPatterns        : [
+      'destruction-summary.json',
+      'destruction-plan.txt',
+      'infrastructure-cleanup-report.txt',
+      'workspace-list.txt',
+      'remaining-resources.txt',
+      'artifacts/**'
+    ]
+  ]
+}
+
+pipeline {
+    agent any
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 2, unit: 'HOURS')
+        timestamps()
+        ansiColor('xterm')
+        skipStagesAfterUnstable()
+    }
+
+    parameters {
+        string(
+            name: 'TARGET_WORKSPACE',
+            defaultValue: '',
+            description: 'Terraform workspace to destroy (e.g., jenkins_airgap_ansible_workspace_123)'
+        )
+        string(
+            name: 'RANCHER_TEST_REPO_URL',
+            defaultValue: 'https://github.com/rancher/tests',
+            description: 'URL of rancher/tests repository'
+        )
+        string(
+            name: 'RANCHER_TEST_REPO_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of rancher/tests repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_URL',
+            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            description: 'URL of qa-infra-automation repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-infra-automation repository'
+        )
+        string(
+            name: 'S3_BUCKET_NAME',
+            defaultValue: 'jenkins-terraform-state-storage',
+            description: 'S3 bucket name where Terraform state is stored'
+        )
+        string(
+            name: 'S3_KEY_PREFIX',
+            defaultValue: 'jenkins-airgap-rke2/terraform.tfstate',
+            description: 'S3 key prefix for the Terraform state files'
+        )
+        string(
+            name: 'S3_BUCKET_REGION',
+            defaultValue: 'us-east-2',
+            description: 'AWS region where the S3 bucket is located'
+        )
+    }
+
+    stages {
+        stage('Initialize Pipeline') {
+      steps {
+        script {
+          logInfo('Initializing destruction pipeline')
+          validateParameters()
+
+          destroyPipeline = airgapDestroy.pipeline(this)
+          destroyPipeline.initialize(composeDestroyContext())
+
+          logInfo('Pipeline initialization complete')
+        }
+      }
+        }
+
+        stage('Checkout Repositories') {
+      steps {
+        script {
+          logInfo('Checking out source repositories')
+          requirePipeline().checkoutRepositories()
+          logInfo('Repositories checked out successfully')
+        }
+      }
+        }
+
+        stage('Prepare Container') {
+      steps {
+        script {
+          logInfo('Preparing container resources for destroy workflow')
+          requirePipeline().prepareContainerResources()
+        }
+      }
+        }
+
+        stage('Infrastructure Destruction') {
+      steps {
+        script {
+          logInfo("Destroying infrastructure for workspace: ${params.TARGET_WORKSPACE}")
+          requirePipeline().destroyInfrastructure()
+          logInfo('Infrastructure destruction completed')
+        }
+      }
+        }
+    }
+
+    post {
+        success {
+      script {
+        logInfo('Pipeline succeeded; running cleanup with S3 purge')
+        performCleanup(true)
+      }
+        }
+        failure {
+      script {
+        logWarning('Pipeline failed; running cleanup without S3 purge')
+        performCleanup(false)
+      }
+        }
+        aborted {
+      script {
+        logWarning('Pipeline aborted; running cleanup without S3 purge')
+        performCleanup(false)
+      }
+        }
+        unstable {
+      script {
+        logWarning('Pipeline unstable; running cleanup without S3 purge')
+        performCleanup(false)
+      }
+        }
+    }
+}
+
+// Execute post-stage cleanup and optionally purge S3 state.
+def performCleanup(boolean cleanupS3) {
+  if (!destroyPipeline) {
+    logWarning('Destroy pipeline was never initialized; skipping cleanup')
+    return
+  }
+
+  try {
+    destroyPipeline.cleanup(cleanupS3)
+    } catch (hudson.AbortException e) {
+    logWarning("Cleanup encountered issues: ${e.message}")
+  }
+}
+
+// Guard stage execution by ensuring initialization succeeded.
+def requirePipeline() {
+  if (!destroyPipeline) {
+    error('Destroy pipeline has not been initialized')
+  }
+  destroyPipeline
+}
+
+// Validate required user parameters before destruction starts.
+def validateParameters() {
+  if (!params.TARGET_WORKSPACE || params.TARGET_WORKSPACE.trim().isEmpty()) {
+    error('TARGET_WORKSPACE parameter is required for destruction')
+  }
+  if (!params.RANCHER_TEST_REPO_URL) {
+    error('RANCHER_TEST_REPO_URL parameter is required')
+  }
+  if (!params.QA_INFRA_REPO_URL) {
+    error('QA_INFRA_REPO_URL parameter is required')
+  }
+
+  logInfo("Target workspace: ${params.TARGET_WORKSPACE}")
+  logInfo("Destroying state from bucket ${getS3BucketName()} in region ${getS3BucketRegion()}")
+}
+
+// Derive S3 bucket name with sensible defaults.
+def getS3BucketName() {
+  def value = params.S3_BUCKET_NAME?.trim()
+  value ? value : 'jenkins-terraform-state-storage'
+}
+
+// Derive S3 key prefix with sensible defaults.
+def getS3KeyPrefix() {
+  def value = params.S3_KEY_PREFIX?.trim()
+  value ? value : 'jenkins-airgap-rke2/terraform.tfstate'
+}
+
+// Choose S3 region when not supplied by users.
+def getS3BucketRegion() {
+  def value = params.S3_BUCKET_REGION?.trim()
+  value ? value : PipelineConstants.DEFAULT_S3_BUCKET_REGION
+}
+
+// Mirror S3 region for AWS actions when missing.
+def getAwsRegion() {
+  def value = params.S3_BUCKET_REGION?.trim()
+  value ? value : PipelineConstants.DEFAULT_S3_BUCKET_REGION
+}
+
+// Emit info logs with consistent prefix and timestamp.
+def logInfo(msg) {
+  echo "${PipelineConstants.LOG_PREFIX_INFO} ${timestamp()} ${msg}"
+}
+
+// Emit error logs with consistent prefix and timestamp.
+def logError(msg) {
+  echo "${PipelineConstants.LOG_PREFIX_ERROR} ${timestamp()} ${msg}"
+}
+
+// Emit warning logs with consistent prefix and timestamp.
+def logWarning(msg) {
+  echo "${PipelineConstants.LOG_PREFIX_WARNING} ${timestamp()} ${msg}"
+}
+
+// Provide shared timestamp formatting for log helpers.
+def timestamp() {
+  new Date().format('yyyy-MM-dd HH:mm:ss')
+}

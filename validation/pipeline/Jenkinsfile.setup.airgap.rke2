@@ -1,0 +1,322 @@
+@Library('qa-jenkins-library@feature/airgap-destroy-pipeline') _
+
+import groovy.transform.Field
+import groovy.lang.MissingPropertyException
+import org.rancher.qa.airgap.PipelineDefaults
+
+//@Field final String QA_LIBRARY_REF = (System.getenv('QA_JENKINS_LIBRARY_REF') ?: 'main').trim()
+
+@Field def setupPipeline
+
+def composeSetupContext() {
+    [
+    RKE2_VERSION             : params.RKE2_VERSION?.trim(),
+    RANCHER_VERSION          : params.RANCHER_VERSION?.trim(),
+    RANCHER_TEST_REPO_URL    : params.RANCHER_TEST_REPO_URL?.trim(),
+    RANCHER_TEST_REPO_BRANCH : params.RANCHER_TEST_REPO_BRANCH?.trim(),
+    QA_INFRA_REPO_URL        : params.QA_INFRA_REPO_URL?.trim(),
+    QA_INFRA_REPO_BRANCH     : params.QA_INFRA_REPO_BRANCH?.trim(),
+    PRIVATE_REGISTRY_URL     : params.PRIVATE_REGISTRY_URL?.trim(),
+    PRIVATE_REGISTRY_USERNAME: params.PRIVATE_REGISTRY_USERNAME?.trim(),
+    PRIVATE_REGISTRY_PASSWORD: params.PRIVATE_REGISTRY_PASSWORD ?: '',
+    S3_BUCKET_NAME           : params.S3_BUCKET_NAME?.trim(),
+    S3_KEY_PREFIX            : params.S3_KEY_PREFIX?.trim(),
+    S3_BUCKET_REGION         : params.S3_BUCKET_REGION?.trim(),
+    HOSTNAME_PREFIX          : params.HOSTNAME_PREFIX?.trim(),
+    DESTROY_ON_FAILURE       : params.DESTROY_ON_FAILURE?.toString(),
+    TERRAFORM_CONFIG         : params.TERRAFORM_CONFIG ?: '',
+    ANSIBLE_VARIABLES        : params.ANSIBLE_VARIABLES ?: '',
+    SKIP_YAML_VALIDATION     : params.SKIP_YAML_VALIDATION?.toString(),
+    DEBUG                    : params.DEBUG?.toString()
+  ]
+}
+
+pipeline {
+    agent any
+
+    options {
+        durabilityHint('PERFORMANCE_OPTIMIZED')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 3, unit: 'HOURS')
+        timestamps()
+        ansiColor('xterm')
+        skipStagesAfterUnstable()
+        retry(1)
+    }
+
+    parameters {
+        string(
+            name: 'RKE2_VERSION',
+            defaultValue: PipelineDefaults.DEFAULT_RKE2_VERSION,
+            description: 'RKE2 version to deploy (e.g., v1.28.8+rke2r1, v1.29.5+rke2r1, v1.30.2+rke2r1)'
+        )
+        string(
+            name: 'RANCHER_VERSION',
+            defaultValue: PipelineDefaults.DEFAULT_RANCHER_VERSION,
+            description: 'Rancher version to deploy (e.g., head, v2.10-head, v2.11.0, v2.9-head)'
+        )
+        string(
+            name: 'RANCHER_TEST_REPO_URL',
+            defaultValue: PipelineDefaults.DEFAULT_RANCHER_TEST_REPO,
+            description: 'URL of rancher/tests repository'
+        )
+        string(
+            name: 'RANCHER_TEST_REPO_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of rancher/tests repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_URL',
+            defaultValue: PipelineDefaults.DEFAULT_QA_INFRA_REPO,
+            description: 'URL of qa-infra-automation repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-infra-automation repository'
+        )
+        string(
+            name: 'PRIVATE_REGISTRY_URL',
+            defaultValue: '',
+            description: 'Private registry URL for airgap deployment'
+        )
+        string(
+            name: 'PRIVATE_REGISTRY_USERNAME',
+            defaultValue: 'default-user',
+            description: 'Private registry username for airgap deployment'
+        )
+        password(
+            name: 'PRIVATE_REGISTRY_PASSWORD',
+            defaultValue: '',
+            description: 'Private registry password for airgap deployment'
+        )
+        string(
+            name: 'S3_BUCKET_NAME',
+            defaultValue: PipelineDefaults.DEFAULT_S3_BUCKET,
+            description: 'S3 bucket name where Terraform state is stored'
+        )
+        string(
+            name: 'S3_KEY_PREFIX',
+            defaultValue: 'jenkins-airgap-rke2/',
+            description: 'S3 key prefix for the Terraform state files'
+        )
+        string(
+            name: 'S3_BUCKET_REGION',
+            defaultValue: PipelineDefaults.DEFAULT_S3_BUCKET_REGION,
+            description: 'AWS region where the S3 bucket is located'
+        )
+        string(
+            name: 'HOSTNAME_PREFIX',
+            defaultValue: PipelineDefaults.DEFAULT_HOSTNAME_PREFIX,
+            description: 'Hostname prefix for *.qa.rancher.space and other AWS resources'
+        )
+        booleanParam(
+            name: 'DESTROY_ON_FAILURE',
+            defaultValue: false,
+            description: 'Destroy infrastructure when Ansible playbooks fail (automatic cleanup)'
+        )
+        text(
+            name: 'TERRAFORM_CONFIG',
+            defaultValue: '',
+            description: 'Terraform variables configuration for OpenTofu deployment'
+        )
+        text(
+            name: 'ANSIBLE_VARIABLES',
+            description: 'Complete group_vars/all.yml content for Ansible configuration.'
+        )
+        booleanParam(
+            name: 'SKIP_YAML_VALIDATION',
+            defaultValue: false,
+            description: 'Skip strict YAML validation for templated group_vars payloads'
+        )
+        booleanParam(
+            name: 'DEBUG',
+            defaultValue: false,
+            description: 'Enable debug output and verbose logging throughout the pipeline'
+        )
+    }
+
+    stages {
+        stage('Initialize Pipeline') {
+            steps {
+                script {
+                    setupPipeline = resolveSetupPipeline()
+                    attemptInitialize()
+                }
+            }
+        }
+
+        stage('Checkout Repositories') {
+            steps {
+                script {
+                    logInfo('Checking out source repositories')
+                    requirePipeline().checkoutRepositories()
+                    logInfo('Repositories checked out successfully')
+                }
+            }
+        }
+
+        stage('Configure Environment') {
+            steps {
+                script {
+                    logInfo('Validating environment configuration')
+                    requirePipeline().configureEnvironment()
+                }
+            }
+        }
+
+        stage('Prepare Infrastructure') {
+            steps {
+                script {
+                    logInfo('Preparing infrastructure resources')
+                    requirePipeline().prepareInfrastructure()
+                }
+            }
+        }
+
+        stage('Deploy Infrastructure') {
+            steps {
+                script {
+                    logInfo('Deploying infrastructure via OpenTofu')
+                    runStageWithCleanup('deployment') {
+                        requirePipeline().deployInfrastructure()
+                        logInfo('Infrastructure deployment completed')
+                    }
+                }
+            }
+        }
+
+        stage('Prepare Ansible Environment') {
+            steps {
+                script {
+                    logInfo('Preparing Ansible environment')
+                    runStageWithCleanup('ansible_prep') {
+                        requirePipeline().prepareAnsibleEnvironment()
+                    }
+                }
+            }
+        }
+
+        stage('Deploy RKE2 with Ansible') {
+            steps {
+                script {
+                    logInfo('Deploying RKE2 cluster')
+                    runStageWithCleanup('rke2') {
+                        requirePipeline().deployRke2()
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Rancher with Ansible') {
+            steps {
+                script {
+                    logInfo('Deploying Rancher components')
+                    runStageWithCleanup('rancher') {
+                        requirePipeline().deployRancher()
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script { performCleanup() }
+        }
+        success {
+            script { logInfo('Pipeline completed successfully') }
+        }
+        failure {
+            script {
+                logError('Pipeline failed')
+                if (setupPipeline) {
+                    requirePipeline().handleFailureCleanup('deployment')
+                }
+            }
+        }
+        aborted {
+            script {
+                logWarning('Pipeline aborted')
+                if (setupPipeline) {
+                    requirePipeline().handleFailureCleanup('timeout')
+                }
+            }
+        }
+        unstable {
+            script { logWarning('Pipeline completed with warnings') }
+        }
+    }
+}
+
+@SuppressWarnings('CatchException')
+def performCleanup() {
+    if (!setupPipeline) {
+        logWarning('Setup pipeline was never initialized; skipping cleanup')
+        return
+    }
+
+    try {
+        setupPipeline.cleanupResources()
+  } catch (Exception e) {
+        logWarning("Cleanup encountered issues: ${e.message}")
+    }
+}
+
+@SuppressWarnings('CatchThrowable')
+def runStageWithCleanup(String reason, Closure block) {
+    try {
+        block.call()
+    } catch (Throwable err) {
+        if (setupPipeline) {
+            setupPipeline.handleFailureCleanup(reason)
+        }
+        throw err
+    }
+}
+
+def resolveSetupPipeline() {
+    try {
+        return airgapSetup.pipeline(this)
+    } catch (MissingPropertyException ignore) {
+        error('Shared library step airgapSetup not found. Ensure feature/airgap-destroy-pipeline contains vars/airgapSetup.groovy or update QA_JENKINS_LIBRARY_REF.')
+    }
+}
+
+// Extracted to reduce nested block depth and provide more granular error messaging
+def attemptInitialize() {
+    try {
+        setupPipeline.initialize(composeSetupContext())
+        logInfo('Pipeline initialization complete')
+    } catch (MissingPropertyException e) {
+        logError("Initialization failed (missing property): ${e.message}")
+        error('Initialization failed; aborting further stages')
+    } catch (RuntimeException e) {
+        logError("Initialization failed: ${e.message}")
+        error('Initialization failed; aborting further stages')
+    }
+}
+
+def requirePipeline() {
+    if (!setupPipeline) {
+        error('Setup pipeline has not been initialized')
+    }
+    setupPipeline
+}
+
+def logInfo(msg) {
+    echo "${PipelineDefaults.LOG_PREFIX_INFO} ${timestamp()} ${msg}"
+}
+
+def logError(msg) {
+    echo "${PipelineDefaults.LOG_PREFIX_ERROR} ${timestamp()} ${msg}"
+}
+
+def logWarning(msg) {
+    echo "${PipelineDefaults.LOG_PREFIX_WARNING} ${timestamp()} ${msg}"
+}
+
+def timestamp() {
+    new Date().format('yyyy-MM-dd HH:mm:ss')
+}
