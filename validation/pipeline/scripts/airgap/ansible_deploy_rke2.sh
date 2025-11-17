@@ -529,6 +529,19 @@ main() {
     deploy_rke2 "$TF_WORKSPACE"
 
     log_info "RKE2 deployment completed"
+
+    # Fallback: ensure inventory is copied to shared volume root for artifact extraction
+    local src_inventory="/root/ansible/rke2/airgap/inventory.yml"
+    local dest_inventory="$SHARED_VOLUME_PATH/ansible-inventory.yml"
+    if [[ -f "$src_inventory" && -s "$src_inventory" ]]; then
+        if cp "$src_inventory" "$dest_inventory" 2>/dev/null; then
+            log_info "Inventory staged to shared volume: $dest_inventory"
+        else
+            log_warning "Failed to stage inventory to shared volume (non-fatal)"
+        fi
+    else
+        log_warning "Inventory not found at $src_inventory (non-fatal)"
+    fi
 }
 
 # Error handling
