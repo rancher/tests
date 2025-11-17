@@ -224,7 +224,7 @@ jobs:
             region: "${{ secrets.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
+              ami: "${{ secrets.AWS_AMI }}"
               enablePrimaryIPv6: true
               httpProtocolIpv6: "enabled"
               ipv6AddressOnly: true
@@ -247,7 +247,7 @@ jobs:
             awsEC2Config:
               - instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_DUALSTACK_AMI }}"
+                awsAMI: "${{ secrets.AWS_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
