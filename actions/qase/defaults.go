@@ -12,6 +12,7 @@ const (
 	ProjectIDEnvVar         = "QASE_PROJECT_ID"
 	TestRunNameEnvVar       = "TEST_RUN_NAME"
 	TestPackagePaths        = "TEST_PACKAGE_PATHS"
+	BuildUrl                = "BUILD_URL"
 	TestSource              = "GoValidation"
 	MultiSubTestPattern     = `(\w+/\w+/\w+){1,}`
 	SubtestPattern          = `(\w+/\w+){1,1}`

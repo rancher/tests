@@ -23,6 +23,7 @@ var (
 	runIDEnvVar             = os.Getenv(qase.TestRunEnvVar)
 	projectIDEnvVar         = os.Getenv(qase.ProjectIDEnvVar)
 	testRunName             = os.Getenv(qase.TestRunNameEnvVar)
+	buildUrl                = os.Getenv(qase.BuildUrl)
 	_, callerFilePath, _, _ = runtime.Caller(0)
 	basepath                = filepath.Join(filepath.Dir(callerFilePath), "..", "..", "..", "..")
 	validStatus             = map[string]string{"pass": "passed", "fail": "failed", "skip": "skipped"}
@@ -44,8 +45,10 @@ func main() {
 
 		runID, err := strconv.ParseInt(runIDEnvVar, 10, 64)
 
+		runDescription := qaseService.CreateRunDescription(buildUrl)
+
 		if testRunName != "" {
-			resp, err := qaseService.CreateTestRun(testRunName, projectIDEnvVar)
+			resp, err := qaseService.CreateTestRun(testRunName, projectIDEnvVar, runDescription)
 			if err != nil {
 				logrus.Error("error creating test run: ", err)
 			} else {

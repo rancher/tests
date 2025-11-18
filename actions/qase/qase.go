@@ -214,7 +214,7 @@ func (q *Service) getTestCases(project string, test upstream.TestCaseCreate) ([]
 	return nil, fmt.Errorf("test case \"%s\" not found in project %s", test.Title, project)
 }
 
-func (q *Service) CreateTestRun(testRunName string, projectID string) (*upstream.IdResponse, error) {
+func (q *Service) CreateTestRun(testRunName string, projectID string, runDescription string) (*upstream.IdResponse, error) {
 	runCreateBody := upstream.RunCreate{
 		Title: testRunName,
 	}
@@ -228,6 +228,10 @@ func (q *Service) CreateTestRun(testRunName string, projectID string) (*upstream
 		}
 	}
 
+	if runDescription != "" {
+		runCreateBody.SetDescription(runDescription)
+	}
+
 	runRequest := q.Client.RunsAPI.CreateRun(context.TODO(), projectID)
 	runRequest = runRequest.RunCreate(runCreateBody)
 	resp, _, err := runRequest.Execute()
@@ -236,4 +240,15 @@ func (q *Service) CreateTestRun(testRunName string, projectID string) (*upstream
 	}
 
 	return resp, nil
+}
+
+// Build the Qase test run description
+func (q *Service) CreateRunDescription(buildUrl string) string {
+	var description strings.Builder
+
+	if buildUrl != "" {
+		description.WriteString(fmt.Sprintf("Jenkins Job: %s", buildUrl))
+	}
+
+	return description.String()
 }

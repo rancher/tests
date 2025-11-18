@@ -14,6 +14,7 @@ import (
 var (
 	testRunName = os.Getenv(qasedefaults.TestRunNameEnvVar)
 	qaseToken   = os.Getenv(qasedefaults.QaseTokenEnvVar)
+	buildUrl    = os.Getenv(qasedefaults.BuildUrl)
 )
 
 type RecurringTestRun struct {
@@ -28,8 +29,9 @@ func main() {
 	client := qasedefaults.SetupQaseClient()
 
 	if *startRun {
+		runDescription := client.CreateRunDescription(buildUrl)
 		// create test run
-		resp, err := client.CreateTestRun(testRunName, qasedefaults.RancherManagerProjectID)
+		resp, err := client.CreateTestRun(testRunName, qasedefaults.RancherManagerProjectID, runDescription)
 		if err != nil {
 			logrus.Error("error creating test run: ", err)
 		}
