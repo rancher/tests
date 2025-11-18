@@ -40,12 +40,12 @@ func main() {
 	}
 
 	if runIDEnvVar != "" {
-		client := qase.SetupQaseClient()
+		qaseService := qase.SetupQaseClient()
 
 		runID, err := strconv.ParseInt(runIDEnvVar, 10, 64)
 
 		if testRunName != "" {
-			resp, err := client.CreateTestRun(testRunName, projectIDEnvVar)
+			resp, err := qaseService.CreateTestRun(testRunName, projectIDEnvVar)
 			if err != nil {
 				logrus.Error("error creating test run: ", err)
 			} else {
@@ -57,9 +57,14 @@ func main() {
 			logrus.Fatalf("error reporting converting string to int64: %v", err)
 		}
 
-		err = reportTestQases(client, int32(runID))
+		err = reportTestQases(qaseService, int32(runID))
 		if err != nil {
 			logrus.Error("error reporting: ", err)
+		}
+
+		err = completeQaseReport(qaseService, projectIDEnvVar, int32(runID))
+		if err != nil {
+			logrus.Error("error update reporting: ", err)
 		}
 	} else {
 		logrus.Warningf("QASE run ID not provided")
@@ -279,4 +284,17 @@ func getAutomationTestName(customFields []upstream.CustomFieldValue) string {
 		}
 	}
 	return ""
+}
+
+func completeQaseReport(qaseService *qase.Service, projectIDEnvVar string, testRunID int32) error {
+	client := qaseService.Client
+	runRequest := client.RunsAPI.CompleteRun(context.TODO(), projectIDEnvVar, testRunID)
+	runRequest = runRequest.ApiService.CompleteRun(context.TODO(), projectIDEnvVar, testRunID)
+
+	_, _, err := runRequest.Execute()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
