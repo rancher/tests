@@ -188,7 +188,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForPods() {
 	require.NoError(mw.T(), err)
 	createdPod, err := downstreamContext.Core.Pod().Create(pod)
 	require.NoError(mw.T(), err, "Failed to create the pod.")
-	err = pods.WatchAndWaitPodContainerRunning(workloadUserClient, mw.cluster.ID, adminNamespace.Name, nil)
+	err = pods.WatchAndWaitPodContainerRunning(workloadUserClient, mw.cluster.ID, adminNamespace.Name)
 	require.NoError(mw.T(), err)
 
 	log.Infof("As user %s, list the pod %s.", workloadUser.Username, createdPod.Name)
