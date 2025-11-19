@@ -292,8 +292,6 @@ func getAutomationTestName(customFields []upstream.CustomFieldValue) string {
 func completeQaseReport(qaseService *qase.Service, projectIDEnvVar string, testRunID int32) error {
 	client := qaseService.Client
 	runRequest := client.RunsAPI.CompleteRun(context.TODO(), projectIDEnvVar, testRunID)
-	runRequest = runRequest.ApiService.CompleteRun(context.TODO(), projectIDEnvVar, testRunID)
-
 	_, _, err := runRequest.Execute()
 	if err != nil {
 		return err
