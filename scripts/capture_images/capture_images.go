@@ -13,12 +13,18 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
+	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+)
+
+const (
+	LOG_BUFFER_SIZE          = "2MB"
+	CAPTURE_VERSIONS_COMMAND = "kubectl version && kubectl get pods --all-namespaces -o jsonpath=\"{..image}\" |tr -s '[[:space:]]' '\n' |sort |uniq"
 )
 
 var (
@@ -136,6 +142,19 @@ func main() {
 		}
 	}
 
+	c, err := clusters.NewClusterMeta(client, rancherConfig.ClusterName)
+	versions, err := captureVersions(client, c.ID)
+	if err != nil {
+		panic(fmt.Errorf("Failed to create file for versions: %v", err))
+	}
+
+	file, err := os.Create("/app/images/" + c.Name)
+	if err != nil {
+		panic(fmt.Errorf("Failed to create file for image names: %v", err))
+	}
+	defer file.Close()
+	file.Write([]byte(versions + "\n"))
+
 	var wg sync.WaitGroup
 	wg.Add(len(clusterList))
 
@@ -151,7 +170,7 @@ func main() {
 				panic(fmt.Errorf("Failed to capture used images: %v", err))
 			}
 
-			file, err := os.Create("/app/images/" + clusterInfo.Name)
+			file, err := os.Create("/app/images/versions")
 			if err != nil {
 				panic(fmt.Errorf("Failed to create file for image names: %v", err))
 			}
@@ -171,4 +190,13 @@ func main() {
 	}
 
 	wg.Wait()
+}
+
+// captureVersions gets the images and kubernetes version on the cluster
+func captureVersions(client *rancher.Client, clusterID string) (string, error) {
+	captureVersionsCommand := []string{
+		"sh", "-c", CAPTURE_VERSIONS_COMMAND,
+	}
+
+	return kubectl.Command(client, nil, clusterID, captureVersionsCommand, LOG_BUFFER_SIZE)
 }

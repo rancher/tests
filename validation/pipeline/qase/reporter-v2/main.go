@@ -11,6 +11,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/kubectl"
+	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/qase"
 	qaseactions "github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/qase/testresult"
@@ -30,7 +35,9 @@ var (
 )
 
 const (
-	requestLimit = 100
+	requestLimit           = 100
+	captureVersionsCommand = "kubectl version && kubectl get pods --all-namespaces -o jsonpath=\"{..image}\" |tr -s '[[:space:]]' '\n' |sort |uniq"
+	logBufferSize          = "2MB"
 )
 
 func main() {
@@ -294,8 +301,50 @@ func createRunDescription(buildUrl string) string {
 	var description strings.Builder
 
 	if buildUrl != "" {
-		description.WriteString(fmt.Sprintf("Jenkins Job: %s", buildUrl))
+		description.WriteString(fmt.Sprintln("Jenkins Job", buildUrl))
+	}
+
+	versions := getVersionInformation()
+	if versions != "" {
+		if description.Len() > 0 {
+			description.WriteString("\n")
+		}
+		description.WriteString(fmt.Sprintln("Version Information", versions))
 	}
 
 	return description.String()
+}
+
+func getVersionInformation() string {
+	rancherConfig := new(rancher.Config)
+	config.LoadConfig(rancher.ConfigurationFileKey, rancherConfig)
+
+	client, err := rancher.NewClientForConfig("", rancherConfig, session.NewSession())
+	if err != nil {
+		logrus.Warning(fmt.Errorf("Error creating client: %w", err))
+		return ""
+	}
+
+	cluster, err := clusters.NewClusterMeta(client, rancherConfig.ClusterName)
+	if err != nil {
+		logrus.Warning(fmt.Errorf("Error creating cluster: %w", err))
+		return ""
+	}
+
+	command := []string{
+		"sh", "-c", captureVersionsCommand,
+	}
+
+	versions, err := kubectl.Command(client, nil, cluster.ID, command, logBufferSize)
+	if err != nil {
+		logrus.Warning(fmt.Errorf("Error getting versions information: %w", err))
+		return ""
+	}
+
+	// formatting versions information
+	versions = strings.ReplaceAll(versions, "Client Version", "rancher")
+	versions = strings.ReplaceAll(versions, "Server Version", "kubernetes")
+	versions = strings.TrimSpace(versions)
+
+	return versions
 }
