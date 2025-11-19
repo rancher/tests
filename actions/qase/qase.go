@@ -241,14 +241,3 @@ func (q *Service) CreateTestRun(testRunName string, projectID string, runDescrip
 
 	return resp, nil
 }
-
-// Build the Qase test run description
-func (q *Service) CreateRunDescription(buildUrl string) string {
-	var description strings.Builder
-
-	if buildUrl != "" {
-		description.WriteString(fmt.Sprintf("Jenkins Job: %s", buildUrl))
-	}
-
-	return description.String()
-}

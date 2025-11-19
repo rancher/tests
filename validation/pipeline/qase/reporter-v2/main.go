@@ -45,7 +45,7 @@ func main() {
 
 		runID, err := strconv.ParseInt(runIDEnvVar, 10, 64)
 
-		runDescription := qaseService.CreateRunDescription(buildUrl)
+		runDescription := createRunDescription(buildUrl)
 
 		if testRunName != "" {
 			resp, err := qaseService.CreateTestRun(testRunName, projectIDEnvVar, runDescription)
@@ -289,6 +289,7 @@ func getAutomationTestName(customFields []upstream.CustomFieldValue) string {
 	return ""
 }
 
+// completeQaseReport complete the Qase test run
 func completeQaseReport(qaseService *qase.Service, projectIDEnvVar string, testRunID int32) error {
 	client := qaseService.Client
 	runRequest := client.RunsAPI.CompleteRun(context.TODO(), projectIDEnvVar, testRunID)
@@ -298,4 +299,15 @@ func completeQaseReport(qaseService *qase.Service, projectIDEnvVar string, testR
 	}
 
 	return nil
+}
+
+// createRunDescription build the Qase test run description
+func createRunDescription(buildUrl string) string {
+	var description strings.Builder
+
+	if buildUrl != "" {
+		description.WriteString(fmt.Sprintf("Jenkins Job: %s", buildUrl))
+	}
+
+	return description.String()
 }
