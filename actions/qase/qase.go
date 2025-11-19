@@ -241,3 +241,14 @@ func (q *Service) CreateTestRun(testRunName string, projectID string, runDescrip
 
 	return resp, nil
 }
+
+// CompleteTestRun complete the Qase test run
+func (q *Service) CompleteTestRun(projectIDEnvVar string, testRunID int32) error {
+	runRequest := q.Client.RunsAPI.CompleteRun(context.TODO(), projectIDEnvVar, testRunID)
+	_, _, err := runRequest.Execute()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

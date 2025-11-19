@@ -65,7 +65,7 @@ func main() {
 			logrus.Error("error reporting: ", err)
 		}
 
-		err = completeQaseReport(qaseService, projectIDEnvVar, int32(runID))
+		err = qaseService.CompleteTestRun(projectIDEnvVar, int32(runID))
 		if err != nil {
 			logrus.Error("error update reporting: ", err)
 		}
@@ -287,18 +287,6 @@ func getAutomationTestName(customFields []upstream.CustomFieldValue) string {
 		}
 	}
 	return ""
-}
-
-// completeQaseReport complete the Qase test run
-func completeQaseReport(qaseService *qase.Service, projectIDEnvVar string, testRunID int32) error {
-	client := qaseService.Client
-	runRequest := client.RunsAPI.CompleteRun(context.TODO(), projectIDEnvVar, testRunID)
-	_, _, err := runRequest.Execute()
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // createRunDescription build the Qase test run description
