@@ -1,0 +1,112 @@
+#!groovy
+@Library('qa-jenkins-library') _
+
+node {
+    def qaInfraPath = "./qa-infra-automation"
+    def tofuModulePath = "${qaInfraPath}/tofu/aws/modules/airgap"
+    def qaInfraBranch = env.QA_INFRA_REPO_BRANCH ?: "main"
+    def qaInfraRepo = env.QA_INFRA_REPO_URL ?: "https://github.com/rancher/qa-infra-automation"
+    def targetWorkspace = env.TARGET_WORKSPACE
+    
+    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg': 1]) {
+        withFolderProperties {
+            paramsMap = []
+            params.each {
+                if (it.value && it.value.trim() != "") {
+                    paramsMap << "$it.key=$it.value"
+                }
+            }
+            
+            withCredentials([
+                string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+                string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+            ]) {
+                withEnv(paramsMap) {
+                    
+                    try {
+                        stage('Validate Parameters') {
+                            if (!targetWorkspace || targetWorkspace.trim() == "") {
+                                error "TARGET_WORKSPACE parameter is required"
+                            }
+                            
+                            echo "Target workspace for destruction: ${targetWorkspace}"
+                        }
+                        
+                        stage('Checkout') {
+                            deleteDir()
+                            
+                            echo "Cloning qa-infra-automation repository"
+                            project.checkout(
+                                target: 'qa-infra-automation',
+                                branch: qaInfraBranch,
+                                repository: qaInfraRepo
+                            )
+                        }
+                        
+                        stage('Initialize Tofu Backend') {
+                            tofu.initBackend(
+                                dir: tofuModulePath,
+                                bucket: env.S3_BUCKET_NAME,
+                                key: env.S3_KEY_PREFIX,
+                                region: env.S3_BUCKET_REGION ?: env.S3_REGION
+                            )
+                        }
+                        
+                        stage('Select Workspace') {
+                            tofu.selectWorkspace(
+                                dir: tofuModulePath,
+                                name: targetWorkspace
+                            )
+                        }
+                        
+                        stage('Destroy Infrastructure') {
+                            echo "Destroying infrastructure in workspace: ${targetWorkspace}"
+                            
+                            tofu.destroy(
+                                dir: tofuModulePath,
+                                autoApprove: true
+                            )
+                            
+                            echo "Infrastructure destroyed successfully"
+                        }
+                        
+                        stage('Delete Workspace') {
+                            tofu.deleteWorkspace(
+                                dir: tofuModulePath,
+                                name: targetWorkspace
+                            )
+                            
+                            echo "Workspace ${targetWorkspace} deleted"
+                        }
+                        
+                        stage('Cleanup Artifacts') {
+                            echo "Cleaning up local artifacts"
+                            
+                            infrastructure.cleanupArtifacts(
+                                paths: [
+                                    "${tofuModulePath}/.terraform",
+                                    "${tofuModulePath}/terraform.tfstate*",
+                                    "${tofuModulePath}/*.tfvars"
+                                ],
+                                force: true
+                            )
+                        }
+                        
+                        stage('Summary') {
+                            echo "=== Infrastructure Destruction Complete ==="
+                            echo "Workspace: ${targetWorkspace}"
+                            echo "All resources have been destroyed and cleaned up"
+                            echo "==========================================="
+                        }
+                        
+                    } catch (err) {
+                        currentBuild.result = 'FAILURE'
+                        echo "Destroy operation failed: ${err.message}"
+                        echo "Manual cleanup may be required for workspace: ${targetWorkspace}"
+                        throw err
+                    }
+                }
+            }
+        }
+    }
+}
