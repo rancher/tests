@@ -1,5 +1,7 @@
 #!groovy
-@Library('qa-jenkins-library') _
+// Load qa-jenkins-library dynamically based on parameter
+def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+library "qa-jenkins-library@${libraryBranch}"
 
 node {
     def qaInfraPath = "./qa-infra-automation"
