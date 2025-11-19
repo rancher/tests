@@ -764,6 +764,28 @@ func CreateGroupProjectRoleTemplateBinding(client *rancher.Client, projectID str
 	return prtb, nil
 }
 
+// GetClusterRoleTemplateBindingsForGroup polls until a CRTB for the given group principal and cluster is found.
+func GetClusterRoleTemplateBindingsForGroup(rancherClient *rancher.Client, groupPrincipalName, clusterID string) (*v3.ClusterRoleTemplateBinding, error) {
+	var matchingCRTB *v3.ClusterRoleTemplateBinding
+	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
+		crtbList, err := rbacapi.ListClusterRoleTemplateBindings(rancherClient, metav1.ListOptions{})
+		if err != nil {
+			return false, err
+		}
+		for _, crtb := range crtbList.Items {
+			if crtb.GroupPrincipalName == groupPrincipalName && crtb.ClusterName == clusterID {
+				matchingCRTB = &crtb
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error while polling for group crtb: %w", err)
+	}
+	return matchingCRTB, nil
+}
+
 // CreateGlobalRoleWithRules creates a global role with given name and rules using wrangler context
 func CreateGlobalRoleWithRules(client *rancher.Client, name string, rules []rbacv1.PolicyRule) (*v3.GlobalRole, error) {
 	role := &v3.GlobalRole{

@@ -1,6 +1,6 @@
 //go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress
 
-package openldap
+package activedirectory
 
 import (
 	"fmt"
@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type OpenLDAPAuthProviderSuite struct {
+type ActiveDirectoryAuthProviderSuite struct {
 	suite.Suite
 	session    *session.Session
 	client     *rancher.Client
@@ -34,7 +34,7 @@ type OpenLDAPAuthProviderSuite struct {
 	authConfig *authactions.AuthConfig
 }
 
-func (a *OpenLDAPAuthProviderSuite) SetupSuite() {
+func (a *ActiveDirectoryAuthProviderSuite) SetupSuite() {
 	a.session = session.NewSession()
 
 	client, err := rancher.NewClient("", a.session)
@@ -43,7 +43,7 @@ func (a *OpenLDAPAuthProviderSuite) SetupSuite() {
 
 	logrus.Info("Loading auth configuration from config file")
 	a.authConfig = new(authactions.AuthConfig)
-	config.LoadConfig(authactions.OpenLdapAuthInput, a.authConfig)
+	config.LoadConfig(authactions.ActiveDirectoryAuthInput, a.authConfig)
 	require.NotNil(a.T(), a.authConfig, "Auth configuration is not provided")
 
 	logrus.Info("Getting cluster name from the config file")
@@ -56,98 +56,98 @@ func (a *OpenLDAPAuthProviderSuite) SetupSuite() {
 	a.cluster, err = a.client.Management.Cluster.ByID(clusterID)
 	require.NoError(a.T(), err, "Failed to retrieve cluster by ID: %s", clusterID)
 
-	logrus.Info("Setting up admin user credentials for OpenLDAP authentication")
+	logrus.Info("Setting up admin user credentials for Active Directory authentication")
 	a.adminUser = &v3.User{
-		Username: client.Auth.OLDAP.Config.Users.Admin.Username,
-		Password: client.Auth.OLDAP.Config.Users.Admin.Password,
+		Username: client.Auth.ActiveDirectory.Config.Users.Admin.Username,
+		Password: client.Auth.ActiveDirectory.Config.Users.Admin.Password,
 	}
 
-	logrus.Info("Enabling OpenLDAP authentication for test suite")
-	err = a.client.Auth.OLDAP.Enable()
-	require.NoError(a.T(), err, "Failed to enable OpenLDAP authentication")
+	logrus.Info("Enabling Active Directory authentication for test suite")
+	err = a.client.Auth.ActiveDirectory.Enable()
+	require.NoError(a.T(), err, "Failed to enable Active Directory authentication")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TearDownSuite() {
+func (a *ActiveDirectoryAuthProviderSuite) TearDownSuite() {
 	if a.client != nil {
-		ldapConfig, err := a.client.Management.AuthConfig.ByID(authactions.OpenLdap)
-		if err == nil && ldapConfig.Enabled {
-			logrus.Info("Disabling OpenLDAP authentication after test suite")
-			err := a.client.Auth.OLDAP.Disable()
+		adConfig, err := a.client.Management.AuthConfig.ByID(authactions.ActiveDirectory)
+		if err == nil && adConfig.Enabled {
+			logrus.Info("Disabling Active Directory authentication after test suite")
+			err := a.client.Auth.ActiveDirectory.Disable()
 			if err != nil {
-				logrus.WithError(err).Warn("Failed to disable OpenLDAP in teardown")
+				logrus.WithError(err).Warn("Failed to disable Active Directory in teardown")
 			}
 		}
 	}
 	a.session.Cleanup()
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestEnableOpenLDAP() {
+func (a *ActiveDirectoryAuthProviderSuite) TestEnableActiveDirectory() {
 	subSession := a.session.NewSession()
 	defer subSession.Cleanup()
 
-	err := a.client.Auth.OLDAP.Enable()
-	require.NoError(a.T(), err, "Failed to enable OpenLDAP")
+	err := a.client.Auth.ActiveDirectory.Enable()
+	require.NoError(a.T(), err, "Failed to enable Active Directory")
 
-	ldapConfig, err := a.client.Management.AuthConfig.ByID(authactions.OpenLdap)
-	require.NoError(a.T(), err, "Failed to retrieve OpenLDAP config")
+	adConfig, err := a.client.Management.AuthConfig.ByID(authactions.ActiveDirectory)
+	require.NoError(a.T(), err, "Failed to retrieve Active Directory config")
 
-	require.True(a.T(), ldapConfig.Enabled, "OpenLDAP should be enabled")
-	require.Equal(a.T(), authactions.AuthProvCleanupAnnotationValUnlocked, ldapConfig.Annotations[authactions.AuthProvCleanupAnnotationKey], "Annotation should be unlocked")
+	require.True(a.T(), adConfig.Enabled, "Active Directory should be enabled")
+	require.Equal(a.T(), authactions.AuthProvCleanupAnnotationValUnlocked, adConfig.Annotations[authactions.AuthProvCleanupAnnotationKey], "Annotation should be unlocked")
 
 	secret, err := a.client.WranglerContext.Core.Secret().Get(
 		rbac.GlobalDataNS,
-		authactions.OpenLdapPasswordSecretID,
+		authactions.ActiveDirectoryPasswordSecretID,
 		metav1.GetOptions{},
 	)
 	require.NoError(a.T(), err, "Failed to retrieve password secret")
 
-	require.Equal(a.T(), a.client.Auth.OLDAP.Config.ServiceAccount.Password, string(secret.Data["serviceaccountpassword"]), "Password mismatch")
+	require.Equal(a.T(), a.client.Auth.ActiveDirectory.Config.ServiceAccount.Password, string(secret.Data["serviceaccountpassword"]), "Password mismatch")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestDisableAndEnableOpenLdap() {
+func (a *ActiveDirectoryAuthProviderSuite) TestDisableAndEnableActiveDirectory() {
 	subSession := a.session.NewSession()
 	defer subSession.Cleanup()
 
-	err := a.client.Auth.OLDAP.Enable()
-	require.NoError(a.T(), err, "Failed to enable OpenLDAP")
+	err := a.client.Auth.ActiveDirectory.Enable()
+	require.NoError(a.T(), err, "Failed to enable Active Directory")
 
-	err = a.client.Auth.OLDAP.Disable()
-	require.NoError(a.T(), err, "Failed to disable OpenLDAP")
+	err = a.client.Auth.ActiveDirectory.Disable()
+	require.NoError(a.T(), err, "Failed to disable Active Directory")
 
-	ldapConfig, err := authactions.WaitForAuthProviderAnnotationUpdate(a.client, authactions.OpenLdap, authactions.AuthProvCleanupAnnotationValLocked)
+	adConfig, err := authactions.WaitForAuthProviderAnnotationUpdate(a.client, authactions.ActiveDirectory, authactions.AuthProvCleanupAnnotationValLocked)
 	require.NoError(a.T(), err, "Failed waiting for annotation update")
 
-	require.False(a.T(), ldapConfig.Enabled, "OpenLDAP should be disabled")
-	require.Equal(a.T(), authactions.AuthProvCleanupAnnotationValLocked, ldapConfig.Annotations[authactions.AuthProvCleanupAnnotationKey], "Annotation should be locked")
+	require.False(a.T(), adConfig.Enabled, "Active Directory should be disabled")
+	require.Equal(a.T(), authactions.AuthProvCleanupAnnotationValLocked, adConfig.Annotations[authactions.AuthProvCleanupAnnotationKey], "Annotation should be locked")
 
 	_, err = a.client.WranglerContext.Core.Secret().Get(
 		rbac.GlobalDataNS,
-		authactions.OpenLdapPasswordSecretID,
+		authactions.ActiveDirectoryPasswordSecretID,
 		metav1.GetOptions{},
 	)
 	require.Error(a.T(), err, "Password secret should not exist")
 	require.Contains(a.T(), err.Error(), "not found", "Should return not found error")
 
-	err = a.client.Auth.OLDAP.Enable()
-	require.NoError(a.T(), err, "Failed to re-enable OpenLDAP")
+	err = a.client.Auth.ActiveDirectory.Enable()
+	require.NoError(a.T(), err, "Failed to re-enable Active Directory")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestAllowAnyUserAccessMode() {
-	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+func (a *ActiveDirectoryAuthProviderSuite) TestAllowAnyUserAccessMode() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
 	allUsers := slices.Concat(a.authConfig.Users, a.authConfig.NestedUsers, a.authConfig.DoubleNestedUsers)
-	err = authactions.VerifyUserLogins(authAdmin, authactions.OpenLdap, allUsers, authactions.AccessModeUnrestricted+" access mode", true)
+	err = authactions.VerifyUserLogins(authAdmin, authactions.ActiveDirectory, allUsers, authactions.AccessModeUnrestricted+" access mode", true)
 	require.NoError(a.T(), err, "All users should be able to login")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestRefreshGroup() {
-	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+func (a *ActiveDirectoryAuthProviderSuite) TestRefreshGroup() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
-	adminGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.OpenLdap, a.authConfig.Group, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
+	adminGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.Group, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
 	adminGlobalRole := &managementv3.GlobalRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "grb-",
@@ -162,7 +162,7 @@ func (a *OpenLDAPAuthProviderSuite) TestRefreshGroup() {
 	err = users.RefreshGroupMembership(authAdmin)
 	require.NoError(a.T(), err, "Failed to refresh group membership")
 
-	standardGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.OpenLdap, a.authConfig.NestedGroup, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
+	standardGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.NestedGroup, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
 	standardGlobalRole := &managementv3.GlobalRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "grb-",
@@ -178,16 +178,16 @@ func (a *OpenLDAPAuthProviderSuite) TestRefreshGroup() {
 	require.NoError(a.T(), err, "Failed to refresh group membership")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipDoubleNestedGroupClusterAccess() {
-	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+func (a *ActiveDirectoryAuthProviderSuite) TestGroupMembershipDoubleNestedGroupClusterAccess() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
 	doubleNestedGroupPrincipalID := authactions.GetGroupPrincipalID(
-		authactions.OpenLdap,
+		authactions.ActiveDirectory,
 		a.authConfig.DoubleNestedGroup,
-		a.client.Auth.OLDAP.Config.Users.SearchBase,
-		a.client.Auth.OLDAP.Config.Groups.SearchBase,
+		a.client.Auth.ActiveDirectory.Config.Users.SearchBase,
+		a.client.Auth.ActiveDirectory.Config.Groups.SearchBase,
 	)
 	_, err = rbac.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterOwner.String())
 	require.NoError(a.T(), err, "Failed to create cluster role binding")
@@ -197,7 +197,7 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipDoubleNestedGroupClusterA
 			Username: userInfo.Username,
 			Password: userInfo.Password,
 		}
-		userClient, err := authactions.LoginAsAuthUser(authAdmin, user, authactions.OpenLdap)
+		userClient, err := authactions.LoginAsAuthUser(authAdmin, user, authactions.ActiveDirectory)
 		require.NoError(a.T(), err, "Failed to login user [%v]", userInfo.Username)
 
 		rbac.VerifyUserCanListCluster(a.T(), a.client, userClient, a.cluster.ID, rbac.ClusterOwner)
@@ -208,12 +208,12 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipDoubleNestedGroupClusterA
 	require.NotNil(a.T(), foundCRTB, "Cluster role binding should exist for group")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipOtherUsersCannotAccessCluster() {
-	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+func (a *ActiveDirectoryAuthProviderSuite) TestGroupMembershipOtherUsersCannotAccessCluster() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
-	doubleNestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.OpenLdap, a.authConfig.DoubleNestedGroup, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
+	doubleNestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.DoubleNestedGroup, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
 	_, err = rbac.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterOwner.String())
 	require.NoError(a.T(), err, "Failed to create cluster role binding")
 
@@ -222,7 +222,7 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipOtherUsersCannotAccessClu
 			Username: userInfo.Username,
 			Password: userInfo.Password,
 		}
-		userClient, err := authactions.LoginAsAuthUser(authAdmin, user, authactions.OpenLdap)
+		userClient, err := authactions.LoginAsAuthUser(authAdmin, user, authactions.ActiveDirectory)
 		require.NoError(a.T(), err, "Failed to login user [%v]", userInfo.Username)
 
 		_, err = userClient.Steve.SteveType(clusters.ProvisioningSteveResourceType).List(nil)
@@ -231,15 +231,15 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipOtherUsersCannotAccessClu
 	}
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipNestedGroupProjectAccess() {
-	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+func (a *ActiveDirectoryAuthProviderSuite) TestGroupMembershipNestedGroupProjectAccess() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
 	projectResp, _, err := projects.CreateProjectAndNamespaceUsingWrangler(authAdmin, a.cluster.ID)
 	require.NoError(a.T(), err, "Failed to create project and namespace")
 
-	nestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.OpenLdap, a.authConfig.NestedGroup, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
+	nestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.NestedGroup, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
 
 	prtbNamespace := projectResp.Name
 	if projectResp.Status.BackingNamespace != "" {
@@ -257,7 +257,7 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipNestedGroupProjectAccess(
 			Username: userInfo.Username,
 			Password: userInfo.Password,
 		}
-		userClient, err := authactions.LoginAsAuthUser(authAdmin, user, authactions.OpenLdap)
+		userClient, err := authactions.LoginAsAuthUser(authAdmin, user, authactions.ActiveDirectory)
 		require.NoError(a.T(), err, "Failed to login user [%v]", userInfo.Username)
 
 		projectList, err := projectsapi.ListProjects(userClient, projectResp.Namespace, metav1.ListOptions{
@@ -268,12 +268,12 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipNestedGroupProjectAccess(
 	}
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestRestrictedAccessModeClusterAndProjectBindings() {
-	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+func (a *ActiveDirectoryAuthProviderSuite) TestRestrictedAccessModeClusterAndProjectBindings() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
-	groupPrincipalID := authactions.GetGroupPrincipalID(authactions.OpenLdap, a.authConfig.Group, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
+	groupPrincipalID := authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.Group, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
 	_, err = rbac.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, groupPrincipalID, rbac.ClusterMember.String())
 	require.NoError(a.T(), err, "Failed to create cluster role binding")
 
@@ -291,7 +291,8 @@ func (a *OpenLDAPAuthProviderSuite) TestRestrictedAccessModeClusterAndProjectBin
 	projectName := fmt.Sprintf("%s:%s", projectResp.Namespace, projectResp.Name)
 
 	for _, userInfo := range a.authConfig.NestedUsers {
-		nestedUserPrincipalID := authactions.GetUserPrincipalID(authactions.OpenLdap, userInfo.Username, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
+		nestedUserPrincipalID := authactions.GetUserPrincipalID(authactions.ActiveDirectory, userInfo.Username, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
+
 		userPRTB := &managementv3.ProjectRoleTemplateBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:    prtbNamespace,
@@ -308,12 +309,12 @@ func (a *OpenLDAPAuthProviderSuite) TestRestrictedAccessModeClusterAndProjectBin
 	}
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestAllowClusterAndProjectMembersAccessMode() {
-	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+func (a *ActiveDirectoryAuthProviderSuite) TestAllowClusterAndProjectMembersAccessMode() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
-	doubleNestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.OpenLdap, a.authConfig.DoubleNestedGroup, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
+	doubleNestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.DoubleNestedGroup, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
 	_, err = rbac.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterMember.String())
 	require.NoError(a.T(), err, "Failed to create cluster role binding")
 
@@ -326,34 +327,33 @@ func (a *OpenLDAPAuthProviderSuite) TestAllowClusterAndProjectMembersAccessMode(
 	}
 	projectName := fmt.Sprintf("%s:%s", projectResp.Namespace, projectResp.Name)
 
-	nestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.OpenLdap, a.authConfig.NestedGroup, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
+	nestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.NestedGroup, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
 
 	groupPRTBResp, err := rbac.CreateGroupProjectRoleTemplateBinding(authAdmin, projectName, prtbNamespace, nestedGroupPrincipalID, rbac.ProjectOwner.String())
 	require.NoError(a.T(), err, "Failed to create PRTB")
 	require.NotNil(a.T(), groupPRTBResp, "PRTB should be created")
 
+	allowedUsers := slices.Concat(a.authConfig.DoubleNestedUsers, a.authConfig.NestedUsers)
 	var allowedPrincipalIDs []string
 	allowedPrincipalIDs = append(allowedPrincipalIDs, nestedGroupPrincipalID)
-	doubleNestedGroupPrincipalID = authactions.GetGroupPrincipalID(authactions.OpenLdap, a.authConfig.DoubleNestedGroup, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
+	doubleNestedGroupPrincipalID = authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.DoubleNestedGroup, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
 	allowedPrincipalIDs = append(allowedPrincipalIDs, doubleNestedGroupPrincipalID)
 
-	newAuthConfig, err := authactions.UpdateAccessMode(a.client, authactions.OpenLdap, authactions.AccessModeRestricted, allowedPrincipalIDs)
+	newAuthConfig, err := authactions.UpdateAccessMode(a.client, authactions.ActiveDirectory, authactions.AccessModeRestricted, allowedPrincipalIDs)
 	require.NoError(a.T(), err, "Failed to update access mode")
 	require.Equal(a.T(), authactions.AccessModeRestricted, newAuthConfig.AccessMode, "Access mode should be restricted")
-
-	allowedUsers := slices.Concat(a.authConfig.DoubleNestedUsers, a.authConfig.NestedUsers)
-	err = authactions.VerifyUserLogins(authAdmin, authactions.OpenLdap, allowedUsers, "restricted access mode", true)
+	err = authactions.VerifyUserLogins(authAdmin, authactions.ActiveDirectory, allowedUsers, "restricted access mode", true)
 	require.NoError(a.T(), err, "Cluster/project members should be able to login")
 
-	err = authactions.VerifyUserLogins(authAdmin, authactions.OpenLdap, a.authConfig.Users, "restricted access mode", false)
+	err = authactions.VerifyUserLogins(authAdmin, authactions.ActiveDirectory, a.authConfig.Users, "restricted access mode", false)
 	require.NoError(a.T(), err, "Non-members should NOT be able to login")
 
-	_, err = authactions.UpdateAccessMode(a.client, authactions.OpenLdap, authactions.AccessModeUnrestricted, nil)
+	_, err = authactions.UpdateAccessMode(a.client, authactions.ActiveDirectory, authactions.AccessModeUnrestricted, nil)
 	require.NoError(a.T(), err, "Failed to rollback access mode")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestRestrictedAccessModeAuthorizedUsersCanLogin() {
-	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+func (a *ActiveDirectoryAuthProviderSuite) TestRestrictedAccessModeAuthorizedUsersCanLogin() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
@@ -361,25 +361,25 @@ func (a *OpenLDAPAuthProviderSuite) TestRestrictedAccessModeAuthorizedUsersCanLo
 		authAdmin,
 		a.cluster.ID,
 		a.authConfig,
-		authactions.OpenLdap,
-		a.client.Auth.OLDAP.Config.Users.SearchBase,
-		a.client.Auth.OLDAP.Config.Groups.SearchBase,
+		authactions.ActiveDirectory,
+		a.client.Auth.ActiveDirectory.Config.Users.SearchBase,
+		a.client.Auth.ActiveDirectory.Config.Groups.SearchBase,
 	)
 	require.NoError(a.T(), err, "Failed to setup required access mode test")
 
-	newAuthConfig, err := authactions.UpdateAccessMode(a.client, authactions.OpenLdap, authactions.AccessModeRequired, principalIDs)
+	newAuthConfig, err := authactions.UpdateAccessMode(a.client, authactions.ActiveDirectory, authactions.AccessModeRequired, principalIDs)
 	require.NoError(a.T(), err, "Failed to update access mode")
 	require.Equal(a.T(), authactions.AccessModeRequired, newAuthConfig.AccessMode, "Access mode should be required")
 
-	err = authactions.VerifyUserLogins(authAdmin, authactions.OpenLdap, a.authConfig.Users, "required access mode", true)
+	err = authactions.VerifyUserLogins(authAdmin, authactions.ActiveDirectory, a.authConfig.Users, "required access mode", true)
 	require.NoError(a.T(), err, "Authorized users should be able to login")
 
-	_, err = authactions.UpdateAccessMode(a.client, authactions.OpenLdap, authactions.AccessModeUnrestricted, nil)
+	_, err = authactions.UpdateAccessMode(a.client, authactions.ActiveDirectory, authactions.AccessModeUnrestricted, nil)
 	require.NoError(a.T(), err, "Failed to rollback access mode")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestRestrictedAccessModeUnauthorizedUsersCannotLogin() {
-	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+func (a *ActiveDirectoryAuthProviderSuite) TestRestrictedAccessModeUnauthorizedUsersCannotLogin() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
@@ -387,24 +387,24 @@ func (a *OpenLDAPAuthProviderSuite) TestRestrictedAccessModeUnauthorizedUsersCan
 		authAdmin,
 		a.cluster.ID,
 		a.authConfig,
-		authactions.OpenLdap,
-		a.client.Auth.OLDAP.Config.Users.SearchBase,
-		a.client.Auth.OLDAP.Config.Groups.SearchBase,
+		authactions.ActiveDirectory,
+		a.client.Auth.ActiveDirectory.Config.Users.SearchBase,
+		a.client.Auth.ActiveDirectory.Config.Groups.SearchBase,
 	)
 	require.NoError(a.T(), err, "Failed to setup required access mode test")
 
-	newAuthConfig, err := authactions.UpdateAccessMode(a.client, authactions.OpenLdap, authactions.AccessModeRequired, principalIDs)
+	newAuthConfig, err := authactions.UpdateAccessMode(a.client, authactions.ActiveDirectory, authactions.AccessModeRequired, principalIDs)
 	require.NoError(a.T(), err, "Failed to update access mode")
 	require.Equal(a.T(), authactions.AccessModeRequired, newAuthConfig.AccessMode, "Access mode should be required")
 
 	unauthorizedUsers := slices.Concat(a.authConfig.NestedUsers, a.authConfig.DoubleNestedUsers)
-	err = authactions.VerifyUserLogins(authAdmin, authactions.OpenLdap, unauthorizedUsers, "required access mode", false)
+	err = authactions.VerifyUserLogins(authAdmin, authactions.ActiveDirectory, unauthorizedUsers, "required access mode", false)
 	require.NoError(a.T(), err, "Unauthorized users should NOT be able to login")
 
-	_, err = authactions.UpdateAccessMode(a.client, authactions.OpenLdap, authactions.AccessModeUnrestricted, nil)
+	_, err = authactions.UpdateAccessMode(a.client, authactions.ActiveDirectory, authactions.AccessModeUnrestricted, nil)
 	require.NoError(a.T(), err, "Failed to rollback access mode")
 }
 
-func TestOpenLDAPAuthProviderSuite(t *testing.T) {
-	suite.Run(t, new(OpenLDAPAuthProviderSuite))
+func TestActiveDirectoryAuthProviderSuite(t *testing.T) {
+	suite.Run(t, new(ActiveDirectoryAuthProviderSuite))
 }

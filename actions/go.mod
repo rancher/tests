@@ -59,7 +59,7 @@ replace (
 
 require (
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20251207235249-2e4e97ab66a2
+	github.com/rancher/shepherd v0.0.0-20251203195144-c9f6483abe67
 	github.com/rancher/tfp-automation v0.0.0-20251121233100-199e1728f71c
 )
 
