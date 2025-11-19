@@ -24,5 +24,5 @@ func VsphereCloudProviderCharts(t *testing.T, client *rancher.Client, clusterNam
 	podErrors := pods.StatusPods(client, clusterID)
 	require.Empty(t, podErrors)
 
-	cloudprovider.CreatePVCWorkload(t, client, clusterID)
+	cloudprovider.CreatePVCWorkload(t, client, clusterID, "")
 }
