@@ -1,7 +1,7 @@
 # Lean Dockerfile for Infrastructure Operations
 # Contains only essentials for running Ansible and Tofu
 
-ARG TOFU_VERSION=12.2.0
+ARG TOFU_VERSION=1.10.7
 ARG ANSIBLE_VERSION=3.14
 
 FROM alpine:3.22
