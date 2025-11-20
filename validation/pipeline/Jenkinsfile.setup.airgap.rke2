@@ -40,6 +40,11 @@ node {
                             )
                         }
                         
+                        stage('Build Infrastructure Tools Image') {
+                            echo "Building Docker image with Tofu and Ansible"
+                            sh "docker build -t rancher-infra-tools:latest -f validation/pipeline/Dockerfile.infra validation/pipeline/"
+                        }
+                        
                         stage('Configure SSH Key') {
                             infrastructure.writeSshKey(
                                 keyContent: env.AWS_SSH_PEM_KEY,
