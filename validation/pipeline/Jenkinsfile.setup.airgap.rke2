@@ -139,6 +139,12 @@ node {
                                 ]
                             )
                             
+                            // Add SSH private key path configuration
+                            def sshKeyPath = "/root/.ssh/${env.AWS_SSH_PEM_KEY_NAME}"
+                            if (!ansibleVars.contains('ssh_private_key_file:')) {
+                                ansibleVars += "\nssh_private_key_file: ${sshKeyPath}"
+                            }
+                            
                             ansible.writeInventoryVars(
                                 path: "${ansiblePath}/inventory/group_vars/all.yml",
                                 content: ansibleVars
