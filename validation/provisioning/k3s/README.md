@@ -242,6 +242,7 @@ clusterConfig:
   kubernetesVersion: ""               #Permutable in dynamic tests. Leave blank for the latest kubernetes version
   provider: "aws"                     #Permutable in dynamic tests.
   nodeProvider: "ec2"
+  resourcePrefix: ""                  # OPTIONAL
   hardened: false
   compliance: false                   #Set this to true for rancher versions with compliance
   psact: ""                           #either rancher-privileged|rancher-restricted|rancher-baseline
