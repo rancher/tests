@@ -2,7 +2,7 @@
 # Contains only essentials for running Ansible and Tofu
 
 ARG TOFU_VERSION=1.10.7
-ARG ANSIBLE_VERSION=2.20.0
+ARG ANSIBLE_VERSION=2.10.7
 
 FROM alpine:3.22
 
