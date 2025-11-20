@@ -36,18 +36,26 @@ node {
                             deleteDir()
                             
                             echo "Cloning tests repository"
-                            project.checkout(
-                                target: 'tests',
-                                branch: testsBranch,
-                                repository: testsRepo
-                            )
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${testsBranch}"]],
+                                extensions: scm.extensions + [
+                                    [$class: 'CleanCheckout'],
+                                    [$class: 'RelativeTargetDirectory', relativeTargetDir: 'tests']
+                                ],
+                                userRemoteConfigs: [[url: testsRepo]]
+                            ])
                             
                             echo "Cloning qa-infra-automation repository"
-                            project.checkout(
-                                target: 'qa-infra-automation',
-                                branch: qaInfraBranch,
-                                repository: qaInfraRepo
-                            )
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${qaInfraBranch}"]],
+                                extensions: scm.extensions + [
+                                    [$class: 'CleanCheckout'],
+                                    [$class: 'RelativeTargetDirectory', relativeTargetDir: 'qa-infra-automation']
+                                ],
+                                userRemoteConfigs: [[url: qaInfraRepo]]
+                            ])
                         }
                         
                         stage('Build Infrastructure Tools Image') {
