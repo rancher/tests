@@ -2,12 +2,10 @@
 # Contains only essentials for running Ansible and Tofu
 
 ARG TOFU_VERSION=1.10.7
-ARG ANSIBLE_VERSION=2.10.7
 
 FROM --platform=linux/amd64 alpine:3.22
 
 ARG TOFU_VERSION
-ARG ANSIBLE_VERSION
 
 # Install runtime dependencies
 RUN apk add --no-cache \
