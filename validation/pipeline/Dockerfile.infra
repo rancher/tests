@@ -25,12 +25,6 @@ RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/dow
     && rm /tmp/tofu.tar.gz \
     && chmod +x /usr/local/bin/tofu
 
-# Install Ansible
-# RUN pip3 install --no-cache-dir --break-system-packages \
-#     ansible==${ANSIBLE_VERSION} \
-#     boto3 \
-#     botocore
-
 # Install AWS CLI
 RUN pip3 install --no-cache-dir --break-system-packages awscli
 
