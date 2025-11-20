@@ -87,7 +87,7 @@ node {
                         stage('Download Terraform Variables from S3') {
                             echo "Downloading terraform.tfvars from S3"
                             
-                            def s3Key = "${env.S3_KEY_PREFIX}/${targetWorkspace}/terraform.tfvars"
+                            def s3Path = "env:/${targetWorkspace}/terraform.tfvars"
                             def tfvarsPath = "${tofuModulePath}/terraform.tfvars"
                             def workspace = pwd()
                             
@@ -98,10 +98,10 @@ node {
                                     -v ${workspace}:/workspace \
                                     -w /workspace \
                                     rancher-infra-tools:latest \
-                                    sh -c 'aws s3 cp s3://${env.S3_BUCKET_NAME}/${s3Key} ${tfvarsPath} --region ${env.S3_BUCKET_REGION}'
+                                    sh -c 'aws s3 cp s3://${env.S3_BUCKET_NAME}/${s3Path} ${tfvarsPath} --region ${env.S3_BUCKET_REGION}'
                             """
                             
-                            echo "Downloaded terraform.tfvars from s3://${env.S3_BUCKET_NAME}/${s3Key}"
+                            echo "Downloaded terraform.tfvars from s3://${env.S3_BUCKET_NAME}/${s3Path}"
                         }
                         
                         stage('Destroy Infrastructure') {
@@ -139,7 +139,7 @@ node {
                             
                             // Clean up S3 stored terraform.tfvars
                             echo "Cleaning up terraform.tfvars from S3"
-                            def s3Key = "${env.S3_KEY_PREFIX}/${targetWorkspace}/terraform.tfvars"
+                            def s3Path = "env:/${targetWorkspace}/terraform.tfvars"
                             def workspace = pwd()
                             sh """
                                 docker run --rm --platform linux/amd64 \
@@ -148,7 +148,7 @@ node {
                                     -v ${workspace}:/workspace \
                                     -w /workspace \
                                     rancher-infra-tools:latest \
-                                    sh -c 'aws s3 rm s3://${env.S3_BUCKET_NAME}/${s3Key} --region ${env.S3_BUCKET_REGION} || true'
+                                    sh -c 'aws s3 rm s3://${env.S3_BUCKET_NAME}/${s3Path} --region ${env.S3_BUCKET_REGION} || true'
                             """
                         }
                         

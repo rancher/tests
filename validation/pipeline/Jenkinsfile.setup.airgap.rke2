@@ -139,7 +139,7 @@ node {
                         stage('Upload Terraform Variables to S3') {
                             echo "Uploading terraform.tfvars to S3 for future destroy operations"
                             
-                            def s3Key = "${env.S3_KEY_PREFIX}/${workspaceName}/terraform.tfvars"
+                            def s3Path = "env:/${workspaceName}/terraform.tfvars"
                             def tfvarsPath = "${tofuModulePath}/terraform.tfvars"
                             def workspace = pwd()
                             
@@ -150,10 +150,10 @@ node {
                                     -v ${workspace}:/workspace \
                                     -w /workspace \
                                     rancher-infra-tools:latest \
-                                    sh -c 'aws s3 cp ${tfvarsPath} s3://${env.S3_BUCKET_NAME}/${s3Key} --region ${env.S3_BUCKET_REGION}'
+                                    sh -c 'aws s3 cp ${tfvarsPath} s3://${env.S3_BUCKET_NAME}/${s3Path} --region ${env.S3_BUCKET_REGION}'
                             """
                             
-                            echo "Uploaded terraform.tfvars to s3://${env.S3_BUCKET_NAME}/${s3Key}"
+                            echo "Uploaded terraform.tfvars to s3://${env.S3_BUCKET_NAME}/${s3Path}"
                         }
                         
                         stage('Configure Ansible Variables') {
