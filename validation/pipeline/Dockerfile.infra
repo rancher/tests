@@ -4,7 +4,7 @@
 ARG TOFU_VERSION=1.10.7
 ARG ANSIBLE_VERSION=2.10.7
 
-FROM alpine:3.22
+FROM --platform=linux/amd64 alpine:3.22
 
 ARG TOFU_VERSION
 ARG ANSIBLE_VERSION
@@ -44,5 +44,5 @@ RUN tofu version && \
     ansible --version && \
     aws --version
 
-# Set entrypoint
-ENTRYPOINT ["/bin/bash"]
+# Default to sh shell (compatible with alpine and docker run sh -c)
+CMD ["/bin/sh"]
