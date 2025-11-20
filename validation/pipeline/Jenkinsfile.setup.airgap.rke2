@@ -127,7 +127,7 @@ node {
                             )
                             
                             // Archive generated inventory file
-                            def inventoryPath = "${ansiblePath}/inventory/inventory.yml"
+                            def inventoryPath = "qa-infra-automation/ansible/rke2/airgap/inventory/inventory.yml"
                             if (fileExists(inventoryPath)) {
                                 archiveArtifacts artifacts: inventoryPath, fingerprint: true
                                 echo "Archived inventory file: ${inventoryPath}"
