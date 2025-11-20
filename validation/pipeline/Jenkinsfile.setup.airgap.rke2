@@ -69,9 +69,6 @@ node {
                                 keyName: env.AWS_SSH_PEM_KEY_NAME,
                                 dir: '.ssh'
                             )
-                            
-                            // Debug: List SSH key files
-                            sh 'ls -la .ssh/'
                         }
                         
                         stage('Configure Tofu Variables') {
@@ -184,10 +181,6 @@ node {
                         }
                         
                         stage('Setup SSH Keys on Nodes') {
-                            // Debug: Check SSH keys in container
-                            def workspace = pwd()
-                            sh "docker run --rm --platform linux/amd64 -v ${workspace}:/workspace -v ${workspace}/.ssh:/root/.ssh:ro -w /workspace rancher-infra-tools:latest sh -c 'ls -la /root/.ssh/'"
-                            
                             ansible.runPlaybook(
                                 dir: ansiblePath,
                                 inventory: 'inventory/inventory.yml',
