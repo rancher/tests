@@ -10,11 +10,11 @@ node {
     def qaInfraRepo = env.QA_INFRA_REPO_URL ?: "https://github.com/rancher/qa-infra-automation"
     def targetWorkspace = env.TARGET_WORKSPACE
     
-    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg': 1]) {
+    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm']) {
         withFolderProperties {
             paramsMap = []
             params.each {
-                if (it.value && it.value.trim() != "") {
+                if (it.value != null && it.value.toString().trim() != "") {
                     paramsMap << "$it.key=$it.value"
                 }
             }
