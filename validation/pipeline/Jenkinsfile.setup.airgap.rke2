@@ -125,6 +125,15 @@ node {
                                 varFile: 'terraform.tfvars',
                                 autoApprove: true
                             )
+                            
+                            // Archive generated inventory file
+                            def inventoryPath = "${ansiblePath}/inventory/inventory.yml"
+                            if (fileExists(inventoryPath)) {
+                                archiveArtifacts artifacts: inventoryPath, fingerprint: true
+                                echo "Archived inventory file: ${inventoryPath}"
+                            } else {
+                                echo "Warning: Inventory file not found at ${inventoryPath}"
+                            }
                         }
                         
                         stage('Configure Ansible Variables') {
