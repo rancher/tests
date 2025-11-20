@@ -141,10 +141,16 @@ node {
                             
                             def s3Key = "${env.S3_KEY_PREFIX}/${workspaceName}/terraform.tfvars"
                             def tfvarsPath = "${tofuModulePath}/terraform.tfvars"
+                            def workspace = pwd()
                             
                             sh """
-                                aws s3 cp ${tfvarsPath} s3://${env.S3_BUCKET_NAME}/${s3Key} \
-                                    --region ${env.S3_BUCKET_REGION}
+                                docker run --rm --platform linux/amd64 \
+                                    -e AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID} \
+                                    -e AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY} \
+                                    -v ${workspace}:/workspace \
+                                    -w /workspace \
+                                    rancher-infra-tools:latest \
+                                    sh -c 'aws s3 cp ${tfvarsPath} s3://${env.S3_BUCKET_NAME}/${s3Key} --region ${env.S3_BUCKET_REGION}'
                             """
                             
                             echo "Uploaded terraform.tfvars to s3://${env.S3_BUCKET_NAME}/${s3Key}"
