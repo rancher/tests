@@ -1,9 +1,9 @@
-- projects: [RANCHERINT]
+- projects: [ RANCHERINT ]
   suite: Longhorn
   cases:
   - title: "Fresh Longhorn Installation via Rancher App Catalog"
     description: "Verify Longhorn can be successfully installed through Rancher's app catalog with default settings on a clean Kubernetes cluster."
-    automation: 0
+    automation: 2
     steps:
     - action: "Log into Rancher UI with cluster admin privileges"
       data: ""
@@ -49,9 +49,11 @@
       data: ""
       expectedresult: "`longhorn` storage class exists and is available"
       position: 11
+    custom_field:
+      "15": "TestLonghornTestSuite/TestChartInstallCustomConfig"
   - title: "Longhorn Installation with Custom Configuration"
     description: "Test Longhorn installation with custom settings including replica count, data path, and node selection through Rancher interface."
-    automation: 0
+    automation: 2
     steps:
     - action: "Access Longhorn installation chart in Rancher Apps"
       data: ""
@@ -97,6 +99,8 @@
       data: ""
       expectedresult: "`/var/lib/longhorn-custom` directory is used"
       position: 11
+    custom_field:
+      "15": "TestLonghornTestSuite/TestChartInstall"
   - title: "Longhorn UI Access Through Rancher"
     description: "Verify seamless access to Longhorn UI through Rancher interface with proper authentication and session management."
     automation: 0
