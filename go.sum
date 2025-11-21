@@ -1519,6 +1519,8 @@ github.com/creack/pty v1.1.18 h1:n56/Zwd5o6whRC5PMGretI4IdRLlmBXYNjScPaBgsbY=
 github.com/creack/pty v1.1.18/go.mod h1:MOBLtS5ELjhRRrroQr9kyvTxUAFNvYEK993ew/Vr4O4=
 github.com/creasty/defaults v1.5.2 h1:/VfB6uxpyp6h0fr7SPp7n8WJBoV8jfxQXPCnkVSjyls=
 github.com/creasty/defaults v1.5.2/go.mod h1:FPZ+Y0WNrbqOVw+c6av63eyHUAl6pMHZwqLPvXUZGfY=
+github.com/dasarinaidu/shepherd v0.0.0-20251119203006-1092e86a7c9d h1:oLZ4WPQaij8AAvER4zHE3FjOkNxyPgoLzX+HdI6/oEU=
+github.com/dasarinaidu/shepherd v0.0.0-20251119203006-1092e86a7c9d/go.mod h1:SJtW8Jqv0rphZzsGnvB965YdyR2FqFtB+TbbzVLt8F4=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
@@ -2182,8 +2184,6 @@ github.com/rancher/rancher/pkg/apis v0.0.0-20251111120454-f829d8f1dc83 h1:5wbUhQ
 github.com/rancher/rancher/pkg/apis v0.0.0-20251111120454-f829d8f1dc83/go.mod h1:xyYMxIycb9QpdxZjUxf95Cc4E27rfma8Z77U5ysRx3A=
 github.com/rancher/rke v1.8.0-rc.4 h1:jowVyaF3LsJonC7vNsAwWf3MONHAtEFUD/j3UzNSE5U=
 github.com/rancher/rke v1.8.0-rc.4/go.mod h1:x9N1abruzDFMwTpqq2cnaDYpKCptlNoW8VraNWB6Pc4=
-github.com/rancher/shepherd v0.0.0-20251111151559-050d62ead063 h1:dOsgYdfXh/xTu4posp1nzCE/ePN/Ce2fCsIgh1XqXFk=
-github.com/rancher/shepherd v0.0.0-20251111151559-050d62ead063/go.mod h1:SJtW8Jqv0rphZzsGnvB965YdyR2FqFtB+TbbzVLt8F4=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078 h1:1MJSgYkgXhr/Zc5idJkKa10SiBQd0HVtbxVOBoghlzY=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078/go.mod h1:CV2Soy/Skw8/SA9dDJVgpeHxoEdtjYkNpNy6xvvC5kA=
 github.com/rancher/tfp-automation v0.0.0-20251119204231-c19c183bcfc7 h1:eYhvr3fxJvBlM7ciMOyAL7kV6d/g7WHlcV3re8OJyEM=
