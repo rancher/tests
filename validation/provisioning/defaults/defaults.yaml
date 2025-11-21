@@ -12,17 +12,17 @@ clusterConfig:
       etcd: true
       controlplane: false
       worker: false
-      quantity: 3
+      quantity: 1
   - machinePoolConfig:
       etcd: false
       controlplane: true
       worker: false
-      quantity: 2
+      quantity: 1
   - machinePoolConfig:
       etcd: false
       controlplane: false
       worker: true
-      quantity: 3
+      quantity: 1
   kubernetesVersion: ""
   cni: "calico"
   provider: "aws"

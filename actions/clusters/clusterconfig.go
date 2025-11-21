@@ -38,6 +38,7 @@ type ClusterConfig struct {
 	RKE1CustomClusterDockerInstall *provisioningInput.RKE1CustomClusterDockerInstall `json:"rke1CustomClusterDockerInstall" yaml:"rke1CustomClusterDockerInstall"`
 	PathToRepo                     string                                            `json:"pathToRepo" yaml:"pathToRepo"`
 	IPv6Cluster                    bool                                              `json:"ipv6Cluster" yaml:"ipv6Cluster" default:"false"`
+	ResourcePrefix                 string                                            `json:"resourcePrefix" yaml:"resourcePrefix" default:""`
 }
 
 // ConvertConfigToClusterConfig converts the config from (user) provisioning input to a cluster config

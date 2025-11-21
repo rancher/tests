@@ -40,7 +40,7 @@ awsMachineConfigs:
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
     ami: "<required>"
-    instanceType: "t3a.medium"
+    instanceType: "t3a.xlarge"
     volumeType: "<required>"
     rootSize: "<required>"
     sshUser: "<required>"
@@ -56,6 +56,35 @@ awsMachineConfigs:
     zone: "a"
     retries: "5"
     rootSize: "100"
+
+#Required for tests that utilize custom clusters
+awsEC2Configs:
+  region: "us-east-2"
+  awsSecretAccessKey: "<required>"
+  awsAccessKeyID: "<required>"
+  awsEC2Config:
+    - instanceType: "t3a.medium"
+      awsRegionAZ: ""
+      awsSSHKeyName: "<required>"
+      awsAMI: "<required>"
+      awsSecurityGroups: ["<required>"]
+      awsSSHKeyName: "<required>"
+      awsCICDInstanceTag: "<required>"
+      awsIAMProfile: ""
+      awsUser: "<required>"
+      volumeSize: 100
+      roles: ["etcd", "controlplane", "worker"]
+    - instanceType: "t2.2xlarge"
+      awsRegionAZ: ""
+      awsSSHKeyName: "<required>"
+      awsAMI: "<required>"
+      awsSecurityGroups: ["<required>"]
+      awsSSHKeyName: "<required>"
+      awsCICDInstanceTag: "<required>"
+      awsIAMProfile: ""
+      awsUser: "<required>"
+      volumeSize: 100
+      roles: ["windows"]
 
 logging:
    level: "info"

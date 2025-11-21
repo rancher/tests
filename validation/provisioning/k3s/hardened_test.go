@@ -20,7 +20,6 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -72,19 +71,13 @@ func hardenedSetup(t *testing.T) hardenedTest {
 func TestHardened(t *testing.T) {
 	t.Parallel()
 	k := hardenedSetup(t)
-	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	tests := []struct {
 		name            string
 		client          *rancher.Client
-		machinePools    []provisioninginput.MachinePools
 		scanProfileName string
 	}{
-		{"K3S_CIS_1.9_Profile|3_etcd|2_cp|3_worker", k.standardUserClient, nodeRolesStandard, "k3s-cis-1.9-profile"},
+		{"K3S_CIS_1.9_Profile|3_etcd|2_cp|3_worker", k.standardUserClient, "k3s-cis-1.9-profile"},
 	}
 	for _, tt := range tests {
 		t.Cleanup(func() {
@@ -97,8 +90,6 @@ func TestHardened(t *testing.T) {
 
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
-
-			clusterConfig.MachinePools = tt.machinePools
 			clusterConfig.Hardened = true
 
 			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)

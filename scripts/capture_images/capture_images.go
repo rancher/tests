@@ -23,8 +23,11 @@ import (
 )
 
 const (
-	LOG_BUFFER_SIZE          = "2MB"
-	CAPTURE_VERSIONS_COMMAND = "kubectl version && kubectl get pods --all-namespaces -o jsonpath=\"{..image}\" |tr -s '[[:space:]]' '\n' |sort |uniq"
+	logBufferSize            = "2MB"
+	rancherVersionCommand    = "kubectl get settings.management.cattle.io server-version -o json | jq -r '\"rancher:\" + .value'"
+	kubernetesVersionCommand = "kubectl version -o json | jq -r '\"kubernetes:\" + .serverVersion.gitVersion'"
+	imagesVersionsCommand    = "kubectl get pods --all-namespaces -o jsonpath=\"{..image}\" |tr -s '[[:space:]]' '\n' |sort |uniq"
+	imagesPath               = "/app/images/"
 )
 
 var (
@@ -148,9 +151,9 @@ func main() {
 		panic(fmt.Errorf("Failed to create file for versions: %v", err))
 	}
 
-	file, err := os.Create("/app/images/" + c.Name)
+	file, err := os.Create(imagesPath + "version-information")
 	if err != nil {
-		panic(fmt.Errorf("Failed to create file for image names: %v", err))
+		panic(fmt.Errorf("Failed to create file for version-information: %v", err))
 	}
 	defer file.Close()
 	file.Write([]byte(versions + "\n"))
@@ -170,7 +173,7 @@ func main() {
 				panic(fmt.Errorf("Failed to capture used images: %v", err))
 			}
 
-			file, err := os.Create("/app/images/versions")
+			file, err := os.Create("/app/images/" + clusterInfo.Name)
 			if err != nil {
 				panic(fmt.Errorf("Failed to create file for image names: %v", err))
 			}
@@ -192,11 +195,11 @@ func main() {
 	wg.Wait()
 }
 
-// captureVersions gets the images and kubernetes version on the cluster
+// captureVersions gets the images, rancher and kubernetes versions on the cluster
 func captureVersions(client *rancher.Client, clusterID string) (string, error) {
-	captureVersionsCommand := []string{
-		"sh", "-c", CAPTURE_VERSIONS_COMMAND,
+	versionsCommand := []string{
+		"sh", "-c", fmt.Sprintf("%s && %s && %s", rancherVersionCommand, kubernetesVersionCommand, imagesVersionsCommand),
 	}
 
-	return kubectl.Command(client, nil, clusterID, captureVersionsCommand, LOG_BUFFER_SIZE)
+	return kubectl.Command(client, nil, clusterID, versionsCommand, logBufferSize)
 }

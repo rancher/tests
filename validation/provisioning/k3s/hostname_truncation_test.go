@@ -17,7 +17,6 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -65,19 +64,16 @@ func TestHostnameTruncation(t *testing.T) {
 	t.Parallel()
 	k := hostnameTruncationSetup(t)
 
-	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-
 	tests := []struct {
 		name                    string
 		client                  *rancher.Client
-		machinePools            []provisioninginput.MachinePools
 		ClusterNameLength       int
 		ClusterLengthLimit      int
 		machinePoolLengthLimits []int
 	}{
-		{"K3S_Hostname_Truncation|10_Characters", k.standardUserClient, nodeRolesDedicated, 63, 10, []int{10, 31, 63}},
-		{"K3S_Hostname_Truncation|31_Characters", k.standardUserClient, nodeRolesDedicated, 63, 31, []int{10, 31, 63}},
-		{"K3S_Hostname_Truncation|63_Characters", k.standardUserClient, nodeRolesDedicated, 63, 63, []int{10, 31, 63}},
+		{"K3S_Hostname_Truncation|10_Characters", k.standardUserClient, 63, 10, []int{10, 31, 63}},
+		{"K3S_Hostname_Truncation|31_Characters", k.standardUserClient, 63, 31, []int{10, 31, 63}},
+		{"K3S_Hostname_Truncation|63_Characters", k.standardUserClient, 63, 63, []int{10, 31, 63}},
 	}
 	for _, tt := range tests {
 		t.Cleanup(func() {
@@ -99,7 +95,6 @@ func TestHostnameTruncation(t *testing.T) {
 
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
-			clusterConfig.MachinePools = tt.machinePools
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))

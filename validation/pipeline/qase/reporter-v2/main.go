@@ -11,11 +11,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/kubectl"
-	"github.com/rancher/shepherd/pkg/config"
-	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/qase"
 	qaseactions "github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/qase/testresult"
@@ -35,9 +30,8 @@ var (
 )
 
 const (
-	requestLimit           = 100
-	captureVersionsCommand = "kubectl version && kubectl get pods --all-namespaces -o jsonpath=\"{..image}\" |tr -s '[[:space:]]' '\n' |sort |uniq"
-	logBufferSize          = "2MB"
+	requestLimit = 100
+	imagesPath   = "/app/images/"
 )
 
 func main() {
@@ -301,7 +295,9 @@ func createRunDescription(buildUrl string) string {
 	var description strings.Builder
 
 	if buildUrl != "" {
-		description.WriteString(fmt.Sprintln("Jenkins Job", buildUrl))
+		description.WriteString("Jenkins Job")
+		description.WriteString("\n")
+		description.WriteString(buildUrl)
 	}
 
 	versions := getVersionInformation()
@@ -309,42 +305,37 @@ func createRunDescription(buildUrl string) string {
 		if description.Len() > 0 {
 			description.WriteString("\n")
 		}
-		description.WriteString(fmt.Sprintln("Version Information", versions))
+		description.WriteString(versions)
 	}
 
 	return description.String()
 }
 
+// getVersionInformation gets versions and commits id from cluster
 func getVersionInformation() string {
-	rancherConfig := new(rancher.Config)
-	config.LoadConfig(rancher.ConfigurationFileKey, rancherConfig)
 
-	client, err := rancher.NewClientForConfig("", rancherConfig, session.NewSession())
+	files, err := os.ReadDir(imagesPath)
 	if err != nil {
-		logrus.Warning(fmt.Errorf("Error creating client: %w", err))
+		logrus.Warning(fmt.Errorf("Failed to get files: %v", err))
 		return ""
 	}
 
-	cluster, err := clusters.NewClusterMeta(client, rancherConfig.ClusterName)
-	if err != nil {
-		logrus.Warning(fmt.Errorf("Error creating cluster: %w", err))
-		return ""
+	var b strings.Builder
+
+	for _, file := range files {
+		path := filepath.Join(imagesPath, file.Name())
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			logrus.Warning(fmt.Errorf("Failed to read file: %v", err))
+			continue
+		}
+
+		b.WriteString(fmt.Sprintf("Images used within %s", file.Name()))
+		b.WriteString("\n")
+		b.WriteString(string(data))
+		b.WriteString("\n")
 	}
 
-	command := []string{
-		"sh", "-c", captureVersionsCommand,
-	}
-
-	versions, err := kubectl.Command(client, nil, cluster.ID, command, logBufferSize)
-	if err != nil {
-		logrus.Warning(fmt.Errorf("Error getting versions information: %w", err))
-		return ""
-	}
-
-	// formatting versions information
-	versions = strings.ReplaceAll(versions, "Client Version", "rancher")
-	versions = strings.ReplaceAll(versions, "Server Version", "kubernetes")
-	versions = strings.TrimSpace(versions)
-
-	return versions
+	return b.String()
 }

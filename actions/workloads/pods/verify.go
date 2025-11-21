@@ -123,7 +123,7 @@ func VerifyClusterPods(t *testing.T, client *rancher.Client, cluster *steveV1.St
 
 		return true, nil
 	})
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
 	if len(podErrors) > 0 {
 		for _, err := range podErrors {
