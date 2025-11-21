@@ -30,7 +30,10 @@ var (
 )
 
 const (
-	requestLimit = 100
+	requestLimit           = 100
+	captureVersionsCommand = "kubectl version && kubectl get pods --all-namespaces -o jsonpath=\"{..image}\" |tr -s '[[:space:]]' '\n' |sort |uniq"
+	logBufferSize          = "2MB"
+	imagesPath             = "/app/images/"
 )
 
 func main() {
@@ -294,8 +297,47 @@ func createRunDescription(buildUrl string) string {
 	var description strings.Builder
 
 	if buildUrl != "" {
-		description.WriteString(fmt.Sprintf("Jenkins Job: %s", buildUrl))
+		description.WriteString("Jenkins Job")
+		description.WriteString("\n")
+		description.WriteString(buildUrl)
+	}
+
+	versions := getVersionInformation()
+	if versions != "" {
+		if description.Len() > 0 {
+			description.WriteString("\n")
+		}
+		description.WriteString(versions)
 	}
 
 	return description.String()
+}
+
+// getVersionInformation gets versions and commits id from cluster
+func getVersionInformation() string {
+
+	files, err := os.ReadDir(imagesPath)
+	if err != nil {
+		logrus.Warning(fmt.Errorf("Failed to get files: %v", err))
+		return ""
+	}
+
+	var b strings.Builder
+
+	for _, file := range files {
+		path := filepath.Join(imagesPath, file.Name())
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			logrus.Warning(fmt.Errorf("Failed to read file: %v", err))
+			continue
+		}
+
+		b.WriteString(fmt.Sprintf("Images used within %s", file.Name()))
+		b.WriteString("\n")
+		b.WriteString(string(data))
+		b.WriteString("\n")
+	}
+
+	return b.String()
 }

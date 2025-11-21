@@ -13,12 +13,20 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
+	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+)
+
+const (
+	logBufferSize            = "2MB"
+	rancherVersionCommand    = "kubectl get settings.management.cattle.io server-version -o jsonpath=\"rancher:{.value}{'\n'}\""
+	kubernetesVersionCommand = "kubectl version -o json | jq -r '\"kubernetes:\" + .serverVersion.gitVersion'"
+	imagesVersionsCommand    = "kubectl get pods --all-namespaces -o jsonpath=\"{..image}\" |tr -s '[[:space:]]' '\n' |sort |uniq"
 )
 
 var (
@@ -136,6 +144,19 @@ func main() {
 		}
 	}
 
+	c, err := clusters.NewClusterMeta(client, rancherConfig.ClusterName)
+	versions, err := captureVersions(client, c.ID)
+	if err != nil {
+		panic(fmt.Errorf("Failed to create file for versions: %v", err))
+	}
+
+	file, err := os.Create("/app/images/version-information")
+	if err != nil {
+		panic(fmt.Errorf("Failed to create file for version-information: %v", err))
+	}
+	defer file.Close()
+	file.Write([]byte(versions + "\n"))
+
 	var wg sync.WaitGroup
 	wg.Add(len(clusterList))
 
@@ -171,4 +192,13 @@ func main() {
 	}
 
 	wg.Wait()
+}
+
+// captureVersions gets the images, rancher and kubernetes versions on the cluster
+func captureVersions(client *rancher.Client, clusterID string) (string, error) {
+	versionsCommand := []string{
+		"sh", "-c", fmt.Sprintf("%s && %s && %s", rancherVersionCommand, kubernetesVersionCommand, imagesVersionsCommand),
+	}
+
+	return kubectl.Command(client, nil, clusterID, versionsCommand, logBufferSize)
 }

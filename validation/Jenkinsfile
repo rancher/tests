@@ -129,9 +129,9 @@ node {
                 }
               }
               stage('Run Validation Tests') {
+                sh "mkdir -p ./validation/images"
                 try {
                   if (env.CAPTURE_IMAGES == "true") {
-                    sh "mkdir -p ./validation/images"
                     sh """
                         docker run -d --name imageCapturer \
                         -v ./validation/config.yaml:/app/config.yaml \
@@ -142,7 +142,7 @@ node {
                   }
 
                   sh """
-                    docker run --name ${testContainer} -t --env-file ${envFile} ${imageName} \
+                    docker run --name ${testContainer} -v ./validation/images/:/app/images -t --env-file ${envFile} ${imageName} \
                     sh -c "/root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v; \
                     ${rootPath}pipeline/scripts/${reporterScript}; \
                     if [ -f ${rootPath}reporter ]; then ${rootPath}reporter; else echo \\"Reporter script not present\\"; fi"
