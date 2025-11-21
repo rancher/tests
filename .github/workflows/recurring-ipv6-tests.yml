@@ -49,7 +49,7 @@ jobs:
           - rancher-server-one
           - rancher-server-two
     env:
-      HOSTNAME_PREFIX_2_13: "gha6-r213"
+      HOSTNAME_PREFIX: "gha6-r213"
 
     steps:
       - name: Checkout repository
@@ -147,7 +147,7 @@ jobs:
         run: |
           cat > config.yaml <<EOF
           rancher:
-            host: "${{ env.HOSTNAME_PREFIX_2_13 }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
+            host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
             adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
             insecure: true
             cleanup: true
@@ -157,7 +157,7 @@ jobs:
             enableNetworkPolicy: false
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
-            resourcePrefix: "${{ env.HOSTNAME_PREFIX_2_13 }}"
+            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsCredentials:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
@@ -192,7 +192,7 @@ jobs:
               osUser: "${{ secrets.IPV6_OS_USER }}"
               osGroup: "${{ secrets.IPV6_OS_GROUP }}"
               rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX_2_13 }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
+              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
@@ -207,7 +207,7 @@ jobs:
             nodeProvider: "ec2"
 
           clusterConfig:
-            resourcePrefix: "${{ env.HOSTNAME_PREFIX_2_13 }}"
+            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
@@ -315,21 +315,21 @@ jobs:
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
-          prefix: "${{ env.HOSTNAME_PREFIX_2_13 }}"
+          prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ secrets.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
-          prefix: "auto-${{ env.HOSTNAME_PREFIX_2_13 }}"
+          prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
           region: "${{ secrets.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
-          prefix: "rancher-validation${{ env.HOSTNAME_PREFIX_2_13 }}"
+          prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
           region: "${{ secrets.AWS_REGION }}"
 
       - name: Revoke Runner IP
