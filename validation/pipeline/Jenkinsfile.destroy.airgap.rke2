@@ -1,0 +1,172 @@
+#!groovy
+// Load qa-jenkins-library dynamically based on parameter
+def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+library "qa-jenkins-library@${libraryBranch}"
+
+node {
+    def testsPath = "./tests"
+    def qaInfraPath = "./qa-infra-automation"
+    def tofuModulePath = "${qaInfraPath}/tofu/aws/modules/airgap"
+    def testsBranch = env.RANCHER_TEST_REPO_BRANCH ?: "main"
+    def testsRepo = env.RANCHER_TEST_REPO_URL ?: "https://github.com/rancher/tests"
+    def qaInfraBranch = env.QA_INFRA_REPO_BRANCH ?: "main"
+    def qaInfraRepo = env.QA_INFRA_REPO_URL ?: "https://github.com/rancher/qa-infra-automation"
+    def targetWorkspace = env.TARGET_WORKSPACE
+    
+    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm']) {
+        withFolderProperties {
+            paramsMap = []
+            params.each {
+                if (it.value != null && it.value.toString().trim() != "") {
+                    paramsMap << "$it.key=$it.value"
+                }
+            }
+            
+            withCredentials([
+                string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+                string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+            ]) {
+                withEnv(paramsMap) {
+                    
+                    try {
+                        stage('Validate Parameters') {
+                            if (!targetWorkspace || targetWorkspace.trim() == "") {
+                                error "TARGET_WORKSPACE parameter is required"
+                            }
+                            
+                            echo "Target workspace for destruction: ${targetWorkspace}"
+                        }
+                        
+                        stage('Checkout') {
+                            deleteDir()
+                            
+                            echo "Cloning tests repository"
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${testsBranch}"]],
+                                extensions: scm.extensions + [
+                                    [$class: 'CleanCheckout'],
+                                    [$class: 'RelativeTargetDirectory', relativeTargetDir: 'tests']
+                                ],
+                                userRemoteConfigs: [[url: testsRepo]]
+                            ])
+                            
+                            echo "Cloning qa-infra-automation repository"
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${qaInfraBranch}"]],
+                                extensions: scm.extensions + [
+                                    [$class: 'CleanCheckout'],
+                                    [$class: 'RelativeTargetDirectory', relativeTargetDir: 'qa-infra-automation']
+                                ],
+                                userRemoteConfigs: [[url: qaInfraRepo]]
+                            ])
+                        }
+                        
+                        stage('Build Infrastructure Tools Image') {
+                            echo "Building Docker image with Tofu and Ansible"
+                            sh "docker build --platform linux/amd64 -t rancher-infra-tools:latest -f ${testsPath}/validation/pipeline/Dockerfile.infra ."
+                        }
+                        
+                        stage('Initialize Tofu Backend') {
+                            tofu.initBackend(
+                                dir: tofuModulePath,
+                                bucket: env.S3_BUCKET_NAME,
+                                key: env.S3_KEY_PREFIX,
+                                region: env.S3_BUCKET_REGION ?: env.S3_REGION
+                            )
+                        }
+                        
+                        stage('Select Workspace') {
+                            tofu.selectWorkspace(
+                                dir: tofuModulePath,
+                                name: targetWorkspace
+                            )
+                        }
+                        
+                        stage('Download Terraform Variables from S3') {
+                            echo "Downloading terraform.tfvars from S3"
+                            
+                            def s3Path = "env:/${targetWorkspace}/terraform.tfvars"
+                            def tfvarsPath = "${tofuModulePath}/terraform.tfvars"
+                            def workspace = pwd()
+                            
+                            sh """
+                                docker run --rm --platform linux/amd64 \
+                                    -e AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID} \
+                                    -e AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY} \
+                                    -v ${workspace}:/workspace \
+                                    -w /workspace \
+                                    rancher-infra-tools:latest \
+                                    sh -c 'aws s3 cp s3://${env.S3_BUCKET_NAME}/${s3Path} ${tfvarsPath} --region ${env.S3_BUCKET_REGION}'
+                            """
+                            
+                            echo "Downloaded terraform.tfvars from s3://${env.S3_BUCKET_NAME}/${s3Path}"
+                        }
+                        
+                        stage('Destroy Infrastructure') {
+                            echo "Destroying infrastructure in workspace: ${targetWorkspace}"
+                            
+                            tofu.destroy(
+                                dir: tofuModulePath,
+                                varFile: "terraform.tfvars",
+                                autoApprove: true
+                            )
+                            
+                            echo "Infrastructure destroyed successfully"
+                        }
+                        
+                        stage('Delete Workspace') {
+                            tofu.deleteWorkspace(
+                                dir: tofuModulePath,
+                                name: targetWorkspace
+                            )
+                            
+                            echo "Workspace ${targetWorkspace} deleted"
+                        }
+                        
+                        stage('Cleanup Artifacts') {
+                            echo "Cleaning up local artifacts"
+                            
+                            infrastructure.cleanupArtifacts(
+                                paths: [
+                                    "${tofuModulePath}/.terraform",
+                                    "${tofuModulePath}/terraform.tfstate*",
+                                    "${tofuModulePath}/*.tfvars"
+                                ],
+                                force: true
+                            )
+                            
+                            // Clean up S3 stored terraform.tfvars
+                            echo "Cleaning up terraform.tfvars from S3"
+                            def s3Path = "env:/${targetWorkspace}/terraform.tfvars"
+                            def workspace = pwd()
+                            sh """
+                                docker run --rm --platform linux/amd64 \
+                                    -e AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID} \
+                                    -e AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY} \
+                                    -v ${workspace}:/workspace \
+                                    -w /workspace \
+                                    rancher-infra-tools:latest \
+                                    sh -c 'aws s3 rm s3://${env.S3_BUCKET_NAME}/${s3Path} --region ${env.S3_BUCKET_REGION} || true'
+                            """
+                        }
+                        
+                        stage('Summary') {
+                            echo "=== Infrastructure Destruction Complete ==="
+                            echo "Workspace: ${targetWorkspace}"
+                            echo "All resources have been destroyed and cleaned up"
+                            echo "==========================================="
+                        }
+                        
+                    } catch (err) {
+                        currentBuild.result = 'FAILURE'
+                        echo "Destroy operation failed: ${err.message}"
+                        echo "Manual cleanup may be required for workspace: ${targetWorkspace}"
+                        throw err
+                    }
+                }
+            }
+        }
+    }
+}
