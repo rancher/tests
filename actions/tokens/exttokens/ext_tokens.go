@@ -2,28 +2,25 @@ package exttokens
 
 import (
 	"context"
-	"fmt"
 	"crypto/tls"
+	"fmt"
 	"net/http"
 
 	extapi "github.com/rancher/rancher/pkg/apis/ext.cattle.io/v1"
-	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	"github.com/rancher/shepherd/extensions/settings"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 const (
-	UserIDLabel                                         =  "cattle.io/user-id"
-	ExtTokenStatusCurrentValue                          = false
-	ExtTokenStatusExpiredValue                          = false
-	TrueConditionStatus          metav1.ConditionStatus = "True"
-	FalseConditionStatus         metav1.ConditionStatus = "False"
+	UserIDLabel                                       = "cattle.io/user-id"
+	ExtTokenStatusCurrentValue                        = false
+	ExtTokenStatusExpiredValue                        = false
+	TrueConditionStatus        metav1.ConditionStatus = "True"
+	FalseConditionStatus       metav1.ConditionStatus = "False"
 )
 
 // CreateExtToken creates an ext token with the TTL value provided using Public API
@@ -31,7 +28,7 @@ func CreateExtToken(client *rancher.Client, ttlValue int64) (*extapi.Token, erro
 	name := namegen.AppendRandomString("test-exttoken")
 	extToken := &extapi.Token{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:   name,
 			Labels: map[string]string{},
 		},
 		Spec: extapi.TokenSpec{
@@ -107,23 +104,6 @@ func DeleteExtToken(client *rancher.Client, exttokenname string) error {
 	return nil
 }
 
-// GetExtTokenDefaultTTLMinutes fetches the Rancher setting "auth-token-max-ttl-minutes"
-func GetExtTokenDefaultTTLMinutes(client *rancher.Client) (string, error) {
-	steveClient := client.Steve
-	authTokenMaxTTLSetting, err := steveClient.SteveType(settings.ManagementSetting).ByID("auth-token-max-ttl-minutes")
-	if err != nil {
-		return "", err
-	}
-
-	extTokenSetting:= &v3.Setting{}
-	err = v1.ConvertToK8sType(authTokenMaxTTLSetting.JSONResp, extTokenSetting)
-	if err != nil {
-		return "", err
-	}
-
-	return extTokenSetting.Value, nil
-}
-
 // WaitForExtTokenDeletion polls until an ext token with the given name is deleted or the timeout is reached
 func WaitForExtTokenDeletion(client *rancher.Client, name string) error {
 	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
@@ -134,7 +114,7 @@ func WaitForExtTokenDeletion(client *rancher.Client, name string) error {
 			}
 			return false, err
 		}
-			return false, nil
+		return false, nil
 	})
 }
 
@@ -142,7 +122,7 @@ func WaitForExtTokenDeletion(client *rancher.Client, name string) error {
 func WaitForExtTokenStatusExpired(client *rancher.Client, name string, expiredStatus bool) (*extapi.Token, error) {
 	var expiredToken *extapi.Token
 
-	err :=  kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
 		extToken, err := GetExtToken(client, name)
 		if err != nil {
 			return false, err
@@ -158,25 +138,25 @@ func WaitForExtTokenStatusExpired(client *rancher.Client, name string, expiredSt
 
 // WaitForExtTokenToDisable polls until an ext token with the given name is disabled or the timeout is reached
 func WaitForExtTokenToDisable(client *rancher.Client, name string, expectedState bool) (*extapi.Token, error) {
-    var disabledToken *extapi.Token
+	var disabledToken *extapi.Token
 
-    err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
-        extToken, err := GetExtToken(client, name)
-        if err != nil {
-            return false, err
-        }
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		extToken, err := GetExtToken(client, name)
+		if err != nil {
+			return false, err
+		}
 
-        if extToken.Spec.Enabled == nil {
-            return false, nil
-        }
+		if extToken.Spec.Enabled == nil {
+			return false, nil
+		}
 
-        if *extToken.Spec.Enabled == expectedState {
-            disabledToken = extToken
-            return true, nil
-        }
-        return false, nil
-    })
-    return disabledToken, err
+		if *extToken.Spec.Enabled == expectedState {
+			disabledToken = extToken
+			return true, nil
+		}
+		return false, nil
+	})
+	return disabledToken, err
 }
 
 // AuthenticateWithExtToken creates an R_SESS cookie using the value from the ext token given by name and authenticates against an endpoint

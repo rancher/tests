@@ -60,7 +60,7 @@ replace (
 require (
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20251111151559-050d62ead063
-	github.com/rancher/tfp-automation v0.0.0-20251110211856-605fbb257d46
+	github.com/rancher/tfp-automation v0.0.0-20251119204231-c19c183bcfc7
 )
 
 require (
@@ -115,7 +115,7 @@ require (
 	github.com/creasty/defaults v1.5.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
-	github.com/docker/docker v25.0.8+incompatible // indirect
+	github.com/docker/docker v27.1.1+incompatible // indirect
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect

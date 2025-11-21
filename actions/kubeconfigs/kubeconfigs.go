@@ -6,14 +6,12 @@ import (
 	"os"
 
 	extapi "github.com/rancher/rancher/pkg/apis/ext.cattle.io/v1"
-	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/defaults"
-	"github.com/rancher/shepherd/extensions/settings"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
@@ -117,23 +115,6 @@ func DeleteKubeconfig(client *rancher.Client, name string) error {
 	}
 
 	return nil
-}
-
-// GetKubeconfigDefaultTTLMinutes fetches the Rancher setting "kubeconfig-default-token-ttl-minutes"
-func GetKubeconfigDefaultTTLMinutes(client *rancher.Client) (string, error) {
-	steveClient := client.Steve
-	kubeConfigTokenSetting, err := steveClient.SteveType(settings.ManagementSetting).ByID(settings.KubeConfigToken)
-	if err != nil {
-		return "", err
-	}
-
-	kubeconfigSetting := &v3.Setting{}
-	err = v1.ConvertToK8sType(kubeConfigTokenSetting.JSONResp, kubeconfigSetting)
-	if err != nil {
-		return "", err
-	}
-
-	return kubeconfigSetting.Value, nil
 }
 
 // GetBackingTokensForKubeconfigName returns all the backing tokens created for a specific kubeconfig name

@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -65,11 +64,6 @@ func TestAgentCustomization(t *testing.T) {
 	t.Parallel()
 	r := agentCustomizationSetup(t)
 
-	productionPool := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	productionPool[0].MachinePoolConfig.Quantity = 3
-	productionPool[1].MachinePoolConfig.Quantity = 2
-	productionPool[2].MachinePoolConfig.Quantity = 2
-
 	agentCustomization := management.AgentDeploymentCustomization{
 		AppendTolerations: []management.Toleration{
 			{
@@ -108,13 +102,12 @@ func TestAgentCustomization(t *testing.T) {
 
 	customAgents := []string{"fleet-agent", "cluster-agent"}
 	tests := []struct {
-		name         string
-		machinePools []provisioninginput.MachinePools
-		client       *rancher.Client
-		agent        string
+		name   string
+		client *rancher.Client
+		agent  string
 	}{
-		{"Custom_Fleet_Agent", productionPool, r.standardUserClient, customAgents[0]},
-		{"Custom_Cluster_Agent", productionPool, r.standardUserClient, customAgents[1]},
+		{"Custom_Fleet_Agent", r.standardUserClient, customAgents[0]},
+		{"Custom_Cluster_Agent", r.standardUserClient, customAgents[1]},
 	}
 
 	for _, tt := range tests {
@@ -128,7 +121,6 @@ func TestAgentCustomization(t *testing.T) {
 			t.Parallel()
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
-			clusterConfig.MachinePools = tt.machinePools
 
 			if tt.agent == "fleet-agent" {
 				clusterConfig.FleetAgent = &agentCustomization
@@ -168,11 +160,6 @@ func TestAgentCustomizationFailure(t *testing.T) {
 	t.Parallel()
 	r := agentCustomizationSetup(t)
 
-	productionPool := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	productionPool[0].MachinePoolConfig.Quantity = 3
-	productionPool[1].MachinePoolConfig.Quantity = 2
-	productionPool[2].MachinePoolConfig.Quantity = 2
-
 	agentCustomization := management.AgentDeploymentCustomization{
 		AppendTolerations: []management.Toleration{
 			{
@@ -186,13 +173,12 @@ func TestAgentCustomizationFailure(t *testing.T) {
 
 	customAgents := []string{"fleet-agent", "cluster-agent"}
 	tests := []struct {
-		name         string
-		machinePools []provisioninginput.MachinePools
-		client       *rancher.Client
-		agent        string
+		name   string
+		client *rancher.Client
+		agent  string
 	}{
-		{"Invalid_Custom_Fleet_Agent", productionPool, r.standardUserClient, customAgents[0]},
-		{"Invalid_Custom_Cluster_Agent", productionPool, r.standardUserClient, customAgents[1]},
+		{"Invalid_Custom_Fleet_Agent", r.standardUserClient, customAgents[0]},
+		{"Invalid_Custom_Cluster_Agent", r.standardUserClient, customAgents[1]},
 	}
 
 	for _, tt := range tests {
@@ -207,7 +193,6 @@ func TestAgentCustomizationFailure(t *testing.T) {
 
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
-			clusterConfig.MachinePools = tt.machinePools
 
 			if tt.agent == "fleet-agent" {
 				clusterConfig.FleetAgent = &agentCustomization
