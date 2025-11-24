@@ -147,6 +147,10 @@ func main() {
 	}
 
 	c, err := clusters.NewClusterMeta(client, rancherConfig.ClusterName)
+	if err != nil {
+		panic(fmt.Errorf("Failed to create file for versions: %v", err))
+	}
+
 	versions, err := captureVersions(client, c.ID)
 	if err != nil {
 		panic(fmt.Errorf("Failed to create file for versions: %v", err))
