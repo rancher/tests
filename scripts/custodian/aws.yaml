@@ -473,7 +473,7 @@ policies:
       op: delete
       # extending by 1 day to avoid deleting before associated resources are cleaned up
       days: 3
-- name: ec2-delete-targetgrpup
+- name: ec2-filter-targetgroup
   resource: app-elb-target-group
   description: |
     Delete any marked targetGroups which have been 
@@ -482,5 +482,23 @@ policies:
       - type: marked-for-op
         tag: ec2_known_user
         op: delete
+  actions:
+    - type: invoke-lambda
+      function: check-targetgroup-in-use
+      batch_size: 50
+      timeout: 75
+- name: ec2-delete-targetgroup-from-lambda
+  resource: app-elb-target-group
+  description: |
+    Delete target groups that have been confirmed unused
+    by the Lambda checker.
+  filters:
+    - type: marked-for-op
+      tag: ec2_known_user
+      op: delete
+    - type: value
+      key: "length(Tags[?Key=='delete-safe'])"
+      value: 1
+      op: eq
   actions:
     - type: delete
