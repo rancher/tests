@@ -304,6 +304,7 @@ func createRunDescription(buildUrl string) string {
 	if versions != "" {
 		if description.Len() > 0 {
 			description.WriteString("\n")
+			description.WriteString("\n")
 		}
 		description.WriteString(versions)
 	}

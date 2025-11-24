@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
 	"github.com/rancher/shepherd/extensions/kubectl"
+	"github.com/rancher/shepherd/extensions/rancherversion"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 
@@ -24,7 +26,6 @@ import (
 
 const (
 	logBufferSize            = "2MB"
-	rancherVersionCommand    = "kubectl get settings.management.cattle.io server-version -o json | jq -r '\"rancher:\" + .value'"
 	kubernetesVersionCommand = "kubectl version -o json | jq -r '\"kubernetes:\" + .serverVersion.gitVersion'"
 	imagesVersionsCommand    = "kubectl get pods --all-namespaces -o jsonpath=\"{..image}\" |tr -s '[[:space:]]' '\n' |sort |uniq"
 	imagesPath               = "/app/images/"
@@ -173,7 +174,7 @@ func main() {
 				panic(fmt.Errorf("Failed to capture used images: %v", err))
 			}
 
-			file, err := os.Create("/app/images/" + clusterInfo.Name)
+			file, err := os.Create(imagesPath + clusterInfo.Name)
 			if err != nil {
 				panic(fmt.Errorf("Failed to create file for image names: %v", err))
 			}
@@ -197,9 +198,26 @@ func main() {
 
 // captureVersions gets the images, rancher and kubernetes versions on the cluster
 func captureVersions(client *rancher.Client, clusterID string) (string, error) {
-	versionsCommand := []string{
-		"sh", "-c", fmt.Sprintf("%s && %s && %s", rancherVersionCommand, kubernetesVersionCommand, imagesVersionsCommand),
+	var b strings.Builder
+
+	config, err := rancherversion.RequestRancherVersion(client.RancherConfig.Host)
+	if err != nil {
+		return "", err
 	}
 
-	return kubectl.Command(client, nil, clusterID, versionsCommand, logBufferSize)
+	b.WriteString(fmt.Sprintf("rancher:%s\n", config.RancherVersion))
+	b.WriteString(fmt.Sprintf("rancher-commit:%s\n", config.GitCommit))
+	b.WriteString(fmt.Sprintf("is-prime:%t\n", config.IsPrime))
+
+	versionsCommand := []string{
+		"sh", "-c", fmt.Sprintf("%s && %s", kubernetesVersionCommand, imagesVersionsCommand),
+	}
+
+	log, err := kubectl.Command(client, nil, clusterID, versionsCommand, logBufferSize)
+	if err != nil {
+		return "", err
+	}
+
+	b.WriteString(log)
+	return b.String(), nil
 }
