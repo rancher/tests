@@ -26,7 +26,8 @@ fi
 
 # Download binary
 DIR=~/.terraform.d/plugins/terraform.local/${PROVIDER}/${PROVIDER}/${VERSION}/${PLATFORM}
-(umask u=rwx,g=rwx,o=rwx && mkdir -p $DIR)
+umask u=rwx,g=rwx,o=rwx
+mkdir -p $DIR
 
 git clone $GITURL provider-clone
 cd provider-clone
