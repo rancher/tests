@@ -17,7 +17,7 @@
       position: 3
     custom_field:
       "15": "TestWorkloadPreUpgrade"
-   - title: "Post-Upgrading cluster"
+  - title: "Post-Upgrading cluster"
     description: "Validate upgrading a downstream cluster to a higher specified K8s version in Rancher"
     automation: 2
     steps:
