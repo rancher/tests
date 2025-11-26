@@ -72,7 +72,7 @@ require (
 	github.com/gruntwork-io/terratest v0.49.0
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/rancher/rancher v0.0.0-20250806201723-9a7af3779b9d
-	github.com/rancher/shepherd v0.0.0-20251111151559-050d62ead063
+	github.com/rancher/shepherd v0.0.0-20251126203801-bd190cfd904c
 	github.com/rancher/tests/actions v0.0.0-20251111162746-32a475483166
 	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
 	github.com/rancher/tfp-automation v0.0.0-20251121233100-199e1728f71c
