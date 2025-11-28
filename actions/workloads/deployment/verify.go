@@ -62,7 +62,7 @@ func VerifyDeploymentUpgrade(client *rancher.Client, clusterName string, namespa
 	}
 
 	logrus.Info("Waiting for all pods to be running")
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName, appv1Deployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func VerifyDeploymentScale(client *rancher.Client, clusterName string, namespace
 	}
 
 	logrus.Info("Waiting for all pods to be running")
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName, scaleDeployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName)
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func VerifyCreateDeployment(client *rancher.Client, clusterID string) error {
 	}
 
 	logrus.Infof("Creating new deployment %s", createdDeployment.Name)
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespace.Name, createdDeployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespace.Name)
 	if err != nil {
 		return err
 	}
@@ -218,7 +218,7 @@ func VerifyCreateDeploymentSideKick(client *rancher.Client, clusterID string) er
 	}
 
 	logrus.Infof("Creating new deployment %s", createdDeployment.Name)
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespace.Name, createdDeployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespace.Name)
 	if err != nil {
 		return err
 	}
@@ -250,7 +250,7 @@ func VerifyCreateDeploymentSideKick(client *rancher.Client, clusterID string) er
 	}
 
 	logrus.Info("Waiting for all pods to be running")
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespace.Name, updatedDeployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespace.Name)
 
 	return err
 }
@@ -509,7 +509,7 @@ func VerifyDeploymentPauseOrchestration(client *rancher.Client, clusterID string
 		return err
 	}
 
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespace.Name, pauseDeployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespace.Name)
 	if err != nil {
 		return err
 	}
