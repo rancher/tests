@@ -56,6 +56,9 @@ func (c *CertRotationWindowsTestSuite) SetupSuite() {
 
 	c.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	c.cattleConfig, err = defaults.LoadPackageDefaults(c.cattleConfig, "")
+	require.NoError(c.T(), err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, c.cattleConfig, loggingConfig)
 
@@ -86,8 +89,11 @@ func (c *CertRotationWindowsTestSuite) SetupSuite() {
 
 	clusterConfig.MachinePools = nodeRolesStandard
 
+	provider := provisioning.CreateProvider(clusterConfig.Provider)
+	machineConfigSpec := provider.LoadMachineConfigFunc(c.cattleConfig)
+
 	logrus.Info("Provisioning RKE2 windows cluster")
-	c.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.RKE2ClusterType.String(), clusterConfig, awsEC2Configs, true, false)
+	c.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, awsEC2Configs, true, false)
 	require.NoError(c.T(), err)
 }
 

@@ -1,6 +1,7 @@
 package machinepools
 
 import (
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -48,6 +49,17 @@ type VmwarevsphereMachineConfig struct {
 	VappIpprotocol          string   `json:"vappIpprotocol" yaml:"vappIpprotocol"`
 	VappProperty            []string `json:"vappProperty" yaml:"vappProperty"`
 	VappTransport           string   `json:"vappTransport" yaml:"vappTransport"`
+}
+
+// LoadVSphereMachineConfig loads the VmwarevsphereMachineConfigs from a provided cattle config file
+func LoadVSphereMachineConfig(cattleConfig map[string]any) MachineConfigs {
+	var machineConfigs MachineConfigs
+
+	VSphereMachineConfigs := new(VmwarevsphereMachineConfigs)
+	operations.LoadObjectFromMap(VmwarevsphereMachineConfigsKey, cattleConfig, VSphereMachineConfigs)
+	machineConfigs.VmwareMachineConfigs = VSphereMachineConfigs
+
+	return machineConfigs
 }
 
 // NewVSphereMachineConfig is a constructor to set up rke-machine-config.cattle.io.vmwarevsphereconfig. It returns an *unstructured.Unstructured

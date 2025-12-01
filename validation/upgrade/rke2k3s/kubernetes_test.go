@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
@@ -20,7 +19,6 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -33,13 +31,12 @@ import (
 
 type UpgradeKubernetesTestSuite struct {
 	suite.Suite
-	session           *session.Session
-	client            *rancher.Client
-	cattleConfig      map[string]any
-	rke2ClusterConfig *clusters.ClusterConfig
-	k3sClusterConfig  *clusters.ClusterConfig
-	rke2Cluster       *v1.SteveAPIObject
-	k3sCluster        *v1.SteveAPIObject
+	session       *session.Session
+	client        *rancher.Client
+	cattleConfig  map[string]any
+	clusterConfig *clusters.ClusterConfig
+	rke2Cluster   *v1.SteveAPIObject
+	k3sCluster    *v1.SteveAPIObject
 }
 
 func (u *UpgradeKubernetesTestSuite) TearDownSuite() {
@@ -60,40 +57,27 @@ func (u *UpgradeKubernetesTestSuite) SetupSuite() {
 
 	u.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	u.cattleConfig, err = defaults.LoadPackageDefaults(u.cattleConfig, "")
+	require.NoError(u.T(), err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, u.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(u.T(), err)
 
-	u.rke2ClusterConfig = new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.rke2ClusterConfig)
+	u.clusterConfig = new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.clusterConfig)
 
-	u.k3sClusterConfig = new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.k3sClusterConfig)
-
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, u.cattleConfig, awsEC2Configs)
-
-	nodeRolesStandard := []provisioninginput.MachinePools{
-		provisioninginput.EtcdMachinePool,
-		provisioninginput.ControlPlaneMachinePool,
-		provisioninginput.WorkerMachinePool,
-	}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-
-	u.rke2ClusterConfig.MachinePools = nodeRolesStandard
-	u.k3sClusterConfig.MachinePools = nodeRolesStandard
+	provider := provisioning.CreateProvider(u.clusterConfig.Provider)
+	machineConfigSpec := provider.LoadMachineConfigFunc(u.cattleConfig)
 
 	logrus.Info("Provisioning RKE2 cluster")
-	u.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), u.rke2ClusterConfig, awsEC2Configs, false, false)
+	u.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *u.clusterConfig, machineConfigSpec, nil, false, false)
 	require.NoError(u.T(), err)
 
 	logrus.Info("Provisioning K3S cluster")
-	u.k3sCluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.K3SClusterType.String(), u.k3sClusterConfig, awsEC2Configs, false, false)
+	u.k3sCluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *u.clusterConfig, machineConfigSpec, nil, false, false)
 	require.NoError(u.T(), err)
 }
 
@@ -104,8 +88,8 @@ func (u *UpgradeKubernetesTestSuite) TestUpgradeKubernetes() {
 		clusterConfig *clusters.ClusterConfig
 		clusterType   string
 	}{
-		{"Upgrading_RKE2_cluster", u.rke2Cluster.ID, u.rke2ClusterConfig, extClusters.RKE2ClusterType.String()},
-		{"Upgrading_K3S_cluster", u.k3sCluster.ID, u.k3sClusterConfig, extClusters.K3SClusterType.String()},
+		{"Upgrading_RKE2_cluster", u.rke2Cluster.ID, u.clusterConfig, extClusters.RKE2ClusterType.String()},
+		{"Upgrading_K3S_cluster", u.k3sCluster.ID, u.clusterConfig, extClusters.K3SClusterType.String()},
 	}
 
 	for _, tt := range tests {

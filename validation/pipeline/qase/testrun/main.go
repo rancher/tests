@@ -29,7 +29,7 @@ func main() {
 
 	if *startRun {
 		// create test run
-		resp, err := client.CreateTestRun(testRunName, qasedefaults.RancherManagerProjectID)
+		resp, err := client.CreateTestRun(testRunName, qasedefaults.RancherManagerProjectID, "")
 		if err != nil {
 			logrus.Error("error creating test run: ", err)
 		}

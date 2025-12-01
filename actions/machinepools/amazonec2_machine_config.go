@@ -5,6 +5,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/tests/actions/nodes/ec2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -40,6 +41,17 @@ type AWSMachineConfig struct {
 	VPCID              string   `json:"vpcId" yaml:"vpcId"`
 	VolumeType         string   `json:"volumeType" yaml:"volumeType"`
 	Zone               string   `json:"zone" yaml:"zone"`
+}
+
+// LoadAWSMachineConfig loads the awsMachineConfigs from a provided cattle config file
+func LoadAWSMachineConfig(cattleConfig map[string]any) MachineConfigs {
+	var machineConfigs MachineConfigs
+
+	awsMachineConfigs := new(AWSMachineConfigs)
+	operations.LoadObjectFromMap(AWSMachineConfigsKey, cattleConfig, awsMachineConfigs)
+	machineConfigs.AmazonEC2MachineConfigs = awsMachineConfigs
+
+	return machineConfigs
 }
 
 // NewAWSMachineConfig is a constructor to set up rke-machine-config.cattle.io.amazonec2config. It returns an *unstructured.Unstructured

@@ -68,10 +68,30 @@ Cloud Provider test verifies that node driver clusers can be provisioned with AW
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCloudProvider -timeout=1h -v`
 
 
+### CNI Test
+
+#### Description: 
+CNI test verifies that clusters can provision properly with various CNIs.
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Machine Config](#machine-config)
+
+#### Table Tests
+1. `RKE2_Node_Driver|Calico`
+2. `RKE2_Node_Driver|Canal`
+3. `RKE2_Node_Driver|Flannel`
+4. `RKE2_Node_Driver|Cilium`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCNI -timeout=1h -v`
+
+
 ### Custom Test
 
 #### Description: 
-Custom test verfies that various custom cluster configurations provision properly.
+Custom test verifies that various custom cluster configurations provision properly.
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
@@ -109,7 +129,7 @@ Data Directories test verifies that files related to k8s, systemAgent and provis
 ### Dynamic Custom Test
 
 #### Description: 
-Dynamic custom test verfies that a user defined custom cluster provisions properly.
+Dynamic custom test verifies that a user defined custom cluster provisions properly.
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
@@ -126,7 +146,7 @@ Dynamic tests do not have a static name
 ### Dynamic Node Driver Test
 
 #### Description: 
-Dynamic node driver test verfies that a user defined node driver cluster provisions properly.
+Dynamic node driver test verifies that a user defined node driver cluster provisions properly.
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
@@ -143,7 +163,7 @@ Dynamic tests do not have a static name
 ### Hardened Test
 
 #### Description: 
-Hardened test verfies that a cluster can deploy the cis-benchmark(2.11<=)/compliance(2.12+) chart on a custom cluster
+Hardened test verifies that a cluster can deploy the cis-benchmark(2.11<=)/compliance(2.12+) chart on a custom cluster
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
@@ -160,7 +180,7 @@ Hardened test verfies that a cluster can deploy the cis-benchmark(2.11<=)/compli
 ### Node Driver Test
 
 #### Description: 
-Node driver test verfies that various node driver cluster configurations provision properly.
+Node driver test verifies that various node driver cluster configurations provision properly.
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
@@ -181,7 +201,7 @@ Node driver test verfies that various node driver cluster configurations provisi
 ### PSACT Test
 
 #### Description: 
-PSACT(Pod Security Admission Configuration Template) Test verfies that various node driver clusters with different psact configurations provision properly.
+PSACT(Pod Security Admission Configuration Template) Test verifies that various node driver clusters with different psact configurations provision properly.
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
@@ -200,7 +220,7 @@ PSACT(Pod Security Admission Configuration Template) Test verfies that various n
 ### Template Test
 
 #### Description: 
-Template Test verfies that an RKE2 template can be used to provision a cluster.
+Template Test verifies that an RKE2 template can be used to provision a cluster.
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
@@ -234,7 +254,7 @@ Hostname truncation test verifies that the node hostname is truncated properly.
 ### All Tests
 
 #### Description: 
-Template Test verfies that an RKE2 template can be used to provision a cluster.
+Template Test verifies that an RKE2 template can be used to provision a cluster.
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
@@ -285,6 +305,7 @@ clusterConfig:
   cni: "calico"                       #Permutable in dynamic tests.
   provider: "aws"                     #Permutable in dynamic tests.
   nodeProvider: "ec2"
+  resourcePrefix: ""                  # OPTIONAL
   hardened: false
   compliance: false                   #Set this to true for rancher versions with compliance (2.12+)
   psact: ""                           #either rancher-privileged|rancher-restricted|rancher-baseline

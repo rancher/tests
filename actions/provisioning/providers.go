@@ -42,6 +42,7 @@ const (
 )
 
 type CloudCredFunc func(rancherClient *rancher.Client, credentials cloudcredentials.CloudCredential) (*v1.SteveAPIObject, error)
+type LoadMachineConfigFunc func(cattleConfig map[string]any) machinepools.MachineConfigs
 type MachinePoolFunc func(machineConfig machinepools.MachineConfigs, generatedPoolName, namespace string) []unstructured.Unstructured
 type MachineRolesFunc func(machineConfig machinepools.MachineConfigs) []machinepools.Roles
 type OSNamesFunc func(client *rancher.Client, cloudCredential cloudcredentials.CloudCredential, machineConfigs machinepools.MachineConfigs) ([]string, error)
@@ -51,6 +52,7 @@ type Provider struct {
 	Name                               provisioninginput.ProviderName
 	CloudProviderName                  string
 	MachineConfigPoolResourceSteveType string
+	LoadMachineConfigFunc              LoadMachineConfigFunc
 	MachinePoolFunc                    MachinePoolFunc
 	CloudCredFunc                      CloudCredFunc
 	VerifyCloudProviderFunc            VerifyCloudProviderFunc
@@ -69,6 +71,7 @@ func CreateProvider(name string) Provider {
 			Name:                               AWSProvider,
 			CloudProviderName:                  AWSProvider,
 			MachineConfigPoolResourceSteveType: machinepools.AWSPoolType,
+			LoadMachineConfigFunc:              machinepools.LoadAWSMachineConfig,
 			MachinePoolFunc:                    machinepools.NewAWSMachineConfig,
 			CloudCredFunc:                      aws.CreateAWSCloudCredentials,
 			VerifyCloudProviderFunc:            cloudprovider.VerifyAWSCloudProvider,
@@ -79,6 +82,7 @@ func CreateProvider(name string) Provider {
 		provider = Provider{
 			Name:                               AzureProvider,
 			MachineConfigPoolResourceSteveType: machinepools.AzurePoolType,
+			LoadMachineConfigFunc:              machinepools.LoadAzureMachineConfig,
 			MachinePoolFunc:                    machinepools.NewAzureMachineConfig,
 			CloudCredFunc:                      azure.CreateAzureCloudCredentials,
 			GetMachineRolesFunc:                machinepools.GetAzureMachineRoles,
@@ -87,6 +91,7 @@ func CreateProvider(name string) Provider {
 		provider = Provider{
 			Name:                               DOProvider,
 			MachineConfigPoolResourceSteveType: machinepools.DOPoolType,
+			LoadMachineConfigFunc:              machinepools.LoadDOMachineConfig,
 			MachinePoolFunc:                    machinepools.NewDigitalOceanMachineConfig,
 			CloudCredFunc:                      digitalocean.CreateDigitalOceanCloudCredentials,
 			GetMachineRolesFunc:                machinepools.GetDOMachineRoles,
@@ -95,6 +100,7 @@ func CreateProvider(name string) Provider {
 		provider = Provider{
 			Name:                               LinodeProvider,
 			MachineConfigPoolResourceSteveType: machinepools.LinodePoolType,
+			LoadMachineConfigFunc:              machinepools.LoadLinodeMachineConfig,
 			MachinePoolFunc:                    machinepools.NewLinodeMachineConfig,
 			CloudCredFunc:                      linode.CreateLinodeCloudCredentials,
 			GetMachineRolesFunc:                machinepools.GetLinodeMachineRoles,
@@ -104,6 +110,7 @@ func CreateProvider(name string) Provider {
 			Name:                               HarvesterProvider,
 			CloudProviderName:                  HarvesterProvider,
 			MachineConfigPoolResourceSteveType: machinepools.HarvesterPoolType,
+			LoadMachineConfigFunc:              machinepools.LoadHarvesterMachineConfig,
 			MachinePoolFunc:                    machinepools.NewHarvesterMachineConfig,
 			CloudCredFunc:                      harvester.CreateHarvesterCloudCredentials,
 			VerifyCloudProviderFunc:            cloudprovider.VerifyHarvesterCloudProvider,
@@ -114,6 +121,7 @@ func CreateProvider(name string) Provider {
 			Name:                               VsphereProvider,
 			CloudProviderName:                  VsphereCloudProvider,
 			MachineConfigPoolResourceSteveType: machinepools.VmwarevsphereType,
+			LoadMachineConfigFunc:              machinepools.LoadVSphereMachineConfig,
 			MachinePoolFunc:                    machinepools.NewVSphereMachineConfig,
 			CloudCredFunc:                      vsphere.CreateVsphereCloudCredentials,
 			VerifyCloudProviderFunc:            cloudprovider.VerifyVSphereCloudProvider,

@@ -48,8 +48,7 @@ func (ur *URDisableTestSuite) TearDownSuite() {
 		}
 	}
 
-	logrus.Info("Resetting user session settings")
-	err := updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, "0")
+	err := resetUserRetentionSettings(ur.client)
 	require.NoError(ur.T(), err)
 
 	ur.session.Cleanup()
@@ -63,6 +62,9 @@ func (ur *URDisableTestSuite) assertBindingsEqual(before, after map[string]inter
 }
 
 func (ur *URDisableTestSuite) TestDefaultAdminUserIsNotDisabled() {
+	subSession := ur.session.NewSession()
+	defer subSession.Cleanup()
+
 	logrus.Info("Setting up user retention settings")
 	setupUserRetentionSettings(ur.client, "10s", "", "*/1 * * * *", "false")
 	logrus.Info("Retrieving admin user details")
@@ -85,6 +87,9 @@ func (ur *URDisableTestSuite) TestDefaultAdminUserIsNotDisabled() {
 }
 
 func (ur *URDisableTestSuite) TestAdminUserGetDisabled() {
+	subSession := ur.session.NewSession()
+	defer subSession.Cleanup()
+
 	logrus.Info("Setting up user retention settings")
 	setupUserRetentionSettings(ur.client, "10s", "", "*/1 * * * *", "false")
 
@@ -116,6 +121,9 @@ func (ur *URDisableTestSuite) TestAdminUserGetDisabled() {
 }
 
 func (ur *URDisableTestSuite) TestStandardUserGetDisabled() {
+	subSession := ur.session.NewSession()
+	defer subSession.Cleanup()
+
 	logrus.Info("Setting up user retention settings")
 	setupUserRetentionSettings(ur.client, "10s", "", "*/1 * * * *", "false")
 
@@ -149,6 +157,9 @@ func (ur *URDisableTestSuite) TestStandardUserGetDisabled() {
 }
 
 func (ur *URDisableTestSuite) TestDisabledUserGetEnabled() {
+	subSession := ur.session.NewSession()
+	defer subSession.Cleanup()
+
 	logrus.Info("Setting up user retention settings")
 	setupUserRetentionSettings(ur.client, "10s", "", "*/1 * * * *", "false")
 
@@ -194,6 +205,9 @@ func (ur *URDisableTestSuite) TestDisabledUserGetEnabled() {
 }
 
 func (ur *URDisableTestSuite) TestStandardUserDidNotGetDisabledWithBlankSettings() {
+	subSession := ur.session.NewSession()
+	defer subSession.Cleanup()
+
 	logrus.Info("Setting up user retention settings with blank values")
 	setupUserRetentionSettings(ur.client, "", "", "*/1 * * * *", "false")
 
@@ -214,6 +228,9 @@ func (ur *URDisableTestSuite) TestStandardUserDidNotGetDisabledWithBlankSettings
 }
 
 func (ur *URDisableTestSuite) TestUserDisableByUpdatingUserattributes() {
+	subSession := ur.session.NewSession()
+	defer subSession.Cleanup()
+
 	logrus.Info("Setting up user retention settings")
 	setupUserRetentionSettings(ur.client, "10s", "", "*/1 * * * *", "false")
 
@@ -258,6 +275,9 @@ func (ur *URDisableTestSuite) TestUserDisableByUpdatingUserattributes() {
 }
 
 func (ur *URDisableTestSuite) TestUserIsNotDisabledWithDryRun() {
+	subSession := ur.session.NewSession()
+	defer subSession.Cleanup()
+
 	logrus.Info("Setting up user retention settings with dry run")
 	setupUserRetentionSettings(ur.client, "10s", "", "*/1 * * * *", "true")
 

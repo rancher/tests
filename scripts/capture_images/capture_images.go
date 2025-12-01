@@ -7,18 +7,28 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
+	"github.com/rancher/shepherd/extensions/kubectl"
+	"github.com/rancher/shepherd/extensions/rancherversion"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+)
+
+const (
+	logBufferSize            = "2MB"
+	kubernetesVersionCommand = "kubectl version -o json | jq -r '\"kubernetes:\" + .serverVersion.gitVersion'"
+	imagesVersionsCommand    = "kubectl get pods --all-namespaces -o jsonpath=\"{..image}\" |tr -s '[[:space:]]' '\n' |sort |uniq"
+	imagesPath               = "/app/images/"
 )
 
 var (
@@ -33,25 +43,25 @@ type ClusterInfo struct {
 
 // Connects to the specified Rancher managed Kubernetes cluster, monitoring and parsing its events while the test
 // is run. Writes all pulled image names to a file.
-func connectAndMonitor(client *rancher.Client, sigChan chan struct{}, clusterID string) (map[string]struct{}, error) {
+func connectAndMonitor(client *rancher.Client, sigChan chan struct{}, clusterID string, file *os.File) error {
 	clientConfig, err := kubeconfig.GetKubeconfig(client, clusterID)
 	if err != nil {
-		return nil, fmt.Errorf("Failed building client config from string: %v", err)
+		return fmt.Errorf("Failed building client config from string: %v", err)
 	}
 
 	restConfig, err := (*clientConfig).ClientConfig()
 	if err != nil {
-		return nil, fmt.Errorf("Failed building client config from string: %v", err)
+		return fmt.Errorf("Failed building client config from string: %v", err)
 	}
 
 	clientset, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
-		return nil, fmt.Errorf("Failed creating clientset object: %v", err)
+		return fmt.Errorf("Failed creating clientset object: %v", err)
 	}
 
 	previousEvents, err := clientset.CoreV1().Events("").List(context.Background(), metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("Failed creating previous events: %v", err)
+		return fmt.Errorf("Failed creating previous events: %v", err)
 	}
 
 	listOptions := metav1.ListOptions{
@@ -61,18 +71,16 @@ func connectAndMonitor(client *rancher.Client, sigChan chan struct{}, clusterID 
 
 	eventWatcher, err := clientset.CoreV1().Events("").Watch(context.Background(), listOptions)
 	if err != nil {
-		return nil, fmt.Errorf("Failed watching events: %v", err)
+		return fmt.Errorf("Failed watching events: %v", err)
 	}
 	defer eventWatcher.Stop()
 
 	log.Println("Listening to events on cluster with ID " + clusterID)
 
-	imageSet := make(map[string]struct{})
-
 	for {
 		select {
 		case <-sigChan:
-			return imageSet, nil
+			return nil
 		case rawEvent := <-eventWatcher.ResultChan():
 			k8sEvent, ok := rawEvent.Object.(*corev1.Event)
 			if !ok {
@@ -82,14 +90,14 @@ func connectAndMonitor(client *rancher.Client, sigChan chan struct{}, clusterID 
 			matches := pulledRegex.FindStringSubmatch(k8sEvent.Message)
 
 			if len(matches) > 1 {
-				imageSet[matches[1]+" (pulled during test)"] = struct{}{}
+				file.WriteString(fmt.Sprintf("%s (pulled during test)\n", matches[1]))
 				continue
 			}
 
 			matches = existingRegex.FindStringSubmatch(k8sEvent.Message)
 
 			if len(matches) > 1 {
-				imageSet[matches[1]] = struct{}{}
+				file.WriteString(fmt.Sprintf("%s \n", matches[1]))
 			}
 		}
 	}
@@ -136,6 +144,33 @@ func main() {
 		}
 	}
 
+	c, err := clusters.NewClusterMeta(client, rancherConfig.ClusterName)
+	if err != nil {
+		panic(fmt.Errorf("Failed to create file for versions: %v", err))
+	}
+
+	versions, err := captureVersions(client, c.ID)
+	if err != nil {
+		panic(fmt.Errorf("Failed to create file for versions: %v", err))
+	}
+
+	file, err := os.Create(imagesPath + "version-information")
+	if err != nil {
+		panic(fmt.Errorf("Failed to create file for version-information: %v", err))
+	}
+	defer file.Close()
+	file.Write([]byte(versions + "\n"))
+
+	filesMap := make(map[string]*os.File)
+	for _, clusterInfo := range clusterList {
+		file, err := os.Create(imagesPath + clusterInfo.Name)
+		if err != nil {
+			panic(fmt.Errorf("Failed to create file for image names: %v", err))
+		}
+		defer file.Close()
+		filesMap[clusterInfo.Name] = file
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(len(clusterList))
 
@@ -146,19 +181,10 @@ func main() {
 		channelList = append(channelList, doneChan)
 
 		go func() {
-			imageSet, err := connectAndMonitor(client, doneChan, clusterInfo.ID)
+			file = filesMap[clusterInfo.Name]
+			err := connectAndMonitor(client, doneChan, clusterInfo.ID, file)
 			if err != nil {
 				panic(fmt.Errorf("Failed to capture used images: %v", err))
-			}
-
-			file, err := os.Create("/app/images/" + clusterInfo.Name)
-			if err != nil {
-				panic(fmt.Errorf("Failed to create file for image names: %v", err))
-			}
-			defer file.Close()
-
-			for image := range imageSet {
-				file.Write([]byte(image + "\n"))
 			}
 
 			wg.Done()
@@ -171,4 +197,30 @@ func main() {
 	}
 
 	wg.Wait()
+}
+
+// captureVersions gets the images, rancher and kubernetes versions on the cluster
+func captureVersions(client *rancher.Client, clusterID string) (string, error) {
+	var b strings.Builder
+
+	config, err := rancherversion.RequestRancherVersion(client.RancherConfig.Host)
+	if err != nil {
+		return "", err
+	}
+
+	b.WriteString(fmt.Sprintf("rancher:%s\n", config.RancherVersion))
+	b.WriteString(fmt.Sprintf("rancher-commit:%s\n", config.GitCommit))
+	b.WriteString(fmt.Sprintf("is-prime:%t\n", config.IsPrime))
+
+	versionsCommand := []string{
+		"sh", "-c", fmt.Sprintf("%s && %s", kubernetesVersionCommand, imagesVersionsCommand),
+	}
+
+	log, err := kubectl.Command(client, nil, clusterID, versionsCommand, logBufferSize)
+	if err != nil {
+		return "", err
+	}
+
+	b.WriteString(log)
+	return b.String(), nil
 }

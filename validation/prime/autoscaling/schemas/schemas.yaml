@@ -1,0 +1,229 @@
+- suite: Go Automation/Prime/Autoscaler
+  projects: [RRT, RM]
+  cases:
+  - description: Autoscales up a cluster 
+    title: RKE2_Auto_Scale_Up
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create an autoscaler cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify that the autoscaler is setup properly
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Create an unscheduleable deployment
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify that the cluster scales up
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  
+  - description: Autoscales up a cluster 
+    title: K3S_Auto_Scale_Up
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create an autoscaler cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify that the autoscaler is setup properly
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Create an unscheduleable deployment
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify that the cluster scales up
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Autoscales down a cluster 
+    title: RKE2_Auto_Scale_Down
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create an autoscaler cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify that the autoscaler is setup properly
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Create an unscheduleable deployment
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Update the unscheduleable deployment to 1 replica
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    - action: Verify that the cluster scales down
+      expectedresult: ""
+      data: ""
+      position: 5
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  
+  - description: Autoscales down a cluster 
+    title: K3S_Auto_Scale_Down
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create an autoscaler cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify that the autoscaler is setup properly
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Create an unscheduleable deployment
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Update the unscheduleable deployment to 1 replica
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    - action: Verify that the cluster scales down
+      expectedresult: ""
+      data: ""
+      position: 5
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+
+  - description: Verifies the autoscaler pause feature
+    title: RKE2_Auto_Scale_Pause
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create an autoscaler cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify that the autoscaler is setup properly
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Pause the autoscaler
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Create an unscheduleable deployment
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    - action: Verify that the cluster does not scale
+      expectedresult: ""
+      data: ""
+      position: 5
+      attachments: []
+    - action: Unpause the autoscaler
+      expectedresult: ""
+      data: ""
+      position: 6
+      attachments: []
+    - action: Verify that the cluster scales up
+      expectedresult: ""
+      data: ""
+      position: 7
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  
+  - description: Verifies the autoscaler pause feature
+    title: K3S_Auto_Scale_Pause
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create an autoscaler cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify that the autoscaler is setup properly
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Pause the autoscaler
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Create an unscheduleable deployment
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    - action: Verify that the cluster does not scale
+      expectedresult: ""
+      data: ""
+      position: 5
+      attachments: []
+    - action: Unpause the autoscaler
+      expectedresult: ""
+      data: ""
+      position: 6
+      attachments: []
+    - action: Verify that the cluster scales up
+      expectedresult: ""
+      data: ""
+      position: 7
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

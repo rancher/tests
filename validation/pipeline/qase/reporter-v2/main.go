@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -24,13 +23,15 @@ var (
 	runIDEnvVar             = os.Getenv(qase.TestRunEnvVar)
 	projectIDEnvVar         = os.Getenv(qase.ProjectIDEnvVar)
 	testRunName             = os.Getenv(qase.TestRunNameEnvVar)
+	buildUrl                = os.Getenv(qase.BuildUrl)
 	_, callerFilePath, _, _ = runtime.Caller(0)
 	basepath                = filepath.Join(filepath.Dir(callerFilePath), "..", "..", "..", "..")
-	validStatus             = []string{"passed", "failed", "skipped"}
+	validStatus             = map[string]string{"pass": "passed", "fail": "failed", "skip": "skipped"}
 )
 
 const (
 	requestLimit = 100
+	imagesPath   = "/app/images/"
 )
 
 func main() {
@@ -41,12 +42,14 @@ func main() {
 	}
 
 	if runIDEnvVar != "" {
-		client := qase.SetupQaseClient()
+		qaseService := qase.SetupQaseClient()
 
 		runID, err := strconv.ParseInt(runIDEnvVar, 10, 64)
 
+		runDescription := createRunDescription(buildUrl)
+
 		if testRunName != "" {
-			resp, err := client.CreateTestRun(testRunName, projectIDEnvVar)
+			resp, err := qaseService.CreateTestRun(testRunName, projectIDEnvVar, runDescription)
 			if err != nil {
 				logrus.Error("error creating test run: ", err)
 			} else {
@@ -58,9 +61,14 @@ func main() {
 			logrus.Fatalf("error reporting converting string to int64: %v", err)
 		}
 
-		err = reportTestQases(client, int32(runID))
+		err = reportTestQases(qaseService, int32(runID))
 		if err != nil {
 			logrus.Error("error reporting: ", err)
+		}
+
+		err = qaseService.CompleteTestRun(projectIDEnvVar, int32(runID))
+		if err != nil {
+			logrus.Error("error update reporting: ", err)
 		}
 	} else {
 		logrus.Warningf("QASE run ID not provided")
@@ -137,11 +145,7 @@ func parseTestResults(outputs []testresult.GoTestOutput) map[string]*testresult.
 		} else if output.Action == "output" && tableTestName != "" {
 			goTestResult := finalTestResults[tableTestName]
 			goTestResult.StackTrace += output.Output
-		} else if output.Action == qase.SkipStatus {
-			if tableTestName != "" {
-				delete(finalTestResults, tableTestName)
-			}
-		} else if (output.Action == qase.FailStatus || output.Action == qase.PassStatus) && tableTestName != "" {
+		} else if (output.Action == qase.FailStatus || output.Action == qase.PassStatus || output.Action == qase.SkipStatus) && tableTestName != "" {
 			if tableTestName != "" {
 				goTestResult := finalTestResults[tableTestName]
 				goTestResult.StackTrace += output.Output
@@ -252,8 +256,8 @@ func updateTestInRun(client *upstream.APIClient, testResult testresult.GoTestRes
 		}
 	}
 
-	status := fmt.Sprintf("%sed", testResult.Status)
-	if !slices.Contains(validStatus, status) {
+	status, exists := validStatus[testResult.Status]
+	if !exists {
 		status = "failed"
 	}
 
@@ -284,4 +288,55 @@ func getAutomationTestName(customFields []upstream.CustomFieldValue) string {
 		}
 	}
 	return ""
+}
+
+// createRunDescription build the Qase test run description
+func createRunDescription(buildUrl string) string {
+	var description strings.Builder
+
+	if buildUrl != "" {
+		description.WriteString("Jenkins Job")
+		description.WriteString("\n")
+		description.WriteString(buildUrl)
+	}
+
+	versions := getVersionInformation()
+	if versions != "" {
+		if description.Len() > 0 {
+			description.WriteString("\n")
+			description.WriteString("\n")
+		}
+		description.WriteString(versions)
+	}
+
+	return description.String()
+}
+
+// getVersionInformation gets versions and commits id from cluster
+func getVersionInformation() string {
+
+	files, err := os.ReadDir(imagesPath)
+	if err != nil {
+		logrus.Warning(fmt.Errorf("Failed to get files: %v", err))
+		return ""
+	}
+
+	var b strings.Builder
+
+	for _, file := range files {
+		path := filepath.Join(imagesPath, file.Name())
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			logrus.Warning(fmt.Errorf("Failed to read file: %v", err))
+			continue
+		}
+
+		b.WriteString(fmt.Sprintf("Images used within %s", file.Name()))
+		b.WriteString("\n")
+		b.WriteString(string(data))
+		b.WriteString("\n")
+	}
+
+	return b.String()
 }

@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
@@ -18,7 +17,6 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/scalinginput"
 	"github.com/rancher/tests/actions/workloads/pods"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
@@ -55,6 +53,9 @@ func (s *AutoReplaceSuite) SetupSuite() {
 
 	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	s.cattleConfig, err = defaults.LoadPackageDefaults(s.cattleConfig, "")
+	require.NoError(s.T(), err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, s.cattleConfig, loggingConfig)
 
@@ -64,27 +65,15 @@ func (s *AutoReplaceSuite) SetupSuite() {
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, clusterConfig)
 
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, s.cattleConfig, awsEC2Configs)
-
-	nodeRolesStandard := []provisioninginput.MachinePools{
-		provisioninginput.EtcdMachinePool,
-		provisioninginput.ControlPlaneMachinePool,
-		provisioninginput.WorkerMachinePool,
-	}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-
-	clusterConfig.MachinePools = nodeRolesStandard
+	provider := provisioning.CreateProvider(clusterConfig.Provider)
+	machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
 
 	logrus.Info("Provisioning RKE2 cluster")
-	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), clusterConfig, awsEC2Configs, true, false)
+	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(s.T(), err)
 
 	logrus.Info("Provisioning K3S cluster")
-	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), clusterConfig, awsEC2Configs, true, false)
+	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(s.T(), err)
 }
 

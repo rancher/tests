@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
@@ -18,7 +17,6 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/validation/certificates"
@@ -56,40 +54,27 @@ func (c *CertRotationTestSuite) SetupSuite() {
 
 	c.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	c.cattleConfig, err = defaults.LoadPackageDefaults(c.cattleConfig, "")
+	require.NoError(c.T(), err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, c.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(c.T(), err)
 
-	rke2ClusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, c.cattleConfig, rke2ClusterConfig)
+	clusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, c.cattleConfig, clusterConfig)
 
-	k3sClusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, c.cattleConfig, k3sClusterConfig)
-
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, c.cattleConfig, awsEC2Configs)
-
-	nodeRolesStandard := []provisioninginput.MachinePools{
-		provisioninginput.EtcdMachinePool,
-		provisioninginput.ControlPlaneMachinePool,
-		provisioninginput.WorkerMachinePool,
-	}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-
-	rke2ClusterConfig.MachinePools = nodeRolesStandard
-	k3sClusterConfig.MachinePools = nodeRolesStandard
+	provider := provisioning.CreateProvider(clusterConfig.Provider)
+	machineConfigSpec := provider.LoadMachineConfigFunc(c.cattleConfig)
 
 	logrus.Info("Provisioning RKE2 cluster")
-	c.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2ClusterConfig, awsEC2Configs, true, false)
+	c.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(c.T(), err)
 
 	logrus.Info("Provisioning K3S cluster")
-	c.k3sCluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.K3SClusterType.String(), k3sClusterConfig, awsEC2Configs, true, false)
+	c.k3sCluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(c.T(), err)
 
 }

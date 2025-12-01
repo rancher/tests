@@ -1,6 +1,7 @@
 package machinepools
 
 import (
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -31,6 +32,17 @@ type LinodeMachineConfig struct {
 	SwapSize        string `json:"swapSize" yaml:"swapSize"`
 	Tags            string `json:"tags" yaml:"tags"`
 	UAPrefix        string `json:"uaPrefix" yaml:"uaPrefix"`
+}
+
+// LoadLinodeMachineConfig loads the LinodeMachineConfigs from a provided cattle config file
+func LoadLinodeMachineConfig(cattleConfig map[string]any) MachineConfigs {
+	var machineConfigs MachineConfigs
+
+	LinodeMachineConfigs := new(LinodeMachineConfigs)
+	operations.LoadObjectFromMap(LinodeMachineConfigsKey, cattleConfig, LinodeMachineConfigs)
+	machineConfigs.LinodeMachineConfigs = LinodeMachineConfigs
+
+	return machineConfigs
 }
 
 // NewLinodeMachineConfig is a constructor to set up rke-machine-config.cattle.io.linodeconfigs. It returns an *unstructured.Unstructured

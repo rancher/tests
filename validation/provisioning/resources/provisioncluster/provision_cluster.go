@@ -17,7 +17,7 @@ import (
 )
 
 // ProvisionRKE2K3SCluster is a helper function that provisions an RKE2/K3s cluster with specified machine pools and node roles.
-func ProvisionRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterType string, clusterConfig *clusters.ClusterConfig, ec2Configs *ec2.AWSEC2Configs,
+func ProvisionRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterType string, provider provisioning.Provider, clusterConfig clusters.ClusterConfig, machineConfigs machinepools.MachineConfigs, ec2Configs *ec2.AWSEC2Configs,
 	highestVersion, isCustomCluster bool) (*v1.SteveAPIObject, error) {
 	var clusterObject *v1.SteveAPIObject
 	var err error
@@ -44,17 +44,15 @@ func ProvisionRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterType s
 	if isCustomCluster {
 		externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
-		clusterObject, err = provisioning.CreateProvisioningCustomCluster(client, &externalNodeProvider, clusterConfig, ec2Configs)
+		clusterObject, err = provisioning.CreateProvisioningCustomCluster(client, &externalNodeProvider, &clusterConfig, ec2Configs)
 		require.NoError(t, err)
 
 		provisioning.VerifyClusterReady(t, client, clusterObject)
 		pods.VerifyClusterPods(t, client, clusterObject)
 	} else {
-		provider := provisioning.CreateProvider(clusterConfig.Provider)
 		credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
-		machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
-		clusterObject, err = provisioning.CreateProvisioningCluster(client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+		clusterObject, err = provisioning.CreateProvisioningCluster(client, provider, credentialSpec, &clusterConfig, machineConfigs, nil)
 		require.NoError(t, err)
 
 		provisioning.VerifyClusterReady(t, client, clusterObject)

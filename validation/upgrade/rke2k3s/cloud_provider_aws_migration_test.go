@@ -18,7 +18,7 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
-	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/provisioning"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/rancher/tests/validation/upgrade"
@@ -55,6 +55,9 @@ func (u *MigrateCloudProviderSuite) SetupSuite() {
 
 	u.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	u.cattleConfig, err = defaults.LoadPackageDefaults(u.cattleConfig, "")
+	require.NoError(u.T(), err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, u.cattleConfig, loggingConfig)
 
@@ -67,20 +70,11 @@ func (u *MigrateCloudProviderSuite) SetupSuite() {
 	awsEC2Configs := new(ec2.AWSEC2Configs)
 	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, u.cattleConfig, awsEC2Configs)
 
-	nodeRolesStandard := []provisioninginput.MachinePools{
-		provisioninginput.EtcdMachinePool,
-		provisioninginput.ControlPlaneMachinePool,
-		provisioninginput.WorkerMachinePool,
-	}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-
-	u.clusterConfig.MachinePools = nodeRolesStandard
+	provider := provisioning.CreateProvider(u.clusterConfig.Provider)
+	machineConfigSpec := provider.LoadMachineConfigFunc(u.cattleConfig)
 
 	logrus.Info("Provisioning RKE2 cluster")
-	u.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), u.standardUserClient, extClusters.RKE2ClusterType.String(), u.clusterConfig, awsEC2Configs, true, false)
+	u.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), u.standardUserClient, extClusters.RKE2ClusterType.String(), provider, *u.clusterConfig, machineConfigSpec, awsEC2Configs, true, false)
 	require.NoError(u.T(), err)
 }
 

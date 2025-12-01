@@ -32,18 +32,18 @@ permissions:
 
 env:
   CLOUD_PROVIDER_VERSION: "5.95.0"
-  HOSTNAME_PREFIX: "gha-ds-prov"
 
 jobs:
   v2-13:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head')) ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: latest
+    env:
+      HOSTNAME_PREFIX: "gha-ds-213"
 
     steps:
       - name: Checkout repository
@@ -107,8 +107,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_HEAD) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_HEAD)
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_13_HEAD) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_13_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -119,8 +119,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_12) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_12)
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_13) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_13)
             }}
 
       - name: Set Rancher repo
@@ -134,6 +134,7 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
+          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_13 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
 
       - name: Create config.yaml
@@ -155,7 +156,7 @@ jobs:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
             awsConfig:
-              ami: "${{ secrets.AWS_AMI }}"
+              ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
               awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
@@ -167,7 +168,7 @@ jobs:
               awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ secrets.AWS_USER }}"
+              awsUser: "${{ secrets.DUAL_STACK_AWS_USER }}"
               clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
               serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
@@ -180,8 +181,8 @@ jobs:
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               certType: "${{ vars.CERT_TYPE }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              osUser: "${{ secrets.OS_USER }}"
-              osGroup: "${{ secrets.OS_GROUP }}"
+              osUser: "${{ secrets.DUAL_STACK_OS_USER }}"
+              osGroup: "${{ secrets.DUAL_STACK_OS_GROUP }}"
               rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
@@ -189,12 +190,13 @@ jobs:
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
-              rke2Version: "${{ vars.RKE2_VERSION_2_12 }}"
+              rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:
+            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
@@ -224,7 +226,7 @@ jobs:
             region: "${{ secrets.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
+              ami: "${{ secrets.AWS_AMI }}"
               enablePrimaryIPv6: true
               httpProtocolIpv6: "enabled"
               ipv6AddressOnly: true
@@ -245,13 +247,12 @@ jobs:
             awsSecretAccessKey: "$AWS_SECRET_KEY"
             awsAccessKeyID: "$AWS_ACCESS_KEY"
             awsEC2Config:
-              - instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-                awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_DUALSTACK_AMI }}"
+              - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
+                awsAMI: "${{ secrets.AWS_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "hb-daily-provisioning"
+                awsCICDInstanceTag: "rancher-validation"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE }}"
                 awsUser: "${{ secrets.AWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
@@ -302,6 +303,27 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: AWS Custodian Infrastructure Cleanup
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
+
+      - name: AWS Custodian Downstream Cleanup - Node driver
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
+
+      - name: AWS Custodian Downstream Cleanup - Custom
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
 
       - name: Revoke Runner IP
         if: always()

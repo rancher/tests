@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
@@ -19,7 +18,6 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/scalinginput"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -33,13 +31,13 @@ import (
 
 type NodeScalingTestSuite struct {
 	suite.Suite
-	client            *rancher.Client
-	session           *session.Session
-	scalingConfig     *scalinginput.Config
-	cattleConfig      map[string]any
-	rke2ClusterConfig *clusters.ClusterConfig
-	rke2Cluster       *v1.SteveAPIObject
-	k3sCluster        *v1.SteveAPIObject
+	client        *rancher.Client
+	session       *session.Session
+	scalingConfig *scalinginput.Config
+	cattleConfig  map[string]any
+	clusterConfig *clusters.ClusterConfig
+	rke2Cluster   *v1.SteveAPIObject
+	k3sCluster    *v1.SteveAPIObject
 }
 
 func (s *NodeScalingTestSuite) TearDownSuite() {
@@ -60,43 +58,30 @@ func (s *NodeScalingTestSuite) SetupSuite() {
 
 	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	s.cattleConfig, err = defaults.LoadPackageDefaults(s.cattleConfig, "")
+	require.NoError(s.T(), err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, s.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(s.T(), err)
 
-	s.rke2ClusterConfig = new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, s.rke2ClusterConfig)
-
-	k3sClusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, k3sClusterConfig)
-
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, s.cattleConfig, awsEC2Configs)
+	s.clusterConfig = new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, s.clusterConfig)
 
 	s.scalingConfig = new(scalinginput.Config)
 	config.LoadConfig(scalinginput.ConfigurationFileKey, s.scalingConfig)
 
-	nodeRolesStandard := []provisioninginput.MachinePools{
-		provisioninginput.EtcdMachinePool,
-		provisioninginput.ControlPlaneMachinePool,
-		provisioninginput.WorkerMachinePool,
-	}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-
-	s.rke2ClusterConfig.MachinePools = nodeRolesStandard
-	k3sClusterConfig.MachinePools = nodeRolesStandard
+	provider := provisioning.CreateProvider(s.clusterConfig.Provider)
+	machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
 
 	logrus.Info("Provisioning RKE2 cluster")
-	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), s.rke2ClusterConfig, awsEC2Configs, true, false)
+	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *s.clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(s.T(), err)
 
 	logrus.Info("Provisioning K3S cluster")
-	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), k3sClusterConfig, awsEC2Configs, true, false)
+	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *s.clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(s.T(), err)
 }
 
@@ -141,7 +126,7 @@ func (s *NodeScalingTestSuite) TestScalingNodePools() {
 		require.NoError(s.T(), err)
 
 		s.Run(tt.name, func() {
-			if s.rke2ClusterConfig.Provider != "vsphere" && tt.isWindows {
+			if s.clusterConfig.Provider != "vsphere" && tt.isWindows {
 				s.T().Skip("Windows test requires access to vSphere")
 			}
 

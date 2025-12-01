@@ -6,7 +6,7 @@ rancher:
   cleanup: true
 
 prime:
-  brand: "<name of brand>"
+  brand: "<required>"
   isPrime: true 
-  rancherVersion: "<version_or_commit_of_rancher>"
-  registry: "<name of registry>
+  rancherVersion: "<required>"
+  registry: "<required>"

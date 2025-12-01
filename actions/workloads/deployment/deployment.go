@@ -1,13 +1,19 @@
 package deployment
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/charts"
+	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/stevestates"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
@@ -15,6 +21,7 @@ import (
 	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/pods"
+	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -281,4 +288,40 @@ func RestartDeployment(client *rancher.Client, clusterID, namespaceName, deploym
 	}
 
 	return nil
+}
+
+func WaitForDeploymentUpdate(client *rancher.Client, clusterID, deploymentNamespace, deploymentName string) error {
+	cluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(clusterID)
+
+	status := &apisV1.ClusterStatus{}
+	err = steveV1.ConvertToK8sType(cluster.Status, status)
+	if err != nil {
+		return err
+	}
+
+	downstreamClient, err := client.Steve.ProxyDownstream(status.ClusterName)
+	if err != nil {
+		return err
+	}
+
+	deploymentClient := downstreamClient.SteveType(stevetypes.Deployment)
+
+	logrus.Debugf("Waiting for %s deployment to be updated", deploymentName)
+	var deployment *appv1.Deployment
+	err = kwait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, defaults.TwoMinuteTimeout, true, func(context.Context) (done bool, err error) {
+		autoscalerDeployment, err := deploymentClient.ByID(deploymentNamespace + "/" + deploymentName)
+		if err != nil {
+			return false, nil
+		}
+
+		deployment = &appv1.Deployment{}
+		err = steveV1.ConvertToK8sType(autoscalerDeployment.JSONResp, deployment)
+		if autoscalerDeployment.State.Name == stevestates.Updating {
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	return err
 }

@@ -68,7 +68,13 @@ const (
 
 // CreateProvisioningCluster provisions a non-rke1 cluster, then runs verify checks
 func CreateProvisioningCluster(client *rancher.Client, provider Provider, credentialSpec cloudcredentials.CloudCredential, clustersConfig *clusters.ClusterConfig, machineConfigSpec machinepools.MachineConfigs, hostnameTruncation []machinepools.HostnameTruncation) (*v1.SteveAPIObject, error) {
-	clusterName := namegen.AppendRandomString(provider.Name.String())
+	var clusterName string
+
+	if clustersConfig.ResourcePrefix != "" {
+		clusterName = namegen.AppendRandomString(clustersConfig.ResourcePrefix)
+	} else {
+		clusterName = namegen.AppendRandomString(provider.Name.String())
+	}
 
 	logrus.Debugf("Creating Cloud credential (%s)", clusterName)
 	cloudCredential, err := provider.CloudCredFunc(client, credentialSpec)
@@ -178,10 +184,12 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 
 	logrus.Debugf("Get cluster object (%s)", clusterName)
 	var createdCluster *v1.SteveAPIObject
+	var clientErr error
 	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
 		adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
 		if err != nil {
 			logrus.Warningf("Unable to get admin cluster client (%s) retrying", clusterName)
+			clientErr = err
 			return false, nil
 		}
 
@@ -193,12 +201,20 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 
 		return true, nil
 	})
+	if err != nil {
+		return createdCluster, err
+	}
 
-	return createdCluster, err
+	if clientErr != nil {
+		return createdCluster, clientErr
+	}
+
+	return createdCluster, clientErr
 }
 
 // CreateProvisioningCustomCluster provisions a non-rke1 cluster using a 3rd party client for its nodes, then runs verify checks
 func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvider *ExternalNodeProvider, clustersConfig *clusters.ClusterConfig, ec2Configs *ec2.AWSEC2Configs) (*v1.SteveAPIObject, error) {
+	var clusterName string
 	rolesPerNode := []string{}
 	quantityPerPool := []int32{}
 	rolesPerPool := []string{}
@@ -234,7 +250,11 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 		}
 	}
 
-	clusterName := namegen.AppendRandomString(externalNodeProvider.Name)
+	if clustersConfig.ResourcePrefix != "" {
+		clusterName = namegen.AppendRandomString(clustersConfig.ResourcePrefix)
+	} else {
+		clusterName = namegen.AppendRandomString(externalNodeProvider.Name)
+	}
 
 	logrus.Debug("Creating custom cluster nodes")
 	nodes, err := externalNodeProvider.NodeCreationFunc(client, rolesPerPool, quantityPerPool, ec2Configs, clustersConfig.IPv6Cluster)
@@ -572,6 +592,7 @@ func CreateProvisioningRKE1CustomCluster(client *rancher.Client, externalNodePro
 
 // CreateProvisioningAirgapCustomCluster provisions a non-rke1 cluster using corral to gather its nodes, then runs verify checks
 func CreateProvisioningAirgapCustomCluster(client *rancher.Client, clustersConfig *clusters.ClusterConfig, corralPackages *corral.Packages) (*v1.SteveAPIObject, error) {
+	var clusterName string
 	quantityPerPool := []int32{}
 	rolesPerPool := []string{}
 	for _, pool := range clustersConfig.MachinePools {
@@ -604,8 +625,12 @@ func CreateProvisioningAirgapCustomCluster(client *rancher.Client, clustersConfi
 		}
 	}
 
-	clusterName := namegen.AppendRandomString(rke2k3sAirgapCustomCluster)
-
+	if clustersConfig.ResourcePrefix != "" {
+		clusterName = namegen.AppendRandomString(clustersConfig.ResourcePrefix)
+	} else {
+		clusterName = namegen.AppendRandomString(rke2k3sAirgapCustomCluster)
+	}
+	
 	cluster := clusters.NewK3SRKE2ClusterConfig(clusterName, namespaces.FleetDefault, clustersConfig, nil, "")
 
 	clusterResp, err := shepherdclusters.CreateK3SRKE2Cluster(client, cluster)
@@ -741,6 +766,7 @@ func CreateProvisioningAKSHostedCluster(client *rancher.Client, aksClusterConfig
 	}
 
 	clusterName := namegen.AppendRandomString("akshostcluster")
+
 	clusterResp, err := aks.CreateAKSHostedCluster(client, clusterName, cloudCredential.Namespace+":"+cloudCredential.Name, aksClusterConfig, false, false, false, false, nil)
 	if err != nil {
 		return nil, err
@@ -915,18 +941,21 @@ func AddRKE2K3SCustomClusterNodes(client *rancher.Client, cluster *v1.SteveAPIOb
 		logrus.Trace(output)
 	}
 
-	err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		clusterResp, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(cluster.ID)
-		if err != nil {
-			return false, err
-		}
+	kubeProvisioningClient, err := client.GetKubeAPIProvisioningClient()
+	if err != nil {
+		return err
+	}
 
-		if clusterResp.ObjectMeta.State.Name == active &&
-			nodestat.AllMachineReady(client, cluster.ID, defaults.ThirtyMinuteTimeout) == nil {
-			return true, nil
-		}
-		return false, nil
+	result, err := kubeProvisioningClient.Clusters(namespaces.FleetDefault).Watch(context.TODO(), metav1.ListOptions{
+		FieldSelector:  "metadata.name=" + cluster.Name,
+		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 	})
+	if err != nil {
+		return err
+	}
+
+	checkFunc := shepherdclusters.IsProvisioningClusterReady
+	err = wait.WatchWait(result, checkFunc)
 	if err != nil {
 		return err
 	}

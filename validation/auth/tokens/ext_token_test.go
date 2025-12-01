@@ -11,6 +11,7 @@ import (
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/rbac"
+	"github.com/rancher/tests/actions/settings"
 	exttokenapi "github.com/rancher/tests/actions/tokens/exttokens"
 	user "github.com/rancher/tests/actions/users"
 	log "github.com/sirupsen/logrus"
@@ -48,7 +49,7 @@ func (ext *ExtTokenTestSuite) SetupSuite() {
 	require.NoError(ext.T(), err)
 
 	log.Info("Getting default TTL value to be used in tests")
-	defaultTTLString, err := exttokenapi.GetExtTokenDefaultTTLMinutes(ext.client)
+	defaultTTLString, err := settings.GetGlobalSettingDefaultValue(ext.client, settings.AuthTokenMaxTTLMinutes)
 	require.NoError(ext.T(), err)
 	defaultTTLInt, err := strconv.Atoi(defaultTTLString)
 	require.NoError(ext.T(), err)

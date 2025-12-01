@@ -20,14 +20,12 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/actions/workloads/pods"
 	cis "github.com/rancher/tests/validation/provisioning/resources/cisbenchmark"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,26 +44,26 @@ func hardenedSetup(t *testing.T) hardenedTest {
 	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k.client = client
 
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k.cattleConfig, err = defaults.SetK8sDefault(client, defaults.K3S, k.cattleConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	return k
 }
@@ -73,19 +71,13 @@ func hardenedSetup(t *testing.T) hardenedTest {
 func TestHardened(t *testing.T) {
 	t.Parallel()
 	k := hardenedSetup(t)
-	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	tests := []struct {
 		name            string
 		client          *rancher.Client
-		machinePools    []provisioninginput.MachinePools
 		scanProfileName string
 	}{
-		{"K3S_CIS_1.9_Profile|3_etcd|2_cp|3_worker", k.standardUserClient, nodeRolesStandard, "k3s-cis-1.9-profile"},
+		{"K3S_CIS_1.9_Profile|3_etcd|2_cp|3_worker", k.standardUserClient, "k3s-cis-1.9-profile"},
 	}
 	for _, tt := range tests {
 		t.Cleanup(func() {
@@ -98,8 +90,6 @@ func TestHardened(t *testing.T) {
 
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
-
-			clusterConfig.MachinePools = tt.machinePools
 			clusterConfig.Hardened = true
 
 			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
@@ -110,7 +100,7 @@ func TestHardened(t *testing.T) {
 			logrus.Info("Provisioning cluster")
 			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
 			reports.TimeoutClusterReport(cluster, err)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, tt.client, cluster)
@@ -127,14 +117,14 @@ func TestHardened(t *testing.T) {
 
 			clusterMeta, err := extensionscluster.NewClusterMeta(tt.client, cluster.Name)
 			reports.TimeoutClusterReport(cluster, err)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			latestCISBenchmarkVersion, err := tt.client.Catalog.GetLatestChartVersion(chartName, catalog.RancherChartRepo)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			project, err := projects.GetProjectByName(tt.client, clusterMeta.ID, cis.System)
 			reports.TimeoutClusterReport(cluster, err)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			k.project = project
 			require.NotEmpty(t, k.project)

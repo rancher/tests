@@ -1,6 +1,7 @@
 package machinepools
 
 import (
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -39,6 +40,17 @@ type AzureMachineConfig struct {
 	UpdateDomainCount string   `json:"updateDomainCount" yaml:"updateDomainCount"`
 	UsePrivateIP      bool     `json:"usePrivateIp" yaml:"usePrivateIp"`
 	Vnet              string   `json:"vnet" yaml:"vnet"`
+}
+
+// LoadAzureMachineConfig loads the AzureMachineConfigs from a provided cattle config file
+func LoadAzureMachineConfig(cattleConfig map[string]any) MachineConfigs {
+	var machineConfigs MachineConfigs
+
+	AzureMachineConfigs := new(AzureMachineConfigs)
+	operations.LoadObjectFromMap(AzureMachineConfigsKey, cattleConfig, AzureMachineConfigs)
+	machineConfigs.AzureMachineConfigs = AzureMachineConfigs
+
+	return machineConfigs
 }
 
 // NewAzureMachineConfig is a constructor to set up rke-machine-config.cattle.io.azureconfig. It returns an *unstructured.Unstructured

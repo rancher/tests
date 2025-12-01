@@ -1,6 +1,7 @@
 package machinepools
 
 import (
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -26,6 +27,17 @@ type HarvesterMachineConfig struct {
 	DiskBus     string `json:"diskBus" yaml:"diskBus"`
 	SSHUser     string `json:"sshUser" yaml:"sshUser"`
 	UserData    string `json:"userData" yaml:"userData"`
+}
+
+// LoadHarvesterMachineConfig loads the HarvesterMachineConfigs from a provided cattle config file
+func LoadHarvesterMachineConfig(cattleConfig map[string]any) MachineConfigs {
+	var machineConfigs MachineConfigs
+
+	HarvesterMachineConfigs := new(HarvesterMachineConfigs)
+	operations.LoadObjectFromMap(HarvesterMachineConfigsKey, cattleConfig, HarvesterMachineConfigs)
+	machineConfigs.HarvesterMachineConfigs = HarvesterMachineConfigs
+
+	return machineConfigs
 }
 
 // NewHarvesterMachineConfig is a constructor to set up rke-machine-config.cattle.io.harvesterconfig.

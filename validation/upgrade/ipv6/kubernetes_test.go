@@ -19,7 +19,6 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -32,11 +31,11 @@ import (
 
 type UpgradeIPv6KubernetesTestSuite struct {
 	suite.Suite
-	session           *session.Session
-	client            *rancher.Client
-	cattleConfig      map[string]any
-	rke2ClusterConfig *clusters.ClusterConfig
-	rke2Cluster       *v1.SteveAPIObject
+	session       *session.Session
+	client        *rancher.Client
+	cattleConfig  map[string]any
+	clusterConfig *clusters.ClusterConfig
+	rke2Cluster   *v1.SteveAPIObject
 }
 
 func (u *UpgradeIPv6KubernetesTestSuite) TearDownSuite() {
@@ -57,35 +56,23 @@ func (u *UpgradeIPv6KubernetesTestSuite) SetupSuite() {
 
 	u.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	u.cattleConfig, err = defaults.LoadPackageDefaults(u.cattleConfig, "")
+	require.NoError(u.T(), err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, u.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(u.T(), err)
 
-	u.rke2ClusterConfig = new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.rke2ClusterConfig)
+	u.clusterConfig = new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.clusterConfig)
 
-	u.rke2ClusterConfig.Networking = &provisioninginput.Networking{
-		ClusterCIDR:     u.rke2ClusterConfig.Networking.ClusterCIDR,
-		ServiceCIDR:     u.rke2ClusterConfig.Networking.ServiceCIDR,
-		StackPreference: u.rke2ClusterConfig.Networking.StackPreference,
-	}
-
-	nodeRolesStandard := []provisioninginput.MachinePools{
-		provisioninginput.EtcdMachinePool,
-		provisioninginput.ControlPlaneMachinePool,
-		provisioninginput.WorkerMachinePool,
-	}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-
-	u.rke2ClusterConfig.MachinePools = nodeRolesStandard
+	provider := provisioning.CreateProvider(u.clusterConfig.Provider)
+	machineConfigSpec := provider.LoadMachineConfigFunc(u.cattleConfig)
 
 	logrus.Info("Provisioning RKE2 cluster")
-	u.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), u.rke2ClusterConfig, nil, false, false)
+	u.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *u.clusterConfig, machineConfigSpec, nil, false, false)
 	require.NoError(u.T(), err)
 }
 
@@ -96,7 +83,7 @@ func (u *UpgradeIPv6KubernetesTestSuite) TestUpgradeIPv6Kubernetes() {
 		clusterConfig *clusters.ClusterConfig
 		clusterType   string
 	}{
-		{"Upgrading_RKE2_IPv6_cluster", u.rke2Cluster.ID, u.rke2ClusterConfig, extClusters.RKE2ClusterType.String()},
+		{"Upgrading_RKE2_IPv6_cluster", u.rke2Cluster.ID, u.clusterConfig, extClusters.RKE2ClusterType.String()},
 	}
 
 	for _, tt := range tests {

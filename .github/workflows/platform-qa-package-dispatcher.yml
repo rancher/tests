@@ -15,7 +15,7 @@ on:
       test_packages:
         description: "Comma-separated test package paths (e.g. validation/rbac,validation/projects)"
         required: true
-        default: "validation/rbac,validation/projects,validation/auth"
+        default: "validation/projects,validation/rbac,validation/auth,validation/token"
       run_all_tests:
         description: "Run all test files in the package?"
         required: true

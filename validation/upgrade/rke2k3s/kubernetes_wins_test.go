@@ -60,6 +60,9 @@ func (u *UpgradeWindowsKubernetesTestSuite) SetupSuite() {
 
 	u.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	u.cattleConfig, err = defaults.LoadPackageDefaults(u.cattleConfig, "")
+	require.NoError(u.T(), err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, u.cattleConfig, loggingConfig)
 
@@ -86,8 +89,11 @@ func (u *UpgradeWindowsKubernetesTestSuite) SetupSuite() {
 
 	u.clusterConfig.MachinePools = nodeRolesStandard
 
+	provider := provisioning.CreateProvider(u.clusterConfig.Provider)
+	machineConfigSpec := provider.LoadMachineConfigFunc(u.cattleConfig)
+
 	logrus.Info("Provisioning RKE2 cluster")
-	u.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), u.clusterConfig, awsEC2Configs, true, true)
+	u.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *u.clusterConfig, machineConfigSpec, awsEC2Configs, true, true)
 	require.NoError(u.T(), err)
 
 	clusters, err := upgradeinput.LoadUpgradeKubernetesConfig(client)

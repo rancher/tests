@@ -17,12 +17,11 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/config/permutationdata"
 	"github.com/rancher/tests/actions/logging"
-	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type DynamicNodeDriverTest struct {
@@ -38,7 +37,7 @@ func dynamicNodeDriverSetup(t *testing.T) DynamicNodeDriverTest {
 	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	k.client = client
 
 	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
@@ -47,21 +46,21 @@ func dynamicNodeDriverSetup(t *testing.T) DynamicNodeDriverTest {
 	operations.LoadObjectFromMap(logging.LoggingKey, cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	providerPermutation, err := permutationdata.CreateProviderPermutation(cattleConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k8sPermutation, err := permutationdata.CreateK8sPermutation(k.client, defaults.K3S, cattleConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	permutedConfigs, err := permutations.Permute([]permutations.Permutation{*k8sPermutation, *providerPermutation}, cattleConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k.cattleConfigs = append(k.cattleConfigs, permutedConfigs...)
 
 	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	return k
 }
@@ -95,11 +94,11 @@ func TestDynamicNodeDriver(t *testing.T) {
 
 				provider := provisioning.CreateProvider(clusterConfig.Provider)
 				credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
-				machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+				machineConfigSpec := provider.LoadMachineConfigFunc(cattleConfig)
 
 				logrus.Info("Provisioning cluster")
 				cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 				provisioning.VerifyClusterReady(t, tt.client, cluster)

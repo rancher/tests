@@ -20,7 +20,7 @@ import (
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type customK3SDualstackTest struct {
@@ -37,26 +37,26 @@ func customK3SDualstackSetup(t *testing.T) customK3SDualstackTest {
 	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k.client = client
 
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k.cattleConfig, err = defaults.SetK8sDefault(k.client, defaults.K3S, k.cattleConfig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	return k
 }
@@ -131,7 +131,7 @@ func TestCustomK3SDualstack(t *testing.T) {
 
 			logrus.Info("Provisioning cluster")
 			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, tt.client, cluster)

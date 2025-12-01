@@ -1,0 +1,49 @@
+#Required for all tests
+rancher:
+  host: "<required>"
+  adminToken: "<required>"
+  insecure: true
+  cleanup: true
+
+#Required for all tests except template
+clusterConfig:
+  machinePools:
+  - machinePoolConfig:
+      etcd: true
+      controlplane: false
+      worker: false
+      quantity: 1
+  - machinePoolConfig:
+      etcd: false
+      controlplane: true
+      worker: false
+      quantity: 1
+  - machinePoolConfig:
+      etcd: false
+      controlplane: false
+      worker: true
+      quantity: 1
+  kubernetesVersion: ""
+  cni: "calico"
+  provider: "aws"
+  nodeProvider: "ec2"
+
+#Required for all tests
+awsCredentials:
+  secretKey: "<required>"
+  accessKey: "<required>"
+  defaultRegion: "us-east-2" 
+
+#Required for tests that utilize node driver clusters
+awsMachineConfigs:
+  region: "us-east-2"
+  awsMachineConfig:
+  - roles: ["etcd","controlplane","worker"]
+    ami: "<required>"
+    instanceType: "t3a.medium"
+    sshUser: "<required>"
+    vpcId: "<required>"
+    retries: "5"
+
+logging:
+   level: "info"

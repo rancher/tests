@@ -1,6 +1,7 @@
 package machinepools
 
 import (
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -30,6 +31,17 @@ type DOMachineConfig struct {
 	SSHUser           string `json:"sshUser" yaml:"sshUser"`
 	Tags              string `json:"tags" yaml:"tags"`
 	Userdata          string `json:"userdata" yaml:"userdata"`
+}
+
+// LoadDOMachineConfig loads the DOMachineConfigs from a provided cattle config file
+func LoadDOMachineConfig(cattleConfig map[string]any) MachineConfigs {
+	var machineConfigs MachineConfigs
+
+	DOMachineConfigs := new(DOMachineConfigs)
+	operations.LoadObjectFromMap(DOMachineConfigsKey, cattleConfig, DOMachineConfigs)
+	machineConfigs.DOMachineConfigs = DOMachineConfigs
+
+	return machineConfigs
 }
 
 // NewDigitalOceanMachineConfig is a constructor to set up rke-machine-config.cattle.io.digitaloceanconfig. It returns an *unstructured.Unstructured

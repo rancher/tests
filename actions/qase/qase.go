@@ -214,7 +214,7 @@ func (q *Service) getTestCases(project string, test upstream.TestCaseCreate) ([]
 	return nil, fmt.Errorf("test case \"%s\" not found in project %s", test.Title, project)
 }
 
-func (q *Service) CreateTestRun(testRunName string, projectID string) (*upstream.IdResponse, error) {
+func (q *Service) CreateTestRun(testRunName string, projectID string, runDescription string) (*upstream.IdResponse, error) {
 	runCreateBody := upstream.RunCreate{
 		Title: testRunName,
 	}
@@ -228,6 +228,10 @@ func (q *Service) CreateTestRun(testRunName string, projectID string) (*upstream
 		}
 	}
 
+	if runDescription != "" {
+		runCreateBody.SetDescription(runDescription)
+	}
+
 	runRequest := q.Client.RunsAPI.CreateRun(context.TODO(), projectID)
 	runRequest = runRequest.RunCreate(runCreateBody)
 	resp, _, err := runRequest.Execute()
@@ -236,4 +240,15 @@ func (q *Service) CreateTestRun(testRunName string, projectID string) (*upstream
 	}
 
 	return resp, nil
+}
+
+// CompleteTestRun complete the Qase test run
+func (q *Service) CompleteTestRun(projectIDEnvVar string, testRunID int32) error {
+	runRequest := q.Client.RunsAPI.CompleteRun(context.TODO(), projectIDEnvVar, testRunID)
+	_, _, err := runRequest.Execute()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

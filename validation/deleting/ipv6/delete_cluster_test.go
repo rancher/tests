@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -51,35 +50,23 @@ func (d *DeleteIPv6ClusterTestSuite) SetupSuite() {
 
 	d.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	d.cattleConfig, err = defaults.LoadPackageDefaults(d.cattleConfig, "")
+	require.NoError(d.T(), err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, d.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(d.T(), err)
 
-	rke2ClusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, rke2ClusterConfig)
+	clusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, clusterConfig)
 
-	rke2ClusterConfig.Networking = &provisioninginput.Networking{
-		ClusterCIDR:     rke2ClusterConfig.Networking.ClusterCIDR,
-		ServiceCIDR:     rke2ClusterConfig.Networking.ServiceCIDR,
-		StackPreference: rke2ClusterConfig.Networking.StackPreference,
-	}
-
-	nodeRolesStandard := []provisioninginput.MachinePools{
-		provisioninginput.EtcdMachinePool,
-		provisioninginput.ControlPlaneMachinePool,
-		provisioninginput.WorkerMachinePool,
-	}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-
-	rke2ClusterConfig.MachinePools = nodeRolesStandard
+	provider := provisioning.CreateProvider(clusterConfig.Provider)
+	machineConfigSpec := provider.LoadMachineConfigFunc(d.cattleConfig)
 
 	logrus.Info("Provisioning RKE2 cluster")
-	d.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), rke2ClusterConfig, nil, true, false)
+	d.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(d.T(), err)
 }
 

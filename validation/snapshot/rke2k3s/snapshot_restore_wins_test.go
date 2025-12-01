@@ -54,6 +54,9 @@ func (s *SnapshotRestoreWindowsTestSuite) SetupSuite() {
 
 	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	s.cattleConfig, err = defaults.LoadPackageDefaults(s.cattleConfig, "")
+	require.NoError(s.T(), err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, s.cattleConfig, loggingConfig)
 
@@ -80,8 +83,11 @@ func (s *SnapshotRestoreWindowsTestSuite) SetupSuite() {
 
 	clusterConfig.MachinePools = nodeRolesStandard
 
+	provider := provisioning.CreateProvider(clusterConfig.Provider)
+	machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
+
 	logrus.Info("Provisioning RKE2 windows cluster")
-	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), clusterConfig, awsEC2Configs, true, true)
+	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, awsEC2Configs, true, true)
 	require.NoError(s.T(), err)
 }
 

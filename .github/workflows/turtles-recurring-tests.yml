@@ -40,15 +40,14 @@ permissions:
 
 env:
   CLOUD_PROVIDER_VERSION: "5.95.0"
-  HOSTNAME_PREFIX: "gha-trecur"
 
 jobs:
   v2-13-off:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event.inputs.run_all_variations == 'true' && startsWith(github.event.inputs.rancher_version, 'head')) ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head')) &&
+      (github.event.inputs.run_all_variations == 'true' && startsWith(github.event.inputs.rancher_version, 'v2.13')) ||
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.turtles, 'false'))
     name: "[v2-13] turtles OFF"
     runs-on: ubuntu-latest
@@ -59,6 +58,8 @@ jobs:
         suite:
           - rancher-server-one
           - rancher-server-two
+    env:
+      HOSTNAME_PREFIX: "gha-trec-off"
 
     steps:
       - name: Checkout repository
@@ -122,8 +123,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_HEAD) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_HEAD)
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_13_HEAD) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_13_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -134,8 +135,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_12) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_12)
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_13) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_13)
             }}
 
       - name: Set Rancher repo
@@ -203,7 +204,7 @@ jobs:
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
-              rke2Version: "${{ vars.RKE2_VERSION_2_12 }}"
+              rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
               featureFlags:
                 turtles: "false"
           terratest:
@@ -214,6 +215,7 @@ jobs:
             nodeProvider: "ec2"
 
           clusterConfig:
+            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
@@ -261,7 +263,7 @@ jobs:
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "hb-recurring-runs"
+                awsCICDInstanceTag: "rancher-validation"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
                 awsUser: "${{ secrets.AWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
@@ -272,7 +274,7 @@ jobs:
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "hb-recurring-runs-wins"
+                awsCICDInstanceTag: "rancher-validation"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["windows"]
@@ -335,6 +337,27 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: AWS Custodian Infrastructure Cleanup
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
+
+      - name: AWS Custodian Downstream Cleanup - Node driver
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
+
+      - name: AWS Custodian Downstream Cleanup - Custom
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
 
       - name: Revoke Runner IP
         if: always()
@@ -360,8 +383,8 @@ jobs:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event.inputs.run_all_variations == 'true' && startsWith(github.event.inputs.rancher_version, 'head')) ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head')) &&
+      (github.event.inputs.run_all_variations == 'true' && startsWith(github.event.inputs.rancher_version, 'v2.13')) ||
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.turtles, 'true'))
     name: "[v2-13] turtles ON"
     runs-on: ubuntu-latest
@@ -372,6 +395,8 @@ jobs:
         suite:
           - rancher-server-one
           - rancher-server-two
+    env:
+      HOSTNAME_PREFIX: "gha-trec-on"
 
     steps:
       - name: Checkout repository
@@ -435,8 +460,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_12_HEAD) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_12_HEAD)
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_13_HEAD) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_13_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -447,8 +472,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_12) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_12)
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_13) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_13)
             }}
 
       - name: Set Rancher repo
@@ -516,7 +541,7 @@ jobs:
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
-              rke2Version: "${{ vars.RKE2_VERSION_2_12 }}"
+              rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
               featureFlags:
                 turtles: "true"
           terratest:
@@ -527,6 +552,7 @@ jobs:
             nodeProvider: "ec2"
 
           clusterConfig:
+            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
@@ -574,7 +600,7 @@ jobs:
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "hb-recurring-runs"
+                awsCICDInstanceTag: "rancher-validation"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
                 awsUser: "${{ secrets.AWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
@@ -585,7 +611,7 @@ jobs:
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "hb-recurring-runs-wins"
+                awsCICDInstanceTag: "rancher-validation"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["windows"]
@@ -648,6 +674,27 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: AWS Custodian Infrastructure Cleanup
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
+
+      - name: AWS Custodian Downstream Cleanup - Node driver
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
+
+      - name: AWS Custodian Downstream Cleanup - Custom
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
 
       - name: Revoke Runner IP
         if: always()
@@ -673,8 +720,8 @@ jobs:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event.inputs.run_all_variations == 'true' && startsWith(github.event.inputs.rancher_version, 'head')) ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head')) &&
+      (github.event.inputs.run_all_variations == 'true' && startsWith(github.event.inputs.rancher_version, 'v2.13')) ||
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.turtles, 'toggledOn'))
     name: "[v2-13] turtles toggled ON"
     runs-on: ubuntu-latest
@@ -685,6 +732,8 @@ jobs:
         suite:
           - rancher-server-one
           - rancher-server-two
+    env:
+      HOSTNAME_PREFIX: "gha-trec-ton"
 
     steps:
       - name: Checkout repository
@@ -748,8 +797,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_12_HEAD) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_12_HEAD)
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_13_HEAD) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_13_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -760,8 +809,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_12) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_12)
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_13) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_13)
             }}
 
       - name: Set Rancher repo
@@ -829,7 +878,7 @@ jobs:
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
-              rke2Version: "${{ vars.RKE2_VERSION_2_12 }}"
+              rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
               featureFlags:
                 turtles: "toggledOn"
           terratest:
@@ -840,6 +889,7 @@ jobs:
             nodeProvider: "ec2"
 
           clusterConfig:
+            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
@@ -887,7 +937,7 @@ jobs:
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "hb-recurring-runs"
+                awsCICDInstanceTag: "rancher-validation"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
                 awsUser: "${{ secrets.AWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
@@ -898,7 +948,7 @@ jobs:
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "hb-recurring-runs-wins"
+                awsCICDInstanceTag: "rancher-validation"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["windows"]
@@ -961,6 +1011,27 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: AWS Custodian Infrastructure Cleanup
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
+
+      - name: AWS Custodian Downstream Cleanup - Node driver
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
+
+      - name: AWS Custodian Downstream Cleanup - Custom
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
 
       - name: Revoke Runner IP
         if: always()
@@ -982,14 +1053,14 @@ jobs:
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-  head-toggled-off:
+  v2-13-toggled-off:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event.inputs.run_all_variations == 'true' && startsWith(github.event.inputs.rancher_version, 'head')) ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head')) &&
+      (github.event.inputs.run_all_variations == 'true' && startsWith(github.event.inputs.rancher_version, 'v2.13')) ||
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.turtles, 'toggledOff'))
-    name: "[head] turtles toggled OFF"
+    name: "[v2-13] turtles toggled OFF"
     runs-on: ubuntu-latest
     environment: latest
     strategy:
@@ -998,6 +1069,8 @@ jobs:
         suite:
           - rancher-server-one
           - rancher-server-two
+    env:
+      HOSTNAME_PREFIX: "gha-trec-toff"
 
     steps:
       - name: Checkout repository
@@ -1061,8 +1134,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_12_HEAD) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_12_HEAD)
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_13_HEAD) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_13_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -1073,8 +1146,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_12) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_12)
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_13) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_13)
             }}
 
       - name: Set Rancher repo
@@ -1142,7 +1215,7 @@ jobs:
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
-              rke2Version: "${{ vars.RKE2_VERSION_2_12 }}"
+              rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
               featureFlags:
                 turtles: "toggledOff"
           terratest:
@@ -1153,6 +1226,7 @@ jobs:
             nodeProvider: "ec2"
 
           clusterConfig:
+            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
@@ -1200,7 +1274,7 @@ jobs:
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "hb-recurring-runs"
+                awsCICDInstanceTag: "rancher-validation"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
                 awsUser: "${{ secrets.AWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
@@ -1211,7 +1285,7 @@ jobs:
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "hb-recurring-runs-wins"
+                awsCICDInstanceTag: "rancher-validation"
                 awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["windows"]
@@ -1274,6 +1348,27 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: AWS Custodian Infrastructure Cleanup
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
+
+      - name: AWS Custodian Downstream Cleanup - Node driver
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
+
+      - name: AWS Custodian Downstream Cleanup - Custom
+        if: always()
+        uses: ./.github/actions/aws-cleanup
+        with:
+          prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ secrets.AWS_REGION }}"
 
       - name: Revoke Runner IP
         if: always()
