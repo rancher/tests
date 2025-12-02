@@ -119,15 +119,18 @@ node("harvester-vpn-1") {
                 dir ("./ansible") {
                   writeFile file: ansibleVarsFilename, text: ansibleConfig
                 }
-                dir ("./ansible/rancher/downstream/elemental/harvester") {
-                  writeFile file: ansibleVarsFilename, text: elementalAnsibleConfig
-                  writeFile file: elementalConfigFile, text: elementalConfig
-                }
                 dir ("./tofu/aws/modules/cluster_nodes") {
                   writeFile file: terraformVarsfilename, text: terraformConfig
                 }
                 dir ("./tofu/aws/modules/s3") {
                   writeFile file: elementalTerraformVarsfilename, text: elementalTerraformConfig
+                }
+                dir ("./ansible/rancher/downstream/elemental/harvester") {
+                  writeFile file: ansibleVarsFilename, text: elementalAnsibleConfig
+                  writeFile file: elementalConfigFile, text: elementalConfig
+                }
+                dir ("./tofu/harvester/modules/elemental-vm") {
+                  writeFile file: terraformVarsfilename, text: terraformConfig
                 }
               }
               
