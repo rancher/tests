@@ -9,7 +9,7 @@ node {
     def tofuModulePath = "${qaInfraPath}/tofu/aws/modules/airgap"
     def ansiblePath = "${qaInfraPath}/ansible/rke2/airgap"
     def workspaceName = ""
-    def terraformBackendInitScript = "/scripts/init-backend.sh"
+    def terraformBackendInitScript = "./scripts/init-backend.sh"
     def testsBranch = env.RANCHER_TEST_REPO_BRANCH ?: "main"
     def testsRepo = env.RANCHER_TEST_REPO_URL ?: "https://github.com/rancher/tests"
     def qaInfraBranch = env.QA_INFRA_REPO_BRANCH ?: "main"
