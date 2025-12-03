@@ -7,6 +7,7 @@ node {
     def testsPath = "./tests"
     def qaInfraPath = "./qa-infra-automation"
     def tofuModulePath = "${qaInfraPath}/tofu/aws/modules/airgap"
+    def tofuBackendInitScript = "./scripts/init-backend.sh"
     def testsBranch = env.RANCHER_TEST_REPO_BRANCH ?: "main"
     def testsRepo = env.RANCHER_TEST_REPO_URL ?: "https://github.com/rancher/tests"
     def qaInfraBranch = env.QA_INFRA_REPO_BRANCH ?: "main"
@@ -74,6 +75,7 @@ node {
                                 bucket: env.S3_BUCKET_NAME,
                                 key: env.S3_KEY_PREFIX,
                                 region: env.S3_BUCKET_REGION ?: env.S3_REGION
+                                backendInitScript: tofuBackendInitScript
                             )
                         }
                         
