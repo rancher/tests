@@ -80,7 +80,7 @@ awsMachineConfigs:
     zone: "${AWS_ZONE_LETTER}"
     retries: "5"
     rootSize: "${AWS_ROOT_SIZE}"
-    securityGroup: ["${AWS_SECURITY_GROUP_NAMES}"]
+    securityGroup: "${AWS_SECURITY_GROUP_NAMES}"
 
 awsEC2Configs:
   region: "${AWS_REGION}"
@@ -90,7 +90,7 @@ awsEC2Configs:
     - instanceType: "${AWS_INSTANCE_TYPE}"
       awsRegionAZ: "${AWS_REGION}${AWS_ZONE_LETTER}"
       awsAMI: "${AWS_AMI}"
-      awsSecurityGroups: ["${AWS_SECURITY_GROUPS}"]
+      awsSecurityGroups: "${AWS_SECURITY_GROUPS}"
       awsSubnetID: "${AWS_SUBNET_ID}"
       awsSSHKeyName: "${SSH_PRIVATE_KEY_NAME}.pem"
       awsCICDInstanceTag: "platform-qa"
@@ -120,7 +120,7 @@ openLDAP:
     nestedGroupMembershipEnabled: true
     searchDirectGroupMemberships: true
 
-authInput:
+openLdapAuthInput:
   group: "testautogroup3"
   users:
     - username: "testauto2"
@@ -141,4 +141,90 @@ authInput:
   doubleNestedUsers:
     - username: "nestedtestuser1"
       password: "${OPENLDAP_USER_PASSWORD}"
+
+activeDirectory:
+  hostname: "${AD_HOSTNAME}"
+  port: "${AD_PORT}"
+  tls: false
+  startTLS: false
+  users:
+    searchBase: "${AD_USERS_SEARCHBASE}"
+    objectClass: "person"
+    usernameAttribute: "name"
+    loginAttribute: "sAMAccountName"
+    searchAttribute: "sAMAccountName|sn|givenName"
+    searchFilter: ""
+    loginFilter: ""
+    enabledAttribute: "userAccountControl"
+    disabledBitMask: 2
+    admin:
+      username: "${AD_ADMIN_USERNAME}"
+      password: "${AD_ADMIN_PASSWORD}"
+  serviceAccount:
+    distinguishedName: "${AD_SA_DN_NAME}"
+    password: "${AD_SA_PASSWORD}"
+  groups:
+    searchBase: "${AD_GROUPS_SEARCHBASE}"
+    objectClass: "group"
+    nameAttribute: "name"
+    searchAttribute: "sAMAccountName"
+    searchFilter: ""
+    memberMappingAttribute: "member"
+    memberUserAttribute: "distinguishedName"
+    dnAttribute: "distinguishedName"
+    nestedGroupMembershipEnabled: true
+  accessMode: "unrestricted"
+
+activeDirectoryAuthInput:
+  standardUser: "testautouser"
+  group: "testautogroup1"
+  users:
+    - username: "testauto1"
+      password: "${AD_USER_PASSWORD}"
+    - username: "testauto2"
+      password: "${AD_USER_PASSWORD}"
+  projectGroup: "testautogroup2"
+  projectUsers:
+    - username: "testauto3"
+      password: "${AD_USER_PASSWORD}"
+    - username: "testauto4"
+      password: "${AD_USER_PASSWORD}"
+  allowedGroup: "testautogroup3"
+  allowedGroupUsers:
+    - username: "testauto5"
+      password: "${AD_USER_PASSWORD}"
+    - username: "testauto6"
+      password: "${AD_USER_PASSWORD}"
+  disallowedGroup: "testautogroup4"
+  disallowedGroupUsers:
+    - username: "testauto7"
+      password: "${AD_USER_PASSWORD}"
+    - username: "testauto8"
+      password: "${AD_USER_PASSWORD}"
+  nestedGroup: "nestgroup1"
+  nestedUsers:
+    - username: "nestedtestuser1"
+      password: "${AD_USER_PASSWORD}"
+  doubleNestedGroup: "nestgroup2"
+  doubleNestedUsers:
+    - username: "nestedtestuser2"
+      password: "${AD_USER_PASSWORD}"
+  tripleNestedGroup: "nestgroup3"
+  tripleNestedUsers:
+    - username: "nestedtestuser3"
+      password: "${AD_USER_PASSWORD}"
+  clusterUsers:
+    - username: "testauto5"
+      password: "${AD_USER_PASSWORD}"
+  projectDirectUsers:
+    - username: "testauto6"
+      password: "${AD_USER_PASSWORD}"
+  allowedUsers:
+    - username: "testauto2"
+      password: "${AD_USER_PASSWORD}"
+  disallowedUsers:
+    - username: "testauto3"
+      password: "${AD_USER_PASSWORD}"
+    - username: "testauto4"
+      password: "${AD_USER_PASSWORD}"
 EOF

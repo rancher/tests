@@ -47,7 +47,7 @@ jobs:
       REPORT_TO_QASE: ${{ github.event.inputs.report_to_qase }}
       QASE_TEST_RUN_ID: ${{ github.event.inputs.qase_test_run_id }}
       GOTESTSUM_OUTPUT_BUFFER: 0
-  
+ 
     steps:
       - name: Checkout repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -92,21 +92,6 @@ jobs:
           RANCHER_ADMIN_TOKEN: ${{ steps.create-token.outputs.RANCHER_ADMIN_TOKEN }}
         run: bash .github/scripts/platform-qa-get-k8s-version.sh
 
-      - name: Preprocess variables and set environment
-        shell: bash
-        env:
-          AWS_SECURITY_GROUPS: ${{ secrets.PQA_AWS_SECURITY_GROUPS }}
-          AWS_SECURITY_GROUP_NAMES: ${{ secrets.PQA_AWS_SECURITY_GROUP_NAMES }}
-        run: |
-          CLEAN_VERSION="${K8S_VERSION#v}"
-          echo "RKE2_VERSION=v${CLEAN_VERSION}+rke2r1" >> $GITHUB_ENV
-          echo "K3S_VERSION=v${CLEAN_VERSION}+k3s1" >> $GITHUB_ENV
-          echo "KUBERNETES_VERSION=v${CLEAN_VERSION}+k3s1" >> $GITHUB_ENV
-          export AWS_SECURITY_GROUP_NAMES=$(echo "$AWS_SECURITY_GROUP_NAMES" | sed 's/,/","/g')
-          export AWS_SECURITY_GROUPS=$(echo "$AWS_SECURITY_GROUPS" | sed 's/,/","/g')
-          echo "AWS_SECURITY_GROUP_NAMES=$AWS_SECURITY_GROUP_NAMES" >> $GITHUB_ENV
-          echo "AWS_SECURITY_GROUPS=$AWS_SECURITY_GROUPS" >> $GITHUB_ENV
-
       - name: Provision downstream cluster
         env:
           RANCHER_ADMIN_TOKEN: ${{ steps.create-token.outputs.RANCHER_ADMIN_TOKEN }}
@@ -119,7 +104,9 @@ jobs:
           AWS_ROOT_SIZE: ${{ vars.AWS_ROOT_SIZE }}
           AWS_VPC_ID: ${{ secrets.PQA_AWS_VPC_ID }}
           AWS_SUBNET_ID: ${{ secrets.PQA_AWS_SUBNET_ID }}
+          AWS_SECURITY_GROUPS: ${{ secrets.PQA_AWS_SECURITY_GROUPS }}
           CNI: ${{ secrets.CNI }}
+          NETWORK_STACK_PREFERENCE: ${{ vars.PQA_NETWORK_STACK_PREFERENCE }}
         run: bash .github/scripts/platform-qa-provision-downstream-k3s.sh
 
       - name: Create cattle config
@@ -137,6 +124,8 @@ jobs:
           AWS_USER: ${{ secrets.AWS_USER }}
           AWS_VPC_ID: ${{ secrets.PQA_AWS_VPC_ID }}
           AWS_SUBNET_ID: ${{ secrets.PQA_AWS_SUBNET_ID }}
+          AWS_SECURITY_GROUPS: ${{ secrets.PQA_AWS_SECURITY_GROUPS }}
+          AWS_SECURITY_GROUP_NAMES: ${{ secrets.PQA_AWS_SECURITY_GROUP_NAMES }}
           PROVIDER_AMAZON: ${{ vars.PROVIDER_AMAZON }}
           CNI: ${{ secrets.CNI }}
           NETWORK_STACK_PREFERENCE: ${{ vars.PQA_NETWORK_STACK_PREFERENCE }}
@@ -154,6 +143,15 @@ jobs:
           OPENLDAP_SA_DN_NAME: ${{ vars.OPENLDAP_SA_DN_NAME }}
           OPENLDAP_USERS_SEARCHBASE: ${{ vars.OPENLDAP_USERS_SEARCHBASE }}
           OPENLDAP_GROUPS_SEARCHBASE: ${{ vars.OPENLDAP_GROUPS_SEARCHBASE }}
+          AD_HOSTNAME: ${{ secrets.AD_HOSTNAME }}
+          AD_PORT: ${{ vars.AD_PORT }}
+          AD_ADMIN_USERNAME: ${{ secrets.AD_ADMIN_USERNAME }}
+          AD_ADMIN_PASSWORD: ${{ secrets.AD_ADMIN_PASSWORD }}
+          AD_USER_PASSWORD: ${{ secrets.AD_USER_PASSWORD }}
+          AD_SA_PASSWORD: ${{ secrets.AD_SA_PASSWORD }}
+          AD_SA_DN_NAME: ${{ vars.AD_SA_DN_NAME }}
+          AD_USERS_SEARCHBASE: ${{ vars.AD_USERS_SEARCHBASE }}
+          AD_GROUPS_SEARCHBASE: ${{ vars.AD_GROUPS_SEARCHBASE }}
         run: bash .github/scripts/platform-qa-create-cattle-config.sh
 
       - name: Run all tests in package

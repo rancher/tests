@@ -24,7 +24,6 @@ MACHINECONFIG_FILE="/tmp/${MACHINECONFIG_NAME}.yaml"
 CLUSTER_FILE="/tmp/${CLUSTER_NAME}-cluster.yaml"
 CLOUD_CREDENTIAL_NAME="aws-creds-$CLUSTER_NAME"
 NAMESPACE="fleet-default"
-AWS_SECURITY_GROUPS_JSON=$(echo "$AWS_SECURITY_GROUPS" | tr -d '"' | jq -Rn --arg csv "$AWS_SECURITY_GROUPS" '$csv | split(",")')
 
 # Check if the cluster already exists
 EXISTING_CLUSTER=$(curl -s -k -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" \
@@ -116,11 +115,11 @@ spec:
           name: ${MACHINECONFIG_NAME}
         dynamicSchemaSpec: >-
           {
-            "securityGroup": '"$AWS_SECURITY_GROUPS_JSON"',
+            "securityGroup": '"$AWS_SECURITY_GROUPS"',
             "keypairName": "'$SSH_PRIVATE_KEY_NAME'"
           }
     networking:
-      stackPreference: dual
+      stackPreference: "${NETWORK_STACK_PREFERENCE}"
     upgradeStrategy:
       controlPlaneConcurrency: "1"
       workerConcurrency: "1"
