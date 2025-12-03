@@ -29,7 +29,7 @@ RUN zypper -n install python311-pip python311-base python311 python311-devel pyt
 
 # Upgrade pip and install Python packages
 RUN python3.11 -m pip install --upgrade pip setuptools && \
-    python3.11 -m pip install ansible kubernetes jmespath
+    python3.11 -m pip install ansible kubernetes jmespath boto3 botocore
 
 ENV PATH="/root/.local/bin:${PATH}"
 
