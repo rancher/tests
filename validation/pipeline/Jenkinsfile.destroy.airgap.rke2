@@ -74,7 +74,7 @@ node {
                                 dir: tofuModulePath,
                                 bucket: env.S3_BUCKET_NAME,
                                 key: env.S3_KEY_PREFIX,
-                                region: env.S3_BUCKET_REGION ?: env.S3_REGION
+                                region: env.S3_BUCKET_REGION ?: env.S3_REGION,
                                 backendInitScript: tofuBackendInitScript
                             )
                         }
