@@ -26,6 +26,8 @@ node("harvester-vpn-1") {
     def elementalAnsibleConfig = env.ELEMENTAL_ANSIBLE_CONFIG
     def elementalConfig = env.ELEMENTAL_CONFIG
     def elementalConfigFile = "elementalconfig.yaml"
+    def harvesterConfig = ""
+    def harvesterConfigfilename = "harvester.yaml"
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"
@@ -108,6 +110,7 @@ node("harvester-vpn-1") {
                 dir("./tests/.ssh") {
                   def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
                   writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                  harvesterConfig = sh(script: "ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${env.AWS_SSH_KEY_NAME} rancher@${env.HARVESTER_IP} 'sudo cat /etc/rancher/rke2/rke2.yaml'", returnStdout: true)
                 }
               }
 
@@ -134,6 +137,7 @@ node("harvester-vpn-1") {
                 }
                 dir ("./tofu/harvester/modules/elemental-vm") {
                   writeFile file: terraformVarsfilename, text: terraformConfig
+                  writeFile file: harvesterConfigfilename, text: harvesterConfig
                 }
               }
               
