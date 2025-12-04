@@ -2,6 +2,7 @@ package cloudprovider
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -239,37 +240,7 @@ func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string, s
 	steveclient, err := adminClient.Steve.ProxyDownstream(clusterID)
 	require.NoError(t, err)
 
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
-	require.NoError(t, err)
-
-	storageClassVolumesResource := dynamicClient.Resource(storageclasses.StorageClassGroupVersionResource).Namespace("")
-
-	ctx := context.Background()
-	unstructuredResp, err := storageClassVolumesResource.List(ctx, metav1.ListOptions{})
-	require.NoError(t, err)
-
-	storageClasses := &v1.StorageClassList{}
-
-	err = scheme.Scheme.Convert(unstructuredResp, storageClasses, unstructuredResp.GroupVersionKind())
-	require.NoError(t, err)
-
-	var storageClass v1.StorageClass
-	if storageClassName == "" {
-		storageClass = storageClasses.Items[0]
-	} else {
-		found := false
-		for _, class := range storageClasses.Items {
-			if class.Name == storageClassName {
-				found = true
-				storageClass = class
-				break
-			}
-		}
-
-		if !found {
-			t.Errorf("No storage class named %s", storageClassName)
-		}
-	}
+	storageClass, err := GetStorageClass(client, clusterID, storageClassName)
 
 	logrus.Infof("creating PVC")
 
@@ -293,7 +264,7 @@ func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string, s
 	pvcStatus := &corev1.PersistentVolumeClaimStatus{}
 	stevePvc := &steveV1.SteveAPIObject{}
 
-	err = wait.PollUntilContextTimeout(ctx, pollInterval, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+	err = wait.PollUntilContextTimeout(t.Context(), pollInterval, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		stevePvc, err = steveclient.SteveType(persistentvolumeclaims.PersistentVolumeClaimType).ByID(namespaces.Default + "/" + persistentVolumeClaim.Name)
 		require.NoError(t, err)
 
@@ -311,6 +282,51 @@ func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string, s
 	require.NoError(t, err)
 
 	return nginxResponse
+}
+
+// GetStorageClass gets a storage class with the provided name on the provided cluster.
+// If an empty storageClassName is provided, the first one on the list of available storage classes will be used.
+func GetStorageClass(client *rancher.Client, clusterID string, storageClassName string) (v1.StorageClass, error) {
+	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
+	if err != nil {
+		return v1.StorageClass{}, err
+	}
+
+	storageClassVolumesResource := dynamicClient.Resource(storageclasses.StorageClassGroupVersionResource).Namespace("")
+	unstructuredResp, err := storageClassVolumesResource.List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return v1.StorageClass{}, err
+	}
+
+	storageClasses := &v1.StorageClassList{}
+	err = scheme.Scheme.Convert(unstructuredResp, storageClasses, unstructuredResp.GroupVersionKind())
+	if err != nil {
+		return v1.StorageClass{}, err
+	}
+
+	if len(storageClasses.Items) == 0 {
+		return v1.StorageClass{}, fmt.Errorf("No storage classes available on cluster %s with user %s", clusterID, client.UserID)
+	}
+
+	if storageClassName == "" {
+		return storageClasses.Items[0], nil
+	}
+
+	var storageClass v1.StorageClass
+	found := false
+	for _, class := range storageClasses.Items {
+		if class.Name == storageClassName {
+			found = true
+			storageClass = class
+			break
+		}
+	}
+
+	if !found {
+		return storageClass, fmt.Errorf("No storage class named %s", storageClassName)
+	}
+
+	return storageClass, nil
 }
 
 // CreateAndInstallAWSExternalCharts is a helper function for rke1 external-aws cloud provider
