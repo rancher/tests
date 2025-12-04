@@ -167,7 +167,7 @@ func CreateNamespaceUsingWrangler(client *rancher.Client, clusterID, projectName
 
 // WaitForProjectFinalizerToUpdate is a helper to wait for project finalizer to update to match the expected finalizer count
 func WaitForProjectFinalizerToUpdate(client *rancher.Client, projectName string, projectNamespace string, finalizerCount int) error {
-	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, false, func(context.Context) (done bool, pollErr error) {
 		project, pollErr := client.WranglerContext.Mgmt.Project().Get(projectNamespace, projectName, metav1.GetOptions{})
 		if pollErr != nil {
 			return false, pollErr
@@ -196,8 +196,13 @@ func WaitForProjectIDUpdate(client *rancher.Client, clusterID, projectName, name
 		projectsapi.ProjectIDAnnotation: projectName,
 	}
 
-	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
-		namespace, pollErr := namespaces.GetNamespaceByName(client, clusterID, namespaceName)
+	downstreamContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(context.Context) (done bool, pollErr error) {
+		namespace, pollErr := downstreamContext.Core.Namespace().Get(namespaceName, metav1.GetOptions{})
 		if pollErr != nil {
 			return false, pollErr
 		}
