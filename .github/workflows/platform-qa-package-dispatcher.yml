@@ -6,9 +6,6 @@ on:
       rancher_hosts:
         description: "Comma-separated Rancher hosts. Example: cluster1.qa.rancher.space,cluster2.qa.rancher.space"
         required: true
-      cluster_names:
-        description: "Comma-separated downstream cluster names (same order as Rancher hosts)"
-        required: true
       test_packages:
         description: "Comma-separated test package paths (e.g. validation/rbac,validation/projects)"
         required: true
@@ -72,7 +69,7 @@ jobs:
           echo "Flattened list: $FLAT_LIST"
           echo "test_packages=$FLAT_LIST" >> $GITHUB_OUTPUT
 
-      - name: Dispatch package runner workflow for each cluster
+      - name: Dispatch package runner workflow for each Rancher instance
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -80,27 +77,19 @@ jobs:
             const workflow_id = "platform-qa-package-runner.yml";
             const ref = "main"; 
             const hosts = "${{ github.event.inputs.rancher_hosts }}".split(',').map(s => s.trim());
-            const clusters = "${{ github.event.inputs.cluster_names }}".split(',').map(s => s.trim());
             const qaseRunsRaw = "${{ github.event.inputs.qase_test_run_ids }}";
             const qaseRuns = qaseRunsRaw ? qaseRunsRaw.split(',').map(s => s.trim()) : [];
-
             const test_packages = "${{ steps.flatten-pkg.outputs.test_packages || github.event.inputs.test_packages }}";
-
-            if (hosts.length !== clusters.length) {
-              throw new Error("Input lengths for rancher_hosts and cluster_names must match");
-            }
 
             for (let i = 0; i < hosts.length; i++) {
               const host = hosts[i];
-              const cluster = clusters[i];
               const qaseRun = qaseRuns[i] || "";
               const reportToQase = qaseRun !== "" ? "true" : "false";
 
-              console.log(`🚀 Dispatching for host=${host}, cluster=${cluster}, packages=${test_packages}`);
+              console.log(`🚀 Dispatching for host=${host}, packages=${test_packages}`);
 
               const inputs = {
                 rancher_host: host,
-                cluster_name: cluster,
                 test_packages,
                 run_all_tests: "${{ github.event.inputs.run_all_tests }}",
                 test_selector: "${{ github.event.inputs.test_selector }}",

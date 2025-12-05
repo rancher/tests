@@ -1,11 +1,6 @@
 #!/bin/bash
 set -e
 
-if ! command -v jq &> /dev/null; then
-  sudo apt-get update
-  sudo apt-get install -y jq
-fi
-
 VERSION=$(curl -k -s -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" \
   "https://$RANCHER_HOST/v1/management.cattle.io.settings/server-version" | jq -r '.value // empty')
 
@@ -15,10 +10,7 @@ if [ -z "$VERSION" ]; then
     "https://$RANCHER_HOST/v3/settings/server-version" | jq -r '.value // empty')
 fi
 
-if [ -z "$VERSION" ]; then
-  echo "❌ Unable to fetch Rancher version from v1 or v3 API. Exiting."
-  exit 1
-fi
+: "${VERSION:?Unable to fetch Rancher version from v1 or v3 API}"
 
 echo "Full Rancher version: $VERSION"
 echo "RANCHER_FULL_VERSION=$VERSION" >> $GITHUB_ENV

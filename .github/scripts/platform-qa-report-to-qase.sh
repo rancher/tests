@@ -16,10 +16,7 @@ if [ ! -f "$RESULTS_JSON" ]; then
   exit 0
 fi
 
-if [ -z "$GITHUB_WORKSPACE" ]; then
-  echo "❌ GITHUB_WORKSPACE must be set"
-  exit 1
-fi
+: "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE must be set}"
 
 echo "📤 Reporting test results to Qase for package: $PACKAGE_NAME"
 RESULTS_DIR=$(mktemp -d)

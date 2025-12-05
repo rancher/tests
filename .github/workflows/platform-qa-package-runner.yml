@@ -1,14 +1,11 @@
 name: Platform QA Package Runner
-run-name: Platform QA Package Runner - Cluster ${{ github.event.inputs.rancher_host }}
+run-name: PlatformQA Package Runner - ${{ github.event.inputs.rancher_host }}
 
 on:
   workflow_dispatch:
     inputs:
       rancher_host:
         description: "Rancher host (e.g. mycluster.qa.rancher.space)"
-        required: true
-      cluster_name:
-        description: "Downstream cluster name"
         required: true
       test_packages:
         description: "Comma-separated test package paths (e.g. validation/rbac,validation/projects)"
@@ -44,7 +41,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RANCHER_HOST: ${{ github.event.inputs.rancher_host }}
-      CLUSTER_NAME: ${{ github.event.inputs.cluster_name }}
       TEST_PACKAGES: ${{ github.event.inputs.test_packages }}
       RUN_ALL_TESTS: ${{ github.event.inputs.run_all_tests }}
       EXCLUDE_TEST_FILES: ${{ github.event.inputs.exclude_test_files }}
@@ -84,7 +80,6 @@ jobs:
         run: |
           INPUTS=(
             "-F" "rancher_host=${{ github.event.inputs.rancher_host }}"
-            "-F" "cluster_name=${{ github.event.inputs.cluster_name }}"
             "-F" "test_package=${{ steps.parse.outputs.current_pkg }}"
             "-F" "run_all_tests=${{ github.event.inputs.run_all_tests }}"
             "-F" "test_selector=${{ github.event.inputs.test_selector }}"
@@ -134,7 +129,6 @@ jobs:
               ref: "main",
               inputs: {
                 rancher_hosts: "${{ github.event.inputs.rancher_host }}",
-                cluster_names: "${{ github.event.inputs.cluster_name }}",
                 test_packages: "${{ steps.parse.outputs.remaining_packages }}",
                 run_all_tests: "${{ github.event.inputs.run_all_tests }}",
                 recursive_tests: "false",

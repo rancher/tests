@@ -1,9 +1,12 @@
 #!/bin/bash
 set -e
 
-if [ -z "$RANCHER_HOST" ] || [ -z "$RANCHER_ADMIN_PASSWORD" ]; then
-  echo "❌ RANCHER_HOST or RANCHER_ADMIN_PASSWORD not set"
-  exit 1
+: "${RANCHER_HOST:?RANCHER_HOST not set}"
+: "${RANCHER_ADMIN_PASSWORD:?RANCHER_ADMIN_PASSWORD not set}"
+
+if ! command -v jq &> /dev/null; then
+  sudo apt-get update
+  sudo apt-get install -y jq
 fi
 
 response=$(curl -s -k "https://$RANCHER_HOST/v1-public/login" \
@@ -24,10 +27,7 @@ if [ -z "$token" ] || [ "$token" == "null" ]; then
   token=$(echo "$response" | jq -r '.token')
 fi
 
-if [ -z "$token" ] || [ "$token" == "null" ]; then
-  echo "❌ Failed to get Rancher token. Response: $response"
-  exit 1
-fi
+: "${token:?❌ Failed to get Rancher token. Response: $response}"
 
-echo "RANCHER_ADMIN_TOKEN=$token" >> $GITHUB_ENV
-echo "::add-mask::$token"
+echo "::add-mask::$token" >&2
+echo "$token"
