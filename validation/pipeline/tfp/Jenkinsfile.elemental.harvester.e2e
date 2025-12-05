@@ -138,6 +138,9 @@ node("harvester-vpn-1") {
                   writeFile file: ansibleVarsFilename, text: elementalAnsibleConfig
                   writeFile file: elementalConfigFile, text: elementalConfig
                 }
+                dir ("./ansible/rancher/downstream/elemental/tasks") {
+                  writeFile file: ansibleVarsFilename, text: elementalAnsibleConfig
+                }
               }
               
               dir ("./") {

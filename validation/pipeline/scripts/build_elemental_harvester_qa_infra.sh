@@ -11,6 +11,8 @@ echo "Create elemental harvester infra"
 : "${ELEMENTAL_PLAYBOOK_FILE:=elemental-playbook.yml}"
 : "${ELEMENTAL_VARS_FILE:=vars.yaml}"
 : "${HARVESTER_TOFU_PATH:=tofu/harvester/modules/elemental-vm}"
+: "${ELEMENTAL_TASKS_PATH:=ansible/rancher/downstream/elemental/tasks}"
+: "${ELEMENTAL_WAIT_FILE:=wait-elemental-tasks.yml}"
 
 cd "$QAINFRA_SCRIPT_PATH/$S3_TOFU_PATH"
 
@@ -45,3 +47,7 @@ if [ $? -ne 0 ] && [[ $CLEANUP == "true" ]]; then
     echo "Tofu infrastructure destroyed successfully!"
     exit 1
 fi
+
+cd "$QAINFRA_SCRIPT_PATH/$ELEMENTAL_TASKS_PATH"
+
+ansible-playbook "$ELEMENTAL_WAIT_FILE" -e "@$ELEMENTAL_VARS_FILE"
