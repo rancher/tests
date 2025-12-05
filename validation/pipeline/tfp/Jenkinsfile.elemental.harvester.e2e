@@ -1,5 +1,5 @@
 #!groovy
-node {
+node("harvester-vpn-1") {
     def workPath = "/root/go/src/github.com/rancher/tests/validation/"
     def rancherRepo = "https://github.com/rancher/tests"
     def jobName = "${JOB_NAME}"
@@ -23,10 +23,11 @@ node {
     def terraformVarsfilename = "cluster.tfvars"
     def elementalTerraformVarsfilename = "elemental.tfvars"
     def elementalTerraformConfig = env.ELEMENTAL_TERRAFORM_CONFIG
-    def googleCredentialsFilename = "service_account.json"
     def elementalAnsibleConfig = env.ELEMENTAL_ANSIBLE_CONFIG
     def elementalConfig = env.ELEMENTAL_CONFIG
     def elementalConfigFile = "elementalconfig.yaml"
+    def harvesterConfig = ""
+    def harvesterConfigfilename = "harvester.yaml"
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"
@@ -67,9 +68,7 @@ node {
                           string(credentialsId: 'RANCHER_BYO_TLS_CERT', variable: 'RANCHER_BYO_TLS_CERT'),
                           string(credentialsId: 'RANCHER_BYO_TLS_KEY', variable: 'RANCHER_BYO_TLS_KEY'),
                           string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK'),
-                          string(credentialsId: 'QASE_AUTOMATION_TOKEN', variable: 'QASE_AUTOMATION_TOKEN'),
-                          string(credentialsId: 'GOOGLE_CLOUD_PROJECT', variable: 'GOOGLE_CLOUD_PROJECT'),
-                          string(credentialsId: 'RANCHER_GKE_CREDENTIAL', variable: 'RANCHER_GKE_CREDENTIAL')]) {
+                          string(credentialsId: 'QASE_AUTOMATION_TOKEN', variable: 'QASE_AUTOMATION_TOKEN')]) {
           
         withEnv(paramsMap) {
           stage('Checkout') {
@@ -101,14 +100,19 @@ node {
               terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC)
               terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS)
               ansibleConfig = ansibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
-              elementalTerraformConfig = elementalTerraformConfig.replace('${GOOGLE_CLOUD_PROJECT}', env.GOOGLE_CLOUD_PROJECT)
-              elementalTerraformConfig = elementalTerraformConfig.replace('${RANCHER_GKE_CREDENTIAL}', googleCredentialsFilename)
+              elementalTerraformConfig = elementalTerraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+              elementalTerraformConfig = elementalTerraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+              elementalAnsibleConfig = elementalAnsibleConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+              elementalAnsibleConfig = elementalAnsibleConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
 
 
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
                 dir("./tests/.ssh") {
                   def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
                   writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                  sh "chmod 600 ${env.AWS_SSH_KEY_NAME}"
+                  harvesterConfig = sh(script: "ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${env.AWS_SSH_KEY_NAME} rancher@${env.HARVESTER_IP} 'sudo cat /etc/rancher/rke2/rke2.yaml'", returnStdout: true)
+                  harvesterConfig = harvesterConfig.replace('127.0.0.1', env.HARVESTER_IP)
                 }
               }
 
@@ -120,17 +124,22 @@ node {
                 dir ("./ansible") {
                   writeFile file: ansibleVarsFilename, text: ansibleConfig
                 }
-                dir ("./ansible/rancher/downstream/elemental/ec2") {
-                  writeFile file: ansibleVarsFilename, text: elementalAnsibleConfig
-                  writeFile file: elementalConfigFile, text: elementalConfig
-                }
                 dir ("./tofu/aws/modules/cluster_nodes") {
                   writeFile file: terraformVarsfilename, text: terraformConfig
                 }
-                dir ("./tofu/gcp/modules/elemental_nodes") {
-                  def decoded = new String(env.RANCHER_GKE_CREDENTIAL.decodeBase64())
-                  writeFile file: googleCredentialsFilename, text: decoded
+                dir ("./tofu/aws/modules/s3") {
                   writeFile file: elementalTerraformVarsfilename, text: elementalTerraformConfig
+                }
+                dir ("./tofu/harvester/modules/elemental-vm") {
+                  writeFile file: elementalTerraformVarsfilename, text: elementalTerraformConfig
+                  writeFile file: harvesterConfigfilename, text: harvesterConfig
+                }
+                dir ("./ansible/rancher/downstream/elemental/harvester") {
+                  writeFile file: ansibleVarsFilename, text: elementalAnsibleConfig
+                  writeFile file: elementalConfigFile, text: elementalConfig
+                }
+                dir ("./ansible/rancher/downstream/elemental/tasks") {
+                  writeFile file: ansibleVarsFilename, text: elementalAnsibleConfig
                 }
               }
               
@@ -149,7 +158,7 @@ node {
             stage("Build Environment") {
               try {
                 sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
-                "${imageName} sh -c \"${workPath}pipeline/scripts/setup_environment.sh && chmod +x ${workPath}pipeline/scripts/build_elemental_qa_infra.sh && ${workPath}pipeline/scripts/build_elemental_qa_infra.sh\""
+                "${imageName} sh -c \"${workPath}pipeline/scripts/setup_environment.sh && chmod +x ${workPath}pipeline/scripts/build_elemental_harvester_qa_infra.sh && ${workPath}pipeline/scripts/build_elemental_harvester_qa_infra.sh\""
               } catch(err) {
                   sh "docker stop ${buildTestContainer}"
                   sh "docker rm -v ${buildTestContainer}"
@@ -162,7 +171,7 @@ node {
               if ("${env.CLEANUP_RANCHER}" == "True" || "${env.CLEANUP_RANCHER}" == "true") {
                 try {
                     sh "docker run --volumes-from ${buildTestContainer} --name ${cleanupTestContainer} -t --env-file ${envFile} " +
-                    "${imageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh && chmod +x ${workPath}pipeline/scripts/destroy_elemental_qa_infra.sh && ${workPath}pipeline/scripts/destroy_elemental_qa_infra.sh\""
+                    "${imageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh && chmod +x ${workPath}pipeline/scripts/destroy_elemental_harvester_qa_infra.sh && ${workPath}pipeline/scripts/destroy_elemental_harvester_qa_infra.sh\""
                 } catch(err) {
                   sh "docker stop ${buildTestContainer}"
                   sh "docker rm -v ${buildTestContainer}"
