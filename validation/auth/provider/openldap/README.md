@@ -68,7 +68,7 @@ openLDAP:
     memberMappingAttribute: "member"
     nestedGroupMembershipEnabled: true
     searchDirectGroupMemberships: true
-authInput:
+openLdapAuthInput:
   group: "<group-name>"
   users:
     - username: "<username1>"
