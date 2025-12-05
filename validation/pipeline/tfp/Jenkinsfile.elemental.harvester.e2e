@@ -110,7 +110,9 @@ node("harvester-vpn-1") {
                 dir("./tests/.ssh") {
                   def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
                   writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                  sh "chmod 600 ${env.AWS_SSH_KEY_NAME}"
                   harvesterConfig = sh(script: "ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${env.AWS_SSH_KEY_NAME} rancher@${env.HARVESTER_IP} 'sudo cat /etc/rancher/rke2/rke2.yaml'", returnStdout: true)
+                  harvesterConfig = harvesterConfig.replace('127.0.0.1', env.HARVESTER_IP)
                 }
               }
 
@@ -129,7 +131,7 @@ node("harvester-vpn-1") {
                   writeFile file: elementalTerraformVarsfilename, text: elementalTerraformConfig
                 }
                 dir ("./tofu/harvester/modules/elemental-vm") {
-                  writeFile file: terraformVarsfilename, text: elementalTerraformConfig
+                  writeFile file: elementalTerraformVarsfilename, text: elementalTerraformConfig
                   writeFile file: harvesterConfigfilename, text: harvesterConfig
                 }
                 dir ("./ansible/rancher/downstream/elemental/harvester") {
