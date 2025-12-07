@@ -44,6 +44,10 @@ node("harvester-vpn-1") {
     if ("${env.TIMEOUT}" != "null" && "${env.TIMEOUT}" != "") {
         timeout = "${env.TIMEOUT}"
     }
+    def dockerFile = "Dockerfile.e2e"
+    if (env.RUN_CYPRESS == "true") {
+        dockerFile = "Dockerfile.cypress"
+    }
     wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg': 1]) {
         withFolderProperties {
             paramsMap = []
@@ -269,7 +273,7 @@ node("harvester-vpn-1") {
                         if (!exists) {
                             sh "ln -s test-repo tests"
                             sh "ln -s infra-repo qa-infra-automation"
-                            sh "docker build . -f ./tests/validation/Dockerfile.e2e \
+                            sh "docker build . -f ./tests/validation/${dockerFile} \
                                         --build-arg TOFU_VERSION=${TOFU_VERSION} \
                                         --build-arg HARVESTER_PROVIDER_VERSION=${HARVESTER_PROVIDER_VERSION} \
                                         --build-arg RANCHER2_PROVIDER_VERSION=${RANCHER2_PROVIDER_VERSION} \
@@ -367,22 +371,86 @@ node("harvester-vpn-1") {
                         
                     }
                     stage('Connect Rancher -> Harvester') {
-                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true") {
+                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true" && env.RUN_CYPRESS != "true") {
                             try {
                                 // this test also writes harvesterCloudCredentials to the config
                                 sh( script: """
                             docker run -v ${validationVolume}:/root --name hvst${golangTestContainer} -t  ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c "cp "\$CATTLE_TEST_CONFIG" . && export CATTLE_TEST_CONFIG="\$CATTLE_TEST_CONFIG" && /root/go/bin/gotestsum --format standard-verbose --packages=${golangHvstDir} --junitfile ${testResultsOut} -- -tags=${TAGS} ${hvstTestCase} -timeout=${timeout} -v "
                             """, returnStatus: true)
+                            sh "docker cp hvst${golangTestContainer}:\$CATTLE_TEST_CONFIG ${filename}"
                             } catch (err) {
                                 echo "${err} Unable to connect harvester to new rancher setup. Aborting"
                                 sh "docker stop hvst${golangTestContainer} || true; docker rm hvst${golangTestContainer}"
                                 error err
                             }
-                            sh "docker cp hvst${golangTestContainer}:\$CATTLE_TEST_CONFIG ${filename}"
+                        }
+                    }
+                    stage('Run Cypress Tests') {
+                        if (env.RUN_CYPRESS == "true") {
+                            def r_host = sh(script: "yq '.rancher.host' ${filename}", returnStdout: true).trim()
+                            def r_pass = sh(script: "yq '.rancher.adminPassword' ${filename}", returnStdout: true).trim()
+                            
+                            try {
+                                sh """
+                                docker run -v ${validationVolume}:/root --name ${testContainer}-cypress -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c '
+                                    git clone --branch ${env.DASHBOARD_BRANCH} ${env.DASHBOARD_REPO} dashboard
+                                    
+                                    export TEST_BASE_URL="https://${r_host}"
+                                    export TEST_USERNAME="${env.RANCHER_USERNAME}"
+                                    export TEST_PASSWORD="${env.RANCHER_PASSWORD}"
+                                    export CATTLE_BOOTSTRAP_PASSWORD="${env.BOOTSTRAP_PASSWORD}"
+                                    export CYPRESS_TAGS="${env.CYPRESS_TAGS}"
+                                    export NO_COLOR=1
+                                    
+                                    # Install dependencies
+                                    cd dashboard
+                                    yarn install
+                                    cd ..
+                                    
+                                    # Run the cypress script
+                                    bash dashboard/cypress/jenkins/cypress.sh
+                                '
+                                """
+                            } catch (err) {
+                                echo "${err} Cypress tests failed"
+                                currentBuild.result = 'FAILURE'
+                            } finally {
+                                // Grab results
+                                sh "docker cp ${testContainer}-cypress:/root/dashboard/results.xml ."
+                                sh "mkdir -p html"
+                                sh "docker cp ${testContainer}-cypress:/root/dashboard/cypress/reports/html/. html/"
+                                // Grab Qase script
+                                sh "docker cp ${testContainer}-cypress:/root/dashboard/cypress/jenkins/transform-junit.sh ."
+                                sh "chmod +x transform-junit.sh"
+                                
+                                // Publish results
+                                junit 'results.xml'
+                                publishHTML(target : [allowMissing: false,
+                                    alwaysLinkToLastBuild: true,
+                                    keepAll: true,
+                                    reportDir: 'html',
+                                    reportFiles: 'index.html',
+                                    reportName: 'html-report',
+                                    reportTitles: 'Report'])
+                                
+                                sh "docker stop ${testContainer}-cypress || true; docker rm ${testContainer}-cypress"
+                            }
+                        }
+                    }
+                    stage('Publish to TC Management') {
+                        if (env.RUN_CYPRESS == "true" && env.QASE_REPORT.toLowerCase() == "true") {
+                            try {
+                                withCredentials([ string(credentialsId: 'QASE_AUTOMATION_TOKEN', variable: 'QASE_AUTOMATION_TOKEN')]) {
+                                    // Run the transformation script locally
+                                    sh "./transform-junit.sh"
+                                }
+                            } catch (err) {
+                                echo "Error publishing to Qase: " + err
+                            }
                         }
                     }
                     stage('Create Downstream Cluster for Testing') {
-                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true") {
+                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true" && env.RUN_CYPRESS != "true") {
 
                             dir("infra-repo") {
                                     def IMPORTED_HVST_KUBECONFIG = sh (
@@ -437,7 +505,7 @@ echo "}\\n" >> "${tfvars_filepath}"
                         }
                     }
                     stage('Run Validation Tests') {
-                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true") {
+                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true" && env.RUN_CYPRESS != "true") {
                             try {
                                 sh """
                                 docker run -v ${validationVolume}:/root --name ${golangTestContainer} -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c "cp \$CATTLE_TEST_CONFIG . && export CATTLE_TEST_CONFIG=/root/go/src/github.com/rancher/tests/config.yml && /root/go/bin/gotestsum --format standard-verbose --packages=${golangTestDir} --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"

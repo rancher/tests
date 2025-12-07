@@ -1,0 +1,119 @@
+FROM registry.suse.com/bci/golang:1.24
+
+# Configure Go
+ENV GOFLAGS=-buildvcs=false
+ENV GOPATH=/root/go
+ENV PATH=${PATH}:/root/go/bin
+
+ENV WORKSPACE=${GOPATH}/src/github.com/rancher/tests
+ENV WORKSPACE2=${GOPATH}/src/github.com/rancher/qa-infra-automation
+
+WORKDIR $WORKSPACE
+
+COPY ["./tests", "$WORKSPACE"]
+COPY ["./qa-infra-automation", "$WORKSPACE2"]
+
+ARG TOFU_VERSION=1.10.3
+ARG RANCHER2_PROVIDER_VERSION=7.0.0
+ARG HARVESTER_PROVIDER_VERSION=0.6.7
+
+ENV TOFU_VERSION=${TOFU_VERSION}
+ENV RANCHER2_PROVIDER_VERSION=${RANCHER2_PROVIDER_VERSION}
+ENV HARVESTER_PROVIDER_VERSION=${HARVESTER_PROVIDER_VERSION}
+
+# Install dependencies
+RUN zypper -n install gcc binutils glibc-devel-static ca-certificates git-core wget curl unzip tar vim less file xz gzip sed gawk iproute2 iptables jq gettext-runtime && \
+    zypper install -y -f docker && rpm -e --nodeps --noscripts containerd
+
+# Python related dependencies 
+RUN zypper -n install python311-pip python311-base python311 python311-devel python311-tox libffi-devel libopenssl-devel
+
+# Upgrade pip and install Python packages 
+RUN python3.11 -m pip install --upgrade pip setuptools && \
+    python3.11 -m pip install ansible kubernetes jmespath
+
+ENV PATH="/root/.local/bin:${PATH}"
+
+# Install ansible-inventory-terraform plugin 
+RUN ansible-galaxy collection install cloud.terraform
+
+# Install Node.js and Yarn for Cypress
+RUN zypper -n install nodejs20 npm20 && \
+    npm install --global yarn
+
+# Install Cypress dependencies
+
+RUN zypper -n install \
+    gtk3-devel \
+    libnotify-devel \
+    mozilla-nss-devel \
+    libXss1 \
+    alsa-devel \
+    libXtst6 \
+    xauth \
+    xvfb \
+    libgbm1 \
+    libxshmfence1 \
+    libglu1
+
+# Ensure pip3 is available for transform-junit.sh
+RUN ln -sf /usr/bin/pip3.11 /usr/bin/pip3
+
+# Install Chrome
+RUN zypper -n install chromium || true
+
+# Install OpenTofu 
+RUN TOFU_ZIP="tofu_${TOFU_VERSION}_linux_amd64.zip" && \
+    wget --verbose "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/${TOFU_ZIP}" && \
+    unzip "${TOFU_ZIP}" -d /usr/local/bin/ && \
+    chmod +x /usr/local/bin/tofu && \
+    rm "${TOFU_ZIP}"
+RUN ln -s /usr/local/bin/tofu /usr/local/bin/terraform
+
+# Install kubectl, helm, yq 
+RUN curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl" & \
+    curl -fsSL -o get_helm.sh "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3" & \
+    wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq & \
+    wait && \
+    chmod +x get_helm.sh && \
+    ./get_helm.sh && \
+    rm get_helm.sh && \
+    chmod +x kubectl && \
+    chmod +x /usr/local/bin/yq && \
+    mv ./kubectl /usr/local/bin/kubectl
+
+# SSH setup 
+RUN zypper install -y openssh && \
+    mkdir -p /root/.ssh && chmod 600 .ssh/jenkins-* && \
+    cp -r .ssh/jenkins-* /root/.ssh/
+
+RUN for pem_file in /root/.ssh/jenkins-*; do \
+        ssh-keygen -f "$pem_file" -y > "/root/.ssh/$(basename "$pem_file").pub"; \
+    done
+
+# Dev provider setup 
+SHELL ["/bin/bash", "-c"] 
+RUN if [[ "$RANCHER2_PROVIDER_VERSION" == *"-dev"* ]]; then \
+      chmod +x ./scripts/tofu/dev-provider.sh && ./scripts/tofu/dev-provider.sh rancher2 "https://github.com/rancher/terraform-provider-rancher2.git" ; \
+    fi; \
+    if [[ "$HARVESTER_PROVIDER_VERSION" == *"-dev"* ]]; then \
+      chmod +x ./scripts/tofu/dev-provider.sh && ./scripts/tofu/dev-provider.sh harvester "https://github.com/harvester/terraform-provider-harvester.git" ; \
+    fi; \
+    wait
+
+# RKE setup 
+ARG RKE_VERSION
+RUN if [[ -n "$RKE_VERSION" ]] ; then echo installing latest version RKE && \
+    curl -0Ls https://github.com/rancher/rke/releases/latest/download/rke_linux-amd64 > rke ; else echo installing ${RKE_VERSION} version RKE && \
+    curl -0Ls https://github.com/rancher/rke/releases/download/$RKE_VERSION/rke_linux-amd64 > rke; fi;
+RUN mv rke /bin/rke && \
+    chmod +x /bin/rke
+
+# CLI setup 
+ARG CLI_VERSION
+RUN if [[ -n "$CLI_VERSION" ]] ; then  \
+        echo installing CLI version $CLI_VERSION ; \
+        curl -LO https://github.com/rancher/cli/releases/download/$CLI_VERSION/rancher-linux-amd64-$CLI_VERSION.tar.gz ; \
+        tar -xf rancher-linux-amd64-$CLI_VERSION.tar.gz && \
+        mv rancher-$CLI_VERSION/rancher /bin/rancher && \
+        chmod +x /bin/rancher; fi;
