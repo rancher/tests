@@ -12,7 +12,7 @@ set -e
 : "${AWS_ROOT_SIZE:?AWS root size not set}"
 : "${AWS_VPC_ID:?AWS VPC ID not set}"
 : "${AWS_SUBNET_ID:?AWS Subnet ID not set}"
-: "${AWS_SECURITY_GROUPS_JSON:?AWS security groups not set}"
+: "${AWS_SECURITY_GROUPS:?AWS security groups not set}"
 : "${SSH_PRIVATE_KEY_NAME:?AWS SSH key pair name not set}"
 : "${AWS_ACCESS_KEY:?AWS access key not set}"
 : "${AWS_SECRET_KEY:?AWS secret key not set}"
@@ -24,6 +24,7 @@ MACHINECONFIG_FILE="/tmp/${MACHINECONFIG_NAME}.yaml"
 CLUSTER_FILE="/tmp/${CLUSTER_NAME}-cluster.yaml"
 CLOUD_CREDENTIAL_NAME="aws-creds-$CLUSTER_NAME"
 NAMESPACE="fleet-default"
+AWS_SECURITY_GROUPS_JSON=$(echo "$AWS_SECURITY_GROUPS" | tr -d '"' | jq -Rn --arg csv "$AWS_SECURITY_GROUPS" '$csv | split(",")')
 
 # Check if the cluster already exists
 EXISTING_CLUSTER=$(curl -s -k -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" \
