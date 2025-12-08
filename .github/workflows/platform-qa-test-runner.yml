@@ -94,14 +94,18 @@ jobs:
 
       - name: Preprocess variables and set environment
         shell: bash
+        env:
+          PQA_AWS_SECURITY_GROUPS: ${{ secrets.PQA_AWS_SECURITY_GROUPS }}
+          PQA_AWS_SECURITY_GROUP_NAMES: ${{ secrets.PQA_AWS_SECURITY_GROUP_NAMES }}
         run: |
           CLEAN_VERSION="${K8S_VERSION#v}"
           echo "RKE2_VERSION=v${CLEAN_VERSION}+rke2r1" >> $GITHUB_ENV
           echo "K3S_VERSION=v${CLEAN_VERSION}+k3s1" >> $GITHUB_ENV
           echo "KUBERNETES_VERSION=v${CLEAN_VERSION}+k3s1" >> $GITHUB_ENV
-          echo "AWS_SECURITY_GROUP_NAMES=$(echo "$AWS_SECURITY_GROUP_NAMES" | sed 's/,/","/g')" >> $GITHUB_ENV
-          echo "AWS_SECURITY_GROUPS_JSON=$(jq -Rn --arg csv "$AWS_SECURITY_GROUPS" '$csv | split(",")') >> $GITHUB_ENV
-          echo "AWS_SECURITY_GROUPS=$(echo "$AWS_SECURITY_GROUPS" | sed 's/,/","/g')" >> $GITHUB_ENV
+          echo "AWS_SECURITY_GROUP_NAMES=$(echo "$PQA_AWS_SECURITY_GROUP_NAMES" | sed 's/,/","/g')" >> $GITHUB_ENV
+          AWS_SECURITY_GROUPS_JSON=$(jq -Rn --arg csv "$PQA_AWS_SECURITY_GROUPS" '$csv | split(",")')
+          echo "AWS_SECURITY_GROUPS_JSON='$AWS_SECURITY_GROUPS_JSON'" >> $GITHUB_ENV
+          echo "AWS_SECURITY_GROUPS=$(echo "$PQA_AWS_SECURITY_GROUPS" | sed 's/,/","/g')" >> $GITHUB_ENV
 
       - name: Provision downstream cluster
         env:
