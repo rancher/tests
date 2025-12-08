@@ -1,40 +1,63 @@
+version: "2"
+run:
+  relative-path-mode: wd
+  build-tags:
+    - validation
+    - "2.13"
+  tests: true
 linters:
-  disable-all: true
+  default: none
   enable:
-    - ineffassign
-    - goimports
+    - forbidigo
+    - goconst
     - govet
+    - ineffassign
     - misspell
+    - predeclared
     - revive
     - unused
-    - goconst
-    - forbidigo
-    - predeclared
-linters-settings:
-  revive:
-    rules:
-      - name: confusing-naming
-        disabled: true
-      - name: exported
-        disabled: false
-  goconst:
-    min-len: 2
-    min-occurrences: 10
-    match-constant: true
-    ignore-strings: "metadata.+"
-  forbidigo:
-    forbid:
-      - p: ^*\.Sleep.*$
-        msg: "No sleeps please use the appropriate polls and watch"
-      - p: ^fmt\.Print.*$
-        msg: "No format prints, please testing or logrus packages"
-run:
-  tests: true
-  relative-path-mode: wd
-  build-tags: [validation, "2.12"]
-  timeout: 8m
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: ^*\.Sleep.*$
+          msg: No sleeps please use the appropriate polls and watch
+        - pattern: ^fmt\.Print.*$
+          msg: No format prints, please testing or logrus packages
+    goconst:
+      match-constant: true
+      min-len: 2
+      min-occurrences: 10
+      ignore-string-values:
+        - metadata.+
+    revive:
+      rules:
+        - name: confusing-naming
+          disabled: true
+        - name: exported
+          disabled: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - ^*\.yaml$
+      - ^*\.yml$
+      - third_party$
+      - builtin$
+      - examples$
 issues:
   max-issues-per-linter: 0
-  exclude-files:
-    - ^*\.yaml$
-    - ^*\.yml$
+formatters:
+  enable:
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - ^*\.yaml$
+      - ^*\.yml$
+      - third_party$
+      - builtin$
+      - examples$
