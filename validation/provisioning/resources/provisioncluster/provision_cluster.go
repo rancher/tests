@@ -48,7 +48,8 @@ func ProvisionRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterType s
 		require.NoError(t, err)
 
 		provisioning.VerifyClusterReady(t, client, clusterObject)
-		pods.VerifyClusterPods(t, client, clusterObject)
+		err = pods.VerifyClusterPods(client, clusterObject)
+		require.NoError(t, err)
 	} else {
 		credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 
@@ -56,7 +57,8 @@ func ProvisionRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterType s
 		require.NoError(t, err)
 
 		provisioning.VerifyClusterReady(t, client, clusterObject)
-		pods.VerifyClusterPods(t, client, clusterObject)
+		err = pods.VerifyClusterPods(client, clusterObject)
+		require.NoError(t, err)
 	}
 
 	return clusterObject, nil

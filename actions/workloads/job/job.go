@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/rancher/shepherd/clients/rancher"
+	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/wait"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
@@ -37,6 +38,22 @@ func CreateJob(client *rancher.Client, clusterID, namespaceName string, podTempl
 	}
 
 	return createdJob, nil
+}
+
+// CreateJobFromConfig creates a job from a config using steve
+func CreateJobFromConfig(client *v1.Client, clusterID string, job *batchv1.Job) (*batchv1.Job, error) {
+	jobResp, err := client.SteveType("batch.job").Create(job)
+	if err != nil {
+		return nil, err
+	}
+
+	newJob := new(batchv1.Job)
+	err = v1.ConvertToK8sType(jobResp.JSONResp, newJob)
+	if err != nil {
+		return nil, err
+	}
+
+	return newJob, nil
 }
 
 // WatchAndWaitJobWrangler is a helper to watch and wait for job to be active using wrangler context

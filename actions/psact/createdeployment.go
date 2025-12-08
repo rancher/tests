@@ -7,10 +7,10 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegenerator "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/provisioninginput"
-	actionsworkloads "github.com/rancher/tests/actions/workloads"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -42,12 +42,12 @@ func CreateNginxDeployment(client *rancher.Client, clusterID string, psact strin
 	}
 
 	// If the deployment already exists, then create a new deployment with a different name to avoid a naming conflict.
-	if _, err := steveclient.SteveType(actionsworkloads.DeploymentSteveType).ByID(deploymentTemplate.Namespace + "/" + deploymentTemplate.Name); err == nil {
+	if _, err := steveclient.SteveType(stevetypes.Deployment).ByID(deploymentTemplate.Namespace + "/" + deploymentTemplate.Name); err == nil {
 		deploymentTemplate.Name = deploymentTemplate.Name + "-" + namegenerator.RandStringLower(5)
 	}
 
 	logrus.Infof("Creating deployment %s", deploymentTemplate.Name)
-	_, err = steveclient.SteveType(actionsworkloads.DeploymentSteveType).Create(deploymentTemplate)
+	_, err = steveclient.SteveType(stevetypes.Deployment).Create(deploymentTemplate)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func CreateNginxDeployment(client *rancher.Client, clusterID string, psact strin
 			return false, err
 		}
 
-		deploymentResp, err := steveclient.SteveType(actionsworkloads.DeploymentSteveType).ByID(deploymentTemplate.Namespace + "/" + deploymentTemplate.Name)
+		deploymentResp, err := steveclient.SteveType(stevetypes.Deployment).ByID(deploymentTemplate.Namespace + "/" + deploymentTemplate.Name)
 		if err != nil {
 			// We don't want to return the error so we don't exit the poll too soon.
 			// There could be delay of when the deployment is created.
@@ -89,13 +89,13 @@ func CreateNginxDeployment(client *rancher.Client, clusterID string, psact strin
 		return err
 	}
 
-	deploymentResp, err := steveclient.SteveType(actionsworkloads.DeploymentSteveType).ByID(deploymentTemplate.Namespace + "/" + deploymentTemplate.Name)
+	deploymentResp, err := steveclient.SteveType(stevetypes.Deployment).ByID(deploymentTemplate.Namespace + "/" + deploymentTemplate.Name)
 	if err != nil {
 		return err
 	}
 
 	logrus.Infof("Deleting deployment %s", deploymentResp.Name)
-	err = steveclient.SteveType(actionsworkloads.DeploymentSteveType).Delete(deploymentResp)
+	err = steveclient.SteveType(stevetypes.Deployment).Delete(deploymentResp)
 	if err != nil {
 		return err
 	}

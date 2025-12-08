@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/providers"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	wloads "github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/config"
@@ -30,7 +31,6 @@ import (
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/actions/services"
-	"github.com/rancher/tests/actions/workloads"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	appv1 "k8s.io/api/apps/v1"
@@ -362,7 +362,7 @@ func createNginxDeploymentWithPVC(steveclient *steveV1.Client, containerNamePref
 	podTemplate := wloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{podVol}, []corev1.LocalObjectReference{}, nil, nil)
 	deployment := wloads.NewDeploymentTemplate(containerName, namespaces.Default, podTemplate, true, nil)
 
-	deploymentResp, err := steveclient.SteveType(workloads.DeploymentSteveType).Create(deployment)
+	deploymentResp, err := steveclient.SteveType(stevetypes.Deployment).Create(deployment)
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +378,7 @@ func createNginxDeployment(steveclient *steveV1.Client, containerNamePrefix stri
 	podTemplate := wloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{}, []corev1.LocalObjectReference{}, nil, nil)
 	deployment := wloads.NewDeploymentTemplate(containerName, namespaces.Default, podTemplate, true, nil)
 
-	deploymentResp, err := steveclient.SteveType(workloads.DeploymentSteveType).Create(deployment)
+	deploymentResp, err := steveclient.SteveType(stevetypes.Deployment).Create(deployment)
 	if err != nil {
 		return nil, err
 	}

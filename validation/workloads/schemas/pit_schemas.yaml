@@ -72,7 +72,7 @@
       expectedresult: "DaemonSet pods available"
       position: 5
     custom_field:
-      "15": "WorkloadDaemonSetTest"
+      "15": "TestDaemonSets"
   - title: "Create CronJob workload"
     description: "Validate that a CronJob can be created and executes scheduled jobs"
     automation: 2
@@ -95,7 +95,7 @@
       expectedresult: "CronJob runs and pods complete successfully"
       position: 5
     custom_field:
-      "15": "WorkloadCronjobTest"
+      "15": "TestCronjobs"
   - title: "Create StatefulSet workload"
     description: "Validate that a StatefulSet can be created and pods become ready with stable identities"
     automation: 2
@@ -118,7 +118,7 @@
       expectedresult: "StatefulSet pods available with persistent IDs"
       position: 5
     custom_field:
-      "15": "WorkloadStatefulsetTest"
+      "15": "TestStatefulsets"
   - title: "Deployment upgrade and rollback"
     description: "Validate that a Deployment can be upgraded multiple times and rolled back correctly"
     automation: 2

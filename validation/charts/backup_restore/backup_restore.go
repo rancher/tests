@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/tests/actions/secrets"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/interoperability/charts"
+	"github.com/stretchr/testify/require"
 
 	shepClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/tests/actions/provisioning"
@@ -319,7 +320,8 @@ func createRKE2dsCluster(t *testing.T, client *rancher.Client) (*v1.SteveAPIObje
 	provisioning.VerifyClusterReady(t, client, steveObject)
 
 	logrus.Infof("Verifying cluster pods (%s)", steveObject.Name)
-	pods.VerifyClusterPods(t, client, steveObject)
+	err = pods.VerifyClusterPods(client, steveObject)
+	require.NoError(t, err)
 
 	logrus.Infof("Verifying cluster features (%s)", steveObject.Name)
 	provisioning.VerifyDynamicCluster(t, client, steveObject)

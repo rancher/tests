@@ -8,9 +8,9 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/ingresses"
 	"github.com/rancher/tests/actions/charts"
-	"github.com/rancher/tests/actions/workloads"
 	appv1 "k8s.io/api/apps/v1"
 	kubewait "k8s.io/apimachinery/pkg/util/wait"
 )
@@ -86,7 +86,7 @@ func getChartCaseEndpointUntilBodyHas(client *rancher.Client, host, path, bodyPa
 // listIstioDeployments is a private helper function
 // that returns the deployment specs if deployments have "operator.istio.io/version" label
 func listIstioDeployments(steveclient *v1.Client) (deploymentSpecList []*appv1.DeploymentSpec, err error) {
-	deploymentList, err := steveclient.SteveType(workloads.DeploymentSteveType).List(nil)
+	deploymentList, err := steveclient.SteveType(stevetypes.Deployment).List(nil)
 	if err != nil {
 		return
 	}

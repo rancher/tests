@@ -107,7 +107,8 @@ func (d *DeleteInitMachineTestSuite) TestDeleteInitMachine() {
 			provisioning.VerifyClusterReady(d.T(), d.client, cluster)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			pods.VerifyClusterPods(d.T(), d.client, cluster)
+			err = pods.VerifyClusterPods(d.client, cluster)
+			require.NoError(d.T(), err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(d.client, d.cattleConfig)

@@ -85,7 +85,8 @@ func (s *AutoReplaceExistingClusterSuite) TestAutoReplaceExistingCluster() {
 			provisioning.VerifyClusterReady(s.T(), s.client, cluster)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			pods.VerifyClusterPods(s.T(), s.client, cluster)
+			err = pods.VerifyClusterPods(s.client, cluster)
+			require.NoError(s.T(), err)
 		})
 	}
 }

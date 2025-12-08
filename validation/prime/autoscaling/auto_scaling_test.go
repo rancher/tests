@@ -211,7 +211,8 @@ func TestAutoScalingDown(t *testing.T) {
 			provisioning.VerifyClusterReady(t, tt.client, cluster)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			pods.VerifyClusterPods(t, tt.client, cluster)
+			err = pods.VerifyClusterPods(tt.client, cluster)
+			require.NoError(t, err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, s.cattleConfig)

@@ -4,17 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/defaults"
-	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wrangler"
-	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
@@ -28,18 +26,16 @@ const (
 )
 
 // VerifyDeployment waits for a deployment to be ready in the downstream cluster
-func VerifyDeployment(steveClient *steveV1.Client, deployment *steveV1.SteveAPIObject) error {
-	err := kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		deploymentResp, err := steveClient.SteveType(stevetypes.Deployment).ByID(deployment.Namespace + "/" + deployment.Name)
-		if err != nil {
-			return false, nil
-		}
+func VerifyDeployment(client *rancher.Client, clusterID, namespace, name string) error {
+	steveclient, err := client.Steve.ProxyDownstream(clusterID)
+	if err != nil {
+		return err
+	}
 
-		deployment := &appv1.Deployment{}
-		err = steveV1.ConvertToK8sType(deploymentResp.JSONResp, deployment)
+	err = kwait.PollUntilContextTimeout(context.TODO(), 1*time.Second, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		deployment, err := GetDeploymentByName(steveclient, clusterID, namespace, name)
 		if err != nil {
-
-			return false, nil
+			return false, err
 		}
 
 		if *deployment.Spec.Replicas == deployment.Status.AvailableReplicas {
@@ -53,7 +49,7 @@ func VerifyDeployment(steveClient *steveV1.Client, deployment *steveV1.SteveAPIO
 }
 
 func VerifyDeploymentUpgrade(client *rancher.Client, clusterName string, namespaceName string, appv1Deployment *appv1.Deployment, expectedRevision string, image string, expectedReplicas int) error {
-	logrus.Infof("Waiting for deployment %s to become active", appv1Deployment.Name)
+	logrus.Debugf("Waiting for deployment %s to become active", appv1Deployment.Name)
 	err := charts.WatchAndWaitDeployments(client, clusterName, namespaceName, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + appv1Deployment.Name,
 	})
@@ -61,25 +57,25 @@ func VerifyDeploymentUpgrade(client *rancher.Client, clusterName string, namespa
 		return err
 	}
 
-	logrus.Info("Waiting for all pods to be running")
+	logrus.Debug("Waiting for all pods to be running")
 	err = pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName, appv1Deployment)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Verifying rollout history by revision %s", expectedRevision)
+	logrus.Tracef("Verifying rollout history by revision %s", expectedRevision)
 	err = VerifyDeploymentRolloutHistory(client, clusterName, namespaceName, appv1Deployment.Name, expectedRevision)
 	if err != nil {
 		return err
 	}
 
-	countPods, err := pods.CountPodContainerRunningByImage(client, clusterName, namespaceName, image)
+	pods, err := GetDeploymentPods(client, clusterName, namespaceName, appv1Deployment.Name)
 	if err != nil {
 		return err
 	}
 
-	if expectedReplicas != countPods {
-		err_msg := fmt.Sprintf("expected replica count: %d does not equal pod count: %d", expectedReplicas, countPods)
+	if expectedReplicas != len(pods) {
+		err_msg := fmt.Sprintf("expected replica count: %d does not equal pod count: %d", expectedReplicas, len(pods))
 		return errors.New(err_msg)
 	}
 
@@ -87,27 +83,19 @@ func VerifyDeploymentUpgrade(client *rancher.Client, clusterName string, namespa
 }
 
 func VerifyDeploymentScale(client *rancher.Client, clusterName string, namespaceName string, scaleDeployment *appv1.Deployment, image string, expectedReplicas int) error {
-	logrus.Infof("Waiting for deployment %s to become active", scaleDeployment.Name)
-	err := charts.WatchAndWaitDeployments(client, clusterName, namespaceName, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + scaleDeployment.Name,
-	})
+	logrus.Debug("Waiting for all pods to be running")
+	err := pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName, scaleDeployment)
 	if err != nil {
 		return err
 	}
 
-	logrus.Info("Waiting for all pods to be running")
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName, scaleDeployment)
+	pods, err := GetDeploymentPods(client, clusterName, namespaceName, scaleDeployment.Name)
 	if err != nil {
 		return err
 	}
 
-	countPods, err := pods.CountPodContainerRunningByImage(client, clusterName, namespaceName, image)
-	if err != nil {
-		return err
-	}
-
-	if expectedReplicas != countPods {
-		err_msg := fmt.Sprintf("expected replica count: %d does not equal pod count: %d", expectedReplicas, countPods)
+	if expectedReplicas != len(pods) {
+		err_msg := fmt.Sprintf("expected replica count: %d does not equal pod count: %d", expectedReplicas, len(pods))
 		return errors.New(err_msg)
 	}
 
@@ -186,156 +174,113 @@ func VerifyOrchestrationStatus(client *rancher.Client, clusterID, namespaceName 
 	return nil
 }
 
-func VerifyCreateDeployment(client *rancher.Client, clusterID string) error {
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(client, clusterID)
+// VerifyDeploymentSideKick verifies deployments can create a sidekick pod
+func VerifyDeploymentSideKick(client *rancher.Client, clusterID, namespace, deploymentName string) error {
+	steveclient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return err
 	}
 
-	createdDeployment, err := CreateDeployment(client, clusterID, namespace.Name, 1, "", "", false, false, false, true)
+	deployment, err := GetDeploymentByName(steveclient, clusterID, namespace, deploymentName)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Creating new deployment %s", createdDeployment.Name)
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespace.Name, createdDeployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace, deployment)
 	if err != nil {
 		return err
 	}
 
-	return err
-}
+	containerName := namegen.AppendRandomString("sidekick-container")
+	sideKickContainer := corev1.Container{
+		Name:  containerName,
+		Image: nginxImageName,
+	}
 
-func VerifyCreateDeploymentSideKick(client *rancher.Client, clusterID string) error {
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(client, clusterID)
+	deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers, sideKickContainer)
+
+	updatedDeployment, err := UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
 	if err != nil {
 		return err
 	}
 
-	createdDeployment, err := CreateDeployment(client, clusterID, namespace.Name, 1, "", "", false, false, false, true)
-	if err != nil {
-		return err
-	}
-
-	logrus.Infof("Creating new deployment %s", createdDeployment.Name)
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespace.Name, createdDeployment)
-	if err != nil {
-		return err
-	}
-
-	containerName := namegen.AppendRandomString("update-test-container")
-	newContainerTemplate := workloads.NewContainer(containerName,
-		redisImageName,
-		corev1.PullAlways,
-		[]corev1.VolumeMount{},
-		[]corev1.EnvFromSource{},
-		nil,
-		nil,
-		nil,
-	)
-
-	createdDeployment.Spec.Template.Spec.Containers = append(createdDeployment.Spec.Template.Spec.Containers, newContainerTemplate)
-
-	updatedDeployment, err := UpdateDeployment(client, clusterID, namespace.Name, createdDeployment, true)
-	if err != nil {
-		return err
-	}
-
-	logrus.Infof("Updating deployment image, %s", createdDeployment.Name)
-	err = charts.WatchAndWaitDeployments(client, clusterID, namespace.Name, metav1.ListOptions{
+	logrus.Debugf("Creating deployment sidekick (%s)", deployment.Name)
+	err = charts.WatchAndWaitDeployments(client, clusterID, deployment.Namespace, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + updatedDeployment.Name,
 	})
 	if err != nil {
 		return err
 	}
 
-	logrus.Info("Waiting for all pods to be running")
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespace.Name, updatedDeployment)
+	logrus.Tracef("Waiting for all pods to be running deployment: %s", deployment.Name)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace, updatedDeployment)
 
 	return err
 }
 
-func VerifyDeploymentUpgradeRollback(client *rancher.Client, clusterID string) error {
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(client, clusterID)
+// VerifyDeploymentUpgradeRollback verifies deployments can perform a series of rollbacks
+func VerifyDeploymentUpgradeRollback(client *rancher.Client, clusterID, namespace, deploymentName string) error {
+	steveclient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return err
 	}
 
-	upgradeDeployment, err := CreateDeployment(client, clusterID, namespace.Name, 2, "", "", false, false, false, true)
+	deployment, err := GetDeploymentByName(steveclient, clusterID, namespace, deploymentName)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Creating new deployment %s", upgradeDeployment.Name)
-	err = VerifyDeploymentUpgrade(client, clusterID, namespace.Name, upgradeDeployment, "1", nginxImageName, 2)
+	startingRevision, err := strconv.Atoi(deployment.ObjectMeta.Annotations[revisionAnnotation])
 	if err != nil {
 		return err
 	}
 
 	containerName := namegen.AppendRandomString("update-test-container")
-	newContainerTemplate := workloads.NewContainer(containerName,
-		redisImageName,
-		corev1.PullAlways,
-		[]corev1.VolumeMount{},
-		[]corev1.EnvFromSource{},
-		nil,
-		nil,
-		nil,
-	)
-	upgradeDeployment.Spec.Template.Spec.Containers = []corev1.Container{newContainerTemplate}
+	updatedContainers := []corev1.Container{
+		{
+			Name:  containerName,
+			Image: redisImageName,
+		},
+	}
 
-	logrus.Infof("Updating deployment %s", upgradeDeployment.Name)
-	upgradeDeployment, err = UpdateDeployment(client, clusterID, namespace.Name, upgradeDeployment, true)
+	deployment.Spec.Template.Spec.Containers = updatedContainers
+
+	logrus.Debugf("Updating deployment (%s) image: %s", deployment.Name, redisImageName)
+	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
 	if err != nil {
 		return err
 	}
 
-	err = VerifyDeploymentUpgrade(client, clusterID, namespace.Name, upgradeDeployment, "2", redisImageName, 2)
+	logrus.Debugf("Verify deployment (%s) upgrade", deployment.Name)
+	err = VerifyDeploymentUpgrade(client, clusterID, deployment.Namespace, deployment, strconv.Itoa(startingRevision+1), redisImageName, int(*deployment.Spec.Replicas))
 	if err != nil {
 		return err
 	}
 
 	containerName = namegen.AppendRandomString("update-test-container-two")
-	newContainerTemplate = workloads.NewContainer(containerName,
-		ubuntuImageName,
-		corev1.PullAlways,
-		[]corev1.VolumeMount{},
-		[]corev1.EnvFromSource{},
-		nil,
-		nil,
-		nil,
-	)
-	newContainerTemplate.TTY = true
-	newContainerTemplate.Stdin = true
-	upgradeDeployment.Spec.Template.Spec.Containers = []corev1.Container{newContainerTemplate}
+	updatedContainers = []corev1.Container{
+		{
+			Name:  containerName,
+			Image: redisImageName,
+			TTY:   true,
+			Stdin: true,
+		},
+	}
+	deployment.Spec.Template.Spec.Containers = updatedContainers
 
-	logrus.Infof("Updating deployment %s", upgradeDeployment.Name)
-	_, err = UpdateDeployment(client, clusterID, namespace.Name, upgradeDeployment, true)
+	logrus.Debugf("Updating deployment (%s) TTY: %v stdin: %v", deployment.Name, true, true)
+	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
 	if err != nil {
 		return err
 	}
 
-	err = VerifyDeploymentUpgrade(client, clusterID, namespace.Name, upgradeDeployment, "3", ubuntuImageName, 2)
+	err = VerifyDeploymentUpgrade(client, clusterID, deployment.Namespace, deployment, strconv.Itoa(startingRevision+2), ubuntuImageName, int(*deployment.Spec.Replicas))
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Rollback deployment %s", upgradeDeployment.Name)
-	logRollback, err := RollbackDeployment(client, clusterID, namespace.Name, upgradeDeployment.Name, 1)
-	if err != nil {
-		return err
-	}
-	if logRollback == "" {
-		return err
-	}
-
-	err = VerifyDeploymentUpgrade(client, clusterID, namespace.Name, upgradeDeployment, "4", nginxImageName, 2)
-	if err != nil {
-		return err
-	}
-
-	logrus.Infof("Rollback deployment %s", upgradeDeployment.Name)
-	logRollback, err = RollbackDeployment(client, clusterID, namespace.Name, upgradeDeployment.Name, 2)
+	logrus.Debugf("Rollback deployment: %s revision: %v", deployment.Name, startingRevision+1)
+	logRollback, err := RollbackDeployment(client, clusterID, deployment.Namespace, deployment.Name, startingRevision+1)
 	if err != nil {
 		return err
 	}
@@ -343,13 +288,13 @@ func VerifyDeploymentUpgradeRollback(client *rancher.Client, clusterID string) e
 		return err
 	}
 
-	err = VerifyDeploymentUpgrade(client, clusterID, namespace.Name, upgradeDeployment, "5", redisImageName, 2)
+	err = VerifyDeploymentUpgrade(client, clusterID, deployment.Namespace, deployment, strconv.Itoa(startingRevision+3), nginxImageName, int(*deployment.Spec.Replicas))
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Rollback deployment %s", upgradeDeployment.Name)
-	logRollback, err = RollbackDeployment(client, clusterID, namespace.Name, upgradeDeployment.Name, 3)
+	logrus.Debugf("Rollback deployment: %s revision: %v", deployment.Name, startingRevision+2)
+	logRollback, err = RollbackDeployment(client, clusterID, deployment.Namespace, deployment.Name, startingRevision+2)
 	if err != nil {
 		return err
 	}
@@ -357,7 +302,21 @@ func VerifyDeploymentUpgradeRollback(client *rancher.Client, clusterID string) e
 		return err
 	}
 
-	err = VerifyDeploymentUpgrade(client, clusterID, namespace.Name, upgradeDeployment, "6", ubuntuImageName, 2)
+	err = VerifyDeploymentUpgrade(client, clusterID, deployment.Namespace, deployment, strconv.Itoa(startingRevision+4), redisImageName, int(*deployment.Spec.Replicas))
+	if err != nil {
+		return err
+	}
+
+	logrus.Debugf("Rollback deployment: %s revision: %v", deployment.Name, startingRevision+3)
+	logRollback, err = RollbackDeployment(client, clusterID, deployment.Namespace, deployment.Name, startingRevision+3)
+	if err != nil {
+		return err
+	}
+	if logRollback == "" {
+		return err
+	}
+
+	err = VerifyDeploymentUpgrade(client, clusterID, deployment.Namespace, deployment, strconv.Itoa(startingRevision+5), ubuntuImageName, int(*deployment.Spec.Replicas))
 	if err != nil {
 		return err
 	}
@@ -365,47 +324,33 @@ func VerifyDeploymentUpgradeRollback(client *rancher.Client, clusterID string) e
 	return err
 }
 
-func VerifyDeploymentPodScaleUp(client *rancher.Client, clusterID string) error {
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(client, clusterID)
+// VerifyDeploymentPodScaleUp verifies deployments can scale up replicas
+func VerifyDeploymentPodScaleUp(client *rancher.Client, clusterID, namespace, deploymentName string) error {
+	steveclient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return err
 	}
 
-	scaleUpDeployment, err := CreateDeployment(client, clusterID, namespace.Name, 1, "", "", false, false, false, true)
+	deployment, err := GetDeploymentByName(steveclient, clusterID, namespace, deploymentName)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Creating new deployment %s", scaleUpDeployment.Name)
-	err = VerifyDeploymentScale(client, clusterID, namespace.Name, scaleUpDeployment, nginxImageName, 1)
+	pods, err := GetDeploymentPods(client, clusterID, deployment.Namespace, deployment.Name)
 	if err != nil {
 		return err
 	}
 
-	replicas := int32(2)
-	scaleUpDeployment.Spec.Replicas = &replicas
+	logrus.Debugf("Updating deployment (%s) replicas from %v to %v", deployment.Name, *deployment.Spec.Replicas, *deployment.Spec.Replicas+1)
+	replicas := int32(*deployment.Spec.Replicas + 1)
+	deployment.Spec.Replicas = &replicas
 
-	logrus.Info("Updating deployment replicas")
-	scaleUpDeployment, err = UpdateDeployment(client, clusterID, namespace.Name, scaleUpDeployment, true)
+	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
 	if err != nil {
 		return err
 	}
 
-	err = VerifyDeploymentScale(client, clusterID, namespace.Name, scaleUpDeployment, nginxImageName, 2)
-	if err != nil {
-		return err
-	}
-
-	replicas = int32(3)
-	scaleUpDeployment.Spec.Replicas = &replicas
-
-	logrus.Info("Updating deployment replicas")
-	scaleUpDeployment, err = UpdateDeployment(client, clusterID, namespace.Name, scaleUpDeployment, true)
-	if err != nil {
-		return err
-	}
-
-	err = VerifyDeploymentScale(client, clusterID, namespace.Name, scaleUpDeployment, nginxImageName, 3)
+	err = VerifyDeploymentScale(client, clusterID, deployment.Namespace, deployment, deployment.Spec.Template.Spec.Containers[0].Image, len(pods)+1)
 	if err != nil {
 		return err
 	}
@@ -413,47 +358,36 @@ func VerifyDeploymentPodScaleUp(client *rancher.Client, clusterID string) error 
 	return err
 }
 
-func VerifyDeploymentPodScaleDown(client *rancher.Client, clusterID string) error {
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(client, clusterID)
+// VerifyDeploymentPodScaleDown verifies deployments can scale down replicas
+func VerifyDeploymentPodScaleDown(client *rancher.Client, clusterID, namespace, deploymentName string) error {
+	steveclient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return err
 	}
 
-	scaleDownDeployment, err := CreateDeployment(client, clusterID, namespace.Name, 3, "", "", false, false, false, true)
+	deployment, err := GetDeploymentByName(steveclient, clusterID, namespace, deploymentName)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Creating new deployment %s", scaleDownDeployment.Name)
-	err = VerifyDeploymentScale(client, clusterID, namespace.Name, scaleDownDeployment, nginxImageName, 3)
+	pods, err := GetDeploymentPods(client, clusterID, deployment.Namespace, deployment.Name)
 	if err != nil {
 		return err
 	}
 
-	replicas := int32(2)
-	scaleDownDeployment.Spec.Replicas = &replicas
+	logrus.Debugf("Updating deployment (%s) replicas from %v to %v", deployment.Name, *deployment.Spec.Replicas, *deployment.Spec.Replicas-1)
+	replicas := int32(*deployment.Spec.Replicas - 1)
+	if replicas < 0 {
+		return errors.New("Can't scale down a deployment with 0 replicas")
+	}
+	deployment.Spec.Replicas = &replicas
 
-	logrus.Info("Updating deployment replicas")
-	scaleDownDeployment, err = UpdateDeployment(client, clusterID, namespace.Name, scaleDownDeployment, true)
+	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
 	if err != nil {
 		return err
 	}
 
-	err = VerifyDeploymentScale(client, clusterID, namespace.Name, scaleDownDeployment, nginxImageName, 2)
-	if err != nil {
-		return err
-	}
-
-	replicas = int32(1)
-	scaleDownDeployment.Spec.Replicas = &replicas
-
-	logrus.Info("Updating deployment replicas")
-	scaleDownDeployment, err = UpdateDeployment(client, clusterID, namespace.Name, scaleDownDeployment, true)
-	if err != nil {
-		return err
-	}
-
-	err = VerifyDeploymentScale(client, clusterID, namespace.Name, scaleDownDeployment, nginxImageName, 1)
+	err = VerifyDeploymentScale(client, clusterID, deployment.Namespace, deployment, deployment.Spec.Template.Spec.Containers[0].Image, len(pods)-1)
 	if err != nil {
 		return err
 	}
@@ -461,36 +395,40 @@ func VerifyDeploymentPodScaleDown(client *rancher.Client, clusterID string) erro
 	return err
 }
 
-func VerifyDeploymentPauseOrchestration(client *rancher.Client, clusterID string) error {
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(client, clusterID)
+// VerifyDeploymentOrchestration verfies that pod orchestration updates replicas but not image when pausing
+func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace, deploymentName string) error {
+	steveclient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return err
 	}
 
-	pauseDeployment, err := CreateDeployment(client, clusterID, namespace.Name, 2, "", "", false, false, false, true)
-	if err != nil {
-		return err
-	}
-	logrus.Infof("Creating new deployment %s", pauseDeployment.Name)
-	err = VerifyDeploymentScale(client, clusterID, namespace.Name, pauseDeployment, nginxImageName, 2)
+	deployment, err := GetDeploymentByName(steveclient, clusterID, namespace, deploymentName)
 	if err != nil {
 		return err
 	}
 
-	logrus.Info("Pausing orchestration")
-	pauseDeployment.Spec.Paused = true
-	pauseDeployment, err = UpdateDeployment(client, clusterID, namespace.Name, pauseDeployment, true)
+	scaleReplicas := int32(2)
+	deploymentPods, err := GetDeploymentPods(client, clusterID, deployment.Namespace, deployment.Name)
 	if err != nil {
 		return err
 	}
 
-	err = VerifyOrchestrationStatus(client, clusterID, namespace.Name, pauseDeployment.Name, true)
+	initialPodCount := len(deploymentPods)
+
+	logrus.Debugf("Pausing orchestration on deployment: %s", deployment.Name)
+	deployment.Spec.Paused = true
+	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
 	if err != nil {
 		return err
 	}
 
-	replicas := int32(3)
-	pauseDeployment.Spec.Replicas = &replicas
+	err = VerifyOrchestrationStatus(client, clusterID, deployment.Namespace, deployment.Name, true)
+	if err != nil {
+		return err
+	}
+
+	replicas := int32(*deployment.Spec.Replicas + scaleReplicas)
+	deployment.Spec.Replicas = &replicas
 	containerName := namegen.AppendRandomString("pause-redis-container")
 	newContainerTemplate := workloads.NewContainer(containerName,
 		redisImageName,
@@ -501,53 +439,52 @@ func VerifyDeploymentPauseOrchestration(client *rancher.Client, clusterID string
 		nil,
 		nil,
 	)
-	pauseDeployment.Spec.Template.Spec.Containers = []corev1.Container{newContainerTemplate}
+	deployment.Spec.Template.Spec.Containers = []corev1.Container{newContainerTemplate}
 
-	logrus.Info("Updating deployment image and replica")
-	pauseDeployment, err = UpdateDeployment(client, clusterID, namespace.Name, pauseDeployment, true)
+	logrus.Debugf("Updating deployment (%s) image: %s replicas: %v", deployment.Name, redisImageName, replicas)
+	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
 	if err != nil {
 		return err
 	}
 
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespace.Name, pauseDeployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace, deployment)
 	if err != nil {
 		return err
 	}
 
-	logrus.Info("Verifying that the deployment was not updated and the replica count was increased")
-	logrus.Infof("Counting all pods running by image %s", nginxImageName)
-	countPods, err := pods.CountPodContainerRunningByImage(client, clusterID, namespace.Name, nginxImageName)
+	logrus.Debug("Verifying that the deployment image was not updated and the replica count was increased")
+	deploymentPods, err = GetDeploymentPods(client, clusterID, deployment.Namespace, deployment.Name)
 	if err != nil {
 		return err
 	}
 
-	if int(replicas) != countPods {
-		err_msg := fmt.Sprintf("expected replica count: %d does not equal pod count: %d", int(replicas), countPods)
+	if initialPodCount+int(scaleReplicas) != len(deploymentPods) {
+		err_msg := fmt.Sprintf("expected replica count: %d does not equal pod count: %d", initialPodCount+int(scaleReplicas), len(deploymentPods))
 		return errors.New(err_msg)
 	}
 
-	logrus.Info("Activing orchestration")
-	pauseDeployment.Spec.Paused = false
-	pauseDeployment, err = UpdateDeployment(client, clusterID, namespace.Name, pauseDeployment, true)
+	logrus.Debug("Resuming orchestration")
+	deployment.Spec.Paused = false
+	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
 
-	err = VerifyDeploymentScale(client, clusterID, namespace.Name, pauseDeployment, redisImageName, int(replicas))
+	logrus.Debugf("Verifying that the deployment image was updated to %s", redisImageName)
+	err = VerifyDeploymentScale(client, clusterID, deployment.Namespace, deployment, redisImageName, int(replicas))
 	if err != nil {
 		return err
 	}
 
-	err = VerifyOrchestrationStatus(client, clusterID, namespace.Name, pauseDeployment.Name, false)
+	err = VerifyOrchestrationStatus(client, clusterID, deployment.Namespace, deployment.Name, false)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Counting all pods running by image %s", redisImageName)
-	countPods, err = pods.CountPodContainerRunningByImage(client, clusterID, namespace.Name, redisImageName)
+	deploymentPods, err = GetDeploymentPods(client, clusterID, deployment.Namespace, deployment.Name)
 	if err != nil {
 		return err
 	}
 
-	if int(replicas) != countPods {
-		err_msg := fmt.Sprintf("expected replica count: %d does not equal pod count: %d", int(replicas), countPods)
+	if int(replicas) != len(deploymentPods) {
+		err_msg := fmt.Sprintf("expected replica count: %d does not equal pod count: %d", int(replicas), len(deploymentPods))
 		return errors.New(err_msg)
 	}
 

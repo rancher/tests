@@ -39,7 +39,44 @@
       steps: []
     tags: []
     params: {}
-    parameters: []
+    parameters:
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: Scheduled Testing
+        values:
+        - ""
+    - parametergroup: null
+      parametershared: null
+      parametersingle: null
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: OS
+        values:
+        - sles16-gmc2-v20250922-x86_64
+        - windows-2022-ctw-5-2-22
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: Provider
+        values:
+        - aws
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: K8sVersion
+        values:
+        - v1.34.1+k3s1
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: CNI
+        values:
+        - calico
+    - parametergroup: null
+      parametershared: null
+      parametersingle: null
     customfield:
       "14": Validation
       "18": Hostbusters
@@ -81,7 +118,44 @@
       steps: []
     tags: []
     params: {}
-    parameters: []
+    parameters:
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: Scheduled Testing
+        values:
+        - ""
+    - parametergroup: null
+      parametershared: null
+      parametersingle: null
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: OS
+        values:
+        - sles16-gmc2-v20250922-x86_64
+        - windows-2022-ctw-5-2-22
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: Provider
+        values:
+        - aws
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: K8sVersion
+        values:
+        - v1.34.1+k3s1
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: CNI
+        values:
+        - calico
+    - parametergroup: null
+      parametershared: null
+      parametersingle: null
     customfield:
       "14": Validation
       "18": Hostbusters
@@ -123,7 +197,44 @@
       steps: []
     tags: []
     params: {}
-    parameters: []
+    parameters:
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: Scheduled Testing
+        values:
+        - ""
+    - parametergroup: null
+      parametershared: null
+      parametersingle: null
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: OS
+        values:
+        - sles16-gmc2-v20250922-x86_64
+        - windows-2022-ctw-5-2-22
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: Provider
+        values:
+        - aws
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: K8sVersion
+        values:
+        - v1.34.1+k3s1
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: CNI
+        values:
+        - calico
+    - parametergroup: null
+      parametershared: null
+      parametersingle: null
     customfield:
       "14": Validation
       "18": Hostbusters
@@ -165,7 +276,44 @@
       steps: []
     tags: []
     params: {}
-    parameters: []
+    parameters:
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: Scheduled Testing
+        values:
+        - ""
+    - parametergroup: null
+      parametershared: null
+      parametersingle: null
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: OS
+        values:
+        - sles16-gmc2-v20250922-x86_64
+        - windows-2022-ctw-5-2-22
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: Provider
+        values:
+        - aws
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: K8sVersion
+        values:
+        - v1.34.1+k3s1
+    - parametergroup: null
+      parametershared: null
+      parametersingle:
+        title: CNI
+        values:
+        - calico
+    - parametergroup: null
+      parametershared: null
+      parametersingle: null
     customfield:
       "14": Validation
       "18": Hostbusters

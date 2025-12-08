@@ -108,7 +108,8 @@ func TestDynamicCustom(t *testing.T) {
 				provisioning.VerifyClusterReady(t, tt.client, cluster)
 
 				logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-				pods.VerifyClusterPods(t, tt.client, cluster)
+				err = pods.VerifyClusterPods(tt.client, cluster)
+				require.NoError(t, err)
 
 				logrus.Infof("Verifying cloud provider %s", cluster.Name)
 				cloudprovider.VerifyCloudProvider(t, tt.client, defaults.K3S, clusterConfig, cluster, nil)

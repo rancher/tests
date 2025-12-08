@@ -95,3 +95,93 @@ sshPath:
 
 logging:
    level: "info"
+
+workloadConfigs:
+  deployment:
+    metadata:
+      generateName: "testdeployment-"
+    spec:
+      selector:
+        matchLabels:
+          "workload.user.cattle.io/workloadselector": "testdeployment"
+      template:
+        metadata:
+          labels:
+            "workload.user.cattle.io/workloadselector": "testdeployment"
+        spec:
+          containers:
+            - name: "testdeployment"
+              image: "nginx:latest"
+  
+  daemonset:
+    metadata:
+      generateName: "testdaemonset-"
+    spec:
+      selector:
+        matchLabels:
+          "workload.user.cattle.io/workloadselector": "testdaemonset"
+      template:
+        metadata:
+          labels:
+            "workload.user.cattle.io/workloadselector": "testdaemonset"
+        spec:
+          containers:
+            - name: "testdaemonset"
+              image: "nginx:latest"
+
+  cronjob:
+    metadata:
+      generateName: "testcronjob-"
+    spec:
+      schedule: "* * * * *"
+      jobTemplate:
+        metadata:
+          generateName: "testcronjob-"
+        spec:
+          template:
+            generateName: testcronjob-
+            spec:
+              restartPolicy: "Never"
+              containers:
+                - name: "testcronjob"
+                  image: "nginx:latest"
+
+  job:
+    metadata:
+      generateName: "testjob-"
+    spec:
+      template:
+        metadata:
+          generateName: "testjob-"
+        spec:
+          generateName: testjob-
+          restartPolicy: "Never"
+          containers:
+            - name: "testjob"
+              image: "nginx:latest"
+              command: ["sh", "-c", "echo Hello World; sleep 30"]
+  
+  pod:
+    metadata:
+      generateName: "testpod-"
+    spec:
+      generateName: testpod-
+      containers:
+        - name: "testpod"
+          image: "nginx:latest"
+
+  statefulset:
+    metadata:
+      generateName: "teststatefulset-"
+    spec:
+      selector:
+        matchLabels:
+          "workload.user.cattle.io/workloadselector": "teststatefulset"
+      template:
+        metadata:
+          labels:
+            "workload.user.cattle.io/workloadselector": "teststatefulset"
+        spec:
+          containers:
+            - name: "teststatefulset"
+              image: "nginx:latest"

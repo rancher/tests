@@ -88,7 +88,8 @@ func DownstreamCluster(u *suite.Suite, testName string, client *rancher.Client, 
 		provisioning.VerifyClusterReady(u.T(), client, upgradedCluster)
 
 		logrus.Infof("Verifying cluster pods (%s)", upgradedCluster.Name)
-		pods.VerifyClusterPods(u.T(), client, upgradedCluster)
+		err = pods.VerifyClusterPods(client, upgradedCluster)
+		require.NoError(u.T(), err)
 	}
 }
 

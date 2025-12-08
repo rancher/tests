@@ -10,6 +10,7 @@ import (
 	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
+	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/stevestates"
@@ -29,15 +30,10 @@ import (
 )
 
 const (
-	active              = "active"
-	defaultNamespace    = "default"
-	port                = "port"
-	DeploymentSteveType = "apps.deployment"
-	nginxImageName      = "nginx"
-	ubuntuImageName     = "ubuntu"
-	redisImageName      = "redis"
-	podSteveType        = "pod"
-	restartAnnotation   = "kubectl.kubernetes.io/restartedAt"
+	nginxImageName    = "nginx"
+	ubuntuImageName   = "ubuntu"
+	redisImageName    = "redis"
+	restartAnnotation = "kubectl.kubernetes.io/restartedAt"
 )
 
 // CreateDeployment is a helper to create a deployment with or without a secret/configmap
@@ -90,6 +86,22 @@ func CreateDeployment(client *rancher.Client, clusterID, namespaceName string, r
 	return createdDeployment, err
 }
 
+// CreateDeploymentFromConfig creates a deployment from a config using steve
+func CreateDeploymentFromConfig(client *v1.Client, clusterID string, deployment *appv1.Deployment) (*appv1.Deployment, error) {
+	deploymentResp, err := client.SteveType(stevetypes.Deployment).Create(deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	deployment = new(appv1.Deployment)
+	err = steveV1.ConvertToK8sType(deploymentResp.JSONResp, deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	return deployment, nil
+}
+
 // UpdateDeployment is a helper to update deployments
 func UpdateDeployment(client *rancher.Client, clusterID, namespaceName string, deployment *appv1.Deployment, watchDeployment bool) (*appv1.Deployment, error) {
 	var wranglerContext *wrangler.Context
@@ -132,12 +144,12 @@ func DeleteDeployment(client *rancher.Client, clusterID string, deployment *appv
 	}
 
 	deploymentID := deployment.Namespace + "/" + deployment.Name
-	deploymentResp, err := steveClient.SteveType(DeploymentSteveType).ByID(deploymentID)
+	deploymentResp, err := steveClient.SteveType(stevetypes.Deployment).ByID(deploymentID)
 	if err != nil {
 		return err
 	}
 
-	err = steveClient.SteveType(DeploymentSteveType).Delete(deploymentResp)
+	err = steveClient.SteveType(stevetypes.Deployment).Delete(deploymentResp)
 	if err != nil {
 		return err
 	}
@@ -151,7 +163,7 @@ func RollbackDeployment(client *rancher.Client, clusterID, namespaceName string,
 		return "", err
 	}
 
-	namespaceClient := steveclient.SteveType(podSteveType).NamespacedSteveClient(namespaceName)
+	namespaceClient := steveclient.SteveType(stevetypes.Pod).NamespacedSteveClient(namespaceName)
 	podsResp, err := namespaceClient.List(nil)
 	if err != nil {
 		return "", err
@@ -160,7 +172,9 @@ func RollbackDeployment(client *rancher.Client, clusterID, namespaceName string,
 	//Collect the pod IDs that are expected to be deleted after the rollback
 	expectBeDeletedIds := []string{}
 	for _, podResp := range podsResp.Data {
-		expectBeDeletedIds = append(expectBeDeletedIds, podResp.ID)
+		if strings.Contains(podResp.Name, deploymentName) {
+			expectBeDeletedIds = append(expectBeDeletedIds, podResp.ID)
+		}
 	}
 
 	//Execute the roolback
@@ -324,4 +338,42 @@ func WaitForDeploymentUpdate(client *rancher.Client, clusterID, deploymentNamesp
 	})
 
 	return err
+}
+
+func GetDeploymentByName(client *v1.Client, clusterID, namespace, name string) (*appv1.Deployment, error) {
+	deploymentResp, err := client.SteveType(stevetypes.Deployment).ByID(namespace + "/" + name)
+	if err != nil {
+		return nil, err
+	}
+
+	deployment := &appv1.Deployment{}
+	err = steveV1.ConvertToK8sType(deploymentResp.JSONResp, deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	return deployment, err
+}
+
+func GetDeploymentPods(client *rancher.Client, clusterID, namespaceName, deploymentName string) ([]v1.SteveAPIObject, error) {
+	var pods []v1.SteveAPIObject
+	steveclient, err := client.Steve.ProxyDownstream(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	namespaceClient := steveclient.SteveType(stevetypes.Pod).NamespacedSteveClient(namespaceName)
+
+	podsResp, err := namespaceClient.List(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, podResp := range podsResp.Data {
+		if strings.Contains(podResp.Name, deploymentName) {
+			pods = append(pods, podResp)
+		}
+	}
+
+	return pods, nil
 }

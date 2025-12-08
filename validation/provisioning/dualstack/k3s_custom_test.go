@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
@@ -150,7 +151,19 @@ func TestCustomK3SDualstack(t *testing.T) {
 			provisioning.VerifyClusterReady(t, tt.client, cluster)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			pods.VerifyClusterPods(t, tt.client, cluster)
+			err = pods.VerifyClusterPods(tt.client, cluster)
+			require.NoError(t, err)
+
+			workloadConfigs := new(workloads.Workloads)
+			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, k.cattleConfig, workloadConfigs)
+
+			logrus.Infof("Creating workloads (%s)", cluster.Name)
+			workloadConfigs, err = workloads.CreateWorkloads(k.client, cluster.Name, *workloadConfigs)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying workloads (%s)", cluster.Name)
+			_, err = workloads.VerifyWorkloads(k.client, cluster.Name, *workloadConfigs)
+			require.NoError(t, err)
 		})
 
 		params := provisioning.GetCustomSchemaParams(tt.client, k.cattleConfig)

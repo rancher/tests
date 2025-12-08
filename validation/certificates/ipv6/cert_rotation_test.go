@@ -93,7 +93,8 @@ func (c *CertRotationIPv6TestSuite) TestCertRotationIPv6() {
 			provisioning.VerifyClusterReady(c.T(), c.client, cluster)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			pods.VerifyClusterPods(c.T(), c.client, cluster)
+			err = pods.VerifyClusterPods(c.client, cluster)
+			require.NoError(c.T(), err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(c.client, c.cattleConfig)

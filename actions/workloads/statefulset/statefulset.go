@@ -2,6 +2,7 @@ package statefulset
 
 import (
 	"github.com/rancher/shepherd/clients/rancher"
+	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/charts"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	appv1 "k8s.io/api/apps/v1"
@@ -32,6 +33,22 @@ func CreateStatefulSet(client *rancher.Client, clusterID, namespaceName string, 
 	}
 
 	return createdStatefulset, err
+}
+
+// CreateStatefulSetFromConfig creates a Pod from a config using steve
+func CreateStatefulSetFromConfig(client *v1.Client, clusterID string, statefulSet *appv1.StatefulSet) (*appv1.StatefulSet, error) {
+	statefulSetResp, err := client.SteveType("apps.statefulset").Create(statefulSet)
+	if err != nil {
+		return nil, err
+	}
+
+	newStatefulSet := new(appv1.StatefulSet)
+	err = v1.ConvertToK8sType(statefulSetResp.JSONResp, newStatefulSet)
+	if err != nil {
+		return nil, err
+	}
+
+	return newStatefulSet, nil
 }
 
 // UpdateStatefulSet is a helper to update statefulset using wrangler context

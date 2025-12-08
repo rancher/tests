@@ -102,7 +102,7 @@ func (d *DeleteInitMachineDualstackTestSuite) TestDeleteInitMachineDualstack() {
 			provisioning.VerifyClusterReady(d.T(), d.client, cluster)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			pods.VerifyClusterPods(d.T(), d.client, cluster)
+			pods.VerifyClusterPods(d.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(d.client, d.cattleConfig)

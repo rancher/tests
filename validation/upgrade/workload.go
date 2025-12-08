@@ -13,6 +13,7 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extensionscharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/ingresses"
 	extensionsworkloads "github.com/rancher/shepherd/extensions/workloads"
 	wloads "github.com/rancher/shepherd/extensions/workloads"
@@ -91,7 +92,7 @@ func createPreUpgradeWorkloads(t *testing.T, client *rancher.Client, clusterName
 	logrus.Infof("Creating deployment: %v", names.random[deploymentName])
 
 	deploymentTemplate := wloads.NewDeploymentTemplate(names.random[deploymentName], namespace.Name, testContainerPodTemplate, isCattleLabeled, nil)
-	createdDeployment, err := steveClient.SteveType(workloads.DeploymentSteveType).Create(deploymentTemplate)
+	createdDeployment, err := steveClient.SteveType(stevetypes.Deployment).Create(deploymentTemplate)
 	require.NoError(t, err)
 	assert.Equal(t, createdDeployment.Name, names.random[deploymentName])
 
@@ -122,7 +123,7 @@ func createPreUpgradeWorkloads(t *testing.T, client *rancher.Client, clusterName
 	logrus.Infof("Creating deployment %v with the test container and secret as volume...", names.random[deploymentNameForVolumeSecret])
 
 	deploymentWithSecretTemplate := wloads.NewDeploymentTemplate(names.random[deploymentNameForVolumeSecret], namespace.Name, podTemplateWithSecretVolume, isCattleLabeled, nil)
-	createdDeploymentWithSecretVolume, err := steveClient.SteveType(workloads.DeploymentSteveType).Create(deploymentWithSecretTemplate)
+	createdDeploymentWithSecretVolume, err := steveClient.SteveType(stevetypes.Deployment).Create(deploymentWithSecretTemplate)
 	require.NoError(t, err)
 	assert.Equal(t, createdDeploymentWithSecretVolume.Name, names.random[deploymentNameForVolumeSecret])
 
@@ -142,7 +143,7 @@ func createPreUpgradeWorkloads(t *testing.T, client *rancher.Client, clusterName
 	logrus.Infof("Creating deployment %v with the test container and secret as environment variable...", names.random[deploymentNameForEnvironmentVariableSecret])
 
 	deploymentEnvironmentWithSecretTemplate := wloads.NewDeploymentTemplate(names.random[deploymentNameForEnvironmentVariableSecret], namespace.Name, podTemplateWithSecretEnvironmentVariable, isCattleLabeled, nil)
-	createdDeploymentEnvironmentVariableSecret, err := steveClient.SteveType(workloads.DeploymentSteveType).Create(deploymentEnvironmentWithSecretTemplate)
+	createdDeploymentEnvironmentVariableSecret, err := steveClient.SteveType(stevetypes.Deployment).Create(deploymentEnvironmentWithSecretTemplate)
 	require.NoError(t, err)
 	assert.Equal(t, createdDeploymentEnvironmentVariableSecret.Name, names.random[deploymentNameForEnvironmentVariableSecret])
 
@@ -161,7 +162,7 @@ func createPreUpgradeWorkloads(t *testing.T, client *rancher.Client, clusterName
 		logrus.Infof("Creating deployment %v with the test container for ingress...", names.random[deploymentNameForIngress])
 
 		deploymentForIngressTemplate := wloads.NewDeploymentTemplate(names.random[deploymentNameForIngress], namespace.Name, testContainerPodTemplate, isCattleLabeled, nil)
-		createdDeploymentForIngress, err := steveClient.SteveType(workloads.DeploymentSteveType).Create(deploymentForIngressTemplate)
+		createdDeploymentForIngress, err := steveClient.SteveType(stevetypes.Deployment).Create(deploymentForIngressTemplate)
 		require.NoError(t, err)
 		assert.Equal(t, createdDeploymentForIngress.Name, names.random[deploymentNameForIngress])
 
@@ -298,7 +299,7 @@ func createPostUpgradeWorkloads(t *testing.T, client *rancher.Client, clusterNam
 	require.NoError(t, err)
 
 	logrus.Infof("Checking deployments in namespace: %s", namespace.Name)
-	deploymentList, err := steveClient.SteveType(workloads.DeploymentSteveType).List(nil)
+	deploymentList, err := steveClient.SteveType(stevetypes.Deployment).List(nil)
 	require.NoError(t, err)
 	deploymentNames := []string{
 		names.coreWithSuffix[deploymentNameForVolumeSecret],

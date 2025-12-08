@@ -1,25 +1,44 @@
 package statefulset
 
 import (
+	"context"
+	"time"
+
+	"github.com/rancher/rancher/pkg/api/scheme"
 	"github.com/rancher/shepherd/clients/rancher"
-	projectsapi "github.com/rancher/tests/actions/projects"
-	"github.com/rancher/tests/actions/workloads/pods"
-	"github.com/sirupsen/logrus"
+	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/tests/actions/kubeapi/workloads/statefulsets"
+	appv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
-func VerifyCreateStatefulset(client *rancher.Client, clusterID string) error {
-	_, namespace, err := projectsapi.CreateProjectAndNamespaceUsingWrangler(client, clusterID)
+func VerifyStatefulset(client *rancher.Client, clusterID, namespace, statefulsetName string) error {
+	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	podTemplate := pods.CreateContainerAndPodTemplate()
+	statefulSetResource := dynamicClient.Resource(statefulsets.StatefulSetGroupVersionResource).Namespace(namespace)
 
-	logrus.Infof("Creating new statefulset")
-	_, err = CreateStatefulSet(client, clusterID, namespace.Name, podTemplate, 1, true)
-	if err != nil {
-		return err
-	}
+	err = kwait.PollUntilContextTimeout(context.TODO(), 1*time.Second, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		unstructuredResp, err := statefulSetResource.Get(context.TODO(), statefulsetName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
 
-	return nil
+		statefulset := &appv1.StatefulSet{}
+		err = scheme.Scheme.Convert(unstructuredResp, statefulset, unstructuredResp.GroupVersionKind())
+		if err != nil {
+			return false, err
+		}
+
+		if *statefulset.Spec.Replicas == statefulset.Status.AvailableReplicas {
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	return err
 }

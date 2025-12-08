@@ -181,7 +181,8 @@ func (a *AirGapRKE2CustomClusterTestSuite) TestCustomClusterWithGitRepo() {
 		provisioning.VerifyClusterReady(a.T(), a.standardClient, clusterObject)
 
 		logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-		pods.VerifyClusterPods(a.T(), a.standardClient, clusterObject)
+		err = pods.VerifyClusterPods(a.standardClient, clusterObject)
+		require.NoError(a.T(), err)
 
 		logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
 		provisioning.VerifyDynamicCluster(a.T(), a.standardClient, clusterObject)
