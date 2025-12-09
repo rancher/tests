@@ -28,7 +28,7 @@ node("harvester-vpn-1") {
     def elementalConfig = env.ELEMENTAL_CONFIG
     def elementalConfigFile = "elementalconfig.yaml"
     def harvesterConfig = ""
-    def harvesterConfigfilename = "harvester.yaml"
+    def harvesterConfigfilename = "local.yaml"
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"
