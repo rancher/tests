@@ -120,7 +120,7 @@ node {
                 dir ("./ansible") {
                   writeFile file: ansibleVarsFilename, text: ansibleConfig
                 }
-                dir ("./ansible/rancher/downstream/elemental/ec2") {
+                dir ("./ansible/rancher/downstream/elemental/libvirt") {
                   writeFile file: ansibleVarsFilename, text: elementalAnsibleConfig
                   writeFile file: elementalConfigFile, text: elementalConfig
                 }
