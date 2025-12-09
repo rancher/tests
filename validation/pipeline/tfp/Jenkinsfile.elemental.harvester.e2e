@@ -1,4 +1,5 @@
 #!groovy
+library('qa-jenkins-library')
 node("harvester-vpn-1") {
     def workPath = "/root/go/src/github.com/rancher/tests/validation/"
     def rancherRepo = "https://github.com/rancher/tests"
@@ -157,8 +158,7 @@ node("harvester-vpn-1") {
                 sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
                 "${imageName} sh -c \"${workPath}pipeline/scripts/setup_environment.sh && sh ${workPath}pipeline/scripts/build_elemental_harvester_qa_infra.sh\""
               } catch(err) {
-                  sh "docker stop ${buildTestContainer}"
-                  sh "docker rm -v ${buildTestContainer}"
+                  container.remove([[name: buildTestContainer, image: imageName]])
                   sh "docker volume rm -f ${validationVolume}"
                   error "Build Environment had failures."
               }
@@ -170,11 +170,7 @@ node("harvester-vpn-1") {
                     sh "docker run --volumes-from ${buildTestContainer} --name ${cleanupTestContainer} -t --env-file ${envFile} " +
                     "${imageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh && sh ${workPath}pipeline/scripts/destroy_elemental_harvester_qa_infra.sh\""
                 } catch(err) {
-                  sh "docker stop ${buildTestContainer}"
-                  sh "docker rm -v ${buildTestContainer}"
-                  sh "docker stop ${cleanupTestContainer}"
-                  sh "docker rm -v ${cleanupTestContainer}"
-                  sh "docker rmi -f ${imageName}"
+                  container.remove([[name: buildTestContainer, image: imageName], [name: cleanupTestContainer, image: imageName]])
                   sh "docker volume rm -f ${validationVolume}"
                   error "Cleanup had failures."
                 }
@@ -182,13 +178,10 @@ node("harvester-vpn-1") {
             }
             stage('Clean Up Images and Volume') {
               echo 'Cleaning test images and volume.'
-              sh "docker stop ${buildTestContainer}"
-              sh "docker rm -v ${buildTestContainer}"
+              container.remove([[name: buildTestContainer, image: imageName]])
               if ("${env.CLEANUP_RANCHER}" == "True" || "${env.CLEANUP_RANCHER}" == "true") {
-                sh "docker stop ${cleanupTestContainer}"
-                sh "docker rm -v ${cleanupTestContainer}"
+                container.remove([[name: cleanupTestContainer, image: imageName]])
               }
-              sh "docker rmi -f ${imageName}"
               sh "docker volume rm -f ${validationVolume}"
             }
           } // dir 
