@@ -14,22 +14,8 @@ node {
     def qaInfraRepo = env.QA_INFRA_REPO_URL ?: "https://github.com/rancher/qa-infra-automation"
     def targetWorkspace = env.TARGET_WORKSPACE
     
-    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm']) {
-        withFolderProperties {
-            paramsMap = []
-            params.each {
-                if (it.value != null && it.value.toString().trim() != "") {
-                    paramsMap << "$it.key=$it.value"
-                }
-            }
-            
-            withCredentials([
-                string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-                string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
-            ]) {
-                withEnv(paramsMap) {
-                    
-                    try {
+    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
+        try {
                         stage('Validate Parameters') {
                             if (!targetWorkspace || targetWorkspace.trim() == "") {
                                 error "TARGET_WORKSPACE parameter is required"
@@ -161,14 +147,11 @@ node {
                             echo "==========================================="
                         }
                         
-                    } catch (err) {
-                        currentBuild.result = 'FAILURE'
-                        echo "Destroy operation failed: ${err.message}"
-                        echo "Manual cleanup may be required for workspace: ${targetWorkspace}"
-                        throw err
-                    }
-                }
-            }
+        } catch (err) {
+            currentBuild.result = 'FAILURE'
+            echo "Destroy operation failed: ${err.message}"
+            echo "Manual cleanup may be required for workspace: ${targetWorkspace}"
+            throw err
         }
     }
 }

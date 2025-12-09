@@ -15,22 +15,7 @@ node {
     def qaInfraBranch = env.QA_INFRA_REPO_BRANCH ?: "main"
     def qaInfraRepo = env.QA_INFRA_REPO_URL ?: "https://github.com/rancher/qa-infra-automation"
     
-    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm']) {
-        withFolderProperties {
-            paramsMap = []
-            params.each {
-                if (it.value != null && it.value.toString().trim() != "") {
-                    paramsMap << "$it.key=$it.value"
-                }
-            }
-            
-            withCredentials([
-                string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-                string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-                string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
-                string(credentialsId: 'AWS_SSH_PEM_KEY_NAME', variable: 'AWS_SSH_PEM_KEY_NAME')
-            ]) {
-                withEnv(paramsMap) {
+    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SSH_PEM_KEY', 'AWS_SSH_PEM_KEY_NAME']) {
                     
                     try {
                         stage('Checkout') {
@@ -253,41 +238,38 @@ node {
                             echo "========================================"
                         }
                         
-                    } catch (err) {
-                        currentBuild.result = 'FAILURE'
-                        echo "Build failed: ${err.message}"
+        } catch (err) {
+            currentBuild.result = 'FAILURE'
+            echo "Build failed: ${err.message}"
+            
+            // Check if we should destroy on failure
+            if (env.DESTROY_ON_FAILURE?.toBoolean() && workspaceName) {
+                echo "DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure..."
+                
+                try {
+                    stage('Cleanup on Failure') {
+                        tofu.selectWorkspace(
+                            dir: tofuModulePath,
+                            name: workspaceName
+                        )
                         
-                        // Check if we should destroy on failure
-                        if (env.DESTROY_ON_FAILURE?.toBoolean() && workspaceName) {
-                            echo "DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure..."
-                            
-                            try {
-                                stage('Cleanup on Failure') {
-                                    tofu.selectWorkspace(
-                                        dir: tofuModulePath,
-                                        name: workspaceName
-                                    )
-                                    
-                                    tofu.destroy(
-                                        dir: tofuModulePath,
-                                        varFile: 'terraform.tfvars',
-                                        autoApprove: true
-                                    )
-                                    
-                                    tofu.deleteWorkspace(
-                                        dir: tofuModulePath,
-                                        name: workspaceName
-                                    )
-                                }
-                            } catch (cleanupErr) {
-                                echo "Cleanup failed: ${cleanupErr.message}"
-                            }
-                        }
+                        tofu.destroy(
+                            dir: tofuModulePath,
+                            varFile: 'terraform.tfvars',
+                            autoApprove: true
+                        )
                         
-                        throw err
+                        tofu.deleteWorkspace(
+                            dir: tofuModulePath,
+                            name: workspaceName
+                        )
                     }
+                } catch (cleanupErr) {
+                    echo "Cleanup failed: ${cleanupErr.message}"
                 }
             }
+            
+            throw err
         }
     }
 }
