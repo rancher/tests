@@ -42,8 +42,6 @@ cd "$RESULTS_DIR"
 chmod +x "$REPORTER_BINARY"
 export QASE_TEST_RUN_ID QASE_AUTOMATION_TOKEN
 "$REPORTER_BINARY" --results results.json
-
 rm -f "${GITHUB_WORKSPACE}/results.xml" "${GITHUB_WORKSPACE}/results.json"
-rm -rf "$RESULTS_DIR"
 
-echo "✅ Test Results have been published to Qase for package: $PACKAGE_NAME"
+echo "✅ Test Results have been published to Qase (Run ID: $QASE_TEST_RUN_ID) for package: $PACKAGE_NAME"

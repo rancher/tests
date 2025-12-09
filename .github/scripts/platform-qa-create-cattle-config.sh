@@ -145,7 +145,7 @@ openLdapAuthInput:
 
 activeDirectory:
   hostname: "${AD_HOSTNAME}"
-  port: "${AD_PORT}"
+  port: ${AD_PORT}
   tls: false
   startTLS: false
   users:
