@@ -12,12 +12,11 @@ set -e
 : "${AWS_ROOT_SIZE:?AWS root size not set}"
 : "${AWS_VPC_ID:?AWS VPC ID not set}"
 : "${AWS_SUBNET_ID:?AWS Subnet ID not set}"
-: "${AWS_SECURITY_GROUPS:?AWS security groups not set}"
-: "${SSH_PRIVATE_KEY_NAME:?AWS SSH key pair name not set}"
+: "${AWS_SECURITY_GROUP_NAMES:?AWS security groups not set}"
 : "${AWS_ACCESS_KEY:?AWS access key not set}"
 : "${AWS_SECRET_KEY:?AWS secret key not set}"
+: "${CLUSTER_NAME:?Cluster name not set}"
 
-CLUSTER_NAME="pqanodeprov1"
 API="https://$RANCHER_HOST/v3"
 MACHINECONFIG_NAME="mc-${CLUSTER_NAME}-pool1"
 MACHINECONFIG_FILE="/tmp/${MACHINECONFIG_NAME}.yaml"
@@ -26,8 +25,7 @@ CLOUD_CREDENTIAL_NAME="aws-creds-$CLUSTER_NAME"
 NAMESPACE="fleet-default"
 
 # Check if the cluster already exists
-EXISTING_CLUSTER=$(curl -s -k -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" \
-  "$API/clusters?name=$CLUSTER_NAME" | jq -r '.data[0].id // empty')
+EXISTING_CLUSTER=$(curl -s -k -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" "$API/clusters?name=$CLUSTER_NAME" | jq -r '.data[0].id // empty')
 if [[ -n "$EXISTING_CLUSTER" ]]; then
   echo "⚠️ Cluster '$CLUSTER_NAME' already exists (ID: $EXISTING_CLUSTER). Skipping creation."
   export CLUSTER_NAME="$CLUSTER_NAME"
@@ -45,7 +43,6 @@ RANCHER_KUBECONFIG_JSON="/tmp/management_kubeconfig.json"
 RANCHER_KUBECONFIG="/tmp/management_kubeconfig.yaml"
 curl -s -k -X POST -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" "$API/clusters/$MANAGEMENT_CLUSTER_ID?action=generateKubeconfig" -o "$RANCHER_KUBECONFIG_JSON"
 jq -r '.config' "$RANCHER_KUBECONFIG_JSON" > "$RANCHER_KUBECONFIG"
-export RANCHER_KUBECONFIG
 
 # Create Cloud Credential
 CLOUD_CREDS_PAYLOAD=$(jq -n \
@@ -75,6 +72,7 @@ if [[ "$CLOUD_CREDENTIAL_ID" == "null" || -z "$CLOUD_CREDENTIAL_ID" ]]; then
   echo "❌ Failed to create cloud credential"
   exit 1
 fi
+echo "✅ Cloud credential created with ID: $CLOUD_CREDENTIAL_ID"
 
 # Create Machine Config
 cat > "$MACHINECONFIG_FILE" <<EOF
@@ -89,9 +87,11 @@ instanceType: ${AWS_INSTANCE_TYPE}
 rootSize: "${AWS_ROOT_SIZE}"
 vpcId: ${AWS_VPC_ID}
 subnetId: ${AWS_SUBNET_ID}
+securityGroup: ${AWS_SECURITY_GROUP_NAMES} 
 EOF
 
 kubectl --kubeconfig "$RANCHER_KUBECONFIG" apply -f "$MACHINECONFIG_FILE"
+sleep 5
 
 # Create Downstream Cluster
 cat > "$CLUSTER_FILE" <<EOF
@@ -113,11 +113,6 @@ spec:
         machineConfigRef:
           kind: Amazonec2Config
           name: ${MACHINECONFIG_NAME}
-        dynamicSchemaSpec: >-
-          {
-            "securityGroup": '"$AWS_SECURITY_GROUPS"',
-            "keypairName": "'$SSH_PRIVATE_KEY_NAME'"
-          }
     networking:
       stackPreference: "${NETWORK_STACK_PREFERENCE}"
     upgradeStrategy:
@@ -126,45 +121,54 @@ spec:
 EOF
 
 kubectl --kubeconfig "$RANCHER_KUBECONFIG" apply -f "$CLUSTER_FILE"
-
-TIMEOUT=900
-START=$(date +%s)
-until kubectl --kubeconfig "$RANCHER_KUBECONFIG" get cluster "${CLUSTER_NAME}" -n fleet-default -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null | grep -q True; do
+echo "⏳ Waiting for cluster '$CLUSTER_NAME' to be ready..."
+TIMEOUT_CLUSTER=1200
+START_CLUSTER=$(date +%s)
+while true; do
+    STATUS=$(kubectl --kubeconfig "$RANCHER_KUBECONFIG" get cluster "$CLUSTER_NAME" -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
+    echo "   Cluster status: ${STATUS:-<unknown>}"
+    if [[ "$STATUS" == "True" ]]; then
+        echo "✅ Cluster '$CLUSTER_NAME' is Ready!"
+        break
+    fi
     sleep 15
-    if (( $(date +%s) - START > TIMEOUT )); then
-        echo "❌ Timeout waiting for cluster to be ready"
+    if (( $(date +%s) - START_CLUSTER > TIMEOUT_CLUSTER )); then
+        echo "❌ Timeout waiting for cluster '$CLUSTER_NAME' to be Ready"
         exit 1
     fi
 done
 
-DOWNSTREAM_CLUSTER_ID=$(kubectl --kubeconfig "$RANCHER_KUBECONFIG" -n fleet-default get cluster "$CLUSTER_NAME" -o jsonpath='{.status.clusterName}')
+DOWNSTREAM_CLUSTER_ID=$(curl -s -k -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" "$API/clusters?name=$CLUSTER_NAME" | jq -r '.data[0].id // empty')
+if [[ -z "$DOWNSTREAM_CLUSTER_ID" ]]; then
+    echo "❌ Failed to get downstream cluster ID from Rancher API"
+    exit 1
+fi
 DOWNSTREAM_KUBECONFIG_JSON="/tmp/downstream_kubeconfig.json"
-DOWNSTREAM_KUBECONFIG="/tmp/downstream_kubeconfig.yaml"
-DEPLOYMENT="rancher-webhook"
-TIMEOUT=900  
-WEBHOOK_NAMESPACE="cattle-system"
+DOWNSTREAM_KUBECONFIG="/tmp/downstream_kubeconfig.yaml" 
 
 curl -s -k -X POST -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" "$API/clusters/$DOWNSTREAM_CLUSTER_ID?action=generateKubeconfig" -o "$DOWNSTREAM_KUBECONFIG_JSON"
 jq -r '.config' "$DOWNSTREAM_KUBECONFIG_JSON" > "$DOWNSTREAM_KUBECONFIG"
-export DOWNSTREAM_KUBECONFIG
 
+DEPLOYMENT="rancher-webhook"
+WEBHOOK_NAMESPACE="cattle-system"
 echo "⏳ Waiting for $DEPLOYMENT deployment to be available in $WEBHOOK_NAMESPACE..."
-START=$(date +%s)
+TIMEOUT_DEPLOY=900
+START_DEPLOY=$(date +%s)
 while true; do
     AVAILABLE=$(kubectl --kubeconfig "$DOWNSTREAM_KUBECONFIG" -n "$WEBHOOK_NAMESPACE" get deployment "$DEPLOYMENT" -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo "0")
-
-    if [[ "$AVAILABLE" != "0" ]]; then
-        break
-    fi
-
-    if (( $(date +%s) - START > TIMEOUT )); then
+    if (( AVAILABLE >= 1 )); then break; fi
+    sleep 10
+    if (( $(date +%s) - START_DEPLOY > TIMEOUT_DEPLOY )); then
         echo "❌ Timeout waiting for $DEPLOYMENT deployment to be available."
         exit 1
     fi
-
-    sleep 10
 done
 
 echo "✅ Downstream cluster created: $CLUSTER_NAME (ID: $DOWNSTREAM_CLUSTER_ID)"
 echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
 echo "DOWNSTREAM_CLUSTER_ID=$DOWNSTREAM_CLUSTER_ID" >> $GITHUB_ENV
+
+cleanup() {
+    rm -f "$MACHINECONFIG_FILE" "$CLUSTER_FILE" "$RANCHER_KUBECONFIG_JSON" "$DOWNSTREAM_KUBECONFIG_JSON"
+}
+trap cleanup EXIT
