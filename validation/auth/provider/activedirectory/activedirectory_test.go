@@ -81,7 +81,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TearDownSuite() {
 	a.session.Cleanup()
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TestEnableActiveDirectory() {
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryEnableProvider() {
 	subSession := a.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -104,7 +104,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestEnableActiveDirectory() {
 	require.Equal(a.T(), a.client.Auth.ActiveDirectory.Config.ServiceAccount.Password, string(secret.Data["serviceaccountpassword"]), "Password mismatch")
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TestDisableAndEnableActiveDirectory() {
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryDisableAndReenableProvider() {
 	subSession := a.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -132,7 +132,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestDisableAndEnableActiveDirectory()
 	require.NoError(a.T(), err, "Failed to re-enable Active Directory")
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TestAllowAnyUserAccessMode() {
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryUnrestrictedAccessMode() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -142,7 +142,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestAllowAnyUserAccessMode() {
 	require.NoError(a.T(), err, "All users should be able to login")
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TestRefreshGroup() {
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryGroupMembershipRefresh() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -178,7 +178,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestRefreshGroup() {
 	require.NoError(a.T(), err, "Failed to refresh group membership")
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TestGroupMembershipDoubleNestedGroupClusterAccess() {
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryNestedGroupClusterAccess() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -208,7 +208,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestGroupMembershipDoubleNestedGroupC
 	require.NotNil(a.T(), foundCRTB, "Cluster role binding should exist for group")
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TestGroupMembershipOtherUsersCannotAccessCluster() {
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryNonMemberClusterAccessDenied() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -231,7 +231,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestGroupMembershipOtherUsersCannotAc
 	}
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TestGroupMembershipNestedGroupProjectAccess() {
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryNestedGroupProjectAccess() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -268,7 +268,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestGroupMembershipNestedGroupProject
 	}
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TestRestrictedAccessModeClusterAndProjectBindings() {
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryRestrictedModeBindings() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -309,7 +309,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestRestrictedAccessModeClusterAndPro
 	}
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TestAllowClusterAndProjectMembersAccessMode() {
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryAllowClusterAndProjectMembersAccessMode() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -352,7 +352,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestAllowClusterAndProjectMembersAcce
 	require.NoError(a.T(), err, "Failed to rollback access mode")
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TestRestrictedAccessModeAuthorizedUsersCanLogin() {
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryRestrictedAccessModeAuthorizedUsersCanLogin() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -378,7 +378,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestRestrictedAccessModeAuthorizedUse
 	require.NoError(a.T(), err, "Failed to rollback access mode")
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TestRestrictedAccessModeUnauthorizedUsersCannotLogin() {
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryUnauthorizedLoginDenied() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()

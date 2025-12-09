@@ -81,7 +81,7 @@ func (a *OpenLDAPAuthProviderSuite) TearDownSuite() {
 	a.session.Cleanup()
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestEnableOpenLDAP() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPEnableProvider() {
 	subSession := a.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -104,7 +104,7 @@ func (a *OpenLDAPAuthProviderSuite) TestEnableOpenLDAP() {
 	require.Equal(a.T(), a.client.Auth.OLDAP.Config.ServiceAccount.Password, string(secret.Data["serviceaccountpassword"]), "Password mismatch")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestDisableAndEnableOpenLdap() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPDisableAndReenableProvider() {
 	subSession := a.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -132,7 +132,7 @@ func (a *OpenLDAPAuthProviderSuite) TestDisableAndEnableOpenLdap() {
 	require.NoError(a.T(), err, "Failed to re-enable OpenLDAP")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestAllowAnyUserAccessMode() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPUnrestrictedAccessMode() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -142,7 +142,7 @@ func (a *OpenLDAPAuthProviderSuite) TestAllowAnyUserAccessMode() {
 	require.NoError(a.T(), err, "All users should be able to login")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestRefreshGroup() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPGroupMembershipRefresh() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -178,7 +178,7 @@ func (a *OpenLDAPAuthProviderSuite) TestRefreshGroup() {
 	require.NoError(a.T(), err, "Failed to refresh group membership")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipDoubleNestedGroupClusterAccess() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPNestedGroupClusterAccess() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -208,7 +208,7 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipDoubleNestedGroupClusterA
 	require.NotNil(a.T(), foundCRTB, "Cluster role binding should exist for group")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipOtherUsersCannotAccessCluster() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPNonMemberClusterAccessDenied() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -231,7 +231,7 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipOtherUsersCannotAccessClu
 	}
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipNestedGroupProjectAccess() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPNestedGroupProjectAccess() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -268,7 +268,7 @@ func (a *OpenLDAPAuthProviderSuite) TestGroupMembershipNestedGroupProjectAccess(
 	}
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestRestrictedAccessModeClusterAndProjectBindings() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRestrictedModeBindings() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -308,7 +308,7 @@ func (a *OpenLDAPAuthProviderSuite) TestRestrictedAccessModeClusterAndProjectBin
 	}
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestAllowClusterAndProjectMembersAccessMode() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPAllowClusterAndProjectMembersAccessMode() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -352,7 +352,7 @@ func (a *OpenLDAPAuthProviderSuite) TestAllowClusterAndProjectMembersAccessMode(
 	require.NoError(a.T(), err, "Failed to rollback access mode")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestRestrictedAccessModeAuthorizedUsersCanLogin() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRestrictedAccessModeAuthorizedUsersCanLogin() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -378,7 +378,7 @@ func (a *OpenLDAPAuthProviderSuite) TestRestrictedAccessModeAuthorizedUsersCanLo
 	require.NoError(a.T(), err, "Failed to rollback access mode")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestRestrictedAccessModeUnauthorizedUsersCannotLogin() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPUnauthorizedLoginDenied() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
