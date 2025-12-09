@@ -45,7 +45,7 @@ node("harvester-vpn-1") {
         timeout = "${env.TIMEOUT}"
     }
     def dockerFile = "Dockerfile.e2e"
-    if (env.RUN_CYPRESS == "true") {
+    if ("${env.RUN_CYPRESS}" == "true") {
         dockerFile = "Dockerfile.cypress"
     }
     wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg': 1]) {
@@ -371,7 +371,7 @@ node("harvester-vpn-1") {
                         
                     }
                     stage('Connect Rancher -> Harvester') {
-                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true" && env.RUN_CYPRESS != "true") {
+                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true" && env."${env.RUN_CYPRESS}" != "true") {
                             try {
                                 // this test also writes harvesterCloudCredentials to the config
                                 sh( script: """
@@ -386,7 +386,7 @@ node("harvester-vpn-1") {
                         }
                     }
                     stage('Run Cypress Tests') {
-                        if (env.RUN_CYPRESS == "true") {
+                        if (env."${env.RUN_CYPRESS}" == "true") {
                             def r_host = sh(script: "yq '.rancher.host' ${filename}", returnStdout: true).trim()
                             def r_pass = sh(script: "yq '.rancher.adminPassword' ${filename}", returnStdout: true).trim()
                             
@@ -438,7 +438,7 @@ node("harvester-vpn-1") {
                         }
                     }
                     stage('Publish to TC Management') {
-                        if (env.RUN_CYPRESS == "true" && env.QASE_REPORT.toLowerCase() == "true") {
+                        if (env."${env.RUN_CYPRESS}" == "true" && env.QASE_REPORT.toLowerCase() == "true") {
                             try {
                                 withCredentials([ string(credentialsId: 'QASE_AUTOMATION_TOKEN', variable: 'QASE_AUTOMATION_TOKEN')]) {
                                     // Run the transformation script locally
@@ -450,7 +450,7 @@ node("harvester-vpn-1") {
                         }
                     }
                     stage('Create Downstream Cluster for Testing') {
-                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true" && env.RUN_CYPRESS != "true") {
+                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true" && env."${env.RUN_CYPRESS}" != "true") {
 
                             dir("infra-repo") {
                                     def IMPORTED_HVST_KUBECONFIG = sh (
@@ -505,7 +505,7 @@ echo "}\\n" >> "${tfvars_filepath}"
                         }
                     }
                     stage('Run Validation Tests') {
-                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true" && env.RUN_CYPRESS != "true") {
+                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true" && env."${env.RUN_CYPRESS}" != "true") {
                             try {
                                 sh """
                                 docker run -v ${validationVolume}:/root --name ${golangTestContainer} -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c "cp \$CATTLE_TEST_CONFIG . && export CATTLE_TEST_CONFIG=/root/go/src/github.com/rancher/tests/config.yml && /root/go/bin/gotestsum --format standard-verbose --packages=${golangTestDir} --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
