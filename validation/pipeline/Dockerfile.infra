@@ -1,5 +1,5 @@
 # Lean Dockerfile for Infrastructure Operations
-# Contains only essentials for running Ansible and Tofu
+# Contains only essentials for running Ansible, Tofu, and AWS
 
 ARG TOFU_VERSION=1.10.7
 
