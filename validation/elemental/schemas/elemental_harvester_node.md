@@ -21,7 +21,7 @@ When creating a new VM in Harvester, configure it with the following settings:
 ### **Volumes**
 1. **Boot Volume (ISO)**
    - **Type**: `cd-rom`
-   - **Size**: `1 GiB`
+   - **Size**: `2 GiB`
    - **Image**: *Elemental ISO image*
    - **Bus**: `SATA`
 2. **Disk Volume**

@@ -1,5 +1,5 @@
 #!/bin/bash
-set -ex
+set -euo
 
 echo "Create elemental harvester infra"
 

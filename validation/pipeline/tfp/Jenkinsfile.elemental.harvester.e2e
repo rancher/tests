@@ -67,7 +67,6 @@ node("harvester-vpn-1") {
                           string(credentialsId: 'RANCHER_VALID_TLS_KEY', variable: 'RANCHER_VALID_TLS_KEY'),
                           string(credentialsId: 'RANCHER_BYO_TLS_CERT', variable: 'RANCHER_BYO_TLS_CERT'),
                           string(credentialsId: 'RANCHER_BYO_TLS_KEY', variable: 'RANCHER_BYO_TLS_KEY'),
-                          string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK'),
                           string(credentialsId: 'QASE_AUTOMATION_TOKEN', variable: 'QASE_AUTOMATION_TOKEN')]) {
           
         withEnv(paramsMap) {
@@ -150,15 +149,13 @@ node("harvester-vpn-1") {
               }
             }
             stage('Setup') {
-                sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
-                sh returnStdout:true, script: 'chmod a+x ./yq'
                 def envText = readFile("${envFile}")
                 writeFile file: "${envFile}", text: envText+"BUILD_DOWNSTREAM_CLUSTER=false"
             }
             stage("Build Environment") {
               try {
                 sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
-                "${imageName} sh -c \"${workPath}pipeline/scripts/setup_environment.sh && chmod +x ${workPath}pipeline/scripts/build_elemental_harvester_qa_infra.sh && ${workPath}pipeline/scripts/build_elemental_harvester_qa_infra.sh\""
+                "${imageName} sh -c \"${workPath}pipeline/scripts/setup_environment.sh && sh ${workPath}pipeline/scripts/build_elemental_harvester_qa_infra.sh\""
               } catch(err) {
                   sh "docker stop ${buildTestContainer}"
                   sh "docker rm -v ${buildTestContainer}"
@@ -171,7 +168,7 @@ node("harvester-vpn-1") {
               if ("${env.CLEANUP_RANCHER}" == "True" || "${env.CLEANUP_RANCHER}" == "true") {
                 try {
                     sh "docker run --volumes-from ${buildTestContainer} --name ${cleanupTestContainer} -t --env-file ${envFile} " +
-                    "${imageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh && chmod +x ${workPath}pipeline/scripts/destroy_elemental_harvester_qa_infra.sh && ${workPath}pipeline/scripts/destroy_elemental_harvester_qa_infra.sh\""
+                    "${imageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh && sh ${workPath}pipeline/scripts/destroy_elemental_harvester_qa_infra.sh\""
                 } catch(err) {
                   sh "docker stop ${buildTestContainer}"
                   sh "docker rm -v ${buildTestContainer}"
