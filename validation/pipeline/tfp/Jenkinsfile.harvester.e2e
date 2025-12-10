@@ -347,7 +347,8 @@ node("harvester-vpn-1") {
                                     }" {} +
                                     cd tests
                                     echo "running dev setup of provider"
-                                    ./scripts/tofu/dev-provider.sh "harvester" "https://github.com/harvester/terraform-provider-harvester.git" "master"
+                                    rm -rf provider-clone
+                                    ./scripts/tofu/dev-provider.sh "harvester" "https://github.com/slickwarren/terraform-provider-harvester.git" "cwarren/test-harvester-changes"
                                 else
                                     echo "${HARVESTER_PROVIDER_VERSION}"
                                 fi
