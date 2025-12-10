@@ -4,25 +4,24 @@ def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
 library "qa-jenkins-library@${libraryBranch}"
 
 node {
-    def testsPath = "./tests"
-    def qaInfraPath = "./qa-infra-automation"
+    def testsPath = './tests'
+    def qaInfraPath = './qa-infra-automation'
     def tofuModulePath = "${qaInfraPath}/tofu/aws/modules/airgap"
-    def tofuBackendInitScript = "./scripts/init-backend.sh"
+    def tofuBackendInitScript = './scripts/init-backend.sh'
     def ansiblePath = "${qaInfraPath}/ansible/rke2/airgap"
-    def workspaceName = ""
-    def testsBranch = env.RANCHER_TEST_REPO_BRANCH ?: "main"
-    def testsRepo = env.RANCHER_TEST_REPO_URL ?: "https://github.com/rancher/tests"
-    def qaInfraBranch = env.QA_INFRA_REPO_BRANCH ?: "main"
-    def qaInfraRepo = env.QA_INFRA_REPO_URL ?: "https://github.com/rancher/qa-infra-automation"
-    
+    def workspaceName = ''
+    def testsBranch = env.RANCHER_TEST_REPO_BRANCH ?: 'main'
+    def testsRepo = env.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'
+    def qaInfraBranch = env.QA_INFRA_REPO_BRANCH ?: 'main'
+    def qaInfraRepo = env.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation'
+
     property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SSH_PEM_KEY', 'AWS_SSH_PEM_KEY_NAME']) {
-                    
                     try {
-                        stage('Checkout') {
-                            deleteDir()
-                            
-                            echo "Cloning tests repository"
-                            checkout([
+            stage('Checkout') {
+                deleteDir()
+
+                echo 'Cloning tests repository'
+                checkout([
                                 $class: 'GitSCM',
                                 branches: [[name: "*/${testsBranch}"]],
                                 extensions: scm.extensions + [
@@ -31,9 +30,9 @@ node {
                                 ],
                                 userRemoteConfigs: [[url: testsRepo]]
                             ])
-                            
-                            echo "Cloning qa-infra-automation repository"
-                            checkout([
+
+                echo 'Cloning qa-infra-automation repository'
+                checkout([
                                 $class: 'GitSCM',
                                 branches: [[name: "*/${qaInfraBranch}"]],
                                 extensions: scm.extensions + [
@@ -42,25 +41,25 @@ node {
                                 ],
                                 userRemoteConfigs: [[url: qaInfraRepo]]
                             ])
-                        }
-                        
-                        stage('Build Infrastructure Tools Image') {
-                            echo "Building Docker image with Tofu and Ansible"
-                            sh "docker build --platform linux/amd64 -t rancher-infra-tools:latest -f ${testsPath}/validation/pipeline/Dockerfile.infra ."
-                        }
-                        
-                        stage('Configure SSH Key') {
-                            infrastructure.writeSshKey(
+            }
+
+            stage('Build Infrastructure Tools Image') {
+                echo 'Building Docker image with Tofu and Ansible'
+                sh "docker build --platform linux/amd64 -t rancher-infra-tools:latest -f ${testsPath}/validation/pipeline/Dockerfile.infra ."
+            }
+
+            stage('Configure SSH Key') {
+                infrastructure.writeSshKey(
                                 keyContent: env.AWS_SSH_PEM_KEY,
                                 keyName: env.AWS_SSH_PEM_KEY_NAME,
                                 dir: '.ssh'
                             )
-                        }
-                        
-                        stage('Configure Tofu Variables') {
-                            echo "Writing Terraform configuration"
-                            
-                            def terraformConfig = infrastructure.parseAndSubstituteVars(
+            }
+
+            stage('Configure Tofu Variables') {
+                echo 'Writing Terraform configuration'
+
+                def terraformConfig = infrastructure.parseAndSubstituteVars(
                                 content: env.TERRAFORM_CONFIG,
                                 envVars: [
                                     'AWS_ACCESS_KEY_ID': env.AWS_ACCESS_KEY_ID,
@@ -69,65 +68,66 @@ node {
                                     'AWS_SSH_PEM_KEY_NAME': env.AWS_SSH_PEM_KEY_NAME
                                 ]
                             )
-                            
-                            infrastructure.writeConfig(
+
+                infrastructure.writeConfig(
                                 path: "${tofuModulePath}/terraform.tfvars",
                                 content: terraformConfig
                             )
-                        }
-                        
-                        stage('Initialize Tofu Backend') {
-                            tofu.initBackend(
+            }
+
+            stage('Initialize Tofu Backend') {
+                tofu.initBackend(
                                 dir: tofuModulePath,
                                 bucket: env.S3_BUCKET_NAME,
                                 key: env.S3_KEY_PREFIX,
                                 region: env.S3_BUCKET_REGION,
                                 backendInitScript: tofuBackendInitScript
                             )
-                        }
-                        
-                        stage('Create Workspace') {
-                            workspaceName = infrastructure.generateWorkspaceName(
+            }
+
+            stage('Create Workspace') {
+                workspaceName = infrastructure.generateWorkspaceName(
                                 prefix: 'jenkins_airgap_ansible_workspace',
+                                suffix: env.HOSTNAME_PREFIX,
                                 includeTimestamp: false
                             )
-                            
-                            tofu.createWorkspace(
+
+                tofu.createWorkspace(
                                 dir: tofuModulePath,
                                 name: workspaceName
                             )
-                            
-                            // Archive workspace name for destroy job
-                            infrastructure.archiveWorkspaceName(
+
+                // Archive workspace name for destroy job
+                infrastructure.archiveWorkspaceName(
                                 workspaceName: workspaceName
                             )
-                        }
-                        
-                        stage('Apply Tofu') {
-                            tofu.apply(
+            }
+
+            stage('Apply Tofu') {
+                tofu.apply(
                                 dir: tofuModulePath,
                                 varFile: 'terraform.tfvars',
                                 autoApprove: true
                             )
-                            
-                            // Archive generated inventory file
-                            def inventoryPath = "qa-infra-automation/ansible/rke2/airgap/inventory/inventory.yml"
-                            if (fileExists(inventoryPath)) {
-                                archiveArtifacts artifacts: inventoryPath, fingerprint: true
-                                echo "Archived inventory file: ${inventoryPath}"
+
+                // Archive generated inventory file
+                def inventoryPath = 'qa-infra-automation/ansible/rke2/airgap/inventory/inventory.yml'
+                if (fileExists(inventoryPath)) {
+                    archiveArtifacts artifacts: inventoryPath, fingerprint: true
+                    echo "Archived inventory file: ${inventoryPath}"
                             } else {
-                                echo "Warning: Inventory file not found at ${inventoryPath}"
-                            }
-                        }
-                        
-                        stage('Upload Terraform Variables to S3') {
-                            echo "Uploading terraform.tfvars to S3 for future destroy operations"
-                            
-                            def s3Path = "env:/${workspaceName}/terraform.tfvars"
-                            def tfvarsPath = "${tofuModulePath}/terraform.tfvars"
-                            def workspace = pwd()
-                            
-                            sh """
+                    echo "Warning: Inventory file not found at ${inventoryPath}"
+                }
+            }
+
+            stage('Upload Terraform Variables to S3') {
+                echo 'Uploading terraform.tfvars to S3 for future destroy operations'
+
+                def s3Path = "env:/${workspaceName}/terraform.tfvars"
+                def tfvarsPath = "${tofuModulePath}/terraform.tfvars"
+                def workspace = pwd()
+
+                sh """
                                 docker run --rm --platform linux/amd64 \
                                     -e AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID} \
                                     -e AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY} \
@@ -136,14 +136,14 @@ node {
                                     rancher-infra-tools:latest \
                                     sh -c 'aws s3 cp ${tfvarsPath} s3://${env.S3_BUCKET_NAME}/${s3Path} --region ${env.S3_BUCKET_REGION}'
                             """
-                            
-                            echo "Uploaded terraform.tfvars to s3://${env.S3_BUCKET_NAME}/${s3Path}"
-                        }
-                        
-                        stage('Configure Ansible Variables') {
-                            echo "Writing Ansible variables"
-                            
-                            def ansibleVars = infrastructure.parseAndSubstituteVars(
+
+                echo "Uploaded terraform.tfvars to s3://${env.S3_BUCKET_NAME}/${s3Path}"
+            }
+
+            stage('Configure Ansible Variables') {
+                echo 'Writing Ansible variables'
+
+                def ansibleVars = infrastructure.parseAndSubstituteVars(
                                 content: env.ANSIBLE_VARIABLES,
                                 envVars: [
                                     'RKE2_VERSION': env.RKE2_VERSION,
@@ -154,111 +154,111 @@ node {
                                     'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD ?: ''
                                 ]
                             )
-                            
-                            // Add SSH private key path configuration
-                            def sshKeyPath = "/root/.ssh/${env.AWS_SSH_PEM_KEY_NAME}"
-                            if (!ansibleVars.contains('ssh_private_key_file:')) {
-                                ansibleVars += "\nssh_private_key_file: ${sshKeyPath}"
-                            }
-                            
-                            ansible.writeInventoryVars(
+
+                // Add SSH private key path configuration
+                def sshKeyPath = "/root/.ssh/${env.AWS_SSH_PEM_KEY_NAME}"
+                if (!ansibleVars.contains('ssh_private_key_file:')) {
+                    ansibleVars += "\nssh_private_key_file: ${sshKeyPath}"
+                }
+
+                ansible.writeInventoryVars(
                                 path: "${ansiblePath}/inventory/group_vars/all.yml",
                                 content: ansibleVars
                             )
-                        }
-                        
-                        stage('Setup SSH Keys on Nodes') {
-                            ansible.runPlaybook(
+            }
+
+            stage('Setup SSH Keys on Nodes') {
+                ansible.runPlaybook(
                                 dir: ansiblePath,
                                 inventory: 'inventory/inventory.yml',
                                 playbook: 'playbooks/setup/setup-ssh-keys.yml'
                             )
-                        }
-                        
-                        stage('Deploy RKE2 Cluster') {
-                            ansible.runPlaybook(
+            }
+
+            stage('Deploy RKE2 Cluster') {
+                ansible.runPlaybook(
                                 dir: ansiblePath,
                                 inventory: 'inventory/inventory.yml',
                                 playbook: 'playbooks/deploy/rke2-tarball-playbook.yml'
                             )
-                        }
-                        
-                        stage('Deploy Rancher (Optional)') {
-                            // Check if Rancher deployment is enabled
-                            def deployRancher = env.ANSIBLE_VARIABLES.contains('deploy_rancher: true')
-                            
-                            if (deployRancher) {
-                                echo "Deploying Rancher..."
-                                ansible.runPlaybook(
+            }
+
+            stage('Deploy Rancher (Optional)') {
+                // Check if Rancher deployment is enabled
+                def deployRancher = env.ANSIBLE_VARIABLES.contains('deploy_rancher: true')
+
+                if (deployRancher) {
+                    echo 'Deploying Rancher...'
+                    ansible.runPlaybook(
                                     dir: ansiblePath,
                                     inventory: 'inventory/inventory.yml',
                                     playbook: 'playbooks/deploy/rancher-helm-deploy-playbook.yml'
                                 )
                             } else {
-                                echo "Skipping Rancher deployment (not enabled in ANSIBLE_VARIABLES)"
-                            }
-                        }
-                        
-                        stage('Output Infrastructure Details') {
-                            echo "=== Infrastructure Setup Complete ==="
-                            echo "Workspace Name: ${workspaceName}"
-                            
-                            // Get Tofu outputs
-                            try {
-                                def bastionDns = tofu.getOutputs(
+                    echo 'Skipping Rancher deployment (not enabled in ANSIBLE_VARIABLES)'
+                }
+            }
+
+            stage('Output Infrastructure Details') {
+                echo '=== Infrastructure Setup Complete ==='
+                echo "Workspace Name: ${workspaceName}"
+
+                // Get Tofu outputs
+                try {
+                    def bastionDns = tofu.getOutputs(
                                     dir: tofuModulePath,
                                     output: 'bastion_public_dns'
                                 )
-                                echo "Bastion Host: ${bastionDns}"
+                    echo "Bastion Host: ${bastionDns}"
                             } catch (e) {
-                                echo "Could not retrieve bastion DNS: ${e.message}"
-                            }
-                            
+                    echo "Could not retrieve bastion DNS: ${e.message}"
+                }
+
                             try {
                                 def rancherHostname = tofu.getOutputs(
                                     dir: tofuModulePath,
                                     output: 'external_lb_hostname'
                                 )
                                 echo "Rancher Hostname (External): ${rancherHostname}"
+
+                                // Update build description with actual rancher URL and workspace
+                                currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${workspaceName}"
                             } catch (e) {
                                 echo "Could not retrieve external LB hostname: ${e.message}"
-                            }
-                            
-                            try {
-                                def internalLbHostname = tofu.getOutputs(
+                            }                try {
+                    def internalLbHostname = tofu.getOutputs(
                                     dir: tofuModulePath,
                                     output: 'internal_lb_hostname'
                                 )
-                                echo "Internal LB Hostname: ${internalLbHostname}"
+                    echo "Internal LB Hostname: ${internalLbHostname}"
                             } catch (e) {
-                                echo "Could not retrieve internal LB hostname: ${e.message}"
+                    echo "Could not retrieve internal LB hostname: ${e.message}"
                             }
-                            
-                            echo "Inventory File: ${ansiblePath}/inventory/inventory.yml"
-                            echo "========================================"
-                        }
-                        
+
+                echo "Inventory File: ${ansiblePath}/inventory/inventory.yml"
+                echo '========================================'
+            }
         } catch (err) {
             currentBuild.result = 'FAILURE'
             echo "Build failed: ${err.message}"
-            
+
             // Check if we should destroy on failure
             if (env.DESTROY_ON_FAILURE?.toBoolean() && workspaceName) {
-                echo "DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure..."
-                
+                echo 'DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure...'
+
                 try {
                     stage('Cleanup on Failure') {
                         tofu.selectWorkspace(
                             dir: tofuModulePath,
                             name: workspaceName
                         )
-                        
+
                         tofu.destroy(
                             dir: tofuModulePath,
                             varFile: 'terraform.tfvars',
                             autoApprove: true
                         )
-                        
+
                         tofu.deleteWorkspace(
                             dir: tofuModulePath,
                             name: workspaceName
@@ -268,8 +268,8 @@ node {
                     echo "Cleanup failed: ${cleanupErr.message}"
                 }
             }
-            
+
             throw err
-        }
+                    }
     }
 }
