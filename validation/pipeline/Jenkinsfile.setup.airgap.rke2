@@ -214,18 +214,20 @@ node {
                     echo "Could not retrieve bastion DNS: ${e.message}"
                 }
 
-                            try {
-                                def rancherHostname = tofu.getOutputs(
+                try {
+                    def rancherHostname = tofu.getOutputs(
                                     dir: tofuModulePath,
                                     output: 'external_lb_hostname'
                                 )
-                                echo "Rancher Hostname (External): ${rancherHostname}"
+                    echo "Rancher Hostname (External): ${rancherHostname}"
 
-                                // Update build description with actual rancher URL and workspace
-                                currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${workspaceName}"
+                    // Update build description with actual rancher URL and workspace
+                    currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${workspaceName}"
                             } catch (e) {
-                                echo "Could not retrieve external LB hostname: ${e.message}"
-                            }                try {
+                    echo "Could not retrieve external LB hostname: ${e.message}"
+                }
+
+                try {
                     def internalLbHostname = tofu.getOutputs(
                                     dir: tofuModulePath,
                                     output: 'internal_lb_hostname'
@@ -233,7 +235,7 @@ node {
                     echo "Internal LB Hostname: ${internalLbHostname}"
                             } catch (e) {
                     echo "Could not retrieve internal LB hostname: ${e.message}"
-                            }
+                }
 
                 echo "Inventory File: ${ansiblePath}/inventory/inventory.yml"
                 echo '========================================'
