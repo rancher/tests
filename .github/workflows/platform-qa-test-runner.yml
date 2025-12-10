@@ -93,9 +93,7 @@ jobs:
         id: create-token
         env:
           RANCHER_ADMIN_PASSWORD: ${{ secrets.PQA_RANCHER_ADMIN_PASSWORD }}
-        run: |
-          TOKEN=$(bash .github/scripts/platform-qa-create-rancher-token.sh)
-          echo "RANCHER_ADMIN_TOKEN=$TOKEN" >> $GITHUB_OUTPUT
+        run: bash .github/scripts/platform-qa-create-rancher-token.sh
 
       - name: Get Rancher version
         env:

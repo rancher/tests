@@ -9,24 +9,29 @@ if ! command -v jq &> /dev/null; then
   sudo apt-get install -y jq
 fi
 
-http_code=$(curl -s -k -o response.txt -w "%{http_code}" "https://$RANCHER_HOST/v1-public/login" \
+response=$(curl -s -k "https://$RANCHER_HOST/v3-public/localProviders/local?action=login" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
-  -d "{\"type\": \"localProvider\", \"username\": \"admin\", \"password\": \"$RANCHER_ADMIN_PASSWORD\", \"responseType\": \"json\"}")
+  -d "{\"username\":\"admin\", \"password\":\"$RANCHER_ADMIN_PASSWORD\"}")
 
-response=$(cat response.txt)
-rm -f response.txt
-
-if [[ "$http_code" == "404" ]]; then
-    echo "⚠️ v1-public login API not supported, trying v3-public API..."
-    response=$(curl -s -k "https://$RANCHER_HOST/v3-public/localProviders/local?action=login" \
-      -H "Content-Type: application/json" \
-      -H "Accept: application/json" \
-      -d "{\"username\":\"admin\", \"password\":\"$RANCHER_ADMIN_PASSWORD\"}")
+if echo "$response" | jq empty 2>/dev/null; then
+    token=$(echo "$response" | jq -r '.token // empty')
+else
+    token=""
 fi
 
-token=$(echo "$response" | jq -r '.token')
+if [ -z "$token" ]; then
+    echo "⚠️ v3-public login failed, trying v1-public API..."
+    response=$(curl -s -k "https://$RANCHER_HOST/v1-public/login" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json" \
+      -d "{\"type\": \"localProvider\", \"username\": \"admin\", \"password\": \"$RANCHER_ADMIN_PASSWORD\", \"responseType\": \"json\"}")
+    if echo "$response" | jq empty 2>/dev/null; then
+        token=$(echo "$response" | jq -r '.token // empty')
+    fi
+fi
+
 : "${token:?❌ Failed to get Rancher token. Response: $response}"
 
 echo "::add-mask::$token" >&2
-echo "$token"
+echo "RANCHER_ADMIN_TOKEN=$token" >> "$GITHUB_OUTPUT"
