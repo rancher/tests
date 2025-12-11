@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -30,8 +31,9 @@ var (
 )
 
 const (
-	requestLimit = 100
-	imagesPath   = "/app/images/"
+	requestLimit     = 100
+	descriptionLimit = 10000
+	imagesPath       = "/app/images/"
 )
 
 func main() {
@@ -309,7 +311,13 @@ func createRunDescription(buildUrl string) string {
 		description.WriteString(versions)
 	}
 
-	return description.String()
+	s := description.String()
+
+	if len(s) <= descriptionLimit {
+		return s
+	}
+
+	return s[:descriptionLimit]
 }
 
 // getVersionInformation gets versions and commits id from cluster
@@ -332,9 +340,16 @@ func getVersionInformation() string {
 			continue
 		}
 
+		s := string(data)
+		lines := strings.Split(s, "\n")
+		slices.Sort(lines)
+		compactLines := slices.Compact(lines)
+		s = strings.Join(compactLines, "\n")
+
 		b.WriteString(fmt.Sprintf("Images used within %s", file.Name()))
 		b.WriteString("\n")
-		b.WriteString(string(data))
+		b.WriteString(s)
+		b.WriteString("\n")
 		b.WriteString("\n")
 	}
 
