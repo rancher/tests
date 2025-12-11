@@ -155,7 +155,7 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPGroupMembershipRefresh() {
 		GroupPrincipalName: adminGroupPrincipalID,
 	}
 
-	_, err = authAdmin.WranglerContext.Mgmt.GlobalRoleBinding().Create(adminGlobalRole)
+	adminGRB, err := authAdmin.WranglerContext.Mgmt.GlobalRoleBinding().Create(adminGlobalRole)
 	require.NoError(a.T(), err, "Failed to create admin global role binding")
 
 	err = users.RefreshGroupMembership(authAdmin)
@@ -170,11 +170,17 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPGroupMembershipRefresh() {
 		GroupPrincipalName: standardGroupPrincipalID,
 	}
 
-	_, err = authAdmin.WranglerContext.Mgmt.GlobalRoleBinding().Create(standardGlobalRole)
+	standardGRB, err := authAdmin.WranglerContext.Mgmt.GlobalRoleBinding().Create(standardGlobalRole)
 	require.NoError(a.T(), err, "Failed to create standard global role binding")
 
 	err = users.RefreshGroupMembership(authAdmin)
 	require.NoError(a.T(), err, "Failed to refresh group membership")
+
+	err = authAdmin.WranglerContext.Mgmt.GlobalRoleBinding().Delete(adminGRB.Name, &metav1.DeleteOptions{})
+	require.NoError(a.T(), err, "Failed to delete admin GRB: %v", adminGRB.Name)
+
+	err = authAdmin.WranglerContext.Mgmt.GlobalRoleBinding().Delete(standardGRB.Name, &metav1.DeleteOptions{})
+	require.NoError(a.T(), err, "Failed to delete standard GRB: %v", standardGRB.Name)
 }
 
 func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPNestedGroupClusterAccess() {
@@ -188,8 +194,8 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPNestedGroupClusterAccess() {
 		a.client.Auth.OLDAP.Config.Users.SearchBase,
 		a.client.Auth.OLDAP.Config.Groups.SearchBase,
 	)
-	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterOwner.String())
-	require.NoError(a.T(), err, "Failed to create cluster role binding")
+	crtb, err := rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterOwner.String())
+	require.NoError(a.T(), err, "Failed to create cluster role template binding")
 
 	for _, userInfo := range a.authConfig.DoubleNestedUsers {
 		user := &v3.User{
@@ -205,6 +211,9 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPNestedGroupClusterAccess() {
 	foundCRTB, err := rbacapi.GetClusterRoleTemplateBindingsForGroup(a.client, doubleNestedGroupPrincipalID, a.cluster.ID)
 	require.NoError(a.T(), err, "Failed to get group CRTB")
 	require.NotNil(a.T(), foundCRTB, "Cluster role binding should exist for group")
+
+	err = authAdmin.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Delete(crtb.Namespace, crtb.Name, &metav1.DeleteOptions{})
+	require.NoError(a.T(), err, "Failed to delete CRTB: %s/%s", crtb.Namespace, crtb.Name)
 }
 
 func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPNonMemberClusterAccessDenied() {
@@ -214,7 +223,7 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPNonMemberClusterAccessDenied() {
 
 	doubleNestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.OpenLdap, a.authConfig.DoubleNestedGroup, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
 	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterOwner.String())
-	require.NoError(a.T(), err, "Failed to create cluster role binding")
+	require.NoError(a.T(), err, "Failed to create group cluster role template binding")
 
 	for _, userInfo := range a.authConfig.Users {
 		user := &v3.User{
@@ -262,6 +271,9 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPNestedGroupProjectAccess() {
 		_, err = userClient.WranglerContext.Mgmt.Project().Get(projectResp.Namespace, projectResp.Name, metav1.GetOptions{})
 		require.NoError(a.T(), err, "User [%v] should be able to get project %s", userInfo.Username, projectResp.Name)
 	}
+
+	err = authAdmin.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Delete(groupPRTBResp.Namespace, groupPRTBResp.Name, &metav1.DeleteOptions{})
+	require.NoError(a.T(), err, "Failed to delete PRTB: %s/%s", groupPRTBResp.Namespace, groupPRTBResp.Name)
 }
 
 func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRestrictedModeBindings() {
@@ -271,7 +283,7 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRestrictedModeBindings() {
 
 	groupPrincipalID := authactions.GetGroupPrincipalID(authactions.OpenLdap, a.authConfig.Group, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
 	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, groupPrincipalID, rbac.ClusterMember.String())
-	require.NoError(a.T(), err, "Failed to create cluster role binding")
+	require.NoError(a.T(), err, "Failed to create cluster role template binding")
 
 	projectResp, _, err := projects.CreateProjectAndNamespaceUsingWrangler(authAdmin, a.cluster.ID)
 	require.NoError(a.T(), err, "Failed to create project")
@@ -311,7 +323,7 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPAllowClusterAndProjectMembersAcc
 
 	doubleNestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.OpenLdap, a.authConfig.DoubleNestedGroup, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
 	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterMember.String())
-	require.NoError(a.T(), err, "Failed to create cluster role binding")
+	require.NoError(a.T(), err, "Failed to create group cluster role template binding")
 
 	projectResp, _, err := projects.CreateProjectAndNamespaceUsingWrangler(authAdmin, a.cluster.ID)
 	require.NoError(a.T(), err, "Failed to create project")
@@ -374,7 +386,70 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRestrictedAccessModeAuthorizedUs
 	require.NoError(a.T(), err, "Failed to rollback access mode")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPUnauthorizedLoginDenied() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRequiredModeNestedGroupAccess() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+	require.NoError(a.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	nestedGroupPrincipalID := authactions.GetGroupPrincipalID(
+		authactions.OpenLdap,
+		a.authConfig.NestedGroup,
+		a.client.Auth.OLDAP.Config.Users.SearchBase,
+		a.client.Auth.OLDAP.Config.Groups.SearchBase,
+	)
+
+	crtb, err := rbacapi.CreateGroupClusterRoleTemplateBinding(
+		authAdmin,
+		a.cluster.ID,
+		nestedGroupPrincipalID,
+		rbac.ClusterMember.String(),
+	)
+	require.NoError(a.T(), err, "Failed to create cluster role template binding")
+
+	principalIDs := []string{nestedGroupPrincipalID}
+
+	nestedUsers := slices.Concat(a.authConfig.NestedUsers, a.authConfig.DoubleNestedUsers)
+	for _, user := range nestedUsers {
+		userPrincipalID := authactions.GetUserPrincipalID(
+			authactions.ActiveDirectory,
+			user.Username,
+			a.client.Auth.ActiveDirectory.Config.Users.SearchBase,
+			a.client.Auth.ActiveDirectory.Config.Groups.SearchBase,
+		)
+		principalIDs = append(principalIDs, userPrincipalID)
+	}
+
+	newAuthConfig, err := authactions.UpdateAccessMode(
+		a.client,
+		authactions.OpenLdap,
+		authactions.AccessModeRequired,
+		principalIDs,
+	)
+	require.NoError(a.T(), err, "Failed to update access mode")
+	require.Equal(a.T(), authactions.AccessModeRequired, newAuthConfig.AccessMode, "Access mode should be required")
+
+	err = authactions.VerifyUserLogins(
+		authAdmin,
+		authactions.OpenLdap,
+		nestedUsers,
+		"required access mode with nested groups",
+		true,
+	)
+	require.NoError(a.T(), err, "Nested group members should be able to login")
+
+	_, err = authactions.UpdateAccessMode(
+		a.client,
+		authactions.OpenLdap,
+		authactions.AccessModeUnrestricted,
+		nil,
+	)
+	require.NoError(a.T(), err, "Failed to rollback access mode")
+
+	err = a.client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Delete(crtb.Namespace, crtb.Name, &metav1.DeleteOptions{})
+	require.NoError(a.T(), err, "Failed to delete CRTB: %s/%s", crtb.Namespace, crtb.Name)
+}
+
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRequiredModeUnauthorizedLoginDenied() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -393,7 +468,7 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPUnauthorizedLoginDenied() {
 	require.NoError(a.T(), err, "Failed to update access mode")
 	require.Equal(a.T(), authactions.AccessModeRequired, newAuthConfig.AccessMode, "Access mode should be required")
 
-	unauthorizedUsers := slices.Concat(a.authConfig.NestedUsers, a.authConfig.DoubleNestedUsers)
+	unauthorizedUsers := a.authConfig.TripleNestedUsers
 	err = authactions.VerifyUserLogins(authAdmin, authactions.OpenLdap, unauthorizedUsers, "required access mode", false)
 	require.NoError(a.T(), err, "Unauthorized users should NOT be able to login")
 

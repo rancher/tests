@@ -44,6 +44,8 @@ type AuthConfig struct {
 	NestedUsers       []User `yaml:"nestedUsers"`
 	DoubleNestedGroup string `yaml:"doubleNestedGroup"`
 	DoubleNestedUsers []User `yaml:"doubleNestedUsers"`
+	TripleNestedGroup string `yaml:"tripleNestedGroup"`
+	TripleNestedUsers []User `yaml:"tripleNestedUsers"`
 }
 
 // SetupAuthenticatedSession enables the auth provider, logs in as the admin user, and returns a new session and client
