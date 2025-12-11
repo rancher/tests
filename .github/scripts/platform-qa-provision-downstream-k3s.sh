@@ -87,7 +87,7 @@ instanceType: ${AWS_INSTANCE_TYPE}
 rootSize: "${AWS_ROOT_SIZE}"
 vpcId: ${AWS_VPC_ID}
 subnetId: ${AWS_SUBNET_ID}
-securityGroup: ${AWS_SECURITY_GROUP_NAMES} 
+securityGroup: [${AWS_SECURITY_GROUP_NAMES}]
 EOF
 
 kubectl --kubeconfig "$RANCHER_KUBECONFIG" apply -f "$MACHINECONFIG_FILE"

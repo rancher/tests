@@ -81,7 +81,7 @@ awsMachineConfigs:
     zone: "${AWS_ZONE_LETTER}"
     retries: "5"
     rootSize: "${AWS_ROOT_SIZE}"
-    securityGroup: "${AWS_SECURITY_GROUP_NAMES}"
+    securityGroup: [${AWS_SECURITY_GROUP_NAMES}]
 
 awsEC2Configs:
   region: "${AWS_REGION}"
@@ -91,7 +91,7 @@ awsEC2Configs:
     - instanceType: "${AWS_INSTANCE_TYPE}"
       awsRegionAZ: "${AWS_REGION}${AWS_ZONE_LETTER}"
       awsAMI: "${AWS_AMI}"
-      awsSecurityGroups: "${AWS_SECURITY_GROUPS}"
+      awsSecurityGroups: [${AWS_SECURITY_GROUPS}]
       awsSubnetID: "${AWS_SUBNET_ID}"
       awsSSHKeyName: "${SSH_PRIVATE_KEY_NAME}.pem"
       awsCICDInstanceTag: "platform-qa"
