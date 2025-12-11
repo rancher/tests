@@ -3,23 +3,13 @@ package kubeconfigs
 import (
 	"context"
 	"fmt"
-	"os"
 
 	extapi "github.com/rancher/rancher/pkg/apis/ext.cattle.io/v1"
-	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
+
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/defaults"
-	"github.com/rancher/shepherd/pkg/config"
-	"github.com/rancher/shepherd/pkg/config/operations"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	"github.com/rancher/tests/actions/clusters"
-	configDefaults "github.com/rancher/tests/actions/config/defaults"
-	"github.com/rancher/tests/actions/machinepools"
-	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -139,43 +129,43 @@ func GetBackingTokensForKubeconfigName(client *rancher.Client, kubeconfigName st
 }
 
 // CreateDownstreamCluster creates a ACE enabled or disabled downstream cluster
-func CreateDownstreamCluster(client *rancher.Client, isACE bool) (*v1.SteveAPIObject, *clusters.ClusterConfig, error) {
-	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
-	cattleConfig, err := configDefaults.SetK8sDefault(client, configDefaults.K3S, cattleConfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to set k8s default to k3s: %w", err)
-	}
+// func CreateDownstreamCluster(client *rancher.Client, isACE bool) (*v1.SteveAPIObject, *clusters.ClusterConfig, error) {
+// 	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+// 	cattleConfig, err := configDefaults.SetK8sDefault(client, configDefaults.K3S, cattleConfig)
+// 	if err != nil {
+// 		return nil, nil, fmt.Errorf("failed to set k8s default to k3s: %w", err)
+// 	}
 
-	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
+// 	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
 
-	clusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(configDefaults.ClusterConfigKey, cattleConfig, clusterConfig)
+// 	clusterConfig := new(clusters.ClusterConfig)
+// 	operations.LoadObjectFromMap(configDefaults.ClusterConfigKey, cattleConfig, clusterConfig)
 
-	if isACE {
-		networking := provisioninginput.Networking{
-			LocalClusterAuthEndpoint: &rkev1.LocalClusterAuthEndpoint{
-				Enabled: true,
-			},
-		}
-		clusterConfig.Networking = &networking
-	}
+// 	if isACE {
+// 		networking := provisioninginput.Networking{
+// 			LocalClusterAuthEndpoint: &rkev1.LocalClusterAuthEndpoint{
+// 				Enabled: true,
+// 			},
+// 		}
+// 		clusterConfig.Networking = &networking
+// 	}
 
-	clusterConfig.MachinePools = nodeRolesAll
+// 	clusterConfig.MachinePools = nodeRolesAll
 
-	provider := provisioning.CreateProvider(clusterConfig.Provider)
-	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
-	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+// 	provider := provisioning.CreateProvider(clusterConfig.Provider)
+// 	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+// 	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
-	clusterObject, err := provisioning.CreateProvisioningCluster(client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
-	if err != nil {
-		if isACE {
-			return nil, nil, fmt.Errorf("failed to create ACE enabled cluster: %w", err)
-		}
-		return nil, nil, fmt.Errorf("failed to create non-ACE cluster: %w", err)
-	}
+// 	clusterObject, err := provisioning.CreateProvisioningCluster(client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+// 	if err != nil {
+// 		if isACE {
+// 			return nil, nil, fmt.Errorf("failed to create ACE enabled cluster: %w", err)
+// 		}
+// 		return nil, nil, fmt.Errorf("failed to create non-ACE cluster: %w", err)
+// 	}
 
-	return clusterObject, clusterConfig, nil
-}
+// 	return clusterObject, clusterConfig, nil
+// }
 
 // GetMapClusterNameToID maps cluster names to their IDs from expectedClusterIDs.
 func GetMapClusterNameToID(client *rancher.Client, expectedClusterIDs []string) (map[string]string, string, error) {

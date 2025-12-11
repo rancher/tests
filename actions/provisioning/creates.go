@@ -3,6 +3,7 @@ package provisioning
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 
 	apiv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
+	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
@@ -22,6 +24,8 @@ import (
 	"github.com/rancher/shepherd/extensions/cloudcredentials/azure"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/google"
 	shepherdclusters "github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/extensions/clusters/aks"
 	"github.com/rancher/shepherd/extensions/clusters/eks"
 	"github.com/rancher/shepherd/extensions/clusters/gke"
@@ -36,6 +40,7 @@ import (
 	"github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/rancher/tests/actions/cloudprovider"
+	configDefaults "github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/clusters"
 	k3sHardening "github.com/rancher/tests/actions/hardening/k3s"
 	rke1Hardening "github.com/rancher/tests/actions/hardening/rke1"
@@ -415,6 +420,45 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 	createdCluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + clusterName)
 
 	return createdCluster, err
+}
+
+// CreateDownstreamClusterWithACEOption creates an ACE enabled or disabled downstream cluster
+func CreateDownstreamClusterWithACEOption(client *rancher.Client, isACE bool) (clusterObject *v1.SteveAPIObject, clusterConfig *clusters.ClusterConfig, err error) {
+	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	cattleConfig, err = configDefaults.SetK8sDefault(client, configDefaults.K3S, cattleConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to set k8s default to k3s: %w", err)
+	}
+
+	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
+	clusterConfig = new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(configDefaults.ClusterConfigKey, cattleConfig, clusterConfig)
+
+	if isACE {
+		networking := provisioninginput.Networking{
+			LocalClusterAuthEndpoint: &rkev1.LocalClusterAuthEndpoint{
+				Enabled: true,
+			},
+		}
+		clusterConfig.Networking = &networking
+	}
+
+	clusterConfig.MachinePools = nodeRolesAll
+
+	
+	provider := CreateProvider(clusterConfig.Provider)
+	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+
+	clusterObject, err = CreateProvisioningCluster(client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+	if err != nil {
+		if isACE {
+			return nil, nil, fmt.Errorf("failed to create ACE enabled cluster: %w", err)
+		}
+		return nil, nil, fmt.Errorf("failed to create non-ACE cluster: %w", err)
+	}
+
+	return clusterObject, clusterConfig, nil
 }
 
 // CreateProvisioningRKE1Cluster provisions an rke1 cluster, then runs verify checks
