@@ -1,0 +1,10 @@
+#!/groovy
+node('neuvector') {
+    stage('Execution') {
+   withCredentials([string(credentialsId: 'NEUVECTOR_PASSWORD', variable: 'NEUVECTOR_PASSWORD'), string(credentialsId: 'NEUVECTOR_ALLINONE_SERVER_01', variable: 'NEUVECTOR_ALLINONE_SERVER_01')]) {
+    sh '''
+      sshpass -p "$NEUVECTOR_PASSWORD" ssh neuvector@$NEUVECTOR_ALLINONE_SERVER_01 "/mnt/nfs/share/QA/automation/allinone_script.sh $NV_RELEASE_TAG $_DIR_ $JOB_NAME $BUILD_NUMBER"
+    '''
+  }
+ }
+}

@@ -23,7 +23,9 @@ import (
 	rbac "github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/settings"
 	"github.com/rancher/tests/actions/users"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -99,8 +101,13 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementCre
 	log.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
 	provisioning.VerifyClusterReady(ra.T(), ra.client, clusterObject)
 
+	logrus.Infof("Verifying cluster deployments (%s)", clusterObject.Name)
+	err = deployment.VerifyClusterDeployments(ra.client, clusterObject)
+	require.NoError(ra.T(), err)
+
 	log.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-	pods.VerifyClusterPods(ra.T(), ra.client, clusterObject)
+	err = pods.VerifyClusterPods(ra.client, clusterObject)
+	require.NoError(ra.T(), err)
 
 	log.Infof("Verifying cluster features (%s)", clusterObject.Name)
 	provisioning.VerifyDynamicCluster(ra.T(), ra.client, clusterObject)

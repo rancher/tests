@@ -11,6 +11,7 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/charts"
 	extensionClusters "github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	shepworkloads "github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
@@ -268,7 +269,7 @@ func (p *PortTestSuite) TestClusterIPScaleAndUpgrade() {
 	deploymentTemplate := shepworkloads.NewDeploymentTemplate(deploymentName, namespace.Name, testContainerPodTemplate, true, nil)
 	replicas := int32(2)
 	deploymentTemplate.Spec.Replicas = &replicas
-	createdDeployment, err := steveClient.SteveType(workloads.DeploymentSteveType).Create(deploymentTemplate)
+	createdDeployment, err := steveClient.SteveType(stevetypes.Deployment).Create(deploymentTemplate)
 	require.NoError(p.T(), err)
 	assert.Equal(p.T(), createdDeployment.Name, deploymentName)
 
@@ -375,7 +376,7 @@ func (p *PortTestSuite) TestHostPortScaleAndUpgrade() {
 	deploymentTemplate := shepworkloads.NewDeploymentTemplate(deploymentName, namespace.Name, testContainerPodTemplate, true, nil)
 	replicas := int32(2)
 	deploymentTemplate.Spec.Replicas = &replicas
-	createdDeployment, err := steveClient.SteveType(workloads.DeploymentSteveType).Create(deploymentTemplate)
+	createdDeployment, err := steveClient.SteveType(stevetypes.Deployment).Create(deploymentTemplate)
 	require.NoError(p.T(), err)
 	assert.Equal(p.T(), createdDeployment.Name, deploymentName)
 
@@ -448,7 +449,7 @@ func (p *PortTestSuite) TestNodePortScaleAndUpgrade() {
 	deploymentTemplate := shepworkloads.NewDeploymentTemplate(deploymentName, namespace.Name, testContainerPodTemplate, true, nil)
 	replicas := int32(2)
 	deploymentTemplate.Spec.Replicas = &replicas
-	createdDeployment, err := steveClient.SteveType(workloads.DeploymentSteveType).Create(deploymentTemplate)
+	createdDeployment, err := steveClient.SteveType(stevetypes.Deployment).Create(deploymentTemplate)
 	require.NoError(p.T(), err)
 	assert.Equal(p.T(), createdDeployment.Name, deploymentName)
 
@@ -543,7 +544,7 @@ func (p *PortTestSuite) TestLoadBalanceScaleAndUpgrade() {
 	deploymentTemplate := shepworkloads.NewDeploymentTemplate(deploymentName, namespace.Name, testContainerPodTemplate, true, nil)
 	replicas := int32(2)
 	deploymentTemplate.Spec.Replicas = &replicas
-	createdDeployment, err := steveClient.SteveType(workloads.DeploymentSteveType).Create(deploymentTemplate)
+	createdDeployment, err := steveClient.SteveType(stevetypes.Deployment).Create(deploymentTemplate)
 	require.NoError(p.T(), err)
 	assert.Equal(p.T(), createdDeployment.Name, deploymentName)
 

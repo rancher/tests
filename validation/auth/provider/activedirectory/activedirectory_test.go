@@ -16,7 +16,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
 	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
-	krbac "github.com/rancher/tests/actions/kubeapi/rbac"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/sirupsen/logrus"
@@ -156,7 +156,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryGroupMembershipRef
 		GroupPrincipalName: adminGroupPrincipalID,
 	}
 
-	_, err = krbac.CreateGlobalRoleBinding(authAdmin, adminGlobalRole)
+	_, err = authAdmin.WranglerContext.Mgmt.GlobalRoleBinding().Create(adminGlobalRole)
 	require.NoError(a.T(), err, "Failed to create admin global role binding")
 
 	err = users.RefreshGroupMembership(authAdmin)
@@ -171,7 +171,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryGroupMembershipRef
 		GroupPrincipalName: standardGroupPrincipalID,
 	}
 
-	_, err = krbac.CreateGlobalRoleBinding(authAdmin, standardGlobalRole)
+	_, err = authAdmin.WranglerContext.Mgmt.GlobalRoleBinding().Create(standardGlobalRole)
 	require.NoError(a.T(), err, "Failed to create standard global role binding")
 
 	err = users.RefreshGroupMembership(authAdmin)
@@ -189,7 +189,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryNestedGroupCluster
 		a.client.Auth.ActiveDirectory.Config.Users.SearchBase,
 		a.client.Auth.ActiveDirectory.Config.Groups.SearchBase,
 	)
-	_, err = rbac.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterOwner.String())
+	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterOwner.String())
 	require.NoError(a.T(), err, "Failed to create cluster role binding")
 
 	for _, userInfo := range a.authConfig.DoubleNestedUsers {
@@ -203,7 +203,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryNestedGroupCluster
 		rbac.VerifyUserCanListCluster(a.T(), a.client, userClient, a.cluster.ID, rbac.ClusterOwner)
 	}
 
-	foundCRTB, err := rbac.GetClusterRoleTemplateBindingsForGroup(a.client, doubleNestedGroupPrincipalID, a.cluster.ID)
+	foundCRTB, err := rbacapi.GetClusterRoleTemplateBindingsForGroup(a.client, doubleNestedGroupPrincipalID, a.cluster.ID)
 	require.NoError(a.T(), err, "Failed to get group CRTB")
 	require.NotNil(a.T(), foundCRTB, "Cluster role binding should exist for group")
 }
@@ -214,7 +214,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryNonMemberClusterAc
 	defer subSession.Cleanup()
 
 	doubleNestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.DoubleNestedGroup, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
-	_, err = rbac.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterOwner.String())
+	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterOwner.String())
 	require.NoError(a.T(), err, "Failed to create cluster role binding")
 
 	for _, userInfo := range a.authConfig.Users {
@@ -248,7 +248,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryNestedGroupProject
 
 	projectName := fmt.Sprintf("%s:%s", projectResp.Namespace, projectResp.Name)
 
-	groupPRTBResp, err := rbac.CreateGroupProjectRoleTemplateBinding(authAdmin, projectName, prtbNamespace, nestedGroupPrincipalID, rbac.ProjectOwner.String())
+	groupPRTBResp, err := rbacapi.CreateGroupProjectRoleTemplateBinding(authAdmin, projectName, prtbNamespace, nestedGroupPrincipalID, rbac.ProjectOwner.String())
 	require.NoError(a.T(), err, "Failed to create PRTB")
 	require.NotNil(a.T(), groupPRTBResp, "PRTB should be created")
 
@@ -274,7 +274,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryRestrictedModeBind
 	defer subSession.Cleanup()
 
 	groupPrincipalID := authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.Group, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
-	_, err = rbac.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, groupPrincipalID, rbac.ClusterMember.String())
+	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, groupPrincipalID, rbac.ClusterMember.String())
 	require.NoError(a.T(), err, "Failed to create cluster role binding")
 
 	projectResp, _, err := projects.CreateProjectAndNamespaceUsingWrangler(authAdmin, a.cluster.ID)
@@ -303,7 +303,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryRestrictedModeBind
 			RoleTemplateName:  rbac.ProjectOwner.String(),
 		}
 
-		userPRTBResp, err := krbac.CreateProjectRoleTemplateBinding(authAdmin, userPRTB)
+		userPRTBResp, err := authAdmin.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Create(userPRTB)
 		require.NoError(a.T(), err, "Failed to create PRTB for user [%v]", userInfo.Username)
 		require.NotNil(a.T(), userPRTBResp, "PRTB should be created for user [%v]", userInfo.Username)
 	}
@@ -315,7 +315,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryAllowClusterAndPro
 	defer subSession.Cleanup()
 
 	doubleNestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.DoubleNestedGroup, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
-	_, err = rbac.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterMember.String())
+	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterMember.String())
 	require.NoError(a.T(), err, "Failed to create cluster role binding")
 
 	projectResp, _, err := projects.CreateProjectAndNamespaceUsingWrangler(authAdmin, a.cluster.ID)
@@ -329,7 +329,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryAllowClusterAndPro
 
 	nestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.NestedGroup, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
 
-	groupPRTBResp, err := rbac.CreateGroupProjectRoleTemplateBinding(authAdmin, projectName, prtbNamespace, nestedGroupPrincipalID, rbac.ProjectOwner.String())
+	groupPRTBResp, err := rbacapi.CreateGroupProjectRoleTemplateBinding(authAdmin, projectName, prtbNamespace, nestedGroupPrincipalID, rbac.ProjectOwner.String())
 	require.NoError(a.T(), err, "Failed to create PRTB")
 	require.NotNil(a.T(), groupPRTBResp, "PRTB should be created")
 
@@ -378,7 +378,67 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryRestrictedAccessMo
 	require.NoError(a.T(), err, "Failed to rollback access mode")
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryUnauthorizedLoginDenied() {
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryRequiredModeNestedGroupAccess() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
+	require.NoError(a.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	nestedGroupPrincipalID := authactions.GetGroupPrincipalID(
+		authactions.ActiveDirectory,
+		a.authConfig.NestedGroup,
+		a.client.Auth.ActiveDirectory.Config.Users.SearchBase,
+		a.client.Auth.ActiveDirectory.Config.Groups.SearchBase,
+	)
+
+	_, err = rbac.CreateGroupClusterRoleTemplateBinding(
+		authAdmin,
+		a.cluster.ID,
+		nestedGroupPrincipalID,
+		rbac.ClusterMember.String(),
+	)
+	require.NoError(a.T(), err, "Failed to create cluster role binding")
+
+	principalIDs := []string{nestedGroupPrincipalID}
+
+	nestedUsers := slices.Concat(a.authConfig.NestedUsers, a.authConfig.DoubleNestedUsers)
+	for _, user := range nestedUsers {
+		userPrincipalID := authactions.GetUserPrincipalID(
+			authactions.ActiveDirectory,
+			user.Username,
+			a.client.Auth.ActiveDirectory.Config.Users.SearchBase,
+			a.client.Auth.ActiveDirectory.Config.Groups.SearchBase,
+		)
+		principalIDs = append(principalIDs, userPrincipalID)
+	}
+
+	newAuthConfig, err := authactions.UpdateAccessMode(
+		a.client,
+		authactions.ActiveDirectory,
+		authactions.AccessModeRequired,
+		principalIDs,
+	)
+	require.NoError(a.T(), err, "Failed to update access mode")
+	require.Equal(a.T(), authactions.AccessModeRequired, newAuthConfig.AccessMode, "Access mode should be required")
+
+	err = authactions.VerifyUserLogins(
+		authAdmin,
+		authactions.ActiveDirectory,
+		nestedUsers,
+		"required access mode with nested groups",
+		true,
+	)
+	require.NoError(a.T(), err, "Nested group members should be able to login")
+
+	_, err = authactions.UpdateAccessMode(
+		a.client,
+		authactions.ActiveDirectory,
+		authactions.AccessModeUnrestricted,
+		nil,
+	)
+	require.NoError(a.T(), err, "Failed to rollback access mode")
+}
+
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryRequiredModeUnauthorizedLoginDenied() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -397,7 +457,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryUnauthorizedLoginD
 	require.NoError(a.T(), err, "Failed to update access mode")
 	require.Equal(a.T(), authactions.AccessModeRequired, newAuthConfig.AccessMode, "Access mode should be required")
 
-	unauthorizedUsers := slices.Concat(a.authConfig.NestedUsers, a.authConfig.DoubleNestedUsers)
+	unauthorizedUsers := a.authConfig.TripleNestedUsers
 	err = authactions.VerifyUserLogins(authAdmin, authactions.ActiveDirectory, unauthorizedUsers, "required access mode", false)
 	require.NoError(a.T(), err, "Unauthorized users should NOT be able to login")
 

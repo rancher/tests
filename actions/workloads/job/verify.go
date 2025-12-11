@@ -1,23 +1,45 @@
 package job
 
 import (
+	"context"
+	"time"
+
+	"github.com/rancher/rancher/pkg/api/scheme"
 	"github.com/rancher/shepherd/clients/rancher"
-	projects "github.com/rancher/tests/actions/projects"
-	"github.com/rancher/tests/actions/workloads/pods"
+	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/tests/actions/kubeapi/workloads/jobs"
+	batchv1 "k8s.io/api/batch/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
-func VerifyCreateJob(client *rancher.Client, clusterID string) error {
-	_, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(client, clusterID)
+// VerifyJob verifies that a job is active
+func VerifyJob(client *rancher.Client, clusterID, namespace, jobName string) error {
+	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	podTemplate := pods.CreateContainerAndPodTemplate()
+	jobResource := dynamicClient.Resource(jobs.JobGroupVersionResource).Namespace(namespace)
 
-	_, err = CreateJob(client, clusterID, namespace.Name, podTemplate, true)
-	if err != nil {
-		return err
-	}
+	err = kwait.PollUntilContextTimeout(context.TODO(), 1*time.Second, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		unstructuredResp, err := jobResource.Get(context.TODO(), jobName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
 
-	return nil
+		job := &batchv1.Job{}
+		err = scheme.Scheme.Convert(unstructuredResp, job, unstructuredResp.GroupVersionKind())
+		if err != nil {
+			return false, err
+		}
+
+		if job.Status.Succeeded == 1 {
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	return err
 }

@@ -67,11 +67,11 @@ func (d *DeleteDualstackClusterTestSuite) SetupSuite() {
 	machineConfigSpec := provider.LoadMachineConfigFunc(d.cattleConfig)
 
 	logrus.Info("Provisioning RKE2 cluster")
-	d.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, true)
+	d.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(d.T(), err)
 
 	logrus.Info("Provisioning K3S cluster")
-	d.k3sCluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, true)
+	d.k3sCluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(d.T(), err)
 }
 

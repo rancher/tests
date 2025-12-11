@@ -229,5 +229,5 @@ func updateNamespaceWithNewProject(client *rancher.Client, clusterName string, r
 		return err
 	}
 
-	return projects.WaitForProjectIDUpdate(client, clusterName, hardenedProjectName, hardenedNS.Name)
+	return namespaces.WaitForProjectIDUpdate(client, clusterName, hardenedProjectName, hardenedNS.Name)
 }

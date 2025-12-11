@@ -21,6 +21,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/scalinginput"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/validation/nodescaling"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
@@ -74,18 +75,15 @@ func (s *NodeScalingDualstackTestSuite) SetupSuite() {
 	provider := provisioning.CreateProvider(s.clusterConfig.Provider)
 	machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
 
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, s.cattleConfig, awsEC2Configs)
-
 	s.scalingConfig = new(scalinginput.Config)
 	config.LoadConfig(scalinginput.ConfigurationFileKey, s.scalingConfig)
 
 	logrus.Info("Provisioning RKE2 cluster")
-	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *s.clusterConfig, machineConfigSpec, awsEC2Configs, true, true)
+	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *s.clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(s.T(), err)
 
 	logrus.Info("Provisioning K3S cluster")
-	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *s.clusterConfig, machineConfigSpec, awsEC2Configs, true, true)
+	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *s.clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(s.T(), err)
 }
 
@@ -131,8 +129,13 @@ func (s *NodeScalingDualstackTestSuite) TestScalingDualstackNodePools() {
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(s.T(), s.client, cluster)
 
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(s.client, cluster)
+			require.NoError(s.T(), err)
+
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			pods.VerifyClusterPods(s.T(), s.client, cluster)
+			err = pods.VerifyClusterPods(s.client, cluster)
+			require.NoError(s.T(), err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(s.client, s.cattleConfig)

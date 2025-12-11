@@ -13,9 +13,9 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/users"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	namespacesapi "github.com/rancher/tests/actions/kubeapi/namespaces"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/namespaces"
 	log "github.com/sirupsen/logrus"
@@ -36,7 +36,7 @@ func VerifyGlobalRoleBindingsForUser(t *testing.T, user *management.User, adminC
 
 // VerifyRoleBindingsForUser validates that the corresponding role bindings are created for the user
 func VerifyRoleBindingsForUser(t *testing.T, user *management.User, adminClient *rancher.Client, clusterID string, role Role, expectedCount int) {
-	rblist, err := rbacapi.ListRoleBindings(adminClient, LocalCluster, clusterID, metav1.ListOptions{})
+	rblist, err := rbacapi.ListRoleBindings(adminClient, clusterapi.LocalCluster, clusterID, metav1.ListOptions{})
 	require.NoError(t, err)
 	userID := user.Resource.ID
 	userRoleBindings := []string{}
@@ -99,8 +99,7 @@ func VerifyUserCanGetProject(t *testing.T, client, standardClient *rancher.Clien
 
 // VerifyUserCanCreateProjects validates a user with the required cluster permissions are able/not able to create projects in the downstream cluster
 func VerifyUserCanCreateProjects(t *testing.T, client, standardClient *rancher.Client, clusterID string, role Role) {
-	projectTemplate := projectsapi.NewProjectTemplate(clusterID)
-	memberProject, err := standardClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
+	memberProject, err := projectapi.CreateProject(standardClient, clusterID)
 	switch role {
 	case ClusterOwner, ClusterMember:
 		require.NoError(t, err)
@@ -116,14 +115,12 @@ func VerifyUserCanCreateNamespace(t *testing.T, client, standardClient *rancher.
 	standardClient, err := standardClient.ReLogin()
 	require.NoError(t, err)
 
-	namespaceName := namegen.AppendRandomString("testns-")
-	createdNamespace, checkErr := namespacesapi.CreateNamespace(standardClient, clusterID, project.Name, namespaceName, "", map[string]string{}, map[string]string{})
+	createdNamespace, checkErr := namespaceapi.CreateNamespaceUsingWrangler(standardClient, clusterID, project.Name, nil)
 
 	switch role {
 	case ClusterOwner, ProjectOwner, ProjectMember:
 		require.NoError(t, checkErr)
 		log.Info("Created a namespace as role ", role, createdNamespace.Name)
-		assert.Equal(t, namespaceName, createdNamespace.Name)
 
 		namespaceStatus := &coreV1.NamespaceStatus{}
 		err = v1.ConvertToK8sType(createdNamespace.Status, namespaceStatus)
@@ -177,8 +174,7 @@ func VerifyUserCanDeleteNamespace(t *testing.T, client, standardClient *rancher.
 	steveStandardClient, err := standardClient.Steve.ProxyDownstream(clusterID)
 	require.NoError(t, err)
 
-	namespaceName := namegen.AppendRandomString("testns-")
-	adminNamespace, err := namespacesapi.CreateNamespace(client, clusterID, project.Name, namespaceName+"-admin", "", map[string]string{}, map[string]string{})
+	adminNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, clusterID, project.Name, nil)
 	require.NoError(t, err)
 
 	namespaceID, err := steveAdminClient.SteveType(namespaces.NamespaceSteveType).ByID(adminNamespace.Name)
@@ -199,7 +195,7 @@ func VerifyUserCanAddClusterRoles(t *testing.T, client, memberClient *rancher.Cl
 	additionalClusterUser, err := users.CreateUserWithRole(client, users.UserConfig(), StandardUser.String())
 	require.NoError(t, err)
 
-	_, errUserRole := CreateClusterRoleTemplateBinding(memberClient, cluster.ID, additionalClusterUser, ClusterOwner.String())
+	_, errUserRole := rbacapi.CreateClusterRoleTemplateBinding(memberClient, cluster.ID, additionalClusterUser, ClusterOwner.String())
 	switch role {
 	case ProjectOwner, ProjectMember:
 		require.Error(t, errUserRole)
@@ -210,7 +206,7 @@ func VerifyUserCanAddClusterRoles(t *testing.T, client, memberClient *rancher.Cl
 // VerifyUserCanAddProjectRoles validates a user with the required cluster permissions are able/not able to add other users in a project on the downstream cluster
 func VerifyUserCanAddProjectRoles(t *testing.T, client *rancher.Client, project *v3.Project, additionalUser *management.User, projectRole, clusterID string, role Role) {
 
-	_, errUserRole := CreateProjectRoleTemplateBinding(client, additionalUser, project, projectRole)
+	_, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(client, additionalUser, project, projectRole)
 	switch role {
 	case ProjectOwner:
 		require.NoError(t, errUserRole)
@@ -237,52 +233,4 @@ func VerifyUserCanDeleteProject(t *testing.T, client *rancher.Client, project *v
 func VerifyUserCanRemoveClusterRoles(t *testing.T, client *rancher.Client, user *management.User) {
 	err := users.RemoveClusterRoleFromUser(client, user)
 	require.NoError(t, err)
-}
-
-// VerifyClusterRoleTemplateBindingForUser is a helper function to verify the number of cluster role template bindings for a user
-func VerifyClusterRoleTemplateBindingForUser(client *rancher.Client, username string, expectedCount int) ([]v3.ClusterRoleTemplateBinding, error) {
-	crtbList, err := rbacapi.ListClusterRoleTemplateBindings(client, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list ClusterRoleTemplateBindings: %w", err)
-	}
-
-	userCrtbs := []v3.ClusterRoleTemplateBinding{}
-	actualCount := 0
-	for _, crtb := range crtbList.Items {
-		if crtb.UserName == username {
-			userCrtbs = append(userCrtbs, crtb)
-			actualCount++
-		}
-	}
-
-	if actualCount != expectedCount {
-		return nil, fmt.Errorf("expected %d ClusterRoleTemplateBindings for user %s, but found %d",
-			expectedCount, username, actualCount)
-	}
-
-	return userCrtbs, nil
-}
-
-// VerifyProjectRoleTemplateBindingForUser is a helper function to verify the number of project role template bindings for a user
-func VerifyProjectRoleTemplateBindingForUser(client *rancher.Client, username string, expectedCount int) ([]v3.ProjectRoleTemplateBinding, error) {
-	prtbList, err := rbacapi.ListProjectRoleTemplateBindings(client, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list ProjectRoleTemplateBindings: %w", err)
-	}
-
-	userPrtbs := []v3.ProjectRoleTemplateBinding{}
-	actualCount := 0
-	for _, prtb := range prtbList.Items {
-		if prtb.UserName == username {
-			userPrtbs = append(userPrtbs, prtb)
-			actualCount++
-		}
-	}
-
-	if actualCount != expectedCount {
-		return nil, fmt.Errorf("expected %d ProjectRoleTemplateBindings for user %s, but found %d",
-			expectedCount, username, actualCount)
-	}
-
-	return userPrtbs, nil
 }

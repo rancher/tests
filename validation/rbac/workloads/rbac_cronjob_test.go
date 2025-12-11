@@ -10,7 +10,8 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/cronjob"
@@ -249,17 +250,17 @@ func (rcj *RbacCronJobTestSuite) TestCrudCronJobAsClusterMember() {
 	user, userClient, err := rbac.AddUserWithRoleToCluster(rcj.client, rbac.StandardUser.String(), role, rcj.cluster, nil)
 	require.NoError(rcj.T(), err)
 
-	projectTemplate := projectsapi.NewProjectTemplate(rcj.cluster.ID)
+	projectTemplate := projectapi.NewProjectTemplate(rcj.cluster.ID)
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": user.ID,
 	}
 	createdProject, err := userClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 	require.NoError(rcj.T(), err)
 
-	err = projects.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
+	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rcj.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rcj.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, rcj.cluster.ID, createdProject.Name, nil)
 	require.NoError(rcj.T(), err)
 
 	log.Infof("As a %v, creating a cronjob in the namespace %v", role, namespace.Name)

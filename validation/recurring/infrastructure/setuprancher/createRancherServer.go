@@ -76,7 +76,7 @@ func setupIPv6Rancher(t *testing.T, rancherConfig *rancher.Config, terraformConf
 
 	testSession := session.NewSession()
 
-	client, err := ranchers.PostRancherSetup(t, terraformOptions, rancherConfig, testSession, terraformConfig.Standalone.RancherHostname, keyPath, false, false)
+	client, err := ranchers.PostRancherSetup(t, terraformOptions, rancherConfig, testSession, terraformConfig.Standalone.RancherHostname, keyPath, false)
 	if err != nil && *rancherConfig.Cleanup {
 		cleanup.Cleanup(nil, terraformOptions, keyPath)
 	}
@@ -96,7 +96,7 @@ func setupDualstackRancher(t *testing.T, rancherConfig *rancher.Config, terrafor
 
 	testSession := session.NewSession()
 
-	client, err := ranchers.PostRancherSetup(t, terraformOptions, rancherConfig, testSession, terraformConfig.Standalone.RancherHostname, keyPath, false, false)
+	client, err := ranchers.PostRancherSetup(t, terraformOptions, rancherConfig, testSession, terraformConfig.Standalone.RancherHostname, keyPath, false)
 	if err != nil && *rancherConfig.Cleanup {
 		cleanup.Cleanup(nil, terraformOptions, keyPath)
 	}

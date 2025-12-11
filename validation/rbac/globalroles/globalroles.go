@@ -8,6 +8,7 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +40,7 @@ func createCustomGlobalRole(client *rancher.Client, globalRole *v3.GlobalRole) (
 		return nil, err
 	}
 
-	createdGlobalRole, err = rbac.GetGlobalRoleByName(client, createdGlobalRole.Name)
+	createdGlobalRole, err = rbacapi.GetGlobalRoleByName(client, createdGlobalRole.Name)
 	if err != nil {
 		return nil, err
 	}

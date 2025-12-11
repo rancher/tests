@@ -9,15 +9,15 @@ inputs:
     description: "Path to prime artifacts"
     required: true
 outputs:
+  latest_tag_v214:
+    description: "Latest tag for v2.14"
+    value: ${{ steps.set-outputs.outputs.latest_tag_v214 }}
   latest_tag_v213:
     description: "Latest tag for v2.13"
     value: ${{ steps.set-outputs.outputs.latest_tag_v213 }}
   latest_tag_v212:
     description: "Latest tag for v2.12"
     value: ${{ steps.set-outputs.outputs.latest_tag_v212 }}
-  latest_tag_v211:
-    description: "Latest tag for v2.11"
-    value: ${{ steps.set-outputs.outputs.latest_tag_v211 }}
 runs:
   using: composite
   steps:
@@ -27,11 +27,20 @@ runs:
         TAGS=$(curl -s https://api.github.com/repos/rancher/rancher/releases | jq -r '.[].tag_name')
 
         for RELEASE_LINE in $RELEASE_LINES; do
-          LATEST_VERSION=$(curl -s https://api.github.com/repos/rancher/rancher/releases | jq -r '.[].tag_name' | grep -E "^$RELEASE_LINE" | head -n 1)
+          LATEST_VERSION=$(curl -s https://api.github.com/repos/rancher/rancher/releases | jq -r '.[].tag_name' | grep -E "^$RELEASE_LINE" | head -n 1 || true)
+
+          SUFFIX=$(echo "$RELEASE_LINE" | tr -d '.')
+
+          if [[ -z "$LATEST_VERSION" ]]; then
+            echo "No tag found for $RELEASE_LINE, skipping..."
+            eval "LATEST_TAG_${SUFFIX}=''"
+            echo "LATEST_TAG_${SUFFIX}=" >> $GITHUB_ENV
+            continue
+          fi
 
           echo "Latest tag for $RELEASE_LINE: $LATEST_VERSION"
 
-          if [[ "$RELEASE_LINE" == "v2.13" ]]; then
+          if [[ "$RELEASE_LINE" == "v2.14" || "$RELEASE_LINE" == "v2.13" ]]; then
             RELEASE_JSON=$(curl -s "https://api.github.com/repos/rancher/rancher/releases/tags/$LATEST_VERSION")
             ASSET_COUNT=$(echo "$RELEASE_JSON" | jq '.assets | length')
 
@@ -50,14 +59,13 @@ runs:
             fi
           fi
 
-          SUFFIX=$(echo "$RELEASE_LINE" | tr -d '.')
           eval "LATEST_TAG_${SUFFIX}=$LATEST_VERSION"
           echo "LATEST_TAG_${SUFFIX}=$LATEST_VERSION" >> $GITHUB_ENV
         done
       shell: bash
     - id: set-outputs
       run: |
-        echo "latest_tag_v213=$LATEST_TAG_v213" >> $GITHUB_OUTPUT
-        echo "latest_tag_v212=$LATEST_TAG_v212" >> $GITHUB_OUTPUT
-        echo "latest_tag_v211=$LATEST_TAG_v211" >> $GITHUB_OUTPUT
+        echo "latest_tag_v214=${LATEST_TAG_v214}" >> $GITHUB_OUTPUT
+        echo "latest_tag_v213=${LATEST_TAG_v213}" >> $GITHUB_OUTPUT
+        echo "latest_tag_v212=${LATEST_TAG_v212}" >> $GITHUB_OUTPUT
       shell: bash

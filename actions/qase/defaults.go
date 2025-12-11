@@ -20,4 +20,5 @@ const (
 	PassStatus              = "pass"
 	FailStatus              = "fail"
 	SkipStatus              = "skip"
+	TestRunCompleteEnvVar   = "QASE_TEST_RUN_COMPLETE"
 )

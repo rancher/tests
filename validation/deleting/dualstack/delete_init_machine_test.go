@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/validation/deleting/rke2k3s"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
@@ -34,6 +35,7 @@ type DeleteInitMachineDualstackTestSuite struct {
 	session      *session.Session
 	cattleConfig map[string]any
 	rke2Cluster  *v1.SteveAPIObject
+	k3sCluster   *v1.SteveAPIObject
 }
 
 func (d *DeleteInitMachineDualstackTestSuite) TearDownSuite() {
@@ -79,6 +81,10 @@ func (d *DeleteInitMachineDualstackTestSuite) SetupSuite() {
 	logrus.Info("Provisioning RKE2 cluster")
 	d.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(d.T(), err)
+
+	logrus.Info("Provisioning K3s cluster")
+	d.k3sCluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
+	require.NoError(d.T(), err)
 }
 
 func (d *DeleteInitMachineDualstackTestSuite) TestDeleteInitMachineDualstack() {
@@ -87,6 +93,7 @@ func (d *DeleteInitMachineDualstackTestSuite) TestDeleteInitMachineDualstack() {
 		clusterID string
 	}{
 		{"RKE2_Dualstack_Delete_Init_Machine", d.rke2Cluster.ID},
+		{"K3S_Dualstack_Delete_Init_Machine", d.k3sCluster.ID},
 	}
 
 	for _, tt := range tests {
@@ -101,8 +108,12 @@ func (d *DeleteInitMachineDualstackTestSuite) TestDeleteInitMachineDualstack() {
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(d.T(), d.client, cluster)
 
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(d.client, cluster)
+			require.NoError(d.T(), err)
+
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			pods.VerifyClusterPods(d.T(), d.client, cluster)
+			pods.VerifyClusterPods(d.client, cluster)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(d.client, d.cattleConfig)

@@ -14,7 +14,6 @@ import (
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/config"
 	appsv1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -34,7 +33,6 @@ const (
 	GitRepoPathWindows                = "multi-cluster/windows-helm"
 	CniCalico                         = "calico"
 	KubeSystem                        = "kube-system"
-	TraefikDeamonSet                  = "svclb-traefik"
 )
 
 // GitRepoConfig is a function that reads in the gitRepo object from the config file
@@ -189,22 +187,4 @@ func GetDeploymentVersion(client *rancher.Client, deploymentID, clusterName stri
 	}
 
 	return strings.Split(deploymentSpec.Template.Spec.Containers[0].Image, ":")[1], nil
-}
-
-// GetDaemonsetByName is a helper that gets the daemonset by name in a given cluster.
-func GetDaemonsetByName(client *rancher.Client, clusterID string, namespaceName string, daemonsetName string) (*appsv1.DaemonSet, error) {
-	wranglerContext, err := client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
-	if err != nil {
-		return nil, err
-	}
-	latestDaemonset, err := wranglerContext.Apps.DaemonSet().List(namespaceName, metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	for _, item := range latestDaemonset.Items {
-		if strings.Contains(item.Name, daemonsetName) {
-			return &item, nil
-		}
-	}
-	return nil, nil
 }

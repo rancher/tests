@@ -351,7 +351,8 @@ func (rt *RegistryTestSuite) TestRegistriesK3S() {
 				provisioning.VerifyClusterReady(rt.T(), subClient, clusterObject)
 
 				logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-				actionspods.VerifyClusterPods(rt.T(), subClient, clusterObject)
+				err = actionspods.VerifyClusterPods(subClient, clusterObject)
+				require.NoError(rt.T(), err)
 			})
 		}
 	}
@@ -378,7 +379,8 @@ func (rt *RegistryTestSuite) TestRegistriesK3S() {
 				provisioning.VerifyClusterReady(rt.T(), subClient, clusterObject)
 
 				logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-				actionspods.VerifyClusterPods(rt.T(), subClient, clusterObject)
+				err = actionspods.VerifyClusterPods(subClient, clusterObject)
+				require.NoError(rt.T(), err)
 			})
 		}
 	}
@@ -431,7 +433,8 @@ func (rt *RegistryTestSuite) TestRegistriesRKE2() {
 				provisioning.VerifyClusterReady(rt.T(), subClient, clusterObject)
 
 				logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-				actionspods.VerifyClusterPods(rt.T(), subClient, clusterObject)
+				err = actionspods.VerifyClusterPods(subClient, clusterObject)
+				require.NoError(rt.T(), err)
 			})
 		}
 	}
@@ -456,7 +459,8 @@ func (rt *RegistryTestSuite) TestRegistriesRKE2() {
 				provisioning.VerifyClusterReady(rt.T(), subClient, clusterObject)
 
 				logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-				actionspods.VerifyClusterPods(rt.T(), subClient, clusterObject)
+				err = actionspods.VerifyClusterPods(subClient, clusterObject)
+				require.NoError(rt.T(), err)
 			})
 		}
 	}

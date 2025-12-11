@@ -75,7 +75,7 @@ func CreateAndValidateSnapshotRestore(client *rancher.Client, clusterName string
 		isRKE1 = true
 	}
 
-	podTemplate, deploymentTemplate, deploymentResp, serviceResp, ingressResp, err := createAndVerifyResources(steveclient, containerImage)
+	podTemplate, deploymentTemplate, deploymentResp, serviceResp, ingressResp, err := createAndVerifyResources(client, clusterID, containerImage)
 	if err != nil {
 		return err
 	}
@@ -588,7 +588,7 @@ func createPostBackupWorkloads(client *rancher.Client, clusterID string, podTemp
 		return nil, nil, err
 	}
 
-	err = deploy.VerifyDeployment(steveclient, postDeploymentResp)
+	err = deploy.VerifyDeployment(client, clusterID, postDeploymentResp.Namespace, postDeploymentResp.Name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -614,7 +614,7 @@ func createPostBackupWorkloads(client *rancher.Client, clusterID string, podTemp
 	return postDeploymentResp, postServiceResp, nil
 }
 
-func createAndVerifyResources(steveclient *steveV1.Client, containerImage string) (*corev1.PodTemplateSpec, *v1.Deployment, *steveV1.SteveAPIObject, *steveV1.SteveAPIObject, *steveV1.SteveAPIObject, error) {
+func createAndVerifyResources(client *rancher.Client, clusterID, containerImage string) (*corev1.PodTemplateSpec, *v1.Deployment, *steveV1.SteveAPIObject, *steveV1.SteveAPIObject, *steveV1.SteveAPIObject, error) {
 	var containerTemplate corev1.Container
 	initialIngressName := namegen.AppendRandomString(InitialIngress)
 	initialWorkloadName := namegen.AppendRandomString(InitialWorkload)
@@ -641,12 +641,17 @@ func createAndVerifyResources(steveclient *steveV1.Client, containerImage string
 		},
 	}
 
+	steveclient, err := client.Steve.ProxyDownstream(clusterID)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+
 	deploymentResp, err := createDeployment(steveclient, initialWorkloadName, deploymentTemplate)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
-	err = deploy.VerifyDeployment(steveclient, deploymentResp)
+	err = deploy.VerifyDeployment(client, clusterID, deploymentResp.Namespace, deploymentResp.Name)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}

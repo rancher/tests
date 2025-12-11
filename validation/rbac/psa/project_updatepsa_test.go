@@ -11,7 +11,8 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	"github.com/rancher/tests/actions/kubeapi/namespaces"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
@@ -81,7 +82,7 @@ func (pu *ProjectUpdatePsaTestSuite) TestCreateNamespaceWithPsaLabelsWithoutUpda
 			log.Infof("As %v, trying to create a namespace with PSA labels in project %v", tt.role.String(), adminProject.Name)
 			psaLabels := generatePSALabels()
 
-			createdNamespace, err := projects.CreateNamespaceUsingWrangler(userClient, pu.cluster.ID, adminProject.Name, psaLabels)
+			createdNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, pu.cluster.ID, adminProject.Name, psaLabels)
 			switch tt.role {
 			case rbac.Admin, rbac.ClusterOwner:
 				assert.NoError(pu.T(), err)
@@ -122,13 +123,13 @@ func (pu *ProjectUpdatePsaTestSuite) TestCreateNamespaceWithPsaLabelsWithUpdateP
 			log.Infof("Granting 'updatepsa' permission to user %v", newUser.Username)
 			customRoleTemplate, err := createUpdatePSARoleTemplate(pu.client)
 			assert.NoError(pu.T(), err)
-			_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate.Name)
+			_, err = rbacapi.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate.Name)
 			assert.NoError(pu.T(), err)
 
 			log.Infof("As a %v, creating a namespace with PSA labels in the project %v", tt.role.String(), adminProject.Name)
 			psaLabels := generatePSALabels()
 
-			createdNamespace, err := projects.CreateNamespaceUsingWrangler(userClient, pu.cluster.ID, adminProject.Name, psaLabels)
+			createdNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, pu.cluster.ID, adminProject.Name, psaLabels)
 			assert.NoError(pu.T(), err, "Expected namespace creation to succeed for role %s", tt.role.String())
 			actualLabels := getPSALabelsFromNamespace(createdNamespace)
 			assert.Equal(pu.T(), actualLabels, psaLabels)
@@ -172,7 +173,7 @@ func (pu *ProjectUpdatePsaTestSuite) TestUpdateNamespaceWithPsaLabelsWithoutUpda
 
 			ctx, err := clusterapi.GetClusterWranglerContext(userClient, pu.cluster.ID)
 			assert.NoError(pu.T(), err)
-			currentNamespace, err := namespaces.GetNamespaceByName(pu.client, pu.cluster.ID, createdNamespace.Name)
+			currentNamespace, err := namespaceapi.GetNamespaceByName(pu.client, pu.cluster.ID, createdNamespace.Name)
 			assert.NoError(pu.T(), err)
 			currentNamespace.ObjectMeta.Labels = psaLabels
 			updatedNamespace, err := ctx.Core.Namespace().Update(currentNamespace)
@@ -216,7 +217,7 @@ func (pu *ProjectUpdatePsaTestSuite) TestUpdateNamespaceWithPsaLabelsWithUpdateP
 			log.Infof("Granting 'updatepsa' permission to user %v", newUser.Username)
 			customRoleTemplate, err := createUpdatePSARoleTemplate(pu.client)
 			assert.NoError(pu.T(), err)
-			_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate.Name)
+			_, err = rbacapi.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate.Name)
 			assert.NoError(pu.T(), err)
 
 			log.Infof("As %v, updating PSA labels in namespace %v", tt.role.String(), createdNamespace.Name)
@@ -224,7 +225,7 @@ func (pu *ProjectUpdatePsaTestSuite) TestUpdateNamespaceWithPsaLabelsWithUpdateP
 
 			ctx, err := clusterapi.GetClusterWranglerContext(userClient, pu.cluster.ID)
 			assert.NoError(pu.T(), err)
-			currentNamespace, err := namespaces.GetNamespaceByName(pu.client, pu.cluster.ID, createdNamespace.Name)
+			currentNamespace, err := namespaceapi.GetNamespaceByName(pu.client, pu.cluster.ID, createdNamespace.Name)
 			assert.NoError(pu.T(), err)
 			currentNamespace.ObjectMeta.Labels = psaLabels
 			updatedNamespace, err := ctx.Core.Namespace().Update(currentNamespace)
@@ -252,16 +253,16 @@ func (pu *ProjectUpdatePsaTestSuite) TestCreateNamespaceWithPsaLabelsAsStandardU
 	log.Infof("Created user: %v", newUser.Username)
 
 	log.Infof("Granting 'updatepsa' permission to user %v", newUser.Username)
-	_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate2.Name)
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate2.Name)
 	require.NoError(pu.T(), err)
 
 	log.Infof("Granting 'create namespaces' permission to user %v", newUser.Username)
-	_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, rbac.CreateNS.String())
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, rbac.CreateNS.String())
 	require.NoError(pu.T(), err)
 
 	log.Infof("As user %v, create a namespace with PSA labels in project %v", newUser.Username, adminProject.Name)
 	psaLabels := generatePSALabels()
-	createdNamespace, err := projects.CreateNamespaceUsingWrangler(userClient, pu.cluster.ID, adminProject.Name, psaLabels)
+	createdNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, pu.cluster.ID, adminProject.Name, psaLabels)
 	require.NoError(pu.T(), err)
 
 	actualLabels := getPSALabelsFromNamespace(createdNamespace)
@@ -288,16 +289,16 @@ func (pu *ProjectUpdatePsaTestSuite) TestVerifyCreateNamespaceWithPsaLabelsWithM
 		log.Infof("Created user: %v", newUser.Username)
 
 		log.Infof("Granting 'updatepsa' permission to user %v", newUser.Username)
-		_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate2.Name)
+		_, err = rbacapi.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate2.Name)
 		require.NoError(pu.T(), err)
 
 		log.Infof("Granting 'create namespaces' permission to user %v", newUser.Username)
-		_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, rbac.CreateNS.String())
+		_, err = rbacapi.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, rbac.CreateNS.String())
 		require.NoError(pu.T(), err)
 
 		log.Infof("As user %v, create a namespace with PSA labels in project %v", newUser.Username, adminProject.Name)
 		psaLabels := generatePSALabels()
-		createdNamespace, err := projects.CreateNamespaceUsingWrangler(userClient, pu.cluster.ID, adminProject.Name, psaLabels)
+		createdNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, pu.cluster.ID, adminProject.Name, psaLabels)
 		require.NoError(pu.T(), err)
 
 		actualLabels := getPSALabelsFromNamespace(createdNamespace)

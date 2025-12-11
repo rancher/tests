@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# ./setup-provider.sh <provider> <version>
+# ./dev-provider.sh <provider> <version>
 
 set -e 
 trap 'rm -rf provider-clone' EXIT
 
 # Validate user input
-if [ $# -ne 2 ]; then
+if [ $# -lt 2 ]; then
   echo "Usage: $0 <provider> <giturl>"
   exit 1
 fi
@@ -18,6 +18,12 @@ VERSION="0.0.0-dev"
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
+BRANCH="master"
+if [ -n "$3" ]; then
+  BRANCH="$3"
+fi
+echo "$BRANCH"
+
 if [ "$OS" = "darwin" ] && [ "$ARCH" = "arm64" ]; then
   PLATFORM="darwin_arm64"
 else
@@ -26,10 +32,12 @@ fi
 
 # Download binary
 DIR=~/.terraform.d/plugins/terraform.local/${PROVIDER}/${PROVIDER}/${VERSION}/${PLATFORM}
-(umask u=rwx,g=rwx,o=rwx && mkdir -p $DIR)
+umask u=rwx,g=rwx,o=rwx
+mkdir -p $DIR
 
 git clone $GITURL provider-clone
 cd provider-clone
+git checkout $BRANCH
 go build -o terraform-provider-${PROVIDER} && \
 cp terraform-provider-${PROVIDER} $DIR
 

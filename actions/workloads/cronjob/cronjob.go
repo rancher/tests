@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/rancher/shepherd/clients/rancher"
+	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/wait"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
@@ -37,6 +38,22 @@ func CreateCronJob(client *rancher.Client, clusterID, namespaceName, schedule st
 	}
 
 	return createdCronJob, nil
+}
+
+// CreateCronJobFromConfig creates a cronjob from a config using steve
+func CreateCronJobFromConfig(client *v1.Client, clusterID string, cronjob *batchv1.CronJob) (*batchv1.CronJob, error) {
+	cronjobResp, err := client.SteveType("batch.cronjob").Create(cronjob)
+	if err != nil {
+		return nil, err
+	}
+
+	newCronJob := new(batchv1.CronJob)
+	err = v1.ConvertToK8sType(cronjobResp.JSONResp, newCronJob)
+	if err != nil {
+		return nil, err
+	}
+
+	return newCronJob, nil
 }
 
 // WatchAndWaitCronJobWrangler is a helper to watch and wait for cronjob to be active using wrangler context

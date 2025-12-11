@@ -1,33 +1,71 @@
 package projects
 
 import (
-	"context"
-
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/unstructured"
-	"github.com/rancher/shepherd/pkg/api/scheme"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// CreateProject is a helper function that uses the dynamic client to create a project in a cluster.
-func CreateProject(client *rancher.Client, project *v3.Project) (*v3.Project, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(LocalCluster)
+// CreateProject is a helper to create a project using wrangler context
+func CreateProject(client *rancher.Client, clusterID string) (*v3.Project, error) {
+	projectTemplate := NewProjectTemplate(clusterID)
+
+	createdProject, err := client.WranglerContext.Mgmt.Project().Create(projectTemplate)
 	if err != nil {
 		return nil, err
 	}
 
-	projectResource := dynamicClient.Resource(ProjectGroupVersionResource).Namespace(project.Namespace)
-	unstructuredResp, err := projectResource.Create(context.TODO(), unstructured.MustToUnstructured(project), metav1.CreateOptions{})
+	err = WaitForProjectFinalizerToUpdate(client, createdProject.Name, createdProject.Namespace, 2)
 	if err != nil {
 		return nil, err
 	}
 
-	newProject := &v3.Project{}
-	err = scheme.Scheme.Convert(unstructuredResp, newProject, unstructuredResp.GroupVersionKind())
+	createdProject, err = client.WranglerContext.Mgmt.Project().Get(clusterID, createdProject.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	return newProject, nil
+	return createdProject, nil
+}
+
+// CreateProjectAndNamespace is a helper to create a project and a namespace in the project using wrangler context
+func CreateProjectAndNamespace(client *rancher.Client, clusterID string) (*v3.Project, *corev1.Namespace, error) {
+	createdProject, err := CreateProject(client, clusterID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	createdNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, clusterID, createdProject.Name, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return createdProject, createdNamespace, nil
+}
+
+// CreateProjectAndNamespaceWithTemplate is a helper to create a project and a namespace in the project using a provided project template
+func CreateProjectAndNamespaceWithTemplate(client *rancher.Client, clusterID string, projectTemplate *v3.Project) (*v3.Project, *corev1.Namespace, error) {
+	createdProject, err := client.WranglerContext.Mgmt.Project().Create(projectTemplate)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = WaitForProjectFinalizerToUpdate(client, createdProject.Name, createdProject.Namespace, 2)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	createdProject, err = client.WranglerContext.Mgmt.Project().Get(clusterID, createdProject.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	createdNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, clusterID, createdProject.Name, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return createdProject, createdNamespace, nil
 }

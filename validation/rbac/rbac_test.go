@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
@@ -59,10 +60,10 @@ func (rb *RBTestSuite) sequentialTestRBAC(role rbac.Role, member string, user *m
 
 	if member == rbac.StandardUser.String() {
 		if strings.Contains(role.String(), "project") {
-			_, err = rbac.CreateProjectRoleTemplateBinding(rb.client, user, adminProject, role.String())
+			_, err = rbacapi.CreateProjectRoleTemplateBinding(rb.client, user, adminProject, role.String())
 			require.NoError(rb.T(), err)
 		} else {
-			_, err = rbac.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, user, role.String())
+			_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, user, role.String())
 			require.NoError(rb.T(), err)
 		}
 	}

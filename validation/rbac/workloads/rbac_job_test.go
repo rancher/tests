@@ -10,7 +10,8 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/job"
@@ -249,17 +250,17 @@ func (rj *RbacJobTestSuite) TestCrudJobAsClusterMember() {
 	user, userClient, err := rbac.AddUserWithRoleToCluster(rj.client, rbac.StandardUser.String(), role, rj.cluster, nil)
 	require.NoError(rj.T(), err)
 
-	projectTemplate := projectsapi.NewProjectTemplate(rj.cluster.ID)
+	projectTemplate := projectapi.NewProjectTemplate(rj.cluster.ID)
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": user.ID,
 	}
 	createdProject, err := userClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 	require.NoError(rj.T(), err)
 
-	err = projects.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
+	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rj.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rj.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, rj.cluster.ID, createdProject.Name, nil)
 	require.NoError(rj.T(), err)
 
 	log.Infof("As a %v, creating a job in the namespace %v", role, namespace.Name)

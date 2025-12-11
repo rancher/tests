@@ -44,7 +44,7 @@ func TfpSetupSuite(t *testing.T) (map[string]any, *rancher.Config, *terraform.Op
 
 	client.RancherConfig.AdminToken = rancherConfig.AdminToken
 	client.RancherConfig.AdminPassword = rancherConfig.AdminPassword
-	client.RancherConfig.Host = terraformConfig.Standalone.AirgapInternalFQDN
+	client.RancherConfig.Host = terraformConfig.Standalone.RancherHostname
 
 	_, err = operations.ReplaceValue([]string{"rancher", "adminToken"}, rancherConfig.AdminToken, configMap[0])
 	require.NoError(t, err)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
@@ -19,6 +20,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/validation/deleting/rke2k3s"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
@@ -34,6 +36,7 @@ type DeleteInitMachineIPv6TestSuite struct {
 	session      *session.Session
 	cattleConfig map[string]any
 	rke2Cluster  *v1.SteveAPIObject
+	k3sCluster   *v1.SteveAPIObject
 }
 
 func (d *DeleteInitMachineIPv6TestSuite) TearDownSuite() {
@@ -79,6 +82,22 @@ func (d *DeleteInitMachineIPv6TestSuite) SetupSuite() {
 	logrus.Info("Provisioning RKE2 cluster")
 	d.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(d.T(), err)
+
+	if clusterConfig.Advanced == nil {
+		clusterConfig.Advanced = &provisioninginput.Advanced{}
+	}
+
+	if clusterConfig.Advanced.MachineGlobalConfig == nil {
+		clusterConfig.Advanced.MachineGlobalConfig = &rkev1.GenericMap{
+			Data: map[string]any{},
+		}
+	}
+
+	clusterConfig.Advanced.MachineGlobalConfig.Data["flannel-ipv6-masq"] = true
+
+	logrus.Info("Provisioning K3s cluster")
+	d.k3sCluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
+	require.NoError(d.T(), err)
 }
 
 func (d *DeleteInitMachineIPv6TestSuite) TestDeleteInitMachineIPv6() {
@@ -87,6 +106,7 @@ func (d *DeleteInitMachineIPv6TestSuite) TestDeleteInitMachineIPv6() {
 		clusterID string
 	}{
 		{"RKE2_IPv6_Delete_Init_Machine", d.rke2Cluster.ID},
+		{"K3S_IPv6_Delete_Init_Machine", d.k3sCluster.ID},
 	}
 
 	for _, tt := range tests {
@@ -101,8 +121,13 @@ func (d *DeleteInitMachineIPv6TestSuite) TestDeleteInitMachineIPv6() {
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(d.T(), d.client, cluster)
 
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(d.client, cluster)
+			require.NoError(d.T(), err)
+
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			pods.VerifyClusterPods(d.T(), d.client, cluster)
+			err = pods.VerifyClusterPods(d.client, cluster)
+			require.NoError(d.T(), err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(d.client, d.cattleConfig)

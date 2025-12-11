@@ -46,6 +46,16 @@ provisioningInput:
     - "ec2"
 
 clusterConfig:
+  registries:
+    rke2Registries:
+      mirrors:
+        "docker.io":
+          endpoint: ["https://${QA_PRIVATE_REGISTRY_NAME}"]
+      configs:
+        "${QA_PRIVATE_REGISTRY_NAME}":
+          "auth":
+            username: "${DOCKERHUB_USERNAME}"
+            password: "${DOCKERHUB_PASSWORD}"
   machinePools:
   - machinePoolConfig:
       etcd: true

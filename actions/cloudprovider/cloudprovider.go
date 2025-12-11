@@ -13,7 +13,6 @@ import (
 
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/vsphere"
-	"github.com/rancher/shepherd/extensions/harvester"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/secrets"
@@ -108,13 +107,10 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 		}
 
 	case provisioninginput.HarvesterProviderName.String():
-		kubeconfig, err := harvester.GetHarvesterSAKubeconfig(client, additionalData["clusterName"].(string))
-		if err != nil {
-			return clustersConfig, err
-		}
+	
 
 		data := map[string][]byte{
-			"credential": kubeconfig,
+			"credential": []byte(credentials.HarvesterCredentialConfig.KubeconfigContent),
 		}
 
 		annotations := map[string]string{

@@ -112,7 +112,7 @@ func (rgr *RbacGlobalRolesTestSuite) TestListGlobalRole() {
 			switch tt.role.String() {
 			case rbac.Admin.String():
 				log.Infof("As a %v, list the global role", tt.role.String())
-				grole, err := rbac.GetGlobalRoleByName(rgr.client, createdGlobalRole.Name)
+				grole, err := rbacapi.GetGlobalRoleByName(rgr.client, createdGlobalRole.Name)
 				assert.NoError(rgr.T(), err)
 				assert.Equal(rgr.T(), grole.Name, createdGlobalRole.Name)
 			case rbac.ClusterOwner.String(), rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
@@ -125,7 +125,7 @@ func (rgr *RbacGlobalRolesTestSuite) TestListGlobalRole() {
 				assert.NoError(rgr.T(), err)
 
 				log.Infof("As a %v, list the global role", tt.role.String())
-				_, err = rbac.GetGlobalRoleByName(userClient, createdGlobalRole.Name)
+				_, err = rbacapi.GetGlobalRoleByName(userClient, createdGlobalRole.Name)
 				assert.Error(rgr.T(), err)
 				assert.True(rgr.T(), errors.IsForbidden(err))
 			}
@@ -155,7 +155,7 @@ func (rgr *RbacGlobalRolesTestSuite) TestUpdateGlobalRole() {
 			createdGlobalRole, err := createCustomGlobalRole(rgr.client, &customGlobalRole)
 			assert.NoError(rgr.T(), err)
 
-			globalRole, err := rbac.GetGlobalRoleByName(rgr.client, createdGlobalRole.Name)
+			globalRole, err := rbacapi.GetGlobalRoleByName(rgr.client, createdGlobalRole.Name)
 			assert.NoError(rgr.T(), err)
 
 			if globalRole.Labels == nil {
@@ -169,7 +169,7 @@ func (rgr *RbacGlobalRolesTestSuite) TestUpdateGlobalRole() {
 				_, err = rbacapi.UpdateGlobalRole(rgr.client, globalRole)
 				assert.NoError(rgr.T(), err)
 
-				updatedGlobalRole, err := rbac.GetGlobalRoleByName(rgr.client, createdGlobalRole.Name)
+				updatedGlobalRole, err := rbacapi.GetGlobalRoleByName(rgr.client, createdGlobalRole.Name)
 				assert.NoError(rgr.T(), err)
 				assert.Equal(rgr.T(), "true", updatedGlobalRole.Labels["test-label"], "Label not updated as expected")
 			case rbac.ClusterOwner.String(), rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
@@ -218,7 +218,7 @@ func (rgr *RbacGlobalRolesTestSuite) TestDeleteGlobalRole() {
 				err = rbacapi.DeleteGlobalRole(rgr.client, createdGlobalRole.Name)
 				assert.NoError(rgr.T(), err)
 
-				_, err = rbac.GetGlobalRoleByName(rgr.client, createdGlobalRole.Name)
+				_, err = rbacapi.GetGlobalRoleByName(rgr.client, createdGlobalRole.Name)
 				assert.Error(rgr.T(), err)
 			case rbac.ClusterOwner.String(), rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
 				log.Info("Create a project and a namespace in the project.")

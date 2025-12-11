@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -23,6 +24,7 @@ var (
 	runIDEnvVar             = os.Getenv(qase.TestRunEnvVar)
 	projectIDEnvVar         = os.Getenv(qase.ProjectIDEnvVar)
 	testRunName             = os.Getenv(qase.TestRunNameEnvVar)
+	testRunComplete         = os.Getenv(qase.TestRunCompleteEnvVar)
 	buildUrl                = os.Getenv(qase.BuildUrl)
 	_, callerFilePath, _, _ = runtime.Caller(0)
 	basepath                = filepath.Join(filepath.Dir(callerFilePath), "..", "..", "..", "..")
@@ -30,8 +32,11 @@ var (
 )
 
 const (
+	// Doc: https://developers.qase.io/reference/get-cases
 	requestLimit = 100
-	imagesPath   = "/app/images/"
+	// Doc: https://developers.qase.io/reference/create-run
+	descriptionLimit = 10000
+	imagesPath       = "/app/images/"
 )
 
 func main() {
@@ -66,9 +71,12 @@ func main() {
 			logrus.Error("error reporting: ", err)
 		}
 
-		err = qaseService.CompleteTestRun(projectIDEnvVar, int32(runID))
-		if err != nil {
-			logrus.Error("error update reporting: ", err)
+		isCompleteRun, _ := strconv.ParseBool(testRunComplete)
+		if isCompleteRun {
+			err = qaseService.CompleteTestRun(projectIDEnvVar, int32(runID))
+			if err != nil {
+				logrus.Error("error update reporting: ", err)
+			}
 		}
 	} else {
 		logrus.Warningf("QASE run ID not provided")
@@ -309,7 +317,12 @@ func createRunDescription(buildUrl string) string {
 		description.WriteString(versions)
 	}
 
-	return description.String()
+	s := description.String()
+	if len(s) > descriptionLimit {
+		s = s[:descriptionLimit]
+	}
+
+	return s
 }
 
 // getVersionInformation gets versions and commits id from cluster
@@ -332,9 +345,16 @@ func getVersionInformation() string {
 			continue
 		}
 
+		s := string(data)
+		lines := strings.Split(s, "\n")
+		slices.Sort(lines)
+		compactLines := slices.Compact(lines)
+		s = strings.Join(compactLines, "\n")
+
 		b.WriteString(fmt.Sprintf("Images used within %s", file.Name()))
 		b.WriteString("\n")
-		b.WriteString(string(data))
+		b.WriteString(s)
+		b.WriteString("\n")
 		b.WriteString("\n")
 	}
 

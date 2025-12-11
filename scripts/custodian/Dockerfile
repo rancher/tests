@@ -74,7 +74,7 @@ CMD set -e; \
     echo "Using USER_KEYS=${USER_KEYS}"; \
     if [ "$CUSTODIAN_YAML" = "aws.yaml" ] || [ "$CUSTODIAN_YAML" = "untag-to-delete.yaml" ]; then \
         for region in us-east-2 us-east-1 us-west-1 us-west-2; do \
-            custodian run --output-dir=. --region="$region" "$CUSTODIAN_YAML"; \
+            custodian run --output-dir=. --region="$region" "$CUSTODIAN_YAML" || echo "Continuing..."; \
         done; \
     elif [ "$CUSTODIAN_YAML" = "tag-to-save.yaml" ] || [ "$CUSTODIAN_YAML" = "aws-monthly.yaml" ]; then \
         custodian run --output-dir=. --region="$OVERRIDE_REGION" "$CUSTODIAN_YAML"; \

@@ -13,12 +13,13 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	extensionsworkloads "github.com/rancher/shepherd/extensions/workloads"
 	wloads "github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads"
 	appv1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -56,12 +57,12 @@ func createDeploymentAndWait(steveclient *v1.Client, containerName string, image
 	podTemplate := wloads.NewPodTemplate([]coreV1.Container{containerTemplate}, []coreV1.Volume{}, []coreV1.LocalObjectReference{}, nil, nil)
 	deployment := wloads.NewDeploymentTemplate(deploymentName, namespaceName, podTemplate, isCattleLabeled, nil)
 
-	deploymentResp, err := steveclient.SteveType(workloads.DeploymentSteveType).Create(deployment)
+	deploymentResp, err := steveclient.SteveType(stevetypes.Deployment).Create(deployment)
 	if err != nil {
 		return nil, err
 	}
 	err = kwait.Poll(5*time.Second, 5*time.Minute, func() (done bool, err error) {
-		deploymentResp, err := steveclient.SteveType(workloads.DeploymentSteveType).ByID(deployment.Namespace + "/" + deployment.Name)
+		deploymentResp, err := steveclient.SteveType(stevetypes.Deployment).ByID(deployment.Namespace + "/" + deployment.Name)
 		if err != nil {
 			return false, err
 		}
@@ -183,7 +184,7 @@ func createRole(client *rancher.Client, context string, roleName string, rules [
 }
 
 func createProject(client *rancher.Client, clusterID string) (*management.Project, error) {
-	projectName := namegen.AppendRandomString("testproject-")
+	projectName := namegen.AppendRandomString("testproject")
 	projectConfig := &management.Project{
 		ClusterID: clusterID,
 		Name:      projectName,
@@ -219,9 +220,9 @@ func generatePSALabels() map[string]string {
 func createUpdatePSARoleTemplate(client *rancher.Client) (*v3.RoleTemplate, error) {
 	updatePsaRules := []rbacv1.PolicyRule{
 		{
-			Verbs:     []string{rbac.UpdatePsaVerb},
-			APIGroups: []string{rbac.ManagementAPIGroup},
-			Resources: []string{rbac.ProjectResource},
+			Verbs:     []string{rbacapi.UpdatePsaVerb},
+			APIGroups: []string{rbacapi.ManagementAPIGroup},
+			Resources: []string{rbacapi.ProjectResource},
 		},
 	}
 
@@ -249,7 +250,7 @@ func createUpdatePSARoleTemplate(client *rancher.Client) (*v3.RoleTemplate, erro
 		ObjectMeta: metav1.ObjectMeta{
 			Name: roleTemplateName,
 		},
-		Context:       rbac.ProjectContext,
+		Context:       rbacapi.ProjectContext,
 		Rules:         updatePsaRules,
 		DisplayName:   displayName,
 		External:      false,

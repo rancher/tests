@@ -8,6 +8,7 @@ import (
 
 const (
 	ClusterConfigKey = "clusterConfig"
+	RancherConfigKey = "rancher"
 	AWSEC2Configs    = "awsEC2Configs"
 	K8SVersionKey    = "kubernetesVersion"
 	CNIKey           = "cni"

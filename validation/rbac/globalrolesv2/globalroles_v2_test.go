@@ -5,6 +5,7 @@ package globalrolesv2
 import (
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -21,6 +22,7 @@ import (
 	"github.com/rancher/shepherd/extensions/users"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 
 	"github.com/rancher/tests/actions/rbac"
@@ -60,21 +62,21 @@ func (gr *GlobalRolesV2TestSuite) validateRBACResources(createdUser *management.
 	require.NoError(gr.T(), err)
 	clusterCount := len(clusterNames)
 	expectedCrtbCount := clusterCount * len(inheritedRoles)
-	crtbs, err := rbac.ListCRTBsByLabel(gr.client, rbac.GrbOwnerLabel, grbOwner, expectedCrtbCount)
+	crtbs, err := rbacapi.ListCRTBsByLabel(gr.client, rbac.GrbOwnerLabel, grbOwner, expectedCrtbCount)
 	require.NoError(gr.T(), err)
 	actualCrtbCount := len(crtbs.Items)
 	require.Equal(gr.T(), expectedCrtbCount, actualCrtbCount, "Unexpected number of ClusterRoleTemplateBindings: Expected %d, Actual %d", expectedCrtbCount, actualCrtbCount)
 
 	log.Info("Verify that the cluster role bindings are created for the downstream cluster.")
 	expectedCrbCount := expectedCrtbCount
-	crbs, err := rbac.GetClusterRoleBindingsForCRTBs(gr.client, crtbs)
+	crbs, err := rbacapi.GetClusterRoleBindingsForCRTBs(gr.client, crtbs)
 	require.NoError(gr.T(), err)
 	actualCrbCount := len(crbs.Items)
 	require.Equal(gr.T(), expectedCrbCount, actualCrbCount, "Unexpected number of ClusterRoleBindings: Expected %d, Actual %d", expectedCrbCount, actualCrbCount)
 
 	log.Info("Verify that the role bindings are created for the downstream cluster.")
 	expectedRbCount := expectedCrtbCount
-	rbs, err := rbac.GetRoleBindingsForCRTBs(gr.client, crtbs)
+	rbs, err := rbacapi.GetRoleBindingsForCRTBs(gr.client, crtbs)
 	require.NoError(gr.T(), err)
 	actualRbCount := len(rbs.Items)
 	require.Equal(gr.T(), expectedRbCount, actualRbCount, "Unexpected number of RoleBindings: Expected %d, Actual %d", expectedRbCount, actualRbCount)
@@ -87,7 +89,7 @@ func (gr *GlobalRolesV2TestSuite) TestCreateUserWithInheritedClusterRoles() {
 
 	log.Info("Create a global role with inheritedClusterRoles.")
 	inheritedClusterRoles := []string{rbac.ClusterOwner.String()}
-	createdGlobalRole, err := rbac.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
 	require.NoError(gr.T(), err)
 
 	log.Info("Create a user with global role standard user and custom global role.")
@@ -103,7 +105,7 @@ func (gr *GlobalRolesV2TestSuite) TestCreateUserWithMultipleInheritedClusterRole
 
 	log.Info("Create a global role with inheritedClusterRoles.")
 	inheritedClusterRoles := []string{rbac.CrtbView.String(), rbac.ProjectsCreate.String(), rbac.ProjectsView.String()}
-	createdGlobalRole, err := rbac.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
 	require.NoError(gr.T(), err)
 
 	log.Info("Create a user with global role standard user and custom global role.")
@@ -128,7 +130,7 @@ func (gr *GlobalRolesV2TestSuite) TestCreateUserWithInheritedCustomClusterRole()
 
 	log.Info("Create a global role with inheritedClusterRoles.")
 	inheritedClusterRoles := []string{inheritedRoleTemplate.ID}
-	createdGlobalRole, err := rbac.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
 	require.NoError(gr.T(), err)
 
 	log.Info("Create a user with global role standard user and custom global role.")
@@ -152,7 +154,7 @@ func (gr *GlobalRolesV2TestSuite) TestClusterCreationAfterAddingGlobalRoleWithIn
 
 	log.Info("Create a global role with inheritedClusterRoles.")
 	inheritedClusterRoles := []string{rbac.ClusterMember.String()}
-	createdGlobalRole, err := rbac.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
 	require.NoError(gr.T(), err)
 
 	log.Info("Create a user with global role standard user and custom global role.")
@@ -174,14 +176,27 @@ func (gr *GlobalRolesV2TestSuite) TestClusterCreationAfterAddingGlobalRoleWithIn
 	require.NoError(gr.T(), err)
 
 	provisioning.VerifyClusterReady(gr.T(), userClient, firstClusterSteveObject)
-	pods.VerifyClusterPods(gr.T(), userClient, firstClusterSteveObject)
+
+	err = deployment.VerifyClusterDeployments(gr.client, firstClusterSteveObject)
+	require.NoError(gr.T(), err)
+
+	err = pods.VerifyClusterPods(userClient, firstClusterSteveObject)
+	require.NoError(gr.T(), err)
+
 	provisioning.VerifyDynamicCluster(gr.T(), userClient, firstClusterSteveObject)
 
 	_, secondClusterSteveObject, _, err := createDownstreamCluster(userClient, "K3S")
 	require.NoError(gr.T(), err)
 
 	provisioning.VerifyClusterReady(gr.T(), userClient, secondClusterSteveObject)
-	pods.VerifyClusterPods(gr.T(), userClient, secondClusterSteveObject)
+
+	logrus.Infof("Verifying cluster deployments (%s)", secondClusterSteveObject.Name)
+	err = deployment.VerifyClusterDeployments(gr.client, secondClusterSteveObject)
+	require.NoError(gr.T(), err)
+
+	err = pods.VerifyClusterPods(userClient, secondClusterSteveObject)
+	require.NoError(gr.T(), err)
+
 	provisioning.VerifyDynamicCluster(gr.T(), userClient, secondClusterSteveObject)
 
 	gr.validateRBACResources(createdUser, createdGlobalRole, inheritedClusterRoles)
@@ -193,7 +208,7 @@ func (gr *GlobalRolesV2TestSuite) TestUpdateExistingUserWithCustomGlobalRoleInhe
 
 	log.Info("Create a global role with inheritedClusterRoles.")
 	inheritedClusterRoles := []string{rbac.ClusterOwner.String()}
-	createdGlobalRole, err := rbac.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
 	require.NoError(gr.T(), err)
 
 	log.Info("Create a user with global role standard user.")
@@ -209,7 +224,7 @@ func (gr *GlobalRolesV2TestSuite) TestUpdateExistingUserWithCustomGlobalRoleInhe
 		GlobalRoleName: createdGlobalRole.Name,
 	}
 
-	_, err = rbacapi.CreateGlobalRoleBinding(gr.client, grb)
+	_, err = gr.client.WranglerContext.Mgmt.GlobalRoleBinding().Create(grb)
 	require.NoError(gr.T(), err)
 
 	_, expectedClusterCount := gr.validateRBACResources(createdUser, createdGlobalRole, inheritedClusterRoles)
@@ -229,7 +244,7 @@ func (gr *GlobalRolesV2TestSuite) TestUserDeletionAndResourceCleanupWithInherite
 
 	log.Info("Create a global role with inheritedClusterRoles.")
 	inheritedClusterRoles := []string{rbac.ClusterOwner.String()}
-	createdGlobalRole, err := rbac.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
 	require.NoError(gr.T(), err)
 
 	log.Info("Create a user with global role standard user and custom global role.")
@@ -267,19 +282,19 @@ func (gr *GlobalRolesV2TestSuite) TestUserDeletionAndResourceCleanupWithInherite
 
 	log.Info("Verify that the cluster role template bindings are deleted for the downstream clusters.")
 	expectedCrtbCount := 0
-	crtbs, err := rbac.ListCRTBsByLabel(gr.client, rbac.GrbOwnerLabel, grbOwner, expectedCrtbCount)
+	crtbs, err := rbacapi.ListCRTBsByLabel(gr.client, rbac.GrbOwnerLabel, grbOwner, expectedCrtbCount)
 	require.NoError(gr.T(), err)
 	actualCrtbCount := len(crtbs.Items)
 	require.Equal(gr.T(), expectedCrtbCount, actualCrtbCount, "Unexpected number of ClusterRoleTemplateBindings: Expected %d, Actual %d", expectedCrtbCount, actualCrtbCount)
 
 	log.Info("Verify that the cluster role bindings are deleted for the downstream cluster.")
-	crbs, err := rbac.GetClusterRoleBindingsForCRTBs(gr.client, crtbs)
+	crbs, err := rbacapi.GetClusterRoleBindingsForCRTBs(gr.client, crtbs)
 	require.NoError(gr.T(), err)
 	actualCrbCount := len(crbs.Items)
 	require.Equal(gr.T(), 0, actualCrbCount, "Unexpected number of ClusterRoleBindings: Expected %d, Actual %d", 0, actualCrbCount)
 
 	log.Info("Verify that the role bindings are deleted for the downstream cluster.")
-	rbs, err := rbac.GetRoleBindingsForCRTBs(gr.client, crtbs)
+	rbs, err := rbacapi.GetRoleBindingsForCRTBs(gr.client, crtbs)
 	require.NoError(gr.T(), err)
 	actualRbCount := len(rbs.Items)
 	require.Equal(gr.T(), 0, actualRbCount, "Unexpected number of RoleBindings: Expected %d, Actual %d", 0, actualRbCount)
@@ -291,7 +306,7 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromDel
 
 	log.Info("Create a global role with inheritedClusterRoles.")
 	inheritedClusterRoles := []string{rbac.ClusterOwner.String()}
-	createdGlobalRole, err := rbac.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
 	require.NoError(gr.T(), err)
 
 	log.Info("Create a user with global role standard user and custom global role.")
@@ -327,19 +342,19 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromDel
 
 	log.Info("Verify that the cluster role template bindings are deleted for the downstream clusters.")
 	expectedCrtbCount := 0
-	crtbs, err := rbac.ListCRTBsByLabel(gr.client, rbac.GrbOwnerLabel, grbOwner, expectedCrtbCount)
+	crtbs, err := rbacapi.ListCRTBsByLabel(gr.client, rbac.GrbOwnerLabel, grbOwner, expectedCrtbCount)
 	require.NoError(gr.T(), err)
 	actualCrtbCount := len(crtbs.Items)
 	require.Equal(gr.T(), expectedCrtbCount, actualCrtbCount, "Unexpected number of ClusterRoleTemplateBindings: Expected %d, Actual %d", expectedCrtbCount, actualCrtbCount)
 
 	log.Info("Verify that the cluster role bindings are deleted for the downstream cluster.")
-	crbs, err := rbac.GetClusterRoleBindingsForCRTBs(gr.client, crtbs)
+	crbs, err := rbacapi.GetClusterRoleBindingsForCRTBs(gr.client, crtbs)
 	require.NoError(gr.T(), err)
 	actualCrbCount := len(crbs.Items)
 	require.Equal(gr.T(), 0, actualCrbCount, "Unexpected number of ClusterRoleBindings: Expected %d, Actual %d", 0, actualCrbCount)
 
 	log.Info("Verify that the role bindings are deleted for the downstream cluster.")
-	rbs, err := rbac.GetRoleBindingsForCRTBs(gr.client, crtbs)
+	rbs, err := rbacapi.GetRoleBindingsForCRTBs(gr.client, crtbs)
 	require.NoError(gr.T(), err)
 	actualRbCount := len(rbs.Items)
 	require.Equal(gr.T(), 0, actualRbCount, "Unexpected number of RoleBindings: Expected %d, Actual %d", 0, actualRbCount)
@@ -357,7 +372,7 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromDel
 
 	log.Info("Create a global role with inheritedClusterRoles.")
 	inheritedClusterRoles := []string{rbac.ClusterMember.String()}
-	createdGlobalRole, err := rbac.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
 	require.NoError(gr.T(), err)
 
 	log.Info("Create a user with global role standard user and custom global role.")
@@ -399,19 +414,19 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromDel
 		require.NotEmpty(gr.T(), grbOwner, "Global Role Binding does not exist for user %s", user.ID)
 
 		log.Infof("Verify that the cluster role template bindings are deleted for user %s.", user.ID)
-		crtbs, err := rbac.ListCRTBsByLabel(gr.client, rbac.GrbOwnerLabel, grbOwner, 0)
+		crtbs, err := rbacapi.ListCRTBsByLabel(gr.client, rbac.GrbOwnerLabel, grbOwner, 0)
 		require.NoError(gr.T(), err)
 		actualCrtbCount := len(crtbs.Items)
 		require.Equal(gr.T(), 0, actualCrtbCount, "Unexpected number of ClusterRoleTemplateBindings for user %s: Expected %d, Actual %d", user.ID, 0, actualCrtbCount)
 
 		log.Infof("Verify that the cluster role bindings are deleted for the downstream cluster.")
-		crbs, err := rbac.GetClusterRoleBindingsForCRTBs(gr.client, crtbs)
+		crbs, err := rbacapi.GetClusterRoleBindingsForCRTBs(gr.client, crtbs)
 		require.NoError(gr.T(), err)
 		actualCrbCount := len(crbs.Items)
 		require.Equal(gr.T(), 0, actualCrbCount, "Unexpected number of ClusterRoleBindings: Expected %d, Actual %d", 0, actualCrbCount)
 
 		log.Info("Verify that the role bindings are deleted for the downstream cluster.")
-		rbs, err := rbac.GetRoleBindingsForCRTBs(gr.client, crtbs)
+		rbs, err := rbacapi.GetRoleBindingsForCRTBs(gr.client, crtbs)
 		require.NoError(gr.T(), err)
 		actualRbCount := len(rbs.Items)
 		require.Equal(gr.T(), 0, actualRbCount, "Unexpected number of RoleBindings: Expected %d, Actual %d", 0, actualRbCount)
@@ -435,12 +450,19 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromClu
 	require.NoError(gr.T(), err)
 
 	provisioning.VerifyClusterReady(gr.T(), gr.client, rke2SteveObject)
-	pods.VerifyClusterPods(gr.T(), gr.client, rke2SteveObject)
+
+	logrus.Infof("Verifying cluster deployments (%s)", rke2SteveObject.Name)
+	err = deployment.VerifyClusterDeployments(gr.client, rke2SteveObject)
+	require.NoError(gr.T(), err)
+
+	err = pods.VerifyClusterPods(gr.client, rke2SteveObject)
+	require.NoError(gr.T(), err)
+
 	provisioning.VerifyDynamicCluster(gr.T(), gr.client, rke2SteveObject)
 
 	log.Info("Create a global role with inheritedClusterRoles.")
 	inheritedClusterRoles := []string{rbac.ClusterOwner.String()}
-	createdGlobalRole, err := rbac.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(gr.client, inheritedClusterRoles)
 	require.NoError(gr.T(), err)
 
 	log.Info("Create a user with global role standard user and custom global role.")
@@ -476,21 +498,21 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromClu
 
 	log.Info("Verify that the cluster role template bindings are deleted for the downstream cluster.")
 	expectedCrtbCount := actualClusterCount - 1
-	crtbs, err := rbac.ListCRTBsByLabel(gr.client, rbac.GrbOwnerLabel, grbOwner, expectedCrtbCount)
+	crtbs, err := rbacapi.ListCRTBsByLabel(gr.client, rbac.GrbOwnerLabel, grbOwner, expectedCrtbCount)
 	require.NoError(gr.T(), err)
 	actualCrtbCount := len(crtbs.Items)
 	require.Equal(gr.T(), expectedCrtbCount, actualCrtbCount, "Unexpected number of ClusterRoleTemplateBindings: Expected %d, Actual %d", expectedCrtbCount, actualCrtbCount)
 
 	log.Info("Verify that the cluster role bindings are deleted for the downstream cluster.")
 	expectedCrbCount := expectedCrtbCount
-	crbs, err := rbac.GetClusterRoleBindingsForCRTBs(gr.client, crtbs)
+	crbs, err := rbacapi.GetClusterRoleBindingsForCRTBs(gr.client, crtbs)
 	require.NoError(gr.T(), err)
 	actualCrbCount := len(crbs.Items)
 	require.Equal(gr.T(), expectedCrbCount, actualCrbCount, "Unexpected number of ClusterRoleBindings: Expected %d, Actual %d", expectedCrbCount, actualCrbCount)
 
 	log.Info("Verify that the role bindings are deleted for the downstream cluster.")
 	expectedRbCount := expectedCrtbCount
-	rbs, err := rbac.GetRoleBindingsForCRTBs(gr.client, crtbs)
+	rbs, err := rbacapi.GetRoleBindingsForCRTBs(gr.client, crtbs)
 	require.NoError(gr.T(), err)
 	actualRbCount := len(rbs.Items)
 	require.Equal(gr.T(), expectedRbCount, actualRbCount, "Unexpected number of RoleBindings: Expected %d, Actual %d", expectedRbCount, actualRbCount)

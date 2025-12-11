@@ -20,18 +20,11 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/upgradeinput"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 
 	kcluster "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
-)
-
-const (
-	local              = "local"
-	provider           = "provider.cattle.io"
-	rke                = "rke"
-	rke2               = "rke2"
-	controllersVersion = "management.cattle.io/current-cluster-controllers-version"
 )
 
 // LocalCluster is a function to upgrade a local cluster.
@@ -87,8 +80,13 @@ func DownstreamCluster(u *suite.Suite, testName string, client *rancher.Client, 
 		logrus.Infof("Verifying the cluster is ready (%s)", upgradedCluster.Name)
 		provisioning.VerifyClusterReady(u.T(), client, upgradedCluster)
 
+		logrus.Infof("Verifying cluster deployments (%s)", upgradedCluster.Name)
+		err = deployment.VerifyClusterDeployments(client, upgradedCluster)
+		require.NoError(u.T(), err)
+
 		logrus.Infof("Verifying cluster pods (%s)", upgradedCluster.Name)
-		pods.VerifyClusterPods(u.T(), client, upgradedCluster)
+		err = pods.VerifyClusterPods(client, upgradedCluster)
+		require.NoError(u.T(), err)
 	}
 }
 

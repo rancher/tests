@@ -10,20 +10,19 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
-	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
-	timeFormat   = "2006/01/02 15:04:05"
-	imageName    = "nginx"
-	podSteveType = "pod"
+	timeFormat = "2006/01/02 15:04:05"
+	imageName  = "nginx"
 )
 
 // NewPodTemplateWithConfig is a helper to create a Pod template with a secret/configmap as an environment variable or volume mount or both
@@ -82,6 +81,22 @@ func NewPodTemplateWithConfig(secretName, configMapName string, useEnvVars, useV
 	return workloads.NewPodTemplate(containers, volumes, nil, nil, nil)
 }
 
+// CreatePodFromConfig creates a Pod from a config using steve
+func CreatePodFromConfig(client *v1.Client, clusterID string, pod *corev1.Pod) (*corev1.Pod, error) {
+	podResp, err := client.SteveType(stevetypes.Pod).Create(pod)
+	if err != nil {
+		return nil, err
+	}
+
+	newPod := new(corev1.Pod)
+	err = v1.ConvertToK8sType(podResp.JSONResp, newPod)
+	if err != nil {
+		return nil, err
+	}
+
+	return newPod, nil
+}
+
 // CheckPodLogsForErrors is a helper to check pod logs for errors
 func CheckPodLogsForErrors(client *rancher.Client, clusterID string, podName string, namespace string, errorPattern string, startTime time.Time) error {
 	startTimeUTC := startTime.UTC()
@@ -126,13 +141,13 @@ func CheckPodLogsForErrors(client *rancher.Client, clusterID string, podName str
 }
 
 // WatchAndWaitPodContainerRunning is a helper to watch and wait all pod containers running
-func WatchAndWaitPodContainerRunning(client *rancher.Client, clusterID, namespaceName string, deploymentTemplate *appv1.Deployment) error {
+func WatchAndWaitPodContainerRunning(client *rancher.Client, clusterID, namespaceName string) error {
 	steveclient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return err
 	}
 
-	namespacedClient := steveclient.SteveType(podSteveType).NamespacedSteveClient(namespaceName)
+	namespacedClient := steveclient.SteveType(stevetypes.Pod).NamespacedSteveClient(namespaceName)
 
 	backoff := kwait.Backoff{
 		Duration: 5 * time.Second,
@@ -155,7 +170,7 @@ func WatchAndWaitPodContainerRunning(client *rancher.Client, clusterID, namespac
 			}
 
 			for _, containerStatus := range podStatus.ContainerStatuses {
-				if containerStatus.State.Running == nil {
+				if containerStatus.State.Running == nil && podResp.State.Name != "completed" {
 					return false, nil
 				}
 			}
@@ -167,34 +182,6 @@ func WatchAndWaitPodContainerRunning(client *rancher.Client, clusterID, namespac
 	}
 
 	return nil
-}
-
-// CountPodContainerRunningByImage is a helper to count all pod containers running by image
-func CountPodContainerRunningByImage(client *rancher.Client, clusterID, namespaceName string, image string) (int, error) {
-	steveclient, err := client.Steve.ProxyDownstream(clusterID)
-	if err != nil {
-		return 0, err
-	}
-
-	podsResp, err := steveclient.SteveType(podSteveType).NamespacedSteveClient(namespaceName).List(nil)
-	if err != nil {
-		return 0, err
-	}
-
-	count := 0
-	for _, podResp := range podsResp.Data {
-		podStatus := &corev1.PodStatus{}
-		err = v1.ConvertToK8sType(podResp.Status, podStatus)
-		if err != nil {
-			return 0, err
-		}
-		for _, containerStatus := range podStatus.ContainerStatuses {
-			if containerStatus.State.Running != nil && strings.Contains(containerStatus.Image, image) {
-				count++
-			}
-		}
-	}
-	return count, nil
 }
 
 // GetPodByName is a helper to retrieve Pod information by Pod name

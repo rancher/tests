@@ -26,6 +26,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning/permutations"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/reports"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/interoperability/fleet"
 	"github.com/sirupsen/logrus"
@@ -180,8 +181,13 @@ func (a *AirGapRKE2CustomClusterTestSuite) TestCustomClusterWithGitRepo() {
 		logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
 		provisioning.VerifyClusterReady(a.T(), a.standardClient, clusterObject)
 
+		logrus.Infof("Verifying cluster deployments (%s)", clusterObject.Name)
+		err = deployment.VerifyClusterDeployments(a.standardClient, clusterObject)
+		require.NoError(a.T(), err)
+
 		logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-		pods.VerifyClusterPods(a.T(), a.standardClient, clusterObject)
+		err = pods.VerifyClusterPods(a.standardClient, clusterObject)
+		require.NoError(a.T(), err)
 
 		logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
 		provisioning.VerifyDynamicCluster(a.T(), a.standardClient, clusterObject)

@@ -4,7 +4,6 @@ set -e
 : "${RANCHER_HOST:?Rancher host not set}"
 : "${RANCHER_ADMIN_TOKEN:?Rancher admin token not set}"
 : "${K3S_VERSION:?K3s version not set}"
-: "${CNI:?CNI not set}"
 
 : "${AWS_REGION:?AWS region not set}"
 : "${AWS_AMI:?AWS AMI not set}"
@@ -16,6 +15,10 @@ set -e
 : "${AWS_ACCESS_KEY:?AWS access key not set}"
 : "${AWS_SECRET_KEY:?AWS secret key not set}"
 : "${CLUSTER_NAME:?Cluster name not set}"
+: "${NETWORK_STACK_PREFERENCE:?Network stack preference not set}"
+: "${QA_PRIVATE_REGISTRY_NAME:?QA private registry name not set}"
+: "${DOCKERHUB_USERNAME:?DockerHub username not set}"
+: "${DOCKERHUB_PASSWORD:?DockerHub password not set}"
 
 API="https://$RANCHER_HOST/v3"
 MACHINECONFIG_NAME="mc-${CLUSTER_NAME}-pool1"
@@ -25,7 +28,7 @@ CLOUD_CREDENTIAL_NAME="aws-creds-$CLUSTER_NAME"
 NAMESPACE="fleet-default"
 
 # Check if the cluster already exists
-EXISTING_CLUSTER=$(curl -s -k -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" "$API/clusters?name=$CLUSTER_NAME" | jq -r '.data[0].id // empty')
+EXISTING_CLUSTER=$(curl -sfk -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" -H "Accept: application/json" "$API/clusters?name=$CLUSTER_NAME" | jq -r '.data[0].id // empty')
 if [[ -n "$EXISTING_CLUSTER" ]]; then
   echo "⚠️ Cluster '$CLUSTER_NAME' already exists (ID: $EXISTING_CLUSTER). Skipping creation."
   export CLUSTER_NAME="$CLUSTER_NAME"
@@ -41,7 +44,7 @@ echo "==========================================="
 MANAGEMENT_CLUSTER_ID="local"
 RANCHER_KUBECONFIG_JSON="/tmp/management_kubeconfig.json"
 RANCHER_KUBECONFIG="/tmp/management_kubeconfig.yaml"
-curl -s -k -X POST -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" "$API/clusters/$MANAGEMENT_CLUSTER_ID?action=generateKubeconfig" -o "$RANCHER_KUBECONFIG_JSON"
+curl -sfk -X POST -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" -H "Accept: application/json" "$API/clusters/$MANAGEMENT_CLUSTER_ID?action=generateKubeconfig" -o "$RANCHER_KUBECONFIG_JSON"
 jq -r '.config' "$RANCHER_KUBECONFIG_JSON" > "$RANCHER_KUBECONFIG"
 
 # Create Cloud Credential
@@ -61,7 +64,7 @@ CLOUD_CREDS_PAYLOAD=$(jq -n \
    }')
 
 CLOUD_CREDENTIAL_ID=$(
-  curl -s -k -X POST \
+  curl -sfk -X POST \
     -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
     -d "$CLOUD_CREDS_PAYLOAD" \
@@ -93,6 +96,19 @@ EOF
 kubectl --kubeconfig "$RANCHER_KUBECONFIG" apply -f "$MACHINECONFIG_FILE"
 sleep 5
 
+REGISTRY_SECRET_NAME="docker-auth-${CLUSTER_NAME}"
+cat <<EOF | kubectl --kubeconfig "$RANCHER_KUBECONFIG" apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${REGISTRY_SECRET_NAME}
+  namespace: ${NAMESPACE}
+type: kubernetes.io/basic-auth
+stringData:
+  username: "${DOCKERHUB_USERNAME}"
+  password: "${DOCKERHUB_PASSWORD}"
+EOF
+
 # Create Downstream Cluster
 cat > "$CLUSTER_FILE" <<EOF
 apiVersion: provisioning.cattle.io/v1
@@ -104,6 +120,13 @@ spec:
   cloudCredentialSecretName: "${CLOUD_CREDENTIAL_ID}"
   kubernetesVersion: ${K3S_VERSION}
   rkeConfig:
+    registries:
+      mirrors:
+        "docker.io":
+          endpoint: ["https://${QA_PRIVATE_REGISTRY_NAME}"]
+      configs:
+        "${QA_PRIVATE_REGISTRY_NAME}":
+          authConfigSecretName: "${REGISTRY_SECRET_NAME}"
     machinePools:
       - name: pool1
         quantity: 1
@@ -138,7 +161,7 @@ while true; do
     fi
 done
 
-DOWNSTREAM_CLUSTER_ID=$(curl -s -k -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" "$API/clusters?name=$CLUSTER_NAME" | jq -r '.data[0].id // empty')
+DOWNSTREAM_CLUSTER_ID=$(curl -sfk -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" -H "Accept: application/json" "$API/clusters?name=$CLUSTER_NAME" | jq -r '.data[0].id // empty')
 if [[ -z "$DOWNSTREAM_CLUSTER_ID" ]]; then
     echo "❌ Failed to get downstream cluster ID from Rancher API"
     exit 1
@@ -146,7 +169,7 @@ fi
 DOWNSTREAM_KUBECONFIG_JSON="/tmp/downstream_kubeconfig.json"
 DOWNSTREAM_KUBECONFIG="/tmp/downstream_kubeconfig.yaml" 
 
-curl -s -k -X POST -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" "$API/clusters/$DOWNSTREAM_CLUSTER_ID?action=generateKubeconfig" -o "$DOWNSTREAM_KUBECONFIG_JSON"
+curl -sfk -X POST -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" -H "Accept: application/json" "$API/clusters/$DOWNSTREAM_CLUSTER_ID?action=generateKubeconfig" -o "$DOWNSTREAM_KUBECONFIG_JSON"
 jq -r '.config' "$DOWNSTREAM_KUBECONFIG_JSON" > "$DOWNSTREAM_KUBECONFIG"
 
 DEPLOYMENT="rancher-webhook"
