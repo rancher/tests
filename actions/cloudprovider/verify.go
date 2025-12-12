@@ -2,6 +2,7 @@ package cloudprovider
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -42,8 +43,6 @@ import (
 
 const (
 	externalProviderString = "external"
-	vsphereCPIchartName    = "rancher-vsphere-cpi"
-	vsphereCSIchartName    = "rancher-vsphere-csi"
 	clusterIPPrefix        = "cip"
 	loadBalancerPrefix     = "lb"
 	portName               = "port"
@@ -54,7 +53,6 @@ const (
 	awsUpstreamCloudProviderRepo = "https://github.com/kubernetes/cloud-provider-aws.git"
 	masterBranch                 = "master"
 	awsUpstreamChartName         = "aws-cloud-controller-manager"
-	kubeSystemNamespace          = "kube-system"
 	systemProject                = "System"
 )
 
@@ -103,7 +101,7 @@ func VerifyCloudProvider(t *testing.T, client *rancher.Client, clusterType strin
 				podErrors := pods.StatusPods(client, rke1ClusterObject.ID)
 				require.Empty(t, podErrors)
 
-				CreatePVCWorkload(t, client, rke1ClusterObject.ID)
+				CreatePVCWorkload(t, client, rke1ClusterObject.ID, "")
 			}
 		}
 	} else if strings.Contains(clusterType, extensionscluster.RKE2ClusterType.String()) {
@@ -135,7 +133,7 @@ func VerifyHarvesterCloudProvider(t *testing.T, client *rancher.Client, clusterO
 	lbServiceResp := CreateHarvesterCloudProviderWorkloadAndServicesLB(t, client, clusterObject)
 
 	services.VerifyHarvesterLoadBalancer(t, client, lbServiceResp, status.ClusterName)
-	CreatePVCWorkload(t, client, status.ClusterName)
+	CreatePVCWorkload(t, client, status.ClusterName, "")
 
 	podErrors := pods.StatusPods(client, status.ClusterName)
 	require.Empty(t, podErrors)
@@ -146,7 +144,7 @@ func VerifyVSphereCloudProvider(t *testing.T, client *rancher.Client, clusterObj
 	err := steveV1.ConvertToK8sType(clusterObject.Status, status)
 	require.NoError(t, err)
 
-	CreatePVCWorkload(t, client, status.ClusterName)
+	CreatePVCWorkload(t, client, status.ClusterName, "")
 
 	podErrors := pods.StatusPods(client, status.ClusterName)
 	require.Empty(t, podErrors)
@@ -232,31 +230,17 @@ func CreateHarvesterCloudProviderWorkloadAndServicesLB(t *testing.T, client *ran
 	return lbServiceResp
 }
 
-// CreatePVCWorkload creates a workload with a PVC for storage. This helper should be used to test
-// storage class functionality, i.e. for an in-tree / out-of-tree cloud provider
-func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string) *steveV1.SteveAPIObject {
-
+// CreatePVCWorkload creates a workload with a PVC for storage using the provided storageClassName.
+// This helper should be used to test storage class functionality, i.e. for an in-tree / out-of-tree cloud provider.
+// If an empty storageClassName is provided, the first one on the list will be used.
+func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string, storageClassName string) *steveV1.SteveAPIObject {
 	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
 	require.NoError(t, err)
 
 	steveclient, err := adminClient.Steve.ProxyDownstream(clusterID)
 	require.NoError(t, err)
 
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
-	require.NoError(t, err)
-
-	storageClassVolumesResource := dynamicClient.Resource(storageclasses.StorageClassGroupVersionResource).Namespace("")
-
-	ctx := context.Background()
-	unstructuredResp, err := storageClassVolumesResource.List(ctx, metav1.ListOptions{})
-	require.NoError(t, err)
-
-	storageClasses := &v1.StorageClassList{}
-
-	err = scheme.Scheme.Convert(unstructuredResp, storageClasses, unstructuredResp.GroupVersionKind())
-	require.NoError(t, err)
-
-	storageClass := storageClasses.Items[0]
+	storageClass, err := GetStorageClass(client, clusterID, storageClassName)
 
 	logrus.Infof("creating PVC")
 
@@ -280,7 +264,7 @@ func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string) *
 	pvcStatus := &corev1.PersistentVolumeClaimStatus{}
 	stevePvc := &steveV1.SteveAPIObject{}
 
-	err = wait.PollUntilContextTimeout(ctx, pollInterval, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+	err = wait.PollUntilContextTimeout(t.Context(), pollInterval, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		stevePvc, err = steveclient.SteveType(persistentvolumeclaims.PersistentVolumeClaimType).ByID(namespaces.Default + "/" + persistentVolumeClaim.Name)
 		require.NoError(t, err)
 
@@ -298,6 +282,51 @@ func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string) *
 	require.NoError(t, err)
 
 	return nginxResponse
+}
+
+// GetStorageClass gets a storage class with the provided name on the provided cluster.
+// If an empty storageClassName is provided, the first one on the list of available storage classes will be used.
+func GetStorageClass(client *rancher.Client, clusterID string, storageClassName string) (v1.StorageClass, error) {
+	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
+	if err != nil {
+		return v1.StorageClass{}, err
+	}
+
+	storageClassVolumesResource := dynamicClient.Resource(storageclasses.StorageClassGroupVersionResource).Namespace("")
+	unstructuredResp, err := storageClassVolumesResource.List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return v1.StorageClass{}, err
+	}
+
+	storageClasses := &v1.StorageClassList{}
+	err = scheme.Scheme.Convert(unstructuredResp, storageClasses, unstructuredResp.GroupVersionKind())
+	if err != nil {
+		return v1.StorageClass{}, err
+	}
+
+	if len(storageClasses.Items) == 0 {
+		return v1.StorageClass{}, fmt.Errorf("No storage classes available on cluster %s with user %s", clusterID, client.UserID)
+	}
+
+	if storageClassName == "" {
+		return storageClasses.Items[0], nil
+	}
+
+	var storageClass v1.StorageClass
+	found := false
+	for _, class := range storageClasses.Items {
+		if class.Name == storageClassName {
+			found = true
+			storageClass = class
+			break
+		}
+	}
+
+	if !found {
+		return storageClass, fmt.Errorf("No storage class named %s", storageClassName)
+	}
+
+	return storageClass, nil
 }
 
 // CreateAndInstallAWSExternalCharts is a helper function for rke1 external-aws cloud provider
