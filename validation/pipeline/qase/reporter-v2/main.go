@@ -24,6 +24,7 @@ var (
 	runIDEnvVar             = os.Getenv(qase.TestRunEnvVar)
 	projectIDEnvVar         = os.Getenv(qase.ProjectIDEnvVar)
 	testRunName             = os.Getenv(qase.TestRunNameEnvVar)
+	testRunComplete         = os.Getenv(qase.TestRunCompleteEnvVar)
 	buildUrl                = os.Getenv(qase.BuildUrl)
 	_, callerFilePath, _, _ = runtime.Caller(0)
 	basepath                = filepath.Join(filepath.Dir(callerFilePath), "..", "..", "..", "..")
@@ -68,9 +69,12 @@ func main() {
 			logrus.Error("error reporting: ", err)
 		}
 
-		err = qaseService.CompleteTestRun(projectIDEnvVar, int32(runID))
-		if err != nil {
-			logrus.Error("error update reporting: ", err)
+		shouldCompleteRun, _ := strconv.ParseBool(testRunComplete)
+		if shouldCompleteRun {
+			err = qaseService.CompleteTestRun(projectIDEnvVar, int32(runID))
+			if err != nil {
+				logrus.Error("error update reporting: ", err)
+			}
 		}
 	} else {
 		logrus.Warningf("QASE run ID not provided")
