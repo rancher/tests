@@ -100,7 +100,8 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementCre
 	provisioning.VerifyClusterReady(ra.T(), ra.client, clusterObject)
 
 	log.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-	pods.VerifyClusterPods(ra.T(), ra.client, clusterObject)
+	err = pods.VerifyClusterPods(ra.client, clusterObject)
+	require.NoError(ra.T(), err)
 
 	log.Infof("Verifying cluster features (%s)", clusterObject.Name)
 	provisioning.VerifyDynamicCluster(ra.T(), ra.client, clusterObject)

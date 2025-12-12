@@ -90,7 +90,8 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						provisioning.VerifyClusterReady(s.T(), client, clusterObject)
 
 						logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-						pods.VerifyClusterPods(s.T(), client, clusterObject)
+						err = pods.VerifyClusterPods(client, clusterObject)
+						require.NoError(s.T(), err)
 
 						logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
 						provisioning.VerifyDynamicCluster(s.T(), client, clusterObject)
@@ -125,7 +126,8 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						provisioning.VerifyClusterReady(s.T(), client, clusterObject)
 
 						logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-						pods.VerifyClusterPods(s.T(), client, clusterObject)
+						err = pods.VerifyClusterPods(client, clusterObject)
+						require.NoError(s.T(), err)
 
 						logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
 						provisioning.VerifyDynamicCluster(s.T(), client, clusterObject)
@@ -161,7 +163,8 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						provisioning.VerifyClusterReady(s.T(), client, clusterObject)
 
 						logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-						pods.VerifyClusterPods(s.T(), client, clusterObject)
+						err = pods.VerifyClusterPods(client, clusterObject)
+						require.NoError(s.T(), err)
 
 						logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
 						provisioning.VerifyDynamicCluster(s.T(), client, clusterObject)

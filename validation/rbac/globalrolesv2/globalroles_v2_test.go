@@ -174,14 +174,18 @@ func (gr *GlobalRolesV2TestSuite) TestClusterCreationAfterAddingGlobalRoleWithIn
 	require.NoError(gr.T(), err)
 
 	provisioning.VerifyClusterReady(gr.T(), userClient, firstClusterSteveObject)
-	pods.VerifyClusterPods(gr.T(), userClient, firstClusterSteveObject)
+	err = pods.VerifyClusterPods(userClient, firstClusterSteveObject)
+	require.NoError(gr.T(), err)
+
 	provisioning.VerifyDynamicCluster(gr.T(), userClient, firstClusterSteveObject)
 
 	_, secondClusterSteveObject, _, err := createDownstreamCluster(userClient, "K3S")
 	require.NoError(gr.T(), err)
 
 	provisioning.VerifyClusterReady(gr.T(), userClient, secondClusterSteveObject)
-	pods.VerifyClusterPods(gr.T(), userClient, secondClusterSteveObject)
+	err = pods.VerifyClusterPods(userClient, secondClusterSteveObject)
+	require.NoError(gr.T(), err)
+
 	provisioning.VerifyDynamicCluster(gr.T(), userClient, secondClusterSteveObject)
 
 	gr.validateRBACResources(createdUser, createdGlobalRole, inheritedClusterRoles)
@@ -435,7 +439,9 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromClu
 	require.NoError(gr.T(), err)
 
 	provisioning.VerifyClusterReady(gr.T(), gr.client, rke2SteveObject)
-	pods.VerifyClusterPods(gr.T(), gr.client, rke2SteveObject)
+	err = pods.VerifyClusterPods(gr.client, rke2SteveObject)
+	require.NoError(gr.T(), err)
+
 	provisioning.VerifyDynamicCluster(gr.T(), gr.client, rke2SteveObject)
 
 	log.Info("Create a global role with inheritedClusterRoles.")

@@ -1,22 +1,45 @@
 package daemonset
 
 import (
+	"context"
+	"time"
+
+	"github.com/rancher/rancher/pkg/api/scheme"
 	"github.com/rancher/shepherd/clients/rancher"
-	projectsapi "github.com/rancher/tests/actions/projects"
-	"github.com/sirupsen/logrus"
+	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/tests/actions/kubeapi/workloads/daemonsets"
+	appv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
-func VerifyCreateDaemonSet(client *rancher.Client, clusterID string) error {
-	_, namespace, err := projectsapi.CreateProjectAndNamespaceUsingWrangler(client, clusterID)
+// VerifyDaemonset verifies that a daemonset is active
+func VerifyDaemonset(client *rancher.Client, clusterID, namespace, daemonsetName string) error {
+	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	logrus.Info("Creating new daemonset")
-	_, err = CreateDaemonset(client, clusterID, namespace.Name, 1, "", "", false, false, true)
-	if err != nil {
-		return err
-	}
+	daemonsetResource := dynamicClient.Resource(daemonsets.DaemonSetGroupVersionResource).Namespace(namespace)
 
-	return nil
+	err = kwait.PollUntilContextTimeout(context.TODO(), 1*time.Second, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		unstructuredResp, err := daemonsetResource.Get(context.TODO(), daemonsetName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+
+		daemonset := &appv1.DaemonSet{}
+		err = scheme.Scheme.Convert(unstructuredResp, daemonset, unstructuredResp.GroupVersionKind())
+		if err != nil {
+			return false, err
+		}
+
+		if daemonset.Status.DesiredNumberScheduled == daemonset.Status.NumberReady {
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	return err
 }

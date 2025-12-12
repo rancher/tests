@@ -20,6 +20,7 @@ import (
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/ssh"
+	workloadDeployments "github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
@@ -297,12 +298,13 @@ func validateWorkload(client *rancher.Client, clusterID string, deployment *appv
 	}
 
 	logrus.Infof("Counting all pods running by image %s", image)
-	countPods, err := pods.CountPodContainerRunningByImage(client, clusterID, namespaceName, image)
+
+	pods, err := workloadDeployments.GetDeploymentPods(client, clusterID, deployment.Namespace, deployment.Name)
 	if err != nil {
 		return err
 	}
 
-	if expectedReplicas == countPods {
+	if expectedReplicas == len(pods) {
 		return nil
 	}
 

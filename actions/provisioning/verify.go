@@ -117,7 +117,7 @@ func VerifyRKE1Cluster(t *testing.T, client *rancher.Client, clustersConfig *clu
 
 // VerifyClusterReady validates that a non-rke1 cluster and its resources are in a good state, matching a given config.
 func VerifyClusterReady(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
-	err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FifteenMinuteTimeout, true, func(context.Context) (done bool, err error) {
+	err := kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FifteenMinuteTimeout, false, func(context.Context) (done bool, err error) {
 		adminClient, err := client.ReLogin()
 		if err != nil {
 			logrus.Warningf("Unable to get cluster client (%s) retrying", cluster.Name)

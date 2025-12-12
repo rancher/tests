@@ -119,7 +119,8 @@ func (b *BackupTestSuite) TestS3InPlaceRestore() {
 	provisioning.VerifyClusterReady(b.T(), b.client, rke2SteveObj)
 
 	logrus.Infof("Verifying cluster pods (%s)", rke2SteveObj.Name)
-	pods.VerifyClusterPods(b.T(), b.client, rke2SteveObj)
+	err = pods.VerifyClusterPods(b.client, rke2SteveObj)
+	require.NoError(b.T(), err)
 
 	logrus.Infof("Verifying cluster pods (%s)", rke2SteveObj.Name)
 	provisioning.VerifyDynamicCluster(b.T(), b.client, rke2SteveObj)

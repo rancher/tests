@@ -186,7 +186,8 @@ func (f *FleetWithProvisioningTestSuite) TestHardenedAfterAddedGitRepo() {
 			provisioning.VerifyClusterReady(f.T(), tt.client, clusterObject)
 
 			logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-			pods.VerifyClusterPods(f.T(), tt.client, clusterObject)
+			err = pods.VerifyClusterPods(tt.client, clusterObject)
+			require.NoError(f.T(), err)
 
 			logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
 			provisioning.VerifyDynamicCluster(f.T(), tt.client, clusterObject)
@@ -280,7 +281,8 @@ func (f *FleetWithProvisioningTestSuite) TestWindowsAfterAddedGitRepo() {
 			provisioning.VerifyClusterReady(f.T(), tt.client, clusterObject)
 
 			logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-			pods.VerifyClusterPods(f.T(), tt.client, clusterObject)
+			err = pods.VerifyClusterPods(tt.client, clusterObject)
+			require.NoError(f.T(), err)
 
 			logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
 			provisioning.VerifyDynamicCluster(f.T(), tt.client, clusterObject)

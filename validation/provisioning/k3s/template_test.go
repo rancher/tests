@@ -121,7 +121,8 @@ func TestTemplate(t *testing.T) {
 			provisioning.VerifyClusterReady(t, k.client, cluster)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			pods.VerifyClusterPods(t, k.client, cluster)
+			err = pods.VerifyClusterPods(k.client, cluster)
+			require.NoError(t, err)
 		})
 	}
 }

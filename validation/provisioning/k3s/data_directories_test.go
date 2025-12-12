@@ -114,7 +114,8 @@ func TestDataDirectories(t *testing.T) {
 			provisioning.VerifyClusterReady(t, tt.client, cluster)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			pods.VerifyClusterPods(t, tt.client, cluster)
+			err = pods.VerifyClusterPods(tt.client, cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster data directories (%s)", cluster.Name)
 			provisioning.VerifyDataDirectories(t, k.client, cluster)

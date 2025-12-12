@@ -113,7 +113,8 @@ func TestACE(t *testing.T) {
 			provisioning.VerifyClusterReady(t, r.client, cluster)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			pods.VerifyClusterPods(t, r.client, cluster)
+			err = pods.VerifyClusterPods(r.client, cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying ACE (%s)", cluster.Name)
 			provisioning.VerifyACE(t, r.client, cluster)

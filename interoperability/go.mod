@@ -155,6 +155,7 @@ require (
 	github.com/rancher/eks-operator v1.13.0-rc.4 // indirect
 	github.com/rancher/gke-operator v1.13.0-rc.3 // indirect
 	github.com/rancher/lasso v0.2.5 // indirect
+	github.com/rancher/rancher v0.0.0-20251203234820-b95b2fb0d738 // indirect
 	github.com/rancher/rke v1.8.0 // indirect
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078 // indirect
 	github.com/rancher/wrangler v1.1.2 // indirect
