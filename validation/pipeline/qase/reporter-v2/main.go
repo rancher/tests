@@ -32,7 +32,9 @@ var (
 )
 
 const (
-	requestLimit     = 100
+	// Doc: https://developers.qase.io/reference/get-cases
+	requestLimit = 100
+	// Doc: https://developers.qase.io/reference/create-run
 	descriptionLimit = 10000
 	imagesPath       = "/app/images/"
 )
@@ -69,8 +71,8 @@ func main() {
 			logrus.Error("error reporting: ", err)
 		}
 
-		shouldCompleteRun, _ := strconv.ParseBool(testRunComplete)
-		if shouldCompleteRun {
+		isCompleteRun, _ := strconv.ParseBool(testRunComplete)
+		if isCompleteRun {
 			err = qaseService.CompleteTestRun(projectIDEnvVar, int32(runID))
 			if err != nil {
 				logrus.Error("error update reporting: ", err)
@@ -316,12 +318,11 @@ func createRunDescription(buildUrl string) string {
 	}
 
 	s := description.String()
-
-	if len(s) <= descriptionLimit {
-		return s
+	if len(s) > descriptionLimit {
+		s = s[:descriptionLimit]
 	}
 
-	return s[:descriptionLimit]
+	return s
 }
 
 // getVersionInformation gets versions and commits id from cluster
