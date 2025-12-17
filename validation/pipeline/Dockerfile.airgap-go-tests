@@ -2,7 +2,7 @@
 # Extends infra tools with Go toolchain and gotestsum for test execution
 
 ARG TOFU_VERSION=1.10.7
-ARG GO_VERSION=1.23
+ARG GO_VERSION=1.25.5
 
 FROM --platform=linux/amd64 alpine:3.22
 
@@ -19,10 +19,14 @@ RUN apk add --no-cache \
     py3-pip \
     ca-certificates \
     ansible \
-    gcc \
-    musl-dev \
-    go \
     && rm -rf /var/cache/apk/*
+
+# Install Go toolchain
+RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.tgz \
+    && tar -C /usr/local -xzf /tmp/go.tgz \
+    && rm /tmp/go.tgz \
+    && ln -s /usr/local/go/bin/go /usr/local/bin/go \
+    && ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 
 # Install OpenTofu
 RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.tar.gz" \
@@ -34,9 +38,9 @@ RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/dow
 RUN pip3 install --no-cache-dir --break-system-packages awscli
 
 # Install gotestsum for JUnit reporting
-RUN go install gotest.tools/gotestsum@latest \
-    && mv /root/go/bin/gotestsum /usr/local/bin/ \
-    && rm -rf /root/go
+ENV GOBIN=/usr/local/bin
+RUN go install gotest.tools/gotestsum@latest
+ENV GOBIN=
 
 # Create working directory
 WORKDIR /workspace
