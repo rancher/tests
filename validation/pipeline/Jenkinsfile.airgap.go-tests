@@ -60,8 +60,8 @@ node {
             }
 
             stage('Build Infrastructure Tools Image') {
-                echo 'Building Docker image with Tofu, Ansible, and Go toolchain'
-                sh "docker build --platform linux/amd64 -t rancher-infra-tools:latest -f ${testsPath}/validation/pipeline/Dockerfile.infra ."
+                echo 'Building Docker image with Tofu, Ansible, Go toolchain, and gotestsum'
+                sh "docker build --platform linux/amd64 -t rancher-infra-tools:latest -f ${testsPath}/validation/pipeline/Dockerfile.airgap-go-tests ."
             }
 
             stage('Configure SSH Key') {
@@ -254,14 +254,14 @@ node {
                 def junitPath = 'junit.xml'
                 def testCmd = "gotestsum --junitfile ${junitPath} -- -timeout ${goTimeout} -tags \"${goTags}\" ${goTestPackage} ${goTestCase}"
 
-                // Attempt gotestsum first; if unavailable install it, else fallback to go test
+                // Run tests with gotestsum (preinstalled)
                 sh """
                     docker run --rm --platform linux/amd64 \
                         --env-file ${envFile} \
                         -v ${workspace}:/workspace \
                         -w /workspace/tests \
                         rancher-infra-tools:latest \
-                        sh -c '\nset -e\n\nif ! command -v gotestsum >/dev/null 2>&1; then\n  echo "gotestsum not found; attempting to install"\n  if command -v go >/dev/null 2>&1; then\n    GOBIN=/usr/local/bin go install gotest.tools/gotestsum@latest || true\n  fi\nfi\n\nif command -v gotestsum >/dev/null 2>&1; then\n  echo "Running: ${testCmd}"\n  ${testCmd}\nelse\n  echo "Falling back to: go test"\n  go test -v -timeout ${goTimeout} -tags \"${goTags}\" ${goTestPackage} ${goTestCase} | tee go-test.log\nfi\n'
+                        sh -c 'set -e; echo "Running: ${testCmd}"; ${testCmd}'
                 """
 
                 // Publish results

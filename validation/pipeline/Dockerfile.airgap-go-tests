@@ -1,0 +1,52 @@
+# Dockerfile for Airgap Go Testing
+# Extends infra tools with Go toolchain and gotestsum for test execution
+
+ARG TOFU_VERSION=1.10.7
+ARG GO_VERSION=1.23
+
+FROM --platform=linux/amd64 alpine:3.22
+
+ARG TOFU_VERSION
+ARG GO_VERSION
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    bash \
+    curl \
+    git \
+    openssh-client \
+    python3 \
+    py3-pip \
+    ca-certificates \
+    ansible \
+    gcc \
+    musl-dev \
+    go \
+    && rm -rf /var/cache/apk/*
+
+# Install OpenTofu
+RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.tar.gz" \
+    && tar -xzf /tmp/tofu.tar.gz -C /usr/local/bin/ \
+    && rm /tmp/tofu.tar.gz \
+    && chmod +x /usr/local/bin/tofu
+
+# Install AWS CLI
+RUN pip3 install --no-cache-dir --break-system-packages awscli
+
+# Install gotestsum for JUnit reporting
+RUN go install gotest.tools/gotestsum@latest \
+    && mv /root/go/bin/gotestsum /usr/local/bin/ \
+    && rm -rf /root/go
+
+# Create working directory
+WORKDIR /workspace
+
+# Verify installations
+RUN tofu version && \
+    ansible --version && \
+    aws --version && \
+    go version && \
+    gotestsum --version
+
+# Default to sh shell (compatible with alpine and docker run sh -c)
+CMD ["/bin/sh"]
