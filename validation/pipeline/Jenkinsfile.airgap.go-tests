@@ -21,6 +21,7 @@ node {
     def goTestCase = env.GO_TEST_CASE ?: ''
     def goTags = env.GO_TAGS ?: 'validation'
     def goTimeout = env.GO_TIMEOUT ?: '45m'
+    def cattleTestConfig = env.CATTLE_TEST_CONFIG ?: ''
     def reportArtifacts = (env.REPORT_ARTIFACTS ?: 'true').toBoolean()
 
     // Optional: always destroy infra at end
@@ -235,9 +236,6 @@ node {
                 // Prepare env-file for docker run
                 def envFile = '.go_test_env'
                 def lines = []
-                if (env.GO_ENV_VARS) {
-                    lines = env.GO_ENV_VARS.split('\n') as List
-                }
                 // Provide common test env vars
                 if (rancherHostname) {
                     lines += [
@@ -248,7 +246,15 @@ node {
                 // If Ansible variables defined a bootstrap password, default commonly used value
                 lines += ["RANCHER_BOOTSTRAP_PASSWORD=${env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'}"]
 
-                writeFile file: envFile, text: lines.findAll { it?.trim() }.join('\n') + '\n'
+                // Optional inline cattle test config
+                if (cattleTestConfig?.trim()) {
+                    def cattleConfigPath = "${testsPath}/cattle-config.yaml"
+                    writeFile file: cattleConfigPath, text: cattleTestConfig.trim() + '\n'
+                    lines += 'CATTLE_TEST_CONFIG=/workspace/tests/cattle-config.yaml'
+                }
+
+                def envContent = lines.findAll { it?.trim() }.join('\n')
+                writeFile file: envFile, text: envContent ? envContent + '\n' : ''
 
                 def workspace = pwd()
                 def junitPath = 'junit.xml'
@@ -261,7 +267,7 @@ node {
                         -v ${workspace}:/workspace \
                         -w /workspace/tests \
                         rancher-infra-tools:latest \
-                        sh -c 'set -e; echo "Running: ${testCmd}"; ${testCmd}'
+                        sh -c 'set -e; set -o pipefail; echo "Running: ${testCmd}"; ${testCmd} | tee go-test.log'
                 """
 
                 // Publish results
