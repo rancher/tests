@@ -11,7 +11,9 @@ node {
     def ansiblePath = "${qaInfraPath}/ansible/rke2/airgap"
     def workspaceName = ''
     def rancherHostname = ''
-    def containerStep = new container()
+    def qaConfig = new config()
+    def dockerPlatform = qaConfig.getDockerPlatform()
+    def infraToolsImage = qaConfig.getDockerImage('infraTools')
 
     def testsBranch = env.GO_REPO_BRANCH ?: 'main'
     def testsRepo = env.GO_REPO_URL ?: 'https://github.com/rancher/tests'
@@ -258,20 +260,17 @@ node {
                 writeFile file: envFile, text: envContent ? envContent + '\n' : ''
 
                 def workspace = pwd()
-                def junitPath = 'junit.xml'
-                def jsonPath = 'gotestsum.json'
-                def testCases = goTestPackage
-                if (goTestCase?.trim()) {
-                    testCases += " ${goTestCase.trim()}"
-                }
+                def names = generate.names()
+                def containerName = names.container
 
-                def (testArgs, testConfig) = containerStep._goTestCommand([
+                def testCases = goTestCase?.trim() ? goTestCase.trim() : goTestPackage
+                def (testArgs, testConfig) = container._goTestCommand([
                     packages: goTestPackage,
                     cases: testCases,
                     tags: goTags,
                     timeout: goTimeout,
-                    resultsXML: junitPath,
-                    resultsJSON: jsonPath
+                    resultsXML: 'junit.xml',
+                    resultsJSON: 'gotestsum.json'
                 ])
 
                 if (testArgs && testArgs[-1]?.endsWith(';')) {
@@ -281,23 +280,23 @@ node {
                 def testCmd = testArgs.join(' ')
                 echo "Running: ${testCmd}"
 
-                // Run tests with gotestsum (preinstalled)
                 sh """
-                    docker run --rm --platform linux/amd64 \
+                    docker run --rm --platform ${dockerPlatform} \
+                        --name ${containerName} \
                         --env-file ${envFile} \
                         -v ${workspace}:/workspace \
                         -w /workspace/tests \
-                        rancher-infra-tools:latest \
+                        ${infraToolsImage} \
                         sh -c 'set -e; set -o pipefail; ${testCmd} | tee go-test.log'
                 """
 
                 // Publish results
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                    junit allowEmptyResults: true, testResults: junitPath
+                    junit allowEmptyResults: true, testResults: testConfig.resultsXML
                 }
 
                 if (reportArtifacts) {
-                    archiveArtifacts allowEmptyArchive: true, artifacts: "go-test.log, ${junitPath}, ${jsonPath}", fingerprint: true
+                    archiveArtifacts allowEmptyArchive: true, artifacts: "go-test.log, ${testConfig.resultsXML}, ${testConfig.resultsJSON}", fingerprint: true
                 }
             }
         } catch (err) {
