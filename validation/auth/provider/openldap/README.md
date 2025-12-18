@@ -83,6 +83,10 @@ openLdapAuthInput:
   doubleNestedUsers:
     - username: "<double-nested-username1>"
       password: "<double-nested-password1>"
+  tripleNestedGroup: "<triple-nested-group-name>"
+  tripleNestedUsers:
+    - username: "<triple-nested-username1>"
+      password: "<triple-nested-password1>"
 ```
 
 ### Group Hierarchy
