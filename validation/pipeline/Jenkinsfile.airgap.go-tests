@@ -11,9 +11,8 @@ node {
     def ansiblePath = "${qaInfraPath}/ansible/rke2/airgap"
     def workspaceName = ''
     def rancherHostname = ''
-    def qaConfig = new config()
-    def dockerPlatform = qaConfig.getDockerPlatform()
-    def infraToolsImage = qaConfig.getDockerImage('infraTools')
+    def dockerPlatform = config.getDockerPlatform()
+    def infraToolsImage = config.getDockerImage('infraTools')
 
     def testsBranch = env.GO_REPO_BRANCH ?: 'main'
     def testsRepo = env.GO_REPO_URL ?: 'https://github.com/rancher/tests'
