@@ -17,7 +17,7 @@ node {
     def qaInfraBranch = env.QA_INFRA_REPO_BRANCH ?: 'main'
     def qaInfraRepo = env.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation'
 
-    def goTestPackage = env.GO_TEST_PACKAGE ?: './tests/validation'
+    def goTestPackage = env.GO_TEST_PACKAGE?.trim() ?: './validation/...'
     def goTestCase = env.GO_TEST_CASE ?: ''
     def goTags = env.GO_TAGS ?: 'validation'
     def goTimeout = env.GO_TIMEOUT ?: '45m'
@@ -258,7 +258,12 @@ node {
 
                 def workspace = pwd()
                 def junitPath = 'junit.xml'
-                def testCmd = "gotestsum --junitfile ${junitPath} -- -timeout ${goTimeout} -tags \"${goTags}\" ${goTestPackage} ${goTestCase}"
+                def goArgs = "-timeout ${goTimeout} -tags \"${goTags}\" ${goTestPackage}"
+                if (goTestCase?.trim()) {
+                    goArgs += " ${goTestCase.trim()}"
+                }
+
+                def testCmd = "gotestsum --junitfile ${junitPath} -- ${goArgs}"
 
                 // Run tests with gotestsum (preinstalled)
                 sh """
