@@ -236,14 +236,15 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ secrets.AWS_USER }}"
-              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
+              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
