@@ -63,12 +63,6 @@ func (f *FleetPublicRepoTestSuite) SetupSuite() {
 
 	podErrors := pods.StatusPods(f.client, f.clusterID)
 	require.Empty(f.T(), podErrors)
-
-	traefikDaemonset, err := fleet.GetDaemonsetByName(f.client, f.clusterID, fleet.KubeSystem, fleet.TraefikDeamonSet)
-	require.NoError(f.T(), err)
-	if traefikDaemonset != nil {
-		f.T().Skip("Test requires Traefik ingress to not be installed")
-	}
 }
 
 func (f *FleetPublicRepoTestSuite) TestGitRepoDeployment() {
