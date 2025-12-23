@@ -164,3 +164,20 @@ func createFleetSecret(client *rancher.Client) (string, error) {
 
 	return secretResp.Name, nil
 }
+
+// deleteResources follows the Istio uninstall reference guide
+// and deletes the ValidatingWebhookConfiguration to avoid installation conflicts
+// Doc: https://docs.apps.rancher.io/reference-guides/istio#uninstall-the-chart
+func deleteResources(client *rancher.Client, clusterID string) (string, error) {
+	deleteCommand := []string{
+		"sh", "-c",
+		fmt.Sprintf("%s && %s && %s && %s && %s",
+			"kubectl delete mutatingwebhookconfiguration istio-sidecar-injector",
+			fmt.Sprintf("kubectl delete configmaps -n %s istio-sidecar-injector", charts.RancherIstioNamespace),
+			"kubectl label namespace default istio-injection-",
+			"kubectl delete $(kubectl get CustomResourceDefinition -l='app.kubernetes.io/part-of=istio' -o name -A)",
+			"kubectl delete validatingwebhookconfiguration istiod-default-validator istio-validator-istio-system"),
+	}
+
+	return kubectl.Command(client, nil, clusterID, deleteCommand, logBufferSize)
+}
