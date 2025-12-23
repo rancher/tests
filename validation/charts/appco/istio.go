@@ -99,8 +99,8 @@ func watchAndwaitCreateFleetGitRepo(client *rancher.Client, clusterName string, 
 			Namespace: fleet.Namespace,
 		},
 		Spec: v1alpha1.GitRepoSpec{
-			Repo:   fleet.ExampleRepo,
-			Branch: fleet.BranchName,
+			Repo:   "https://github.com/lscalabrini01/fleet-examples.git",
+			Branch: "appco-istio-update",
 			Paths:  []string{"appco"},
 			Targets: []v1alpha1.GitTarget{
 				{
