@@ -5,7 +5,7 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 )
 
-const projectName = "testproject-"
+const projectName = "testproject"
 
 // NewProjectConfig is a constructor that creates a project template
 func NewProjectConfig(clusterID string) *management.Project {

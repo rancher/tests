@@ -183,7 +183,7 @@ func createRole(client *rancher.Client, context string, roleName string, rules [
 }
 
 func createProject(client *rancher.Client, clusterID string) (*management.Project, error) {
-	projectName := namegen.AppendRandomString("testproject-")
+	projectName := namegen.AppendRandomString("testproject")
 	projectConfig := &management.Project{
 		ClusterID: clusterID,
 		Name:      projectName,
