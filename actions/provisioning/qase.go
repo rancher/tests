@@ -3,6 +3,7 @@ package provisioning
 import (
 	"strings"
 
+	upstream "github.com/qase-tms/qase-go/qase-api-client"
 	rancherEc2 "github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
@@ -12,7 +13,6 @@ import (
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tfp-automation/config"
 	"github.com/sirupsen/logrus"
-	upstream "go.qase.io/qase-api-client"
 )
 
 // GetProvisioningSchemaParams gets a set of params from the cattle config and returns a qase params object

@@ -22,8 +22,6 @@ replace (
 	go.opentelemetry.io/otel/sdk => go.opentelemetry.io/otel/sdk v1.28.0
 	go.opentelemetry.io/otel/trace => go.opentelemetry.io/otel/trace v1.28.0
 	go.opentelemetry.io/proto/otlp => go.opentelemetry.io/proto/otlp v1.3.1
-	go.qase.io/client => github.com/rancher/qase-go/client v0.0.0-20250627195016-142ff3dfec16
-	go.qase.io/qase-api-client => github.com/qase-tms/qase-go/qase-api-client v1.2.0
 
 	helm.sh/helm/v3 => github.com/rancher/helm/v3 v3.16.1-rancher1
 	k8s.io/api => k8s.io/api v0.34.1
@@ -62,21 +60,18 @@ replace (
 	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.8.3
 )
 
-require (
-	github.com/antihax/optional v1.0.0
-	github.com/rancher/rancher/pkg/apis v0.0.0
-	go.qase.io/client v0.0.0-20231114201952-65195ec001fa
-)
+require github.com/rancher/rancher/pkg/apis v0.0.0
 
 require (
 	github.com/gruntwork-io/terratest v0.49.0
 	github.com/mattn/go-sqlite3 v1.14.28
+	github.com/qase-tms/qase-go/pkg/qase-go v1.0.7
+	github.com/qase-tms/qase-go/qase-api-client v1.2.1
 	github.com/rancher/rancher v0.0.0-20251223145833-24cecce3325e
 	github.com/rancher/shepherd v0.0.0-20251216155429-44067c0178ae
 	github.com/rancher/tests/actions v0.0.0-20260105193042-a805683addc3
 	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
 	github.com/rancher/tfp-automation v0.0.0-20251219210947-f4a1a9882c29
-	go.qase.io/qase-api-client v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -183,6 +178,7 @@ require (
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/moby/sys/user v0.3.0 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
+	github.com/qase-tms/qase-go/qase-api-v2-client v1.1.4 // indirect
 	github.com/rancher/ali-operator v1.13.0-rc.2 // indirect
 	github.com/tmccombs/hcl2json v0.6.4 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect

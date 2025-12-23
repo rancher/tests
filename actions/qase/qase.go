@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
+	upstream "github.com/qase-tms/qase-go/qase-api-client"
 	"github.com/sirupsen/logrus"
-	upstream "go.qase.io/qase-api-client"
 )
 
 type TestSuiteSchema struct {

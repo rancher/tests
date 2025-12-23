@@ -5,6 +5,7 @@ package upgrade
 import (
 	"testing"
 
+	upstream "github.com/qase-tms/qase-go/qase-api-client"
 	"github.com/rancher/shepherd/clients/rancher"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
@@ -15,7 +16,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	upstream "go.qase.io/qase-api-client"
 )
 
 type UpgradeKubernetesTestSuite struct {
