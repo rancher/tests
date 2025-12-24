@@ -11,11 +11,12 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	"github.com/rancher/tests/actions/kubeapi/namespaces"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
-	deployment "github.com/rancher/tests/actions/workloads/deployment"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -55,10 +56,10 @@ func (pr *ProjectsTestSuite) TestProjectsCrudLocalCluster() {
 	defer subSession.Cleanup()
 
 	log.Info("Create a project in the local cluster and verify that the project can be listed.")
-	createdProject, err := projects.CreateProjectUsingWrangler(pr.client, projectsapi.LocalCluster)
+	createdProject, err := projectapi.CreateProject(pr.client, rbacapi.LocalCluster)
 	require.NoError(pr.T(), err)
 
-	projectList, err := projectsapi.ListProjects(pr.client, createdProject.Namespace, metav1.ListOptions{
+	projectList, err := projectapi.ListProjects(pr.client, createdProject.Namespace, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdProject.Name,
 	})
 	require.NoError(pr.T(), err)
@@ -73,16 +74,16 @@ func (pr *ProjectsTestSuite) TestProjectsCrudLocalCluster() {
 	_, err = pr.client.WranglerContext.Mgmt.Project().Update(&currentProject)
 	require.NoError(pr.T(), err, "Failed to update project.")
 
-	updatedProjectList, err := projectsapi.ListProjects(pr.client, createdProject.Namespace, metav1.ListOptions{
+	updatedProjectList, err := projectapi.ListProjects(pr.client, createdProject.Namespace, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", "hello", "world"),
 	})
 	require.NoError(pr.T(), err)
 	require.Equal(pr.T(), 1, len(updatedProjectList.Items), "Expected one project in the list")
 
 	log.Info("Delete the project.")
-	err = projectsapi.DeleteProject(pr.client, createdProject.Namespace, createdProject.Name)
+	err = projectapi.DeleteProject(pr.client, createdProject.Namespace, createdProject.Name)
 	require.NoError(pr.T(), err, "Failed to delete project")
-	projectList, err = projectsapi.ListProjects(pr.client, createdProject.Namespace, metav1.ListOptions{
+	projectList, err = projectapi.ListProjects(pr.client, createdProject.Namespace, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdProject.Name,
 	})
 	require.NoError(pr.T(), err)
@@ -98,10 +99,10 @@ func (pr *ProjectsTestSuite) TestProjectsCrudDownstreamCluster() {
 	require.NoError(pr.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Create a project in the downstream cluster and verify that the project can be listed.")
-	createdProject, err := projects.CreateProjectUsingWrangler(pr.client, pr.cluster.ID)
+	createdProject, err := projectapi.CreateProject(pr.client, pr.cluster.ID)
 	require.NoError(pr.T(), err, "Failed to create project")
 
-	projectList, err := projectsapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
+	projectList, err := projectapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdProject.Name,
 	})
 	require.NoError(pr.T(), err, "Failed to list project.")
@@ -116,16 +117,16 @@ func (pr *ProjectsTestSuite) TestProjectsCrudDownstreamCluster() {
 	_, err = standardUserClient.WranglerContext.Mgmt.Project().Update(&currentProject)
 	require.NoError(pr.T(), err, "Failed to update project.")
 
-	updatedProjectList, err := projectsapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
+	updatedProjectList, err := projectapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", "hello", "world"),
 	})
 	require.NoError(pr.T(), err)
 	require.Equal(pr.T(), 1, len(updatedProjectList.Items), "Expected one project in the list")
 
 	log.Info("Delete the project.")
-	err = projectsapi.DeleteProject(standardUserClient, createdProject.Namespace, createdProject.Name)
+	err = projectapi.DeleteProject(standardUserClient, createdProject.Namespace, createdProject.Name)
 	require.NoError(pr.T(), err, "Failed to delete project")
-	projectList, err = projectsapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
+	projectList, err = projectapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdProject.Name,
 	})
 	require.NoError(pr.T(), err, "Failed to list project.")
@@ -137,27 +138,27 @@ func (pr *ProjectsTestSuite) TestDeleteSystemProject() {
 	defer subSession.Cleanup()
 
 	log.Info("Delete the System Project in the local cluster.")
-	projectList, err := projectsapi.ListProjects(pr.client, projectsapi.LocalCluster, metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", systemProjectLabel, "true"),
+	projectList, err := projectapi.ListProjects(pr.client, rbacapi.LocalCluster, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", projectapi.SystemProjectLabel, "true"),
 	})
 	require.NoError(pr.T(), err)
 	require.Equal(pr.T(), 1, len(projectList.Items), "Expected one project in the list")
 
 	systemProjectName := projectList.Items[0].ObjectMeta.Name
-	err = projectsapi.DeleteProject(pr.client, projectsapi.LocalCluster, systemProjectName)
+	err = projectapi.DeleteProject(pr.client, rbacapi.LocalCluster, systemProjectName)
 	require.Error(pr.T(), err, "Failed to delete project")
 	expectedErrorMessage := "admission webhook \"rancher.cattle.io.projects.management.cattle.io\" denied the request: System Project cannot be deleted"
 	require.Equal(pr.T(), expectedErrorMessage, err.Error())
 
 	log.Info("Delete the System Project in the downstream cluster.")
-	projectList, err = projectsapi.ListProjects(pr.client, pr.cluster.ID, metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", systemProjectLabel, "true"),
+	projectList, err = projectapi.ListProjects(pr.client, pr.cluster.ID, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", projectapi.SystemProjectLabel, "true"),
 	})
 	require.NoError(pr.T(), err)
 	require.Equal(pr.T(), 1, len(projectList.Items), "Expected one project in the list")
 
 	systemProjectName = projectList.Items[0].ObjectMeta.Name
-	err = projectsapi.DeleteProject(pr.client, pr.cluster.ID, systemProjectName)
+	err = projectapi.DeleteProject(pr.client, pr.cluster.ID, systemProjectName)
 	require.Error(pr.T(), err, "Failed to delete project")
 	expectedErrorMessage = "admission webhook \"rancher.cattle.io.projects.management.cattle.io\" denied the request: System Project cannot be deleted"
 	require.Equal(pr.T(), expectedErrorMessage, err.Error())
@@ -176,26 +177,26 @@ func (pr *ProjectsTestSuite) TestMoveNamespaceOutOfProject() {
 	require.NoError(pr.T(), err)
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, pr.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, pr.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(pr.T(), err)
 
 	log.Info("Move the namespace out of the project.")
-	updatedNamespace, err := namespaces.GetNamespaceByName(standardUserClient, pr.cluster.ID, createdNamespace.Name)
+	updatedNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, pr.cluster.ID, createdNamespace.Name)
 	require.NoError(pr.T(), err)
-	delete(updatedNamespace.Labels, projectsapi.ProjectIDAnnotation)
-	delete(updatedNamespace.Annotations, projectsapi.ProjectIDAnnotation)
+	delete(updatedNamespace.Labels, namespaceapi.ProjectIDAnnotation)
+	delete(updatedNamespace.Annotations, namespaceapi.ProjectIDAnnotation)
 
 	downstreamContext, err := clusterapi.GetClusterWranglerContext(pr.client, pr.cluster.ID)
 	require.NoError(pr.T(), err)
 
-	currentNamespace, err := namespaces.GetNamespaceByName(standardUserClient, pr.cluster.ID, updatedNamespace.Name)
+	currentNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, pr.cluster.ID, updatedNamespace.Name)
 	require.NoError(pr.T(), err)
 	updatedNamespace.ResourceVersion = currentNamespace.ResourceVersion
 	_, err = downstreamContext.Core.Namespace().Update(updatedNamespace)
 	require.NoError(pr.T(), err, "Failed to move the namespace out of the project")
 
 	log.Info("Verify that the namespace does not have the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, pr.cluster.ID, createdProject.Name, updatedNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, pr.cluster.ID, createdProject.Name, updatedNamespace.Name)
 	require.Error(pr.T(), err)
 }
 
@@ -214,7 +215,7 @@ func (pr *ProjectsTestSuite) TestProjectWithResourceQuotaAndContainerDefaultReso
 	cpuReservation := "50m"
 	memoryLimit := "64Mi"
 	memoryReservation := "32Mi"
-	projectTemplate := projectsapi.NewProjectTemplate(pr.cluster.ID)
+	projectTemplate := projectapi.NewProjectTemplate(pr.cluster.ID)
 	projectTemplate.Spec.ContainerDefaultResourceLimit.LimitsCPU = cpuLimit
 	projectTemplate.Spec.ContainerDefaultResourceLimit.RequestsCPU = cpuReservation
 	projectTemplate.Spec.ContainerDefaultResourceLimit.LimitsMemory = memoryLimit
@@ -225,7 +226,7 @@ func (pr *ProjectsTestSuite) TestProjectWithResourceQuotaAndContainerDefaultReso
 	require.NoError(pr.T(), err)
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, pr.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, pr.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(pr.T(), err)
 
 	log.Info("Verify that the pod limits and container default resource limit in the Project spec is accurate.")
@@ -238,7 +239,7 @@ func (pr *ProjectsTestSuite) TestProjectWithResourceQuotaAndContainerDefaultReso
 	require.Equal(pr.T(), memoryReservation, projectSpec.ContainerDefaultResourceLimit.RequestsMemory, "Memory reservation mismatch")
 
 	log.Info("Verify that the namespace has the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, pr.cluster.ID, createdNamespace.Name, resourceQuotaAnnotation, true)
+	err = checkAnnotationExistsInNamespace(standardUserClient, pr.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(pr.T(), err, "'field.cattle.io/resourceQuota' annotation should exist")
 
 	log.Info("Verify that the resource quota validation for the namespace is successful.")

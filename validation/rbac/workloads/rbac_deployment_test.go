@@ -10,7 +10,8 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/deployment"
@@ -240,17 +241,17 @@ func (rd *RbacDeploymentTestSuite) TestCrudDeploymentAsClusterMember() {
 	user, userClient, err := rbac.AddUserWithRoleToCluster(rd.client, rbac.StandardUser.String(), role, rd.cluster, nil)
 	require.NoError(rd.T(), err)
 
-	projectTemplate := projectsapi.NewProjectTemplate(rd.cluster.ID)
+	projectTemplate := projectapi.NewProjectTemplate(rd.cluster.ID)
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": user.ID,
 	}
 	createdProject, err := userClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 	require.NoError(rd.T(), err)
 
-	err = projects.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
+	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rd.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rd.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, rd.cluster.ID, createdProject.Name, nil)
 	require.NoError(rd.T(), err)
 
 	log.Infof("As a %v, create a deployment in the namespace %v", role, namespace.Name)

@@ -7,12 +7,13 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/unstructured"
 	"github.com/rancher/shepherd/pkg/api/scheme"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // UpdateProject is a helper function that uses the dynamic client to update a project in a cluster.
 func UpdateProject(client *rancher.Client, existingProject *v3.Project, updatedProject *v3.Project) (*v3.Project, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(LocalCluster)
+	dynamicClient, err := client.GetDownStreamClusterClient(rbacapi.LocalCluster)
 	if err != nil {
 		return nil, err
 	}

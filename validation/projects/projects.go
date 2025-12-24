@@ -14,24 +14,15 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	"github.com/rancher/tests/actions/kubeapi/namespaces"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
-	quotas "github.com/rancher/tests/actions/kubeapi/resourcequotas"
-	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
-	"github.com/rancher/tests/actions/projects"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	quotaapi "github.com/rancher/tests/actions/kubeapi/resourcequotas"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/workloads/pods"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
-)
-
-const (
-	dummyFinalizer                  = "dummy"
-	systemProjectLabel              = "authz.management.cattle.io/system-project"
-	resourceQuotaAnnotation         = "field.cattle.io/resourceQuota"
-	containerDefaultLimitAnnotation = "field.cattle.io/containerDefaultResourceLimit"
-	resourceQuotaStatusAnnotation   = "cattle.io/status"
 )
 
 var prtb = v3.ProjectRoleTemplateBinding{
@@ -55,7 +46,7 @@ func createProjectAndNamespace(client *rancher.Client, clusterID string, project
 	}
 
 	namespaceName := namegen.AppendRandomString("testns-")
-	createdNamespace, err := namespaces.CreateNamespace(client, clusterID, createdProject.Name, namespaceName, "", map[string]string{}, map[string]string{})
+	createdNamespace, err := namespaceapi.CreateNamespace(client, clusterID, createdProject.Name, namespaceName, "", map[string]string{}, map[string]string{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -64,7 +55,7 @@ func createProjectAndNamespace(client *rancher.Client, clusterID string, project
 }
 
 func createProjectAndNamespaceWithQuotas(client *rancher.Client, clusterID string, namespacePodLimit, projectPodLimit string) (*v3.Project, *corev1.Namespace, error) {
-	projectTemplate := projectsapi.NewProjectTemplate(clusterID)
+	projectTemplate := projectapi.NewProjectTemplate(clusterID)
 	projectTemplate.Spec.NamespaceDefaultResourceQuota.Limit.Pods = namespacePodLimit
 	projectTemplate.Spec.ResourceQuota.Limit.Pods = projectPodLimit
 	createdProject, createdNamespace, err := createProjectAndNamespace(client, clusterID, projectTemplate)
@@ -76,7 +67,7 @@ func createProjectAndNamespaceWithQuotas(client *rancher.Client, clusterID strin
 }
 
 func createProjectAndNamespaceWithLimits(client *rancher.Client, clusterID string, cpuLimit, cpuReservation, memoryLimit, memoryReservation string) (*v3.Project, *corev1.Namespace, error) {
-	projectTemplate := projectsapi.NewProjectTemplate(clusterID)
+	projectTemplate := projectapi.NewProjectTemplate(clusterID)
 	projectTemplate.Spec.ContainerDefaultResourceLimit.LimitsCPU = cpuLimit
 	projectTemplate.Spec.ContainerDefaultResourceLimit.RequestsCPU = cpuReservation
 	projectTemplate.Spec.ContainerDefaultResourceLimit.LimitsMemory = memoryLimit
@@ -91,7 +82,7 @@ func createProjectAndNamespaceWithLimits(client *rancher.Client, clusterID strin
 }
 
 func checkAnnotationExistsInNamespace(client *rancher.Client, clusterID string, namespaceName string, annotationKey string, expectedExistence bool) error {
-	namespace, err := namespaces.GetNamespaceByName(client, clusterID, namespaceName)
+	namespace, err := namespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 	if err != nil {
 		return err
 	}
@@ -124,7 +115,7 @@ func getLatestStatusMessageFromDeployment(deployment *appv1.Deployment, messageT
 }
 
 func checkDeploymentStatus(client *rancher.Client, clusterID, namespaceName, deploymentName, statusType, expectedStatusReason, expectedStatusMessage string, expectedReplicaCount int32) error {
-	updatedDeploymentList, err := deployments.ListDeployments(client, clusterID, namespaceName, metav1.ListOptions{
+	updatedDeploymentList, err := deploymentapi.ListDeployments(client, clusterID, namespaceName, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + deploymentName,
 	})
 	if err != nil {
@@ -181,7 +172,7 @@ func getStatusAndMessageFromAnnotation(annotation string, conditionType string) 
 }
 
 func getNamespaceLimit(client *rancher.Client, clusterID string, namespaceName, annotation string) (map[string]interface{}, error) {
-	namespace, err := namespaces.GetNamespaceByName(client, clusterID, namespaceName)
+	namespace, err := namespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +192,7 @@ func getNamespaceLimit(client *rancher.Client, clusterID string, namespaceName, 
 }
 
 func checkNamespaceResourceQuota(client *rancher.Client, clusterID, namespaceName string, expectedPodLimit int) error {
-	quotas, err := quotas.ListResourceQuotas(client, clusterID, namespaceName, metav1.ListOptions{})
+	quotas, err := quotaapi.ListResourceQuotas(client, clusterID, namespaceName, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -223,12 +214,12 @@ func checkNamespaceResourceQuota(client *rancher.Client, clusterID, namespaceNam
 }
 
 func checkNamespaceResourceQuotaValidationStatus(client *rancher.Client, clusterID, namespaceName, namespacePodLimit string, expectedStatus bool, expectedErrorMessage string) error {
-	namespace, err := namespaces.GetNamespaceByName(client, clusterID, namespaceName)
+	namespace, err := namespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 	if err != nil {
 		return err
 	}
 
-	limitData, err := getNamespaceLimit(client, clusterID, namespace.Name, resourceQuotaAnnotation)
+	limitData, err := getNamespaceLimit(client, clusterID, namespace.Name, projectapi.ResourceQuotaAnnotation)
 	if err != nil {
 		return err
 	}
@@ -238,7 +229,7 @@ func checkNamespaceResourceQuotaValidationStatus(client *rancher.Client, cluster
 		return fmt.Errorf("namespace pod limit mismatch in the namespace spec. expected: %s, actual: %s", namespacePodLimit, actualNamespacePodLimit)
 	}
 
-	status, message, err := getStatusAndMessageFromAnnotation(namespace.Annotations[resourceQuotaStatusAnnotation], "ResourceQuotaValidated")
+	status, message, err := getStatusAndMessageFromAnnotation(namespace.Annotations[projectapi.ResourceQuotaStatusAnnotation], "ResourceQuotaValidated")
 	if err != nil {
 		return err
 	}
@@ -261,7 +252,7 @@ func updateProjectContainerResourceLimit(client *rancher.Client, existingProject
 	updatedProject.Spec.ContainerDefaultResourceLimit.LimitsMemory = memoryLimit
 	updatedProject.Spec.ContainerDefaultResourceLimit.RequestsMemory = memoryReservation
 
-	updatedProject, err := projectsapi.UpdateProject(client, existingProject, updatedProject)
+	updatedProject, err := projectapi.UpdateProject(client, existingProject, updatedProject)
 	if err != nil {
 		return nil, err
 	}
@@ -377,28 +368,4 @@ func checkLimitRange(client *rancher.Client, clusterID, namespaceName string, ex
 	}
 
 	return nil
-}
-
-func createNamespacesInProject(client *rancher.Client, clusterID, projectID string, count int) ([]*corev1.Namespace, error) {
-	var namespaces []*corev1.Namespace
-
-	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, true, func(ctx context.Context) (bool, error) {
-		namespaces = []*corev1.Namespace{}
-
-		for i := 0; i < count; i++ {
-			ns, err := projects.CreateNamespaceUsingWrangler(client, clusterID, projectID, nil)
-			if err != nil {
-				return false, err
-			}
-			namespaces = append(namespaces, ns)
-		}
-
-		return true, nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to create %d namespaces: %w", count, err)
-	}
-
-	return namespaces, nil
 }

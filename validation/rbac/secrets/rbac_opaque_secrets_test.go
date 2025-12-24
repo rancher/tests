@@ -10,7 +10,8 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/secrets"
@@ -312,17 +313,17 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCrudSecretAsClusterMember() {
 	standardUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(rbos.client, rbac.StandardUser.String(), role, rbos.cluster, nil)
 	require.NoError(rbos.T(), err)
 
-	projectTemplate := projectsapi.NewProjectTemplate(rbos.cluster.ID)
+	projectTemplate := projectapi.NewProjectTemplate(rbos.cluster.ID)
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": standardUser.ID,
 	}
 	createdProject, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 	require.NoError(rbos.T(), err)
 
-	err = projects.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
+	err = projectapi.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rbos.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(standardUserClient, rbos.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, rbos.cluster.ID, createdProject.Name, nil)
 	require.NoError(rbos.T(), err)
 
 	log.Infof("As a %v, create a secret in the project %v", role, createdProject.Name)

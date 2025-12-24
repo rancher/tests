@@ -6,12 +6,13 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/api/scheme"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // ListProjects is a helper function that uses the dynamic client to list projects in a cluster.
 func ListProjects(client *rancher.Client, namespace string, listOpt metav1.ListOptions) (*v3.ProjectList, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(LocalCluster)
+	dynamicClient, err := client.GetDownStreamClusterClient(rbacapi.LocalCluster)
 	if err != nil {
 		return nil, err
 	}

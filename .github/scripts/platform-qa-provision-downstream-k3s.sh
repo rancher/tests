@@ -96,13 +96,14 @@ EOF
 kubectl --kubeconfig "$RANCHER_KUBECONFIG" apply -f "$MACHINECONFIG_FILE"
 sleep 5
 
-REGISTRY_SECRET_NAME="dockerhub-registry-auth"
+REGISTRY_SECRET_NAME="docker-auth-${CLUSTER_NAME}"
 cat <<EOF | kubectl --kubeconfig "$RANCHER_KUBECONFIG" apply -f -
 apiVersion: v1
 kind: Secret
 metadata:
   name: ${REGISTRY_SECRET_NAME}
   namespace: ${NAMESPACE}
+type: kubernetes.io/basic-auth
 stringData:
   username: "${DOCKERHUB_USERNAME}"
   password: "${DOCKERHUB_PASSWORD}"

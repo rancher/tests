@@ -10,7 +10,8 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -246,17 +247,17 @@ func (rs *RbacStatefulsetTestSuite) TestCrudStatefulsetAsClusterMember() {
 	user, userClient, err := rbac.AddUserWithRoleToCluster(rs.client, rbac.StandardUser.String(), role, rs.cluster, nil)
 	require.NoError(rs.T(), err)
 
-	projectTemplate := projectsapi.NewProjectTemplate(rs.cluster.ID)
+	projectTemplate := projectapi.NewProjectTemplate(rs.cluster.ID)
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": user.ID,
 	}
 	createdProject, err := userClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 	require.NoError(rs.T(), err)
 
-	err = projects.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
+	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rs.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rs.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, rs.cluster.ID, createdProject.Name, nil)
 	require.NoError(rs.T(), err)
 
 	log.Infof("As a %v, create a statefulset in the namespace %v", role, namespace.Name)

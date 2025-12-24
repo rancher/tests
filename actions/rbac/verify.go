@@ -13,9 +13,8 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/users"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	namespacesapi "github.com/rancher/tests/actions/kubeapi/namespaces"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/namespaces"
 	log "github.com/sirupsen/logrus"
@@ -99,8 +98,7 @@ func VerifyUserCanGetProject(t *testing.T, client, standardClient *rancher.Clien
 
 // VerifyUserCanCreateProjects validates a user with the required cluster permissions are able/not able to create projects in the downstream cluster
 func VerifyUserCanCreateProjects(t *testing.T, client, standardClient *rancher.Client, clusterID string, role Role) {
-	projectTemplate := projectsapi.NewProjectTemplate(clusterID)
-	memberProject, err := standardClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
+	memberProject, err := projectapi.CreateProject(standardClient, clusterID)
 	switch role {
 	case ClusterOwner, ClusterMember:
 		require.NoError(t, err)
@@ -116,14 +114,12 @@ func VerifyUserCanCreateNamespace(t *testing.T, client, standardClient *rancher.
 	standardClient, err := standardClient.ReLogin()
 	require.NoError(t, err)
 
-	namespaceName := namegen.AppendRandomString("testns-")
-	createdNamespace, checkErr := namespacesapi.CreateNamespace(standardClient, clusterID, project.Name, namespaceName, "", map[string]string{}, map[string]string{})
+	createdNamespace, checkErr := namespaceapi.CreateNamespaceUsingWrangler(standardClient, clusterID, project.Name, nil)
 
 	switch role {
 	case ClusterOwner, ProjectOwner, ProjectMember:
 		require.NoError(t, checkErr)
 		log.Info("Created a namespace as role ", role, createdNamespace.Name)
-		assert.Equal(t, namespaceName, createdNamespace.Name)
 
 		namespaceStatus := &coreV1.NamespaceStatus{}
 		err = v1.ConvertToK8sType(createdNamespace.Status, namespaceStatus)
@@ -177,8 +173,7 @@ func VerifyUserCanDeleteNamespace(t *testing.T, client, standardClient *rancher.
 	steveStandardClient, err := standardClient.Steve.ProxyDownstream(clusterID)
 	require.NoError(t, err)
 
-	namespaceName := namegen.AppendRandomString("testns-")
-	adminNamespace, err := namespacesapi.CreateNamespace(client, clusterID, project.Name, namespaceName+"-admin", "", map[string]string{}, map[string]string{})
+	adminNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, clusterID, project.Name, nil)
 	require.NoError(t, err)
 
 	namespaceID, err := steveAdminClient.SteveType(namespaces.NamespaceSteveType).ByID(adminNamespace.Name)
