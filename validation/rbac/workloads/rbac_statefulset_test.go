@@ -77,7 +77,7 @@ func (rs *RbacStatefulsetTestSuite) TestCreateStatefulSet() {
 
 			log.Infof("As a %v, creating a statefulset", tt.role.String())
 			podTemplate := pods.CreateContainerAndPodTemplate()
-			_, err = statefulset.CreateStatefulSet(userClient, rs.cluster.ID, namespace.Name, podTemplate, 1, false)
+			_, err = statefulset.CreateStatefulSet(userClient, rs.cluster.ID, namespace.Name, podTemplate, 1, false, "")
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rs.T(), err, "failed to create statefulset")
@@ -116,7 +116,7 @@ func (rs *RbacStatefulsetTestSuite) TestListStatefulset() {
 
 			log.Infof("As a %v, create a statefulset in the namespace %v", rbac.Admin, namespace.Name)
 			podTemplate := pods.CreateContainerAndPodTemplate()
-			createdStatefulset, err := statefulset.CreateStatefulSet(rs.client, rs.cluster.ID, namespace.Name, podTemplate, 1, true)
+			createdStatefulset, err := statefulset.CreateStatefulSet(rs.client, rs.cluster.ID, namespace.Name, podTemplate, 1, true, "")
 			assert.NoError(rs.T(), err, "failed to create statefulset")
 
 			log.Infof("As a %v, list the statefulset", tt.role.String())
@@ -163,7 +163,7 @@ func (rs *RbacStatefulsetTestSuite) TestUpdateStatefulset() {
 
 			log.Infof("As a %v, create a statefulset in the namespace %v", rbac.Admin, namespace.Name)
 			podTemplate := pods.CreateContainerAndPodTemplate()
-			createdStatefulset, err := statefulset.CreateStatefulSet(rs.client, rs.cluster.ID, namespace.Name, podTemplate, 1, true)
+			createdStatefulset, err := statefulset.CreateStatefulSet(rs.client, rs.cluster.ID, namespace.Name, podTemplate, 1, true, "")
 			assert.NoError(rs.T(), err, "failed to create statefulset")
 
 			log.Infof("As a %v, update the statefulset %s with a new label.", tt.role.String(), createdStatefulset.Name)
@@ -215,7 +215,7 @@ func (rs *RbacStatefulsetTestSuite) TestDeleteStatefulset() {
 
 			log.Infof("As a %v, create a statefulset in the namespace %v", rbac.Admin, namespace.Name)
 			podTemplate := pods.CreateContainerAndPodTemplate()
-			createdStatefulset, err := statefulset.CreateStatefulSet(rs.client, rs.cluster.ID, namespace.Name, podTemplate, 1, true)
+			createdStatefulset, err := statefulset.CreateStatefulSet(rs.client, rs.cluster.ID, namespace.Name, podTemplate, 1, true, "")
 			assert.NoError(rs.T(), err, "failed to create statefulset")
 
 			log.Infof("As a %v, delete the statefulset", tt.role.String())
@@ -261,7 +261,7 @@ func (rs *RbacStatefulsetTestSuite) TestCrudStatefulsetAsClusterMember() {
 
 	log.Infof("As a %v, create a statefulset in the namespace %v", role, namespace.Name)
 	podTemplate := pods.CreateContainerAndPodTemplate()
-	createdStatefulset, err := statefulset.CreateStatefulSet(userClient, rs.cluster.ID, namespace.Name, podTemplate, 1, true)
+	createdStatefulset, err := statefulset.CreateStatefulSet(userClient, rs.cluster.ID, namespace.Name, podTemplate, 1, true, "")
 	assert.NoError(rs.T(), err, "failed to create statefulset")
 
 	log.Infof("As a %v, list the statefulset", role)
