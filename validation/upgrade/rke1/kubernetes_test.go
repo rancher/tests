@@ -5,6 +5,7 @@ package rke1
 import (
 	"testing"
 
+	upstream "github.com/qase-tms/qase-go/qase-api-client"
 	"github.com/rancher/shepherd/clients/rancher"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
@@ -19,7 +20,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	upstream "go.qase.io/qase-api-client"
 )
 
 type UpgradeRKE1KubernetesTestSuite struct {
