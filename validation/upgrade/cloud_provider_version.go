@@ -8,7 +8,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/tests/actions/charts"
-	"github.com/rancher/tests/actions/cloudprovider"
+	"github.com/rancher/tests/actions/storage"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -24,5 +24,5 @@ func VsphereCloudProviderCharts(t *testing.T, client *rancher.Client, clusterNam
 	podErrors := pods.StatusPods(client, clusterID)
 	require.Empty(t, podErrors)
 
-	cloudprovider.CreatePVCWorkload(t, client, clusterID)
+	storage.CreatePVCWorkload(t, client, clusterID, "")
 }

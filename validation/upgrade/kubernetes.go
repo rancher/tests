@@ -26,14 +26,6 @@ import (
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
-const (
-	local              = "local"
-	provider           = "provider.cattle.io"
-	rke                = "rke"
-	rke2               = "rke2"
-	controllersVersion = "management.cattle.io/current-cluster-controllers-version"
-)
-
 // LocalCluster is a function to upgrade a local cluster.
 func LocalCluster(u *suite.Suite, client *rancher.Client, testConfig *clusters.ClusterConfig, cluster upgradeinput.Cluster) {
 	clusterMeta, err := extensionscluster.NewClusterMeta(client, cluster.Name)

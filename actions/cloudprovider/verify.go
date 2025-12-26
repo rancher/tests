@@ -1,12 +1,9 @@
 package cloudprovider
 
 import (
-	"context"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/rancher/rancher/pkg/api/scheme"
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
@@ -14,7 +11,6 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extensionscharts "github.com/rancher/shepherd/extensions/charts"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/providers"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
@@ -24,37 +20,28 @@ import (
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/clusters"
-	"github.com/rancher/tests/actions/kubeapi/storageclasses"
-	"github.com/rancher/tests/actions/kubeapi/volumes/persistentvolumeclaims"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/actions/services"
+	"github.com/rancher/tests/actions/storage"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/storage/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
 	externalProviderString = "external"
-	vsphereCPIchartName    = "rancher-vsphere-cpi"
-	vsphereCSIchartName    = "rancher-vsphere-csi"
 	clusterIPPrefix        = "cip"
 	loadBalancerPrefix     = "lb"
 	portName               = "port"
 	nginxName              = "nginx"
 
-	pollInterval = time.Duration(1 * time.Second)
-
 	awsUpstreamCloudProviderRepo = "https://github.com/kubernetes/cloud-provider-aws.git"
 	masterBranch                 = "master"
 	awsUpstreamChartName         = "aws-cloud-controller-manager"
-	kubeSystemNamespace          = "kube-system"
 	systemProject                = "System"
 )
 
@@ -103,7 +90,7 @@ func VerifyCloudProvider(t *testing.T, client *rancher.Client, clusterType strin
 				podErrors := pods.StatusPods(client, rke1ClusterObject.ID)
 				require.Empty(t, podErrors)
 
-				CreatePVCWorkload(t, client, rke1ClusterObject.ID)
+				storage.CreatePVCWorkload(t, client, rke1ClusterObject.ID, "")
 			}
 		}
 	} else if strings.Contains(clusterType, extensionscluster.RKE2ClusterType.String()) {
@@ -135,7 +122,7 @@ func VerifyHarvesterCloudProvider(t *testing.T, client *rancher.Client, clusterO
 	lbServiceResp := CreateHarvesterCloudProviderWorkloadAndServicesLB(t, client, clusterObject)
 
 	services.VerifyHarvesterLoadBalancer(t, client, lbServiceResp, status.ClusterName)
-	CreatePVCWorkload(t, client, status.ClusterName)
+	storage.CreatePVCWorkload(t, client, status.ClusterName, "")
 
 	podErrors := pods.StatusPods(client, status.ClusterName)
 	require.Empty(t, podErrors)
@@ -146,7 +133,7 @@ func VerifyVSphereCloudProvider(t *testing.T, client *rancher.Client, clusterObj
 	err := steveV1.ConvertToK8sType(clusterObject.Status, status)
 	require.NoError(t, err)
 
-	CreatePVCWorkload(t, client, status.ClusterName)
+	storage.CreatePVCWorkload(t, client, status.ClusterName, "")
 
 	podErrors := pods.StatusPods(client, status.ClusterName)
 	require.Empty(t, podErrors)
@@ -232,74 +219,6 @@ func CreateHarvesterCloudProviderWorkloadAndServicesLB(t *testing.T, client *ran
 	return lbServiceResp
 }
 
-// CreatePVCWorkload creates a workload with a PVC for storage. This helper should be used to test
-// storage class functionality, i.e. for an in-tree / out-of-tree cloud provider
-func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string) *steveV1.SteveAPIObject {
-
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	require.NoError(t, err)
-
-	steveclient, err := adminClient.Steve.ProxyDownstream(clusterID)
-	require.NoError(t, err)
-
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
-	require.NoError(t, err)
-
-	storageClassVolumesResource := dynamicClient.Resource(storageclasses.StorageClassGroupVersionResource).Namespace("")
-
-	ctx := context.Background()
-	unstructuredResp, err := storageClassVolumesResource.List(ctx, metav1.ListOptions{})
-	require.NoError(t, err)
-
-	storageClasses := &v1.StorageClassList{}
-
-	err = scheme.Scheme.Convert(unstructuredResp, storageClasses, unstructuredResp.GroupVersionKind())
-	require.NoError(t, err)
-
-	storageClass := storageClasses.Items[0]
-
-	logrus.Infof("creating PVC")
-
-	accessModes := []corev1.PersistentVolumeAccessMode{
-		"ReadWriteOnce",
-	}
-
-	persistentVolumeClaim, err := persistentvolumeclaims.CreatePersistentVolumeClaim(
-		client,
-		clusterID,
-		namegenerator.AppendRandomString("pvc"),
-		"test-pvc-volume",
-		namespaces.Default,
-		1,
-		accessModes,
-		nil,
-		&storageClass,
-	)
-	require.NoError(t, err)
-
-	pvcStatus := &corev1.PersistentVolumeClaimStatus{}
-	stevePvc := &steveV1.SteveAPIObject{}
-
-	err = wait.PollUntilContextTimeout(ctx, pollInterval, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		stevePvc, err = steveclient.SteveType(persistentvolumeclaims.PersistentVolumeClaimType).ByID(namespaces.Default + "/" + persistentVolumeClaim.Name)
-		require.NoError(t, err)
-
-		err = steveV1.ConvertToK8sType(stevePvc.Status, pvcStatus)
-		require.NoError(t, err)
-
-		if pvcStatus.Phase == persistentvolumeclaims.PersistentVolumeBoundStatus {
-			return true, nil
-		}
-		return false, err
-	})
-	require.NoError(t, err)
-
-	nginxResponse, err := createNginxDeploymentWithPVC(steveclient, "pvcwkld", persistentVolumeClaim.Name, string(stevePvc.Spec.(map[string]interface{})[persistentvolumeclaims.StevePersistentVolumeClaimVolumeName].(string)))
-	require.NoError(t, err)
-
-	return nginxResponse
-}
-
 // CreateAndInstallAWSExternalCharts is a helper function for rke1 external-aws cloud provider
 // clusters that install the appropriate chart(s) and returns an error, if any.
 func CreateAndInstallAWSExternalCharts(client *rancher.Client, cluster *extensionscluster.ClusterMeta, isLeaderMigration bool) error {
@@ -336,38 +255,6 @@ func CreateAndInstallAWSExternalCharts(client *rancher.Client, cluster *extensio
 	}
 	err = charts.InstallAWSOutOfTreeChart(client, installOptions, repoName, cluster.ID, isLeaderMigration)
 	return err
-}
-
-// createNginxDeploymentWithPVC is a helper function that creates a nginx deployment in a cluster's default namespace
-func createNginxDeploymentWithPVC(steveclient *steveV1.Client, containerNamePrefix, pvcName, volName string) (*steveV1.SteveAPIObject, error) {
-	logrus.Tracef("Vol: %s", volName)
-	logrus.Tracef("Pod: %s", pvcName)
-
-	containerName := namegenerator.AppendRandomString(containerNamePrefix)
-	volMount := &corev1.VolumeMount{
-		MountPath: "/auto-mnt",
-		Name:      volName,
-	}
-
-	podVol := corev1.Volume{
-		Name: volName,
-		VolumeSource: corev1.VolumeSource{
-			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-				ClaimName: pvcName,
-			},
-		},
-	}
-
-	containerTemplate := wloads.NewContainer(nginxName, nginxName, corev1.PullAlways, []corev1.VolumeMount{*volMount}, []corev1.EnvFromSource{}, nil, nil, nil)
-	podTemplate := wloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{podVol}, []corev1.LocalObjectReference{}, nil, nil)
-	deployment := wloads.NewDeploymentTemplate(containerName, namespaces.Default, podTemplate, true, nil)
-
-	deploymentResp, err := steveclient.SteveType(stevetypes.Deployment).Create(deployment)
-	if err != nil {
-		return nil, err
-	}
-
-	return deploymentResp, err
 }
 
 // createNginxDeployment is a helper function that creates a nginx deployment in a cluster's default namespace

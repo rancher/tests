@@ -292,7 +292,7 @@ func validateWorkload(client *rancher.Client, clusterID string, deployment *appv
 	}
 
 	logrus.Info("Waiting for all pods to be running")
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespaceName, deployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, namespaceName)
 	if err != nil {
 		return err
 	}

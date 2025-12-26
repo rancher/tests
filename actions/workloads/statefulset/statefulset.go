@@ -4,20 +4,56 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/charts"
+	"github.com/rancher/shepherd/pkg/namegenerator"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	"github.com/rancher/tests/actions/storage"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// CreateStatefulset is a helper to create a statefulset using wrangler context
-func CreateStatefulSet(client *rancher.Client, clusterID, namespaceName string, podTemplate corev1.PodTemplateSpec, replicas int32, watchStatefulset bool) (*appv1.StatefulSet, error) {
+// CreateStatefulset is a helper to create a statefulset using wrangler context.
+// If storageClass is provided, a volume template with the indicated storage class and 5Gi of storage will
+// be included in the StetefulSet spec.
+func CreateStatefulSet(client *rancher.Client, clusterID, namespaceName string, podTemplate corev1.PodTemplateSpec, replicas int32, watchStatefulset bool, storageClassName string) (*appv1.StatefulSet, error) {
 	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
 
 	statefulsetTemplate := NewStatefulsetTemplate(namespaceName, podTemplate, replicas)
+	if storageClassName != "" {
+		volName := namegenerator.AppendRandomString(storageClassName + "-pvc-template")
+		volumeClaimTemplate := corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      volName,
+				Namespace: namespaceName,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					"ReadWriteOnce",
+				},
+				StorageClassName: &storageClassName,
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("5Gi"),
+					},
+				},
+			},
+		}
+
+		statefulsetTemplate.Spec.VolumeClaimTemplates = append(statefulsetTemplate.Spec.VolumeClaimTemplates, volumeClaimTemplate)
+		for i, container := range statefulsetTemplate.Spec.Template.Spec.Containers {
+			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+				MountPath: storage.MountPath,
+				Name:      volumeClaimTemplate.Name,
+				ReadOnly:  false,
+			})
+			statefulsetTemplate.Spec.Template.Spec.Containers[i] = container
+		}
+	}
+
 	createdStatefulset, err := wranglerContext.Apps.StatefulSet().Create(statefulsetTemplate)
 	if err != nil {
 		return nil, err

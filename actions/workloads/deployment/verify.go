@@ -58,7 +58,7 @@ func VerifyDeploymentUpgrade(client *rancher.Client, clusterName string, namespa
 	}
 
 	logrus.Debug("Waiting for all pods to be running")
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName, appv1Deployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName)
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func VerifyDeploymentUpgrade(client *rancher.Client, clusterName string, namespa
 
 func VerifyDeploymentScale(client *rancher.Client, clusterName string, namespaceName string, scaleDeployment *appv1.Deployment, image string, expectedReplicas int) error {
 	logrus.Debug("Waiting for all pods to be running")
-	err := pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName, scaleDeployment)
+	err := pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName)
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func VerifyDeploymentSideKick(client *rancher.Client, clusterID, namespace, depl
 		return err
 	}
 
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace, deployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace)
 	if err != nil {
 		return err
 	}
@@ -213,7 +213,7 @@ func VerifyDeploymentSideKick(client *rancher.Client, clusterID, namespace, depl
 	}
 
 	logrus.Tracef("Waiting for all pods to be running deployment: %s", deployment.Name)
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace, updatedDeployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace)
 
 	return err
 }
@@ -447,7 +447,7 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 		return err
 	}
 
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace, deployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace)
 	if err != nil {
 		return err
 	}

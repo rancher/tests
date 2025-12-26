@@ -15,7 +15,6 @@ import (
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
-	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -142,7 +141,7 @@ func CheckPodLogsForErrors(client *rancher.Client, clusterID string, podName str
 }
 
 // WatchAndWaitPodContainerRunning is a helper to watch and wait all pod containers running
-func WatchAndWaitPodContainerRunning(client *rancher.Client, clusterID, namespaceName string, deploymentTemplate *appv1.Deployment) error {
+func WatchAndWaitPodContainerRunning(client *rancher.Client, clusterID, namespaceName string) error {
 	steveclient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return err
