@@ -34,6 +34,7 @@ type DeleteInitMachineDualstackTestSuite struct {
 	session      *session.Session
 	cattleConfig map[string]any
 	rke2Cluster  *v1.SteveAPIObject
+	k3sCluster   *v1.SteveAPIObject
 }
 
 func (d *DeleteInitMachineDualstackTestSuite) TearDownSuite() {
@@ -79,6 +80,10 @@ func (d *DeleteInitMachineDualstackTestSuite) SetupSuite() {
 	logrus.Info("Provisioning RKE2 cluster")
 	d.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(d.T(), err)
+
+	logrus.Info("Provisioning K3s cluster")
+	d.k3sCluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
+	require.NoError(d.T(), err)
 }
 
 func (d *DeleteInitMachineDualstackTestSuite) TestDeleteInitMachineDualstack() {
@@ -87,6 +92,7 @@ func (d *DeleteInitMachineDualstackTestSuite) TestDeleteInitMachineDualstack() {
 		clusterID string
 	}{
 		{"RKE2_Dualstack_Delete_Init_Machine", d.rke2Cluster.ID},
+		{"K3S_Dualstack_Delete_Init_Machine", d.k3sCluster.ID},
 	}
 
 	for _, tt := range tests {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
@@ -16,6 +17,7 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -30,6 +32,7 @@ type DeleteIPv6ClusterTestSuite struct {
 	client       *rancher.Client
 	cattleConfig map[string]any
 	rke2Cluster  *v1.SteveAPIObject
+	k3sCluster   *v1.SteveAPIObject
 }
 
 func (d *DeleteIPv6ClusterTestSuite) TearDownSuite() {
@@ -68,6 +71,22 @@ func (d *DeleteIPv6ClusterTestSuite) SetupSuite() {
 	logrus.Info("Provisioning RKE2 cluster")
 	d.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(d.T(), err)
+
+	if clusterConfig.Advanced == nil {
+		clusterConfig.Advanced = &provisioninginput.Advanced{}
+	}
+
+	if clusterConfig.Advanced.MachineGlobalConfig == nil {
+		clusterConfig.Advanced.MachineGlobalConfig = &rkev1.GenericMap{
+			Data: map[string]any{},
+		}
+	}
+
+	clusterConfig.Advanced.MachineGlobalConfig.Data["flannel-ipv6-masq"] = true
+
+	logrus.Info("Provisioning K3s cluster")
+	d.k3sCluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
+	require.NoError(d.T(), err)
 }
 
 func (d *DeleteIPv6ClusterTestSuite) TestDeletingIPv6Cluster() {
@@ -76,6 +95,7 @@ func (d *DeleteIPv6ClusterTestSuite) TestDeletingIPv6Cluster() {
 		clusterID string
 	}{
 		{"RKE2_Delete_IPv6_Cluster", d.rke2Cluster.ID},
+		{"K3S_Delete_IPv6_Cluster", d.k3sCluster.ID},
 	}
 
 	for _, tt := range tests {

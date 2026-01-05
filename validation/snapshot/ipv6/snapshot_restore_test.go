@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
@@ -18,6 +19,7 @@ import (
 	"github.com/rancher/tests/actions/etcdsnapshot"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -36,6 +38,7 @@ type SnapshotIPv6RestoreTestSuite struct {
 	client       *rancher.Client
 	cattleConfig map[string]any
 	rke2Cluster  *v1.SteveAPIObject
+	k3sCluster   *v1.SteveAPIObject
 }
 
 func (s *SnapshotIPv6RestoreTestSuite) TearDownSuite() {
@@ -74,6 +77,22 @@ func (s *SnapshotIPv6RestoreTestSuite) SetupSuite() {
 	logrus.Info("Provisioning RKE2 cluster")
 	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, false, false)
 	require.NoError(s.T(), err)
+
+	if clusterConfig.Advanced == nil {
+		clusterConfig.Advanced = &provisioninginput.Advanced{}
+	}
+
+	if clusterConfig.Advanced.MachineGlobalConfig == nil {
+		clusterConfig.Advanced.MachineGlobalConfig = &rkev1.GenericMap{
+			Data: map[string]any{},
+		}
+	}
+
+	clusterConfig.Advanced.MachineGlobalConfig.Data["flannel-ipv6-masq"] = true
+
+	logrus.Info("Provisioning K3s cluster")
+	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, false, false)
+	require.NoError(s.T(), err)
 }
 
 func snapshotRestoreConfigs() []*etcdsnapshot.Config {
@@ -109,6 +128,9 @@ func (s *SnapshotIPv6RestoreTestSuite) TestSnapshotIPv6Restore() {
 		{"RKE2_IPv6_Restore_ETCD", snapshotRestoreConfigRKE2[0], s.rke2Cluster.ID},
 		{"RKE2_IPv6_Restore_ETCD_K8sVersion", snapshotRestoreConfigRKE2[1], s.rke2Cluster.ID},
 		{"RKE2_IPv6_Restore_Upgrade_Strategy", snapshotRestoreConfigRKE2[2], s.rke2Cluster.ID},
+		{"K3S_IPv6_Restore_ETCD", snapshotRestoreConfigRKE2[0], s.k3sCluster.ID},
+		{"K3S_IPv6_Restore_ETCD_K8sVersion", snapshotRestoreConfigRKE2[1], s.k3sCluster.ID},
+		{"K3S_IPv6_Restore_Upgrade_Strategy", snapshotRestoreConfigRKE2[2], s.k3sCluster.ID},
 	}
 
 	for _, tt := range tests {
