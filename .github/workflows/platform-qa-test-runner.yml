@@ -47,7 +47,7 @@ jobs:
       REPORT_TO_QASE: ${{ github.event.inputs.report_to_qase }}
       QASE_TEST_RUN_ID: ${{ github.event.inputs.qase_test_run_id }}
       GOTESTSUM_OUTPUT_BUFFER: 0
-      CLUSTER_NAME: ${{ vars.PQA_DS__CLUSTER_NAME }}
+      CLUSTER_NAME: ${{ vars.PQA_DS_CLUSTER_NAME }}
       AWS_INSTANCE_TYPE: ${{ vars.AWS_INSTANCE_TYPE }}
       AWS_ROOT_SIZE: ${{ vars.AWS_ROOT_SIZE }}
       AWS_VOLUME_TYPE: ${{ vars.AWS_VOLUME_TYPE }}

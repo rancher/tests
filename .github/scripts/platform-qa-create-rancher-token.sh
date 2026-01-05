@@ -9,7 +9,7 @@ if ! command -v jq &> /dev/null; then
   sudo apt-get install -y jq
 fi
 
-response=$(curl -s -k "https://$RANCHER_HOST/v3-public/localProviders/local?action=login" \
+response=$(curl -sfk "https://$RANCHER_HOST/v3-public/localProviders/local?action=login" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d "{\"username\":\"admin\", \"password\":\"$RANCHER_ADMIN_PASSWORD\"}")
@@ -22,7 +22,7 @@ fi
 
 if [ -z "$token" ]; then
     echo "⚠️ v3-public login failed, trying v1-public API..."
-    response=$(curl -s -k "https://$RANCHER_HOST/v1-public/login" \
+    response=$(curl -sfk "https://$RANCHER_HOST/v1-public/login" \
       -H "Content-Type: application/json" \
       -H "Accept: application/json" \
       -d "{\"type\": \"localProvider\", \"username\": \"admin\", \"password\": \"$RANCHER_ADMIN_PASSWORD\", \"responseType\": \"json\"}")

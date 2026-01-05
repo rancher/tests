@@ -5,7 +5,7 @@ set -e
 : "${RANCHER_ADMIN_TOKEN:?RANCHER_ADMIN_TOKEN not set}"
 : "${RANCHER_SHORT_VERSION:?RANCHER_SHORT_VERSION not set}"
 
-RANGE=$(curl -s -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" \
+RANGE=$(curl -sfk -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" -H "Accept: application/json"  \
   "https://$RANCHER_HOST/v1/management.cattle.io.settings/ui-k8s-supported-versions-range" \
   | jq -r .value)
 
@@ -15,7 +15,7 @@ MIN_K8S_RAW=$(echo "$RANGE" | awk '{print substr($1,3)}')
 MAX_K8S_RAW=$(echo "$RANGE" | awk '{print substr($2,3)}') 
 
 DATA_URL="https://releases.rancher.com/kontainer-driver-metadata/dev-v$RANCHER_SHORT_VERSION/data.json"
-K8S_VERSIONS=$(curl -s "$DATA_URL" \
+K8S_VERSIONS=$(curl -sf "$DATA_URL" \
   | jq -r '.. | .version? // empty' \
   | grep '+k3s' \
   | sed 's/+k3s.*//' \

@@ -1,12 +1,15 @@
 #!/bin/bash
 set -e
 
-VERSION=$(curl -k -s -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" \
+: "${RANCHER_HOST:?RANCHER_HOST not set}"
+: "${RANCHER_ADMIN_TOKEN:?RANCHER_ADMIN_TOKEN not set}"
+
+VERSION=$(curl -sfk -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" -H "Accept: application/json" \
   "https://$RANCHER_HOST/v1/management.cattle.io.settings/server-version" | jq -r '.value // empty')
 
 if [ -z "$VERSION" ]; then
   echo "⚠️ v1 API failed, falling back to v3 API..."
-  VERSION=$(curl -k -s -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" \
+  VERSION=$(curl -sfk -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" -H "Accept: application/json" \
     "https://$RANCHER_HOST/v3/settings/server-version" | jq -r '.value // empty')
 fi
 
