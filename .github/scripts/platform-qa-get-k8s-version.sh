@@ -22,6 +22,9 @@ K8S_VERSIONS=$(curl -sf "$DATA_URL" \
   | sort -V)
 MIN_K8S=$(echo "$K8S_VERSIONS" | grep -E "^${MIN_K8S_RAW%.*}" | head -n1)
 MAX_K8S=$(echo "$K8S_VERSIONS" | grep -E "^${MAX_K8S_RAW%.*}" | tail -n1)
+if [ -z "$MAX_K8S" ]; then
+  MAX_K8S=$(echo "$K8S_VERSIONS" | tail -n1)
+fi
 
 K8S_VERSION=$(echo "$K8S_VERSIONS" | sort -V | awk -v min="$MIN_K8S" -v max="$MAX_K8S" '$0 >= min && $0 <= max' | tail -n1)
 if [ -z "$K8S_VERSION" ]; then
