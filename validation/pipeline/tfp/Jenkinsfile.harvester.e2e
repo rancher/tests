@@ -425,7 +425,6 @@ echo "}\\n" >> "${tfvars_filepath}"
 
 # echo "\\nEOF\\n}\\n" >> "${tfvars_filepath}"
                                 """
-
                                     // run the test with tofu
                                     sh """
                                 
@@ -437,6 +436,9 @@ echo "}\\n" >> "${tfvars_filepath}"
                                 . /root/playbook.env
                                 . ./validation/pipeline/scripts/register_downstream_cluster.sh
                                 '
+
+                                docker cp ${testContainer}-ds:/root/go/src/github.com/rancher/qa-infra-automation/config.yml mid_config.yml
+                            
                                 docker stop ${testContainer}-ds || true; docker rm ${testContainer}-ds
                                 sleep 90
                                 """
@@ -444,33 +446,54 @@ echo "}\\n" >> "${tfvars_filepath}"
                         }
                     }
                     stage('Run Validation Tests') {
+                        
                         if (env.CONNECT_HARVESTER_AND_RANCHER == "true") {
                             try {
-                                sh """
-                                docker run -v ${validationVolume}:/root --name ${golangTestContainer} -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c "cp \$CATTLE_TEST_CONFIG . && export CATTLE_TEST_CONFIG=/root/go/src/github.com/rancher/tests/config.yml && /root/go/bin/gotestsum --format standard-verbose --packages=${golangTestDir} --junitfile ${testResultsOut} -- -tags=${TAGS} ${GO_TEST_CASE} -timeout=${timeout} -v ;"
-                                """
+                                
+                                jobs = [:]
+                                dir("infra-repo") {
+                                    def mainRancherConfigPath = "mid_config.yml"
+
+                                    sh "yq e '.rancher.cleanup = true' -i ${mainRancherConfigPath}"
+                                    
+
+                                    def configYaml = readFile(file: "${mainRancherConfigPath}")
+
+                                    def goProvisioningParams = [
+                                    string(name: 'TIMEOUT', value: timeout),
+                                    text(name: 'CONFIG', value: configYaml),
+                                    string(name: 'REPO', value: "${env.TEST_REPO}"),
+                                    string(name: 'BRANCH', value: "${testBranch}"),
+                                    // string(name: 'QASE_TEST_RUN_ID', value: "${testRunID}"),
+                                    string(name: 'TEST_PACKAGE', value: "${env.GO_TEST_PACKAGE}"),
+                                    string(name: 'GOTEST_TESTCASE', value: "${env.GO_TEST_CASE}"),
+                                    string(name: 'TAGS', value: "${env.TAGS}"),
+                                    ]
+                                    def individualJob = "go-freeform-job-harvester"
+                                    jobs["test-pit"] = { build job: individualJob, parameters: goProvisioningParams }
+                                    parallel jobs
+                                }
+
                             } catch (err) {
                                 echo "${err} Test had failures.."
                             }
                             
-                            sh "docker cp ${golangTestContainer}:/root/go/src/github.com/rancher/tests/config.yml final_config.yml"
-                            
                             def r_host = sh (
-                                script: "yq '.rancher.host' final_config.yml",
+                                script: "yq '.rancher.host' /infra-repo/mid_config.yml",
                                 returnStdout: true
                             ).trim()
 
                             def r_pass = sh (
-                                script: "yq '.rancher.adminPassword' final_config.yml",
+                                script: "yq '.rancher.adminPassword' /infra-repo/mid_config.yml",
                                 returnStdout: true
                             ).trim()
 
                             def h_host = sh (
-                                script: "yq '.harvester.host' final_config.yml",
+                                script: "yq '.harvester.host' /infra-repo/mid_config.yml",
                                 returnStdout: true
                             ).trim()
 
-                            currentBuild.description = "https://${r_host}\\n${r_pass}\\nhttps://${h_host}\\n"
+                            currentBuild.description = "https://${r_host}<br>${r_pass}<br>https://${h_host}"
 
                             sh """
                             docker stop ${golangTestContainer} || true
