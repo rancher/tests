@@ -477,21 +477,22 @@ echo "}\\n" >> "${tfvars_filepath}"
                             } catch (err) {
                                 echo "${err} Test had failures.."
                             }
-                            
-                            def r_host = sh (
-                                script: "yq '.rancher.host' /infra-repo/mid_config.yml",
-                                returnStdout: true
-                            ).trim()
+                            dir("infra-repo") {
+                                def r_host = sh (
+                                    script: "yq '.rancher.host' mid_config.yml",
+                                    returnStdout: true
+                                ).trim()
 
-                            def r_pass = sh (
-                                script: "yq '.rancher.adminPassword' /infra-repo/mid_config.yml",
-                                returnStdout: true
-                            ).trim()
+                                def r_pass = sh (
+                                    script: "yq '.rancher.adminPassword' mid_config.yml",
+                                    returnStdout: true
+                                ).trim()
 
-                            def h_host = sh (
-                                script: "yq '.harvester.host' /infra-repo/mid_config.yml",
-                                returnStdout: true
-                            ).trim()
+                                def h_host = sh (
+                                    script: "yq '.harvester.host' mid_config.yml",
+                                    returnStdout: true
+                                ).trim()
+                            }
 
                             currentBuild.description = "https://${r_host}<br>${r_pass}<br>https://${h_host}"
 
