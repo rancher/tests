@@ -96,6 +96,18 @@ EOF
 kubectl --kubeconfig "$RANCHER_KUBECONFIG" apply -f "$MACHINECONFIG_FILE"
 sleep 5
 
+REGISTRY_SECRET_NAME="dockerhub-registry-auth"
+cat <<EOF | kubectl --kubeconfig "$RANCHER_KUBECONFIG" apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${REGISTRY_SECRET_NAME}
+  namespace: ${NAMESPACE}
+stringData:
+  username: "${DOCKERHUB_USERNAME}"
+  password: "${DOCKERHUB_PASSWORD}"
+EOF
+
 # Create Downstream Cluster
 cat > "$CLUSTER_FILE" <<EOF
 apiVersion: provisioning.cattle.io/v1
@@ -113,9 +125,7 @@ spec:
           endpoint: ["https://${QA_PRIVATE_REGISTRY_NAME}"]
       configs:
         "${QA_PRIVATE_REGISTRY_NAME}":
-          "auth":
-            username: "${DOCKERHUB_USERNAME}"
-            password: "${DOCKERHUB_PASSWORD}"
+          authConfigSecretName: "${REGISTRY_SECRET_NAME}"
     machinePools:
       - name: pool1
         quantity: 1
