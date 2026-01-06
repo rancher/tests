@@ -33,6 +33,7 @@ on:
         required: false
 
 permissions:
+  id-token: write
   contents: read
 
 jobs:
@@ -89,6 +90,18 @@ jobs:
           chmod 600 ~/.ssh/$SSH_PRIVATE_KEY_NAME.pem
           echo "SSH_PRIVATE_KEY_PATH=$HOME/.ssh" >> $GITHUB_ENV
 
+      - name: Fetch and Set DockerHub Credentials
+        uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
+
+      - name: Mask Dockerhub Credentials
+        run: |
+          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
+          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+
       - name: Create Rancher admin token
         id: create-token
         env:
@@ -115,6 +128,9 @@ jobs:
           AWS_VPC_ID: ${{ secrets.PQA_AWS_VPC_ID }}
           AWS_SUBNET_ID: ${{ secrets.PQA_AWS_SUBNET_ID }}
           AWS_SECURITY_GROUP_NAMES: ${{ secrets.PQA_AWS_SECURITY_GROUP_NAMES }}
+          QA_PRIVATE_REGISTRY_NAME: ${{ secrets.QA_PRIVATE_REGISTRY_NAME }}
+          DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ env.DOCKERHUB_PASSWORD }}
         run: bash .github/scripts/platform-qa-provision-downstream-k3s.sh
 
       - name: Create cattle config
@@ -124,6 +140,9 @@ jobs:
           QUAY_REGISTRY_NAME: ${{ secrets.QUAY_REGISTRY_NAME }}
           QUAY_REGISTRY_USERNAME: ${{ secrets.QUAY_REGISTRY_USERNAME }}
           QUAY_REGISTRY_PASSWORD: ${{ secrets.QUAY_REGISTRY_PASSWORD }}
+          QA_PRIVATE_REGISTRY_NAME: ${{ secrets.QA_PRIVATE_REGISTRY_NAME }}
+          DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ env.DOCKERHUB_PASSWORD }}
           AWS_ACCESS_KEY: ${{ secrets.PQA_AWS_ACCESS_KEY }}
           AWS_SECRET_KEY: ${{ secrets.PQA_AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}

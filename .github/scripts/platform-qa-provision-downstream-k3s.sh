@@ -16,6 +16,9 @@ set -e
 : "${AWS_SECRET_KEY:?AWS secret key not set}"
 : "${CLUSTER_NAME:?Cluster name not set}"
 : "${NETWORK_STACK_PREFERENCE:?Network stack preference not set}"
+: "${QA_PRIVATE_REGISTRY_NAME:?QA private registry name not set}"
+: "${DOCKERHUB_USERNAME:?DockerHub username not set}"
+: "${DOCKERHUB_PASSWORD:?DockerHub password not set}"
 
 API="https://$RANCHER_HOST/v3"
 MACHINECONFIG_NAME="mc-${CLUSTER_NAME}-pool1"
@@ -104,6 +107,15 @@ spec:
   cloudCredentialSecretName: "${CLOUD_CREDENTIAL_ID}"
   kubernetesVersion: ${K3S_VERSION}
   rkeConfig:
+    registries:
+      mirrors:
+        "docker.io":
+          endpoint: ["https://${QA_PRIVATE_REGISTRY_NAME}"]
+      configs:
+        "${QA_PRIVATE_REGISTRY_NAME}":
+          "auth":
+            username: "${DOCKERHUB_USERNAME}"
+            password: "${DOCKERHUB_PASSWORD}"
     machinePools:
       - name: pool1
         quantity: 1
