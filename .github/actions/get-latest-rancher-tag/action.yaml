@@ -9,7 +9,7 @@ inputs:
     description: "Path to prime artifacts"
     required: true
 outputs:
-  lateset_tag_v214:
+  latest_tag_v214:
     description: "Latest tag for v2.14"
     value: ${{ steps.set-outputs.outputs.latest_tag_v214 }}
   latest_tag_v213:
