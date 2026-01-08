@@ -24,6 +24,11 @@ on:
       turtles:
         description: "Turtles mode to test: on, off, toggledOn, toggledOff"
         required: false
+      reporting:
+        description: "Enable reporting to Qase and Slack"
+        required: false
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       rancher_version:
@@ -61,6 +66,11 @@ jobs:
           - rancher-server-two
     env:
       HOSTNAME_PREFIX: "trec-off-214"
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+        }}
 
     steps:
       - name: Checkout repository
@@ -325,6 +335,7 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
+          reporting: env.REPORTING_ENABLED
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
@@ -373,7 +384,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: always()
+        if: env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -397,7 +408,12 @@ jobs:
           - rancher-server-one
           - rancher-server-two
     env:
-      HOSTNAME_PREFIX: "trec-on-213"
+      HOSTNAME_PREFIX: "trec-on-214"
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+        }}
 
     steps:
       - name: Checkout repository
@@ -662,6 +678,7 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
+          reporting: env.REPORTING_ENABLED
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
@@ -710,7 +727,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: always()
+        if: env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -735,6 +752,11 @@ jobs:
           - rancher-server-two
     env:
       HOSTNAME_PREFIX: "trec-ton-214"
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+        }}
 
     steps:
       - name: Checkout repository
@@ -999,6 +1021,7 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
+          reporting: env.REPORTING_ENABLED
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
@@ -1047,7 +1070,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: always()
+        if: env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -1071,7 +1094,12 @@ jobs:
           - rancher-server-one
           - rancher-server-two
     env:
-      HOSTNAME_PREFIX: "trec-toff-213"
+      HOSTNAME_PREFIX: "trec-toff-214"
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+        }}
 
     steps:
       - name: Checkout repository
@@ -1336,6 +1364,7 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
+          reporting: env.REPORTING_ENABLED
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
@@ -1384,7 +1413,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: always()
+        if: env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -1409,6 +1438,11 @@ jobs:
           - rancher-server-two
     env:
       HOSTNAME_PREFIX: "trec-off-213"
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+        }}
 
     steps:
       - name: Checkout repository
@@ -1673,6 +1707,7 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
+          reporting: env.REPORTING_ENABLED
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
@@ -1721,7 +1756,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: always()
+        if: env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -1746,6 +1781,11 @@ jobs:
           - rancher-server-two
     env:
       HOSTNAME_PREFIX: "trec-on-213"
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+        }}
 
     steps:
       - name: Checkout repository
@@ -2010,6 +2050,7 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
+          reporting: env.REPORTING_ENABLED
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
@@ -2058,7 +2099,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: always()
+        if: env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -2083,6 +2124,11 @@ jobs:
           - rancher-server-two
     env:
       HOSTNAME_PREFIX: "trec-ton-213"
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+        }}
 
     steps:
       - name: Checkout repository
@@ -2347,6 +2393,7 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
+          reporting: env.REPORTING_ENABLED
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
@@ -2395,7 +2442,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: always()
+        if: env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -2420,6 +2467,11 @@ jobs:
           - rancher-server-two
     env:
       HOSTNAME_PREFIX: "trec-toff-213"
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+        }}
 
     steps:
       - name: Checkout repository
@@ -2684,6 +2736,7 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
+          reporting: env.REPORTING_ENABLED
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
@@ -2732,7 +2785,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: always()
+        if: env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}

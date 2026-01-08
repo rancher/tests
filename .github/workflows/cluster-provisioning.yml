@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      reporting:
+        description: "Enable reporting to Qase and Slack"
+        required: false
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       rancher_version:
@@ -44,6 +49,11 @@ jobs:
     environment: latest
     env:
       HOSTNAME_PREFIX: "gha-prov-214"
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+        }}
 
     steps:
       - name: Checkout repository
@@ -305,6 +315,8 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
+        with:
+          reporting: env.REPORTING_ENABLED
 
       - name: Cleanup Infrastructure
         if: always()
@@ -352,7 +364,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: always()
+        if: env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -369,6 +381,11 @@ jobs:
     environment: latest
     env:
       HOSTNAME_PREFIX: "gha-prov-213"
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+        }}
 
     steps:
       - name: Checkout repository
@@ -630,6 +647,8 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
+        with:
+          reporting: env.REPORTING_ENABLED
 
       - name: Cleanup Infrastructure
         if: always()
@@ -677,7 +696,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: always()
+        if: env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -694,6 +713,11 @@ jobs:
     environment: staging-latest
     env:
       HOSTNAME_PREFIX: "gha-prov-212"
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+        }}
 
     steps:
       - name: Checkout repository
@@ -964,6 +988,8 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
+        with:
+          reporting: env.REPORTING_ENABLED
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1011,7 +1037,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: always()
+        if: env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -1028,6 +1054,11 @@ jobs:
     environment: staging-latest
     env:
       HOSTNAME_PREFIX: "gha-prov-211"
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+        }}
 
     steps:
       - name: Checkout repository
@@ -1299,6 +1330,8 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
+        with:
+          reporting: env.REPORTING_ENABLED
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1346,7 +1379,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: always()
+        if: env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
