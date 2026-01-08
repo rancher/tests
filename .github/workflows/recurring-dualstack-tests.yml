@@ -58,7 +58,7 @@ jobs:
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
 
     steps:
@@ -306,7 +306,7 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
-          reporting: env.REPORTING_ENABLED
+          reporting: ${{ env.REPORTING_ENABLED }}
         uses: ./.github/actions/run-hostbusters-dualstack-test-suites
 
       - name: Cleanup Infrastructure
@@ -381,7 +381,7 @@ jobs:
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting)
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
 
     steps:
@@ -629,7 +629,7 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
-          reporting: env.REPORTING_ENABLED
+          reporting: ${{ env.REPORTING_ENABLED }}
         uses: ./.github/actions/run-hostbusters-dualstack-test-suites
 
       - name: Cleanup Infrastructure
