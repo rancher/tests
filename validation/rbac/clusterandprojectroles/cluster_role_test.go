@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/secrets"
@@ -58,7 +59,7 @@ func (rb *ClusterRoleTestSuite) testSetupUserAndProject(role string) (*managemen
 	require.NoError(rb.T(), err)
 
 	log.Infof("Adding a standard user to the downstream cluster as %s", role)
-	_, errUserRole := rbac.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, role)
+	_, errUserRole := rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, role)
 	require.NoError(rb.T(), errUserRole)
 	standardUserClient, err = standardUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -72,7 +73,7 @@ func (rb *ClusterRoleTestSuite) testSetupUserAndProject(role string) (*managemen
 	createdProject, createdNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(userClient, rb.cluster.ID)
 	require.NoError(rb.T(), err)
 
-	_, errProjectOwnerRole := rbac.CreateProjectRoleTemplateBinding(rb.client, standardUser, createdProject, rbac.CustomManageProjectMember.String())
+	_, errProjectOwnerRole := rbacapi.CreateProjectRoleTemplateBinding(rb.client, standardUser, createdProject, rbac.CustomManageProjectMember.String())
 	require.NoError(rb.T(), errProjectOwnerRole)
 	standardUserClient, err = standardUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -89,7 +90,7 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsUserAsProjectOwner() {
 	additionalUser, additionalUserClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
 	require.NoError(rb.T(), err)
 
-	createdPrtb, err := rbac.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, clusterOwnerProject, rbac.ProjectOwner.String())
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, clusterOwnerProject, rbac.ProjectOwner.String())
 	require.NoError(rb.T(), err)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -117,7 +118,7 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsUserAsClusterOwner() {
 	additionalUser, additionalUserClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
 	require.NoError(rb.T(), err)
 
-	crtb, err := rbac.CreateClusterRoleTemplateBinding(standardUserClient, rb.cluster.ID, additionalUser, rbac.ClusterOwner.String())
+	crtb, err := rbacapi.CreateClusterRoleTemplateBinding(standardUserClient, rb.cluster.ID, additionalUser, rbac.ClusterOwner.String())
 	require.NoError(rb.T(), err)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -145,7 +146,7 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsClusterMemberAsProjectOwner(
 	additionalUser, additionalUserClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
 	require.NoError(rb.T(), err)
 
-	_, err = rbac.CreateClusterRoleTemplateBinding(standardUserClient, rb.cluster.ID, additionalUser, rbac.ClusterMember.String())
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(standardUserClient, rb.cluster.ID, additionalUser, rbac.ClusterMember.String())
 	require.NoError(rb.T(), err)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -154,7 +155,7 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsClusterMemberAsProjectOwner(
 	require.NoError(rb.T(), err)
 	assert.Equal(rb.T(), 1, len(clusterList.Data))
 
-	_, err = rbac.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, clusterOwnerProject, rbac.ProjectOwner.String())
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, clusterOwnerProject, rbac.ProjectOwner.String())
 	require.NoError(rb.T(), err)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -176,23 +177,23 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithPrtbAccess() {
 	log.Infof("Creating a cluster role template with verbs *, resources projectroletemplatebindings")
 	rules := []rbacv1.PolicyRule{{
 		Verbs:     []string{"*"},
-		APIGroups: []string{rbac.ManagementAPIGroup},
-		Resources: []string{rbac.PrtbResource},
+		APIGroups: []string{rbacapi.ManagementAPIGroup},
+		Resources: []string{rbacapi.PrtbResource},
 	}}
-	createdRoleTemplate, err := rbac.CreateRoleTemplate(rb.client, rbac.ClusterContext, rules, nil, false, nil)
+	createdRoleTemplate, err := rbacapi.CreateRoleTemplate(rb.client, rbacapi.ClusterContext, rules, nil, false, false, nil)
 	require.NoError(rb.T(), err, "Failed to create main role template")
 
 	log.Info("Adding the user to the downstream cluster with the cluster role template")
-	_, err = rbac.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, createdRoleTemplate.Name)
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, createdRoleTemplate.Name)
 	require.NoError(rb.T(), err)
-	_, err = rbac.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, rbac.ProjectsView.String())
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, rbac.ProjectsView.String())
 	require.NoError(rb.T(), err)
 
 	log.Info("As cluster member with PRTB permissions, verifying CRUD projectroletemplatebindings")
-	prtb, err := rbac.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, adminProject, rbac.PrtbView.String())
+	prtb, err := rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, adminProject, rbac.PrtbView.String())
 	require.NoError(rb.T(), err)
 
-	userContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbac.LocalCluster)
+	userContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, clusterapi.LocalCluster)
 	require.NoError(rb.T(), err)
 	prtb, err = userContext.Mgmt.ProjectRoleTemplateBinding().Get(prtb.Namespace, prtb.Name, metav1.GetOptions{})
 	require.NoError(rb.T(), err)
@@ -218,15 +219,15 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithSecretAccess() {
 	rules := []rbacv1.PolicyRule{{
 		Verbs:     []string{"*"},
 		APIGroups: []string{""},
-		Resources: []string{rbac.SecretsResource},
+		Resources: []string{rbacapi.SecretsResource},
 	}}
-	createdRoleTemplate, err := rbac.CreateRoleTemplate(rb.client, rbac.ClusterContext, rules, nil, false, nil)
+	createdRoleTemplate, err := rbacapi.CreateRoleTemplate(rb.client, rbacapi.ClusterContext, rules, nil, false, false, nil)
 	require.NoError(rb.T(), err, "Failed to create main role template")
 
 	log.Info("Adding the user to the downstream cluster with the cluster role template")
-	_, err = rbac.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, createdRoleTemplate.Name)
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, createdRoleTemplate.Name)
 	require.NoError(rb.T(), err)
-	_, err = rbac.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, rbac.ProjectsView.String())
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, rbac.ProjectsView.String())
 	require.NoError(rb.T(), err)
 
 	log.Info("As cluster member with secrets permissions, verifying CRUD secrets")

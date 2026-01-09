@@ -12,7 +12,6 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	secretsapi "github.com/rancher/tests/actions/kubeapi/secrets"
-	"github.com/rancher/tests/actions/rbac"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -102,7 +101,7 @@ func CreateProjectScopedSecret(client *rancher.Client, clusterID, projectID stri
 		ProjectScopedSecretLabel: projectID,
 	}
 
-	createdProjectScopedSecret, err := CreateSecret(client, rbac.LocalCluster, backingNamespace, data, secretType, labels, nil)
+	createdProjectScopedSecret, err := CreateSecret(client, clusterapi.LocalCluster, backingNamespace, data, secretType, labels, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create project scoped secret: %w", err)
 	}
@@ -169,7 +168,7 @@ func UpdateSecretData(client *rancher.Client, clusterID, namespace, secretName s
 func UpdateProjectScopedSecret(client *rancher.Client, clusterID, projectID, secretName string, newData map[string][]byte) (*corev1.Secret, error) {
 	backingNamespace := fmt.Sprintf("%s-%s", clusterID, projectID)
 
-	updatedProjectScopedSecret, err := UpdateSecretData(client, rbac.LocalCluster, backingNamespace, secretName, newData)
+	updatedProjectScopedSecret, err := UpdateSecretData(client, clusterapi.LocalCluster, backingNamespace, secretName, newData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update secret %s: %w", secretName, err)
 	}

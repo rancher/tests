@@ -17,6 +17,7 @@ import (
 	extensionsworkloads "github.com/rancher/shepherd/extensions/workloads"
 	wloads "github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/rbac"
 	appv1 "k8s.io/api/apps/v1"
@@ -219,9 +220,9 @@ func generatePSALabels() map[string]string {
 func createUpdatePSARoleTemplate(client *rancher.Client) (*v3.RoleTemplate, error) {
 	updatePsaRules := []rbacv1.PolicyRule{
 		{
-			Verbs:     []string{rbac.UpdatePsaVerb},
-			APIGroups: []string{rbac.ManagementAPIGroup},
-			Resources: []string{rbac.ProjectResource},
+			Verbs:     []string{rbacapi.UpdatePsaVerb},
+			APIGroups: []string{rbacapi.ManagementAPIGroup},
+			Resources: []string{rbacapi.ProjectResource},
 		},
 	}
 
@@ -249,7 +250,7 @@ func createUpdatePSARoleTemplate(client *rancher.Client) (*v3.RoleTemplate, erro
 		ObjectMeta: metav1.ObjectMeta{
 			Name: roleTemplateName,
 		},
-		Context:       rbac.ProjectContext,
+		Context:       rbacapi.ProjectContext,
 		Rules:         updatePsaRules,
 		DisplayName:   displayName,
 		External:      false,

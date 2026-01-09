@@ -11,7 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/auth"
-	"github.com/rancher/tests/actions/rbac"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -108,7 +108,7 @@ func (ur *URDeleteTestSuite) TestAdminUserGetDeleted() {
 	require.ErrorContains(ur.T(), err, unauthorizedError)
 
 	logrus.Info("Checking bindings after user deletion")
-	bindingsAfter, err := rbac.GetBindings(ur.client, newAdminUser.ID)
+	bindingsAfter, err := rbacapi.GetBindings(ur.client, newAdminUser.ID)
 	require.NoError(ur.T(), err)
 	require.Empty(ur.T(), bindingsAfter["RoleBindings"], "Expected no RoleBindings after user deletion")
 
@@ -156,7 +156,7 @@ func (ur *URDeleteTestSuite) TestStandardUserGetDeleted() {
 	require.ErrorContains(ur.T(), err, unauthorizedError)
 
 	logrus.Info("Checking bindings after user deletion")
-	bindingsAfter, err := rbac.GetBindings(ur.client, newStdUser.ID)
+	bindingsAfter, err := rbacapi.GetBindings(ur.client, newStdUser.ID)
 	require.NoError(ur.T(), err)
 	require.Empty(ur.T(), bindingsAfter["RoleBindings"], "Expected no RoleBindings after user deletion")
 
@@ -232,7 +232,7 @@ func (ur *URDeleteTestSuite) TestUserIsNotGetDeletedWithDryRun() {
 	require.NoError(ur.T(), err)
 
 	logrus.Info("Getting initial bindings")
-	bindingsBefore, _ := rbac.GetBindings(ur.client, newUser.ID)
+	bindingsBefore, _ := rbacapi.GetBindings(ur.client, newUser.ID)
 
 	logrus.Info("Waiting for default duration")
 	time.Sleep(2 * defaultWaitDuration)
@@ -243,7 +243,7 @@ func (ur *URDeleteTestSuite) TestUserIsNotGetDeletedWithDryRun() {
 	require.Equal(ur.T(), isActive, *(userReLogin).Enabled)
 
 	logrus.Info("Checking bindings after wait period")
-	bindingsAfter, _ := rbac.GetBindings(ur.client, newUser.ID)
+	bindingsAfter, _ := rbacapi.GetBindings(ur.client, newUser.ID)
 	require.Equal(ur.T(), bindingsBefore, bindingsAfter, "RoleBindings")
 	require.Equal(ur.T(), bindingsBefore, bindingsAfter, "ClusterRoleBindings")
 	require.Equal(ur.T(), bindingsBefore, bindingsAfter, "GlobalRoleBindings")

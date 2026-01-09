@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
@@ -122,7 +123,7 @@ func (pu *ProjectUpdatePsaTestSuite) TestCreateNamespaceWithPsaLabelsWithUpdateP
 			log.Infof("Granting 'updatepsa' permission to user %v", newUser.Username)
 			customRoleTemplate, err := createUpdatePSARoleTemplate(pu.client)
 			assert.NoError(pu.T(), err)
-			_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate.Name)
+			_, err = rbacapi.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate.Name)
 			assert.NoError(pu.T(), err)
 
 			log.Infof("As a %v, creating a namespace with PSA labels in the project %v", tt.role.String(), adminProject.Name)
@@ -216,7 +217,7 @@ func (pu *ProjectUpdatePsaTestSuite) TestUpdateNamespaceWithPsaLabelsWithUpdateP
 			log.Infof("Granting 'updatepsa' permission to user %v", newUser.Username)
 			customRoleTemplate, err := createUpdatePSARoleTemplate(pu.client)
 			assert.NoError(pu.T(), err)
-			_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate.Name)
+			_, err = rbacapi.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate.Name)
 			assert.NoError(pu.T(), err)
 
 			log.Infof("As %v, updating PSA labels in namespace %v", tt.role.String(), createdNamespace.Name)
@@ -252,11 +253,11 @@ func (pu *ProjectUpdatePsaTestSuite) TestCreateNamespaceWithPsaLabelsAsStandardU
 	log.Infof("Created user: %v", newUser.Username)
 
 	log.Infof("Granting 'updatepsa' permission to user %v", newUser.Username)
-	_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate2.Name)
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate2.Name)
 	require.NoError(pu.T(), err)
 
 	log.Infof("Granting 'create namespaces' permission to user %v", newUser.Username)
-	_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, rbac.CreateNS.String())
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, rbac.CreateNS.String())
 	require.NoError(pu.T(), err)
 
 	log.Infof("As user %v, create a namespace with PSA labels in project %v", newUser.Username, adminProject.Name)
@@ -288,11 +289,11 @@ func (pu *ProjectUpdatePsaTestSuite) TestVerifyCreateNamespaceWithPsaLabelsWithM
 		log.Infof("Created user: %v", newUser.Username)
 
 		log.Infof("Granting 'updatepsa' permission to user %v", newUser.Username)
-		_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate2.Name)
+		_, err = rbacapi.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, customRoleTemplate2.Name)
 		require.NoError(pu.T(), err)
 
 		log.Infof("Granting 'create namespaces' permission to user %v", newUser.Username)
-		_, err = rbac.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, rbac.CreateNS.String())
+		_, err = rbacapi.CreateProjectRoleTemplateBinding(pu.client, newUser, adminProject, rbac.CreateNS.String())
 		require.NoError(pu.T(), err)
 
 		log.Infof("As user %v, create a namespace with PSA labels in project %v", newUser.Username, adminProject.Name)

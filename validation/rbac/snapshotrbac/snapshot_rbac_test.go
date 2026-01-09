@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/etcdsnapshot"
 	"github.com/rancher/shepherd/pkg/session"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
 	rbac "github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
@@ -85,10 +86,10 @@ func (etcd *SnapshotRBACTestSuite) TestRKE2K3SSnapshotRBAC() {
 
 			if tt.member == rbac.StandardUser.String() {
 				if strings.Contains(tt.role, "project") {
-					_, err = rbac.CreateProjectRoleTemplateBinding(etcd.client, clusterUser, adminProject, tt.role)
+					_, err = rbacapi.CreateProjectRoleTemplateBinding(etcd.client, clusterUser, adminProject, tt.role)
 					require.NoError(etcd.T(), err)
 				} else {
-					_, err = rbac.CreateClusterRoleTemplateBinding(etcd.client, etcd.cluster.ID, clusterUser, tt.role)
+					_, err = rbacapi.CreateClusterRoleTemplateBinding(etcd.client, etcd.cluster.ID, clusterUser, tt.role)
 					require.NoError(etcd.T(), err)
 				}
 			}
