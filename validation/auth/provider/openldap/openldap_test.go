@@ -378,7 +378,67 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRestrictedAccessModeAuthorizedUs
 	require.NoError(a.T(), err, "Failed to rollback access mode")
 }
 
-func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPUnauthorizedLoginDenied() {
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRequiredModeNestedGroupAccess() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+	require.NoError(a.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	nestedGroupPrincipalID := authactions.GetGroupPrincipalID(
+		authactions.OpenLdap,
+		a.authConfig.NestedGroup,
+		a.client.Auth.OLDAP.Config.Users.SearchBase,
+		a.client.Auth.OLDAP.Config.Groups.SearchBase,
+	)
+
+	_, err = rbac.CreateGroupClusterRoleTemplateBinding(
+		authAdmin,
+		a.cluster.ID,
+		nestedGroupPrincipalID,
+		rbac.ClusterMember.String(),
+	)
+	require.NoError(a.T(), err, "Failed to create cluster role binding")
+
+	principalIDs := []string{nestedGroupPrincipalID}
+
+	nestedUsers := slices.Concat(a.authConfig.NestedUsers, a.authConfig.DoubleNestedUsers)
+	for _, user := range nestedUsers {
+		userPrincipalID := authactions.GetUserPrincipalID(
+			authactions.OpenLdap,
+			user.Username,
+			a.client.Auth.OLDAP.Config.Users.SearchBase,
+			a.client.Auth.OLDAP.Config.Groups.SearchBase,
+		)
+		principalIDs = append(principalIDs, userPrincipalID)
+	}
+
+	newAuthConfig, err := authactions.UpdateAccessMode(
+		a.client,
+		authactions.OpenLdap,
+		authactions.AccessModeRequired,
+		principalIDs,
+	)
+	require.NoError(a.T(), err, "Failed to update access mode")
+	require.Equal(a.T(), authactions.AccessModeRequired, newAuthConfig.AccessMode, "Access mode should be required")
+
+	err = authactions.VerifyUserLogins(
+		authAdmin,
+		authactions.OpenLdap,
+		nestedUsers,
+		"required access mode with nested groups",
+		true,
+	)
+	require.NoError(a.T(), err, "Nested group members should be able to login")
+
+	_, err = authactions.UpdateAccessMode(
+		a.client,
+		authactions.OpenLdap,
+		authactions.AccessModeUnrestricted,
+		nil,
+	)
+	require.NoError(a.T(), err, "Failed to rollback access mode")
+}
+
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRequiredModeUnauthorizedLoginDenied() {
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -397,7 +457,7 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPUnauthorizedLoginDenied() {
 	require.NoError(a.T(), err, "Failed to update access mode")
 	require.Equal(a.T(), authactions.AccessModeRequired, newAuthConfig.AccessMode, "Access mode should be required")
 
-	unauthorizedUsers := slices.Concat(a.authConfig.NestedUsers, a.authConfig.DoubleNestedUsers)
+	unauthorizedUsers := a.authConfig.TripleNestedUsers
 	err = authactions.VerifyUserLogins(authAdmin, authactions.OpenLdap, unauthorizedUsers, "required access mode", false)
 	require.NoError(a.T(), err, "Unauthorized users should NOT be able to login")
 
