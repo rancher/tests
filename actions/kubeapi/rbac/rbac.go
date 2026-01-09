@@ -48,6 +48,10 @@ const (
 	PodsResource                       = "pods"
 	ManageUsersVerb                    = "manage-users"
 	UpdatePsaVerb                      = "updatepsa"
+	ClusterOwnerRoleSuffix             = "clusterowner"
+	ClusterMemberRoleSuffix            = "clustermember"
+	ProjectOwnerRoleSuffix             = "projectowner"
+	ProjectMemberRoleSuffix            = "projectmember"
 )
 
 var (
@@ -627,4 +631,42 @@ func IsFeatureEnabled(client *rancher.Client, featureName string) (bool, error) 
 	}
 
 	return feature.Spec.Value != nil && *feature.Spec.Value, nil
+}
+
+// WaitForClusterRoleExistence polls until the ClusterRole exists or does not exist, based on shouldExist.
+func WaitForClusterRoleExistence(client *rancher.Client, clusterID, clusterRoleName string, shouldExist bool) error {
+	wranglerCtx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+		_, err := wranglerCtx.RBAC.ClusterRole().Get(clusterRoleName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return !shouldExist, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		return shouldExist, nil
+	})
+}
+
+// WaitForRoleExistence polls until the Role exists or does not exist, based on shouldExist.
+func WaitForRoleExistence(client *rancher.Client, clusterID, namespaceName, roleName string, shouldExist bool) error {
+	wranglerCtx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+		_, err := wranglerCtx.RBAC.Role().Get(namespaceName, roleName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return !shouldExist, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		return shouldExist, nil
+	})
 }
