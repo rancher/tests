@@ -384,7 +384,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: env.REPORTING_ENABLED == 'true'
+        if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -727,7 +727,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: env.REPORTING_ENABLED == 'true'
+        if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -1070,7 +1070,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: env.REPORTING_ENABLED == 'true'
+        if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -1413,7 +1413,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: env.REPORTING_ENABLED == 'true'
+        if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -1756,7 +1756,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: env.REPORTING_ENABLED == 'true'
+        if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -2099,7 +2099,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: env.REPORTING_ENABLED == 'true'
+        if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -2442,7 +2442,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: env.REPORTING_ENABLED == 'true'
+        if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
@@ -2785,7 +2785,7 @@ jobs:
         id: set-job-status
 
       - name: Reporting Results to Slack
-        if: env.REPORTING_ENABLED == 'true'
+        if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
