@@ -63,16 +63,9 @@ node("harvester-vpn-1") {
             ]) {
                 withEnv(paramsMap) {
                     stage('Setup Harvester Environment') {
-                        sh returnStdout: true, script: 'wget -qO ./jq https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64'
-                        sh returnStdout: true, script: 'chmod a+x ./jq'
-                        sh returnStdout: true, script: 'sudo cp jq /usr/local/bin/'
-                        sh returnStdout: true, script: 'wget -qO yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
-                        sh returnStdout: true, script: 'chmod a+x yq'
-                        sh returnStdout: true, script: 'sudo cp yq /usr/local/bin/'
                         sh returnStdout: true, script: 'wget -qO ./kubectl "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
                         sh returnStdout: true, script: 'chmod a+x ./kubectl'
                         sh returnStdout: true, script: 'sudo cp kubectl /usr/local/bin/'
-                        // TODO: don't think I need this 
                         dir(".ssh") {
                             def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
                             writeFile file: AWS_SSH_KEY_NAME, text: decoded
@@ -95,11 +88,15 @@ node("harvester-vpn-1") {
                         export inode="${EXISTING_HARVESTER_IP}"
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
                             export KUBECONFIG=seeder.yaml
+                            export inode=$(./kubectl get -n tink-system inventories/$HARVESTER_INVENTORY_NODE -o jsonpath='{.status.pxeBootConfig.address}')
                             ./kubectl delete clusters.metal/$HARVESTER_CLUSTER_NAME -n tink-system || true
-                            sleep 300
+                            while ping -c 1 "$HOST" >/dev/null 2>&1; do
+                                sleep 5
+                            done
+                            sleep 180
 
                             ./kubectl apply -f node_manifest.yaml
-
+                            export inode=""
                             while [[ -z "$inode" ]]; do
                                 export inode=$(./kubectl get -n tink-system inventories/$HARVESTER_INVENTORY_NODE -o jsonpath='{.status.pxeBootConfig.address}')
                                 sleep 2
@@ -183,8 +180,12 @@ node("harvester-vpn-1") {
                         echo $jsonOutput
 
                         token=$(echo $jsonOutput | jq -cr .token)
-                        userID=$(echo $jsonOutput | jq -cr .userId)
 
+                        jsonOutput=$(curl --insecure -X GET  -H "Accept: application/json" -H "Content-Type: application/json"  -H "Authorization: Bearer $token"  "https://$inode/v3/users?me=true")
+
+                        echo $jsonOutput
+
+                        userID=$(echo $jsonOutput | jq -cr .data[0].id)
 
                         jsonData=$( jq -n --arg password "password1234" '{"newPassword" : $password}')
 
@@ -219,6 +220,10 @@ node("harvester-vpn-1") {
                         sh returnStdout: true, script: "echo 'finished'"
 
                         config = sh(script: "cat ${filename}", returnStdout: true).trim()
+
+                        sh '''#!/bin/bash
+                        cat config.yml
+                        '''
                     }
                     stage("Parallel Checkout") {
                         parallel(
@@ -266,6 +271,9 @@ node("harvester-vpn-1") {
                             returnStdout: true
                         ).trim()
 
+                        dir("infra-repo/ansible/k3s/default/roles/k3s_install/tasks/") {
+                            writeFile file: "k3s_registry.yaml", text: env.INTERNAL_MIRROR_CONFIG
+                        }
                         if (!exists) {
                             sh "ln -s test-repo tests"
                             sh "ln -s infra-repo qa-infra-automation"
@@ -319,8 +327,8 @@ node("harvester-vpn-1") {
                         docker cp config.yml ${testContainer}-dev:/root/go/src/github.com/rancher/qa-infra-automation/config.yml
                         docker cp harvester.yaml ${testContainer}-dev:/root/go/src/github.com/rancher/qa-infra-automation/tofu/harvester/modules/local.yaml
                         """
-
                     }
+
                     stage('Install Rancher') {
                         dir("infra-repo") {
                             try {
@@ -360,7 +368,6 @@ node("harvester-vpn-1") {
                                 export CATTLE_TEST_CONFIG="/root/go/src/github.com/rancher/qa-infra-automation/\$(echo \$CONFIG_FILE)"
                             '
                         """
-
 
                             env.CATTLE_TEST_CONFIG ="/root/go/src/github.com/rancher/qa-infra-automation/config.yml"
                             } catch (err) {
@@ -492,9 +499,10 @@ echo "}\\n" >> "${tfvars_filepath}"
                                     script: "yq '.harvester.host' mid_config.yml",
                                     returnStdout: true
                                 ).trim()
+
+                                currentBuild.description = "https://${r_host}<br>${r_pass}<br>https://${h_host}"
                             }
 
-                            currentBuild.description = "https://${r_host}<br>${r_pass}<br>https://${h_host}"
 
                             sh """
                             docker stop ${golangTestContainer} || true
