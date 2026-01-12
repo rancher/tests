@@ -51,7 +51,11 @@ jobs:
     environment: prime
     env:
       HOSTNAME_PREFIX: "gha-prime-213"
-      REPORTING_ENABLED: ${{ github.event.inputs.reporting == 'true' }}
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'workflow_call' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
+        }}
 
     steps:
       - name: Checkout repository
@@ -293,7 +297,11 @@ jobs:
     environment: prime
     env:
       HOSTNAME_PREFIX: "gha-prime-212"
-      REPORTING_ENABLED: ${{ github.event.inputs.reporting == 'true' }}
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'workflow_call' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
+        }}
 
     steps:
       - name: Checkout repository
@@ -536,7 +544,11 @@ jobs:
     environment: prime
     env:
       HOSTNAME_PREFIX: "gha-prime-211"
-      REPORTING_ENABLED: ${{ github.event.inputs.reporting == 'true' }}
+      REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'workflow_call' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
+        }}
 
     steps:
       - name: Checkout repository
