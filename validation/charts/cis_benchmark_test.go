@@ -3,7 +3,6 @@
 package charts
 
 import (
-	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -11,26 +10,20 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/pkg/config"
-	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
-	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/projects"
 	cis "github.com/rancher/tests/validation/provisioning/resources/cisbenchmark"
-	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
 type CisBenchmarkTestSuite struct {
 	suite.Suite
-	client       *rancher.Client
-	session      *session.Session
-	cluster      *management.Cluster
-	cattleConfig map[string]any
-	project      *management.Project
+	client  *rancher.Client
+	session *session.Session
+	cluster *clusters.ClusterMeta
+	project *management.Project
 }
 
 func (i *CisBenchmarkTestSuite) TearDownSuite() {
@@ -38,30 +31,21 @@ func (i *CisBenchmarkTestSuite) TearDownSuite() {
 }
 
 func (i *CisBenchmarkTestSuite) SetupSuite() {
-	i.session = session.NewSession()
+	testSession := session.NewSession()
+	i.session = testSession
 
-	client, err := rancher.NewClient("", i.session)
+	client, err := rancher.NewClient("", testSession)
 	require.NoError(i.T(), err)
 
 	i.client = client
 
-	i.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
-
-	loggingConfig := new(logging.Logging)
-	operations.LoadObjectFromMap(logging.LoggingKey, i.cattleConfig, loggingConfig)
-
-	err = logging.SetLogger(loggingConfig)
-	require.NoError(i.T(), err)
-
-	log.Info("Getting cluster name from the config file and append cluster details in connection")
 	clusterName := client.RancherConfig.ClusterName
-	require.NotEmptyf(i.T(), clusterName, "Cluster name to install should be set")
+	require.NotEmptyf(i.T(), clusterName, "Cluster name to install is not set")
 
-	clusterID, err := clusters.GetClusterIDByName(i.client, clusterName)
-	require.NoError(i.T(), err, "Error getting cluster ID")
-
-	i.cluster, err = i.client.Management.Cluster.ByID(clusterID)
+	cluster, err := clusters.NewClusterMeta(client, clusterName)
 	require.NoError(i.T(), err)
+
+	i.cluster = cluster
 
 	clusterMeta, err := extensionscluster.NewClusterMeta(i.client, i.cluster.Name)
 	require.NoError(i.T(), err)
@@ -82,7 +66,6 @@ func (i *CisBenchmarkTestSuite) TestInstallCisBenchmarkChart() {
 
 	i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, cis.System)
 	require.NoError(i.T(), err)
-
 	require.Equal(i.T(), i.project.Name, cis.System)
 
 	chartInstallOptions := &charts.InstallOptions{
@@ -91,7 +74,7 @@ func (i *CisBenchmarkTestSuite) TestInstallCisBenchmarkChart() {
 		ProjectID: i.project.ID,
 	}
 
-	logrus.Infof("Setting up %s on cluster (%s)", chartName, i.cluster.Name)
+	i.T().Logf("Setting up %s on cluster (%s)", chartName, i.cluster.Name)
 	err = cis.SetupHardenedChart(i.client, i.project.ClusterID, chartInstallOptions, chartName, chartNamespace)
 	require.NoError(i.T(), err)
 }
