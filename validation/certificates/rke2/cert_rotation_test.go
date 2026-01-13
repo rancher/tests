@@ -1,6 +1,6 @@
 //go:build (validation || infra.rke2k3s || recurring || cluster.any || stress) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke1 && !sanity && !extended
 
-package rke2k3s
+package rke2
 
 import (
 	"os"
@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/actions/certificates"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
@@ -20,7 +21,6 @@ import (
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
-	"github.com/rancher/tests/validation/certificates"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
@@ -33,8 +33,7 @@ type CertRotationTestSuite struct {
 	session      *session.Session
 	client       *rancher.Client
 	cattleConfig map[string]any
-	rke2Cluster  *v1.SteveAPIObject
-	k3sCluster   *v1.SteveAPIObject
+	cluster      *v1.SteveAPIObject
 }
 
 func (c *CertRotationTestSuite) TearDownSuite() {
@@ -67,46 +66,57 @@ func (c *CertRotationTestSuite) SetupSuite() {
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, c.cattleConfig, clusterConfig)
 
-	provider := provisioning.CreateProvider(clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(c.cattleConfig)
+	rancherConfig := new(rancher.Config)
+	operations.LoadObjectFromMap(defaults.RancherConfigKey, c.cattleConfig, rancherConfig)
 
-	logrus.Info("Provisioning RKE2 cluster")
-	c.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
-	require.NoError(c.T(), err)
+	if rancherConfig.ClusterName == "" {
+		provider := provisioning.CreateProvider(clusterConfig.Provider)
+		machineConfigSpec := provider.LoadMachineConfigFunc(c.cattleConfig)
 
-	logrus.Info("Provisioning K3S cluster")
-	c.k3sCluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
-	require.NoError(c.T(), err)
-
+		logrus.Info("Provisioning RKE2 cluster")
+		c.cluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
+		require.NoError(c.T(), err)
+	} else {
+		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
+		c.cluster, err = c.client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + c.client.RancherConfig.ClusterName)
+		require.NoError(c.T(), err)
+	}
 }
 
 func (c *CertRotationTestSuite) TestCertRotation() {
 	tests := []struct {
-		name      string
-		clusterID string
+		name    string
+		cluster *v1.SteveAPIObject
 	}{
-		{"RKE2_Certificate_Rotation", c.rke2Cluster.ID},
-		{"K3S_Certificate_Rotation", c.k3sCluster.ID},
+		{"RKE2_Certificate_Rotation", c.cluster},
 	}
 
 	for _, tt := range tests {
-		cluster, err := c.client.Steve.SteveType(stevetypes.Provisioning).ByID(tt.clusterID)
-		require.NoError(c.T(), err)
-
+		var err error
 		c.Run(tt.name, func() {
-			logrus.Infof("Rotating certificates on cluster (%s)", cluster.Name)
-			require.NoError(c.T(), certificates.RotateCerts(c.client, cluster.Name))
-
-			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(c.T(), c.client, cluster)
-
-			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(c.client, cluster)
+			oldCertificates, err := certificates.GetClusterCertificates(c.client, tt.cluster.Name)
 			require.NoError(c.T(), err)
 
-			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(c.client, cluster)
+			logrus.Infof("Rotating certificates on cluster (%s)", tt.cluster.Name)
+			require.NoError(c.T(), certificates.RotateCerts(c.client, tt.cluster.Name))
+
+			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
+			provisioning.VerifyClusterReady(c.T(), c.client, tt.cluster)
+
+			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
+			err = deployment.VerifyClusterDeployments(c.client, tt.cluster)
 			require.NoError(c.T(), err)
+
+			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
+			err = pods.VerifyClusterPods(c.client, tt.cluster)
+			require.NoError(c.T(), err)
+
+			newCertificates, err := certificates.GetClusterCertificates(c.client, tt.cluster.Name)
+			require.NoError(c.T(), err)
+
+			logrus.Infof("Verifying certificates were rotated (%s)", tt.cluster.Name)
+			isRotated := certificates.VerifyCertificateRotation(oldCertificates, newCertificates)
+			require.True(c.T(), isRotated)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(c.client, c.cattleConfig)

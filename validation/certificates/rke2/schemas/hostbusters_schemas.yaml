@@ -1,8 +1,8 @@
-- suite: Go Automation/Certificates
+- suite: Go Automation/Certificates/rke2
   projects: [RRT, RM]
   cases:
   - description: Rotates the clusters certificates
-    title: RKE2_Dualstack_Certificate_Rotation
+    title: RKE2_Certificate_Rotation
     priority: 4
     type: 8
     is_flaky: 0
@@ -21,9 +21,9 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
-  
+
   - description: Rotates the clusters certificates
-    title: K3S_Dualstack_Certificate_Rotation
+    title: RKE2_Windows_Certificate_Rotation
     priority: 4
     type: 8
     is_flaky: 0

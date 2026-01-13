@@ -24,14 +24,29 @@ runs:
         case "${{ inputs.suite }}" in
           rancher-server-one)
             gotestsum --format standard-verbose \
-              --packages=github.com/rancher/tests/validation/certificates/ipv6 \
+              --packages=github.com/rancher/tests/validation/certificates/rke2/ipv6 \
               --junitfile results.xml \
-              --jsonfile results_cert.json \
+              --jsonfile results_rke2_cert.json \
               -- -timeout=5h -tags=recurring -v
 
-            cert_exit=$?
-            echo "cert_exit=$cert_exit" >> "$GITHUB_ENV"
-            cp results_cert.json results.json
+            rke2_cert_exit=$?
+            echo "rke2_cert_exit=$rke2_cert_exit" >> "$GITHUB_ENV"
+            cp results_rke2_cert.json results.json
+
+            if [[ "${{ inputs.reporting }}" == "true" ]]; then
+              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+              ./validation/reporter
+            fi
+
+            gotestsum --format standard-verbose \
+              --packages=github.com/rancher/tests/validation/certificates/k3s/ipv6 \
+              --junitfile results.xml \
+              --jsonfile results_k3s_cert.json \
+              -- -timeout=5h -tags=recurring -v
+
+            k3s_cert_exit=$?
+            echo "k3s_cert_exit=$k3s_cert_exit" >> "$GITHUB_ENV"
+            cp results_k3s_cert.json results.json
 
             if [[ "${{ inputs.reporting }}" == "true" ]]; then
               ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -136,7 +151,8 @@ runs:
       shell: bash
       run: |
         declare -A suites=(
-          [cert_exit]="Cert Rotation:results_cert.json"
+          [k3s_cert_exit]="K3s Cert Rotation:results_k3s_cert.json"
+          [rke2_cert_exit]="RKE2 Cert Rotation:results_rke2_cert.json"
           [delete_exit]="Delete Cluster:results_delete.json"
           [node_scale_exit]="Node Scaling:results_node_scale.json"
           [prov_exit]="Provisioning:results_prov.json"

@@ -2,7 +2,7 @@
   projects: [RRT, RM]
   cases:
   - description: Creates and restores a snapshot on an existing cluster
-    title: RKE2_Restore_ETCD
+    title: RKE2_IPv6_Restore_ETCD
     priority: 4
     type: 8
     is_flaky: 0
@@ -28,7 +28,7 @@
       "18": Hostbusters
 
   - description: Upgrades the kubernetes version and restores a snapshot
-    title: RKE2_Restore_ETCD_K8sVersion
+    title: RKE2_IPv6_Restore_ETCD_K8sVersion
     priority: 4
     type: 8
     is_flaky: 0
@@ -60,7 +60,7 @@
       "18": Hostbusters
 
   - description: Creates and restores a snapshot with upgrade strategy
-    title: RKE2_Restore_Upgrade_Strategy
+    title: RKE2_IPv6_Restore_Upgrade_Strategy
     priority: 5
     type: 8
     is_flaky: 0
