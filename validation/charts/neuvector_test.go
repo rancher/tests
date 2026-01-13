@@ -78,7 +78,32 @@ func (i *NeuVectorTestSuite) TestInstallNeuVectorChart() {
 	}
 
 	i.T().Logf("Setting up %s on cluster (%s)", charts.NeuVectorChartName, i.cluster.Name)
-	err = charts.InstallNeuVectorChart(i.client, payloadOpts)
+	err = charts.InstallNeuVectorChart(i.client, charts.NeuVectorChartName, payloadOpts)
+	require.NoError(i.T(), err)
+}
+
+func (i *NeuVectorTestSuite) TestInstallNeuVectorMonitorChart() {
+	clusterMeta, err := extensionscluster.NewClusterMeta(i.client, i.cluster.Name)
+	require.NoError(i.T(), err)
+
+	latestNeuVectorChartVersion, err := i.client.Catalog.GetLatestChartVersion(charts.NeuVectorMonitorChartName, catalog.RancherChartRepo)
+	require.NoError(i.T(), err)
+
+	i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, NeuVectorProject)
+	require.NoError(i.T(), err)
+	require.Equal(i.T(), i.project.Name, NeuVectorProject)
+
+	payloadOpts := charts.PayloadOpts{
+		Namespace: charts.NeuVectorNamespace,
+		InstallOptions: charts.InstallOptions{
+			Cluster:   clusterMeta,
+			Version:   latestNeuVectorChartVersion,
+			ProjectID: i.project.ID,
+		},
+	}
+
+	i.T().Logf("Setting up %s on cluster (%s)", charts.NeuVectorMonitorChartName, i.cluster.Name)
+	err = charts.InstallNeuVectorChart(i.client, charts.NeuVectorMonitorChartName, payloadOpts)
 	require.NoError(i.T(), err)
 }
 
