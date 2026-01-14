@@ -63,9 +63,6 @@ node("harvester-vpn-1") {
             ]) {
                 withEnv(paramsMap) {
                     stage('Setup Harvester Environment') {
-                        sh returnStdout: true, script: 'wget -qO ./kubectl "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
-                        sh returnStdout: true, script: 'chmod a+x ./kubectl'
-                        sh returnStdout: true, script: 'sudo cp kubectl /usr/local/bin/'
                         dir(".ssh") {
                             def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
                             writeFile file: AWS_SSH_KEY_NAME, text: decoded
@@ -88,17 +85,17 @@ node("harvester-vpn-1") {
                         export inode="${EXISTING_HARVESTER_IP}"
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
                             export KUBECONFIG=seeder.yaml
-                            export inode=$(./kubectl get -n tink-system inventories/$HARVESTER_INVENTORY_NODE -o jsonpath='{.status.pxeBootConfig.address}')
-                            ./kubectl delete clusters.metal/$HARVESTER_CLUSTER_NAME -n tink-system || true
+                            export inode=$(kubectl get -n tink-system inventories/$HARVESTER_INVENTORY_NODE -o jsonpath='{.status.pxeBootConfig.address}')
+                            kubectl delete clusters.metal/$HARVESTER_CLUSTER_NAME -n tink-system || true
                             while ping -c 1 "$HOST" >/dev/null 2>&1; do
                                 sleep 5
                             done
                             sleep 180
 
-                            ./kubectl apply -f node_manifest.yaml
+                            kubectl apply -f node_manifest.yaml
                             export inode=""
                             while [[ -z "$inode" ]]; do
-                                export inode=$(./kubectl get -n tink-system inventories/$HARVESTER_INVENTORY_NODE -o jsonpath='{.status.pxeBootConfig.address}')
+                                export inode=$(kubectl get -n tink-system inventories/$HARVESTER_INVENTORY_NODE -o jsonpath='{.status.pxeBootConfig.address}')
                                 sleep 2
                             done
                         fi
@@ -148,9 +145,9 @@ node("harvester-vpn-1") {
 
                         export KUBECONFIG=harvester.yaml
 
-                        ./kubectl get pods -A
-                        ./kubectl rollout status deployment -n harvester-system harvester
-                        ./kubectl rollout status deployment -n cattle-system rancher
+                        kubectl get pods -A
+                        kubectl rollout status deployment -n harvester-system harvester
+                        kubectl rollout status deployment -n cattle-system rancher
                         '''
 
                         config = config.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
@@ -301,7 +298,7 @@ node("harvester-vpn-1") {
                         sh '''#!/bin/bash
                         export KUBECONFIG=harvester.yaml
 
-                        ./kubectl apply -f harvester_config.yaml
+                        kubectl apply -f harvester_config.yaml
                         '''
 
 
@@ -385,7 +382,8 @@ node("harvester-vpn-1") {
                             try {
                                 // this test also writes harvesterCloudCredentials to the config
                                 sh( script: """
-                            docker run -v ${validationVolume}:/root --name hvst${golangTestContainer} -t  ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c "cp "\$CATTLE_TEST_CONFIG" . && export CATTLE_TEST_CONFIG="\$CATTLE_TEST_CONFIG" && /root/go/bin/gotestsum --format standard-verbose --packages=${golangHvstDir} --junitfile ${testResultsOut} -- -tags=${TAGS} ${hvstTestCase} -timeout=${timeout} -v "
+                            sleep 60
+                            docker run -v ${validationVolume}:/root --name hvst${golangTestContainer} -t  ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c "cp "\$CATTLE_TEST_CONFIG" . && export CATTLE_TEST_CONFIG="\$CATTLE_TEST_CONFIG" && /root/go/bin/gotestsum --format standard-verbose --packages=${golangHvstDir} --junitfile ${testResultsOut} -- -tags=harvester ${hvstTestCase} -timeout=${timeout} -v "
                             """, returnStatus: true)
                             } catch (err) {
                                 echo "${err} Unable to connect harvester to new rancher setup. Aborting"
