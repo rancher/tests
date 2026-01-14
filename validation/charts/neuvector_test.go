@@ -17,10 +17,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-const (
-	NeuVectorProject = "System"
-)
-
 type NeuVectorTestSuite struct {
 	suite.Suite
 	client  *rancher.Client
@@ -53,7 +49,7 @@ func (i *NeuVectorTestSuite) SetupSuite() {
 	clusterMeta, err := extensionscluster.NewClusterMeta(i.client, i.cluster.Name)
 	require.NoError(i.T(), err)
 
-	i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, NeuVectorProject)
+	i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, charts.SystemProject)
 	require.NoError(i.T(), err)
 }
 
@@ -71,9 +67,9 @@ func (i *NeuVectorTestSuite) TestChartInstallation() {
 			latestNeuVectorChartVersion, err := i.client.Catalog.GetLatestChartVersion(neuVectorChartName, catalog.RancherChartRepo)
 			require.NoError(i.T(), err)
 
-			i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, NeuVectorProject)
+			i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, charts.SystemProject)
 			require.NoError(i.T(), err)
-			require.Equal(i.T(), i.project.Name, NeuVectorProject)
+			require.Equal(i.T(), i.project.Name, charts.SystemProject)
 
 			payloadOpts := charts.PayloadOpts{
 				Namespace: charts.NeuVectorNamespace,
