@@ -54,7 +54,7 @@ func (i *CisBenchmarkTestSuite) SetupSuite() {
 	require.NoError(i.T(), err)
 }
 
-func (i *CisBenchmarkTestSuite) TestInstallCisBenchmarkChart() {
+func (i *CisBenchmarkTestSuite) TestChartInstallation() {
 	chartName := charts.CISBenchmarkName
 	chartNamespace := charts.CISBenchmarkNamespace
 

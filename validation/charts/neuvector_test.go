@@ -57,7 +57,7 @@ func (i *NeuVectorTestSuite) SetupSuite() {
 	require.NoError(i.T(), err)
 }
 
-func (i *NeuVectorTestSuite) TestInstallNeuVectorChart() {
+func (i *NeuVectorTestSuite) TestChartInstallation() {
 	neuVectorChartNames := []string{
 		charts.NeuVectorChartName,
 		charts.NeuVectorMonitorChartName,
