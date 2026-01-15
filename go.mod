@@ -10,8 +10,8 @@ replace (
 
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20191219222812-2987a591a72c
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20191219222812-2987a591a72c
-	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20251111120454-f829d8f1dc83
-	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20251111120454-f829d8f1dc83
+	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260105201356-c4811cb9f2af
+	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260105201356-c4811cb9f2af
 
 	github.com/rancher/tests/actions => ./actions
 	github.com/rancher/tests/interoperability => ./interoperability
@@ -71,9 +71,9 @@ require (
 require (
 	github.com/gruntwork-io/terratest v0.49.0
 	github.com/mattn/go-sqlite3 v1.14.28
-	github.com/rancher/rancher v0.0.0-20251203234820-b95b2fb0d738
-	github.com/rancher/shepherd v0.0.0-20251203195144-c9f6483abe67
-	github.com/rancher/tests/actions v0.0.0-20251111162746-32a475483166
+	github.com/rancher/rancher v0.0.0-20251223145833-24cecce3325e
+	github.com/rancher/shepherd v0.0.0-20251216155429-44067c0178ae
+	github.com/rancher/tests/actions v0.0.0-20260105193042-a805683addc3
 	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
 	github.com/rancher/tfp-automation v0.0.0-20251219210947-f4a1a9882c29
 	go.qase.io/qase-api-client v0.0.0-00010101000000-000000000000
@@ -109,34 +109,34 @@ require (
 	github.com/rancher/apiserver v0.8.0 // indirect
 	github.com/rancher/backup-restore-operator v1.2.1
 	github.com/rancher/eks-operator v1.13.0-rc.4 // indirect
-	github.com/rancher/fleet/pkg/apis v0.14.0-rc.1
+	github.com/rancher/fleet/pkg/apis v0.15.0-alpha.4
 	github.com/rancher/gke-operator v1.13.0-rc.3 // indirect
 	github.com/rancher/lasso v0.2.5 // indirect
-	github.com/rancher/norman v0.8.0
+	github.com/rancher/norman v0.8.1
 	github.com/rancher/rke v1.8.0 // indirect
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078 // indirect
 	github.com/rancher/wrangler v1.1.2 // indirect
 	github.com/rancher/wrangler/v3 v3.3.1 // indirect
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/crypto v0.43.0
-	golang.org/x/net v0.46.0
+	golang.org/x/crypto v0.45.0
+	golang.org/x/net v0.47.0
 	golang.org/x/oauth2 v0.32.0 // indirect
-	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/text v0.30.0 // indirect
+	golang.org/x/sync v0.18.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	google.golang.org/grpc v1.75.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.34.1
+	k8s.io/api v0.34.3
 	k8s.io/apiextensions-apiserver v0.34.1 // indirect
-	k8s.io/apimachinery v0.34.1
+	k8s.io/apimachinery v0.34.3
 	k8s.io/apiserver v0.34.1 // indirect
 	k8s.io/cli-runtime v0.34.1 // indirect
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kube-aggregator v0.34.1 // indirect
 	k8s.io/kube-openapi v0.31.5 // indirect
 	k8s.io/kubectl v0.34.1 // indirect
-	k8s.io/kubernetes v1.34.1 // indirect
+	k8s.io/kubernetes v1.34.2 // indirect
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // indirect
 	sigs.k8s.io/cluster-api v1.10.6 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
@@ -190,8 +190,8 @@ require (
 	github.com/zclconf/go-cty v1.15.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/mod v0.28.0 // indirect
-	golang.org/x/tools v0.37.0 // indirect
+	golang.org/x/mod v0.30.0 // indirect
+	golang.org/x/tools v0.39.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250825161204-c5933d9347a5 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251002232023-7c0ddcbb5797 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
@@ -277,8 +277,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/sys v0.37.0 // indirect
-	golang.org/x/term v0.36.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/time v0.13.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

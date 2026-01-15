@@ -1,96 +1,147 @@
 ---
- name: Run IPv6 Test Suite
- description: "Runs a specific test suite based on input"
- inputs:
-   suite:
-     description: "The test suite to run"
-     required: true
- runs:
-   using: composite
-   steps:
-     - name: Run Selected Test Suite
-       id: run-tests
-       run: |
-         set +e
-         case "${{ inputs.suite }}" in
-           rancher-server-one)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/ipv6 \
-               --junitfile results.xml --jsonfile results_cert.json -- -timeout=5h -tags=recurring -v;
-             cert_exit=$?;
-             echo "cert_exit=$cert_exit" >> $GITHUB_ENV;
-             cp results_cert.json results.json
-             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-             ./validation/reporter
-             
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/ipv6 \
-               --junitfile results.xml --jsonfile results_delete.json -- -timeout=5h -tags=recurring -v;
-             delete_exit=$?;
-             echo "delete_exit=$delete_exit" >> $GITHUB_ENV;
-             cp results_delete.json results.json
-             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-             ./validation/reporter
+name: Run IPv6 Test Suite
+description: "Runs a specific test suite based on input"
 
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/ipv6 \
-               --junitfile results.xml --jsonfile results_node_scale.json -- -timeout=5h -tags=recurring -v;
-             node_scale_exit=$?;
-             echo "node_scale_exit=$node_scale_exit" >> $GITHUB_ENV;
-             cp results_node_scale.json results.json
-             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-             ./validation/reporter
-             ;;
-           rancher-server-two)
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 \
-               --junitfile results.xml --jsonfile results_prov.json -- -timeout=5h -tags=recurring -v;
-             prov_exit=$?;
-             echo "prov_exit=$prov_exit" >> $GITHUB_ENV;
-             cp results_prov.json results.json
-             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-             ./validation/reporter
+inputs:
+  suite:
+    description: "The test suite to run"
+    required: true
+  reporting:
+    description: "Enable reporting"
+    required: false
+    default: "false"
 
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/ipv6 \
-               --junitfile results.xml --jsonfile results_snapshot.json -- -timeout=5h -tags=recurring -v;
-             snap_restore_exit=$?;
-             echo "snap_restore_exit=$snap_restore_exit" >> $GITHUB_ENV;
-             cp results_snapshot.json results.json
-             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-             ./validation/reporter
+runs:
+  using: composite
+  steps:
+    - name: Run Selected Test Suite
+      id: run-tests
+      shell: bash
+      continue-on-error: true
+      run: |
+        set +e
 
-             gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/ipv6 \
-               --junitfile results.xml --jsonfile results_upgrade.json -- -timeout=5h -tags=recurring -v;
-             upgrade_exit=$?;
-             echo "upgrade_exit=$upgrade_exit" >> $GITHUB_ENV;
-             cp results_upgrade.json results.json
-             ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-             ./validation/reporter
-             ;;
-         esac
-       shell: bash
-       continue-on-error: true
+        case "${{ inputs.suite }}" in
+          rancher-server-one)
+            gotestsum --format standard-verbose \
+              --packages=github.com/rancher/tests/validation/certificates/ipv6 \
+              --junitfile results.xml \
+              --jsonfile results_cert.json \
+              -- -timeout=5h -tags=recurring -v
 
-     - name: Show failed tests
-       run: |
-         declare -A suites=(
-           [cert_exit]="Cert Rotation:results_cert.json"
-           [delete_exit]="Delete Cluster:results_delete.json"
-           [node_scale_exit]="Node Scaling:results_node_scale.json"
-           [prov_exit]="Provisioning:results_prov.json"
-           [snap_restore_exit]="Snapshot Restore:results_snapshot.json"
-           [upgrade_exit]="Kubernetes Upgrade:results_upgrade.json"
-         )
+            cert_exit=$?
+            echo "cert_exit=$cert_exit" >> "$GITHUB_ENV"
+            cp results_cert.json results.json
 
-         failed=0
-         for exit_code in "${!suites[@]}"; do
+            if [[ "${{ inputs.reporting }}" == "true" ]]; then
+              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+              ./validation/reporter
+            fi
+
+            gotestsum --format standard-verbose \
+              --packages=github.com/rancher/tests/validation/deleting/ipv6 \
+              --junitfile results.xml \
+              --jsonfile results_delete.json \
+              -- -timeout=5h -tags=recurring -v
+
+            delete_exit=$?
+            echo "delete_exit=$delete_exit" >> "$GITHUB_ENV"
+            cp results_delete.json results.json
+
+            if [[ "${{ inputs.reporting }}" == "true" ]]; then
+              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+              ./validation/reporter
+            fi
+
+            gotestsum --format standard-verbose \
+              --packages=github.com/rancher/tests/validation/nodescaling/ipv6 \
+              --junitfile results.xml \
+              --jsonfile results_node_scale.json \
+              -- -timeout=5h -tags=recurring -v
+
+            node_scale_exit=$?
+            echo "node_scale_exit=$node_scale_exit" >> "$GITHUB_ENV"
+            cp results_node_scale.json results.json
+
+            if [[ "${{ inputs.reporting }}" == "true" ]]; then
+              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+              ./validation/reporter
+            fi
+            ;;
+          
+          rancher-server-two)
+            gotestsum --format standard-verbose \
+              --packages=github.com/rancher/tests/validation/provisioning/ipv6 \
+              --junitfile results.xml \
+              --jsonfile results_prov.json \
+              -- -timeout=5h -tags=recurring -v
+
+            prov_exit=$?
+            echo "prov_exit=$prov_exit" >> "$GITHUB_ENV"
+            cp results_prov.json results.json
+
+            if [[ "${{ inputs.reporting }}" == "true" ]]; then
+              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+              ./validation/reporter
+            fi
+
+            gotestsum --format standard-verbose \
+              --packages=github.com/rancher/tests/validation/snapshot/ipv6 \
+              --junitfile results.xml \
+              --jsonfile results_snapshot.json \
+              -- -timeout=5h -tags=recurring -v
+
+            snap_restore_exit=$?
+            echo "snap_restore_exit=$snap_restore_exit" >> "$GITHUB_ENV"
+            cp results_snapshot.json results.json
+
+            if [[ "${{ inputs.reporting }}" == "true" ]]; then
+              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+              ./validation/reporter
+            fi
+
+            gotestsum --format standard-verbose \
+              --packages=github.com/rancher/tests/validation/upgrade/ipv6 \
+              --junitfile results.xml \
+              --jsonfile results_upgrade.json \
+              -- -timeout=5h -tags=recurring -v
+
+            upgrade_exit=$?
+            echo "upgrade_exit=$upgrade_exit" >> "$GITHUB_ENV"
+            cp results_upgrade.json results.json
+
+            if [[ "${{ inputs.reporting }}" == "true" ]]; then
+              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+              ./validation/reporter
+            fi
+            ;;
+        esac
+
+    - name: Show failed tests
+      shell: bash
+      run: |
+        declare -A suites=(
+          [cert_exit]="Cert Rotation:results_cert.json"
+          [delete_exit]="Delete Cluster:results_delete.json"
+          [node_scale_exit]="Node Scaling:results_node_scale.json"
+          [prov_exit]="Provisioning:results_prov.json"
+          [snap_restore_exit]="Snapshot Restore:results_snapshot.json"
+          [upgrade_exit]="Kubernetes Upgrade:results_upgrade.json"
+        )
+
+        failed=0
+
+        for exit_code in "${!suites[@]}"; do
           IFS=: read suite_name results_file <<< "${suites[$exit_code]}"
           exit_val="${!exit_code}"
-           
+
           if [ "$exit_val" != "" ] && [ "$exit_val" -ne 0 ]; then
             echo "Failed $suite_name tests:"
             jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' "$results_file"
             failed=1
           fi
-         done
+        done
 
-         if [ "$failed" -eq 1 ]; then
+        if [ "$failed" -eq 1 ]; then
           exit 1
-         fi
-       shell: bash
+        fi

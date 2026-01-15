@@ -2,7 +2,7 @@ package globalroles
 
 import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/rancher/tests/actions/rbac"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -107,8 +107,8 @@ func newRestrictedAdminReplacementTemplate(globalRoleName string) v3.GlobalRole 
 
 var (
 	manageUsersVerb = rbacv1.PolicyRule{
-		Verbs:     []string{rbac.ManageUsersVerb},
-		APIGroups: []string{rbac.ManagementAPIGroup},
-		Resources: []string{rbac.UsersResource, rbac.UserAttributeResource, rbac.GroupsResource, rbac.GroupMembersResource},
+		Verbs:     []string{rbacapi.ManageUsersVerb},
+		APIGroups: []string{rbacapi.ManagementAPIGroup},
+		Resources: []string{rbacapi.UsersResource, rbacapi.UserAttributeResource, rbacapi.GroupsResource, rbacapi.GroupMembersResource},
 	}
 )

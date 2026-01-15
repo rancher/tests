@@ -20,6 +20,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/scalinginput"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -119,6 +120,10 @@ func (s *NodeReplacingTestSuite) TestReplacingNodes() {
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(s.T(), s.client, cluster)
+
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(s.client, cluster)
+			require.NoError(s.T(), err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(s.client, cluster)

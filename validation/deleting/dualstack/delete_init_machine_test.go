@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/validation/deleting/rke2k3s"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
@@ -106,6 +107,10 @@ func (d *DeleteInitMachineDualstackTestSuite) TestDeleteInitMachineDualstack() {
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(d.T(), d.client, cluster)
+
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(d.client, cluster)
+			require.NoError(d.T(), err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			pods.VerifyClusterPods(d.client, cluster)

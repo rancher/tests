@@ -1,9 +1,9 @@
-- projects: [RANCHERINT]
+- projects: [ RANCHERINT ]
   suite: Longhorn
   cases:
   - title: "Fresh Longhorn Installation via Rancher App Catalog"
     description: "Verify Longhorn can be successfully installed through Rancher's app catalog with default settings on a clean Kubernetes cluster."
-    automation: 0
+    automation: 2
     steps:
     - action: "Log into Rancher UI with cluster admin privileges"
       data: ""
@@ -49,9 +49,11 @@
       data: ""
       expectedresult: "`longhorn` storage class exists and is available"
       position: 11
+    custom_field:
+      "15": "TestLonghornTestSuite/TestChartInstallCustomConfig"
   - title: "Longhorn Installation with Custom Configuration"
     description: "Test Longhorn installation with custom settings including replica count, data path, and node selection through Rancher interface."
-    automation: 0
+    automation: 2
     steps:
     - action: "Access Longhorn installation chart in Rancher Apps"
       data: ""
@@ -97,6 +99,8 @@
       data: ""
       expectedresult: "`/var/lib/longhorn-custom` directory is used"
       position: 11
+    custom_field:
+      "15": "TestLonghornTestSuite/TestChartInstall"
   - title: "Longhorn UI Access Through Rancher"
     description: "Verify seamless access to Longhorn UI through Rancher interface with proper authentication and session management."
     automation: 0
@@ -143,7 +147,7 @@
       position: 10
   - title: "RBAC Integration Testing"
     description: "Test Role-Based Access Control integration between Rancher and Longhorn for different user permission levels."
-    automation: 0
+    automation: 2
     steps:
     - action: "Create cluster admin user in Rancher"
       data: ""
@@ -185,9 +189,11 @@
       data: ""
       expectedresult: "Permissions enforced consistently"
       position: 10
+    custom_field:
+      "15": "TestLonghornTestSuite/TestRBACIntegration"
   - title: "Volume Creation Through Rancher Workloads"
     description: "Verify automatic volume provisioning and attachment when deploying workloads with Longhorn storage through Rancher."
-    automation: 0
+    automation: 2
     steps:
     - action: "Navigate to 'Workloads' in Rancher cluster view"
       data: ""
@@ -233,9 +239,11 @@
       data: ""
       expectedresult: "Data persists across pod restart"
       position: 11
+    custom_field:
+      "15": "TestLonghornTestSuite/TestChartInstall"
   - title: "Create and Scale StatefulSet with PVC Template"
     description: "Test Longhorn integration with StatefulSet persistent volumes including scaling operations and pod rescheduling."
-    automation: 0
+    automation: 2
     steps:
     - action: "Create StatefulSet manifest with volumeClaimTemplates using Longhorn storage class"
       data: ""
@@ -277,6 +285,8 @@
       data: ""
       expectedresult: "Data consistency maintained"
       position: 10
+    custom_field:
+      "15": "TestLonghornTestSuite/TestScaleStatefulSetWithPVC"
   - title: "Longhorn Metrics in Rancher Monitoring Interoperability"
     description: "Verify Longhorn metrics collection and visualization through Rancher's Prometheus and Grafana monitoring stack."
     automation: 0

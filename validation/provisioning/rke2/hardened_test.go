@@ -23,6 +23,7 @@ import (
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/actions/workloads"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	cis "github.com/rancher/tests/validation/provisioning/resources/cisbenchmark"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -106,6 +107,10 @@ func TestHardened(t *testing.T) {
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, r.client, cluster)
+
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(tt.client, cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(r.client, cluster)

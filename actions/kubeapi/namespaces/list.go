@@ -2,12 +2,36 @@ package namespaces
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/api/scheme"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// GetNamespacesInProject retrieves all namespaces in a specific project within a cluster
+func GetNamespacesInProject(client *rancher.Client, clusterID, projectName string) ([]*corev1.Namespace, error) {
+	clusterContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get wrangler context for cluster %s: %w", clusterID, err)
+	}
+
+	nsList, err := clusterContext.Core.Namespace().List(metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", ProjectIDAnnotation, projectName),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list namespaces for project %s: %w", projectName, err)
+	}
+
+	namespaces := make([]*corev1.Namespace, 0, len(nsList.Items))
+	for i := range nsList.Items {
+		namespaces = append(namespaces, &nsList.Items[i])
+	}
+
+	return namespaces, nil
+}
 
 // NamespaceList is a struct that contains a list of namespaces.
 type NamespaceList struct {

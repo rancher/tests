@@ -10,6 +10,7 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
@@ -58,14 +59,14 @@ func (gr *GlobalRolesTestSuite) TestGlobalRoleCustom() {
 	require.NoError(gr.T(), err, "Failed to create custom global role and user")
 
 	log.Info("Verify that the global role binding is created for the user.")
-	grb, err := rbac.GetGlobalRoleBindingByUserAndRole(gr.client, createdUser.ID, createdGlobalRole.Name)
+	grb, err := rbacapi.GetGlobalRoleBindingByUserAndRole(gr.client, createdUser.ID, createdGlobalRole.Name)
 	require.NoError(gr.T(), err, "Failed to get global role binding")
 	require.NotEmpty(gr.T(), grb, "Global Role Binding not found for the user")
 
 	log.Info("As admin, create a deployment.")
-	_, namespace, err := projects.CreateProjectAndNamespace(gr.client, rbac.LocalCluster)
+	_, namespace, err := projects.CreateProjectAndNamespace(gr.client, clusterapi.LocalCluster)
 	require.NoError(gr.T(), err, "Failed to create project and namespace")
-	createdDeployment, err := deployment.CreateDeployment(gr.client, rbac.LocalCluster, namespace.Name, 2, "", "", false, false, false, true)
+	createdDeployment, err := deployment.CreateDeployment(gr.client, clusterapi.LocalCluster, namespace.Name, 2, "", "", false, false, false, true)
 	require.NoError(gr.T(), err, "Failed to create deployment in the namespace")
 
 	log.Infof("Verify the user %s can get the deployment.", createdUser.Username)
@@ -75,14 +76,14 @@ func (gr *GlobalRolesTestSuite) TestGlobalRoleCustom() {
 	require.NoError(gr.T(), err, "User failed to get the deployment")
 
 	log.Infof("Verify the user %s cannot create a deployment.", createdUser.Username)
-	_, err = deployment.CreateDeployment(userClient, rbac.LocalCluster, namespace.Name, 2, "", "", false, false, false, true)
+	_, err = deployment.CreateDeployment(userClient, clusterapi.LocalCluster, namespace.Name, 2, "", "", false, false, false, true)
 	require.Error(gr.T(), err)
 	require.True(gr.T(), errors.IsForbidden(err))
 
 	log.Info("Delete global role.")
 	err = rbacapi.DeleteGlobalRole(gr.client, createdGlobalRole.Name)
 	require.NoError(gr.T(), err, "Failed to delete global role")
-	_, err = rbac.GetGlobalRoleByName(gr.client, createdGlobalRole.Name)
+	_, err = rbacapi.GetGlobalRoleByName(gr.client, createdGlobalRole.Name)
 	require.Error(gr.T(), err, "Global role was not deleted")
 
 	log.Info("Verify the user cannot get the deployment.")
@@ -100,27 +101,27 @@ func (gr *GlobalRolesTestSuite) TestBuiltinGlobalRole() {
 	require.NoError(gr.T(), err, "Failed to create user with builtin global role")
 
 	log.Info("Verify that the global role binding is created for the user.")
-	grb, err := rbac.GetGlobalRoleBindingByUserAndRole(gr.client, createdUser.ID, rbac.Admin.String())
+	grb, err := rbacapi.GetGlobalRoleBindingByUserAndRole(gr.client, createdUser.ID, rbac.Admin.String())
 	require.NoError(gr.T(), err, "Failed to get global role binding")
 	require.NotEmpty(gr.T(), grb, "Global Role Binding not found for the user")
 
 	log.Info("Verify the user can create a deployment.")
-	_, namespace, err := projects.CreateProjectAndNamespace(gr.client, rbac.LocalCluster)
+	_, namespace, err := projects.CreateProjectAndNamespace(gr.client, clusterapi.LocalCluster)
 	require.NoError(gr.T(), err, "Failed to create project and namespace")
 	userClient, err := gr.client.AsUser(createdUser)
 	require.NoError(gr.T(), err)
 
-	_, err = deployment.CreateDeployment(userClient, rbac.LocalCluster, namespace.Name, 2, "", "", false, false, false, true)
+	_, err = deployment.CreateDeployment(userClient, clusterapi.LocalCluster, namespace.Name, 2, "", "", false, false, false, true)
 	require.NoError(gr.T(), err, "User failed to create deployment in the namespace")
 
 	log.Info("Delete the global role binding for the user.")
 	err = rbacapi.DeleteGlobalRoleBinding(gr.client, grb.Name)
 	require.NoError(gr.T(), err, "Failed to delete global role binding")
-	_, err = rbac.GetGlobalRoleBindingByName(gr.client, grb.Name)
+	_, err = rbacapi.GetGlobalRoleBindingByName(gr.client, grb.Name)
 	require.Error(gr.T(), err, "Global role binding was not deleted")
 
 	log.Info("Verify the user cannot create a deployment.")
-	_, err = deployment.CreateDeployment(userClient, rbac.LocalCluster, namespace.Name, 2, "", "", false, false, false, true)
+	_, err = deployment.CreateDeployment(userClient, clusterapi.LocalCluster, namespace.Name, 2, "", "", false, false, false, true)
 	require.Error(gr.T(), err)
 	require.True(gr.T(), errors.IsForbidden(err))
 }
@@ -131,7 +132,7 @@ func (gr *GlobalRolesTestSuite) TestUpdateBuiltinGlobalRoleFails() {
 
 	log.Info("Attempt to update an existing built-in global role and verify it fails.")
 	builtinGlobalRoleName := rbac.StandardUser.String()
-	builtinGlobalRole, err := rbac.GetGlobalRoleByName(gr.client, builtinGlobalRoleName)
+	builtinGlobalRole, err := rbacapi.GetGlobalRoleByName(gr.client, builtinGlobalRoleName)
 	require.NoError(gr.T(), err, "Failed to fetch the built-in global role")
 
 	updatedGlobalRole := builtinGlobalRole.DeepCopy()
@@ -158,7 +159,7 @@ func (gr *GlobalRolesTestSuite) TestDeleteBuiltinGlobalRoleFails() {
 	expectedErrMessage := fmt.Sprintf("%s cannot delete builtin GlobalRoles", webhookErrorMessagePrefix)
 	require.Contains(gr.T(), err.Error(), expectedErrMessage)
 
-	_, err = rbac.GetGlobalRoleByName(gr.client, builtinGlobalRoleName)
+	_, err = rbacapi.GetGlobalRoleByName(gr.client, builtinGlobalRoleName)
 	require.NoError(gr.T(), err, "Failed to fetch the built-in global role")
 }
 

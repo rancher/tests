@@ -97,7 +97,15 @@ func VerifyWorkloads(client *rancher.Client, clusterName string, workloads Workl
 	}
 
 	err = pods.VerifyClusterPods(client, cluster)
+	if err != nil {
+		return nil, err
+	}
 
-	return &workloads, err
+	err = deployment.VerifyClusterDeployments(client, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	return &workloads, nil
 
 }

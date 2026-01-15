@@ -141,7 +141,7 @@ func VerifyClusterReady(t *testing.T, client *rancher.Client, cluster *steveV1.S
 		checkFunc := shepherdclusters.IsProvisioningClusterReady
 		err = wait.WatchWait(watchInterface, checkFunc)
 		if err != nil {
-			logrus.Warningf("Unable to get cluster status (%s): %v. Retrying", cluster.Name, err)
+			logrus.Warningf("Unable to get cluster status (%s) Retrying", cluster.Name)
 			return false, nil
 		}
 

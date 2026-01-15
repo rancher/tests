@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/settings"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -73,6 +74,10 @@ func (kc *ExtKubeconfigTestSuite) SetupSuite() {
 	require.NoError(kc.T(), err)
 
 	provisioning.VerifyClusterReady(kc.T(), client, aceClusterObject1)
+
+	err = deployment.VerifyClusterDeployments(client, aceClusterObject1)
+	require.NoError(kc.T(), err)
+
 	err = pods.VerifyClusterPods(client, aceClusterObject1)
 	require.NoError(kc.T(), err)
 	provisioning.VerifyDynamicCluster(kc.T(), client, aceClusterObject1)
@@ -81,6 +86,10 @@ func (kc *ExtKubeconfigTestSuite) SetupSuite() {
 	log.Infof("ACE-enabled cluster created: %s (%s)", kc.aceCluster1.Name, aceCluster1ID)
 
 	provisioning.VerifyClusterReady(kc.T(), client, aceClusterObject2)
+
+	err = deployment.VerifyClusterDeployments(client, aceClusterObject2)
+	require.NoError(kc.T(), err)
+
 	err = pods.VerifyClusterPods(client, aceClusterObject2)
 	require.NoError(kc.T(), err)
 	provisioning.VerifyDynamicCluster(kc.T(), client, aceClusterObject2)
@@ -89,6 +98,10 @@ func (kc *ExtKubeconfigTestSuite) SetupSuite() {
 	log.Infof("ACE-enabled cluster created: %s (%s)", kc.aceCluster2.Name, aceCluster2ID)
 
 	provisioning.VerifyClusterReady(kc.T(), client, clusterObject2)
+
+	err = deployment.VerifyClusterDeployments(client, clusterObject2)
+	require.NoError(kc.T(), err)
+
 	err = pods.VerifyClusterPods(client, clusterObject2)
 	require.NoError(kc.T(), err)
 	provisioning.VerifyDynamicCluster(kc.T(), client, clusterObject2)

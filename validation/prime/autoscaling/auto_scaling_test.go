@@ -123,6 +123,14 @@ func TestAutoScalingUp(t *testing.T) {
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, s.client, cluster)
+
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(s.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			err = pods.VerifyClusterPods(s.client, cluster)
+			require.NoError(t, err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, s.cattleConfig)
@@ -185,6 +193,14 @@ func TestAutoScalingDown(t *testing.T) {
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, tt.client, cluster)
 
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(s.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			err = pods.VerifyClusterPods(s.client, cluster)
+			require.NoError(t, err)
+
 			logrus.Infof("Verifying cluster autoscaler (%s)", cluster.Name)
 			scaling.VerifyAutoscaler(t, s.client, cluster)
 
@@ -210,8 +226,12 @@ func TestAutoScalingDown(t *testing.T) {
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, tt.client, cluster)
 
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(s.client, cluster)
+			require.NoError(t, err)
+
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(tt.client, cluster)
+			err = pods.VerifyClusterPods(s.client, cluster)
 			require.NoError(t, err)
 		})
 
@@ -311,6 +331,14 @@ func TestAutoScalingPause(t *testing.T) {
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(t, s.client, cluster)
+
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(s.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			err = pods.VerifyClusterPods(s.client, cluster)
+			require.NoError(t, err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, s.cattleConfig)

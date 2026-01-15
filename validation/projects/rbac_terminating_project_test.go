@@ -11,7 +11,9 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rancherleader"
 	"github.com/rancher/tests/actions/rbac"
@@ -63,16 +65,16 @@ func (rtp *RbacTerminatingProjectTestSuite) TestUserAdditionToClusterWithTermina
 
 	logCaptureStartTime := time.Now()
 	log.Info("Simulate a project stuck in terminating state by adding a finalizer to the project.")
-	finalizer := append([]string{dummyFinalizer}, createdProject.Finalizers...)
+	finalizer := append([]string{projectapi.DummyFinalizer}, createdProject.Finalizers...)
 	updatedProject, err := projects.UpdateProjectNamespaceFinalizer(rtp.client, createdProject, finalizer)
 	require.NoError(rtp.T(), err, "Failed to update finalizer.")
-	err = projects.WaitForProjectFinalizerToUpdate(rtp.client, createdProject.Name, createdProject.Namespace, 3)
+	err = projectapi.WaitForProjectFinalizerToUpdate(rtp.client, createdProject.Name, createdProject.Namespace, 3)
 	require.NoError(rtp.T(), err)
 
 	log.Info("Delete the Project.")
-	err = projectsapi.DeleteProject(rtp.client, createdProject.Namespace, createdProject.Name)
+	err = projectapi.DeleteProject(rtp.client, createdProject.Namespace, createdProject.Name)
 	require.Error(rtp.T(), err)
-	err = projects.WaitForProjectFinalizerToUpdate(rtp.client, createdProject.Name, createdProject.Namespace, 1)
+	err = projectapi.WaitForProjectFinalizerToUpdate(rtp.client, createdProject.Name, createdProject.Namespace, 1)
 	require.NoError(rtp.T(), err)
 	leaderPodName, err := rancherleader.GetRancherLeaderPodName(rtp.client)
 	require.NoError(rtp.T(), err)
@@ -80,7 +82,7 @@ func (rtp *RbacTerminatingProjectTestSuite) TestUserAdditionToClusterWithTermina
 	logCaptureStartTime = time.Now()
 	log.Info("Verify that there are no errors in the Rancher logs related to role binding.")
 	errorRegex := `\[ERROR\] error syncing '(.*?)': handler mgmt-auth-crtb-controller: .*? (?:not found|is forbidden), requeuing`
-	err = pod.CheckPodLogsForErrors(rtp.client, projectsapi.LocalCluster, leaderPodName, projectsapi.RancherNamespace, errorRegex, logCaptureStartTime)
+	err = pod.CheckPodLogsForErrors(rtp.client, clusterapi.LocalCluster, leaderPodName, rbac.RancherDeploymentNamespace, errorRegex, logCaptureStartTime)
 	require.NoError(rtp.T(), err)
 
 	logCaptureStartTime = time.Now()
@@ -90,7 +92,7 @@ func (rtp *RbacTerminatingProjectTestSuite) TestUserAdditionToClusterWithTermina
 	require.NoError(rtp.T(), err, "Failed to remove the finalizer.")
 
 	log.Info("Verify that there are no errors in the Rancher logs related to role binding.")
-	err = pod.CheckPodLogsForErrors(rtp.client, projectsapi.LocalCluster, leaderPodName, projectsapi.RancherNamespace, errorRegex, logCaptureStartTime)
+	err = pod.CheckPodLogsForErrors(rtp.client, clusterapi.LocalCluster, leaderPodName, rbac.RancherDeploymentNamespace, errorRegex, logCaptureStartTime)
 	require.NoError(rtp.T(), err)
 }
 
@@ -99,7 +101,7 @@ func (rtp *RbacTerminatingProjectTestSuite) TestUserAdditionToProjectWithTermina
 	defer subSession.Cleanup()
 
 	log.Info("Create a standard user.")
-	createdUser, err := users.CreateUserWithRole(rtp.client, users.UserConfig(), projectsapi.StandardUser)
+	createdUser, err := users.CreateUserWithRole(rtp.client, users.UserConfig(), rbac.StandardUser.String())
 	require.NoError(rtp.T(), err)
 	rtp.T().Logf("Created user: %v", createdUser.Username)
 
@@ -108,20 +110,20 @@ func (rtp *RbacTerminatingProjectTestSuite) TestUserAdditionToProjectWithTermina
 	require.NoError(rtp.T(), err)
 
 	log.Info("Simulate a project stuck in terminating state by adding a finalizer to the project.")
-	finalizer := append([]string{dummyFinalizer}, createdProject.Finalizers...)
+	finalizer := append([]string{projectapi.DummyFinalizer}, createdProject.Finalizers...)
 	updatedProject, err := projects.UpdateProjectNamespaceFinalizer(rtp.client, createdProject, finalizer)
 	require.NoError(rtp.T(), err, "Failed to update finalizer.")
-	err = projects.WaitForProjectFinalizerToUpdate(rtp.client, createdProject.Name, createdProject.Namespace, 3)
+	err = projectapi.WaitForProjectFinalizerToUpdate(rtp.client, createdProject.Name, createdProject.Namespace, 3)
 	require.NoError(rtp.T(), err)
 
 	log.Info("Delete the Project.")
-	err = projectsapi.DeleteProject(rtp.client, createdProject.Namespace, createdProject.Name)
+	err = projectapi.DeleteProject(rtp.client, createdProject.Namespace, createdProject.Name)
 	require.Error(rtp.T(), err)
-	err = projects.WaitForProjectFinalizerToUpdate(rtp.client, createdProject.Name, createdProject.Namespace, 1)
+	err = projectapi.WaitForProjectFinalizerToUpdate(rtp.client, createdProject.Name, createdProject.Namespace, 1)
 	require.NoError(rtp.T(), err)
 
 	log.Info("Add the standard user to the project as project owner.")
-	_, err = rbac.CreateProjectRoleTemplateBinding(rtp.client, createdUser, createdProject, rbac.ProjectOwner.String())
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(rtp.client, createdUser, createdProject, rbac.ProjectOwner.String())
 	require.Error(rtp.T(), err)
 
 	log.Info("Remove the finalizer that was previously added to the project.")

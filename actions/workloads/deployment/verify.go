@@ -4,12 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
+	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
+	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/charts"
+	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wrangler"
@@ -22,6 +27,10 @@ import (
 )
 
 const (
+	Webhook            = "rancher-webhook"
+	SUC                = "system-upgrade-controller"
+	Fleet              = "fleet-agent"
+	ClusterAgent       = "cattle-cluster-agent"
 	revisionAnnotation = "deployment.kubernetes.io/revision"
 )
 
@@ -58,7 +67,7 @@ func VerifyDeploymentUpgrade(client *rancher.Client, clusterName string, namespa
 	}
 
 	logrus.Debug("Waiting for all pods to be running")
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName, appv1Deployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName)
 	if err != nil {
 		return err
 	}
@@ -84,7 +93,7 @@ func VerifyDeploymentUpgrade(client *rancher.Client, clusterName string, namespa
 
 func VerifyDeploymentScale(client *rancher.Client, clusterName string, namespaceName string, scaleDeployment *appv1.Deployment, image string, expectedReplicas int) error {
 	logrus.Debug("Waiting for all pods to be running")
-	err := pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName, scaleDeployment)
+	err := pods.WatchAndWaitPodContainerRunning(client, clusterName, namespaceName)
 	if err != nil {
 		return err
 	}
@@ -186,7 +195,7 @@ func VerifyDeploymentSideKick(client *rancher.Client, clusterID, namespace, depl
 		return err
 	}
 
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace, deployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace)
 	if err != nil {
 		return err
 	}
@@ -213,7 +222,7 @@ func VerifyDeploymentSideKick(client *rancher.Client, clusterID, namespace, depl
 	}
 
 	logrus.Tracef("Waiting for all pods to be running deployment: %s", deployment.Name)
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace, updatedDeployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace)
 
 	return err
 }
@@ -447,7 +456,7 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 		return err
 	}
 
-	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace, deployment)
+	err = pods.WatchAndWaitPodContainerRunning(client, clusterID, deployment.Namespace)
 	if err != nil {
 		return err
 	}
@@ -486,6 +495,91 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 	if int(replicas) != len(deploymentPods) {
 		err_msg := fmt.Sprintf("expected replica count: %d does not equal pod count: %d", int(replicas), len(deploymentPods))
 		return errors.New(err_msg)
+	}
+
+	return err
+}
+
+// VerifyClusterDeployments verifies that all required deployments are present and available in the cluster
+func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject) error {
+	clusterID, err := clusters.GetClusterIDByName(client, cluster.Name)
+	if err != nil {
+		return err
+	}
+
+	downstreamClient, err := client.Steve.ProxyDownstream(clusterID)
+	if err != nil {
+		return err
+	}
+	if downstreamClient == nil {
+		return errors.New("downstream client is nil")
+	}
+
+	deploymentClient := downstreamClient.SteveType(stevetypes.Deployment)
+	requiredDeployments := []string{ClusterAgent, Webhook, Fleet, SUC}
+
+	logrus.Debugf("Verifying all required deployments exist: %v", requiredDeployments)
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.TenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		clusterDeployments, err := deploymentClient.List(nil)
+		if err != nil {
+			return false, nil
+		}
+
+		for _, deployment := range clusterDeployments.Data {
+			k8sDeployment := &appv1.Deployment{}
+			err := steveV1.ConvertToK8sType(deployment.JSONResp, k8sDeployment)
+			if err != nil {
+				return false, nil
+			}
+
+			if slices.Contains(requiredDeployments, k8sDeployment.Name) {
+				requiredDeployments = slices.Delete(requiredDeployments, slices.Index(requiredDeployments, k8sDeployment.Name), slices.Index(requiredDeployments, k8sDeployment.Name)+1)
+			}
+		}
+		if len(requiredDeployments) != 0 {
+			return false, nil
+		}
+
+		return true, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("Not all required deployments exist: %v", requiredDeployments)
+	}
+
+	logrus.Debug("Verifying all deployments")
+	var failedDeployments []appv1.Deployment
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.TenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		clusterDeployments, err := deploymentClient.List(nil)
+		if err != nil {
+			return false, nil
+		}
+
+		failedDeployments = []appv1.Deployment{}
+		for _, deploymentObj := range clusterDeployments.Data {
+			k8sDeployment := &appv1.Deployment{}
+			err := steveV1.ConvertToK8sType(deploymentObj.JSONResp, k8sDeployment)
+			if err != nil {
+				return false, nil
+			}
+
+			if k8sDeployment.Status.AvailableReplicas != *k8sDeployment.Spec.Replicas {
+				failedDeployments = append(failedDeployments, *k8sDeployment)
+			}
+		}
+
+		return true, nil
+	})
+
+	if len(failedDeployments) > 0 {
+		for _, deploymentObj := range failedDeployments {
+
+			for _, condition := range deploymentObj.Status.Conditions {
+				logrus.Error("Deployment:", deploymentObj.Name, "Condition: ", condition.Message)
+			}
+		}
+
+		return nil
 	}
 
 	return err

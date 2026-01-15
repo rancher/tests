@@ -12,10 +12,11 @@ import (
 	"github.com/rancher/shepherd/pkg/wrangler"
 	"github.com/rancher/tests/actions/configmaps"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
-	deployment "github.com/rancher/tests/actions/workloads/deployment"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -287,17 +288,17 @@ func (cm *ConfigmapsRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
 	standardUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, rbac.StandardUser.String(), rbac.ClusterMember.String(), cm.cluster, nil)
 	require.NoError(cm.T(), err)
 
-	projectTemplate := projectsapi.NewProjectTemplate(cm.cluster.ID)
+	projectTemplate := projectapi.NewProjectTemplate(cm.cluster.ID)
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": standardUser.ID,
 	}
 	createdProject, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 	require.NoError(cm.T(), err)
 
-	err = projects.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
+	err = projectapi.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(cm.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(standardUserClient, cm.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, cm.cluster.ID, createdProject.Name, nil)
 	require.NoError(cm.T(), err)
 
 	configMapCreatedByAdmin, err := configmaps.CreateConfigmap(namespace.Name, cm.client, data, cm.cluster.ID)

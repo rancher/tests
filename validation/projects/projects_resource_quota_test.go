@@ -15,10 +15,10 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	"github.com/rancher/tests/actions/kubeapi/namespaces"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
-	quotas "github.com/rancher/tests/actions/kubeapi/resourcequotas"
-	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	quotaapi "github.com/rancher/tests/actions/kubeapi/resourcequotas"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/deployment"
@@ -78,11 +78,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestProjectWithoutResourceQuota() {
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace does not have the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, resourceQuotaAnnotation, false)
+	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, false)
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should not exist")
 
 	log.Info("Create a deployment in the namespace with ten replicas.")
@@ -107,11 +107,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestProjectWithResourceQuota() {
 	require.Equal(prq.T(), projectPodLimit, createdProject.Spec.ResourceQuota.Limit.Pods, "Project pod limit mismatch")
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, firstNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, firstNamespace.Name)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, firstNamespace.Name, resourceQuotaAnnotation, true)
+	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, firstNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should exist")
 
 	log.Info("Verify that the resource quota validation for the namespace is successful.")
@@ -124,7 +124,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestProjectWithResourceQuota() {
 
 	log.Info("Create another namespace in the project and verify that the resource quota validation for the namespace fails.")
 	secondNamespaceName := namegen.AppendRandomString("testns-")
-	secondNamespace, err := namespaces.CreateNamespace(standardUserClient, prq.cluster.ID, createdProject.Name, secondNamespaceName, "", map[string]string{}, map[string]string{})
+	secondNamespace, err := namespaceapi.CreateNamespace(standardUserClient, prq.cluster.ID, createdProject.Name, secondNamespaceName, "", map[string]string{}, map[string]string{})
 	require.NoError(prq.T(), err, "Failed to create namespace in the project")
 	err = checkNamespaceResourceQuotaValidationStatus(standardUserClient, prq.cluster.ID, secondNamespace.Name, namespacePodLimit, false, "Resource quota [pods=4] exceeds project limit")
 	require.NoError(prq.T(), err)
@@ -168,10 +168,12 @@ func (prq *ProjectsResourceQuotaTestSuite) TestProjectWithResourceQuota() {
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the second deployment created in the first namespace transitions to Active state.")
-	updatedDeploymentList, err := deployments.ListDeployments(standardUserClient, prq.cluster.ID, firstNamespace.Name, metav1.ListOptions{
+	updatedDeploymentList, err := deploymentapi.ListDeployments(standardUserClient, prq.cluster.ID, firstNamespace.Name, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdSecondDeployment.Name,
 	})
+	require.NoError(prq.T(), err)
 	updatedSecondDeployment := updatedDeploymentList.Items[0]
+
 	err = charts.WatchAndWaitDeployments(standardUserClient, prq.cluster.ID, firstNamespace.Name, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + updatedSecondDeployment.Name,
 	})
@@ -195,11 +197,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaPropagationToExistingNamespa
 	require.Equal(prq.T(), projectPodLimit, createdProject.Spec.ResourceQuota.Limit.Pods, "Project pod limit mismatch")
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, resourceQuotaAnnotation, true)
+	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should exist")
 
 	log.Info("Verify that the resource quota validation for the namespace is successful.")
@@ -213,7 +215,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaPropagationToExistingNamespa
 	log.Info("Update the resource quota in the Project with new values.")
 	namespacePodLimit = "5"
 	projectPodLimit = "10"
-	projectList, err := projectsapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
+	projectList, err := projectapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdProject.Name,
 	})
 	require.NoError(prq.T(), err, "Failed to list project.")
@@ -228,7 +230,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaPropagationToExistingNamespa
 	require.Equal(prq.T(), projectPodLimit, updatedProject.Spec.ResourceQuota.Limit.Pods, "Project pod limit mismatch")
 
 	log.Info("Verify that the namespace still has the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, resourceQuotaAnnotation, true)
+	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should exist")
 
 	log.Info("Verify that the resource quota in the existing namespace has the pod limit in the resource quota still set to 2.")
@@ -237,7 +239,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaPropagationToExistingNamespa
 
 	log.Info("Create a new namespace in the project.")
 	newNamespaceName := namegen.AppendRandomString("testns-")
-	newNamespace, err := namespaces.CreateNamespace(standardUserClient, prq.cluster.ID, updatedProject.Name, newNamespaceName, "", map[string]string{}, map[string]string{})
+	newNamespace, err := namespaceapi.CreateNamespace(standardUserClient, prq.cluster.ID, updatedProject.Name, newNamespaceName, "", map[string]string{}, map[string]string{})
 	require.NoError(prq.T(), err, "Failed to create namespace in the project")
 
 	log.Info("Verify that the resource quota validation for the namespace is successful.")
@@ -266,11 +268,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaDeletionPropagationToExistin
 	require.Equal(prq.T(), projectPodLimit, createdProject.Spec.ResourceQuota.Limit.Pods, "Project pod limit mismatch")
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, resourceQuotaAnnotation, true)
+	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should exist")
 
 	log.Info("Verify that the resource quota validation for the namespace is successful.")
@@ -285,7 +287,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaDeletionPropagationToExistin
 	namespacePodLimit = ""
 	projectPodLimit = ""
 
-	projectList, err := projectsapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
+	projectList, err := projectapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdProject.Name,
 	})
 	require.NoError(prq.T(), err, "Failed to list project.")
@@ -301,7 +303,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaDeletionPropagationToExistin
 
 	log.Info("Verify that the namespace does not have the annotation: field.cattle.io/resourceQuota.")
 	err = kwait.Poll(defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, func() (done bool, pollErr error) {
-		checkErr := checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, resourceQuotaAnnotation, false)
+		checkErr := checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, false)
 		if checkErr != nil {
 			return false, checkErr
 		}
@@ -311,7 +313,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaDeletionPropagationToExistin
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should not exist")
 
 	log.Info("Verify that the resource quota in the existing namespace is deleted.")
-	quotas, err := quotas.ListResourceQuotas(standardUserClient, prq.cluster.ID, createdNamespace.Name, metav1.ListOptions{})
+	quotas, err := quotaapi.ListResourceQuotas(standardUserClient, prq.cluster.ID, createdNamespace.Name, metav1.ListOptions{})
 	require.NoError(prq.T(), err)
 	require.Empty(prq.T(), quotas)
 
@@ -337,11 +339,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestOverrideQuotaInNamespace() {
 	require.Equal(prq.T(), projectPodLimit, createdProject.Spec.ResourceQuota.Limit.Pods, "Project pod limit mismatch")
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, resourceQuotaAnnotation, true)
+	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should exist")
 
 	log.Info("Verify that the resource quota validation for the namespace is successful.")
@@ -360,14 +362,14 @@ func (prq *ProjectsResourceQuotaTestSuite) TestOverrideQuotaInNamespace() {
 	namespacePodLimit = "3"
 	downstreamContext, err := clusterapi.GetClusterWranglerContext(prq.client, prq.cluster.ID)
 	require.NoError(prq.T(), err)
-	currentNamespace, err := namespaces.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
+	currentNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
 	require.NoError(prq.T(), err)
-	currentNamespace.Annotations[resourceQuotaAnnotation] = fmt.Sprintf(`{"limit": {"pods": "%s"}}`, namespacePodLimit)
+	currentNamespace.Annotations[projectapi.ResourceQuotaAnnotation] = fmt.Sprintf(`{"limit": {"pods": "%s"}}`, namespacePodLimit)
 	updatedNamespace, err := downstreamContext.Core.Namespace().Update(currentNamespace)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the pod limit for the namespace is set to 3.")
-	limitData, err := getNamespaceLimit(standardUserClient, prq.cluster.ID, updatedNamespace.Name, resourceQuotaAnnotation)
+	limitData, err := getNamespaceLimit(standardUserClient, prq.cluster.ID, updatedNamespace.Name, projectapi.ResourceQuotaAnnotation)
 	require.NoError(prq.T(), err)
 	actualNamespacePodLimit := limitData["limit"].(map[string]interface{})["pods"]
 	require.Equal(prq.T(), namespacePodLimit, actualNamespacePodLimit, "Namespace pod limit mismatch")
@@ -388,9 +390,9 @@ func (prq *ProjectsResourceQuotaTestSuite) TestOverrideQuotaInNamespace() {
 
 	log.Info("Increase the pod limit on the namespace from 3 to 4.")
 	namespacePodLimit = "4"
-	currentNamespace, err = namespaces.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
+	currentNamespace, err = namespaceapi.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
 	require.NoError(prq.T(), err)
-	currentNamespace.Annotations[resourceQuotaAnnotation] = fmt.Sprintf(`{"limit": {"pods": "%s"}}`, namespacePodLimit)
+	currentNamespace.Annotations[projectapi.ResourceQuotaAnnotation] = fmt.Sprintf(`{"limit": {"pods": "%s"}}`, namespacePodLimit)
 	updatedNamespace, err = downstreamContext.Core.Namespace().Update(currentNamespace)
 	require.NoError(prq.T(), err)
 
@@ -412,11 +414,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromNoQuotaToQuotaPr
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace does not have the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, resourceQuotaAnnotation, false)
+	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, false)
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should not exist")
 
 	log.Info("Create a deployment in the namespace with ten replicas.")
@@ -427,7 +429,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromNoQuotaToQuotaPr
 	namespacePodLimit = "2"
 	projectPodLimit = "3"
 
-	projectTemplate := projectsapi.NewProjectTemplate(prq.cluster.ID)
+	projectTemplate := projectapi.NewProjectTemplate(prq.cluster.ID)
 	projectTemplate.Spec.NamespaceDefaultResourceQuota.Limit.Pods = namespacePodLimit
 	projectTemplate.Spec.ResourceQuota.Limit.Pods = projectPodLimit
 	createdProject2, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
@@ -441,15 +443,15 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromNoQuotaToQuotaPr
 	downstreamContext, err := clusterapi.GetClusterWranglerContext(prq.client, prq.cluster.ID)
 	require.NoError(prq.T(), err)
 
-	updatedNamespace, err := namespaces.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
+	updatedNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
 	require.NoError(prq.T(), err)
-	updatedNamespace.Annotations[projectsapi.ProjectIDAnnotation] = createdProject2.Namespace + ":" + createdProject2.Name
+	updatedNamespace.Annotations[namespaceapi.ProjectIDAnnotation] = createdProject2.Namespace + ":" + createdProject2.Name
 	movedNamespace, err := downstreamContext.Core.Namespace().Update(updatedNamespace)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the annotation: field.cattle.io/resourceQuota.")
 	err = kwait.Poll(defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, func() (bool, error) {
-		err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, movedNamespace.Name, resourceQuotaAnnotation, true)
+		err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, movedNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
 		if err != nil {
 			return false, err
 		}
@@ -499,11 +501,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromQuotaToNoQuotaPr
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, resourceQuotaAnnotation, true)
+	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should exist")
 
 	log.Info("Verify that the resource quota object is created for the namespace and the pod limit in the resource quota is set to 2.")
@@ -518,7 +520,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromQuotaToNoQuotaPr
 	namespacePodLimit = ""
 	projectPodLimit = ""
 
-	projectTemplate := projectsapi.NewProjectTemplate(prq.cluster.ID)
+	projectTemplate := projectapi.NewProjectTemplate(prq.cluster.ID)
 	projectTemplate.Spec.NamespaceDefaultResourceQuota.Limit.Pods = namespacePodLimit
 	projectTemplate.Spec.ResourceQuota.Limit.Pods = projectPodLimit
 	createdProject2, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
@@ -528,15 +530,15 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromQuotaToNoQuotaPr
 	downstreamContext, err := clusterapi.GetClusterWranglerContext(prq.client, prq.cluster.ID)
 	require.NoError(prq.T(), err)
 
-	updatedNamespace, err := namespaces.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
+	updatedNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
 	require.NoError(prq.T(), err)
-	updatedNamespace.Annotations[projectsapi.ProjectIDAnnotation] = createdProject2.Namespace + ":" + createdProject2.Name
+	updatedNamespace.Annotations[namespaceapi.ProjectIDAnnotation] = createdProject2.Namespace + ":" + createdProject2.Name
 	movedNamespace, err := downstreamContext.Core.Namespace().Update(updatedNamespace)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace does not have the annotation: field.cattle.io/resourceQuota.")
 	err = kwait.Poll(defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, func() (done bool, pollErr error) {
-		checkErr := checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, movedNamespace.Name, resourceQuotaAnnotation, false)
+		checkErr := checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, movedNamespace.Name, projectapi.ResourceQuotaAnnotation, false)
 		if checkErr != nil {
 			return false, checkErr
 		}
@@ -572,11 +574,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceWithDeploymentTransi
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, resourceQuotaAnnotation, true)
+	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should exist")
 
 	log.Info("Verify that the resource quota object is created for the namespace and the pod limit in the resource quota is set to 2.")
@@ -602,7 +604,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceWithDeploymentTransi
 	namespacePodLimit = ""
 	projectPodLimit = ""
 
-	projectTemplate := projectsapi.NewProjectTemplate(prq.cluster.ID)
+	projectTemplate := projectapi.NewProjectTemplate(prq.cluster.ID)
 	projectTemplate.Spec.NamespaceDefaultResourceQuota.Limit.Pods = namespacePodLimit
 	projectTemplate.Spec.ResourceQuota.Limit.Pods = projectPodLimit
 	createdProject2, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
@@ -612,15 +614,15 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceWithDeploymentTransi
 	downstreamContext, err := clusterapi.GetClusterWranglerContext(prq.client, prq.cluster.ID)
 	require.NoError(prq.T(), err)
 
-	updatedNamespace, err := namespaces.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
+	updatedNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
 	require.NoError(prq.T(), err)
-	updatedNamespace.Annotations[projectsapi.ProjectIDAnnotation] = createdProject2.Namespace + ":" + createdProject2.Name
+	updatedNamespace.Annotations[namespaceapi.ProjectIDAnnotation] = createdProject2.Namespace + ":" + createdProject2.Name
 	movedNamespace, err := downstreamContext.Core.Namespace().Update(updatedNamespace)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace does not have the annotation: field.cattle.io/resourceQuota.")
 	err = kwait.Poll(defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, func() (done bool, pollErr error) {
-		checkErr := checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, movedNamespace.Name, resourceQuotaAnnotation, false)
+		checkErr := checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, movedNamespace.Name, projectapi.ResourceQuotaAnnotation, false)
 		if checkErr != nil {
 			return false, checkErr
 		}
@@ -653,13 +655,13 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceBetweenProjectsWithN
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(prq.T(), err)
-	updatedNamespace, err := namespaces.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
+	updatedNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, prq.cluster.ID, createdNamespace.Name)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace does not have the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, resourceQuotaAnnotation, false)
+	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, false)
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should not exist")
 
 	log.Info("Create a deployment in the namespace with ten replicas.")
@@ -667,29 +669,29 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceBetweenProjectsWithN
 	require.NoError(prq.T(), err)
 
 	log.Info("Create another project in the downstream cluster.")
-	projectTemplate := projectsapi.NewProjectTemplate(prq.cluster.ID)
+	projectTemplate := projectapi.NewProjectTemplate(prq.cluster.ID)
 	createdProject2, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 	require.NoError(prq.T(), err, "Failed to create project")
-	err = projects.WaitForProjectFinalizerToUpdate(prq.client, createdProject2.Name, createdProject2.Namespace, 2)
+	err = projectapi.WaitForProjectFinalizerToUpdate(prq.client, createdProject2.Name, createdProject2.Namespace, 2)
 	require.NoError(prq.T(), err)
 
 	log.Info("Move the namespace from the first project to the second project.")
-	currentNamespace, err := namespaces.GetNamespaceByName(standardUserClient, prq.cluster.ID, updatedNamespace.Name)
+	currentNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, prq.cluster.ID, updatedNamespace.Name)
 	require.NoError(prq.T(), err)
 	downstreamContext, err := clusterapi.GetClusterWranglerContext(prq.client, prq.cluster.ID)
 	require.NoError(prq.T(), err)
 
-	updatedNamespace.Annotations[projectsapi.ProjectIDAnnotation] = createdProject2.Namespace + ":" + createdProject2.Name
+	updatedNamespace.Annotations[namespaceapi.ProjectIDAnnotation] = createdProject2.Namespace + ":" + createdProject2.Name
 	updatedNamespace.ResourceVersion = currentNamespace.ResourceVersion
 	_, err = downstreamContext.Core.Namespace().Update(updatedNamespace)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace has the correct label and annotation referencing the second project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject2.Name, updatedNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject2.Name, updatedNamespace.Name)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the namespace does not have the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, updatedNamespace.Name, resourceQuotaAnnotation, false)
+	err = checkAnnotationExistsInNamespace(standardUserClient, prq.cluster.ID, updatedNamespace.Name, projectapi.ResourceQuotaAnnotation, false)
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should not exist")
 
 	log.Info("Verify that the deployment is in Active state and all pods in the deployment are in Running state.")

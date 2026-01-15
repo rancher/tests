@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/tests/actions/config/permutationdata"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
@@ -102,6 +103,10 @@ func TestDynamicNodeDriver(t *testing.T) {
 
 				logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 				provisioning.VerifyClusterReady(t, tt.client, cluster)
+
+				logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+				err = deployment.VerifyClusterDeployments(tt.client, cluster)
+				require.NoError(t, err)
 
 				logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 				err = pods.VerifyClusterPods(tt.client, cluster)

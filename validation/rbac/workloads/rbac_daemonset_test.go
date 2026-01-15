@@ -10,7 +10,8 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/daemonset"
@@ -240,17 +241,17 @@ func (rds *RbacDaemonsetTestSuite) TestCrudDaemonsetAsClusterMember() {
 	user, userClient, err := rbac.AddUserWithRoleToCluster(rds.client, rbac.StandardUser.String(), role, rds.cluster, nil)
 	require.NoError(rds.T(), err)
 
-	projectTemplate := projectsapi.NewProjectTemplate(rds.cluster.ID)
+	projectTemplate := projectapi.NewProjectTemplate(rds.cluster.ID)
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": user.ID,
 	}
 	createdProject, err := userClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 	require.NoError(rds.T(), err)
 
-	err = projects.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
+	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rds.T(), err)
 
-	namespace, err := projects.CreateNamespaceUsingWrangler(userClient, rds.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, rds.cluster.ID, createdProject.Name, nil)
 	require.NoError(rds.T(), err)
 
 	log.Infof("As a %v, create a daemonset in the namespace %v", role, namespace.Name)

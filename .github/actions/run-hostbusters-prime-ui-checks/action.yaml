@@ -1,6 +1,13 @@
 ---
 name: Run Prime UI Checks
 description: "Runs Prime UI checks"
+
+inputs:
+  reporting:
+    description: "Enable reporting"
+    required: false
+    default: "false"
+
 runs:
   using: composite
   steps:
@@ -11,8 +18,10 @@ runs:
         --junitfile results.xml --jsonfile results.json -- -timeout=3h -tags=prime -v;
         exit_code=$?;
         echo "exit_code=$exit_code" >> $GITHUB_ENV;
-        ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-        ./validation/reporter;
+        if [[ "${{ inputs.reporting }}" == "true" ]]; then
+          ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+          ./validation/reporter
+        fi
       shell: bash
 
     - name: Show failed tests

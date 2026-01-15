@@ -15,6 +15,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/interoperability/charts"
 	"github.com/stretchr/testify/assert"
@@ -117,6 +118,10 @@ func (b *BackupTestSuite) TestS3InPlaceRestore() {
 
 	logrus.Infof("Verifying the cluster is ready (%s)", rke2SteveObj.Name)
 	provisioning.VerifyClusterReady(b.T(), b.client, rke2SteveObj)
+
+	logrus.Infof("Verifying cluster deployments (%s)", rke2SteveObj.Name)
+	err = deployment.VerifyClusterDeployments(b.client, rke2SteveObj)
+	require.NoError(b.T(), err)
 
 	logrus.Infof("Verifying cluster pods (%s)", rke2SteveObj.Name)
 	err = pods.VerifyClusterPods(b.client, rke2SteveObj)

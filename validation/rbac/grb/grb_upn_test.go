@@ -59,7 +59,7 @@ func (upn *GlobalRoleBindingUserPrincipalNameTestSuite) TestCreateGlobalRoleBind
 	log.Info("Create a globalrolebinding with userPrincipalName set")
 	customGlobalRoleBinding.Name = namegen.AppendRandomString("testgrb")
 	customGlobalRoleBinding.GlobalRoleName = globalRoleWithInheritedClusterMember.Name
-	_, err = rbacapi.CreateGlobalRoleBinding(upn.client, &customGlobalRoleBinding)
+	_, err = upn.client.WranglerContext.Mgmt.GlobalRoleBinding().Create(&customGlobalRoleBinding)
 	require.NoError(upn.T(), err)
 
 	log.Info("Verify user in globalrolebinding userPrincipalName field is created")
@@ -83,7 +83,7 @@ func (upn *GlobalRoleBindingUserPrincipalNameTestSuite) TestGlobalRoleBindingPri
 	customGlobalRoleBinding.Name = namegen.AppendRandomString("testgrb")
 	customGlobalRoleBinding.GlobalRoleName = globalRoleWithInheritedClusterMember.Name
 	customGlobalRoleBinding.Annotations[principalDisplayNameAnnotation] = testPrincipalDisplayName
-	createdGlobalRoleBinding, err := rbacapi.CreateGlobalRoleBinding(upn.client, &customGlobalRoleBinding)
+	createdGlobalRoleBinding, err := upn.client.WranglerContext.Mgmt.GlobalRoleBinding().Create(&customGlobalRoleBinding)
 	require.NoError(upn.T(), err)
 	require.Equal(upn.T(), testPrincipalDisplayName, createdGlobalRoleBinding.Annotations[principalDisplayNameAnnotation])
 }
@@ -104,7 +104,7 @@ func (upn *GlobalRoleBindingUserPrincipalNameTestSuite) TestGlobalRoleBindingUse
 	customGlobalRoleBinding.Name = namegen.AppendRandomString("testgrb-both")
 	customGlobalRoleBinding.GlobalRoleName = globalRoleWithInheritedClusterMember.Name
 	customGlobalRoleBinding.GroupPrincipalName = testGroupPrincipalName
-	_, err = rbacapi.CreateGlobalRoleBinding(upn.client, &customGlobalRoleBinding)
+	_, err = upn.client.WranglerContext.Mgmt.GlobalRoleBinding().Create(&customGlobalRoleBinding)
 	require.Error(upn.T(), err)
 	require.Contains(upn.T(), err.Error(), "Forbidden: bindings can not set both userName/userPrincipalName and groupPrincipalName")
 
@@ -113,7 +113,7 @@ func (upn *GlobalRoleBindingUserPrincipalNameTestSuite) TestGlobalRoleBindingUse
 	customGlobalRoleBinding.GlobalRoleName = globalRoleWithInheritedClusterMember.Name
 	customGlobalRoleBinding.GroupPrincipalName = testGroupPrincipalName
 	customGlobalRoleBinding.UserName = namegen.AppendRandomString("test-username")
-	_, err = rbacapi.CreateGlobalRoleBinding(upn.client, &customGlobalRoleBinding)
+	_, err = upn.client.WranglerContext.Mgmt.GlobalRoleBinding().Create(&customGlobalRoleBinding)
 	require.Error(upn.T(), err)
 	require.Contains(upn.T(), err.Error(), "Forbidden: bindings can not set both userName/userPrincipalName and groupPrincipalName")
 }

@@ -13,8 +13,8 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	"github.com/rancher/tests/actions/kubeapi/namespaces"
-	"github.com/rancher/tests/actions/projects"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
@@ -155,7 +155,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestCpuAndMemoryLimitEqualT
 	require.Equal(pcrl.T(), memoryReservation, projectSpec.RequestsMemory, "Memory reservation mismatch")
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(pcrl.T(), err)
 
 	log.Info("Verify that the limit range object is created for the namespace and the resource limit in the limit range is accurate.")
@@ -194,7 +194,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestCpuAndMemoryLimitGreate
 	require.Equal(pcrl.T(), memoryReservation, projectSpec.RequestsMemory, "Memory reservation mismatch")
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(pcrl.T(), err)
 
 	log.Info("Verify that the limit range object is created for the namespace and the resource limit in the limit range is accurate.")
@@ -342,7 +342,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestLimitDeletionPropagatio
 	require.Equal(pcrl.T(), memoryReservation, projectSpec.RequestsMemory, "Memory reservation mismatch")
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(pcrl.T(), err)
 
 	log.Info("Verify that the limit range object is created for the namespace and the resource limit in the limit range is accurate.")
@@ -413,7 +413,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestOverrideDefaultLimitInN
 	require.Equal(pcrl.T(), memoryReservation, projectSpec.RequestsMemory, "Memory reservation mismatch")
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
-	err = projects.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
+	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, pcrl.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(pcrl.T(), err)
 
 	log.Info("Verify that the limit range object is created for the namespace and the resource limit in the limit range is accurate.")
@@ -434,13 +434,13 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestOverrideDefaultLimitInN
 	memoryLimit = "128Mi"
 	memoryReservation = "64Mi"
 
-	updatedNamespace, err := namespaces.GetNamespaceByName(standardUserClient, pcrl.cluster.ID, createdNamespace.Name)
+	updatedNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, pcrl.cluster.ID, createdNamespace.Name)
 	require.NoError(pcrl.T(), err)
-	if _, exists := updatedNamespace.Annotations[containerDefaultLimitAnnotation]; !exists {
-		updatedNamespace.Annotations[containerDefaultLimitAnnotation] = fmt.Sprintf(`{"limitsCpu":"%s","limitsMemory":"%s","requestsCpu":"%s","requestsMemory":"%s"}`, cpuLimit, memoryLimit, cpuReservation, memoryReservation)
+	if _, exists := updatedNamespace.Annotations[projectapi.ContainerDefaultLimitAnnotation]; !exists {
+		updatedNamespace.Annotations[projectapi.ContainerDefaultLimitAnnotation] = fmt.Sprintf(`{"limitsCpu":"%s","limitsMemory":"%s","requestsCpu":"%s","requestsMemory":"%s"}`, cpuLimit, memoryLimit, cpuReservation, memoryReservation)
 	}
 
-	currentNamespace, err := namespaces.GetNamespaceByName(standardUserClient, pcrl.cluster.ID, updatedNamespace.Name)
+	currentNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, pcrl.cluster.ID, updatedNamespace.Name)
 	require.NoError(pcrl.T(), err)
 	updatedNamespace.ResourceVersion = currentNamespace.ResourceVersion
 	namespace, err := standardUserContext.Core.Namespace().Update(updatedNamespace)

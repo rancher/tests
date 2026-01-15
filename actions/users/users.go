@@ -13,7 +13,7 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	"github.com/rancher/tests/actions/rbac"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -124,7 +124,7 @@ func CreateUserWithRoles(client *rancher.Client, globalRoles ...string) (*v3.Use
 	}
 
 	for _, globalRole := range globalRoles {
-		_, err := rbac.CreateGlobalRoleBinding(client, createdUser, globalRole)
+		_, err := rbacapi.CreateGlobalRoleBinding(client, globalRole, createdUser.Username, "", "")
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to assign global role %s to user %s: %w", globalRole, createdUser.Username, err)
 		}

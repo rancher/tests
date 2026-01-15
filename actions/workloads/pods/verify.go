@@ -3,7 +3,6 @@ package pods
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -84,23 +83,6 @@ func VerifyClusterPods(client *rancher.Client, cluster *steveV1.SteveAPIObject) 
 		}
 
 		steveClient := downstreamClient.SteveType(stevetypes.Pod)
-		deploymentClient := downstreamClient.SteveType(stevetypes.Deployment)
-		clusterDeployments, err := deploymentClient.List(nil)
-		if err != nil {
-			return false, nil
-		}
-
-		requiredDeployments := []string{ClusterAgent, Webhook, Fleet, SUC}
-		requiredDeploymentCount := 0
-		for _, deployment := range clusterDeployments.Data {
-			if slices.Contains(requiredDeployments, deployment.Name) {
-				logrus.Tracef("Deployment: %s exists", deployment.Name)
-				requiredDeploymentCount += 1
-			}
-		}
-		if requiredDeploymentCount != len(requiredDeployments) {
-			return false, nil
-		}
 
 		podErrors = []error{}
 

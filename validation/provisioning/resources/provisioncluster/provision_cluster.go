@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/stretchr/testify/require"
 )
@@ -48,6 +49,10 @@ func ProvisionRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterType s
 		require.NoError(t, err)
 
 		provisioning.VerifyClusterReady(t, client, clusterObject)
+
+		err = deployment.VerifyClusterDeployments(client, clusterObject)
+		require.NoError(t, err)
+
 		err = pods.VerifyClusterPods(client, clusterObject)
 		require.NoError(t, err)
 	} else {
@@ -57,6 +62,10 @@ func ProvisionRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterType s
 		require.NoError(t, err)
 
 		provisioning.VerifyClusterReady(t, client, clusterObject)
+
+		err = deployment.VerifyClusterDeployments(client, clusterObject)
+		require.NoError(t, err)
+
 		err = pods.VerifyClusterPods(client, clusterObject)
 		require.NoError(t, err)
 	}

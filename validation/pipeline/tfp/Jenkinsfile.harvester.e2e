@@ -217,10 +217,6 @@ node("harvester-vpn-1") {
                         sh returnStdout: true, script: "echo 'finished'"
 
                         config = sh(script: "cat ${filename}", returnStdout: true).trim()
-
-                        sh '''#!/bin/bash
-                        cat config.yml
-                        '''
                     }
                     stage("Parallel Checkout") {
                         parallel(
@@ -497,10 +493,8 @@ echo "}\\n" >> "${tfvars_filepath}"
                                     script: "yq '.harvester.host' mid_config.yml",
                                     returnStdout: true
                                 ).trim()
-
                                 currentBuild.description = "https://${r_host}<br>${r_pass}<br>https://${h_host}"
                             }
-
 
                             sh """
                             docker stop ${golangTestContainer} || true

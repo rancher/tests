@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/validation/certificates"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
@@ -98,6 +99,10 @@ func (c *CertRotationTestSuite) TestCertRotation() {
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			provisioning.VerifyClusterReady(c.T(), c.client, cluster)
+
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(c.client, cluster)
+			require.NoError(c.T(), err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(c.client, cluster)

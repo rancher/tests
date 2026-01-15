@@ -8,8 +8,10 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/unstructured"
 	"github.com/rancher/shepherd/pkg/api/scheme"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wait"
-	coreV1 "k8s.io/api/core/v1"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +21,7 @@ import (
 
 // CreateNamespace is a helper function that uses the dynamic client to create a namespace on a project.
 // It registers a delete function with a wait.WatchWait to ensure the namspace is deleted cleanly.
-func CreateNamespace(client *rancher.Client, clusterID, projectName, namespaceName, containerDefaultResourceLimit string, labels, annotations map[string]string) (*coreV1.Namespace, error) {
+func CreateNamespace(client *rancher.Client, clusterID, projectName, namespaceName, containerDefaultResourceLimit string, labels, annotations map[string]string) (*corev1.Namespace, error) {
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
@@ -33,7 +35,7 @@ func CreateNamespace(client *rancher.Client, clusterID, projectName, namespaceNa
 		annotations["field.cattle.io/projectId"] = annotationValue
 	}
 
-	namespace := &coreV1.Namespace{
+	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        namespaceName,
 			Annotations: annotations,
@@ -123,10 +125,57 @@ func CreateNamespace(client *rancher.Client, clusterID, projectName, namespaceNa
 		})
 	})
 
-	newNamespace := &coreV1.Namespace{}
+	newNamespace := &corev1.Namespace{}
 	err = scheme.Scheme.Convert(unstructuredResp, newNamespace, unstructuredResp.GroupVersionKind())
 	if err != nil {
 		return nil, err
 	}
 	return newNamespace, nil
+}
+
+// CreateNamespaceUsingWrangler is a helper to create a namespace in the project using wrangler context
+func CreateNamespaceUsingWrangler(client *rancher.Client, clusterID, projectName string, labels map[string]string) (*corev1.Namespace, error) {
+	namespaceName := namegen.AppendRandomString("testns")
+	annotations := map[string]string{
+		ProjectIDAnnotation: clusterID + ":" + projectName,
+	}
+
+	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	createdNamespace, err := ctx.Core.Namespace().Create(&corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        namespaceName,
+			Annotations: annotations,
+			Labels:      labels,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = WaitForProjectIDUpdate(client, clusterID, projectName, createdNamespace.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	return createdNamespace, nil
+}
+
+// CreateMultipleNamespacesInProject creates multiple namespaces in the specified project using wrangler context
+func CreateMultipleNamespacesInProject(client *rancher.Client, clusterID, projectID string, count int) ([]*corev1.Namespace, error) {
+	var createdNamespaces []*corev1.Namespace
+
+	for i := 0; i < count; i++ {
+		ns, err := CreateNamespaceUsingWrangler(client, clusterID, projectID, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create namespace %d/%d: %w", i+1, count, err)
+		}
+
+		createdNamespaces = append(createdNamespaces, ns)
+	}
+
+	return createdNamespaces, nil
 }
