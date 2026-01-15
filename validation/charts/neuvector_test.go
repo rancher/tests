@@ -51,6 +51,7 @@ func (i *NeuVectorTestSuite) SetupSuite() {
 
 	i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, charts.SystemProject)
 	require.NoError(i.T(), err)
+	require.Equal(i.T(), i.project.Name, charts.SystemProject)
 }
 
 func (i *NeuVectorTestSuite) TestChartInstallation() {
@@ -66,10 +67,6 @@ func (i *NeuVectorTestSuite) TestChartInstallation() {
 
 			latestNeuVectorChartVersion, err := i.client.Catalog.GetLatestChartVersion(neuVectorChartName, catalog.RancherChartRepo)
 			require.NoError(i.T(), err)
-
-			i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, charts.SystemProject)
-			require.NoError(i.T(), err)
-			require.Equal(i.T(), i.project.Name, charts.SystemProject)
 
 			payloadOpts := charts.PayloadOpts{
 				Namespace: charts.NeuVectorNamespace,

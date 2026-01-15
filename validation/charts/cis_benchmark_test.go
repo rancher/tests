@@ -52,6 +52,7 @@ func (i *CisBenchmarkTestSuite) SetupSuite() {
 
 	i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, cis.System)
 	require.NoError(i.T(), err)
+	require.Equal(i.T(), i.project.Name, cis.System)
 }
 
 func (i *CisBenchmarkTestSuite) TestChartInstallation() {
@@ -63,10 +64,6 @@ func (i *CisBenchmarkTestSuite) TestChartInstallation() {
 
 	latestHardenedChartVersion, err := i.client.Catalog.GetLatestChartVersion(chartName, catalog.RancherChartRepo)
 	require.NoError(i.T(), err)
-
-	i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, cis.System)
-	require.NoError(i.T(), err)
-	require.Equal(i.T(), i.project.Name, cis.System)
 
 	chartInstallOptions := &charts.InstallOptions{
 		Cluster:   clusterMeta,
