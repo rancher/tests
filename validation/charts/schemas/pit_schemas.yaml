@@ -76,7 +76,7 @@
       expectedresult: "Neu Vector resources are installed successfully"
       position: 3
     custom_field:
-      "15": "TestNeuVectorTestSuite/TestChartInstallation/neuvector"
+      "15": "neuvector"
   - title: "Install Neu Vector Monitor Chart"
     description: "Validate that Neu Vector Monitor chart can be installed"
     automation: 2
@@ -94,4 +94,78 @@
       expectedresult: "Neu Vector Monitor resources are installed successfully"
       position: 3
     custom_field:
-      "15": "TestNeuVectorTestSuite/TestChartInstallation/neuvector-monitor"
+      "15": "neuvector-monitor"
+  - title: "Install Monitoring Chart"
+    description: "Validate that Monitoring chart can be installed"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Project"
+      data: "Project name: System"
+      expectedresult: "The 'System' project is successfully created"
+      position: 2
+    - action: "Install Monitoring chart"
+      expectedresult: "Monitoring resources are installed successfully"
+      position: 3
+    custom_field:
+      "15": "TestMonitoringChart"
+  - title: "Update Monitoring Chart"
+    description: "Validate that Monitoring chart can be updated"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Project"
+      data: "Project name: System"
+      expectedresult: "The 'System' project is successfully created"
+      position: 2
+    - action: "Install Monitoring chart"
+      expectedresult: "Monitoring resources are installed successfully"
+      position: 3
+    - action: "Update Monitoring chart"
+      expectedresult: "Monitoring resources are updated successfully"
+      position: 4
+    custom_field:
+      "15": "TestUpgradeMonitoringChart"
+  - title: "Install Istio Chart"
+    description: "Validate that Istio chart can be installed"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Project"
+      data: "Project name: System"
+      expectedresult: "The 'System' project is successfully created"
+      position: 2
+    - action: "Install istio chart"
+      expectedresult: "Istio resources are installed successfully"
+      position: 3
+    custom_field:
+      "15": "TestIstioChart"
+  - title: "Update Istio Chart"
+    description: "Validate that Istio chart can be updated"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Project"
+      data: "Project name: System"
+      expectedresult: "The 'System' project is successfully created"
+      position: 2
+    - action: "Install Istio chart"
+      expectedresult: "Istio resources are installed successfully"
+      position: 3
+    - action: "Update Istio chart"
+      expectedresult: "Istio resources are updated successfully"
+      position: 4
+    custom_field:
+      "15": "TestUpgradeIstioChart"
