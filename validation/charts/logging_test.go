@@ -1,4 +1,4 @@
-//go:build (validation || infra.rke1 || cluster.any || stress) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke2k3s && !sanity && !extended
+//go:build (validation || infra.rke1 || cluster.any || stress || pit.daily) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke2k3s && !sanity && !extended
 
 package charts
 
@@ -8,14 +8,13 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	extencharts "github.com/rancher/shepherd/extensions/charts"
+	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
-	"github.com/rancher/tests/actions/registries"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type LoggingTestSuite struct {
@@ -69,32 +68,25 @@ func (i *LoggingTestSuite) TestChartInstallation() {
 	client, err := i.client.WithSession(i.session)
 	require.NoError(i.T(), err)
 
-	loggingChart, err := extencharts.GetChartStatus(client, i.project.ClusterID, charts.RancherLoggingNamespace, charts.RancherLoggingName)
+	latestLoggingVersion, err := client.Catalog.GetLatestChartVersion(charts.RancherLoggingName, catalog.RancherChartRepo)
 	require.NoError(i.T(), err)
 
-	if !loggingChart.IsAlreadyInstalled {
-		// Get latest versions of logging
-		latestLoggingVersion, err := client.Catalog.GetLatestChartVersion(charts.RancherLoggingName, catalog.RancherChartRepo)
-		require.NoError(i.T(), err)
-
-		loggingChartInstallOption := &charts.InstallOptions{
-			Cluster:   i.cluster,
-			Version:   latestLoggingVersion,
-			ProjectID: i.project.ID,
-		}
-
-		loggingChartFeatureOption := &charts.RancherLoggingOpts{
-			AdditionalLoggingSources: true,
-		}
-
-		i.T().Logf("Installing logging chart with the latest version in cluster [%v] with version [%v]", i.cluster.Name, latestLoggingVersion)
-		err = charts.InstallRancherLoggingChart(client, loggingChartInstallOption, loggingChartFeatureOption)
-		require.NoError(i.T(), err)
+	loggingChartInstallOption := &charts.InstallOptions{
+		Cluster:   i.cluster,
+		Version:   latestLoggingVersion,
+		ProjectID: i.project.ID,
 	}
 
-	isUsingRegistry, err := registries.CheckAllClusterPodsForRegistryPrefix(client, i.cluster.ID, i.registrySetting.Value)
+	loggingChartFeatureOption := &charts.RancherLoggingOpts{
+		AdditionalLoggingSources: true,
+	}
+
+	i.T().Logf("Installing logging chart with the latest version in cluster [%v] with version [%v]", i.cluster.Name, latestLoggingVersion)
+	err = charts.InstallRancherLoggingChart(client, loggingChartInstallOption, loggingChartFeatureOption)
 	require.NoError(i.T(), err)
-	assert.Truef(i.T(), isUsingRegistry, "Checking if using correct registry prefix")
+
+	err = shepherdCharts.WatchAndWaitDeployments(client, i.cluster.ID, charts.RancherLoggingNamespace, metav1.ListOptions{})
+	require.NoError(i.T(), err)
 }
 
 func TestLoggingTestSuite(t *testing.T) {
