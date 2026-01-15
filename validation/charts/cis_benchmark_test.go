@@ -77,6 +77,10 @@ func (i *CisBenchmarkTestSuite) TestChartInstallation() {
 	i.T().Logf("Setting up %s on cluster (%s)", chartName, i.cluster.Name)
 	err = cis.SetupHardenedChart(i.client, i.project.ClusterID, chartInstallOptions, chartName, chartNamespace)
 	require.NoError(i.T(), err)
+
+	i.T().Logf("Running CIS scan on cluster (%s)", i.cluster.Name)
+	err = cis.RunCISScan(i.client, i.project.ClusterID, cis.ScanProfileName)
+	require.NoError(i.T(), err)
 }
 
 func TestCisBenchmarkTestSuite(t *testing.T) {
