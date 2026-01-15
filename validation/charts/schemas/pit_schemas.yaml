@@ -1,0 +1,97 @@
+- projects: [RANCHERINT]
+  suite: Charts
+  cases:
+  - title: "Install Cis Benchmark Chart"
+    description: "Validate that Cis Benchmark chart can be installed"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Project"
+      data: "Project name: System"
+      expectedresult: "The 'System' project is successfully created"
+      position: 2
+    - action: "Install Cis Benchmark chart"
+      data: "helm install rancher-cis-benchmark ./ --create-namespace -n cis-operator-system"
+      expectedresult: "Cis Benchmark resources are installed successfully"
+      position: 3
+    - action: "Run CIS Scan"
+      data: "Profile name: cis-1.11-profile"
+      expectedresult: "Scan executed"
+      position: 4
+    custom_field:
+      "15": "TestCisBenchmarkTestSuite/TestChartInstallation"
+  - title: "Install Alerting Chart"
+    description: "Validate that Alerting chart can be installed"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Project"
+      data: "Project name: System"
+      expectedresult: "The 'System' project is successfully created"
+      position: 2
+    - action: "Install Alerting chart"
+      data: "helm install rancher-alerting-drivers --namespace=default"
+      expectedresult: "Alerting resources are installed successfully"
+      position: 3
+    custom_field:
+      "15": "TestAlertingTestSuite/TestChartInstallation"
+  - title: "Install Logging Chart"
+    description: "Validate that Logging chart can be installed"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Project"
+      data: "Project name: System"
+      expectedresult: "The 'System' project is successfully created"
+      position: 2
+    - action: "Install Logging chart"
+      data: "helm install --generate-name --wait oci://ghcr.io/kube-logging/helm-charts/logging-operator"
+      expectedresult: "Logging resources are installed successfully"
+      position: 3
+    custom_field:
+      "15": "TestLoggingTestSuite/TestChartInstallation"
+  - title: "Install Neu Vector Chart"
+    description: "Validate that Neu Vector chart can be installed"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Project"
+      data: "Project name: System"
+      expectedresult: "The 'System' project is successfully created"
+      position: 2
+    - action: "Install Neu Vector chart"
+      data: "helm install --namespace=cattle-neuvector-system neuvector"
+      expectedresult: "Neu Vector resources are installed successfully"
+      position: 3
+    custom_field:
+      "15": "TestNeuVectorTestSuite/TestChartInstallation/neuvector"
+  - title: "Install Neu Vector Monitor Chart"
+    description: "Validate that Neu Vector Monitor chart can be installed"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create Project"
+      data: "Project name: System"
+      expectedresult: "The 'System' project is successfully created"
+      position: 2
+    - action: "Install Neu Vector Monitor chart"
+      data: "helm install --namespace=cattle-neuvector-system neuvector-monitor"
+      expectedresult: "Neu Vector Monitor resources are installed successfully"
+      position: 3
+    custom_field:
+      "15": "TestNeuVectorTestSuite/TestChartInstallation/neuvector-monitor"
