@@ -17,8 +17,6 @@ replace (
 	go.opentelemetry.io/otel/sdk => go.opentelemetry.io/otel/sdk v1.28.0
 	go.opentelemetry.io/otel/trace => go.opentelemetry.io/otel/trace v1.28.0
 	go.opentelemetry.io/proto/otlp => go.opentelemetry.io/proto/otlp v1.3.1
-	go.qase.io/client => github.com/rancher/qase-go/client v0.0.0-20250627195016-142ff3dfec16
-	go.qase.io/qase-api-client => github.com/qase-tms/qase-go/qase-api-client v1.2.0
 
 	helm.sh/helm/v3 => github.com/rancher/helm/v3 v3.16.1-rancher1
 	k8s.io/api => k8s.io/api v0.34.1
@@ -58,6 +56,7 @@ replace (
 )
 
 require (
+	github.com/qase-tms/qase-go/qase-api-client v1.2.0
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20251216155429-44067c0178ae
 	github.com/rancher/tfp-automation v0.0.0-20251219210947-f4a1a9882c29
@@ -196,7 +195,6 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel v1.38.0 // indirect
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
-	go.qase.io/qase-api-client v0.0.0-00010101000000-000000000000
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect

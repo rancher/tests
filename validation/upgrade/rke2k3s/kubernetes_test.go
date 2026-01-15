@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	upstream "github.com/qase-tms/qase-go/qase-api-client"
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
@@ -26,7 +27,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	upstream "go.qase.io/qase-api-client"
 )
 
 type UpgradeKubernetesTestSuite struct {

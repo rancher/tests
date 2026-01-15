@@ -10,13 +10,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/antihax/optional"
+	"github.com/qase-tms/qase-go/pkg/qase-go/clients"
+	api_v1_client "github.com/qase-tms/qase-go/qase-api-client"
 	"github.com/rancher/shepherd/extensions/defaults"
 	qaseactions "github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/qase/testresult"
 	"github.com/rancher/tests/validation/pipeline/slack"
 	"github.com/sirupsen/logrus"
-	qase "go.qase.io/client"
 	yaml "gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -43,9 +43,13 @@ var (
 
 func main() {
 	if runIDEnvVar != "" {
-		cfg := qase.NewConfiguration()
-		cfg.AddDefaultHeader("Token", qaseToken)
-		client := qase.NewAPIClient(cfg)
+		cfg := clients.ClientConfig{
+			APIToken: qaseToken,
+		}
+		client, err := clients.NewV1Client(cfg)
+		if err != nil {
+			logrus.Fatalf("error creating Qase client: %v", err)
+		}
 
 		runID, err := strconv.ParseInt(runIDEnvVar, 10, 64)
 		if err != nil {
@@ -79,23 +83,23 @@ func main() {
 	}
 }
 
-func getAllAutomationTestCases(client *qase.APIClient) (map[string]qase.TestCase, error) {
-	testCases := []qase.TestCase{}
-	testCaseNameMap := map[string]qase.TestCase{}
+func getAllAutomationTestCases(client *clients.V1Client) (map[string]api_v1_client.TestCase, error) {
+	testCases := []api_v1_client.TestCase{}
+	testCaseNameMap := map[string]api_v1_client.TestCase{}
+	authCtx := context.WithValue(context.TODO(), api_v1_client.ContextAPIKeys, map[string]api_v1_client.APIKey{
+		"TokenAuth": {Key: qaseToken},
+	})
 	var numOfTestsCases int32 = 1
 	offSetCount := 0
 	for numOfTestsCases > 0 {
-		offset := optional.NewInt32(int32(offSetCount))
-		localVarOptionals := &qase.CasesApiGetCasesOpts{
-			Offset: offset,
-		}
-		tempResult, _, err := client.CasesApi.GetCases(context.TODO(), qaseactions.RancherManagerProjectID, localVarOptionals)
+		offset := int32(offSetCount)
+		tempResult, _, err := client.GetAPIClient().CasesAPI.GetCases(authCtx, qaseactions.RancherManagerProjectID).Offset(offset).Execute()
 		if err != nil {
 			return nil, err
 		}
 
 		testCases = append(testCases, tempResult.Result.Entities...)
-		numOfTestsCases = tempResult.Result.Count
+		numOfTestsCases = *tempResult.Result.Count
 		offSetCount += 10
 	}
 
@@ -104,7 +108,7 @@ func getAllAutomationTestCases(client *qase.APIClient) (map[string]qase.TestCase
 		if automationTestNameCustomField != "" {
 			testCaseNameMap[automationTestNameCustomField] = testCase
 		} else {
-			testCaseNameMap[testCase.Title] = testCase
+			testCaseNameMap[*testCase.Title] = testCase
 		}
 
 	}
@@ -178,7 +182,7 @@ func parseCorrectTestCases(testCases []testresult.GoTestOutput) map[string]*test
 	return finalTestCases
 }
 
-func reportTestQases(client *qase.APIClient, testRunID int64) (int, error) {
+func reportTestQases(client *clients.V1Client, testRunID int64) (int, error) {
 	tempTestCases, err := readTestCase()
 	if err != nil {
 		return 0, err
@@ -195,7 +199,7 @@ func reportTestQases(client *qase.APIClient, testRunID int64) (int, error) {
 	for _, goTestResult := range goTestResults {
 		if testQase, ok := qaseTestCases[goTestResult.Name]; ok {
 			// update test status
-			httpCode, err := updateTestInRun(client, *goTestResult, testQase.Id, testRunID)
+			httpCode, err := updateTestInRun(client, *goTestResult, *testQase.Id, testRunID)
 			if err != nil {
 				return httpCode, err
 			}
@@ -210,7 +214,7 @@ func reportTestQases(client *qase.APIClient, testRunID int64) (int, error) {
 				return 0, err
 			}
 
-			httpCode, err := updateTestInRun(client, *goTestResult, caseID.Result.Id, testRunID)
+			httpCode, err := updateTestInRun(client, *goTestResult, *caseID.Result.Id, testRunID)
 			if err != nil {
 				return httpCode, err
 			}
@@ -220,7 +224,7 @@ func reportTestQases(client *qase.APIClient, testRunID int64) (int, error) {
 			}
 		}
 	}
-	resp, httpResponse, err := client.RunsApi.GetRun(context.TODO(), qaseactions.RancherManagerProjectID, int32(testRunID))
+	resp, httpResponse, err := client.GetAPIClient().RunsAPI.GetRun(context.TODO(), qaseactions.RancherManagerProjectID, int32(testRunID)).Execute()
 	if err != nil {
 		var statusCode int
 		if httpResponse != nil {
@@ -228,76 +232,73 @@ func reportTestQases(client *qase.APIClient, testRunID int64) (int, error) {
 		}
 		return statusCode, fmt.Errorf("error getting test run: %v", err)
 	}
-	if strings.Contains(resp.Result.Title, "-head") {
-		return 0, slack.PostSlackMessage(resultTestMap, testRunID, resp.Result.Title)
+	if strings.Contains(*resp.Result.Title, "-head") {
+		return 0, slack.PostSlackMessage(resultTestMap, testRunID, *resp.Result.Title)
 	}
 
 	return http.StatusOK, nil
 }
 
-func writeTestSuiteToQase(client *qase.APIClient, testResult testresult.GoTestResult) (*int64, error) {
+func writeTestSuiteToQase(client *clients.V1Client, testResult testresult.GoTestResult) (*int64, error) {
 	parentSuite := int64(automationSuiteID)
 	var id int64
 	for _, suiteGo := range testResult.TestSuite {
-		localVarOptionals := &qase.SuitesApiGetSuitesOpts{
-			FiltersSearch: optional.NewString(suiteGo),
-		}
-
-		qaseSuites, _, err := client.SuitesApi.GetSuites(context.TODO(), qaseactions.RancherManagerProjectID, localVarOptionals)
+		qaseSuites, _, err := client.GetAPIClient().SuitesAPI.GetSuites(context.TODO(), qaseactions.RancherManagerProjectID).Search(suiteGo).Execute()
 		if err != nil {
 			return nil, err
 		}
 
 		var testSuiteWasFound bool
-		var qaseSuiteFound qase.Suite
+		var qaseSuiteFound api_v1_client.Suite
 		for _, qaseSuite := range qaseSuites.Result.Entities {
-			if qaseSuite.Title == suiteGo {
+			if *qaseSuite.Title == suiteGo {
 				testSuiteWasFound = true
 				qaseSuiteFound = qaseSuite
 			}
 		}
 		if !testSuiteWasFound {
-			suiteBody := qase.SuiteCreate{
+			suiteBody := api_v1_client.SuiteCreate{
 				Title:    suiteGo,
-				ParentId: int64(parentSuite),
+				ParentId: *api_v1_client.NewNullableInt64(&parentSuite),
 			}
-			idResponse, _, err := client.SuitesApi.CreateSuite(context.TODO(), suiteBody, qaseactions.RancherManagerProjectID)
+			idResponse, _, err := client.GetAPIClient().SuitesAPI.CreateSuite(context.TODO(), qaseactions.RancherManagerProjectID).SuiteCreate(suiteBody).Execute()
 			if err != nil {
 				return nil, err
 			}
-			id = idResponse.Result.Id
+			id = *idResponse.Result.Id
 			parentSuite = id
 		} else {
-			id = qaseSuiteFound.Id
+			id = *qaseSuiteFound.Id
 		}
 	}
 
 	return &id, nil
 }
 
-func writeTestCaseToQase(client *qase.APIClient, testResult testresult.GoTestResult) (*qase.IdResponse, error) {
+func writeTestCaseToQase(client *clients.V1Client, testResult testresult.GoTestResult) (*api_v1_client.IdResponse, error) {
 	testSuiteID, err := writeTestSuiteToQase(client, testResult)
 	if err != nil {
 		return nil, err
 	}
-
-	testQaseBody := qase.TestCaseCreate{
+	var zero int32 = 0
+	var two int32 = 2
+	testQaseBody := api_v1_client.TestCaseCreate{
 		Title:      testResult.Name,
-		SuiteId:    *testSuiteID,
-		IsFlaky:    int32(0),
-		Automation: int32(2),
-		CustomField: map[string]string{
+		SuiteId:    testSuiteID,
+		IsFlaky:    &zero,
+		Automation: &two,
+		CustomField: &map[string]string{
 			fmt.Sprintf("%d", testSourceID): testSource,
 		},
 	}
-	caseID, _, err := client.CasesApi.CreateCase(context.TODO(), testQaseBody, qaseactions.RancherManagerProjectID)
+	caseID, _, err := client.GetAPIClient().CasesAPI.CreateCase(context.TODO(), qaseactions.RancherManagerProjectID).TestCaseCreate(testQaseBody).Execute()
 	if err != nil {
 		return nil, err
 	}
-	return &caseID, err
+	return caseID, err
 }
 
-func updateTestInRun(client *qase.APIClient, testResult testresult.GoTestResult, qaseTestCaseID, testRunID int64) (int, error) {
+func updateTestInRun(client *clients.V1Client, testResult testresult.GoTestResult, qaseTestCaseID, testRunID int64) (int, error) {
 	status := fmt.Sprintf("%sed", testResult.Status)
 	var elapsedTime float64
 	if testResult.Elapsed != "" {
@@ -308,14 +309,14 @@ func updateTestInRun(client *qase.APIClient, testResult testresult.GoTestResult,
 		}
 	}
 
-	resultBody := qase.ResultCreate{
-		CaseId:  qaseTestCaseID,
+	resultBody := api_v1_client.ResultCreate{
+		CaseId:  &qaseTestCaseID,
 		Status:  status,
-		Comment: testResult.StackTrace,
-		Time:    int64(elapsedTime),
+		Comment: *api_v1_client.NewNullableString(&testResult.StackTrace),
+		Time:    *api_v1_client.NewNullableInt64(api_v1_client.PtrInt64(int64(elapsedTime))),
 	}
 
-	_, resp, err := client.ResultsApi.CreateResult(context.TODO(), resultBody, qaseactions.RancherManagerProjectID, testRunID)
+	_, resp, err := client.GetAPIClient().ResultsAPI.CreateResult(context.TODO(), qaseactions.RancherManagerProjectID, int32(testRunID)).ResultCreate(resultBody).Execute()
 	if err != nil {
 		if resp != nil {
 			return resp.StatusCode, err
@@ -326,10 +327,10 @@ func updateTestInRun(client *qase.APIClient, testResult testresult.GoTestResult,
 	return http.StatusOK, nil
 }
 
-func getAutomationTestName(customFields []qase.CustomFieldValue) string {
+func getAutomationTestName(customFields []api_v1_client.CustomFieldValue) string {
 	for _, field := range customFields {
-		if field.Id == automationTestNameID {
-			return field.Value
+		if *field.Id == automationTestNameID {
+			return *field.Value
 		}
 	}
 	return ""
