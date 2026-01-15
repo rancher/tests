@@ -22,6 +22,7 @@ const (
 	defaultRegistrySettingID = "system-default-registry"
 	serverURLSettingID       = "server-url"
 	cisBenchmarkSteveType    = "cis.cattle.io.clusterscan"
+	ScanProfileName          = "cis-1.11-profile"
 )
 
 // SetupHardenedChart installs the CIS Benchmark chart and waits for all resources to be ready.
