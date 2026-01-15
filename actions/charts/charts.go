@@ -10,6 +10,7 @@ const (
 	rancherChartsName        = "rancher-charts"
 	rancherPartnerCharts     = "rancher-partner-charts"
 	active                   = "active"
+	SystemProject            = "System"
 )
 
 // InstallOptions is a struct of the required options to install a chart.
