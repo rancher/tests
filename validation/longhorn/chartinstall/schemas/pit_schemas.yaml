@@ -1,0 +1,104 @@
+- projects: [ RANCHERINT ]
+  suite: Longhorn
+  cases:
+  - title: "Fresh Longhorn Installation via Rancher App Catalog"
+    description: "Verify Longhorn can be successfully installed through Rancher's app catalog with default settings on a clean Kubernetes cluster."
+    automation: 2
+    steps:
+    - action: "Log into Rancher UI with cluster admin privileges"
+      data: ""
+      expectedresult: "Rancher dashboard loads successfully"
+      position: 1
+    - action: "Navigate to target cluster in Rancher dashboard"
+      data: ""
+      expectedresult: "Cluster view displays"
+      position: 2
+    - action: "Click 'Apps' in the left navigation menu"
+      data: ""
+      expectedresult: "Apps section opens"
+      position: 3
+    - action: "Click 'Charts' to access the application catalog"
+      data: ""
+      expectedresult: "Charts catalog displays"
+      position: 4
+    - action: "Click 'Charts' to access the application catalog"
+      data: ""
+      expectedresult: "Search for 'Longhorn' in the search bar"
+      position: 5
+    - action: "Select the Longhorn chart from the results"
+      data: ""
+      expectedresult: "Longhorn installation page opens"
+      position: 6
+    - action: "Review default settings and click 'Install'"
+      data: ""
+      expectedresult: "Installation begins"
+      position: 7
+    - action: "Monitor installation progress in the Apps section"
+      data: ""
+      expectedresult: "Installation completes within 10 minutes"
+      position: 8
+    - action: "Verify all Longhorn pods are in Running state"
+      data: ""
+      expectedresult: "All pods show 'Running' status in longhorn-system namespace"
+      position: 9
+    - action: "Check Longhorn UI accessibility through Rancher"
+      data: ""
+      expectedresult: "Longhorn UI opens when clicking Longhorn button"
+      position: 10
+    - action: "Verify default storage class creation"
+      data: ""
+      expectedresult: "`longhorn` storage class exists and is available"
+      position: 11
+    custom_field:
+      "15": "TestChartInstall"
+  - title: "Longhorn Installation with Custom Configuration"
+    description: "Test Longhorn installation with custom settings including replica count, data path, and node selection through Rancher interface."
+    automation: 2
+    steps:
+    - action: "Access Longhorn installation chart in Rancher Apps"
+      data: ""
+      expectedresult: "Longhorn installation page displays"
+      position: 1
+    - action: "Click 'Longhorn Default Settings' to expand configuration"
+      data: ""
+      expectedresult: "Configuration options become visible"
+      position: 2
+    - action: "Set Default replica count to `2`"
+      data: ""
+      expectedresult: "Setting accepts value of 2"
+      position: 3
+    - action: "Set Default data path to `/var/lib/longhorn-custom`"
+      data: ""
+      expectedresult: "Custom path is configured"
+      position: 4
+    - action: "Set Storage over-provisioning percentage to `150`"
+      data: ""
+      expectedresult: "Over-provisioning set to 150%"
+      position: 5
+    - action: "Enable 'Create default disk only on labeled node'"
+      data: ""
+      expectedresult: "Option is enabled"
+      position: 6
+    - action: "Label worker nodes with `node.longhorn.io/create-default-disk=true`"
+      data: ""
+      expectedresult: "Nodes are properly labeled"
+      position: 7
+    - action: "Complete installation with custom configuration"
+      data: ""
+      expectedresult: "Installation succeeds with custom settings"
+      position: 8
+    - action: "Verify custom settings in Longhorn UI"
+      data: ""
+      expectedresult: "Settings reflect custom configuration"
+      position: 9
+    - action: "Create test volume and verify replica count"
+      data: ""
+      expectedresult: "Volume created with 2 replicas"
+      position: 10
+    - action: "Check custom data path utilization on nodes"
+      data: ""
+      expectedresult: "`/var/lib/longhorn-custom` directory is used"
+      position: 11
+    custom_field:
+      "15": "TestChartInstallStaticCustomConfig"
+  
