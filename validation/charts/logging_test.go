@@ -56,11 +56,11 @@ func (i *LoggingTestSuite) SetupSuite() {
 	// Create project
 	projectConfig := &management.Project{
 		ClusterID: cluster.ID,
-		Name:      exampleAppProjectName,
+		Name:      charts.SystemProject,
 	}
 	createdProject, err := client.Management.Project.Create(projectConfig)
 	require.NoError(i.T(), err)
-	require.Equal(i.T(), createdProject.Name, exampleAppProjectName)
+	require.Equal(i.T(), createdProject.Name, charts.SystemProject)
 	i.project = createdProject
 }
 
