@@ -125,7 +125,7 @@ func waitUninstallation(catalogClient *catalog.Client, namespace string, chartNa
 	return wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
 		switch event.Type {
 		case watch.Error:
-			return false, fmt.Errorf("there was an error uninstalling Longhorn chart")
+			return false, fmt.Errorf("there was an error uninstalling %s chart", chartName)
 		case watch.Deleted:
 			return true, nil
 		}
