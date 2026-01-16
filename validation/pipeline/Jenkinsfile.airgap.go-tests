@@ -251,11 +251,7 @@ node {
             stage('Inject Admin Token') {
                 echo 'Injecting dynamically created admin token into cattle-config.yaml'
 
-                def adminPassword = env.RANCHER_ADMIN_PASSWORD
-
-                if (!adminPassword?.trim()) {
-                    error('RANCHER_ADMIN_PASSWORD must be provided in the Jenkins job environment (e.g. via withCredentials or a secret text parameter).')
-                }
+                def adminPassword = env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'
 
                 // Run the token injection program
                 sh """
