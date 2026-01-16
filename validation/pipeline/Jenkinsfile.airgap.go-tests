@@ -265,7 +265,7 @@ node {
                         -e CATTLE_CONFIG_PATH=/workspace/tests/cattle-config.yaml \
                         -w /workspace/tests \
                         ${infraToolsImage} \
-                        sh -c 'set -euo pipefail; cd /workspace && go run -tags ignore ${injectSource}'
+                        sh -c 'set -euo pipefail; go run -tags ignore ${injectSource}'
                 """
             }
 
