@@ -64,7 +64,8 @@ node {
 
             stage('Build Infrastructure Tools Image') {
                 echo 'Building Docker image with Tofu, Ansible, Go toolchain, and gotestsum'
-                sh "docker build --platform linux/amd64 -t rancher-infra-tools:latest -f ${testsPath}/validation/pipeline/Dockerfile.airgap-go-tests ."
+                sh "docker rmi -f rancher-infra-tools:latest || true"
+                sh "docker build --no-cache --platform linux/amd64 -t rancher-infra-tools:latest -f ${testsPath}/validation/pipeline/Dockerfile.airgap-go-tests ."
             }
 
             stage('Verify Infra Tools Tooling') {
