@@ -70,6 +70,7 @@ jobs:
         ${{
           github.event_name == 'schedule' ||
           github.event_name == 'workflow_call' ||
+          github.actor == 'github-actions[bot]' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
 
@@ -414,6 +415,7 @@ jobs:
         ${{
           github.event_name == 'schedule' ||
           github.event_name == 'workflow_call' ||
+          github.actor == 'github-actions[bot]' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
 
@@ -758,6 +760,7 @@ jobs:
         ${{
           github.event_name == 'schedule' ||
           github.event_name == 'workflow_call' ||
+          github.actor == 'github-actions[bot]' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
 
@@ -1102,6 +1105,7 @@ jobs:
         ${{
           github.event_name == 'schedule' ||
           github.event_name == 'workflow_call' ||
+          github.actor == 'github-actions[bot]' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
 
@@ -1446,6 +1450,7 @@ jobs:
         ${{
           github.event_name == 'schedule' ||
           github.event_name == 'workflow_call' ||
+          github.actor == 'github-actions[bot]' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
 
@@ -1790,6 +1795,7 @@ jobs:
         ${{
           github.event_name == 'schedule' ||
           github.event_name == 'workflow_call' ||
+          github.actor == 'github-actions[bot]' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
 
@@ -2134,6 +2140,7 @@ jobs:
         ${{
           github.event_name == 'schedule' ||
           github.event_name == 'workflow_call' ||
+          github.actor == 'github-actions[bot]' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
 
@@ -2478,6 +2485,7 @@ jobs:
         ${{
           github.event_name == 'schedule' ||
           github.event_name == 'workflow_call' ||
+          github.actor == 'github-actions[bot]' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
 
