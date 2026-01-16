@@ -588,6 +588,71 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbUserDeletionCleansUp
 	require.Equal(acrd.T(), 4, len(downstreamCRs.Items))
 }
 
+func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbClusterOwnerUserDeletionCleansUpAllBindings() {
+	subSession := acrd.session.NewSession()
+	defer subSession.Cleanup()
+
+	_, _, createdUser, _, _, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
+	require.NoError(acrd.T(), err)
+
+	log.Infof("Adding user %s to the downstream cluster as cluster-owner", createdUser.Username)
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(acrd.client, acrd.cluster.ID, createdUser, rbac.ClusterOwner.String())
+	require.NoError(acrd.T(), err, "Failed to assign cluster-owner role to user")
+	crtbs, err := rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.ID, 1)
+	require.NoError(acrd.T(), err, "CRTB not found for user")
+
+	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 1, 0)
+	require.NoError(acrd.T(), err)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 1)
+	require.NoError(acrd.T(), err)
+
+	log.Infof("Deleting user %s", createdUser.ID)
+	err = userapi.DeleteUser(acrd.client, createdUser.ID)
+	require.NoError(acrd.T(), err, "Failed to delete user")
+
+	log.Infof("Verifying that the cluster role template binding for user %s is automatically deleted.", createdUser.Username)
+	_, err = rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.ID, 0)
+	require.NoError(acrd.T(), err, "CRTB still exists for the deleted user")
+
+	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
+	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 0, 0))
+	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 0))
+}
+
+func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbProjectOwnerUserDeletionCleansUpAllBindings() {
+	subSession := acrd.session.NewSession()
+	defer subSession.Cleanup()
+
+	createdProject, createdNamespaces, createdUser, _, _, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
+	require.NoError(acrd.T(), err)
+
+	log.Infof("Adding user %s to a project %s in the downstream cluster as project-owner", createdUser.Username, createdProject.Name)
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(acrd.client, createdUser, createdProject, rbac.ProjectOwner.String())
+	require.NoError(acrd.T(), err, "Failed to assign project-owner role to user")
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.ID, 1)
+	require.NoError(acrd.T(), err, "PRTB not found for user")
+
+	log.Infof("Deleting user %s", createdUser.ID)
+	err = userapi.DeleteUser(acrd.client, createdUser.ID)
+	require.NoError(acrd.T(), err, "Failed to delete user")
+
+	log.Infof("Verifying that the project role template binding for user %s is automatically deleted.", createdUser.Username)
+	_, err = rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.ID, 0)
+	require.NoError(acrd.T(), err, "PRTB still exists for the deleted user")
+
+	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
+	prtbNamespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: prtbs[0].Namespace,
+		},
+	}
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
+	require.NoError(acrd.T(), err)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 0, 0)
+	require.NoError(acrd.T(), err)
+}
+
 func TestAggregatedClusterRolesCleanupTestSuite(t *testing.T) {
 	suite.Run(t, new(AggregatedClusterRolesCleanupTestSuite))
 }

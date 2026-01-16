@@ -16,10 +16,10 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/services"
 	"github.com/rancher/tests/actions/workloads"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -300,7 +300,7 @@ func (p *PortTestSuite) TestClusterIPScaleAndUpgrade() {
 	log.Info("Scaling up deployment")
 	replicas = int32(3)
 	deploymentTemplate.Spec.Replicas = &replicas
-	deploymentTemplate, err = deployment.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
+	deploymentTemplate, err = deploymentapi.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
 	require.NoError(p.T(), err)
 
 	err = validateWorkload(p.client, p.cluster.ID, deploymentTemplate, containerImage, 3, namespace.Name)
@@ -312,7 +312,7 @@ func (p *PortTestSuite) TestClusterIPScaleAndUpgrade() {
 	log.Info("Scaling down deployment")
 	replicas = int32(2)
 	deploymentTemplate.Spec.Replicas = &replicas
-	deploymentTemplate, err = deployment.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
+	deploymentTemplate, err = deploymentapi.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
 	require.NoError(p.T(), err)
 
 	err = validateWorkload(p.client, p.cluster.ID, deploymentTemplate, containerImage, 2, namespace.Name)
@@ -327,7 +327,7 @@ func (p *PortTestSuite) TestClusterIPScaleAndUpgrade() {
 	}
 
 	log.Info("Updating deployment replicas")
-	deploymentTemplate, err = deployment.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
+	deploymentTemplate, err = deploymentapi.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
 	require.NoError(p.T(), err)
 
 	err = validateWorkload(p.client, p.cluster.ID, deploymentTemplate, containerImage, 2, namespace.Name)
@@ -389,7 +389,7 @@ func (p *PortTestSuite) TestHostPortScaleAndUpgrade() {
 	log.Info("Scaling up deployment")
 	replicas = int32(3)
 	deploymentTemplate.Spec.Replicas = &replicas
-	deploymentTemplate, err = deployment.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
+	deploymentTemplate, err = deploymentapi.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
 	require.NoError(p.T(), err)
 
 	err = validateWorkload(p.client, p.cluster.ID, deploymentTemplate, containerImage, 3, namespace.Name)
@@ -401,7 +401,7 @@ func (p *PortTestSuite) TestHostPortScaleAndUpgrade() {
 	log.Info("Scaling down deployment")
 	replicas = int32(2)
 	deploymentTemplate.Spec.Replicas = &replicas
-	deploymentTemplate, err = deployment.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
+	deploymentTemplate, err = deploymentapi.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
 	require.NoError(p.T(), err)
 
 	err = validateWorkload(p.client, p.cluster.ID, deploymentTemplate, containerImage, 2, namespace.Name)
@@ -416,7 +416,7 @@ func (p *PortTestSuite) TestHostPortScaleAndUpgrade() {
 	}
 
 	log.Info("Updating deployment replicas")
-	deploymentTemplate, err = deployment.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
+	deploymentTemplate, err = deploymentapi.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
 	require.NoError(p.T(), err)
 
 	err = validateWorkload(p.client, p.cluster.ID, deploymentTemplate, containerImage, 2, namespace.Name)
@@ -481,7 +481,7 @@ func (p *PortTestSuite) TestNodePortScaleAndUpgrade() {
 	log.Info("Scaling up deployment")
 	replicas = int32(3)
 	deploymentTemplate.Spec.Replicas = &replicas
-	deploymentTemplate, err = deployment.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
+	deploymentTemplate, err = deploymentapi.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
 	require.NoError(p.T(), err)
 
 	err = validateWorkload(p.client, p.cluster.ID, deploymentTemplate, containerImage, 3, namespace.Name)
@@ -493,7 +493,7 @@ func (p *PortTestSuite) TestNodePortScaleAndUpgrade() {
 	log.Info("Scaling down deployment")
 	replicas = int32(2)
 	deploymentTemplate.Spec.Replicas = &replicas
-	deploymentTemplate, err = deployment.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
+	deploymentTemplate, err = deploymentapi.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
 	require.NoError(p.T(), err)
 
 	err = validateWorkload(p.client, p.cluster.ID, deploymentTemplate, containerImage, 2, namespace.Name)
@@ -508,7 +508,7 @@ func (p *PortTestSuite) TestNodePortScaleAndUpgrade() {
 	}
 
 	log.Info("Updating deployment replicas")
-	deploymentTemplate, err = deployment.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
+	deploymentTemplate, err = deploymentapi.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
 	require.NoError(p.T(), err)
 
 	err = validateWorkload(p.client, p.cluster.ID, deploymentTemplate, containerImage, 2, namespace.Name)
@@ -578,7 +578,7 @@ func (p *PortTestSuite) TestLoadBalanceScaleAndUpgrade() {
 	log.Info("Scaling up deployment")
 	replicas = int32(3)
 	deploymentTemplate.Spec.Replicas = &replicas
-	deploymentTemplate, err = deployment.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
+	deploymentTemplate, err = deploymentapi.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
 	require.NoError(p.T(), err)
 
 	err = validateWorkload(p.client, p.cluster.ID, deploymentTemplate, containerImage, 3, namespace.Name)
@@ -590,7 +590,7 @@ func (p *PortTestSuite) TestLoadBalanceScaleAndUpgrade() {
 	log.Info("Scaling down deployment")
 	replicas = int32(2)
 	deploymentTemplate.Spec.Replicas = &replicas
-	deploymentTemplate, err = deployment.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
+	deploymentTemplate, err = deploymentapi.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
 	require.NoError(p.T(), err)
 
 	err = validateWorkload(p.client, p.cluster.ID, deploymentTemplate, containerImage, 2, namespace.Name)
@@ -605,7 +605,7 @@ func (p *PortTestSuite) TestLoadBalanceScaleAndUpgrade() {
 	}
 
 	log.Info("Updating deployment replicas")
-	deploymentTemplate, err = deployment.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
+	deploymentTemplate, err = deploymentapi.UpdateDeployment(p.client, p.cluster.ID, namespace.Name, deploymentTemplate, true)
 	require.NoError(p.T(), err)
 
 	err = validateWorkload(p.client, p.cluster.ID, deploymentTemplate, containerImage, 2, namespace.Name)
