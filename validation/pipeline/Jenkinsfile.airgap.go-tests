@@ -253,7 +253,9 @@ node {
 
                 def adminPassword = env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'
 
-                // Run the token injection program
+                def injectSource = './validation/pipeline/scripts/inject-admin-token.go'
+
+                // Run the token injection program directly via go run (uses GenerateUserToken helper)
                 sh """
                     docker run --rm --platform ${dockerPlatform} \
                         --name inject-token \
@@ -261,8 +263,9 @@ node {
                         -e RANCHER_ADMIN_PASSWORD=${adminPassword} \
                         -e RANCHER_ADMIN_USERNAME=admin \
                         -e CATTLE_CONFIG_PATH=/workspace/tests/cattle-config.yaml \
-                        rancher-infra-tools:latest \
-                        /workspace/validation/pipeline/scripts/inject-admin-token
+                        -w /workspace/tests \
+                        ${infraToolsImage} \
+                        sh -c 'set -euo pipefail; cd /workspace && go run -tags ignore ${injectSource}'
                 """
             }
 
