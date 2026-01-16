@@ -67,6 +67,15 @@ node {
                 sh "docker build --platform linux/amd64 -t rancher-infra-tools:latest -f ${testsPath}/validation/pipeline/Dockerfile.airgap-go-tests ."
             }
 
+            stage('Verify Infra Tools Tooling') {
+                echo 'Verifying gotestsum availability inside infra tools image'
+                sh """
+                    docker run --rm --platform ${dockerPlatform} \
+                        ${infraToolsImage} \
+                        sh -c 'set -e; echo \"PATH=[1m$PATH\"; which gotestsum || true; ls -al /root/go/bin || true; ls -al /usr/local/bin/gotestsum || true'
+                """
+            }
+
             stage('Configure SSH Key') {
                 infrastructure.writeSshKey(
                     keyContent: env.AWS_SSH_PEM_KEY,
