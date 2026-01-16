@@ -1,5 +1,5 @@
 - projects: [ RANCHERINT ]
-  suite: RKE2K3S Snapshot Restore
+  suite: Snapshot Restore
   cases:
   - title: "Restore ETCD Snapshot on Existing RKE2 Cluster"
     description: "Verify restoring an ETCD snapshot on an existing cluster without Kubernetes version upgrade."
