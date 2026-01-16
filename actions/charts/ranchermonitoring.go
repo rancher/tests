@@ -13,8 +13,6 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
-	kubenamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
-	"github.com/rancher/tests/actions/namespaces"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -114,51 +112,7 @@ func InstallRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 			}
 			return false, nil
 		})
-		if err != nil {
-			return err
-		}
-
-		steveclient, err := client.Steve.ProxyDownstream(installOptions.Cluster.ID)
-		if err != nil {
-			return err
-		}
-
-		namespaceClient := steveclient.SteveType(namespaces.NamespaceSteveType)
-
-		namespace, err := namespaceClient.ByID(RancherMonitoringNamespace)
-		if err != nil {
-			return err
-		}
-
-		err = namespaceClient.Delete(namespace)
-		if err != nil {
-			return err
-		}
-
-		adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-		if err != nil {
-			return err
-		}
-		adminDynamicClient, err := adminClient.GetDownStreamClusterClient(installOptions.Cluster.ID)
-		if err != nil {
-			return err
-		}
-		adminNamespaceResource := adminDynamicClient.Resource(kubenamespaces.NamespaceGroupVersionResource).Namespace("")
-
-		watchNamespaceInterface, err := adminNamespaceResource.Watch(context.TODO(), metav1.ListOptions{
-			FieldSelector:  "metadata.name=" + RancherMonitoringNamespace,
-			TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-		})
-		if err != nil {
-			return err
-		}
-
-		return wait.WatchWait(watchNamespaceInterface, func(event watch.Event) (ready bool, err error) {
-			if event.Type == watch.Deleted {
-				return true, nil
-			}
-			return false, nil
-		})
+		return err
 	})
 
 	err = catalogClient.InstallChart(chartInstallAction, catalog.RancherChartRepo)

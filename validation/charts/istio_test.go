@@ -86,6 +86,10 @@ func (i *IstioTestSuite) SetupSuite() {
 	require.Equal(i.T(), createdProject.Name, exampleAppProjectName)
 	i.project = createdProject
 
+	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
+	_, err = namespaces.CreateNamespace(client, charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{}, i.project)
+	require.NoError(i.T(), err)
+
 	i.chartInstallOptions = &chartInstallOptions{
 		monitoring: &charts.InstallOptions{
 			Cluster:   cluster,
