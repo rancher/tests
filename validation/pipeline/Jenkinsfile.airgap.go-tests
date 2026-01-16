@@ -242,6 +242,24 @@ node {
                 }
             }
 
+            stage('Inject Admin Token') {
+                echo 'Injecting dynamically created admin token into cattle-config.yaml'
+                
+                def adminPassword = env.RANCHER_ADMIN_PASSWORD ?: credentials('rancher-password')
+                
+                // Run the token injection program
+                sh """
+                    docker run --rm --platform ${dockerPlatform} \
+                        --name inject-token \
+                        -v ${workspace}:/workspace \
+                        -e RANCHER_ADMIN_PASSWORD=${adminPassword} \
+                        -e RANCHER_ADMIN_USERNAME=admin \
+                        -e CATTLE_CONFIG_PATH=/workspace/tests/cattle-config.yaml \
+                        rancher-infra-tools:latest \
+                        /workspace/validation/pipeline/scripts/inject-admin-token
+                """
+            }
+
             stage('Run Go Automation Tests') {
                 echo 'Running Go tests with gotestsum (JUnit output)'
 
