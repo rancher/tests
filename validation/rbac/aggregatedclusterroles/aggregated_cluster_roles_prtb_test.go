@@ -1054,6 +1054,56 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbVerifyCrossClusterAndPr
 	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, clusterapi.LocalCluster, createdUser, "patch", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
 }
 
+func (acrp *AggregatedClusterRolesPrtbTestSuite) TestProjectRoleTemplateInheritingProjectOwner() {
+	subSession := acrp.session.NewSession()
+	defer subSession.Cleanup()
+
+	createdProject, _, createdUser, _, _, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	require.NoError(acrp.T(), err)
+
+	log.Info("Creating project role templates.")
+	mainRules := []rbacv1.PolicyRule{}
+	projectOwnerRT, err := acrp.client.WranglerContext.Mgmt.RoleTemplate().Get("project-owner", metav1.GetOptions{})
+	require.NoError(acrp.T(), err, "Failed to fetch project-owner roletemplate")
+
+	inheritedChildRoleTemplate := []*v3.RoleTemplate{projectOwnerRT}
+	createdMainRT, err := rbacapi.CreateRoleTemplate(acrp.client, rbacapi.ProjectContext, mainRules, inheritedChildRoleTemplate, false, false, nil)
+	require.NoError(acrp.T(), err, "Failed to create main role template")
+
+	childRTName := projectOwnerRT.Name
+	mainRTName := createdMainRT.Name
+
+	log.Info("Verifying the cluster roles in the local and downstream clusters.")
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	require.NoError(acrp.T(), err)
+	require.Equal(acrp.T(), 10, len(localCRs.Items))
+	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, childRTName, mainRTName)
+	require.NoError(acrp.T(), err)
+	require.Equal(acrp.T(), 7, len(downstreamCRs.Items))
+
+	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName)
+	require.NoError(acrp.T(), err, "Failed to assign role to user")
+	_, err = rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	require.NoError(acrp.T(), err, "prtb not found for user")
+
+	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "create", "projects", "", "", false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projects", "", createdProject.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projects", "", createdProject.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projects", "", createdProject.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projects", "", createdProject.Name, true, true))
+
+	log.Info("Remove project-owner inheritance and verify that the user no longer has access to the project")
+	_, err = rbacapi.UpdateRoleTemplateInheritance(acrp.client, mainRTName, []*v3.RoleTemplate{})
+	require.NoError(acrp.T(), err, "Failed to update role template inheritance")
+
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projects", "", createdProject.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projects", "", createdProject.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projects", "", createdProject.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projects", "", createdProject.Name, false, true))
+}
+
 func TestAggregatedClusterRolesPrtbTestSuite(t *testing.T) {
 	suite.Run(t, new(AggregatedClusterRolesPrtbTestSuite))
 }

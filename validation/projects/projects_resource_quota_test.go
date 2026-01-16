@@ -376,7 +376,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestOverrideQuotaInNamespace() {
 	require.NoError(prq.T(), err)
 	replicas := int32(3)
 	currentDeployment.Spec.Replicas = &replicas
-	_, err = deployment.UpdateDeployment(standardUserClient, prq.cluster.ID, updatedNamespace.Name, currentDeployment, true)
+	_, err = deploymentapi.UpdateDeployment(standardUserClient, prq.cluster.ID, updatedNamespace.Name, currentDeployment, true)
 	require.NoError(prq.T(), err)
 
 	log.Info("Increase the pod limit on the namespace from 3 to 4.")
@@ -465,7 +465,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromNoQuotaToQuotaPr
 	require.NoError(prq.T(), err)
 	replicas := int32(3)
 	currentDeployment.Spec.Replicas = &replicas
-	updatedDeployment, err := deployment.UpdateDeployment(standardUserClient, prq.cluster.ID, updatedNamespace.Name, currentDeployment, false)
+	updatedDeployment, err := deploymentapi.UpdateDeployment(standardUserClient, prq.cluster.ID, updatedNamespace.Name, currentDeployment, false)
 	require.NoError(prq.T(), err)
 
 	err = kwait.Poll(defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, func() (done bool, pollErr error) {
@@ -548,7 +548,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromQuotaToNoQuotaPr
 	require.NoError(prq.T(), err)
 	replicas := int32(10)
 	currentDeployment.Spec.Replicas = &replicas
-	_, err = deployment.UpdateDeployment(standardUserClient, prq.cluster.ID, movedNamespace.Name, currentDeployment, true)
+	_, err = deploymentapi.UpdateDeployment(standardUserClient, prq.cluster.ID, movedNamespace.Name, currentDeployment, true)
 	require.NoError(prq.T(), err)
 }
 

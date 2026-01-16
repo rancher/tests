@@ -1,12 +1,10 @@
 package secrets
 
 import (
-	"context"
-
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/pkg/api/scheme"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	coreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -19,24 +17,16 @@ var SecretGroupVersionResource = schema.GroupVersionResource{
 	Resource: "secrets",
 }
 
-// GetSecretByName is a helper function that uses the dynamic client to get a specific secret on a namespace for a specific cluster.
+// GetSecretByName is a helper function that uses the wrangler context to get a specific secret in a namespace of a specific cluster.
 func GetSecretByName(client *rancher.Client, clusterID, namespace, secretName string, getOpts metav1.GetOptions) (*coreV1.Secret, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
+	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	secretResource := dynamicClient.Resource(SecretGroupVersionResource).Namespace(namespace)
-
-	unstructuredResp, err := secretResource.Get(context.TODO(), secretName, getOpts)
+	secret, err := wranglerContext.Core.Secret().Get(namespace, secretName, getOpts)
 	if err != nil {
 		return nil, err
 	}
-
-	newSecret := &coreV1.Secret{}
-	err = scheme.Scheme.Convert(unstructuredResp, newSecret, unstructuredResp.GroupVersionKind())
-	if err != nil {
-		return nil, err
-	}
-	return newSecret, nil
+	return secret, nil
 }
