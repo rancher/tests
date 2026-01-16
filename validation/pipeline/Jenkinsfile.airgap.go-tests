@@ -190,30 +190,36 @@ node {
             }
 
             stage('Setup SSH Keys on Nodes') {
-                ansible.runPlaybook(
-                    dir: ansiblePath,
-                    inventory: 'inventory/inventory.yml',
-                    playbook: 'playbooks/setup/setup-ssh-keys.yml'
-                )
+                retry(3) {
+                    ansible.runPlaybook(
+                        dir: ansiblePath,
+                        inventory: 'inventory/inventory.yml',
+                        playbook: 'playbooks/setup/setup-ssh-keys.yml'
+                    )
+                }
             }
 
             stage('Deploy RKE2 Cluster') {
-                ansible.runPlaybook(
-                    dir: ansiblePath,
-                    inventory: 'inventory/inventory.yml',
-                    playbook: 'playbooks/deploy/rke2-tarball-playbook.yml'
-                )
+                retry(3) {
+                    ansible.runPlaybook(
+                        dir: ansiblePath,
+                        inventory: 'inventory/inventory.yml',
+                        playbook: 'playbooks/deploy/rke2-tarball-playbook.yml'
+                    )
+                }
             }
 
             stage('Deploy Rancher (Optional)') {
                 def deployRancher = env.ANSIBLE_VARIABLES?.contains('deploy_rancher: true')
                 if (deployRancher) {
                     echo 'Deploying Rancher...'
-                    ansible.runPlaybook(
-                        dir: ansiblePath,
-                        inventory: 'inventory/inventory.yml',
-                        playbook: 'playbooks/deploy/rancher-helm-deploy-playbook.yml'
-                    )
+                    retry(3) {
+                        ansible.runPlaybook(
+                            dir: ansiblePath,
+                            inventory: 'inventory/inventory.yml',
+                            playbook: 'playbooks/deploy/rancher-helm-deploy-playbook.yml'
+                        )
+                    }
                 } else {
                     echo 'Skipping Rancher deployment (not enabled in ANSIBLE_VARIABLES)'
                 }
@@ -245,7 +251,7 @@ node {
             stage('Inject Admin Token') {
                 echo 'Injecting dynamically created admin token into cattle-config.yaml'
 
-                def adminPassword = env.RANCHER_BOOTSTRAP_PASSWORD
+                def adminPassword = env.RANCHER_ADMIN_PASSWORD
 
                 if (!adminPassword?.trim()) {
                     error('RANCHER_ADMIN_PASSWORD must be provided in the Jenkins job environment (e.g. via withCredentials or a secret text parameter).')
