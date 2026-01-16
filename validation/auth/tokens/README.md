@@ -1,6 +1,6 @@
-# Ext Tokens Test Suite (Public API)
+# Tokens Test Suite
 
-This repository contains Golang automation tests for Ext Tokens (Public API).
+This repository contains Golang automation tests for tokens and Ext Tokens (Public API).
 
 ## Pre-requisites
 
@@ -8,7 +8,10 @@ This repository contains Golang automation tests for Ext Tokens (Public API).
 
 ## Test Setup
 
-Your GO suite should be set to `-run ^TestExtTokenTestSuite$`. You can find specific tests by checking the test file you plan to run.
+Your GO suite should be set to `-run ^Test<TestSuite>$`
+
+- To run the token_test.go, set the GO suite to `-run ^TestTokenTestSuite$`
+- To run the ext_token_test.go, set the GO suite to `-run ^TestExtTokenTestSuite$`
 
 In your config file, set the following:
 

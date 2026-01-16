@@ -1,6 +1,6 @@
 //go:build (validation || infra.any || cluster.any || sanity) && !stress
 
-package token
+package tokens
 
 import (
 	"testing"
