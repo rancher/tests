@@ -1,0 +1,49 @@
+- projects: [ RANCHERINT ]
+  suite: RKE2K3S Snapshot Restore
+  cases:
+  - title: "Restore ETCD Snapshot on Existing RKE2 Cluster"
+    description: "Verify restoring an ETCD snapshot on an existing cluster without Kubernetes version upgrade."
+    automation: 2
+    steps:
+    - action: "Select existing provisioned cluster"
+      expectedresult: "Cluster is available and accessible"
+      position: 1
+    - action: "Trigger ETCD snapshot restore with no Kubernetes upgrade"
+      expectedresult: "Snapshot restore operation starts successfully"
+      position: 2
+    - action: "Validate cluster state after restore"
+      expectedresult: "Cluster is healthy and workloads are restored"
+      position: 3
+    custom_field:
+      "15": "RKE2_Restore_ETCD"
+  - title: "Restore ETCD Snapshot with Kubernetes Version"
+    description: "Verify restoring an ETCD snapshot while restoring the Kubernetes version on an existing cluster"
+    automation: 2
+    steps:
+    - action: "Select existing provisioned cluster"
+      expectedresult: "Cluster is available and accessible"
+      position: 1
+    - action: "Trigger ETCD snapshot restore with Kubernetes version"
+      expectedresult: "Snapshot restore starts successfully"
+      position: 2
+    - action: "Validate cluster state after restore"
+      expectedresult: "Cluster is healthy and Kubernetes version matches snapshot"
+      position: 3
+    custom_field:
+      "15": "RKE2_Restore_ETCD_K8sVersion"
+
+  - title: "Restore ETCD Snapshot Using Upgrade Strategy on Existing Cluster"
+    description: "Verify restoring an ETCD snapshot using control plane and worker upgrade concurrency strategies"
+    automation: 2
+    steps:
+    - action: "Select existing provisioned cluster"
+      expectedresult: "Cluster is available and accessible"
+      position: 1
+    - action: "Trigger ETCD snapshot restore with upgrade strategy"
+      expectedresult: "Snapshot restore starts using defined concurrency values"
+      position: 2
+    - action: "Validate cluster state after restore"
+      expectedresult: "Cluster is healthy and workloads are restored correctly"
+      position: 3
+    custom_field:
+      "15": "RKE2K3S_Restore_Upgrade_Strategy"
