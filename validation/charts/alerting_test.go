@@ -55,7 +55,7 @@ func (i *AlertingTestSuite) SetupSuite() {
 	require.NoError(i.T(), err)
 }
 
-func (i *AlertingTestSuite) TestChartInstallation() {
+func (i *AlertingTestSuite) TestAlertingInstallation() {
 	client, err := i.client.WithSession(i.session)
 	require.NoError(i.T(), err)
 
