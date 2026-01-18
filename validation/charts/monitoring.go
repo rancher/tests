@@ -96,24 +96,24 @@ var (
 // that awaits the unknown Prometheus targets to be resolved until the timeout by using Prometheus API.
 func waitUnknownPrometheusTargets(client *rancher.Client) error {
 	checkUnknownPrometheusTargets := func() (bool, error) {
-		var statusInit bool
-		var unknownTargets []string
 		bodyString, err := ingresses.GetExternalIngressResponse(client, client.RancherConfig.Host, prometheusTargetsPathAPI, true)
 		if err != nil {
-			return statusInit, err
+			return false, err
 		}
 
 		var mapResponse map[string]interface{}
 		if err = json.Unmarshal([]byte(bodyString), &mapResponse); err != nil {
-			return statusInit, err
+			return false, err
 		}
 		if mapResponse["status"] != "success" {
-			return statusInit, errors.New("failed to get targets from prometheus")
+			return false, errors.New("failed to get targets from prometheus")
 		}
 		activeTargets := mapResponse["data"].(map[string]interface{})["activeTargets"].([]interface{})
 		if len(activeTargets) < 1 {
 			return false, errors.New("failed to find any active targets")
 		}
+
+		var unknownTargets []string
 		for _, target := range activeTargets {
 			targetMap := target.(map[string]interface{})
 			if targetMap["health"].(string) == "unknown" {
@@ -123,17 +123,12 @@ func waitUnknownPrometheusTargets(client *rancher.Client) error {
 		return len(unknownTargets) == 0, nil
 	}
 
-	return kubewait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, 2*time.Minute, true, func(context.Context) (ongoing bool, err error) {
+	return kubewait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, 5*time.Minute, true, func(context.Context) (bool, error) {
 		result, err := checkUnknownPrometheusTargets()
 		if err != nil {
-			return ongoing, err
+			return false, err
 		}
-
-		if result {
-			return !ongoing, nil
-		}
-
-		return
+		return result, nil
 	})
 }
 

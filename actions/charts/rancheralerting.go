@@ -7,12 +7,9 @@ import (
 	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
-	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
-	kubenamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
-	"github.com/rancher/tests/actions/namespaces"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -82,59 +79,6 @@ func InstallRancherAlertingChart(client *rancher.Client, installOptions *Install
 		})
 		if err != nil {
 			return err
-		}
-
-		monitoringChart, err := charts.GetChartStatus(client, installOptions.Cluster.ID, RancherMonitoringNamespace, RancherMonitoringName)
-		if err != nil {
-			return err
-		}
-
-		// prevent hitting delete twice for the monitoring namespace while CRDs are being deleted
-		if !monitoringChart.IsAlreadyInstalled {
-			steveclient, err := client.Steve.ProxyDownstream(installOptions.Cluster.ID)
-			if err != nil {
-				return err
-			}
-
-			namespaceClient := steveclient.SteveType(namespaces.NamespaceSteveType)
-
-			namespace, err := namespaceClient.ByID(RancherAlertingNamespace)
-			if err != nil {
-				return err
-			}
-
-			err = namespaceClient.Delete(namespace)
-			if err != nil {
-				return err
-			}
-
-			adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-			if err != nil {
-				return err
-			}
-			adminDynamicClient, err := adminClient.GetDownStreamClusterClient(installOptions.Cluster.ID)
-			if err != nil {
-				return err
-			}
-			adminNamespaceResource := adminDynamicClient.Resource(kubenamespaces.NamespaceGroupVersionResource).Namespace("")
-
-			watchNamespaceInterface, err := adminNamespaceResource.Watch(context.TODO(), metav1.ListOptions{
-				FieldSelector:  "metadata.name=" + RancherAlertingNamespace,
-				TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-			})
-			if err != nil {
-				return err
-			}
-
-			err = wait.WatchWait(watchNamespaceInterface, func(event watch.Event) (ready bool, err error) {
-				if event.Type == watch.Deleted {
-					return true, nil
-				}
-				return false, nil
-			})
-			if err != nil {
-				return err
-			}
 		}
 
 		return nil
