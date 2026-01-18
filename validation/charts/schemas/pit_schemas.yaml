@@ -22,7 +22,7 @@
       expectedresult: "CIS scan completes successfully"
       position: 4
     custom_field:
-      "15": "TestCisBenchmarkTestSuite/TestChartInstallation"
+      "15": "TestCISBenchmarkInstallation"
   - title: "Rancher Alerting Chart Installation"
     description: "Verify Rancher Alerting chart installs successfully"
     automation: 2
@@ -43,7 +43,7 @@
       expectedresult: "All alerting deployments are Ready state"
       position: 4
     custom_field:
-      "15": "TestAlertingTestSuite/TestChartInstallation"
+      "15": "TestAlertingInstallation"
   - title: "Rancher Logging Chart Installation"
     description: "Verify Rancher Logging chart installs successfully"
     automation: 2
@@ -65,7 +65,7 @@
       expectedresult: "All logging deployments reach Ready state"
       position: 4
     custom_field:
-      "15": "TestLoggingTestSuite/TestChartInstallation"
+      "15": "TestLoggingInstallation"
   - title: "NeuVector Chart Installation"
     description: "Verify NeuVector chart install successfully"
     automation: 2

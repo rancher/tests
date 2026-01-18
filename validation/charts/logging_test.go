@@ -64,7 +64,7 @@ func (i *LoggingTestSuite) SetupSuite() {
 	i.project = createdProject
 }
 
-func (i *LoggingTestSuite) TestChartInstallation() {
+func (i *LoggingTestSuite) TestLoggingInstallation() {
 	client, err := i.client.WithSession(i.session)
 	require.NoError(i.T(), err)
 

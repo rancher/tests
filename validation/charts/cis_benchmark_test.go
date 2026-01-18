@@ -55,7 +55,7 @@ func (i *CisBenchmarkTestSuite) SetupSuite() {
 	require.Equal(i.T(), i.project.Name, cis.System)
 }
 
-func (i *CisBenchmarkTestSuite) TestChartInstallation() {
+func (i *CisBenchmarkTestSuite) TestCISBenchmarkInstallation() {
 	chartName := charts.CISBenchmarkName
 	chartNamespace := charts.CISBenchmarkNamespace
 
