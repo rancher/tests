@@ -8,13 +8,14 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
-	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/charts"
+	actionsCharts "github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type NeuVectorTestSuite struct {
@@ -25,54 +26,64 @@ type NeuVectorTestSuite struct {
 	project *management.Project
 }
 
-func (i *NeuVectorTestSuite) TearDownSuite() {
-	i.session.Cleanup()
+func (n *NeuVectorTestSuite) TearDownSuite() {
+	n.session.Cleanup()
 }
 
-func (i *NeuVectorTestSuite) SetupSuite() {
+func (n *NeuVectorTestSuite) SetupSuite() {
 	testSession := session.NewSession()
-	i.session = testSession
+	n.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
-	require.NoError(i.T(), err)
+	require.NoError(n.T(), err)
 
-	i.client = client
+	n.client = client
 
 	clusterName := client.RancherConfig.ClusterName
-	require.NotEmptyf(i.T(), clusterName, "Cluster name to install is not set")
+	require.NotEmptyf(n.T(), clusterName, "Cluster name to install is not set")
 
 	cluster, err := clusters.NewClusterMeta(client, clusterName)
-	require.NoError(i.T(), err)
+	require.NoError(n.T(), err)
 
-	i.cluster = cluster
+	n.cluster = cluster
 
-	clusterMeta, err := extensionscluster.NewClusterMeta(i.client, i.cluster.Name)
-	require.NoError(i.T(), err)
-
-	i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, charts.SystemProject)
-	require.NoError(i.T(), err)
-	require.Equal(i.T(), i.project.Name, charts.SystemProject)
+	n.T().Logf("Creating Project [%s]", actionsCharts.SystemProject)
+	n.project, err = projects.GetProjectByName(n.client, cluster.ID, actionsCharts.SystemProject)
+	require.NoError(n.T(), err)
+	require.Equal(n.T(), actionsCharts.SystemProject, n.project.Name)
 }
 
-func (i *NeuVectorTestSuite) TestNeuVectorInstallation() {
-	clusterMeta, err := extensionscluster.NewClusterMeta(i.client, i.cluster.Name)
-	require.NoError(i.T(), err)
+func (n *NeuVectorTestSuite) TestNeuVectorInstallation() {
+	n.T().Logf("Getting the latest chart version for [%s]", actionsCharts.NeuVectorChartName)
+	latestVersion, err := n.client.Catalog.GetLatestChartVersion(actionsCharts.NeuVectorChartName, catalog.RancherChartRepo)
+	require.NoError(n.T(), err)
 
-	latestNeuVectorChartVersion, err := i.client.Catalog.GetLatestChartVersion(charts.NeuVectorChartName, catalog.RancherChartRepo)
-	require.NoError(i.T(), err)
-
-	payloadOpts := charts.PayloadOpts{
-		Namespace: charts.NeuVectorNamespace,
-		InstallOptions: charts.InstallOptions{
-			Cluster:   clusterMeta,
-			Version:   latestNeuVectorChartVersion,
-			ProjectID: i.project.ID,
+	payload := actionsCharts.PayloadOpts{
+		Namespace: actionsCharts.NeuVectorNamespace,
+		InstallOptions: actionsCharts.InstallOptions{
+			Cluster:   n.cluster,
+			Version:   latestVersion,
+			ProjectID: n.project.ID,
 		},
 	}
 
-	i.T().Logf("Setting up neu vector on cluster (%s)", i.cluster.Name)
-	err = charts.InstallNeuVectorChart(i.client, payloadOpts)
-	require.NoError(i.T(), err)
+	n.T().Logf("Installing NeuVector on cluster [%s]", n.cluster.Name)
+	err = actionsCharts.InstallNeuVectorChart(n.client, payload)
+	require.NoError(n.T(), err)
+
+	n.T().Log("Waiting for NeuVector chart to become active")
+	catalogClient, err := n.client.GetClusterCatalogClient(n.cluster.ID)
+	require.NoError(n.T(), err)
+
+	err = charts.WaitChartInstall(catalogClient, payload.Namespace, actionsCharts.NeuVectorChartName)
+	require.NoError(n.T(), err)
+
+	n.T().Log("Waiting for resources to become active")
+	err = charts.WatchAndWaitDeployments(n.client, n.cluster.ID, payload.Namespace, metav1.ListOptions{})
+	require.NoError(n.T(), err)
+
+	err = charts.WatchAndWaitDaemonSets(n.client, n.cluster.ID, payload.Namespace, metav1.ListOptions{})
+	require.NoError(n.T(), err)
 }
 
 func TestNeuVectorTestSuite(t *testing.T) {
