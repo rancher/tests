@@ -66,42 +66,47 @@
       position: 4
     custom_field:
       "15": "TestLoggingInstallation"
-  - title: "NeuVector Chart Installation"
-    description: "Verify NeuVector chart install successfully"
+  - title: "Test NeuVector chart installation"
+    description: "Validate that the NeuVector chart and its dependent components are successfully installed and become ready on the target cluster"
     automation: 2
     steps:
-    - action: "Config a downstream cluster running in rancher"
-      data: ""
-      expectedresult: "A downstream cluster is active and ready to receive workloads"
+    - action: "Create Rancher client session"
+      data: "Initialize Rancher client and test session"
+      expectedresult: "Rancher client initialized successfully"
       position: 1
-    - action: "Create Project"
-      data: "Project name: System"
-      expectedresult: "The 'System' project is successfully created"
+    - action: "Validate target cluster configuration"
+      data: "Retrieve cluster name from Rancher configuration"
+      expectedresult: "Cluster name is set and cluster metadata retrieved"
       position: 2
-    - action: "Install NeuVector chart"
-      data: "helm install --namespace=cattle-neuvector-system neuvector"
-      expectedresult: "NeuVector chart installs successfully"
+    - action: "Retrieve system project"
+      data: "Get System project from the cluster"
+      expectedresult: "System project found successfully"
       position: 3
+    - action: "Fetch latest NeuVector chart version"
+      data: "Query Rancher chart repository for latest NeuVector version"
+      expectedresult: "Latest NeuVector chart version retrieved"
+      position: 4
+    - action: "Prepare NeuVector install payload"
+      data: "Namespace: neuvector-system, Project: System, Version: latest"
+      expectedresult: "Install payload prepared successfully"
+      position: 5
+    - action: "Install NeuVector charts"
+      data: "Install neuvector, neuvector-monitor, and neuvector-crd charts"
+      expectedresult: "All NeuVector charts installed successfully"
+      position: 6
+    - action: "Wait for neuvector, neuvector-monitor, and neuvector-crd charts installations to complete"
+      expectedresult: "Charts reports successful installations"
+      position: 7
+    - action: "Verify NeuVector deployments readiness"
+      data: "Watch and wait for all deployments in neuvector-system namespace"
+      expectedresult: "All NeuVector deployments are in Ready state"
+      position: 8
+    - action: "Verify NeuVector daemonsets readiness"
+      data: "Watch and wait for all daemonsets in neuvector-system namespace"
+      expectedresult: "All NeuVector daemonsets are in Ready state"
+      position: 9
     custom_field:
-      "15": "neuvector"
-  - title: "NeuVector Monitor Chart Installation"
-    description: "Verify NeuVector monitor chart install successfully"
-    automation: 2
-    steps:
-    - action: "Config a downstream cluster running in rancher"
-      data: ""
-      expectedresult: "A downstream cluster is active and ready to receive workloads"
-      position: 1
-    - action: "Create Project"
-      data: "Project name: System"
-      expectedresult: "The 'System' project is successfully created"
-      position: 2
-    - action: "Install NeuVector monitor chart"
-      data: "helm install --namespace=cattle-neuvector-system neuvector-monitor"
-      expectedresult: "NeuVector monitor chart installs successfully"
-      position: 3
-    custom_field:
-      "15": "neuvector-monitor"
+      "15": "TestNeuVectorInstallation"
   - title: "Rancher Monitoring Chart Installation"
     description: "Validate that Monitoring chart can be installed"
     automation: 2
