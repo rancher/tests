@@ -9,25 +9,22 @@ import (
 )
 
 const (
-	NeuVectorNamespace        = "neuvector-system"
-	NeuVectorChartName        = "neuvector"
-	NeuVectorMonitorChartName = "neuvector-monitor"
+	NeuVectorNamespace = "neuvector-system"
+	NeuVectorChartName = "neuvector"
 )
 
 // InstallNeuVectorChart installs the NeuVector chart on the cluster according to data on the payload.
 // This also waits for installation to complete and checks if the deployments are Ready.
-func InstallNeuVectorChart(client *rancher.Client, neuVectorChartName string, payload PayloadOpts) error {
+func InstallNeuVectorChart(client *rancher.Client, payload PayloadOpts) error {
 	catalogClient, err := client.GetClusterCatalogClient(payload.Cluster.ID)
 	if err != nil {
 		return err
 	}
 
 	chartInstalls := []types.ChartInstall{
-		*NewChartInstall(neuVectorChartName, payload.Version, payload.Cluster.ID, payload.Cluster.Name, payload.Host, catalog.RancherChartRepo, payload.ProjectID, payload.DefaultRegistry, nil),
-	}
-
-	if neuVectorChartName == NeuVectorChartName {
-		chartInstalls = append(chartInstalls, *NewChartInstall(neuVectorChartName+"-crd", payload.Version, payload.Cluster.ID, payload.Cluster.Name, payload.Host, catalog.RancherChartRepo, payload.ProjectID, payload.DefaultRegistry, nil))
+		*NewChartInstall(NeuVectorChartName, payload.Version, payload.Cluster.ID, payload.Cluster.Name, payload.Host, catalog.RancherChartRepo, payload.ProjectID, payload.DefaultRegistry, nil),
+		*NewChartInstall(NeuVectorChartName+"-monitor", payload.Version, payload.Cluster.ID, payload.Cluster.Name, payload.Host, catalog.RancherChartRepo, payload.ProjectID, payload.DefaultRegistry, nil),
+		*NewChartInstall(NeuVectorChartName+"-crd", payload.Version, payload.Cluster.ID, payload.Cluster.Name, payload.Host, catalog.RancherChartRepo, payload.ProjectID, payload.DefaultRegistry, nil),
 	}
 
 	chartInstallAction := NewChartInstallAction(payload.Namespace, payload.ProjectID, chartInstalls)
@@ -38,10 +35,10 @@ func InstallNeuVectorChart(client *rancher.Client, neuVectorChartName string, pa
 	}
 
 	client.Session.RegisterCleanupFunc(func() error {
-		return UninstallNeuVectorChart(client, neuVectorChartName, payload.Namespace, payload.Cluster.ID, payload.Host)
+		return uninstallNeuVectorChart(client, NeuVectorChartName, payload.Namespace, payload.Cluster.ID, payload.Host)
 	})
 
-	err = shepherdCharts.WaitChartInstall(catalogClient, payload.Namespace, neuVectorChartName)
+	err = shepherdCharts.WaitChartInstall(catalogClient, payload.Namespace, NeuVectorChartName)
 	if err != nil {
 		return err
 	}
@@ -55,14 +52,14 @@ func InstallNeuVectorChart(client *rancher.Client, neuVectorChartName string, pa
 	return err
 }
 
-// UninstallNeuVectorChart removes NeuVector from the cluster related to the received catalog client object.
-func UninstallNeuVectorChart(client *rancher.Client, neuVectorChartName string, namespace string, clusterID string, rancherHostname string) error {
+// uninstallNeuVectorChart removes NeuVector from the cluster related to the received catalog client object.
+func uninstallNeuVectorChart(client *rancher.Client, neuVectorChartName string, namespace string, clusterID string, rancherHostname string) error {
 	catalogClient, err := client.GetClusterCatalogClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	err = catalogClient.UninstallChart(neuVectorChartName, namespace, NewChartUninstallAction())
+	err = catalogClient.UninstallChart(NeuVectorChartName, namespace, NewChartUninstallAction())
 	if err != nil {
 		return err
 	}
@@ -72,14 +69,17 @@ func UninstallNeuVectorChart(client *rancher.Client, neuVectorChartName string, 
 		return err
 	}
 
-	if neuVectorChartName == NeuVectorChartName {
-		err = catalogClient.UninstallChart(neuVectorChartName+"-crd", namespace, NewChartUninstallAction())
-		if err != nil {
-			return err
-		}
-
-		return waitUninstallation(catalogClient, namespace, neuVectorChartName+"-crd")
+	err = catalogClient.UninstallChart(neuVectorChartName+"-monitor", namespace, NewChartUninstallAction())
+	if err != nil {
+		return err
 	}
 
-	return nil
+	return waitUninstallation(catalogClient, namespace, neuVectorChartName+"-monitor")
+
+	err = catalogClient.UninstallChart(neuVectorChartName+"-crd", namespace, NewChartUninstallAction())
+	if err != nil {
+		return err
+	}
+
+	return waitUninstallation(catalogClient, namespace, neuVectorChartName+"-crd")
 }
