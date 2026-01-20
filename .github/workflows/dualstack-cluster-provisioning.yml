@@ -218,6 +218,8 @@ jobs:
               serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
             registries:
+              rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
+              rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
@@ -227,6 +229,7 @@ jobs:
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
+                    insecureSkipVerify: true
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
@@ -532,6 +535,8 @@ jobs:
               serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
             registries:
+              rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
+              rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
@@ -541,6 +546,7 @@ jobs:
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
+                    insecureSkipVerify: true
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"

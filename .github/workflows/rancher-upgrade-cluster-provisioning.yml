@@ -225,6 +225,8 @@ jobs:
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             compliance: true
             registries:
+              rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
+              rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
@@ -234,6 +236,7 @@ jobs:
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
+                    insecureSkipVerify: true
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
@@ -565,6 +568,8 @@ jobs:
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             compliance: true
             registries:
+              rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
+              rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
@@ -574,6 +579,7 @@ jobs:
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
+                    insecureSkipVerify: true
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
@@ -915,6 +921,8 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             registries:
+              rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
+              rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
@@ -924,6 +932,7 @@ jobs:
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
+                    insecureSkipVerify: true
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
