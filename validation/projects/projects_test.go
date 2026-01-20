@@ -58,7 +58,7 @@ func (pr *ProjectsTestSuite) TestProjectsCrudLocalCluster() {
 	createdProject, err := projectapi.CreateProject(pr.client, clusterapi.LocalCluster)
 	require.NoError(pr.T(), err)
 
-	projectList, err := projectapi.ListProjects(pr.client, createdProject.Namespace, metav1.ListOptions{
+	projectList, err := pr.client.WranglerContext.Mgmt.Project().List(createdProject.Namespace, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdProject.Name,
 	})
 	require.NoError(pr.T(), err)
@@ -73,20 +73,15 @@ func (pr *ProjectsTestSuite) TestProjectsCrudLocalCluster() {
 	_, err = pr.client.WranglerContext.Mgmt.Project().Update(&currentProject)
 	require.NoError(pr.T(), err, "Failed to update project.")
 
-	updatedProjectList, err := projectapi.ListProjects(pr.client, createdProject.Namespace, metav1.ListOptions{
+	updatedProjectList, err := pr.client.WranglerContext.Mgmt.Project().List(createdProject.Namespace, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", "hello", "world"),
 	})
 	require.NoError(pr.T(), err)
 	require.Equal(pr.T(), 1, len(updatedProjectList.Items), "Expected one project in the list")
 
 	log.Info("Delete the project.")
-	err = projectapi.DeleteProject(pr.client, createdProject.Namespace, createdProject.Name)
+	err = projectapi.DeleteProject(pr.client, createdProject.Namespace, createdProject.Name, true)
 	require.NoError(pr.T(), err, "Failed to delete project")
-	projectList, err = projectapi.ListProjects(pr.client, createdProject.Namespace, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + createdProject.Name,
-	})
-	require.NoError(pr.T(), err)
-	require.Equal(pr.T(), 0, len(projectList.Items), "Expected zero project.")
 }
 
 func (pr *ProjectsTestSuite) TestProjectsCrudDownstreamCluster() {
@@ -101,35 +96,26 @@ func (pr *ProjectsTestSuite) TestProjectsCrudDownstreamCluster() {
 	createdProject, err := projectapi.CreateProject(pr.client, pr.cluster.ID)
 	require.NoError(pr.T(), err, "Failed to create project")
 
-	projectList, err := projectapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + createdProject.Name,
-	})
-	require.NoError(pr.T(), err, "Failed to list project.")
-	require.Equal(pr.T(), 1, len(projectList.Items), "Expected exactly one project.")
+	currentProject, err := standardUserClient.WranglerContext.Mgmt.Project().Get(createdProject.Namespace, createdProject.Name, metav1.GetOptions{})
+	require.NoError(pr.T(), err, "Failed to get project.")
 
 	log.Info("Verify that the project can be updated by adding a label.")
-	currentProject := projectList.Items[0]
 	if currentProject.Labels == nil {
 		currentProject.Labels = make(map[string]string)
 	}
 	currentProject.Labels["hello"] = "world"
-	_, err = standardUserClient.WranglerContext.Mgmt.Project().Update(&currentProject)
+	_, err = standardUserClient.WranglerContext.Mgmt.Project().Update(currentProject)
 	require.NoError(pr.T(), err, "Failed to update project.")
 
-	updatedProjectList, err := projectapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
+	updatedProjectList, err := standardUserClient.WranglerContext.Mgmt.Project().List(createdProject.Namespace, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", "hello", "world"),
 	})
 	require.NoError(pr.T(), err)
 	require.Equal(pr.T(), 1, len(updatedProjectList.Items), "Expected one project in the list")
 
 	log.Info("Delete the project.")
-	err = projectapi.DeleteProject(standardUserClient, createdProject.Namespace, createdProject.Name)
+	err = projectapi.DeleteProject(standardUserClient, createdProject.Namespace, createdProject.Name, true)
 	require.NoError(pr.T(), err, "Failed to delete project")
-	projectList, err = projectapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + createdProject.Name,
-	})
-	require.NoError(pr.T(), err, "Failed to list project.")
-	require.Equal(pr.T(), 0, len(projectList.Items), "Expected zero project.")
 }
 
 func (pr *ProjectsTestSuite) TestDeleteSystemProject() {
@@ -137,27 +123,27 @@ func (pr *ProjectsTestSuite) TestDeleteSystemProject() {
 	defer subSession.Cleanup()
 
 	log.Info("Delete the System Project in the local cluster.")
-	projectList, err := projectapi.ListProjects(pr.client, clusterapi.LocalCluster, metav1.ListOptions{
+	projectList, err := pr.client.WranglerContext.Mgmt.Project().List(clusterapi.LocalCluster, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", projectapi.SystemProjectLabel, "true"),
 	})
 	require.NoError(pr.T(), err)
 	require.Equal(pr.T(), 1, len(projectList.Items), "Expected one project in the list")
 
 	systemProjectName := projectList.Items[0].ObjectMeta.Name
-	err = projectapi.DeleteProject(pr.client, clusterapi.LocalCluster, systemProjectName)
+	err = projectapi.DeleteProject(pr.client, clusterapi.LocalCluster, systemProjectName, false)
 	require.Error(pr.T(), err, "Failed to delete project")
 	expectedErrorMessage := "admission webhook \"rancher.cattle.io.projects.management.cattle.io\" denied the request: System Project cannot be deleted"
 	require.Equal(pr.T(), expectedErrorMessage, err.Error())
 
 	log.Info("Delete the System Project in the downstream cluster.")
-	projectList, err = projectapi.ListProjects(pr.client, pr.cluster.ID, metav1.ListOptions{
+	projectList, err = pr.client.WranglerContext.Mgmt.Project().List(pr.cluster.ID, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", projectapi.SystemProjectLabel, "true"),
 	})
 	require.NoError(pr.T(), err)
 	require.Equal(pr.T(), 1, len(projectList.Items), "Expected one project in the list")
 
 	systemProjectName = projectList.Items[0].ObjectMeta.Name
-	err = projectapi.DeleteProject(pr.client, pr.cluster.ID, systemProjectName)
+	err = projectapi.DeleteProject(pr.client, pr.cluster.ID, systemProjectName, false)
 	require.Error(pr.T(), err, "Failed to delete project")
 	expectedErrorMessage = "admission webhook \"rancher.cattle.io.projects.management.cattle.io\" denied the request: System Project cannot be deleted"
 	require.Equal(pr.T(), expectedErrorMessage, err.Error())

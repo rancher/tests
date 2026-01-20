@@ -172,13 +172,13 @@ DOWNSTREAM_KUBECONFIG="/tmp/downstream_kubeconfig.yaml"
 curl -sfk -X POST -H "Authorization: Bearer $RANCHER_ADMIN_TOKEN" -H "Accept: application/json" "$API/clusters/$DOWNSTREAM_CLUSTER_ID?action=generateKubeconfig" -o "$DOWNSTREAM_KUBECONFIG_JSON"
 jq -r '.config' "$DOWNSTREAM_KUBECONFIG_JSON" > "$DOWNSTREAM_KUBECONFIG"
 
-DEPLOYMENT="rancher-webhook"
-WEBHOOK_NAMESPACE="cattle-system"
-echo "⏳ Waiting for $DEPLOYMENT deployment to be available in $WEBHOOK_NAMESPACE..."
+NAMESPACE="cattle-system"
 TIMEOUT_DEPLOY=900
 START_DEPLOY=$(date +%s)
+DEPLOYMENT="rancher-webhook"
+echo "⏳ Waiting for $DEPLOYMENT deployment to be available in $NAMESPACE..."
 while true; do
-    AVAILABLE=$(kubectl --kubeconfig "$DOWNSTREAM_KUBECONFIG" -n "$WEBHOOK_NAMESPACE" get deployment "$DEPLOYMENT" -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo "0")
+    AVAILABLE=$(kubectl --kubeconfig "$DOWNSTREAM_KUBECONFIG" -n "$NAMESPACE" get deployment "$DEPLOYMENT" -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo "0")
     if (( AVAILABLE >= 1 )); then break; fi
     sleep 10
     if (( $(date +%s) - START_DEPLOY > TIMEOUT_DEPLOY )); then
@@ -186,6 +186,22 @@ while true; do
         exit 1
     fi
 done
+echo "✅ $DEPLOYMENT deployment is available."
+
+TIMEOUT_DEPLOY=300
+START_DEPLOY=$(date +%s)
+DEPLOYMENT="system-upgrade-controller"
+echo "⏳ Waiting for $DEPLOYMENT deployment to be available in $NAMESPACE..."
+while true; do
+    AVAILABLE=$(kubectl --kubeconfig "$DOWNSTREAM_KUBECONFIG" -n "$NAMESPACE" get deployment "$DEPLOYMENT" -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo "0")
+    if (( AVAILABLE >= 1 )); then break; fi
+    sleep 10
+    if (( $(date +%s) - START_DEPLOY > TIMEOUT_DEPLOY )); then
+        echo "❌ Timeout waiting for $DEPLOYMENT deployment to be available."
+        exit 1
+    fi
+done
+echo "✅ $DEPLOYMENT deployment is available."
 
 echo "✅ Downstream cluster created: $CLUSTER_NAME (ID: $DOWNSTREAM_CLUSTER_ID)"
 echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV

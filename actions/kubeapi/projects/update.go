@@ -2,47 +2,43 @@ package projects
 
 import (
 	"context"
+	"fmt"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/unstructured"
-	"github.com/rancher/shepherd/pkg/api/scheme"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	"github.com/rancher/shepherd/extensions/defaults"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
-// UpdateProject is a helper function that uses the dynamic client to update a project in a cluster.
-func UpdateProject(client *rancher.Client, existingProject *v3.Project, updatedProject *v3.Project) (*v3.Project, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
+// UpdateProject is a helper function that uses wrangler context to update an existing project in a cluster
+func UpdateProject(client *rancher.Client, clusterID string, updatedProject *v3.Project) (*v3.Project, error) {
+	var updated *v3.Project
+	var lastErr error
+	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		current, getErr := client.WranglerContext.Mgmt.Project().Get(updatedProject.Namespace, updatedProject.Name, metav1.GetOptions{})
+		if getErr != nil {
+			lastErr = fmt.Errorf("failed to get Project %s: %w", updatedProject.Name, getErr)
+			return false, nil
+		}
+
+		updatedProject.ResourceVersion = current.ResourceVersion
+		updated, lastErr = client.WranglerContext.Mgmt.Project().Update(updatedProject)
+		if lastErr != nil {
+			if errors.IsConflict(lastErr) {
+				return false, nil
+			}
+			return false, lastErr
+		}
+
+		return true, nil
+	},
+	)
+
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("timed out updating Project %s: %w", updatedProject.Name, lastErr)
 	}
 
-	projectResource := dynamicClient.Resource(ProjectGroupVersionResource).Namespace(existingProject.Namespace)
-
-	projectUnstructured, err := projectResource.Get(context.TODO(), existingProject.Name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	currentProject := &v3.Project{}
-	err = scheme.Scheme.Convert(projectUnstructured, currentProject, projectUnstructured.GroupVersionKind())
-	if err != nil {
-		return nil, err
-	}
-
-	updatedProject.ObjectMeta.ResourceVersion = currentProject.ObjectMeta.ResourceVersion
-
-	unstructuredResp, err := projectResource.Update(context.TODO(), unstructured.MustToUnstructured(updatedProject), metav1.UpdateOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	newProject := &v3.Project{}
-	err = scheme.Scheme.Convert(unstructuredResp, newProject, unstructuredResp.GroupVersionKind())
-	if err != nil {
-		return nil, err
-	}
-
-	return newProject, nil
+	return updated, nil
 }

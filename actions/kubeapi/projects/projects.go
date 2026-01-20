@@ -8,7 +8,6 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -31,13 +30,6 @@ const (
 	Version                                       = "v3"
 )
 
-// ProjectGroupVersionResource is the required Group Version Resource for accessing projects in a cluster, using the dynamic client.
-var ProjectGroupVersionResource = schema.GroupVersionResource{
-	Group:    GroupName,
-	Version:  Version,
-	Resource: Projects,
-}
-
 // NewProjectTemplate is a constructor that creates a public API project template
 func NewProjectTemplate(clusterID string) *v3.Project {
 	project := &v3.Project{
@@ -48,6 +40,7 @@ func NewProjectTemplate(clusterID string) *v3.Project {
 		},
 		Spec: v3.ProjectSpec{
 			ClusterName: clusterID,
+			DisplayName: "test-" + namegen.AppendRandomString(""),
 			ResourceQuota: &v3.ProjectResourceQuota{
 				Limit: v3.ResourceQuotaLimit{
 					Pods: "",

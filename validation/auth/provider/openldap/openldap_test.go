@@ -15,7 +15,6 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
-	projectsapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
@@ -260,11 +259,8 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPNestedGroupProjectAccess() {
 		userClient, err := authactions.LoginAsAuthUser(authAdmin, user, authactions.OpenLdap)
 		require.NoError(a.T(), err, "Failed to login user [%v]", userInfo.Username)
 
-		projectList, err := projectsapi.ListProjects(userClient, projectResp.Namespace, metav1.ListOptions{
-			FieldSelector: "metadata.name=" + projectResp.Name,
-		})
-		require.NoError(a.T(), err, "User [%v] should be able to list projects", userInfo.Username)
-		require.Equal(a.T(), 1, len(projectList.Items), "User [%v] should see exactly 1 project", userInfo.Username)
+		_, err = userClient.WranglerContext.Mgmt.Project().Get(projectResp.Namespace, projectResp.Name, metav1.GetOptions{})
+		require.NoError(a.T(), err, "User [%v] should be able to get project %s", userInfo.Username, projectResp.Name)
 	}
 }
 

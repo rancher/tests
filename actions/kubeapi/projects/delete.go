@@ -2,46 +2,46 @@ package projects
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
-// DeleteProject is a helper function that uses the dynamic client to delete a Project from a cluster.
-func DeleteProject(client *rancher.Client, projectNamespace string, projectName string) error {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
+// DeleteProject is a helper function that uses the wrangler context to delete a Project from a cluster.
+func DeleteProject(client *rancher.Client, clusterID string, projectName string, waitForDeletion bool) error {
+	err := client.WranglerContext.Mgmt.Project().Delete(clusterID, projectName, &metav1.DeleteOptions{})
 	if err != nil {
 		return err
 	}
 
-	projectResource := dynamicClient.Resource(ProjectGroupVersionResource).Namespace(projectNamespace)
-
-	err = projectResource.Delete(context.TODO(), projectName, metav1.DeleteOptions{})
-	if err != nil {
-		return err
+	if waitForDeletion {
+		return WaitForProjectDeletion(client, clusterID, projectName)
 	}
 
-	err = kwait.Poll(defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, func() (done bool, err error) {
-		projectList, err := ListProjects(client, projectNamespace, metav1.ListOptions{
-			FieldSelector: "metadata.name=" + projectName,
-		})
+	return nil
+}
 
-		if err != nil {
-			return false, err
+// WaitForProjectDeletion is a helper function that waits for a Project to be deleted from a cluster.
+func WaitForProjectDeletion(client *rancher.Client, clusterID string, projectName string) error {
+	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		_, err = client.WranglerContext.Mgmt.Project().Get(clusterID, projectName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return true, nil
 		}
 
-		if len(projectList.Items) == 0 {
-			return true, nil
+		if err != nil {
+			return false, fmt.Errorf("error checking Project deletion status: %w", err)
 		}
 
 		return false, nil
 	})
 
 	if err != nil {
-		return err
+		return fmt.Errorf("timed out waiting for Project %s to be deleted: %w", projectName, err)
 	}
 
 	return nil

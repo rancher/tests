@@ -136,6 +136,10 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExtendedReso
 	require.NoError(perq.T(), err)
 
 	log.Info("Verify project-level quota usage remains unchanged.")
+	expectedUsage = map[string]string{
+		projectapi.ExtendedEphemeralStorageResourceQuotaRequest: podEphemeralStorageRequest,
+		projectapi.ExtendedEphemeralStorageResourceQuotaLimit:   podEphemeralStorageLimit,
+	}
 	err = projectapi.VerifyUsedProjectExtendedResourceQuota(standardUserClient, perq.cluster.ID, createdProject.Name, expectedUsage)
 	require.NoError(perq.T(), err)
 }

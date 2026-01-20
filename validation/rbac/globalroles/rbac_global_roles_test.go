@@ -87,7 +87,7 @@ func (rgr *RbacGlobalRolesTestSuite) TestCreateGlobalRole() {
 	}
 }
 
-func (rgr *RbacGlobalRolesTestSuite) TestListGlobalRole() {
+func (rgr *RbacGlobalRolesTestSuite) TestGetGlobalRole() {
 	subSession := rgr.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -104,14 +104,14 @@ func (rgr *RbacGlobalRolesTestSuite) TestListGlobalRole() {
 	}
 
 	for _, tt := range tests {
-		rgr.Run("Validate listing global role with role "+tt.role.String(), func() {
+		rgr.Run("Validate getting global role with role "+tt.role.String(), func() {
 			log.Infof("As a admin, create a global role")
 			createdGlobalRole, err := createCustomGlobalRole(rgr.client, &customGlobalRole)
 			assert.NoError(rgr.T(), err)
 
 			switch tt.role.String() {
 			case rbac.Admin.String():
-				log.Infof("As a %v, list the global role", tt.role.String())
+				log.Infof("As a %v, get the global role", tt.role.String())
 				grole, err := rbacapi.GetGlobalRoleByName(rgr.client, createdGlobalRole.Name)
 				assert.NoError(rgr.T(), err)
 				assert.Equal(rgr.T(), grole.Name, createdGlobalRole.Name)
@@ -124,7 +124,7 @@ func (rgr *RbacGlobalRolesTestSuite) TestListGlobalRole() {
 				_, userClient, err := rbac.AddUserWithRoleToCluster(rgr.client, tt.member, tt.role.String(), rgr.cluster, adminProject)
 				assert.NoError(rgr.T(), err)
 
-				log.Infof("As a %v, list the global role", tt.role.String())
+				log.Infof("As a %v, get the global role", tt.role.String())
 				_, err = rbacapi.GetGlobalRoleByName(userClient, createdGlobalRole.Name)
 				assert.Error(rgr.T(), err)
 				assert.True(rgr.T(), errors.IsForbidden(err))
@@ -217,9 +217,6 @@ func (rgr *RbacGlobalRolesTestSuite) TestDeleteGlobalRole() {
 				log.Infof("As a %v, delete the global role", tt.role.String())
 				err = rbacapi.DeleteGlobalRole(rgr.client, createdGlobalRole.Name)
 				assert.NoError(rgr.T(), err)
-
-				_, err = rbacapi.GetGlobalRoleByName(rgr.client, createdGlobalRole.Name)
-				assert.Error(rgr.T(), err)
 			case rbac.ClusterOwner.String(), rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
 				log.Info("Create a project and a namespace in the project.")
 				adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(rgr.client, rgr.cluster.ID)

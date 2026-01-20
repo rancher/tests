@@ -103,7 +103,7 @@ func WaitForProjectIDUpdate(client *rancher.Client, clusterID, projectName, name
 
 // UpdateNamespaceResourceQuotaAnnotation updates the resource quota annotation on a namespace
 func UpdateNamespaceResourceQuotaAnnotation(client *rancher.Client, clusterID string, namespaceName string, existingLimits map[string]string, extendedLimits map[string]string) error {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerCtx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -112,22 +112,19 @@ func UpdateNamespaceResourceQuotaAnnotation(client *rancher.Client, clusterID st
 	for k, v := range existingLimits {
 		limit[k] = v
 	}
-
 	if len(extendedLimits) > 0 {
 		limit["extended"] = extendedLimits
 	}
 
-	quota := map[string]interface{}{
-		"limit": limit,
-	}
-
+	quota := map[string]interface{}{"limit": limit}
 	quotaJSON, err := json.Marshal(quota)
 	if err != nil {
-		return fmt.Errorf("marshal resource quota annotation payload: %w", err)
+		return fmt.Errorf("marshal resource quota annotation: %w", err)
 	}
+
 	quotaStr := string(quotaJSON)
 
-	ns, err := ctx.Core.Namespace().Get(namespaceName, metav1.GetOptions{})
+	ns, err := wranglerCtx.Core.Namespace().Get(namespaceName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -138,8 +135,27 @@ func UpdateNamespaceResourceQuotaAnnotation(client *rancher.Client, clusterID st
 
 	ns.Annotations[ResourceQuotaAnnotation] = quotaStr
 
-	_, err = ctx.Core.Namespace().Update(ns)
-	return err
+	_, err = UpdateNamespace(client, clusterID, ns)
+	if err != nil {
+		return fmt.Errorf("failed to update namespace %s with resource quota annotation: %w", namespaceName, err)
+	}
+
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		updatedNS, err := wranglerCtx.Core.Namespace().Get(namespaceName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		if updatedNS.Annotations[ResourceQuotaAnnotation] == quotaStr {
+			return true, nil
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to verify namespace %s annotation update: %w", namespaceName, err)
+	}
+
+	return nil
 }
 
 // MoveNamespaceToProject updates the project annotation/label to move the namespace into a different project

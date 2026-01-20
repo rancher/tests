@@ -319,7 +319,6 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCrudSecretAsClusterMember() {
 	}
 	createdProject, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
 	require.NoError(rbos.T(), err)
-
 	err = projectapi.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rbos.T(), err)
 
@@ -339,7 +338,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCrudSecretAsClusterMember() {
 
 	log.Infof("As a %v, list the secrets.", role)
 	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbos.cluster.ID)
-	assert.NoError(rbos.T(), err)
+	require.NoError(rbos.T(), err)
 	secretList, err := standardUserContext.Core.Secret().List(namespace.Name, metav1.ListOptions{})
 	require.NoError(rbos.T(), err, "failed to list secret")
 	require.Equal(rbos.T(), len(secretList.Items), 1)
@@ -352,9 +351,9 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCrudSecretAsClusterMember() {
 	updatedSecretObj := secrets.SecretCopyWithNewData(&secretList.Items[0], newData)
 	updatedSecret, err := standardUserContext.Core.Secret().Update(updatedSecretObj)
 	require.NoError(rbos.T(), err, "failed to update secret")
-	assert.NotNil(rbos.T(), updatedSecret)
-	assert.Contains(rbos.T(), updatedSecret.Data, "foo")
-	assert.Equal(rbos.T(), updatedSecret.Data["foo"], []byte("bar"))
+	require.NotNil(rbos.T(), updatedSecret)
+	require.Contains(rbos.T(), updatedSecret.Data, "foo")
+	require.Equal(rbos.T(), updatedSecret.Data["foo"], []byte("bar"))
 
 	log.Infof("As a %v, create a deployment using the secret as an environment variable.", role)
 	_, err = deployment.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, 1, updatedSecret.Name, "", true, false, false, true)
@@ -364,8 +363,8 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCrudSecretAsClusterMember() {
 	err = standardUserContext.Core.Secret().Delete(namespace.Name, updatedSecret.Name, &metav1.DeleteOptions{})
 	require.NoError(rbos.T(), err, "failed to delete secret")
 	secretList, err = standardUserContext.Core.Secret().List(namespace.Name, metav1.ListOptions{})
-	assert.NoError(rbos.T(), err)
-	assert.Equal(rbos.T(), len(secretList.Items), 0)
+	require.NoError(rbos.T(), err)
+	require.Equal(rbos.T(), len(secretList.Items), 0)
 }
 
 func TestRbacOpaqueSecretTestSuite(t *testing.T) {

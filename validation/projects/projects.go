@@ -252,7 +252,7 @@ func updateProjectContainerResourceLimit(client *rancher.Client, existingProject
 	updatedProject.Spec.ContainerDefaultResourceLimit.LimitsMemory = memoryLimit
 	updatedProject.Spec.ContainerDefaultResourceLimit.RequestsMemory = memoryReservation
 
-	updatedProject, err := projectapi.UpdateProject(client, existingProject, updatedProject)
+	updatedProject, err := projectapi.UpdateProject(client, updatedProject.Namespace, updatedProject)
 	if err != nil {
 		return nil, err
 	}

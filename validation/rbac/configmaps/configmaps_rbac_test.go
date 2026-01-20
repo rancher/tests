@@ -284,8 +284,9 @@ func (cm *ConfigmapsRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
 	subSession := cm.session.NewSession()
 	defer subSession.Cleanup()
 
+	role := rbac.ClusterMember.String()
 	log.Info("Creating a standard user and adding them to cluster as a cluster member.")
-	standardUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, rbac.StandardUser.String(), rbac.ClusterMember.String(), cm.cluster, nil)
+	standardUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, rbac.StandardUser.String(), role, cm.cluster, nil)
 	require.NoError(cm.T(), err)
 
 	projectTemplate := projectapi.NewProjectTemplate(cm.cluster.ID)
@@ -304,57 +305,31 @@ func (cm *ConfigmapsRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
 	configMapCreatedByAdmin, err := configmaps.CreateConfigmap(namespace.Name, cm.client, data, cm.cluster.ID)
 	require.NoError(cm.T(), err)
 
-	downstreamWranglerContextAsClusterMember, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
+	log.Infof("Validating CRUD operations on config maps in the project %s created by cluster member %s", createdProject.Name, standardUser.Username)
+	configMapCreatedByClusterMember, err := configmaps.CreateConfigmap(namespace.Name, standardUserClient, data, cm.cluster.ID)
+	require.NoError(cm.T(), err)
+	_, err = deployment.CreateDeployment(standardUserClient, cm.cluster.ID, namespace.Name, 1, "", configMapCreatedByClusterMember.Name, true, false, false, true)
 	require.NoError(cm.T(), err)
 
-	cm.Run("Validate config map creation in the project created by "+rbac.ClusterMember.String(), func() {
-		configMapCreatedByClusterMember, err := configmaps.CreateConfigmap(namespace.Name, standardUserClient, data, cm.cluster.ID)
-		require.NoError(cm.T(), err)
+	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
+	assert.NoError(cm.T(), err)
+	configMapListAsClusterMember, err := standardUserContext.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{})
+	require.NoError(cm.T(), err)
+	configMapListAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{})
+	require.NoError(cm.T(), err)
+	require.Equal(cm.T(), len(configMapListAsClusterMember.Items), len(configMapListAsAdmin.Items))
 
-		_, err = deployment.CreateDeployment(standardUserClient, cm.cluster.ID, namespace.Name, 1, "", configMapCreatedByClusterMember.Name, true, false, false, true)
+	configMapCreatedByAdmin.Data["foo1"] = "bar1"
+	updatedConfigMap, err := standardUserContext.Core.ConfigMap().Update(configMapCreatedByAdmin)
+	require.NoError(cm.T(), err)
+	require.Contains(cm.T(), updatedConfigMap.Data, "foo1")
+	require.Equal(cm.T(), updatedConfigMap.Data["foo1"], "bar1")
 
-		require.NoError(cm.T(), err)
-	})
-
-	cm.Run("Validate cluster member can update admin created config map in the project created by cluster member.", func() {
-		configMapCreatedByAdmin.Data["foo1"] = "bar1"
-		require.NoError(cm.T(), err)
-
-		configMapCreatedByUser, err := downstreamWranglerContextAsClusterMember.Core.ConfigMap().Update(configMapCreatedByAdmin)
-		require.NoError(cm.T(), err)
-
-		configmapListAsAdmin, _ := cm.ctxAsAdmin.Core.ConfigMap().List(namespace.Namespace, metav1.ListOptions{
-			FieldSelector: "metadata.name=" + configMapCreatedByUser.Name,
-		})
-
-		require.Equal(cm.T(), len(configmapListAsAdmin.Items), 1)
-		require.Equal(cm.T(), configMapCreatedByUser.Data, configmapListAsAdmin.Items[0].Data)
-	})
-
-	cm.Run("Validate cluster member can list config maps from the project created by cluster member.", func() {
-
-		configMapListAsClusterMember, err := downstreamWranglerContextAsClusterMember.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{})
-		require.NoError(cm.T(), err)
-
-		configMapListAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{})
-		require.NoError(cm.T(), err)
-
-		require.Equal(cm.T(), len(configMapListAsAdmin.Items), len(configMapListAsClusterMember.Items))
-		require.Equal(cm.T(), configMapListAsClusterMember, configMapListAsAdmin)
-	})
-
-	cm.Run("Validate cluster member can delete config maps from the project.", func() {
-
-		err = downstreamWranglerContextAsClusterMember.Core.ConfigMap().Delete(namespace.Name, configMapCreatedByAdmin.Name, &metav1.DeleteOptions{})
-		require.NoError(cm.T(), err)
-
-		configMapListAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{
-			FieldSelector: "metadata.name=" + configMapCreatedByAdmin.Name,
-		})
-		require.NoError(cm.T(), err)
-		require.Nil(cm.T(), configMapListAsAdmin.Items)
-	})
-
+	err = standardUserContext.Core.ConfigMap().Delete(namespace.Name, configMapCreatedByAdmin.Name, &metav1.DeleteOptions{})
+	require.NoError(cm.T(), err)
+	configMapListAsClusterMember, err = standardUserContext.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{})
+	require.NoError(cm.T(), err)
+	require.Equal(cm.T(), len(configMapListAsClusterMember.Items), len(configMapListAsAdmin.Items)-1)
 }
 
 func TestConfigmapsRBACTestSuite(t *testing.T) {

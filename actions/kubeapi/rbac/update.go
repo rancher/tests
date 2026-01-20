@@ -6,77 +6,84 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/unstructured"
 	"github.com/rancher/shepherd/pkg/api/scheme"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
-// UpdateGlobalRole is a helper function that uses the dynamic client to update a Global Role
+// UpdateGlobalRole is a helper function that uses wrangler context to update an existing global role
 func UpdateGlobalRole(client *rancher.Client, updatedGlobalRole *v3.GlobalRole) (*v3.GlobalRole, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
+	var updated *v3.GlobalRole
+	var lastErr error
+	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		current, getErr := client.WranglerContext.Mgmt.GlobalRole().Get(updatedGlobalRole.Name, metav1.GetOptions{})
+		if getErr != nil {
+			lastErr = fmt.Errorf("failed to get GlobalRole %s: %w", updatedGlobalRole.Name, getErr)
+			return false, nil
+		}
+
+		updatedGlobalRole.ResourceVersion = current.ResourceVersion
+
+		updated, lastErr = client.WranglerContext.Mgmt.GlobalRole().Update(updatedGlobalRole)
+		if lastErr != nil {
+			if errors.IsConflict(lastErr) {
+				return false, nil
+			}
+			return false, lastErr
+		}
+
+		return true, nil
+	},
+	)
+
 	if err != nil {
-		return nil, err
-	}
-	globalRoleResource := dynamicClient.Resource(GlobalRoleGroupVersionResource)
-	globalRolesUnstructured, err := globalRoleResource.Get(context.TODO(), updatedGlobalRole.Name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("timed out updating GlobalRole %s: %w", updatedGlobalRole.Name, lastErr)
 	}
 
-	currentGlobalRole := &v3.GlobalRole{}
-	err = scheme.Scheme.Convert(globalRolesUnstructured, currentGlobalRole, globalRolesUnstructured.GroupVersionKind())
-	if err != nil {
-		return nil, err
-	}
-
-	updatedGlobalRole.ObjectMeta.ResourceVersion = currentGlobalRole.ObjectMeta.ResourceVersion
-
-	unstructuredResp, err := globalRoleResource.Update(context.TODO(), unstructured.MustToUnstructured(updatedGlobalRole), metav1.UpdateOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	newGlobalRole := &v3.GlobalRole{}
-	err = scheme.Scheme.Convert(unstructuredResp, newGlobalRole, unstructuredResp.GroupVersionKind())
-	if err != nil {
-		return nil, err
-	}
-	return newGlobalRole, nil
+	return updated, nil
 }
 
-// UpdateRoleTemplate is a helper function that uses the dynamic client to update an existing cluster role template
+// UpdateRoleTemplate is a helper function that uses wrangler context to update an existing role template
 func UpdateRoleTemplate(client *rancher.Client, updatedRoleTemplate *v3.RoleTemplate) (*v3.RoleTemplate, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
+	currentRoleTemplate, err := client.WranglerContext.Mgmt.RoleTemplate().Get(
+		updatedRoleTemplate.Name,
+		metav1.GetOptions{},
+	)
 	if err != nil {
-		return nil, err
-	}
-	roleTemplateUnstructured := dynamicClient.Resource(RoleTemplateGroupVersionResource)
-	roleTemplate, err := roleTemplateUnstructured.Get(context.TODO(), updatedRoleTemplate.Name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get RoleTemplate %s: %w", updatedRoleTemplate.Name, err)
 	}
 
-	currentRoleTemplate := &v3.RoleTemplate{}
-	err = scheme.Scheme.Convert(roleTemplate, currentRoleTemplate, roleTemplate.GroupVersionKind())
-	if err != nil {
-		return nil, err
+	updatedRoleTemplate.ResourceVersion = currentRoleTemplate.ResourceVersion
+
+	if _, err := client.WranglerContext.Mgmt.RoleTemplate().Update(updatedRoleTemplate); err != nil {
+		return nil, fmt.Errorf("failed to update RoleTemplate %s: %w", updatedRoleTemplate.Name, err)
 	}
 
-	updatedRoleTemplate.ObjectMeta.ResourceVersion = currentRoleTemplate.ObjectMeta.ResourceVersion
+	var newRoleTemplate *v3.RoleTemplate
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		rt, err := client.WranglerContext.Mgmt.RoleTemplate().Get(updatedRoleTemplate.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
 
-	unstructuredResp, err := roleTemplateUnstructured.Update(context.TODO(), unstructured.MustToUnstructured(updatedRoleTemplate), metav1.UpdateOptions{})
+		if rt.ResourceVersion != currentRoleTemplate.ResourceVersion {
+			newRoleTemplate = rt
+			return true, nil
+		}
+
+		return false, nil
+	},
+	)
+
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("timed out waiting for RoleTemplate %s to be updated: %w", updatedRoleTemplate.Name, err)
 	}
 
-	newRoleTemplate := &v3.RoleTemplate{}
-	err = scheme.Scheme.Convert(unstructuredResp, newRoleTemplate, unstructuredResp.GroupVersionKind())
-	if err != nil {
-		return nil, err
-	}
 	return newRoleTemplate, nil
-
 }
 
 // UpdateClusterRoleTemplateBindings is a helper function that uses the dynamic client to update an existing cluster role template binding

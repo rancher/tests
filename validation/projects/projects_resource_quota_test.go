@@ -215,14 +215,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaPropagationToExistingNamespa
 	log.Info("Update the resource quota in the Project with new values.")
 	namespacePodLimit = "5"
 	projectPodLimit = "10"
-	projectList, err := projectapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + createdProject.Name,
-	})
-	require.NoError(prq.T(), err, "Failed to list project.")
-	currentProject := projectList.Items[0]
+	currentProject, err := standardUserClient.WranglerContext.Mgmt.Project().Get(createdProject.Namespace, createdProject.Name, metav1.GetOptions{})
+	require.NoError(prq.T(), err, "Failed to get project.")
 	currentProject.Spec.NamespaceDefaultResourceQuota.Limit.Pods = namespacePodLimit
 	currentProject.Spec.ResourceQuota.Limit.Pods = projectPodLimit
-	updatedProject, err := standardUserClient.WranglerContext.Mgmt.Project().Update(&currentProject)
+	updatedProject, err := projectapi.UpdateProject(standardUserClient, currentProject.Namespace, currentProject)
 	require.NoError(prq.T(), err, "Failed to update resource quota.")
 
 	log.Info("Verify that the pod limits in the Project spec has the updated values for resource quota.")
@@ -287,14 +284,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaDeletionPropagationToExistin
 	namespacePodLimit = ""
 	projectPodLimit = ""
 
-	projectList, err := projectapi.ListProjects(standardUserClient, createdProject.Namespace, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + createdProject.Name,
-	})
-	require.NoError(prq.T(), err, "Failed to list project.")
-	currentProject := projectList.Items[0]
+	currentProject, err := standardUserClient.WranglerContext.Mgmt.Project().Get(createdProject.Namespace, createdProject.Name, metav1.GetOptions{})
+	require.NoError(prq.T(), err, "Failed to get project.")
 	currentProject.Spec.NamespaceDefaultResourceQuota.Limit.Pods = namespacePodLimit
 	currentProject.Spec.ResourceQuota.Limit.Pods = projectPodLimit
-	updatedProject, err := standardUserClient.WranglerContext.Mgmt.Project().Update(&currentProject)
+	updatedProject, err := projectapi.UpdateProject(standardUserClient, currentProject.Namespace, currentProject)
 	require.NoError(prq.T(), err, "Failed to update resource quota.")
 
 	log.Info("Verify that the resource quota in the Project spec has been updated.")

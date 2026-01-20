@@ -72,7 +72,7 @@ func (rtp *RbacTerminatingProjectTestSuite) TestUserAdditionToClusterWithTermina
 	require.NoError(rtp.T(), err)
 
 	log.Info("Delete the Project.")
-	err = projectapi.DeleteProject(rtp.client, createdProject.Namespace, createdProject.Name)
+	err = projectapi.DeleteProject(rtp.client, createdProject.Namespace, createdProject.Name, false)
 	require.Error(rtp.T(), err)
 	err = projectapi.WaitForProjectFinalizerToUpdate(rtp.client, createdProject.Name, createdProject.Namespace, 1)
 	require.NoError(rtp.T(), err)
@@ -117,7 +117,7 @@ func (rtp *RbacTerminatingProjectTestSuite) TestUserAdditionToProjectWithTermina
 	require.NoError(rtp.T(), err)
 
 	log.Info("Delete the Project.")
-	err = projectapi.DeleteProject(rtp.client, createdProject.Namespace, createdProject.Name)
+	err = projectapi.DeleteProject(rtp.client, createdProject.Namespace, createdProject.Name, false)
 	require.Error(rtp.T(), err)
 	err = projectapi.WaitForProjectFinalizerToUpdate(rtp.client, createdProject.Name, createdProject.Namespace, 1)
 	require.NoError(rtp.T(), err)

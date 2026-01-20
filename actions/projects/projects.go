@@ -110,7 +110,7 @@ func UpdateProjectNamespaceFinalizer(client *rancher.Client, existingProject *v3
 	updatedProject := existingProject.DeepCopy()
 	updatedProject.ObjectMeta.Finalizers = finalizer
 
-	updatedProject, err := projectapi.UpdateProject(client, existingProject, updatedProject)
+	updatedProject, err := projectapi.UpdateProject(client, updatedProject.Namespace, updatedProject)
 	if err != nil {
 		return nil, err
 	}

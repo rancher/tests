@@ -74,37 +74,33 @@ func (kc *ExtKubeconfigTestSuite) SetupSuite() {
 	require.NoError(kc.T(), err)
 
 	provisioning.VerifyClusterReady(kc.T(), client, aceClusterObject1)
+	provisioning.VerifyClusterReady(kc.T(), client, aceClusterObject2)
+	provisioning.VerifyClusterReady(kc.T(), client, clusterObject2)
 
 	err = deployment.VerifyClusterDeployments(client, aceClusterObject1)
+	require.NoError(kc.T(), err)
+	err = deployment.VerifyClusterDeployments(client, aceClusterObject2)
+	require.NoError(kc.T(), err)
+	err = deployment.VerifyClusterDeployments(client, clusterObject2)
 	require.NoError(kc.T(), err)
 
 	err = pods.VerifyClusterPods(client, aceClusterObject1)
 	require.NoError(kc.T(), err)
+	err = pods.VerifyClusterPods(client, aceClusterObject2)
+	require.NoError(kc.T(), err)
+	err = pods.VerifyClusterPods(client, clusterObject2)
+	require.NoError(kc.T(), err)
+
 	provisioning.VerifyDynamicCluster(kc.T(), client, aceClusterObject1)
+	provisioning.VerifyDynamicCluster(kc.T(), client, aceClusterObject2)
+	provisioning.VerifyDynamicCluster(kc.T(), client, clusterObject2)
+
 	kc.aceCluster1, err = kc.client.Management.Cluster.ByID(aceCluster1ID)
 	require.NoError(kc.T(), err)
 	log.Infof("ACE-enabled cluster created: %s (%s)", kc.aceCluster1.Name, aceCluster1ID)
-
-	provisioning.VerifyClusterReady(kc.T(), client, aceClusterObject2)
-
-	err = deployment.VerifyClusterDeployments(client, aceClusterObject2)
-	require.NoError(kc.T(), err)
-
-	err = pods.VerifyClusterPods(client, aceClusterObject2)
-	require.NoError(kc.T(), err)
-	provisioning.VerifyDynamicCluster(kc.T(), client, aceClusterObject2)
 	kc.aceCluster2, err = kc.client.Management.Cluster.ByID(aceCluster2ID)
 	require.NoError(kc.T(), err)
 	log.Infof("ACE-enabled cluster created: %s (%s)", kc.aceCluster2.Name, aceCluster2ID)
-
-	provisioning.VerifyClusterReady(kc.T(), client, clusterObject2)
-
-	err = deployment.VerifyClusterDeployments(client, clusterObject2)
-	require.NoError(kc.T(), err)
-
-	err = pods.VerifyClusterPods(client, clusterObject2)
-	require.NoError(kc.T(), err)
-	provisioning.VerifyDynamicCluster(kc.T(), client, clusterObject2)
 	kc.cluster2, err = kc.client.Management.Cluster.ByID(cluster2ID)
 	require.NoError(kc.T(), err)
 	log.Infof("ACE-disabled cluster created: %s (%s)", kc.cluster2.Name, cluster2ID)

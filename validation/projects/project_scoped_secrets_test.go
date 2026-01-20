@@ -196,15 +196,8 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretCleanupOnProject
 	createdProject, namespaceList, createdProjectScopedSecret := pss.testProjectScopedSecret(pss.cluster.ID, corev1.SecretTypeOpaque, opaqueSecretData)
 
 	log.Infof("Deleting the project: %s", createdProject.Name)
-	err := projectapi.DeleteProject(pss.client, pss.cluster.ID, createdProject.Name)
+	err := projectapi.DeleteProject(pss.client, pss.cluster.ID, createdProject.Name, true)
 	require.NoError(pss.T(), err, "Failed to delete the project")
-
-	log.Infof("Verify the project %s is deleted", createdProject.Name)
-	projectList, err := projectapi.ListProjects(pss.client, createdProject.Namespace, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + createdProject.Name,
-	})
-	require.NoError(pss.T(), err)
-	require.Equal(pss.T(), 0, len(projectList.Items), "Project was not deleted")
 
 	log.Info("Verify that the project scoped secret is deleted.")
 	backingNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)}}

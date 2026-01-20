@@ -179,7 +179,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldUpdateAndVerify() {
 	require.NoError(crtbs.T(), err)
 
 	log.Info("Deleting custom cluster role template")
-	err = rbacapi.DeleteRoletemplate(crtbs.client, createdCustomClusterRoleTemplate.Name)
+	err = rbacapi.DeleteRoleTemplate(crtbs.client, createdCustomClusterRoleTemplate.Name)
 	require.NoError(crtbs.T(), err)
 
 	log.Info("Verifying CRTB Status field after deleting custom cluster role template")

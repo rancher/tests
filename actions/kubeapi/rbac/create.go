@@ -12,7 +12,6 @@ import (
 	"github.com/rancher/shepherd/extensions/unstructured"
 	"github.com/rancher/shepherd/pkg/api/scheme"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -77,26 +76,30 @@ func CreateRoleBinding(client *rancher.Client, clusterName, roleBindingName, nam
 	return newRoleBinding, nil
 }
 
-// CreateGlobalRole is a helper function that uses the dynamic client to create a global role in the local cluster.
+// CreateGlobalRole is a helper function that uses wrangler context to create a Global Role
 func CreateGlobalRole(client *rancher.Client, globalRole *v3.GlobalRole) (*v3.GlobalRole, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
+	newGlobalRole, err := client.WranglerContext.Mgmt.GlobalRole().Create(globalRole)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create global role binding for global role %s: %w", globalRole.Name, err)
 	}
 
-	globalRoleResource := dynamicClient.Resource(GlobalRoleGroupVersionResource)
-	unstructuredResp, err := globalRoleResource.Create(context.TODO(), unstructured.MustToUnstructured(globalRole), metav1.CreateOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	newGlobalRole := &v3.GlobalRole{}
-	err = scheme.Scheme.Convert(unstructuredResp, newGlobalRole, unstructuredResp.GroupVersionKind())
+	err = WaitForGlobalRoleExistence(client, newGlobalRole.Name)
 	if err != nil {
 		return nil, err
 	}
 
 	return newGlobalRole, nil
+}
+
+// WaitForGlobalRoleExistence waits until the GlobalRole exists based on the provided name using wrangler context
+func WaitForGlobalRoleExistence(client *rancher.Client, globalRoleName string) error {
+	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+		_, err := client.WranglerContext.Mgmt.GlobalRole().Get(globalRoleName, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
 }
 
 // CreateGlobalRoleBinding creates a global role binding for the user with the provided global role using wrangler context
@@ -124,7 +127,7 @@ func CreateGlobalRoleBinding(client *rancher.Client, globalRoleName, userName, g
 	return grb, nil
 }
 
-// WaitForGrbExistence waits until the GlobalRoleBinding exists based on the provided field (User, UserPrincipal, or Group)
+// WaitForGrbExistence waits until the GlobalRoleBinding exists based on the provided field (User, UserPrincipal, or Group) using wrangler context
 func WaitForGrbExistence(client *rancher.Client, grbName string) error {
 	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
 		_, err := client.WranglerContext.Mgmt.GlobalRoleBinding().Get(grbName, metav1.GetOptions{})

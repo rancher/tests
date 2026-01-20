@@ -6,41 +6,35 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
-// DeleteGlobalRole is a helper function that uses the dynamic client to delete a Global Role by name
+// DeleteGlobalRole is a helper function to delete a Global Role by name using wrangler context
 func DeleteGlobalRole(client *rancher.Client, globalRoleName string) error {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
+	err := client.WranglerContext.Mgmt.GlobalRole().Delete(globalRoleName, &metav1.DeleteOptions{})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delete GlobalRole %s: %w", globalRoleName, err)
 	}
 
-	globalRoleResource := dynamicClient.Resource(GlobalRoleGroupVersionResource)
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		_, err = client.WranglerContext.Mgmt.GlobalRole().Get(globalRoleName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return true, nil
+		}
 
-	err = globalRoleResource.Delete(context.TODO(), globalRoleName, metav1.DeleteOptions{})
+		if err != nil {
+			return false, fmt.Errorf("error checking GlobalRole deletion status: %w", err)
+		}
+
+		return false, nil
+	})
+
 	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// DeleteRoletemplate is a helper function that uses the dynamic client to delete a Custom Cluster Role/ Project Role template by name
-func DeleteRoletemplate(client *rancher.Client, roleName string) error {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
-	if err != nil {
-		return err
+		return fmt.Errorf("timed out waiting for GlobalRole %s to be deleted: %w", globalRoleName, err)
 	}
 
-	roleResource := dynamicClient.Resource(RoleTemplateGroupVersionResource)
-
-	err = roleResource.Delete(context.TODO(), roleName, metav1.DeleteOptions{})
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
