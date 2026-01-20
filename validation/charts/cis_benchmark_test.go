@@ -36,7 +36,6 @@ func (i *CisBenchmarkTestSuite) SetupSuite() {
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(i.T(), err)
-
 	i.client = client
 
 	clusterName := client.RancherConfig.ClusterName
@@ -44,38 +43,40 @@ func (i *CisBenchmarkTestSuite) SetupSuite() {
 
 	cluster, err := clusters.NewClusterMeta(client, clusterName)
 	require.NoError(i.T(), err)
-
 	i.cluster = cluster
 
 	clusterMeta, err := extensionscluster.NewClusterMeta(i.client, i.cluster.Name)
 	require.NoError(i.T(), err)
 
+	i.T().Logf("Creating Project [%s]", cis.System)
 	i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, cis.System)
 	require.NoError(i.T(), err)
-	require.Equal(i.T(), i.project.Name, cis.System)
+	require.Equal(i.T(), cis.System, i.project.Name)
 }
 
 func (i *CisBenchmarkTestSuite) TestCISBenchmarkInstallation() {
 	chartName := charts.CISBenchmarkName
-	chartNamespace := charts.CISBenchmarkNamespace
-
-	clusterMeta, err := extensionscluster.NewClusterMeta(i.client, i.cluster.Name)
+	i.T().Logf("Getting the latest chart version for [%s]", chartName)
+	latestChartVersion, err := i.client.Catalog.GetLatestChartVersion(chartName, catalog.RancherChartRepo)
 	require.NoError(i.T(), err)
 
-	latestHardenedChartVersion, err := i.client.Catalog.GetLatestChartVersion(chartName, catalog.RancherChartRepo)
-	require.NoError(i.T(), err)
-
-	chartInstallOptions := &charts.InstallOptions{
-		Cluster:   clusterMeta,
-		Version:   latestHardenedChartVersion,
+	installOptions := &charts.InstallOptions{
+		Cluster:   i.cluster,
+		Version:   latestChartVersion,
 		ProjectID: i.project.ID,
 	}
 
-	i.T().Logf("Setting up %s on cluster (%s)", chartName, i.cluster.Name)
-	err = cis.SetupHardenedChart(i.client, i.project.ClusterID, chartInstallOptions, chartName, chartNamespace)
+	i.T().Logf("Installing %s chart on cluster [%s] with version [%s]", chartName, i.cluster.Name, latestChartVersion)
+	err = cis.SetupHardenedChart(
+		i.client,
+		i.project.ClusterID,
+		installOptions,
+		chartName,
+		charts.CISBenchmarkNamespace,
+	)
 	require.NoError(i.T(), err)
 
-	i.T().Logf("Running CIS scan on cluster (%s)", i.cluster.Name)
+	i.T().Logf("Running CIS benchmark scan on cluster [%s] using profile [%s]", i.cluster.Name, cis.ScanProfileName)
 	err = cis.RunCISScan(i.client, i.project.ClusterID, cis.ScanProfileName)
 	require.NoError(i.T(), err)
 }

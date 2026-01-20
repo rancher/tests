@@ -45,7 +45,6 @@ func (i *AlertingTestSuite) SetupSuite() {
 
 	cluster, err := clusters.NewClusterMeta(client, clusterName)
 	require.NoError(i.T(), err)
-
 	i.cluster = cluster
 
 	clusterMeta, err := extensionscluster.NewClusterMeta(i.client, i.cluster.Name)
@@ -53,32 +52,47 @@ func (i *AlertingTestSuite) SetupSuite() {
 
 	i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, charts.SystemProject)
 	require.NoError(i.T(), err)
+	require.Equal(i.T(), charts.SystemProject, i.project.Name)
 }
 
 func (i *AlertingTestSuite) TestAlertingInstallation() {
-	client, err := i.client.WithSession(i.session)
+	latestAlertingVersion, err := i.client.Catalog.GetLatestChartVersion(
+		charts.RancherAlertingName,
+		catalog.RancherChartRepo,
+	)
 	require.NoError(i.T(), err)
 
-	// Get latest versions of alerting
-	latestAlertingVersion, err := client.Catalog.GetLatestChartVersion(charts.RancherAlertingName, catalog.RancherChartRepo)
-	require.NoError(i.T(), err)
-
-	alertingChartInstallOption := &charts.InstallOptions{
+	installOptions := &charts.InstallOptions{
 		Cluster:   i.cluster,
 		Version:   latestAlertingVersion,
 		ProjectID: i.project.ID,
 	}
 
-	alertingFeatureOption := &charts.RancherAlertingOpts{
+	featureOptions := &charts.RancherAlertingOpts{
 		SMS:   true,
 		Teams: false,
 	}
 
-	i.T().Logf("Installing alerting chart with the latest version in cluster [%v] with version [%v]", i.cluster.Name, latestAlertingVersion)
-	err = charts.InstallRancherAlertingChart(client, alertingChartInstallOption, alertingFeatureOption)
+	i.T().Logf(
+		"Installing Rancher Alerting chart on cluster [%s] with version [%s]",
+		i.cluster.Name,
+		latestAlertingVersion,
+	)
+
+	err = charts.InstallRancherAlertingChart(i.client, installOptions, featureOptions)
 	require.NoError(i.T(), err)
 
-	err = shepherdCharts.WatchAndWaitDeployments(client, i.cluster.ID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+	i.T().Logf(
+		"Waiting for alerting deployments to become ready in namespace [%s]",
+		charts.RancherMonitoringNamespace,
+	)
+
+	err = shepherdCharts.WatchAndWaitDeployments(
+		i.client,
+		i.cluster.ID,
+		charts.RancherMonitoringNamespace,
+		metav1.ListOptions{},
+	)
 	require.NoError(i.T(), err)
 }
 
