@@ -19,11 +19,10 @@ import (
 
 type LoggingTestSuite struct {
 	suite.Suite
-	client          *rancher.Client
-	session         *session.Session
-	project         *management.Project
-	cluster         *clusters.ClusterMeta
-	registrySetting *management.Setting
+	client  *rancher.Client
+	session *session.Session
+	project *management.Project
+	cluster *clusters.ClusterMeta
 }
 
 func (i *LoggingTestSuite) TearDownSuite() {
@@ -36,56 +35,49 @@ func (i *LoggingTestSuite) SetupSuite() {
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(i.T(), err)
-
 	i.client = client
 
-	// Get clusterName from config yaml
 	clusterName := client.RancherConfig.ClusterName
 	require.NotEmptyf(i.T(), clusterName, "Cluster name to install is not set")
 
-	// Get cluster meta
 	cluster, err := clusters.NewClusterMeta(client, clusterName)
 	require.NoError(i.T(), err)
-
 	i.cluster = cluster
 
-	// Get Server and Registry Setting Values
-	i.registrySetting, err = client.Management.Setting.ByID("system-default-registry")
-	require.NoError(i.T(), err)
-
-	// Create project
 	projectConfig := &management.Project{
 		ClusterID: cluster.ID,
 		Name:      charts.SystemProject,
 	}
+
+	i.T().Logf("Creating project [%s] on cluster [%s]", charts.SystemProject, cluster.Name)
 	createdProject, err := client.Management.Project.Create(projectConfig)
 	require.NoError(i.T(), err)
-	require.Equal(i.T(), createdProject.Name, charts.SystemProject)
+	require.Equal(i.T(), charts.SystemProject, createdProject.Name)
+
 	i.project = createdProject
 }
 
 func (i *LoggingTestSuite) TestLoggingInstallation() {
-	client, err := i.client.WithSession(i.session)
+	i.T().Logf("Resolving latest chart version for [%s] from repository [%s]", charts.RancherLoggingName, catalog.RancherChartRepo)
+	latestLoggingVersion, err := i.client.Catalog.GetLatestChartVersion(charts.RancherLoggingName, catalog.RancherChartRepo)
 	require.NoError(i.T(), err)
 
-	latestLoggingVersion, err := client.Catalog.GetLatestChartVersion(charts.RancherLoggingName, catalog.RancherChartRepo)
-	require.NoError(i.T(), err)
-
-	loggingChartInstallOption := &charts.InstallOptions{
+	installOptions := &charts.InstallOptions{
 		Cluster:   i.cluster,
 		Version:   latestLoggingVersion,
 		ProjectID: i.project.ID,
 	}
 
-	loggingChartFeatureOption := &charts.RancherLoggingOpts{
+	featureOptions := &charts.RancherLoggingOpts{
 		AdditionalLoggingSources: true,
 	}
 
-	i.T().Logf("Installing logging chart with the latest version in cluster [%v] with version [%v]", i.cluster.Name, latestLoggingVersion)
-	err = charts.InstallRancherLoggingChart(client, loggingChartInstallOption, loggingChartFeatureOption)
+	i.T().Logf("Installing Rancher Logging chart on cluster [%s] with version [%s]", i.cluster.Name, latestLoggingVersion)
+	err = charts.InstallRancherLoggingChart(i.client, installOptions, featureOptions)
 	require.NoError(i.T(), err)
 
-	err = shepherdCharts.WatchAndWaitDeployments(client, i.cluster.ID, charts.RancherLoggingNamespace, metav1.ListOptions{})
+	i.T().Logf("Waiting for logging deployments to become ready in namespace [%s]", charts.RancherLoggingNamespace)
+	err = shepherdCharts.WatchAndWaitDeployments(i.client, i.cluster.ID, charts.RancherLoggingNamespace, metav1.ListOptions{})
 	require.NoError(i.T(), err)
 }
 
