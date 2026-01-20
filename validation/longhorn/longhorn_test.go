@@ -37,7 +37,6 @@ type LonghornTestSuite struct {
 	longhornTestConfig longhorn.TestConfig
 	cluster            *clusters.ClusterMeta
 	project            *management.Project
-	payloadOpts        charts.PayloadOpts
 }
 
 func (l *LonghornTestSuite) TearDownSuite() {
@@ -82,7 +81,7 @@ func (l *LonghornTestSuite) SetupSuite() {
 			},
 		}
 
-		l.T().Logf("Installing Lonhgorn chart in cluster [%v] with latest version [%v] in project [%v] and namespace [%v]", l.cluster.Name, l.payloadOpts.Version, l.project.Name, l.payloadOpts.Namespace)
+		l.T().Logf("Installing Lonhgorn chart in cluster [%v] with latest version [%v] in project [%v] and namespace [%v]", l.cluster.Name, payloadOpts.Version, l.project.Name, payloadOpts.Namespace)
 		err = charts.InstallLonghornChart(l.client, payloadOpts, nil)
 		require.NoError(l.T(), err)
 	}
