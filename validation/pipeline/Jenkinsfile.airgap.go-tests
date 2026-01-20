@@ -265,7 +265,12 @@ node {
                         -e CATTLE_CONFIG_PATH=/workspace/tests/cattle-config.yaml \
                         -w /workspace/tests \
                         ${infraToolsImage} \
-                        sh -c 'set -euo pipefail; go run -tags ignore ${injectSource}'
+                        sh -c 'set -euo pipefail; \
+                            echo "[diag] go env GOROOT/GOPATH/GOFLAGS:"; \
+                            go env GOROOT GOPATH GOFLAGS; \
+                            echo "[diag] build tags on ${injectSource}:"; \
+                            grep -n "^//go:build" ${injectSource} || true; \
+                            go run -tags ignore ${injectSource}'
                 """
             }
 
