@@ -121,18 +121,17 @@ node("harvester-vpn-1") {
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
                             sleep 660
                             until timeout 60 ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i .ssh/$AWS_SSH_KEY_NAME rancher@$inode 'sudo cat /etc/rancher/rke2/rke2.yaml'; do sleep 5; done
-                            echo "ssh shows rke2.yaml is up, downloading now.."
+                            sleep 180
+                            echo "ssh shows rke2.yaml is up, downloaded ^^"
                         fi
                         
                         
                         ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i .ssh/$AWS_SSH_KEY_NAME rancher@$inode 'sudo cat /etc/rancher/rke2/rke2.yaml' > harvester.yaml
-                        
-                        
-
 
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
                             sleep 300
                         fi
+
                         while true; do
                             inode2=$(ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                                 -i ".ssh/$AWS_SSH_KEY_NAME" rancher@"$inode" \
@@ -173,7 +172,7 @@ node("harvester-vpn-1") {
                         jsonOutput=""
 
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
-                            sleep 60
+                            sleep 120
 
                             jsonOutput=$(curl --insecure -d '{"username" : "admin", "password" : "admin", "responseType" : "json"}'  "https://$inode/v3-public/localproviders/local?action=login")
                         else
