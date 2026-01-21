@@ -62,7 +62,7 @@ func main() {
 
 	logrus.Infof("Generating admin token for: %s@%s", username, wrapped.Configuration.Host)
 
-	// Dynamically create the admin token
+	// Dynamically create an admin token
 	startTime := time.Now()
 	adminToken, err := generateAdminToken(username, password, wrapped.Configuration.Host)
 	if err != nil {
@@ -72,7 +72,7 @@ func main() {
 
 	logrus.Infof("Successfully created admin token in %v", duration)
 
-	// Update the config with the generated token
+	// Update config with generated token
 	wrapped.Configuration.AdminToken = adminToken
 
 	// Marshal updated config back to YAML
