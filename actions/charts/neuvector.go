@@ -20,6 +20,17 @@ func InstallNeuVectorChart(client *rancher.Client, payload PayloadOpts) error {
 
 	chartInstalls := []types.ChartInstall{
 		*NewChartInstall(
+			NeuVectorChartName+"-crd",
+			payload.Version,
+			payload.Cluster.ID,
+			payload.Cluster.Name,
+			payload.Host,
+			catalog.RancherChartRepo,
+			payload.ProjectID,
+			payload.DefaultRegistry,
+			nil,
+		),
+		*NewChartInstall(
 			NeuVectorChartName,
 			payload.Version,
 			payload.Cluster.ID,
@@ -32,17 +43,6 @@ func InstallNeuVectorChart(client *rancher.Client, payload PayloadOpts) error {
 		),
 		*NewChartInstall(
 			NeuVectorChartName+"-monitor",
-			payload.Version,
-			payload.Cluster.ID,
-			payload.Cluster.Name,
-			payload.Host,
-			catalog.RancherChartRepo,
-			payload.ProjectID,
-			payload.DefaultRegistry,
-			nil,
-		),
-		*NewChartInstall(
-			NeuVectorChartName+"-crd",
 			payload.Version,
 			payload.Cluster.ID,
 			payload.Cluster.Name,
@@ -74,22 +74,22 @@ func uninstallNeuVectorChart(client *rancher.Client, namespace string, clusterID
 		return err
 	}
 
-	err = catalogClient.UninstallChart(NeuVectorChartName, namespace, NewChartUninstallAction())
-	if err != nil {
-		return err
-	}
-
-	err = waitUninstallation(catalogClient, namespace, NeuVectorChartName)
-	if err != nil {
-		return err
-	}
-
 	err = catalogClient.UninstallChart(NeuVectorChartName+"-monitor", namespace, NewChartUninstallAction())
 	if err != nil {
 		return err
 	}
 
 	err = waitUninstallation(catalogClient, namespace, NeuVectorChartName+"-monitor")
+	if err != nil {
+		return err
+	}
+
+	err = catalogClient.UninstallChart(NeuVectorChartName, namespace, NewChartUninstallAction())
+	if err != nil {
+		return err
+	}
+
+	err = waitUninstallation(catalogClient, namespace, NeuVectorChartName)
 	if err != nil {
 		return err
 	}
