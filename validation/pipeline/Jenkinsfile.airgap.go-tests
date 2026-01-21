@@ -225,6 +225,17 @@ node {
                 }
             }
 
+            stage('Create Test Config') {
+                echo 'Creating test config file if needed'
+                if (cattleTestConfig?.trim()) {
+                    def cattleConfigPath = "${testsPath}/cattle-config.yaml"
+                    writeFile file: cattleConfigPath, text: cattleTestConfig.trim() + '\n'
+                    echo "Created test config file: ${cattleConfigPath}"
+                } else {
+                    echo 'No CATTLE_TEST_CONFIG provided, skipping config creation'
+                }
+            }
+
             stage('Resolve Outputs') {
                 try {
                     rancherHostname = tofu.getOutputs(
