@@ -1,4 +1,4 @@
-//go:build validation || sanity || pit.daily
+//go:build validation || sanity || pit.daily || pit.harvester.daily
 
 package fleet
 
