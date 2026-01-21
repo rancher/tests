@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || i.cluster.any || sanity || pit.daily) && !stress && !extended
+//go:build (validation || infra.any || cluster.any || sanity || pit.daily) && !stress && !extended
 
 package charts
 
@@ -26,59 +26,59 @@ type CisBenchmarkTestSuite struct {
 	project *management.Project
 }
 
-func (i *CisBenchmarkTestSuite) TearDownSuite() {
-	i.session.Cleanup()
+func (c *CisBenchmarkTestSuite) TearDownSuite() {
+	c.session.Cleanup()
 }
 
-func (i *CisBenchmarkTestSuite) SetupSuite() {
+func (c *CisBenchmarkTestSuite) SetupSuite() {
 	testSession := session.NewSession()
-	i.session = testSession
+	c.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
-	require.NoError(i.T(), err)
-	i.client = client
+	require.NoError(c.T(), err)
+	c.client = client
 
 	clusterName := client.RancherConfig.ClusterName
-	require.NotEmptyf(i.T(), clusterName, "Cluster name to install is not set")
+	require.NotEmptyf(c.T(), clusterName, "Cluster name to install is not set")
 
 	cluster, err := clusters.NewClusterMeta(client, clusterName)
-	require.NoError(i.T(), err)
-	i.cluster = cluster
+	require.NoError(c.T(), err)
+	c.cluster = cluster
 
-	clusterMeta, err := extensionscluster.NewClusterMeta(i.client, i.cluster.Name)
-	require.NoError(i.T(), err)
+	clusterMeta, err := extensionscluster.NewClusterMeta(c.client, c.cluster.Name)
+	require.NoError(c.T(), err)
 
-	i.T().Logf("Creating Project [%s]", cis.System)
-	i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, cis.System)
-	require.NoError(i.T(), err)
-	require.Equal(i.T(), cis.System, i.project.Name)
+	c.T().Logf("Creating Project [%s]", cis.System)
+	c.project, err = projects.GetProjectByName(c.client, clusterMeta.ID, cis.System)
+	require.NoError(c.T(), err)
+	require.Equal(c.T(), cis.System, c.project.Name)
 }
 
-func (i *CisBenchmarkTestSuite) TestCISBenchmarkInstallation() {
+func (c *CisBenchmarkTestSuite) TestCISBenchmarkInstallation() {
 	chartName := charts.CISBenchmarkName
-	i.T().Logf("Getting the latest chart version for [%s]", chartName)
-	latestChartVersion, err := i.client.Catalog.GetLatestChartVersion(chartName, catalog.RancherChartRepo)
-	require.NoError(i.T(), err)
+	c.T().Logf("Getting the latest chart version for [%s]", chartName)
+	latestChartVersion, err := c.client.Catalog.GetLatestChartVersion(chartName, catalog.RancherChartRepo)
+	require.NoError(c.T(), err)
 
 	installOptions := &charts.InstallOptions{
-		Cluster:   i.cluster,
+		Cluster:   c.cluster,
 		Version:   latestChartVersion,
-		ProjectID: i.project.ID,
+		ProjectID: c.project.ID,
 	}
 
-	i.T().Logf("Installing %s chart on cluster [%s] with version [%s]", chartName, i.cluster.Name, latestChartVersion)
+	c.T().Logf("Installing %s chart on cluster [%s] with version [%s]", chartName, c.cluster.Name, latestChartVersion)
 	err = cis.SetupHardenedChart(
-		i.client,
-		i.project.ClusterID,
+		c.client,
+		c.project.ClusterID,
 		installOptions,
 		chartName,
 		charts.CISBenchmarkNamespace,
 	)
-	require.NoError(i.T(), err)
+	require.NoError(c.T(), err)
 
-	i.T().Logf("Running CIS benchmark scan on cluster [%s] using profile [%s]", i.cluster.Name, cis.ScanProfileName)
-	err = cis.RunCISScan(i.client, i.project.ClusterID, cis.ScanProfileName)
-	require.NoError(i.T(), err)
+	c.T().Logf("Running CIS benchmark scan on cluster [%s] using profile [%s]", c.cluster.Name, cis.ScanProfileName)
+	err = cis.RunCISScan(c.client, c.project.ClusterID, cis.ScanProfileName)
+	require.NoError(c.T(), err)
 }
 
 func TestCisBenchmarkTestSuite(t *testing.T) {

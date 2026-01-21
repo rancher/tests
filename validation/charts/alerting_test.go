@@ -1,4 +1,4 @@
-//go:build (validation || infra.rke1 || cluster.any || stress || pit.daily) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke2k3s && !sanity && !extended
+//go:build (validation || infra.any || cluster.any || sanity || pit.daily) && !stress && !extended
 
 package charts
 
@@ -27,45 +27,45 @@ type AlertingTestSuite struct {
 	cluster *clusters.ClusterMeta
 }
 
-func (i *AlertingTestSuite) TearDownSuite() {
-	i.session.Cleanup()
+func (a *AlertingTestSuite) TearDownSuite() {
+	a.session.Cleanup()
 }
 
-func (i *AlertingTestSuite) SetupSuite() {
+func (a *AlertingTestSuite) SetupSuite() {
 	testSession := session.NewSession()
-	i.session = testSession
+	a.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
-	require.NoError(i.T(), err)
+	require.NoError(a.T(), err)
 
-	i.client = client
+	a.client = client
 
 	clusterName := client.RancherConfig.ClusterName
-	require.NotEmptyf(i.T(), clusterName, "Cluster name to install is not set")
+	require.NotEmptyf(a.T(), clusterName, "Cluster name to install is not set")
 
 	cluster, err := clusters.NewClusterMeta(client, clusterName)
-	require.NoError(i.T(), err)
-	i.cluster = cluster
+	require.NoError(a.T(), err)
+	a.cluster = cluster
 
-	clusterMeta, err := extensionscluster.NewClusterMeta(i.client, i.cluster.Name)
-	require.NoError(i.T(), err)
+	clusterMeta, err := extensionscluster.NewClusterMeta(a.client, a.cluster.Name)
+	require.NoError(a.T(), err)
 
-	i.project, err = projects.GetProjectByName(i.client, clusterMeta.ID, charts.SystemProject)
-	require.NoError(i.T(), err)
-	require.Equal(i.T(), charts.SystemProject, i.project.Name)
+	a.project, err = projects.GetProjectByName(a.client, clusterMeta.ID, charts.SystemProject)
+	require.NoError(a.T(), err)
+	require.Equal(a.T(), charts.SystemProject, a.project.Name)
 }
 
-func (i *AlertingTestSuite) TestAlertingInstallation() {
-	latestAlertingVersion, err := i.client.Catalog.GetLatestChartVersion(
+func (a *AlertingTestSuite) TestAlertingInstallation() {
+	latestAlertingVersion, err := a.client.Catalog.GetLatestChartVersion(
 		charts.RancherAlertingName,
 		catalog.RancherChartRepo,
 	)
-	require.NoError(i.T(), err)
+	require.NoError(a.T(), err)
 
 	installOptions := &charts.InstallOptions{
-		Cluster:   i.cluster,
+		Cluster:   a.cluster,
 		Version:   latestAlertingVersion,
-		ProjectID: i.project.ID,
+		ProjectID: a.project.ID,
 	}
 
 	featureOptions := &charts.RancherAlertingOpts{
@@ -73,27 +73,27 @@ func (i *AlertingTestSuite) TestAlertingInstallation() {
 		Teams: false,
 	}
 
-	i.T().Logf(
+	a.T().Logf(
 		"Installing Rancher Alerting chart on cluster [%s] with version [%s]",
-		i.cluster.Name,
+		a.cluster.Name,
 		latestAlertingVersion,
 	)
 
-	err = charts.InstallRancherAlertingChart(i.client, installOptions, featureOptions)
-	require.NoError(i.T(), err)
+	err = charts.InstallRancherAlertingChart(a.client, installOptions, featureOptions)
+	require.NoError(a.T(), err)
 
-	i.T().Logf(
+	a.T().Logf(
 		"Waiting for alerting deployments to become ready in namespace [%s]",
 		charts.RancherMonitoringNamespace,
 	)
 
 	err = shepherdCharts.WatchAndWaitDeployments(
-		i.client,
-		i.cluster.ID,
+		a.client,
+		a.cluster.ID,
 		charts.RancherMonitoringNamespace,
 		metav1.ListOptions{},
 	)
-	require.NoError(i.T(), err)
+	require.NoError(a.T(), err)
 }
 
 func TestAlertingTestSuite(t *testing.T) {
