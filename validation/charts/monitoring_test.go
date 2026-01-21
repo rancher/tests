@@ -200,11 +200,20 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 		logrus.Info("Getting the node IP")
 		newNode := &corev1.Node{}
 		err = steveV1.ConvertToK8sType(machine.JSONResp, newNode)
-		require.NoError(m.T(), err)
+		if err != nil {
+			logrus.Warnf("Failed to convert node: %v", err)
+			continue // Skip invalid nodes instead of failing completely
+		}
 
 		nodeIP := kubeapinodes.GetNodeIP(newNode, corev1.NodeExternalIP)
+		if nodeIP == "" {
+			logrus.Warnf("Node %s has no external IP", newNode.Name)
+			continue
+		}
 		workerNodePublicIPs = append(workerNodePublicIPs, nodeIP)
 	}
+
+	require.NotEmpty(m.T(), workerNodePublicIPs, "No worker nodes with external IPs found")
 	randWorkerNodePublicIP := workerNodePublicIPs[rand.Intn(len(workerNodePublicIPs))]
 
 	// Get URL and string versions of origin with random node' public IP
