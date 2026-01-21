@@ -7,9 +7,9 @@ on:
         description: "Comma-separated Rancher hosts. Example: cluster1.qa.rancher.space,cluster2.qa.rancher.space"
         required: true
       test_packages:
-        description: "Comma-separated test package paths (e.g. validation/rbac,validation/projects)"
+        description: "Comma-separated test package paths (e.g. validation/projects,validation/rbac)"
         required: true
-        default: "validation/projects,validation/rbac,validation/auth,validation/token"
+        default: "validation/projects,validation/rbac,validation/auth"
       run_all_tests:
         description: "Run all test files in the package?"
         required: true
