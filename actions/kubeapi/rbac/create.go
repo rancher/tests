@@ -213,8 +213,8 @@ func CreateProjectRoleTemplateBinding(client *rancher.Client, user *management.U
 
 	prtbObj := &v3.ProjectRoleTemplateBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:    prtbNamespace,
-			GenerateName: "prtb-",
+			Name:      namegen.AppendRandomString("prtb-"),
+			Namespace: prtbNamespace,
 		},
 		ProjectName:      projectName,
 		UserName:         user.ID,
