@@ -1,4 +1,4 @@
-# K3S Certificates Configs
+# RKE2 Deleting Configs
 
 ## Table of Contents
 1. [Prerequisites](../README.md)
@@ -6,59 +6,43 @@
 3. [Configurations](#Configurations)
 4. [Configuration Defaults](#defaults)
 5. [Logging Levels](#Logging)
-6. [Back to general certificates](../README.md)
+6. [Back to general deleting](../README.md)
 
 ## Test Cases
 All of the test cases in this package are listed below, keep in mind that all configuration for these tests have built in defaults [Configuration Defaults](#defaults). These tests will provision a cluster if one is not provided via the rancher.ClusterName field.
 
-### IPv6 Certificate Tests
+### Delete cluster test
 
 #### Description:
-The IPv6 certificate test verifies that a cluster can rotate certificates.
+Verifies that a cluster can be deleted. 
 
 #### Required Configurations:
 1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config) (with IPv6 settings)
+2. [Cluster Config](#cluster-config)
 3. [Machine Config](#machine-config)
 
 #### Table Tests:
-1. `K3S_IPv6_Certificate_Rotation`
+1. `RKE2_Delete_Cluster`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/k3s/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation  -run TestCertRotationIPv6TestSuite/TestCertRotationIPv6$ -timeout=2h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeleteClusterTestSuite/TestDeletingCluster -timeout=1h -v`
 
 
-### Dualstack Certificate Tests
+### Delete cluster init machine test
 
 #### Description:
-The Dualstack certificate test verifies that a cluster can rotate certificates.
+Verifies that a cluster is able to recover from deleting the init machine.
 
 #### Required Configurations:
 1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config) (with dualstack settings)
+2. [Cluster Config](#cluster-config)
 3. [Machine Config](#machine-config)
 
 #### Table Tests:
-1. `K3S_Dualstack_Certificate_Rotation`
+1. `RKE2_Delete_Cluster`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/k3s/dualstack --junitfile results.xml --jsonfile results.json -- -tags=validation  -run TestCertRotationDualstackTestSuite/TestCertRotationDualstack$ -timeout=2h -v`
-
-### Certificate Tests
-
-#### Description:
-The certificate test verifies that a cluster can rotate certificates.
-
-#### Required Configurations:
-1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config) (with IPv6 settings)
-3. [Machine Config](#machine-config)
-
-#### Table Tests:
-1. `K3S_Certificate_Rotation`
-
-#### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCertRotationTestSuite/TestCertRotation$ -timeout=2h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeleteInitMachineTestSuite/TestDeleteInitMachine -timeout=1h -v`
 
 ## Configurations
 
@@ -73,7 +57,7 @@ rancher:
 ```
 
 ### Provisioning cluster
-This test will create a cluster if one is not provided, see to configure a node driver OR custom cluster depending on the certificate test [k3s provisioning](../../provisioning/k3s/README.md)
+This test will create a cluster if one is not provided, see to configure a node driver OR custom cluster depending on the deleting test [rke2 provisioning](../../provisioning/rke2/README.md)
 
 ## Defaults
 This package contains a defaults folder which contains default test configuration data for non-sensitive fields. The goal of this data is to: 

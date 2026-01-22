@@ -91,7 +91,7 @@ rancher:
 ```
 
 ### Provisioning cluster
-This test will create a cluster if one is not provided, see to configure a node driver OR custom cluster depending on the snapshot test [rke2 provisioning](../../provisioning/rke2/README.md)
+This test will create a cluster if one is not provided, see to configure a node driver OR custom cluster depending on the certificate test [rke2 provisioning](../../provisioning/rke2/README.md)
 
 ## Defaults
 This package contains a defaults folder which contains default test configuration data for non-sensitive fields. The goal of this data is to: 

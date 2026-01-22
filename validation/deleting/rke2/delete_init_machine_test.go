@@ -1,6 +1,6 @@
 //go:build (infra.rke2k3s || validation || recurring) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke1 && !stress && !sanity && !extended
 
-package rke2k3s
+package rke2
 
 import (
 	"os"
@@ -8,7 +8,6 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -33,8 +32,7 @@ type DeleteInitMachineTestSuite struct {
 	client       *rancher.Client
 	session      *session.Session
 	cattleConfig map[string]any
-	rke2Cluster  *v1.SteveAPIObject
-	k3sCluster   *v1.SteveAPIObject
+	cluster      *v1.SteveAPIObject
 }
 
 func (d *DeleteInitMachineTestSuite) TearDownSuite() {
@@ -67,52 +65,54 @@ func (d *DeleteInitMachineTestSuite) SetupSuite() {
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, clusterConfig)
 
-	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
+	rancherConfig := new(rancher.Config)
+	operations.LoadObjectFromMap(defaults.RancherConfigKey, d.cattleConfig, rancherConfig)
 
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-	clusterConfig.MachinePools = nodeRolesStandard
+	if rancherConfig.ClusterName == "" {
+		nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 
-	provider := provisioning.CreateProvider(clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(d.cattleConfig)
+		nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
+		nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
+		nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
+		clusterConfig.MachinePools = nodeRolesStandard
 
-	logrus.Info("Provisioning RKE2 cluster")
-	d.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
-	require.NoError(d.T(), err)
+		provider := provisioning.CreateProvider(clusterConfig.Provider)
+		machineConfigSpec := provider.LoadMachineConfigFunc(d.cattleConfig)
 
-	logrus.Info("Provisioning K3S cluster")
-	d.k3sCluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
-	require.NoError(d.T(), err)
+		logrus.Info("Provisioning RKE2 cluster")
+		d.cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, defaults.RKE2, provider, *clusterConfig, machineConfigSpec, nil, true, false)
+		require.NoError(d.T(), err)
+	} else {
+		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
+		d.cluster, err = d.client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + rancherConfig.ClusterName)
+		require.NoError(d.T(), err)
+	}
 }
 
 func (d *DeleteInitMachineTestSuite) TestDeleteInitMachine() {
 	tests := []struct {
-		name      string
-		clusterID string
+		name    string
+		cluster *v1.SteveAPIObject
 	}{
-		{"RKE2_Delete_Init_Machine", d.rke2Cluster.ID},
-		{"K3S_Delete_Init_Machine", d.k3sCluster.ID},
+		{"RKE2_Delete_Init_Machine", d.cluster},
 	}
 
 	for _, tt := range tests {
-		cluster, err := d.client.Steve.SteveType(stevetypes.Provisioning).ByID(tt.clusterID)
-		require.NoError(d.T(), err)
-
+		var err error
 		d.Run(tt.name, func() {
-			logrus.Infof("Deleting init machine on cluster (%s)", cluster.Name)
-			err := DeleteInitMachine(d.client, tt.clusterID)
+			logrus.Infof("Deleting init machine on cluster (%s)", tt.cluster.Name)
+			err := clusters.DeleteInitMachine(d.client, tt.cluster.ID)
 			require.NoError(d.T(), err)
 
-			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(d.T(), d.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
+			provisioning.VerifyClusterReady(d.T(), d.client, tt.cluster)
 
-			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(d.client, cluster)
+			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
+			err = deployment.VerifyClusterDeployments(d.client, tt.cluster)
 			require.NoError(d.T(), err)
 
-			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(d.client, cluster)
+			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
+			err = pods.VerifyClusterPods(d.client, tt.cluster)
 			require.NoError(d.T(), err)
 		})
 

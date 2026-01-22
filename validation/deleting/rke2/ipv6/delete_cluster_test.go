@@ -1,6 +1,6 @@
-//go:build (infra.rke2k3s || validation || recurring) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke1 && !stress && !sanity && !extended
+//go:build validation || recurring
 
-package rke2k3s
+package ipv6
 
 import (
 	"os"
@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -24,24 +25,23 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type DeleteClusterTestSuite struct {
+type DeleteIPv6ClusterTestSuite struct {
 	suite.Suite
-	client       *rancher.Client
 	session      *session.Session
+	client       *rancher.Client
 	cattleConfig map[string]any
-	rke2Cluster  *v1.SteveAPIObject
-	k3sCluster   *v1.SteveAPIObject
+	cluster      *v1.SteveAPIObject
 }
 
-func (d *DeleteClusterTestSuite) TearDownSuite() {
+func (d *DeleteIPv6ClusterTestSuite) TearDownSuite() {
 	d.session.Cleanup()
 }
 
-func (d *DeleteClusterTestSuite) SetupSuite() {
+func (d *DeleteIPv6ClusterTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	d.session = testSession
 
-	client, err := rancher.NewClient("", d.session)
+	client, err := rancher.NewClient("", testSession)
 	require.NoError(d.T(), err)
 
 	d.client = client
@@ -63,34 +63,38 @@ func (d *DeleteClusterTestSuite) SetupSuite() {
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, clusterConfig)
 
-	provider := provisioning.CreateProvider(clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(d.cattleConfig)
+	rancherConfig := new(rancher.Config)
+	operations.LoadObjectFromMap(defaults.RancherConfigKey, d.cattleConfig, rancherConfig)
 
-	logrus.Info("Provisioning RKE2 cluster")
-	d.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
-	require.NoError(d.T(), err)
+	if rancherConfig.ClusterName == "" {
+		provider := provisioning.CreateProvider(clusterConfig.Provider)
+		machineConfigSpec := provider.LoadMachineConfigFunc(d.cattleConfig)
 
-	logrus.Info("Provisioning K3S cluster")
-	d.k3sCluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
-	require.NoError(d.T(), err)
+		logrus.Info("Provisioning RKE2 cluster")
+		d.cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, defaults.RKE2, provider, *clusterConfig, machineConfigSpec, nil, true, false)
+		require.NoError(d.T(), err)
+	} else {
+		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
+		d.cluster, err = d.client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + rancherConfig.ClusterName)
+		require.NoError(d.T(), err)
+	}
 }
 
-func (d *DeleteClusterTestSuite) TestDeletingCluster() {
+func (d *DeleteIPv6ClusterTestSuite) TestDeletingIPv6Cluster() {
 	tests := []struct {
-		name      string
-		clusterID string
+		name    string
+		cluster *v1.SteveAPIObject
 	}{
-		{"RKE2_Delete_Cluster", d.rke2Cluster.ID},
-		{"K3S_Delete_Cluster", d.k3sCluster.ID},
+		{"RKE2_Delete_IPv6_Cluster", d.cluster},
 	}
 
 	for _, tt := range tests {
 		d.Run(tt.name, func() {
-			logrus.Infof("Deleting cluster (%s)", tt.clusterID)
-			extClusters.DeleteK3SRKE2Cluster(d.client, tt.clusterID)
+			logrus.Infof("Deleting cluster (%s)", tt.cluster.ID)
+			extClusters.DeleteK3SRKE2Cluster(d.client, tt.cluster.ID)
 
-			logrus.Infof("Verifying cluster (%s) deletion", tt.clusterID)
-			provisioning.VerifyDeleteRKE2K3SCluster(d.T(), d.client, tt.clusterID)
+			logrus.Infof("Verifying cluster (%s) deletion", tt.cluster.ID)
+			provisioning.VerifyDeleteRKE2K3SCluster(d.T(), d.client, tt.cluster.ID)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(d.client, d.cattleConfig)
@@ -101,6 +105,6 @@ func (d *DeleteClusterTestSuite) TestDeletingCluster() {
 	}
 }
 
-func TestDeleteClusterTestSuite(t *testing.T) {
-	suite.Run(t, new(DeleteClusterTestSuite))
+func TestDeleteIPv6ClusterTestSuite(t *testing.T) {
+	suite.Run(t, new(DeleteIPv6ClusterTestSuite))
 }

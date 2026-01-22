@@ -14,7 +14,10 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	"github.com/rancher/shepherd/extensions/steve"
+	"github.com/rancher/tests/actions/machinepools"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -25,11 +28,9 @@ const (
 	baseline              = "baseline"
 	externalAws           = "external-aws"
 	protectKernelDefaults = "protect-kernel-defaults"
-
-	localcluster      = "fleet-local/local"
-	rancherRestricted = "rancher-restricted"
-	rke1HardenedGID   = 52034
-	rke1HardenedUID   = 52034
+	rancherRestricted     = "rancher-restricted"
+	rke1HardenedGID       = 52034
+	rke1HardenedUID       = 52034
 )
 
 // CreateRancherBaselinePSACT creates custom PSACT called rancher-baseline which sets each PSS to baseline.
@@ -944,6 +945,33 @@ func DeletePSACT(client *rancher.Client, psactID string) error {
 
 	logrus.Infof("Deleting PSACT %s...", psact.Name)
 	err = client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResoureType).Delete(psact)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteInitMachine deletes the init machine from the specified cluster.
+func DeleteInitMachine(client *rancher.Client, clusterID string) error {
+	initMachine, err := machinepools.GetInitMachine(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	err = client.Steve.SteveType(stevetypes.Machine).Delete(initMachine)
+	if err != nil {
+		return err
+	}
+
+	logrus.Debugf("Waiting for the init machine to be deleted on cluster (%s)", clusterID)
+	err = steve.WaitForResourceDeletion(client.Steve, initMachine, defaults.FiveHundredMillisecondTimeout, defaults.TenMinuteTimeout)
+	if err != nil {
+		return err
+	}
+
+	logrus.Debugf("Waiting for the init machine to be replaced on cluster (%s)", clusterID)
+	err = clusters.WatchAndWaitForCluster(client, clusterID)
 	if err != nil {
 		return err
 	}
