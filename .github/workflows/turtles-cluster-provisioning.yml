@@ -388,6 +388,7 @@ jobs:
         if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
+          rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -732,6 +733,7 @@ jobs:
         if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
+          rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -1076,6 +1078,7 @@ jobs:
         if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
+          rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -1420,6 +1423,7 @@ jobs:
         if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
+          rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -1764,6 +1768,7 @@ jobs:
         if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
+          rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -2108,6 +2113,7 @@ jobs:
         if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
+          rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -2452,6 +2458,7 @@ jobs:
         if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
+          rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -2796,6 +2803,7 @@ jobs:
         if: always() && env.REPORTING_ENABLED == 'true'
         uses: ./.github/actions/report-to-slack
         with:
+          rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
