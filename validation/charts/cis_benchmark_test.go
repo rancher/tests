@@ -9,7 +9,6 @@ import (
 	"github.com/rancher/shepherd/clients/rancher/catalog"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/projects"
@@ -45,11 +44,8 @@ func (c *CisBenchmarkTestSuite) SetupSuite() {
 	require.NoError(c.T(), err)
 	c.cluster = cluster
 
-	clusterMeta, err := extensionscluster.NewClusterMeta(c.client, c.cluster.Name)
-	require.NoError(c.T(), err)
-
 	c.T().Logf("Creating Project [%s]", cis.System)
-	c.project, err = projects.GetProjectByName(c.client, clusterMeta.ID, cis.System)
+	c.project, err = projects.GetProjectByName(c.client, cluster.ID, cis.System)
 	require.NoError(c.T(), err)
 	require.Equal(c.T(), cis.System, c.project.Name)
 }

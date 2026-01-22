@@ -10,7 +10,6 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
-	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/projects"
@@ -47,10 +46,7 @@ func (a *AlertingTestSuite) SetupSuite() {
 	require.NoError(a.T(), err)
 	a.cluster = cluster
 
-	clusterMeta, err := extensionscluster.NewClusterMeta(a.client, a.cluster.Name)
-	require.NoError(a.T(), err)
-
-	a.project, err = projects.GetProjectByName(a.client, clusterMeta.ID, charts.SystemProject)
+	a.project, err = projects.GetProjectByName(a.client, cluster.ID, charts.SystemProject)
 	require.NoError(a.T(), err)
 	require.Equal(a.T(), charts.SystemProject, a.project.Name)
 }
