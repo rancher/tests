@@ -25,9 +25,10 @@ import (
 )
 
 const (
-	nginxName    = "nginx"
-	MountPath    = "/auto-mnt"
-	pollInterval = time.Duration(1 * time.Second)
+	nginxName                     = "nginx"
+	MountPath                     = "/auto-mnt"
+	defaultStorageClassAnnotation = "storageclass.kubernetes.io/is-default-class"
+	pollInterval                  = time.Duration(1 * time.Second)
 )
 
 // GetStorageClass gets a storage class with the provided name on the provided cluster.
@@ -55,6 +56,12 @@ func GetStorageClass(client *rancher.Client, clusterID string, storageClassName 
 	}
 
 	if storageClassName == "" {
+		for _, storageClass := range storageClasses.Items {
+			if storageClass.Annotations[defaultStorageClassAnnotation] == "true" {
+				return storageClass, nil
+			}
+		}
+
 		return storageClasses.Items[0], nil
 	}
 
