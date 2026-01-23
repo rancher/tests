@@ -13,6 +13,7 @@ const (
 	defaultFilePath = "defaults/defaults.yaml"
 	RKE2            = "rke2"
 	K3S             = "k3s"
+	K3K             = "k3k"
 )
 
 // LoadPackageDefaults loads the specified filename in the same package as the test

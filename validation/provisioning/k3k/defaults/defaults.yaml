@@ -1,0 +1,11 @@
+#Required for the template test
+templateTest:
+  repo:
+    metadata:
+      name: "test"
+    spec:
+      gitRepo: "<required>"
+      gitBranch: "<required>"
+      insecureSkipTLSVerify: true
+  templateProvider: "aws"
+  templateName: "<required>"
