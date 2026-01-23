@@ -99,6 +99,9 @@ The pit tags organizes Go tests using **build tags**. These tags define when and
 ##### pit.daily
 -  Tests that should run **every day**
 
+##### pit.harvester.daily
+-  Tests that should run **every day** on a harvester setup
+
 ##### pit.weekly
 -  Tests that should run **once per week**
 

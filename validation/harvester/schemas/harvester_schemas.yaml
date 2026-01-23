@@ -34,7 +34,7 @@
     custom_field:
       "15": "TestRKE2ProvisioningTestSuite TestK3SProvisioningTestSuite TestRKE1ProvisioningTestSuite"
   - title: "Node Driver Cloud Provider RKE2 - Loadbalancing and Storage"
-    description: "TestRKE2ProvisioningTestSuite TestK3SProvisioningTestSuite TestRKE1ProvisioningTestSuite"
+    description: "HarvesterProvisioningTestSuite"
     automation: 2
     steps:
     - action: "Prerequisites"
@@ -50,7 +50,7 @@
       expectedresult: "writing and reading file(s) in the mountpoint are successful"
       position: 3
     custom_field:
-      "15": "TestRKE2ProvisioningTestSuite TestK3SProvisioningTestSuite TestRKE1ProvisioningTestSuite"
+      "15": "HarvesterProvisioningTestSuite"
   - title: "Custom Cluster Provisioning"
     description: "TestCustomClusterRKE2ProvisioningTestSuite TestCustomClusterK3SProvisioningTestSuite TestCustomClusterRKE1ProvisioningTestSuite"
     automation: 2

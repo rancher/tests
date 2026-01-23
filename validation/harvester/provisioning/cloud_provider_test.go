@@ -26,15 +26,15 @@ import (
 
 type HarvesterProvisioningTestSuite struct {
 	suite.Suite
-	client             *rancher.Client
-	session            *session.Session
-	cattleConfig       map[string]any
+	client       *rancher.Client
+	session      *session.Session
+	cattleConfig map[string]any
 }
-
 
 func (p *HarvesterProvisioningTestSuite) TearDownSuite() {
 	p.session.Cleanup()
 }
+
 func (p *HarvesterProvisioningTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	p.session = testSession
@@ -50,64 +50,48 @@ func (p *HarvesterProvisioningTestSuite) SetupSuite() {
 	require.NoError(p.T(), err)
 }
 
-func (p *HarvesterProvisioningTestSuite) TestHarvesterCloudProvider() {
+func (p *HarvesterProvisioningTestSuite) TestCloudProvider() {
 
 	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
 	nodeRolesDedicated[0].MachinePoolConfig.Quantity = 1
 	nodeRolesDedicated[1].MachinePoolConfig.Quantity = 2
 	nodeRolesDedicated[2].MachinePoolConfig.Quantity = 2
-
-	tests := []struct {
-		name         string
-		machinePools []provisioninginput.MachinePools
-		client       *rancher.Client
-	}{
-		{"Harvester_oot", nodeRolesDedicated, p.client},
-	}
-
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, p.cattleConfig, clusterConfig)
-	if clusterConfig.Provider != "harvester" {
-		p.T().Skip("Harvester Cloud Provider test requires access to harvester.")
+	var err error
+
+	clusterConfig.Provider = providers.Harvester
+	clusterConfig.MachinePools = nodeRolesDedicated
+
+	provider := provisioning.CreateProvider(clusterConfig.Provider)
+	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	machineConfigSpec := provider.LoadMachineConfigFunc(p.cattleConfig)
+
+	logrus.Infof("Provisioning cluster")
+	cluster, err := provisioning.CreateProvisioningCluster(p.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+	require.NoError(p.T(), err)
+
+	logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+	provisioning.VerifyClusterReady(p.T(), p.client, cluster)
+
+	logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+	err = deployment.VerifyClusterDeployments(p.client, cluster)
+	require.NoError(p.T(), err)
+
+	logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+	err = pods.VerifyClusterPods(p.client, cluster)
+	require.NoError(p.T(), err)
+
+	logrus.Infof("Verifying cloud provider (%s)", cluster.Name)
+	provider.VerifyCloudProviderFunc(p.T(), p.client, cluster)
+
+	params := provisioning.GetProvisioningSchemaParams(p.client, p.cattleConfig)
+	err = qase.UpdateSchemaParameters("Harvester_oot", params)
+	if err != nil {
+		logrus.Warningf("Failed to upload schema parameters %s", err)
 	}
 
-	for _, tt := range tests {
-		var err error
-
-		clusterConfig.Provider = providers.Harvester
-		clusterConfig.MachinePools = tt.machinePools
-
-		provider := provisioning.CreateProvider(clusterConfig.Provider)
-		credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
-		machineConfigSpec := provider.LoadMachineConfigFunc(p.cattleConfig)
-
-		logrus.Infof("Provisioning cluster")
-		cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
-		require.NoError(p.T(), err)
-
-		logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-		provisioning.VerifyClusterReady(p.T(), p.client, cluster)
-
-		logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-		err = deployment.VerifyClusterDeployments(tt.client, cluster)
-		require.NoError(p.T(), err)
-
-		logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-		err = pods.VerifyClusterPods(p.client, cluster)
-		require.NoError(p.T(), err)
-
-		logrus.Infof("Verifying cloud provider (%s)", cluster.Name)
-		provider.VerifyCloudProviderFunc(p.T(), p.client, cluster)
-		
-
-		params := provisioning.GetProvisioningSchemaParams(tt.client, p.cattleConfig)
-		err = qase.UpdateSchemaParameters(tt.name, params)
-		if err != nil {
-			logrus.Warningf("Failed to upload schema parameters %s", err)
-		}
-	}
 }
-
 
 // In order for 'go test' to run this suite, we need to create
 // a normal test function and pass our suite to suite.Run
