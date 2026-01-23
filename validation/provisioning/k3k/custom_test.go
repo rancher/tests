@@ -109,14 +109,14 @@ func TestCustom(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(t, tt.client, cluster)
+			provisioning.VerifyClusterReady(t, k.client, cluster)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 			err = deployment.VerifyClusterDeployments(tt.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(tt.client, cluster)
+			err = pods.VerifyClusterPods(k.client, cluster)
 			require.NoError(t, err)
 
 			workloadConfigs := new(workloads.Workloads)

@@ -1,4 +1,4 @@
-#Required for the template test
+# Required for the template test
 templateTest:
   repo:
     metadata:
