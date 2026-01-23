@@ -96,6 +96,7 @@ func TestVSphereProvisioning(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt // capture loop variable
 		var err error
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
