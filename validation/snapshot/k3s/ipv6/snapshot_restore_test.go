@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
@@ -19,7 +18,6 @@ import (
 	"github.com/rancher/tests/actions/etcdsnapshot"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -73,21 +71,9 @@ func (s *SnapshotIPv6RestoreTestSuite) SetupSuite() {
 	rancherConfig := new(rancher.Config)
 	operations.LoadObjectFromMap(defaults.RancherConfigKey, s.cattleConfig, rancherConfig)
 
-	provider := provisioning.CreateProvider(clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
-
 	if rancherConfig.ClusterName == "" {
-		if clusterConfig.Advanced == nil {
-			clusterConfig.Advanced = &provisioninginput.Advanced{}
-		}
-
-		if clusterConfig.Advanced.MachineGlobalConfig == nil {
-			clusterConfig.Advanced.MachineGlobalConfig = &rkev1.GenericMap{
-				Data: map[string]any{},
-			}
-		}
-
-		clusterConfig.Advanced.MachineGlobalConfig.Data["flannel-ipv6-masq"] = true
+		provider := provisioning.CreateProvider(clusterConfig.Provider)
+		machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
 
 		logrus.Info("Provisioning K3s cluster")
 		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, false, false)

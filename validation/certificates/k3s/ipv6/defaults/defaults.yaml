@@ -4,6 +4,9 @@ clusterConfig:
     clusterCIDR: "<required>"
     serviceCIDR: "<required>"
     stackPreference: "<required>"
+  advanced:
+    machineGlobalConfig:
+      flannel-ipv6-masq: true
 
 awsMachineConfigs:
   awsMachineConfig:

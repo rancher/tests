@@ -74,10 +74,10 @@ func (s *SnapshotRetentionTestSuite) SetupSuite() {
 	rancherConfig := new(rancher.Config)
 	operations.LoadObjectFromMap(defaults.RancherConfigKey, s.cattleConfig, rancherConfig)
 
-	provider := provisioning.CreateProvider(clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
-
 	if rancherConfig.ClusterName == "" {
+		provider := provisioning.CreateProvider(clusterConfig.Provider)
+		machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
+
 		logrus.Info("Provisioning K3S cluster")
 		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, false, false)
 		require.NoError(s.T(), err)

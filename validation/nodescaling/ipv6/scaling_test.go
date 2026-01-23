@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
@@ -19,7 +18,6 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -76,18 +74,6 @@ func (s *NodeScalingIPv6TestSuite) SetupSuite() {
 	logrus.Info("Provisioning RKE2 cluster")
 	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 	require.NoError(s.T(), err)
-
-	if clusterConfig.Advanced == nil {
-		clusterConfig.Advanced = &provisioninginput.Advanced{}
-	}
-
-	if clusterConfig.Advanced.MachineGlobalConfig == nil {
-		clusterConfig.Advanced.MachineGlobalConfig = &rkev1.GenericMap{
-			Data: map[string]any{},
-		}
-	}
-
-	clusterConfig.Advanced.MachineGlobalConfig.Data["flannel-ipv6-masq"] = true
 
 	logrus.Info("Provisioning K3s cluster")
 	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)

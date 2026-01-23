@@ -67,10 +67,10 @@ func (s *SnapshotRecurringTestSuite) SetupSuite() {
 	rancherConfig := new(rancher.Config)
 	operations.LoadObjectFromMap(defaults.RancherConfigKey, s.cattleConfig, rancherConfig)
 
-	provider := provisioning.CreateProvider(clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
-
 	if rancherConfig.ClusterName == "" {
+		provider := provisioning.CreateProvider(clusterConfig.Provider)
+		machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
+
 		logrus.Info("Provisioning RKE2 cluster")
 		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
 		require.NoError(s.T(), err)

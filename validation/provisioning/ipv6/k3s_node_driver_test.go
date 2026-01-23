@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config"
@@ -115,18 +114,6 @@ func TestNodeDriverK3SIPv6(t *testing.T) {
 
 		clusterConfig.MachinePools = tt.machinePools
 		clusterConfig.Networking = tt.networking
-
-		if clusterConfig.Advanced == nil {
-			clusterConfig.Advanced = &provisioninginput.Advanced{}
-		}
-
-		if clusterConfig.Advanced.MachineGlobalConfig == nil {
-			clusterConfig.Advanced.MachineGlobalConfig = &rkev1.GenericMap{
-				Data: map[string]any{},
-			}
-		}
-
-		clusterConfig.Advanced.MachineGlobalConfig.Data["flannel-ipv6-masq"] = true
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()

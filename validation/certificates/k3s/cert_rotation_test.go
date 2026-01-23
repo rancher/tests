@@ -8,7 +8,6 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -74,7 +73,7 @@ func (c *CertRotationTestSuite) SetupSuite() {
 
 	if rancherConfig.ClusterName == "" {
 		logrus.Info("Provisioning K3S cluster")
-		c.cluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
+		c.cluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, defaults.K3S, provider, *clusterConfig, machineConfigSpec, nil, true, false)
 		require.NoError(c.T(), err)
 	} else {
 		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)

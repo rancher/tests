@@ -6,10 +6,8 @@ import (
 	"os"
 	"testing"
 
-	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -19,7 +17,6 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -75,20 +72,8 @@ func (c *CertRotationIPv6TestSuite) SetupSuite() {
 		provider := provisioning.CreateProvider(clusterConfig.Provider)
 		machineConfigSpec := provider.LoadMachineConfigFunc(c.cattleConfig)
 
-		if clusterConfig.Advanced == nil {
-			clusterConfig.Advanced = &provisioninginput.Advanced{}
-		}
-
-		if clusterConfig.Advanced.MachineGlobalConfig == nil {
-			clusterConfig.Advanced.MachineGlobalConfig = &rkev1.GenericMap{
-				Data: map[string]any{},
-			}
-		}
-
-		clusterConfig.Advanced.MachineGlobalConfig.Data["flannel-ipv6-masq"] = true
-
 		logrus.Info("Provisioning K3s cluster")
-		c.cluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, true, false)
+		c.cluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, defaults.K3S, provider, *clusterConfig, machineConfigSpec, nil, true, false)
 		require.NoError(c.T(), err)
 	} else {
 		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)

@@ -9,7 +9,6 @@ import (
 	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/providers"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
@@ -98,7 +97,7 @@ func (c *CertRotationWindowsTestSuite) SetupSuite() {
 		machineConfigSpec := provider.LoadMachineConfigFunc(c.cattleConfig)
 
 		logrus.Info("Provisioning RKE2 windows cluster")
-		c.cluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, awsEC2Configs, true, false)
+		c.cluster, err = resources.ProvisionRKE2K3SCluster(c.T(), standardUserClient, defaults.RKE2, provider, *clusterConfig, machineConfigSpec, awsEC2Configs, true, false)
 		require.NoError(c.T(), err)
 	} else {
 		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)

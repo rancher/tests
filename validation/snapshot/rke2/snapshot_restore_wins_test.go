@@ -86,9 +86,9 @@ func (s *SnapshotRestoreWindowsTestSuite) SetupSuite() {
 
 	clusterConfig.MachinePools = nodeRolesStandard
 
-	provider := provisioning.CreateProvider(clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
 	if rancherConfig.ClusterName == "" {
+		provider := provisioning.CreateProvider(clusterConfig.Provider)
+		machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
 
 		logrus.Info("Provisioning RKE2 windows cluster")
 		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, awsEC2Configs, true, true)
