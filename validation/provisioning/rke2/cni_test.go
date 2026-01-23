@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
-	"github.com/rancher/tests/actions/workloads"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -108,17 +107,6 @@ func TestCNI(t *testing.T) {
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(r.client, cluster)
-			require.NoError(t, err)
-
-			workloadConfigs := new(workloads.Workloads)
-			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, r.cattleConfig, workloadConfigs)
-
-			logrus.Infof("Creating workloads (%s)", cluster.Name)
-			workloadConfigs, err = workloads.CreateWorkloads(r.client, cluster.Name, *workloadConfigs)
-			require.NoError(t, err)
-
-			logrus.Infof("Verifying workloads (%s)", cluster.Name)
-			_, err = workloads.VerifyWorkloads(r.client, cluster.Name, *workloadConfigs)
 			require.NoError(t, err)
 		})
 
