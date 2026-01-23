@@ -178,6 +178,6 @@ func createProjectAndAddANamespace(client *rancher.Client, nsPrefix string) (str
 	if err != nil {
 		return "", err
 	}
-	customNS1, err := namespaces.CreateNamespace(client, localcluster, customProject.Name, namegen.AppendRandomString(nsPrefix), "", nil, nil)
+	customNS1, err := namespaces.CreateNamespaceUsingWrangler(client, localcluster, customProject.Name, nil)
 	return customNS1.Name, err
 }

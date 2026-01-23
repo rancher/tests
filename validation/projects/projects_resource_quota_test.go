@@ -11,7 +11,6 @@ import (
 	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
@@ -123,8 +122,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestProjectWithResourceQuota() {
 	require.NoError(prq.T(), err)
 
 	log.Info("Create another namespace in the project and verify that the resource quota validation for the namespace fails.")
-	secondNamespaceName := namegen.AppendRandomString("testns-")
-	secondNamespace, err := namespaceapi.CreateNamespace(standardUserClient, prq.cluster.ID, createdProject.Name, secondNamespaceName, "", map[string]string{}, map[string]string{})
+	secondNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, prq.cluster.ID, createdProject.Name, nil)
 	require.NoError(prq.T(), err, "Failed to create namespace in the project")
 	err = checkNamespaceResourceQuotaValidationStatus(standardUserClient, prq.cluster.ID, secondNamespace.Name, namespacePodLimit, false, "Resource quota [pods=4] exceeds project limit")
 	require.NoError(prq.T(), err)
@@ -235,8 +233,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaPropagationToExistingNamespa
 	require.NoError(prq.T(), err)
 
 	log.Info("Create a new namespace in the project.")
-	newNamespaceName := namegen.AppendRandomString("testns-")
-	newNamespace, err := namespaceapi.CreateNamespace(standardUserClient, prq.cluster.ID, updatedProject.Name, newNamespaceName, "", map[string]string{}, map[string]string{})
+	newNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, prq.cluster.ID, updatedProject.Name, nil)
 	require.NoError(prq.T(), err, "Failed to create namespace in the project")
 
 	log.Info("Verify that the resource quota validation for the namespace is successful.")
