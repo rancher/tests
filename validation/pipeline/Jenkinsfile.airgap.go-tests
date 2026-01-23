@@ -260,24 +260,43 @@ node {
             }
 
             stage('Inject Admin Token') {
-                echo 'Injecting dynamically created admin token into cattle-config.yaml'
+                echo 'Generating admin token via Ansible playbook and injecting into cattle-config.yaml'
 
                 def adminPassword = env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'
+                def cattleConfigPath = '/workspace/tests/cattle-config.yaml'
+                def tokenPlaybook = 'playbooks/setup/generate-admin-token.yml'
+                def workspace = pwd()
 
-                def injectSource = './validation/pipeline/scripts/inject-admin-token.go'
+                // Token configuration options (can be overridden via environment variables)
+                def tokenTtl = env.RANCHER_TOKEN_TTL ?: '0'  // 0 = no expiration
+                def tokenDescription = env.RANCHER_TOKEN_DESCRIPTION ?: "jenkins-airgap-${env.BUILD_NUMBER}"
 
-                // Run the token injection program directly via go run (uses GenerateUserToken helper)
+                // Run the Ansible playbook to generate and inject the admin token
+                // The playbook uses the rancher_token role which:
+                // - Authenticates with Rancher API
+                // - Creates an API token with configurable TTL and description
+                // - Updates cattle-config.yaml with the generated token
                 sh """
                     docker run --rm --platform ${dockerPlatform} \
-                        --name inject-token \
+                        --name generate-token \
                         -v ${workspace}:/workspace \
-                        -e RANCHER_ADMIN_PASSWORD=${adminPassword} \
-                        -e RANCHER_ADMIN_USERNAME=admin \
-                        -e CATTLE_CONFIG_PATH=/workspace/tests/cattle-config.yaml \
-                        -w /workspace/tests \
+                        -w /workspace/${ansiblePath} \
                         ${infraToolsImage} \
-                        sh -c 'set -euo pipefail; go run ${injectSource}'
+                        ansible-playbook ${tokenPlaybook} \
+                            -e rancher_url=https://${rancherHostname} \
+                            -e rancher_token_password=${adminPassword} \
+                            -e rancher_cattle_config_file=${cattleConfigPath} \
+                            -e rancher_token_ttl=${tokenTtl} \
+                            -e rancher_token_description=${tokenDescription} \
+                            -e rancher_token_output_format=json \
+                            -e rancher_token_output_file=/workspace/rancher-token.json
                 """
+
+                // Archive the token metadata (JSON format) for debugging/auditing
+                if (fileExists('rancher-token.json')) {
+                    archiveArtifacts artifacts: 'rancher-token.json', fingerprint: true
+                    echo 'Archived token metadata: rancher-token.json'
+                }
             }
 
             stage('Run Go Automation Tests') {
