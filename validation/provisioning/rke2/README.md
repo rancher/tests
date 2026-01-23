@@ -251,6 +251,27 @@ Hostname truncation test verifies that the node hostname is truncated properly.
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestHostnameTruncation -timeout=1h -v`
 
+
+### vSphere Provisioning Test
+
+#### Description: 
+vSphere Provisioning test verifies that RKE2 clusters can be provisioned on vSphere with various node configurations, including all-in-one, shared roles, dedicated roles, and Windows nodes.
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config) (vSphere credentials required)
+2. [Cluster Config](#cluster-config) (provider must be set to "vsphere")
+3. [Machine Config](#machine-config) (vSphere machine configuration required)
+
+#### Table Tests:
+1. `RKE2_vSphere|etcd_cp_worker` - Single node with all roles
+2. `RKE2_vSphere|etcd_cp|worker` - Shared etcd/control plane nodes with separate worker nodes
+3. `RKE2_vSphere|etcd|cp|worker` - Dedicated nodes for each role
+4. `RKE2_vSphere|etcd|cp|worker|windows` - Dedicated roles with Windows worker nodes
+5. `RKE2_vSphere|3_etcd|2_cp|3_worker` - Multiple nodes per role (3 etcd, 2 control plane, 3 worker)
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestVSphereProvisioning -timeout=1h -v`
+
 ### All Tests
 
 #### Description: 
