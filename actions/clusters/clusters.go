@@ -35,7 +35,7 @@ const (
 
 // CreateRancherBaselinePSACT creates custom PSACT called rancher-baseline which sets each PSS to baseline.
 func CreateRancherBaselinePSACT(client *rancher.Client, psact string) error {
-	_, err := client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResoureType).ByID(psact)
+	_, err := client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResourceType).ByID(psact)
 	if err == nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func CreateRancherBaselinePSACT(client *rancher.Client, psact string) error {
 		},
 	}
 
-	_, err = client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResoureType).Create(template)
+	_, err = client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResourceType).Create(template)
 	if err != nil {
 		return err
 	}
@@ -933,18 +933,17 @@ func GetClusterType(client *rancher.Client, clusterName string) (string, error) 
 	}
 
 	return clusterType, nil
-
 }
 
 // DeletePSACT deletes a Pod Security Admission Configuration Template (PSACT) by its ID.
 func DeletePSACT(client *rancher.Client, psactID string) error {
-	psact, err := client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResoureType).ByID(psactID)
+	psact, err := client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResourceType).ByID(psactID)
 	if err != nil {
 		return err
 	}
 
 	logrus.Infof("Deleting PSACT %s...", psact.Name)
-	err = client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResoureType).Delete(psact)
+	err = client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResourceType).Delete(psact)
 	if err != nil {
 		return err
 	}

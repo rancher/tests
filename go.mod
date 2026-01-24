@@ -68,7 +68,7 @@ require (
 	github.com/qase-tms/qase-go/pkg/qase-go v1.0.7
 	github.com/qase-tms/qase-go/qase-api-client v1.2.1
 	github.com/rancher/rancher v0.0.0-20251223145833-24cecce3325e
-	github.com/rancher/shepherd v0.0.0-20251216155429-44067c0178ae
+	github.com/rancher/shepherd v0.0.0-20260122211220-e4fc12acd2be
 	github.com/rancher/tests/actions v0.0.0-20260105193042-a805683addc3
 	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
 	github.com/rancher/tfp-automation v0.0.0-20251219210947-f4a1a9882c29
