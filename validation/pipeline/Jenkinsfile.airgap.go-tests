@@ -273,6 +273,7 @@ node {
 
                 // Run the Ansible playbook to generate and inject the admin token
                 // The playbook uses the rancher_token role which:
+                // - Reads external_lb_hostname from inventory (or uses explicit rancher_url)
                 // - Authenticates with Rancher API
                 // - Creates an API token with configurable TTL and description
                 // - Updates cattle-config.yaml with the generated token
@@ -282,8 +283,7 @@ node {
                         -v ${workspace}:/workspace \
                         -w /workspace/${ansiblePath} \
                         ${infraToolsImage} \
-                        ansible-playbook ${tokenPlaybook} \
-                            -e rancher_url=https://${rancherHostname} \
+                        ansible-playbook -i inventory/inventory.yml ${tokenPlaybook} \
                             -e rancher_token_password=${adminPassword} \
                             -e rancher_cattle_config_file=${cattleConfigPath} \
                             -e rancher_token_ttl=${tokenTtl} \
