@@ -98,7 +98,7 @@ func TestPSACT(t *testing.T) {
 				}
 			}
 
-			customPSACT, err := tt.client.Steve.SteveType(extClusters.PodSecurityAdmissionSteveResoureType).ByID("rancher-baseline")
+			customPSACT, err := tt.client.Steve.SteveType(extClusters.PodSecurityAdmissionSteveResourceType).ByID("rancher-baseline")
 			if err == nil && customPSACT != nil {
 				_ = clusters.DeletePSACT(tt.client, customPSACT.ID)
 			}
