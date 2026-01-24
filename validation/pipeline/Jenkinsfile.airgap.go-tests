@@ -29,7 +29,12 @@ node {
     // Optional: always destroy infra at end
     def destroyAfterTests = (env.DESTROY_AFTER_TESTS ?: 'true').toBoolean()
 
-    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SSH_PEM_KEY', 'AWS_SSH_PEM_KEY_NAME']) {
+    // Qase test reporting configuration
+    def qaseTestRunId = env.QASE_TEST_RUN_ID ?: ''
+    def qaseProjectId = env.QASE_PROJECT_ID ?: ''
+    def qaseReporterScript = env.QASE_REPORTER_SCRIPT ?: 'build_qase_reporter_v2.sh'
+
+    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SSH_PEM_KEY', 'AWS_SSH_PEM_KEY_NAME', 'QASE_AUTOMATION_TOKEN']) {
         try {
             stage('Checkout') {
                 deleteDir()
@@ -370,6 +375,51 @@ node {
                 if (reportArtifacts) {
                     archiveArtifacts allowEmptyArchive: true, artifacts: "go-test.log, ${testConfig.resultsXML}, ${testConfig.resultsJSON}", fingerprint: true
                 }
+            }
+
+            stage('Report to Qase') {
+                // Skip if Qase is not configured
+                if (!qaseTestRunId?.trim() || !qaseProjectId?.trim()) {
+                    echo 'Skipping Qase reporting: QASE_TEST_RUN_ID or QASE_PROJECT_ID not provided'
+                    return
+                }
+
+                if (!env.QASE_AUTOMATION_TOKEN?.trim()) {
+                    echo 'Skipping Qase reporting: QASE_AUTOMATION_TOKEN credential not available'
+                    return
+                }
+
+                echo "Reporting test results to Qase (Project: ${qaseProjectId}, Run: ${qaseTestRunId})"
+
+                def workspace = pwd()
+
+                // Build and run the Qase reporter
+                // The reporter script builds a Go binary that reads test results and uploads to Qase API
+                sh """
+                    docker run --rm --platform ${dockerPlatform} \
+                        --name qase-reporter \
+                        -e QASE_TEST_RUN_ID=${qaseTestRunId} \
+                        -e QASE_PROJECT_ID=${qaseProjectId} \
+                        -e QASE_AUTOMATION_TOKEN=${env.QASE_AUTOMATION_TOKEN} \
+                        -v ${workspace}:/workspace \
+                        -w /workspace/tests \
+                        ${infraToolsImage} \
+                        sh -c '
+                            set -e
+                            echo "Building Qase reporter..."
+                            ./validation/pipeline/scripts/${qaseReporterScript}
+
+                            if [ -f ./validation/reporter ]; then
+                                echo "Running Qase reporter..."
+                                ./validation/reporter
+                                echo "Qase reporting complete"
+                            else
+                                echo "Reporter binary not found - reporter script may have skipped build"
+                            fi
+                        '
+                """
+
+                echo "Test results reported to Qase successfully"
             }
         } catch (err) {
             currentBuild.result = 'FAILURE'
