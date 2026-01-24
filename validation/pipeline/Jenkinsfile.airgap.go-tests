@@ -315,11 +315,17 @@ node {
                 // If Ansible variables defined a bootstrap password, default commonly used value
                 lines += ["RANCHER_BOOTSTRAP_PASSWORD=${env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'}"]
 
-                // Optional inline cattle test config
-                if (cattleTestConfig?.trim()) {
-                    def cattleConfigPath = "${testsPath}/cattle-config.yaml"
+                // Point to the cattle config file (already created and token-injected in earlier stages)
+                // NOTE: Do NOT overwrite the file here - it already has the admin token injected
+                def cattleConfigPath = "${testsPath}/cattle-config.yaml"
+                if (fileExists(cattleConfigPath)) {
+                    lines += 'CATTLE_TEST_CONFIG=/workspace/tests/cattle-config.yaml'
+                    echo "Using existing cattle config with injected token: ${cattleConfigPath}"
+                } else if (cattleTestConfig?.trim()) {
+                    // Fallback: create config if it doesn't exist (should not happen in normal flow)
                     writeFile file: cattleConfigPath, text: cattleTestConfig.trim() + '\n'
                     lines += 'CATTLE_TEST_CONFIG=/workspace/tests/cattle-config.yaml'
+                    echo "Warning: Created cattle config without token injection"
                 }
 
                 def envContent = lines.findAll { it?.trim() }.join('\n')
