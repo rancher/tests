@@ -46,7 +46,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: latest
+    environment: head
     env:
       HOSTNAME_PREFIX: "gha6-ds-214"
       REPORTING_ENABLED: >-

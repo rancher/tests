@@ -57,7 +57,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.turtles, 'false'))
     name: "[v2-14] turtles OFF"
     runs-on: ubuntu-latest
-    environment: latest
+    environment: head
     strategy:
       fail-fast: false
       matrix:
@@ -406,7 +406,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.turtles, 'true'))
     name: "[v2-14] turtles ON"
     runs-on: ubuntu-latest
-    environment: latest
+    environment: head
     strategy:
       fail-fast: false
       matrix:
@@ -755,7 +755,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.turtles, 'toggledOn'))
     name: "[v2-14] turtles toggled ON"
     runs-on: ubuntu-latest
-    environment: latest
+    environment: head
     strategy:
       fail-fast: false
       matrix:
@@ -1104,7 +1104,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.turtles, 'toggledOff'))
     name: "[v2-14] turtles toggled OFF"
     runs-on: ubuntu-latest
-    environment: latest
+    environment: head
     strategy:
       fail-fast: false
       matrix:

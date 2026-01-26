@@ -57,7 +57,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.upgraded_turtles, 'false'))
     name: ${{ vars.RELEASED_RANCHER_VERSION_2_13 }} -> v2-14 - turtles OFF
     runs-on: ubuntu-latest
-    environment: latest
+    environment: upgrade-community-head
     env:
       HOSTNAME_PREFIX: "tpu-off-214"
       REPORTING_ENABLED: >-
@@ -406,7 +406,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.upgraded_turtles, 'true'))
     name: ${{ vars.RELEASED_RANCHER_VERSION_2_13 }} -> v2-14 - turtles ON
     runs-on: ubuntu-latest
-    environment: latest
+    environment: upgrade-community-head
     env:
       HOSTNAME_PREFIX: "tpu-on-214"
       REPORTING_ENABLED: >-
@@ -755,7 +755,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.upgraded_turtles, 'toggledOn'))
     name: ${{ vars.RELEASED_RANCHER_VERSION_2_13 }} -> v2-14 - turtles toggled ON
     runs-on: ubuntu-latest
-    environment: latest
+    environment: upgrade-community-head
     env:
       HOSTNAME_PREFIX: "tpu-ton-214"
       REPORTING_ENABLED: >-
@@ -1104,7 +1104,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.upgraded_turtles, 'toggledOff'))
     name: ${{ vars.RELEASED_RANCHER_VERSION_2_13 }} -> v2-14 - turtles toggled OFF
     runs-on: ubuntu-latest
-    environment: latest
+    environment: upgrade-community-head
     env:
       HOSTNAME_PREFIX: "tpu-toff-214"
       REPORTING_ENABLED: >-

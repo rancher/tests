@@ -59,7 +59,7 @@ require (
 	github.com/qase-tms/qase-go/qase-api-client v1.2.0
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20260122211220-e4fc12acd2be
-	github.com/rancher/tfp-automation v0.0.0-20251219210947-f4a1a9882c29
+	github.com/rancher/tfp-automation v0.0.0-20260126225050-e17784ebc431
 )
 
 require (
