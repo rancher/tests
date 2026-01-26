@@ -3,9 +3,11 @@
 package longhorn
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rancher/norman/types"
 	"github.com/rancher/shepherd/clients/rancher"
@@ -14,6 +16,7 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/kubectl"
 	shepherdPods "github.com/rancher/shepherd/extensions/workloads/pods"
@@ -21,10 +24,12 @@ import (
 	"github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/storage"
 	"github.com/rancher/tests/interoperability/longhorn"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	appv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -43,6 +48,28 @@ type LonghornChartTestSuite struct {
 	payloadOpts        charts.PayloadOpts
 }
 
+// getChartStatusWithRetry wraps GetChartStatus with retry logic to handle transient API unavailability.
+// This is useful when the Kubernetes API server might be temporarily unavailable due to cluster operations.
+func getChartStatusWithRetry(client *rancher.Client, clusterID, namespace, chartName string) (*shepherdCharts.ChartStatus, error) {
+	var chartStatus *shepherdCharts.ChartStatus
+	err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 3*time.Minute, false, func(context.Context) (done bool, err error) {
+		chartStatus, err = shepherdCharts.GetChartStatus(client, clusterID, namespace, chartName)
+		if err != nil {
+			// Retry on connection errors or impersonation issues
+			if strings.Contains(err.Error(), "connection refused") || 
+			   strings.Contains(err.Error(), "unable to create impersonator account") ||
+			   strings.Contains(err.Error(), "dial tcp") {
+				logrus.Warningf("Transient error getting chart status, retrying: %v", err)
+				return false, nil
+			}
+			// For other errors, fail immediately
+			return false, err
+		}
+		return true, nil
+	})
+	return chartStatus, err
+}
+
 func (l *LonghornChartTestSuite) TearDownSuite() {
 	l.session.Cleanup()
 }
@@ -57,7 +84,7 @@ func (l *LonghornChartTestSuite) SetupSuite() {
 	l.cluster, err = clusters.NewClusterMeta(client, client.RancherConfig.ClusterName)
 	require.NoError(l.T(), err)
 
-	chart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
+	chart, err := getChartStatusWithRetry(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(l.T(), err)
 
 	l.longhornTestConfig = *longhorn.GetLonghornTestConfig()
@@ -119,7 +146,7 @@ func (l *LonghornChartTestSuite) TestChartInstall() {
 }
 
 func (l *LonghornChartTestSuite) TestChartInstallStaticCustomConfig() {
-	chart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
+	chart, err := getChartStatusWithRetry(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(l.T(), err)
 
 	// If Longhorn was installed by a previous test on this same session, uninstall it to install it again with custom configuration.
