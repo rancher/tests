@@ -568,6 +568,10 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 			}
 		}
 
+		if len(failedDeployments) > 0 {
+			return false, nil
+		}
+
 		return true, nil
 	})
 
