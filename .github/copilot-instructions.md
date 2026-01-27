@@ -23,10 +23,10 @@ Exentsions are located in the [shepherd repo](https://github.com/rancher/shepher
 
 ## Technology Stack
 
-* **Language**: Go 1.25.0
+* **Language**: Go 1.25.0 -- kept up to date with [upstream rancher's go.mod](https://github.com/rancher/rancher/blob/main/go.mod#L3)
 * **Testing Framework**: `github.com/stretchr/testify/suite` for test suites
 * **Rancher Testing Framework**: `github.com/rancher/shepherd` for Rancher-specific test utilities
-* **Kubernetes Client**: k8s.io client libraries (v0.34.1)
+* **Kubernetes Client**: k8s.io client libraries (v0.34.1) -- kept up to date with [upstream rancher's go.mod](https://github.com/rancher/rancher/blob/main/go.mod#L24-L27)
 * **Linting**: golangci-lint with specific rules (see `.golangci.yaml`)
 
 ### Actions Vs. Extensions
@@ -55,7 +55,7 @@ This repository uses Go build tags extensively to control which tests run in dif
 1. **Feature tags**: `validation`, `infra.rke1`, `infra.rke2k3s`, `infra.aks`, `infra.eks`, `infra.gke`, etc.
 2. **Cluster type tags**: `cluster.custom`, `cluster.nodedriver`, etc.
 3. **Test tier tags**: `sanity`, `extended`, `stress`
-4. **PIT (Periodic Integration Testing) tags**:
+4. **PIT (Platform Interoperability Testing) tags**:
    * `pit.daily`: Tests that run daily
    * `pit.harvester.daily`: Daily tests for Harvester setup
    * `pit.weekly`: Tests that run weekly
