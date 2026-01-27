@@ -119,6 +119,7 @@ import (
     "testing"
     "github.com/rancher/shepherd/clients/rancher"
     "github.com/rancher/shepherd/pkg/session"
+    "github.com/stretchr/testify/require"
     "github.com/stretchr/testify/suite"
 )
 
