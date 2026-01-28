@@ -87,7 +87,8 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						require.NoError(s.T(), err)
 
 						logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
-						provisioning.VerifyClusterReady(s.T(), client, clusterObject)
+						err = provisioning.VerifyClusterReady(client, clusterObject)
+						require.NoError(s.T(), err)
 
 						logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
 						err = pods.VerifyClusterPods(client, clusterObject)
@@ -123,7 +124,8 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						require.NoError(s.T(), err)
 
 						logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
-						provisioning.VerifyClusterReady(s.T(), client, clusterObject)
+						err = provisioning.VerifyClusterReady(client, clusterObject)
+						require.NoError(s.T(), err)
 
 						logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
 						err = pods.VerifyClusterPods(client, clusterObject)
@@ -160,7 +162,8 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						require.NoError(s.T(), err)
 
 						logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
-						provisioning.VerifyClusterReady(s.T(), client, clusterObject)
+						err = provisioning.VerifyClusterReady(client, clusterObject)
+						require.NoError(s.T(), err)
 
 						logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
 						err = pods.VerifyClusterPods(client, clusterObject)

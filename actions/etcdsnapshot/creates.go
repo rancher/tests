@@ -23,9 +23,12 @@ import (
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/scalinginput"
 	"github.com/rancher/tests/actions/services"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	deploy "github.com/rancher/tests/actions/workloads/deployment"
+	actionspods "github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -37,18 +40,15 @@ const (
 	InitialIngress  = "ingress-before-restore"
 	InitialWorkload = "wload-before-restore"
 
-	all                   = "all"
-	nginxImage            = "nginx"
-	containerName         = "nginx"
-	isCattleLabeled       = true
-	ingressPath           = "/index.html"
-	kubernetesVersion     = "kubernetesVersion"
-	port                  = "port"
-	postWorkload          = "wload-after-backup"
-	RKE1                  = "rke1"
-	serviceAppendName     = "service-"
-	windowsContainerImage = "mcr.microsoft.com/windows/servercore/iis"
-	windowsContainerName  = "iis"
+	all               = "all"
+	containerName     = "nginx"
+	isCattleLabeled   = true
+	ingressPath       = "/index.html"
+	kubernetesVersion = "kubernetesVersion"
+	port              = "port"
+	postWorkload      = "wload-after-backup"
+	RKE1              = "rke1"
+	serviceAppendName = "service-"
 )
 
 // CreateAndValidateSnapshotRestore is an e2e helper that determines the engine type of the cluster, then takes a snapshot, and finally restores the cluster to the original snapshot
@@ -102,6 +102,7 @@ func CreateAndValidateSnapshotRestore(client *rancher.Client, clusterName string
 		}
 
 	} else {
+		logrus.Debugf("Creating snapshot on cluster %s", clusterName)
 		cluster, snapshotName, postDeploymentResp, postServiceResp, err := CreateAndValidateSnapshotV2Prov(client, podTemplate, deploymentTemplate, clusterName, clusterID, etcdRestore, isRKE1)
 		if err != nil {
 			return err
@@ -477,19 +478,34 @@ func RestoreAndValidateSnapshotV2Prov(client *rancher.Client, snapshotID string,
 			return err
 		}
 
-		clusterObject, _, err = clusters.GetProvisioningClusterByName(client, cluster.Name, namespaces.FleetDefault)
+		logrus.Info("Restoring snapshot for cluster " + clusterObject.Name)
+		steveCluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + clusterObject.Name)
 		if err != nil {
 			return err
 		}
 
-		err = clusters.WaitClusterToBeUpgraded(client, clusterID)
+		logrus.Tracef("Waiting for cluster %s to be upgraded", cluster.Name)
+		err = clusters.WaitClusterToBeInUpgrade(client, clusterID)
 		if err != nil {
 			return err
 		}
 
-		podErrors := pods.StatusPods(client, clusterID)
-		if len(podErrors) != 0 {
-			return errors.New("cluster's pods not in good health post restore")
+		logrus.Tracef("Waiting for cluster %s to finish upgrade", cluster.Name)
+		err = provisioning.VerifyClusterReady(client, steveCluster)
+		if err != nil {
+			return err
+		}
+
+		logrus.Tracef("Verifying deployments on cluster %s", cluster.Name)
+		err = deployment.VerifyClusterDeployments(client, steveCluster)
+		if err != nil {
+			return err
+		}
+
+		logrus.Tracef("Verifying pods on cluster %s", cluster.Name)
+		err = actionspods.VerifyClusterPods(client, steveCluster)
+		if err != nil {
+			return err
 		}
 
 		if cluster.Spec.KubernetesVersion != clusterObject.Spec.KubernetesVersion {

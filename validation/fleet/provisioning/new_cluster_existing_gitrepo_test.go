@@ -184,7 +184,8 @@ func (f *FleetWithProvisioningTestSuite) TestHardenedAfterAddedGitRepo() {
 			require.NoError(f.T(), err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
-			provisioning.VerifyClusterReady(f.T(), tt.client, clusterObject)
+			err = provisioning.VerifyClusterReady(tt.client, clusterObject)
+			require.NoError(f.T(), err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", clusterObject.Name)
 			err = deployment.VerifyClusterDeployments(tt.client, clusterObject)
@@ -283,7 +284,8 @@ func (f *FleetWithProvisioningTestSuite) TestWindowsAfterAddedGitRepo() {
 			require.NoError(f.T(), err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
-			provisioning.VerifyClusterReady(f.T(), tt.client, clusterObject)
+			err = provisioning.VerifyClusterReady(tt.client, clusterObject)
+			require.NoError(f.T(), err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", clusterObject.Name)
 			err = deployment.VerifyClusterDeployments(tt.client, clusterObject)

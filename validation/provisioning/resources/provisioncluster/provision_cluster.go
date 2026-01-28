@@ -48,7 +48,8 @@ func ProvisionRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterType s
 		clusterObject, err = provisioning.CreateProvisioningCustomCluster(client, &externalNodeProvider, &clusterConfig, ec2Configs)
 		require.NoError(t, err)
 
-		provisioning.VerifyClusterReady(t, client, clusterObject)
+		err = provisioning.VerifyClusterReady(client, clusterObject)
+		require.NoError(t, err)
 
 		err = deployment.VerifyClusterDeployments(client, clusterObject)
 		require.NoError(t, err)
@@ -61,7 +62,8 @@ func ProvisionRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterType s
 		clusterObject, err = provisioning.CreateProvisioningCluster(client, provider, credentialSpec, &clusterConfig, machineConfigs, nil)
 		require.NoError(t, err)
 
-		provisioning.VerifyClusterReady(t, client, clusterObject)
+		err = provisioning.VerifyClusterReady(client, clusterObject)
+		require.NoError(t, err)
 
 		err = deployment.VerifyClusterDeployments(client, clusterObject)
 		require.NoError(t, err)

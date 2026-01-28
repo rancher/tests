@@ -175,7 +175,8 @@ func (gr *GlobalRolesV2TestSuite) TestClusterCreationAfterAddingGlobalRoleWithIn
 	_, firstClusterSteveObject, _, err := createDownstreamCluster(userClient, "K3S")
 	require.NoError(gr.T(), err)
 
-	provisioning.VerifyClusterReady(gr.T(), userClient, firstClusterSteveObject)
+	err = provisioning.VerifyClusterReady(userClient, firstClusterSteveObject)
+	require.NoError(gr.T(), err)
 
 	err = deployment.VerifyClusterDeployments(gr.client, firstClusterSteveObject)
 	require.NoError(gr.T(), err)
@@ -188,7 +189,8 @@ func (gr *GlobalRolesV2TestSuite) TestClusterCreationAfterAddingGlobalRoleWithIn
 	_, secondClusterSteveObject, _, err := createDownstreamCluster(userClient, "K3S")
 	require.NoError(gr.T(), err)
 
-	provisioning.VerifyClusterReady(gr.T(), userClient, secondClusterSteveObject)
+	err = provisioning.VerifyClusterReady(userClient, secondClusterSteveObject)
+	require.NoError(gr.T(), err)
 
 	logrus.Infof("Verifying cluster deployments (%s)", secondClusterSteveObject.Name)
 	err = deployment.VerifyClusterDeployments(gr.client, secondClusterSteveObject)
@@ -449,7 +451,8 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromClu
 	_, rke2SteveObject, _, err := createDownstreamCluster(gr.client, "RKE2")
 	require.NoError(gr.T(), err)
 
-	provisioning.VerifyClusterReady(gr.T(), gr.client, rke2SteveObject)
+	err = provisioning.VerifyClusterReady(gr.client, rke2SteveObject)
+	require.NoError(gr.T(), err)
 
 	logrus.Infof("Verifying cluster deployments (%s)", rke2SteveObject.Name)
 	err = deployment.VerifyClusterDeployments(gr.client, rke2SteveObject)

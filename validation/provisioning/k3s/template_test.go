@@ -119,7 +119,8 @@ func TestTemplate(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(t, k.client, cluster)
+			err = provisioning.VerifyClusterReady(k.client, cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 			err = deployment.VerifyClusterDeployments(k.client, cluster)

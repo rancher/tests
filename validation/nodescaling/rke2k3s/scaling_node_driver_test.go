@@ -134,7 +134,8 @@ func (s *NodeScalingTestSuite) TestScalingNodePools() {
 			nodescaling.ScalingRKE2K3SNodePools(s.T(), s.client, tt.clusterID, tt.nodeRoles)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(s.T(), s.client, cluster)
+			err = provisioning.VerifyClusterReady(s.client, cluster)
+			require.NoError(s.T(), err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 			err = deployment.VerifyClusterDeployments(s.client, cluster)

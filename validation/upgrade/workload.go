@@ -68,7 +68,6 @@ const (
 	servicePortName                            = "port"
 	servicePortNumber                          = 80
 	volumeMountPath                            = "/root/usr/"
-	windowsContainerImage                      = "mcr.microsoft.com/windows/servercore/iis"
 )
 
 // createPreUpgradeWorkloads creates workloads in the downstream cluster before the upgrade.

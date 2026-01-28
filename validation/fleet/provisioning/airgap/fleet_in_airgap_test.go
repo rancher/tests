@@ -179,7 +179,8 @@ func (a *AirGapRKE2CustomClusterTestSuite) TestCustomClusterWithGitRepo() {
 		require.NoError(a.T(), err)
 
 		logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
-		provisioning.VerifyClusterReady(a.T(), a.standardClient, clusterObject)
+		err = provisioning.VerifyClusterReady(a.standardClient, clusterObject)
+		require.NoError(a.T(), err)
 
 		logrus.Infof("Verifying cluster deployments (%s)", clusterObject.Name)
 		err = deployment.VerifyClusterDeployments(a.standardClient, clusterObject)

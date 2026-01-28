@@ -105,7 +105,8 @@ func TestHardened(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(t, r.client, cluster)
+			err = provisioning.VerifyClusterReady(r.client, cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 			err = deployment.VerifyClusterDeployments(tt.client, cluster)

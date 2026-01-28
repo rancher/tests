@@ -122,7 +122,8 @@ func TestAutoScalingUp(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(t, s.client, cluster)
+			err = provisioning.VerifyClusterReady(s.client, cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 			err = deployment.VerifyClusterDeployments(s.client, cluster)
@@ -191,7 +192,8 @@ func TestAutoScalingDown(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(t, tt.client, cluster)
+			err = provisioning.VerifyClusterReady(tt.client, cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 			err = deployment.VerifyClusterDeployments(s.client, cluster)
@@ -224,7 +226,8 @@ func TestAutoScalingDown(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(t, tt.client, cluster)
+			err = provisioning.VerifyClusterReady(tt.client, cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 			err = deployment.VerifyClusterDeployments(s.client, cluster)
@@ -313,7 +316,8 @@ func TestAutoScalingPause(t *testing.T) {
 			require.Error(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(t, s.client, cluster)
+			err = provisioning.VerifyClusterReady(s.client, cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Unpausing cluster autoscaler (%s)", cluster.Name)
 			err = scaling.UpdateAutoscalerState(s.client, cluster, false)
@@ -330,7 +334,8 @@ func TestAutoScalingPause(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(t, s.client, cluster)
+			err = provisioning.VerifyClusterReady(s.client, cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 			err = deployment.VerifyClusterDeployments(s.client, cluster)

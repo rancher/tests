@@ -105,7 +105,8 @@ func (d *DeleteInitMachineDualstackTestSuite) TestDeleteInitMachineDualstack() {
 			require.NoError(d.T(), err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
-			provisioning.VerifyClusterReady(d.T(), d.client, tt.cluster)
+			err = provisioning.VerifyClusterReady(d.client, tt.cluster)
+			require.NoError(d.T(), err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
 			err = deployment.VerifyClusterDeployments(d.client, tt.cluster)

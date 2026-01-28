@@ -106,7 +106,8 @@ func TestDynamicCustom(t *testing.T) {
 				require.NoError(t, err)
 
 				logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-				provisioning.VerifyClusterReady(t, tt.client, cluster)
+				err = provisioning.VerifyClusterReady(tt.client, cluster)
+				require.NoError(t, err)
 
 				logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 				err = deployment.VerifyClusterDeployments(tt.client, cluster)

@@ -27,8 +27,7 @@ import (
 )
 
 const (
-	containerImage        = "nginx"
-	windowsContainerImage = "mcr.microsoft.com/windows/servercore/iis"
+	containerImage = "nginx"
 )
 
 type SnapshotRestoreTestSuite struct {

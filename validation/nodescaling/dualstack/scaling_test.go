@@ -127,7 +127,8 @@ func (s *NodeScalingDualstackTestSuite) TestScalingDualstackNodePools() {
 			nodescaling.ScalingRKE2K3SCustomClusterPools(s.T(), s.client, tt.clusterID, s.scalingConfig.NodeProvider, tt.nodeRoles, awsEC2Configs, tt.clusterConfig)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(s.T(), s.client, cluster)
+			err = provisioning.VerifyClusterReady(s.client, cluster)
+			require.NoError(s.T(), err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 			err = deployment.VerifyClusterDeployments(s.client, cluster)

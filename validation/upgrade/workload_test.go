@@ -16,6 +16,10 @@ import (
 
 var verifyIngress = true
 
+const (
+	windowsContainerImage = "mcr.microsoft.com/windows/servercore/iis"
+)
+
 type UpgradeWorkloadTestSuite struct {
 	suite.Suite
 	session  *session.Session

@@ -58,7 +58,8 @@ func (mr *MembershipRolesTestSuite) TestClusterRolesOnClusterCreationAndDeletion
 	createdClusterID, err := clusters.GetClusterIDByName(mr.client, clusterObj.Name)
 	require.NoError(mr.T(), err)
 
-	provisioning.VerifyClusterReady(mr.T(), mr.client, clusterObj)
+	err = provisioning.VerifyClusterReady(mr.client, clusterObj)
+	require.NoError(mr.T(), err)
 	err = deployment.VerifyClusterDeployments(mr.client, clusterObj)
 	require.NoError(mr.T(), err)
 	err = pods.VerifyClusterPods(mr.client, clusterObj)

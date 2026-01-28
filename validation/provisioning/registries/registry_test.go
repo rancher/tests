@@ -348,7 +348,8 @@ func (rt *RegistryTestSuite) TestRegistriesK3S() {
 				require.NoError(rt.T(), err)
 
 				logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
-				provisioning.VerifyClusterReady(rt.T(), subClient, clusterObject)
+				err = provisioning.VerifyClusterReady(subClient, clusterObject)
+				require.NoError(rt.T(), err)
 
 				logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
 				err = actionspods.VerifyClusterPods(subClient, clusterObject)
@@ -376,7 +377,8 @@ func (rt *RegistryTestSuite) TestRegistriesK3S() {
 				require.NoError(rt.T(), err)
 
 				logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
-				provisioning.VerifyClusterReady(rt.T(), subClient, clusterObject)
+				err = provisioning.VerifyClusterReady(subClient, clusterObject)
+				require.NoError(rt.T(), err)
 
 				logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
 				err = actionspods.VerifyClusterPods(subClient, clusterObject)
@@ -430,7 +432,8 @@ func (rt *RegistryTestSuite) TestRegistriesRKE2() {
 				require.NoError(rt.T(), err)
 
 				logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
-				provisioning.VerifyClusterReady(rt.T(), subClient, clusterObject)
+				err = provisioning.VerifyClusterReady(subClient, clusterObject)
+				require.NoError(rt.T(), err)
 
 				logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
 				err = actionspods.VerifyClusterPods(subClient, clusterObject)
@@ -456,7 +459,8 @@ func (rt *RegistryTestSuite) TestRegistriesRKE2() {
 				require.NoError(rt.T(), err)
 
 				logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
-				provisioning.VerifyClusterReady(rt.T(), subClient, clusterObject)
+				err = provisioning.VerifyClusterReady(subClient, clusterObject)
+				require.NoError(rt.T(), err)
 
 				logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
 				err = actionspods.VerifyClusterPods(subClient, clusterObject)

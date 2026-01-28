@@ -117,7 +117,8 @@ func (b *BackupTestSuite) TestS3InPlaceRestore() {
 	provisioning.VerifyRKE1Cluster(b.T(), b.client, rke1ClusterConfig, rke1ClusterObj)
 
 	logrus.Infof("Verifying the cluster is ready (%s)", rke2SteveObj.Name)
-	provisioning.VerifyClusterReady(b.T(), b.client, rke2SteveObj)
+	err = provisioning.VerifyClusterReady(b.client, rke2SteveObj)
+	require.NoError(b.T(), err)
 
 	logrus.Infof("Verifying cluster deployments (%s)", rke2SteveObj.Name)
 	err = deployment.VerifyClusterDeployments(b.client, rke2SteveObj)

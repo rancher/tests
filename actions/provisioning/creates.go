@@ -304,19 +304,6 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 		return nil, err
 	}
 
-	kubeProvisioningClient, err := client.GetKubeAPIProvisioningClient()
-	if err != nil {
-		return nil, err
-	}
-
-	result, err := kubeProvisioningClient.Clusters(namespaces.FleetDefault).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + clusterName,
-		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	logrus.Debugf("Registering linux nodes (%s)", clusterName)
 
 	var command string
@@ -355,8 +342,7 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 		totalNodesObserved += int(quantityPerPool[poolIndex])
 	}
 
-	checkFunc := shepherdclusters.IsProvisioningClusterReady
-	err = wait.WatchWait(result, checkFunc)
+	err = VerifyClusterReady(client, customCluster)
 	if err != nil {
 		return nil, err
 	}

@@ -124,7 +124,8 @@ func (c *CertRotationWindowsTestSuite) TestCertRotationWindows() {
 			require.NoError(c.T(), certificates.RotateCerts(c.client, tt.cluster.Name))
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
-			provisioning.VerifyClusterReady(c.T(), c.client, tt.cluster)
+			err = provisioning.VerifyClusterReady(c.client, tt.cluster)
+			require.NoError(c.T(), err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
 			err = deployment.VerifyClusterDeployments(c.client, tt.cluster)

@@ -318,7 +318,8 @@ func createRKE2dsCluster(t *testing.T, client *rancher.Client) (*v1.SteveAPIObje
 	}
 
 	logrus.Infof("Verifying the cluster is ready (%s)", steveObject.Name)
-	provisioning.VerifyClusterReady(t, client, steveObject)
+	err = provisioning.VerifyClusterReady(client, steveObject)
+	require.NoError(t, err)
 
 	logrus.Infof("Verifying cluster deployments (%s)", steveObject.Name)
 	err = deployment.VerifyClusterDeployments(client, steveObject)

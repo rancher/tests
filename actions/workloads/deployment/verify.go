@@ -41,18 +41,24 @@ func VerifyDeployment(client *rancher.Client, clusterID, namespace, name string)
 		return err
 	}
 
-	err = kwait.PollUntilContextTimeout(context.TODO(), 1*time.Second, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+	var deploymentConditions []appv1.DeploymentCondition
+	err = kwait.PollUntilContextTimeout(context.TODO(), 1*time.Second, defaults.TenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		deployment, err := GetDeploymentByName(steveclient, clusterID, namespace, name)
 		if err != nil {
 			return false, err
 		}
 
+		deploymentConditions = deployment.Status.Conditions
 		if *deployment.Spec.Replicas == deployment.Status.AvailableReplicas {
 			return true, nil
 		}
 
 		return false, nil
 	})
+
+	if err != nil {
+		logrus.Warningf("Failed to verify deployment: %s", deploymentConditions[0].Message)
+	}
 
 	return err
 }

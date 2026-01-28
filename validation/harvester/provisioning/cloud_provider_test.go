@@ -72,7 +72,8 @@ func (p *HarvesterProvisioningTestSuite) TestCloudProvider() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-	provisioning.VerifyClusterReady(p.T(), p.client, cluster)
+	err = provisioning.VerifyClusterReady(p.client, cluster)
+	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 	err = deployment.VerifyClusterDeployments(p.client, cluster)

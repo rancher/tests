@@ -99,7 +99,8 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementCre
 	require.NoError(ra.T(), err)
 
 	log.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
-	provisioning.VerifyClusterReady(ra.T(), ra.client, clusterObject)
+	err = provisioning.VerifyClusterReady(ra.client, clusterObject)
+	require.NoError(ra.T(), err)
 
 	logrus.Infof("Verifying cluster deployments (%s)", clusterObject.Name)
 	err = deployment.VerifyClusterDeployments(ra.client, clusterObject)

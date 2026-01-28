@@ -116,7 +116,7 @@ func VerifyRKE1Cluster(t *testing.T, client *rancher.Client, clustersConfig *clu
 }
 
 // VerifyClusterReady validates that a non-rke1 cluster and its resources are in a good state, matching a given config.
-func VerifyClusterReady(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
+func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject) error {
 	err := kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FifteenMinuteTimeout, false, func(context.Context) (done bool, err error) {
 		adminClient, err := client.ReLogin()
 		if err != nil {
@@ -147,16 +147,27 @@ func VerifyClusterReady(t *testing.T, client *rancher.Client, cluster *steveV1.S
 
 		return true, nil
 	})
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
 	logrus.Debugf("Waiting for all machines to be ready on cluster (%s)", cluster.Name)
 	err = nodestat.AllMachineReady(client, cluster.ID, defaults.FiveMinuteTimeout)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
 	logrus.Debugf("Verifying cluster token (%s)", cluster.Name)
 	clusterToken, err := clusters.CheckServiceAccountTokenSecret(client, cluster.Name)
-	require.NoError(t, err)
-	require.Equal(t, true, clusterToken)
+	if err != nil {
+		return err
+	}
+
+	if clusterToken != true {
+		return fmt.Errorf("cluster token is not valid")
+	}
+
+	return nil
 }
 
 func VerifyPSACT(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {

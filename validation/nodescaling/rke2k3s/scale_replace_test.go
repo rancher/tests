@@ -119,7 +119,8 @@ func (s *NodeReplacingTestSuite) TestReplacingNodes() {
 			require.NoError(s.T(), err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			provisioning.VerifyClusterReady(s.T(), s.client, cluster)
+			err = provisioning.VerifyClusterReady(s.client, cluster)
+			require.NoError(s.T(), err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 			err = deployment.VerifyClusterDeployments(s.client, cluster)

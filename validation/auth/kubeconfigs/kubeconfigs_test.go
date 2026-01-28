@@ -73,9 +73,12 @@ func (kc *ExtKubeconfigTestSuite) SetupSuite() {
 	cluster2ID, err := clusters.GetClusterIDByName(kc.client, clusterObject2.Name)
 	require.NoError(kc.T(), err)
 
-	provisioning.VerifyClusterReady(kc.T(), client, aceClusterObject1)
-	provisioning.VerifyClusterReady(kc.T(), client, aceClusterObject2)
-	provisioning.VerifyClusterReady(kc.T(), client, clusterObject2)
+	err = provisioning.VerifyClusterReady(client, aceClusterObject1)
+	require.NoError(kc.T(), err)
+	err = provisioning.VerifyClusterReady(client, aceClusterObject2)
+	require.NoError(kc.T(), err)
+	err = provisioning.VerifyClusterReady(client, clusterObject2)
+	require.NoError(kc.T(), err)
 
 	err = deployment.VerifyClusterDeployments(client, aceClusterObject1)
 	require.NoError(kc.T(), err)
