@@ -16,7 +16,6 @@ type K3KProvisioningTestSuite struct {
 	client  *rancher.Client
 	session *session.Session
 }
-
 // SetupSuite initializes the test suite
 func (k *K3KProvisioningTestSuite) SetupSuite() {
 	// Skip suite setup as k3k APIs are not yet available
@@ -27,7 +26,6 @@ func (k *K3KProvisioningTestSuite) SetupSuite() {
 	// require.NoError(k.T(), err)
 	// k.client = client
 }
-
 // TearDownSuite cleans up resources after tests
 func (k *K3KProvisioningTestSuite) TearDownSuite() {
 	// Skip cleanup as k3k APIs are not yet available
@@ -36,7 +34,6 @@ func (k *K3KProvisioningTestSuite) TearDownSuite() {
 	//     k.session.Cleanup()
 	// }
 }
-
 // TestK3KClusterProvisioning is a placeholder test for k3k cluster provisioning
 // TODO: This test cannot be implemented until k3k APIs are available in Rancher
 //
@@ -86,7 +83,6 @@ func (k *K3KProvisioningTestSuite) TestK3KClusterProvisioning() {
 	// err = pods.VerifyClusterPods(k.client, cluster)
 	// require.NoError(k.T(), err)
 }
-
 // TestK3KClusterProvisioningDynamic is a placeholder for dynamic k3k provisioning tests
 // This test should use user-provided configuration when k3k APIs are available
 func (k *K3KProvisioningTestSuite) TestK3KClusterProvisioningDynamic() {
@@ -107,7 +103,6 @@ func (k *K3KProvisioningTestSuite) TestK3KClusterProvisioningDynamic() {
 	//     memory: "4Gi"
 	//   nodeCount: 1
 }
-
 // TestK3KSharedMode is a placeholder test for k3k shared mode provisioning
 func (k *K3KProvisioningTestSuite) TestK3KSharedMode() {
 	k.T().Skip("K3k API endpoints are not yet available in Rancher. " +
@@ -120,7 +115,6 @@ func (k *K3KProvisioningTestSuite) TestK3KSharedMode() {
 	// - Proper isolation between clusters
 	// - Correct resource quota enforcement
 }
-
 // TestK3KVirtualMode is a placeholder test for k3k virtual mode provisioning
 func (k *K3KProvisioningTestSuite) TestK3KVirtualMode() {
 	k.T().Skip("K3k API endpoints are not yet available in Rancher. " +
@@ -133,7 +127,6 @@ func (k *K3KProvisioningTestSuite) TestK3KVirtualMode() {
 	// - No resource contention
 	// - Enhanced security boundaries
 }
-
 // TestK3KProvisioningTestSuite runs the k3k provisioning test suite
 func TestK3KProvisioningTestSuite(t *testing.T) {
 	suite.Run(t, new(K3KProvisioningTestSuite))
