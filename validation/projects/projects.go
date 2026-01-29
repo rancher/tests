@@ -12,7 +12,6 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
@@ -45,8 +44,7 @@ func createProjectAndNamespace(client *rancher.Client, clusterID string, project
 		return nil, nil, err
 	}
 
-	namespaceName := namegen.AppendRandomString("testns-")
-	createdNamespace, err := namespaceapi.CreateNamespace(client, clusterID, createdProject.Name, namespaceName, "", map[string]string{}, map[string]string{})
+	createdNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, clusterID, createdProject.Name, nil)
 	if err != nil {
 		return nil, nil, err
 	}

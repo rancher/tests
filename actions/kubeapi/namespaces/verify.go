@@ -192,10 +192,7 @@ func VerifyUsedNamespaceResourceQuota(client *rancher.Client, clusterID, namespa
 		return err
 	}
 
-	rqList, err := ctx.Core.ResourceQuota().List(
-		namespace,
-		metav1.ListOptions{},
-	)
+	rqList, err := ctx.Core.ResourceQuota().List(namespace, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

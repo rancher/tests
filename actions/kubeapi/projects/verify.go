@@ -15,9 +15,6 @@ func VerifyUsedProjectExtendedResourceQuota(client *rancher.Client, clusterID, p
 	}
 
 	usedExtended := project.Spec.ResourceQuota.UsedLimit.Extended
-	if usedExtended == nil {
-		return fmt.Errorf("project usedLimit.extended is empty")
-	}
 
 	for resource, expectedVal := range expectedUsed {
 		actual, ok := usedExtended[resource]

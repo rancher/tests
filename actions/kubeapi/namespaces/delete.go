@@ -23,7 +23,7 @@ func DeleteNamespace(client *rancher.Client, clusterID, namespaceName string) er
 		return err
 	}
 
-	return kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, false, func(context.Context) (bool, error) {
+	return kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(context.Context) (bool, error) {
 		_, pollErr := ctx.Core.Namespace().Get(namespaceName, metav1.GetOptions{})
 		if pollErr != nil {
 			if k8serrors.IsNotFound(pollErr) {
