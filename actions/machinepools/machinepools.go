@@ -148,8 +148,8 @@ func MatchNodeRolesToMachinePool(nodeRoles NodeRoles, machinePools []apisV1.RKEM
 	return -1, count
 }
 
-// updateMachinePoolQuantity is a helper method that will update the desired machine pool with the latest quantity.
-func updateMachinePoolQuantity(client *rancher.Client, cluster *v1.SteveAPIObject, nodeRoles NodeRoles) (*v1.SteveAPIObject, error) {
+// ScaleMachinePool is a helper method that will update the desired machine pool.
+func ScaleMachinePool(client *rancher.Client, cluster *v1.SteveAPIObject, nodeRoles NodeRoles) (*v1.SteveAPIObject, error) {
 	updateCluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(cluster.ID)
 	if err != nil {
 		return nil, err
@@ -162,12 +162,12 @@ func updateMachinePoolQuantity(client *rancher.Client, cluster *v1.SteveAPIObjec
 	}
 
 	updatedCluster.ObjectMeta.ResourceVersion = updateCluster.ObjectMeta.ResourceVersion
-	machineConfig, newQuantity := MatchNodeRolesToMachinePool(nodeRoles, updatedCluster.Spec.RKEConfig.MachinePools)
+	poolIndex, quantity := MatchNodeRolesToMachinePool(nodeRoles, updatedCluster.Spec.RKEConfig.MachinePools)
 
-	newQuantity += nodeRoles.Quantity
-	updatedCluster.Spec.RKEConfig.MachinePools[machineConfig].Quantity = &newQuantity
+	quantity += nodeRoles.Quantity
+	updatedCluster.Spec.RKEConfig.MachinePools[poolIndex].Quantity = &quantity
 
-	logrus.Infof("Scaling machine pool %v to %v total nodes", updatedCluster.Spec.RKEConfig.MachinePools[machineConfig].Name, newQuantity)
+	logrus.Infof("Scaling machine pool %v to %v total nodes", updatedCluster.Spec.RKEConfig.MachinePools[poolIndex].Name, quantity)
 	cluster, err = client.Steve.SteveType(stevetypes.Provisioning).Update(cluster, updatedCluster)
 	if err != nil {
 		return nil, err
@@ -358,18 +358,6 @@ func CreateAllMachinePools(machineConfigs []MachinePoolConfig, pools []Pools, ma
 	}
 
 	return machinePools
-}
-
-// ScaleMachinePoolNodes is a helper method that will scale the machine pool to the desired quantity.
-func ScaleMachinePoolNodes(client *rancher.Client, cluster *v1.SteveAPIObject, nodeRoles NodeRoles) (*v1.SteveAPIObject, error) {
-	scaledClusterResp, err := updateMachinePoolQuantity(client, cluster, nodeRoles)
-	if err != nil {
-		return nil, err
-	}
-
-	logrus.Infof("Machine pool has been scaled!")
-
-	return scaledClusterResp, nil
 }
 
 // MatchRoleToPool matches the role of a pool to the Roles of a machine. Returns the index of the matching Roles.

@@ -1,0 +1,95 @@
+- suite: Go Automation/NodeScaling/K3S
+  projects: [RRT, RM]
+  cases:
+  - description: Scales up/down the control plane node pools of an existing cluster
+    title: K3S_Scale_Control_Plane
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Scale up the control plane node pools by 1
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Scale down the control plane node pools by 1
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Scales up/down the etcd node pools of an existing cluster
+    title: K3S_Scale_ETCD
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Scale up the etcd node pools by 1
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Scale down the etcd node pools by 1
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Scales up/down the worker node pools of an existing cluster
+    title: K3S_Scale_Worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Scale up the worker node pools by 1
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Scale down the worker node pools by 1
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

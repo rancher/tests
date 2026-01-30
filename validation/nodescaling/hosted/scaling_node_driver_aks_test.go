@@ -11,7 +11,6 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/scalinginput"
-	"github.com/rancher/tests/validation/nodescaling"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -65,7 +64,7 @@ func (s *AKSNodeScalingTestSuite) TestScalingAKSNodePools() {
 		require.NoError(s.T(), err)
 
 		s.Run(tt.name, func() {
-			nodescaling.ScalingAKSNodePools(s.T(), s.client, clusterID, &tt.aksNodes)
+			ScalingAKSNodePools(s.T(), s.client, clusterID, &tt.aksNodes)
 		})
 	}
 }
@@ -78,7 +77,7 @@ func (s *AKSNodeScalingTestSuite) TestScalingAKSNodePoolsDynamicInput() {
 	clusterID, err := clusters.GetClusterIDByName(s.client, s.client.RancherConfig.ClusterName)
 	require.NoError(s.T(), err)
 
-	nodescaling.ScalingAKSNodePools(s.T(), s.client, clusterID, s.scalingConfig.AKSNodePool)
+	ScalingAKSNodePools(s.T(), s.client, clusterID, s.scalingConfig.AKSNodePool)
 }
 
 // In order for 'go test' to run this suite, we need to create

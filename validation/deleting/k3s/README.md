@@ -39,10 +39,29 @@ Verifies that a cluster is able to recover from deleting the init machine.
 3. [Machine Config](#machine-config)
 
 #### Table Tests:
-1. `K3S_Delete_Cluster`
+1. `K3S_Delete_Init_Machine`
 
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeleteInitMachineTestSuite/TestDeleteInitMachine -timeout=1h -v`
+
+
+### Delete machine test
+
+#### Description:
+Verifies that machines can be deleted and replaced by role (control plane, etcd, worker).
+
+#### Required Configurations:
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Machine Config](#machine-config)
+
+#### Table Tests:
+1. `K3S_Replace_Control_Plane`
+2. `K3S_Replace_ETCD`
+3. `K3S_Replace_Worker`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeleteMachineTestSuite/TestDeleteMachine -timeout=1h -v`
 
 
 ### Delete IPv6 cluster test

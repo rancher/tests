@@ -14,11 +14,10 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
-	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
-	"github.com/rancher/shepherd/extensions/nodes"
 	nodestat "github.com/rancher/shepherd/extensions/nodes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
+	"github.com/rancher/tests/actions/machinepools"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -37,38 +36,36 @@ const (
 )
 
 // MatchNodeToRole returns the count and list of nodes that match the specified role(s) in a given cluster. Error returned, if any.
-func MatchNodeToRole(client *rancher.Client, clusterID string, isEtcd, isControlPlane, isWorker bool) (int, []management.Node, error) {
-	numOfNodes := 0
+func MatchNodeToRole(client *rancher.Client, clusterID string, nodeRoles *machinepools.NodeRoles) ([]management.Node, error) {
 	machines, err := client.Management.Node.List(&types.ListOpts{Filters: map[string]interface{}{
 		"clusterId": clusterID,
 	}})
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 
 	matchingNodes := []management.Node{}
 
 	for _, machine := range machines.Data {
-		if machine.Etcd == isEtcd && machine.ControlPlane == isControlPlane && machine.Worker == isWorker {
+		if machine.Etcd == nodeRoles.Etcd && machine.ControlPlane == nodeRoles.ControlPlane && machine.Worker == nodeRoles.Worker {
 			matchingNodes = append(matchingNodes, machine)
-			numOfNodes++
 		}
 	}
 	if len(matchingNodes) == 0 {
-		return 0, nil, errors.New("matching node name is empty")
+		return nil, errors.New("matching node name is empty")
 	}
 
-	return numOfNodes, matchingNodes, err
+	return matchingNodes, err
 }
 
 // ReplaceNodes replaces the last node with the specified role(s) in a k3s/rke2 cluster
-func ReplaceNodes(client *rancher.Client, clusterName string, isEtcd bool, isControlPlane bool, isWorker bool) error {
+func ReplaceNodes(client *rancher.Client, clusterName string, nodeRoles machinepools.NodeRoles) error {
 	clusterID, err := clusters.GetClusterIDByName(client, clusterName)
 	if err != nil {
 		return err
 	}
 
-	_, nodesToDelete, err := MatchNodeToRole(client, clusterID, isEtcd, isControlPlane, isWorker)
+	nodesToDelete, err := MatchNodeToRole(client, clusterID, &nodeRoles)
 	if err != nil {
 		return err
 	}
@@ -126,7 +123,12 @@ func ReplaceRKE1Nodes(client *rancher.Client, clusterName string, isEtcd bool, i
 		return err
 	}
 
-	_, nodesToDelete, err := MatchNodeToRole(client, clusterID, isEtcd, isControlPlane, isWorker)
+	var pool machinepools.NodeRoles
+	pool.Etcd = isEtcd
+	pool.ControlPlane = isControlPlane
+	pool.Worker = isWorker
+
+	nodesToDelete, err := MatchNodeToRole(client, clusterID, &pool)
 	if err != nil {
 		return err
 	}
@@ -203,66 +205,4 @@ func matchNodeToMachinePool(clusterObject *steveV1.SteveAPIObject, nodeName stri
 	}
 
 	return nil, errors.New("could not find matching machine pool for this node")
-}
-
-// AutoReplaceFirstNodeWithRole ssh into the first node with the specified role and shuts it down. If the node is replacable,
-// wait for the cluster to return to a healthy state. Otherwise, we expect the cluster to never return to active, as the node will remain unreachable.
-func AutoReplaceFirstNodeWithRole(client *rancher.Client, clusterName, nodeRole string) error {
-	clusterID, err := clusters.GetClusterIDByName(client, clusterName)
-	if err != nil {
-		return err
-	}
-
-	_, stevecluster, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
-	if err != nil {
-		return err
-	}
-
-	machine, err := shutdownFirstNodeWithRole(client, clusterID, nodeRole)
-	if err != nil {
-		return err
-	}
-
-	machinePool, err := matchNodeToMachinePool(stevecluster, machine.Name)
-	if err != nil {
-		return err
-	}
-
-	if nodeRole == controlPlane || nodeRole == etcd {
-		err = clusters.WaitClusterToBeUpgraded(client, clusterID)
-		if machinePool.UnhealthyNodeTimeout.String() == "0s" {
-			if err == nil {
-				return errors.New("UnhealthyNodeTimeout set to 0s, but node was replaced!")
-			}
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-
-	}
-
-	err = nodes.Isv1NodeConditionMet(client, machine.ID, clusterID, unreachableCondition)
-	if machinePool.UnhealthyNodeTimeout.String() == "0s" {
-		if err == nil {
-			return errors.New("UnhealthyNodeTimeout set to 0s, but node was replaced!")
-		}
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
-	err = nodestat.IsNodeDeleted(client, machine.Name, clusterID)
-	if err != nil {
-		return err
-	}
-
-	err = nodes.AllMachineReady(client, clusterID, machinePool.UnhealthyNodeTimeout.Duration+time.Duration(1800))
-	if err != nil {
-		return err
-	}
-
-	err = clusters.WaitClusterToBeUpgraded(client, clusterID)
-	return err
 }

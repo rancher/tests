@@ -1,0 +1,69 @@
+#Required for all tests
+rancher:
+  host: "<required>"
+  adminToken: "<required>"
+  insecure: true
+  cleanup: true
+
+#Required for all tests except template
+clusterConfig:
+  machinePools:
+  - machinePoolConfig:
+      etcd: true
+      controlplane: false
+      worker: false
+      quantity: 3
+  - machinePoolConfig:
+      etcd: false
+      controlplane: true
+      worker: false
+      quantity: 2
+  - machinePoolConfig:
+      etcd: false
+      controlplane: false
+      worker: true
+      quantity: 3
+  kubernetesVersion: ""
+  cni: "calico"
+  provider: "aws"
+  nodeProvider: "ec2"
+
+#Required for all tests
+awsCredentials:
+  secretKey: "<required>"
+  accessKey: "<required>"
+  defaultRegion: "us-east-2" 
+
+#Required for tests that utilize node driver clusters
+awsMachineConfigs:
+  region: "us-east-2"
+  awsMachineConfig:
+  - roles: ["etcd","controlplane","worker"]
+    ami: "<required>"
+    instanceType: "t3a.xlarge"
+    volumeType: "<required>"
+    rootSize: "<required>"
+    sshUser: "<required>"
+    vpcId: "<required>"
+    retries: "5"
+    zone: "a"
+
+awsEC2Configs:
+  region: "us-east-2"
+  awsSecretAccessKey: "<required>"
+  awsAccessKeyID: "<required>"
+  awsEC2Config:
+    - instanceType: "t3a.xlarge"
+      awsRegionAZ: ""
+      awsSSHKeyName: "<required>"
+      awsAMI: "<required>"
+      awsSecurityGroups: ["<required>"]
+      awsSSHKeyName: "<required>"
+      awsCICDInstanceTag: "<required>"
+      awsIAMProfile: ""
+      awsUser: "<required>"
+      volumeSize: 100
+      roles: ["etcd", "controlplane", "worker"]
+
+logging:
+   level: "info"

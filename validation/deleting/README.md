@@ -13,6 +13,13 @@ For the `delete_init_machine_test.go` test, the following workflow is followed:
 2. Perform post-cluster provisioning checks
 3. Delete the init machine in the downstream cluster
 
+For the `delete_machine_test.go` test, the following workflow is followed:
+
+1. Provision a downstream cluster
+2. Perform post-cluster provisioning checks
+3. Delete a machine by role (control plane, etcd, or worker)
+4. Verify the machine is replaced and cluster recovers
+
 ## Table of Contents
 1. [Getting Started](#Getting-Started)
 2. [Running Tests](#Running-Tests)

@@ -12,7 +12,6 @@ import (
 	"github.com/rancher/tests/actions/provisioninginput"
 	nodepools "github.com/rancher/tests/actions/rke1/nodepools"
 	"github.com/rancher/tests/actions/scalinginput"
-	"github.com/rancher/tests/validation/nodescaling"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/stretchr/testify/require"
@@ -93,7 +92,7 @@ func (s *RKE1NodeScalingTestSuite) TestScalingRKE1NodePools() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			nodescaling.ScalingRKE1NodePools(s.T(), s.client, tt.clusterID, tt.nodeRoles)
+			ScalingRKE1NodePools(s.T(), s.client, tt.clusterID, tt.nodeRoles)
 		})
 	}
 }
@@ -106,7 +105,7 @@ func (s *RKE1NodeScalingTestSuite) TestScalingRKE1NodePoolsDynamicInput() {
 	clusterID, err := clusters.GetClusterIDByName(s.client, s.client.RancherConfig.ClusterName)
 	require.NoError(s.T(), err)
 
-	nodescaling.ScalingRKE1NodePools(s.T(), s.client, clusterID, *s.scalingConfig.NodePools.NodeRoles)
+	ScalingRKE1NodePools(s.T(), s.client, clusterID, *s.scalingConfig.NodePools.NodeRoles)
 }
 
 func TestRKE1NodeScalingTestSuite(t *testing.T) {

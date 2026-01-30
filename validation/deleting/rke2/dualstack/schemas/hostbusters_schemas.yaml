@@ -41,3 +41,63 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+  - description: Deletes and replaces a control plane machine
+    title: RKE2_Dualstack_Replace_Control_Plane
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Delete a control plane machine
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify machine replacement and cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Deletes and replaces an ETCD machine
+    title: RKE2_Dualstack_Replace_ETCD
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Delete an ETCD machine
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify machine replacement and cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Deletes and replaces a worker machine
+    title: RKE2_Dualstack_Replace_Worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Delete a worker machine
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify machine replacement and cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

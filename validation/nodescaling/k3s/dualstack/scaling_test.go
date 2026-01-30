@@ -6,10 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -23,7 +21,6 @@ import (
 	"github.com/rancher/tests/actions/scalinginput"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
-	"github.com/rancher/tests/validation/nodescaling"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
@@ -38,8 +35,7 @@ type NodeScalingDualstackTestSuite struct {
 	cattleConfig  map[string]any
 	clusterConfig *clusters.ClusterConfig
 	scalingConfig *scalinginput.Config
-	rke2Cluster   *v1.SteveAPIObject
-	k3sCluster    *v1.SteveAPIObject
+	cluster       *v1.SteveAPIObject
 }
 
 func (s *NodeScalingDualstackTestSuite) TearDownSuite() {
@@ -72,19 +68,24 @@ func (s *NodeScalingDualstackTestSuite) SetupSuite() {
 	s.clusterConfig = new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, s.clusterConfig)
 
-	provider := provisioning.CreateProvider(s.clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
-
 	s.scalingConfig = new(scalinginput.Config)
 	config.LoadConfig(scalinginput.ConfigurationFileKey, s.scalingConfig)
 
-	logrus.Info("Provisioning RKE2 cluster")
-	s.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *s.clusterConfig, machineConfigSpec, nil, true, false)
-	require.NoError(s.T(), err)
+	rancherConfig := new(rancher.Config)
+	operations.LoadObjectFromMap(defaults.RancherConfigKey, s.cattleConfig, rancherConfig)
 
-	logrus.Info("Provisioning K3S cluster")
-	s.k3sCluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *s.clusterConfig, machineConfigSpec, nil, true, false)
-	require.NoError(s.T(), err)
+	if rancherConfig.ClusterName == "" {
+		provider := provisioning.CreateProvider(s.clusterConfig.Provider)
+		machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
+
+		logrus.Info("Provisioning K3S cluster")
+		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, defaults.K3S, provider, *s.clusterConfig, machineConfigSpec, nil, true, false)
+		require.NoError(s.T(), err)
+	} else {
+		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
+		s.cluster, err = s.client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + rancherConfig.ClusterName)
+		require.NoError(s.T(), err)
+	}
 }
 
 func (s *NodeScalingDualstackTestSuite) TestScalingDualstackNodePools() {
@@ -106,36 +107,49 @@ func (s *NodeScalingDualstackTestSuite) TestScalingDualstackNodePools() {
 	tests := []struct {
 		name          string
 		nodeRoles     machinepools.NodeRoles
-		clusterID     string
-		clusterConfig *clusters.ClusterConfig
+		scaleQuantity int32
+		cluster       *v1.SteveAPIObject
 	}{
-		{"RKE2_Dualstack_Scale_Control_Plane", nodeRolesControlPlane, s.rke2Cluster.ID, s.clusterConfig},
-		{"RKE2_Dualstack_Scale_ETCD", nodeRolesEtcd, s.rke2Cluster.ID, s.clusterConfig},
-		{"RKE2_Dualstack_Scale_Worker", nodeRolesWorker, s.rke2Cluster.ID, s.clusterConfig},
-		{"K3S_Dualstack_Scale_Control_Plane", nodeRolesControlPlane, s.k3sCluster.ID, s.clusterConfig},
-		{"K3S_Dualstack_Scale_ETCD", nodeRolesEtcd, s.k3sCluster.ID, s.clusterConfig},
-		{"K3S_Dualstack_Scale_Worker", nodeRolesWorker, s.k3sCluster.ID, s.clusterConfig},
+		{"K3S_Dualstack_Scale_Control_Plane", nodeRolesControlPlane, 1, s.cluster},
+		{"K3S_Dualstack_Scale_ETCD", nodeRolesEtcd, 1, s.cluster},
+		{"K3S_Dualstack_Scale_Worker", nodeRolesWorker, 1, s.cluster},
 	}
 
 	for _, tt := range tests {
-		cluster, err := s.client.Steve.SteveType(stevetypes.Provisioning).ByID(tt.clusterID)
-		require.NoError(s.T(), err)
-
+		var err error
 		s.Run(tt.name, func() {
-			awsEC2Configs := new(ec2.AWSEC2Configs)
-			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, s.cattleConfig, awsEC2Configs)
-			nodescaling.ScalingRKE2K3SCustomClusterPools(s.T(), s.client, tt.clusterID, s.scalingConfig.NodeProvider, tt.nodeRoles, awsEC2Configs, tt.clusterConfig)
-
-			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			err = provisioning.VerifyClusterReady(s.client, cluster)
+			tt.nodeRoles.Quantity = tt.scaleQuantity
+			logrus.Infof("Scaling up the node pool (%s)", tt.cluster.Name)
+			tt.cluster, err = machinepools.ScaleMachinePool(s.client, tt.cluster, tt.nodeRoles)
 			require.NoError(s.T(), err)
 
-			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(s.client, cluster)
+			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
+			err = provisioning.VerifyClusterReady(s.client, tt.cluster)
 			require.NoError(s.T(), err)
 
-			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(s.client, cluster)
+			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
+			err = deployment.VerifyClusterDeployments(s.client, tt.cluster)
+			require.NoError(s.T(), err)
+
+			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
+			err = pods.VerifyClusterPods(s.client, tt.cluster)
+			require.NoError(s.T(), err)
+
+			tt.nodeRoles.Quantity = -tt.scaleQuantity
+			logrus.Infof("Scaling down the node pool (%s)", tt.cluster.Name)
+			_, err = machinepools.ScaleMachinePool(s.client, tt.cluster, tt.nodeRoles)
+			require.NoError(s.T(), err)
+
+			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
+			err = provisioning.VerifyClusterReady(s.client, tt.cluster)
+			require.NoError(s.T(), err)
+
+			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
+			err = deployment.VerifyClusterDeployments(s.client, tt.cluster)
+			require.NoError(s.T(), err)
+
+			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
+			err = pods.VerifyClusterPods(s.client, tt.cluster)
 			require.NoError(s.T(), err)
 		})
 
