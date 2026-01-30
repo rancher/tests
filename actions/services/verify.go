@@ -31,7 +31,8 @@ import (
 )
 
 const (
-	noSuchHostSubString = "no such host"
+	noSuchHostSubString        = "no such host"
+	connectionRefusedSubString = "connection refused"
 )
 
 // VerifyService waits for a service to be ready in the downstream cluster
@@ -84,7 +85,7 @@ func VerifyAWSLoadBalancer(t *testing.T, client *rancher.Client, serviceLB *v1.S
 	err = kwait.PollUntilContextTimeout(context.TODO(), 20*time.Second, extdefault.TenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		isIngressAccessible, err := ingresses.IsIngressExternallyAccessible(client, lbHostname, "", false)
 		if err != nil {
-			if strings.Contains(err.Error(), noSuchHostSubString) {
+			if strings.Contains(err.Error(), noSuchHostSubString) || strings.Contains(err.Error(), connectionRefusedSubString) {
 				return false, nil
 			}
 			return false, err
@@ -130,7 +131,7 @@ func VerifyHarvesterLoadBalancer(t *testing.T, client *rancher.Client, serviceLB
 	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, extdefault.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		isIngressAccessible, err := ingresses.IsIngressExternallyAccessible(client, lbHostname, "", false)
 		if err != nil {
-			if strings.Contains(err.Error(), noSuchHostSubString) {
+			if strings.Contains(err.Error(), noSuchHostSubString) || strings.Contains(err.Error(), connectionRefusedSubString) {
 				return false, nil
 			}
 			return false, err
