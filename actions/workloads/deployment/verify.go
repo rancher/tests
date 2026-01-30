@@ -513,19 +513,21 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 		return err
 	}
 
-	downstreamClient, err := client.Steve.ProxyDownstream(clusterID)
-	if err != nil {
-		return err
-	}
-	if downstreamClient == nil {
-		return errors.New("downstream client is nil")
-	}
+	var downstreamClient *v1.Client
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		downstreamClient, err = client.Steve.ProxyDownstream(clusterID)
+		if err != nil {
+			return false, nil
+		}
+
+		return true, nil
+	})
 
 	deploymentClient := downstreamClient.SteveType(stevetypes.Deployment)
 	requiredDeployments := []string{ClusterAgent, Webhook, Fleet, SUC}
 
 	logrus.Debugf("Verifying all required deployments exist: %v", requiredDeployments)
-	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.TenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		clusterDeployments, err := deploymentClient.List(nil)
 		if err != nil {
 			return false, nil
@@ -550,7 +552,7 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 	})
 
 	if err != nil {
-		return fmt.Errorf("Not all required deployments exist: %v", requiredDeployments)
+		return fmt.Errorf("Not all required deployments exist on cluster (%s): %v", cluster.Name, requiredDeployments)
 	}
 
 	logrus.Debug("Verifying all deployments")
