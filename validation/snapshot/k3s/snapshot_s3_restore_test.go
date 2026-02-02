@@ -105,6 +105,9 @@ func (s *S3SnapshotRestoreTestSuite) TestS3SnapshotRestore() {
 
 			err = etcdsnapshot.CreateAndValidateSnapshotRestore(s.client, cluster.Name, tt.etcdSnapshot, containerImage)
 			require.NoError(s.T(), err)
+
+			err = etcdsnapshot.VerifyS3Config(s.cluster)
+			require.NoError(s.T(), err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(s.client, s.cattleConfig)
