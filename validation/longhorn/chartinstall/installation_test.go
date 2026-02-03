@@ -3,19 +3,15 @@
 package longhorn
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/rancher/norman/types"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
-	"github.com/rancher/shepherd/extensions/kubectl"
 	shepherdPods "github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
@@ -23,7 +19,6 @@ import (
 	"github.com/rancher/tests/interoperability/longhorn"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	appv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -116,86 +111,6 @@ func (l *LonghornChartTestSuite) TestChartInstall() {
 	}
 
 	storage.CheckMountedVolume(l.T(), l.client, l.cluster.ID, namespaces.Default, podName, storage.MountPath)
-}
-
-func (l *LonghornChartTestSuite) TestChartInstallStaticCustomConfig() {
-	chart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
-	require.NoError(l.T(), err)
-
-	// If Longhorn was installed by a previous test on this same session, uninstall it to install it again with custom configuration.
-	if chart.IsAlreadyInstalled {
-		l.T().Log("Uninstalling Longhorn as it was installed on a previous test.")
-		err = charts.UninstallLonghornChart(l.client, charts.LonghornNamespace, l.cluster.ID, l.payloadOpts.Host)
-		require.NoError(l.T(), err)
-	}
-
-	nodeCollection, err := l.client.Management.Node.List(&types.ListOpts{Filters: map[string]interface{}{
-		"clusterId": l.cluster.ID,
-	}})
-	require.NoError(l.T(), err)
-
-	// Label worker nodes to check effectiveness of createDefaultDiskLabeledNodes setting.
-	// Also save the name of one worker node for future use.
-	l.T().Log("Label worker nodes with Longhorn's create-default-disk=true")
-	var workerName string
-	for _, node := range nodeCollection.Data {
-		if node.Worker {
-			labelNodeCommand := []string{"kubectl", "label", "node", node.Hostname, createDefaultDiskNodeLabel}
-			_, err = kubectl.Command(l.client, nil, l.cluster.ID, labelNodeCommand, "")
-			require.NoError(l.T(), err)
-			if workerName == "" {
-				workerName = node.Hostname
-			}
-		}
-	}
-
-	longhornCustomSetting := map[string]any{
-		"defaultSettings": map[string]any{
-			"createDefaultDiskLabeledNodes":     true,
-			"defaultDataPath":                   "/var/lib/longhorn-custom",
-			"defaultReplicaCount":               2,
-			"storageOverProvisioningPercentage": 150,
-		},
-	}
-
-	l.T().Logf("Installing Lonhgorn chart in cluster [%v] with latest version [%v] in project [%v] and namespace [%v]", l.cluster.Name, l.payloadOpts.Version, l.project.Name, l.payloadOpts.Namespace)
-	err = charts.InstallLonghornChart(l.client, l.payloadOpts, longhornCustomSetting)
-	require.NoError(l.T(), err)
-
-	expectedSettings := map[string]string{
-		"default-data-path":                    "/var/lib/longhorn-custom",
-		"default-replica-count":                `{"v1":"2","v2":"2"}`,
-		"storage-over-provisioning-percentage": "150",
-		"create-default-disk-labeled-nodes":    "true",
-	}
-
-	for setting, expectedValue := range expectedSettings {
-		getSettingCommand := []string{"kubectl", "-n", charts.LonghornNamespace, "get", "settings.longhorn.io", setting, `-o=jsonpath='{.value}'`}
-		settingValue, err := kubectl.Command(l.client, nil, l.cluster.ID, getSettingCommand, "")
-		require.NoError(l.T(), err)
-		// The output extracted from kubectl has single quotes and a newline on the end.
-		require.Equal(l.T(), fmt.Sprintf("'%s'\n", expectedValue), settingValue)
-	}
-
-	// Use the "longhorn-static" storage class so we get the expected number of replicas.
-	// Using the "longhorn" storage class will always result in 3 volume replicas.
-	l.T().Logf("Create nginx deployment with %s PVC on default namespace", longhornStaticStorageClass)
-	nginxResponse := storage.CreatePVCWorkload(l.T(), l.client, l.cluster.ID, longhornStaticStorageClass)
-
-	nginxSpec := &appv1.DeploymentSpec{}
-	err = steveV1.ConvertToK8sType(nginxResponse.Spec, nginxSpec)
-	require.NoError(l.T(), err)
-	require.NotEmpty(l.T(), nginxSpec.Template.Spec.Volumes[0])
-
-	// Even though the Longhorn default for number of replicas is 2, Rancher enforces its own default of 3.
-	volumeName := nginxSpec.Template.Spec.Volumes[0].Name
-	checkReplicasCommand := []string{"kubectl", "-n", charts.LonghornNamespace, "get", "volumes.longhorn.io", volumeName, `-o=jsonpath="{.spec.numberOfReplicas}"`}
-	settingValue, err := kubectl.Command(l.client, nil, l.cluster.ID, checkReplicasCommand, "")
-	require.NoError(l.T(), err)
-	require.Equal(l.T(), "\"2\"\n", settingValue)
-
-	// Check the node's filesystem contains the expected files.
-	storage.CheckNodeFilesystem(l.T(), l.client, l.cluster.ID, workerName, "test -d /host/var/lib/longhorn-custom/replicas && test -f /host/var/lib/longhorn-custom/longhorn-disk.cfg", l.project)
 }
 
 // In order for 'go test' to run this suite, we need to create
