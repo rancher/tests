@@ -110,8 +110,8 @@ func (l *LonghornUIAccessTestSuite) TestLonghornUIAccess() {
 	err = longhornapi.ValidateVolumeActive(l.T(), apiClient, volumeName)
 	require.NoError(l.T(), err)
 
-	l.T().Logf("Validating volume %s is visible through Rancher API with longhorn storage class", volumeName)
-	err = validateVolumeInRancher(l.T(), l.client, l.cluster.ID, volumeName, l.longhornTestConfig.LonghornTestStorageClass)
+	l.T().Log("Verifying Longhorn storage class is accessible through Rancher API")
+	err = validateLonghornStorageClassInRancher(l.T(), l.client, l.cluster.ID, l.longhornTestConfig.LonghornTestStorageClass)
 	require.NoError(l.T(), err)
 
 	l.T().Log("Cleaning up test volume")

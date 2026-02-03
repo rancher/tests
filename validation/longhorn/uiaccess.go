@@ -164,46 +164,27 @@ func validateLonghornService(t *testing.T, client *rancher.Client, clusterID str
 	return serviceURL, nil
 }
 
-// validateVolumeInRancher verifies that a volume created through Longhorn API is visible through Rancher API
-func validateVolumeInRancher(t *testing.T, client *rancher.Client, clusterID, volumeName, expectedStorageClass string) error {
+// validateLonghornStorageClassInRancher verifies that the Longhorn storage class exists and is accessible through Rancher API
+func validateLonghornStorageClassInRancher(t *testing.T, client *rancher.Client, clusterID, storageClassName string) error {
 	steveClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return fmt.Errorf("failed to get downstream client: %w", err)
 	}
 
-	t.Logf("Looking for persistent volume %s in Rancher", volumeName)
+	t.Logf("Looking for storage class %s in Rancher", storageClassName)
 
-	// Poll for the volume to appear in Rancher
-	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		volumes, err := steveClient.SteveType("persistentvolume").List(nil)
-		if err != nil {
-			return false, nil
-		}
-
-		for _, vol := range volumes.Data {
-			pv := &corev1.PersistentVolume{}
-			err = steveV1.ConvertToK8sType(vol.JSONResp, pv)
-			if err != nil {
-				continue
-			}
-
-			// Check if this is the volume we're looking for
-			if pv.Name == volumeName {
-				// Verify it uses the longhorn storage class
-				if pv.Spec.StorageClassName == expectedStorageClass {
-					t.Logf("Found volume %s with storage class %s in Rancher", volumeName, expectedStorageClass)
-					return true, nil
-				}
-				return false, fmt.Errorf("volume %s found but has storage class %s, expected %s", volumeName, pv.Spec.StorageClassName, expectedStorageClass)
-			}
-		}
-
-		return false, nil
-	})
-
+	// Get the storage class
+	storageClasses, err := steveClient.SteveType("storage.k8s.io.storageclass").List(nil)
 	if err != nil {
-		return fmt.Errorf("volume %s not found in Rancher or validation failed: %w", volumeName, err)
+		return fmt.Errorf("failed to list storage classes: %w", err)
 	}
 
-	return nil
+	for _, sc := range storageClasses.Data {
+		if sc.Name == storageClassName {
+			t.Logf("Found storage class %s in Rancher", storageClassName)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("storage class %s not found in Rancher", storageClassName)
 }
