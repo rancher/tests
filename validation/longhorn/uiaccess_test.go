@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// LonghornUIAccessTestSuite is a test suite for validating Longhorn UI and API access on downstream clusters
 type LonghornUIAccessTestSuite struct {
 	suite.Suite
 	client             *rancher.Client
