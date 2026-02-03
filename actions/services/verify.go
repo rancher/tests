@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	noSuchHostSubString = "no such host"
+	noSuchHostSubString        = "no such host"
 	connectionRefusedSubstring = "connection refused"
 )
 
