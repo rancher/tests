@@ -514,7 +514,7 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 	}
 
 	var downstreamClient *v1.Client
-	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		downstreamClient, err = client.Steve.ProxyDownstream(clusterID)
 		if err != nil {
 			return false, nil
@@ -522,6 +522,10 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 
 		return true, nil
 	})
+
+	if downstreamClient == nil {
+		return fmt.Errorf("failed to get downstream steve client for cluster (%s)", cluster.Name)
+	}
 
 	deploymentClient := downstreamClient.SteveType(stevetypes.Deployment)
 	requiredDeployments := []string{ClusterAgent, Webhook, Fleet, SUC}
