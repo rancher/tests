@@ -1,5 +1,5 @@
 name: Platform QA Package Runner
-run-name: PlatformQA Package Runner - ${{ github.event.inputs.rancher_host }}
+run-name: "PlatformQA Package Runner - ${{ github.event.inputs.rancher_host }}"
 
 on:
   workflow_dispatch:
