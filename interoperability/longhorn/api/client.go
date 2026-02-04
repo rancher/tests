@@ -55,6 +55,7 @@ volumeSpec := map[string]interface{}{
 "spec": map[string]interface{}{
 "numberOfReplicas": 3,
 "size":             "1073741824", // 1Gi in bytes
+"frontend":         "blockdev",   // Required for data engine v1
 },
 }
 
