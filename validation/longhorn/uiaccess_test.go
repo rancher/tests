@@ -10,14 +10,12 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
-	shepherdPods "github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/interoperability/longhorn"
 	longhornapi "github.com/rancher/tests/interoperability/longhorn/api"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // LonghornUIAccessTestSuite is a test suite for validating Longhorn UI and API access on downstream clusters
