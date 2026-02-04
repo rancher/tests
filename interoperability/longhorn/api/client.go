@@ -69,7 +69,7 @@ t.Logf("Successfully created volume: %s", volumeName)
 return volumeName, nil
 }
 
-// ValidateVolumeActive validates that a volume is in an active/detached state
+// ValidateVolumeActive validates that a volume is in an active/detached state and ready to use
 func ValidateVolumeActive(t *testing.T, lc *LonghornClient, volumeName string) error {
 t.Logf("Validating volume %s is active", volumeName)
 
@@ -100,8 +100,9 @@ robustness, _ := statusMap["robustness"].(string)
 
 t.Logf("Volume %s state: %s, robustness: %s", volumeName, state, robustness)
 
-// Volume is ready when it's in detached state and healthy
-if state == "detached" && robustness == "healthy" {
+// Volume is ready when it's in detached state with valid robustness
+// "unknown" robustness is expected for detached volumes with no replicas scheduled
+if state == "detached" && (robustness == "healthy" || robustness == "unknown") {
 return true, nil
 }
 
@@ -112,7 +113,7 @@ if err != nil {
 return fmt.Errorf("volume %s did not become active: %w", volumeName, err)
 }
 
-t.Logf("Volume %s is active and healthy", volumeName)
+t.Logf("Volume %s is active and ready to use", volumeName)
 return nil
 }
 
