@@ -31,7 +31,8 @@ import (
 )
 
 const (
-	noSuchHostSubString = "no such host"
+	noSuchHostSubString        = "no such host"
+	connectionRefusedSubstring = "connection refused"
 )
 
 // VerifyService waits for a service to be ready in the downstream cluster
@@ -98,7 +99,7 @@ func VerifyAWSLoadBalancer(t *testing.T, client *rancher.Client, serviceLB *v1.S
 	require.Empty(t, podErrors)
 }
 
-// VerifyHarvesterLoadBalancer validates that an AWS loadbalancer service is created and working properly
+// VerifyHarvesterLoadBalancer validates that a Harvester loadbalancer service is created and working properly
 func VerifyHarvesterLoadBalancer(t *testing.T, client *rancher.Client, serviceLB *v1.SteveAPIObject, clusterName string) {
 	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
 	require.NoError(t, err)
@@ -131,6 +132,8 @@ func VerifyHarvesterLoadBalancer(t *testing.T, client *rancher.Client, serviceLB
 		isIngressAccessible, err := ingresses.IsIngressExternallyAccessible(client, lbHostname, "", false)
 		if err != nil {
 			if strings.Contains(err.Error(), noSuchHostSubString) {
+				return false, nil
+			} else if strings.Contains(err.Error(), connectionRefusedSubstring) {
 				return false, nil
 			}
 			return false, err

@@ -1,4 +1,4 @@
-//go:build validation || pit.daily || pit.harvester.daily
+//go:build validation || pit.daily
 
 package longhorn
 
