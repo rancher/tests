@@ -152,6 +152,10 @@ openLdapAuthInput:
   doubleNestedUsers:
     - username: "nestedtestuser1"
       password: "${OPENLDAP_USER_PASSWORD}"
+  tripleNestedGroup: "nestgroup3"
+  tripleNestedUsers:
+    - username: "nestedtestuser3"
+      password: "${OPENLDAP_USER_PASSWORD}"
 
 activeDirectory:
   hostname: "${AD_HOSTNAME}"
