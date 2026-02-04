@@ -60,10 +60,6 @@ func (a *OpenLDAPAuthProviderSuite) SetupSuite() {
 		Username: client.Auth.OLDAP.Config.Users.Admin.Username,
 		Password: client.Auth.OLDAP.Config.Users.Admin.Password,
 	}
-
-	logrus.Info("Enabling OpenLDAP authentication for test suite")
-	err = a.client.Auth.OLDAP.Enable()
-	require.NoError(a.T(), err, "Failed to enable OpenLDAP authentication")
 }
 
 func (a *OpenLDAPAuthProviderSuite) TearDownSuite() {
@@ -72,19 +68,16 @@ func (a *OpenLDAPAuthProviderSuite) TearDownSuite() {
 		if err == nil && ldapConfig.Enabled {
 			logrus.Info("Disabling OpenLDAP authentication after test suite")
 			err := a.client.Auth.OLDAP.Disable()
-			if err != nil {
-				logrus.WithError(err).Warn("Failed to disable OpenLDAP in teardown")
-			}
+			require.NoError(a.T(), err, "Failed to disable OpenLDAP in teardown")
 		}
 	}
-	a.session.Cleanup()
 }
 
 func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPEnableProvider() {
 	subSession := a.session.NewSession()
 	defer subSession.Cleanup()
 
-	err := a.client.Auth.OLDAP.Enable()
+	err := authactions.EnsureAuthProviderEnabled(a.client, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to enable OpenLDAP")
 
 	ldapConfig, err := a.client.Management.AuthConfig.ByID(authactions.OpenLdap)
@@ -107,7 +100,7 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPDisableAndReenableProvider() {
 	subSession := a.session.NewSession()
 	defer subSession.Cleanup()
 
-	err := a.client.Auth.OLDAP.Enable()
+	err := authactions.EnsureAuthProviderEnabled(a.client, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to enable OpenLDAP")
 
 	err = a.client.Auth.OLDAP.Disable()
@@ -126,8 +119,7 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPDisableAndReenableProvider() {
 	)
 	require.Error(a.T(), err, "Password secret should not exist")
 	require.Contains(a.T(), err.Error(), "not found", "Should return not found error")
-
-	err = a.client.Auth.OLDAP.Enable()
+	err = authactions.EnsureAuthProviderEnabled(a.client, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to re-enable OpenLDAP")
 }
 
@@ -411,10 +403,10 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRequiredModeNestedGroupAccess() 
 	nestedUsers := slices.Concat(a.authConfig.NestedUsers, a.authConfig.DoubleNestedUsers)
 	for _, user := range nestedUsers {
 		userPrincipalID := authactions.GetUserPrincipalID(
-			authactions.ActiveDirectory,
+			authactions.OpenLdap,
 			user.Username,
-			a.client.Auth.ActiveDirectory.Config.Users.SearchBase,
-			a.client.Auth.ActiveDirectory.Config.Groups.SearchBase,
+			a.client.Auth.OLDAP.Config.Users.SearchBase,
+			a.client.Auth.OLDAP.Config.Groups.SearchBase,
 		)
 		principalIDs = append(principalIDs, userPrincipalID)
 	}

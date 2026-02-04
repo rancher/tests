@@ -49,12 +49,13 @@ type AuthConfig struct {
 }
 
 // SetupAuthenticatedSession enables the auth provider, logs in as the admin user, and returns a new session and client
-func SetupAuthenticatedSession(client *rancher.Client, session *session.Session, adminUser *v3.User, providerName string) (*session.Session, *rancher.Client, error) {
+func SetupAuthenticatedSession(client *rancher.Client, baseSession *session.Session, adminUser *v3.User, providerName string) (*session.Session, *rancher.Client, error) {
 	err := EnsureAuthProviderEnabled(client, providerName)
 	if err != nil {
 		return nil, nil, err
 	}
-	authSession := session.NewSession()
+
+	authSession := baseSession.NewSession()
 	newClient, err := client.WithSession(authSession)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create client with new session: %w", err)
@@ -161,16 +162,32 @@ func VerifyUserLogins(authAdmin *rancher.Client, providerName string, users []Us
 	return nil
 }
 
-// EnsureAuthProviderEnabled enables the specified auth provider on the Rancher client.
+// EnsureAuthProviderEnabled enables the specified auth provider and waits for it to be ready
 func EnsureAuthProviderEnabled(client *rancher.Client, providerName string) error {
+	authConfig, err := client.Management.AuthConfig.ByID(providerName)
+	if err != nil {
+		return fmt.Errorf("failed to get auth config: %w", err)
+	}
+
+	if authConfig.Enabled {
+		return nil
+	}
+
 	switch providerName {
 	case OpenLdap:
-		return client.Auth.OLDAP.Enable()
+		err = client.Auth.OLDAP.Enable()
 	case ActiveDirectory:
-		return client.Auth.ActiveDirectory.Enable()
+		err = client.Auth.ActiveDirectory.Enable()
 	default:
 		return fmt.Errorf("unsupported auth provider: %s", providerName)
 	}
+
+	if err != nil {
+		return fmt.Errorf("failed to enable auth provider %s: %w", providerName, err)
+	}
+
+	_, err = WaitForAuthProviderAnnotationUpdate(client, providerName, AuthProvCleanupAnnotationValUnlocked)
+	return err
 }
 
 // WaitForNamespaceReady polls until the namespace is available within the specified timeout

@@ -60,10 +60,6 @@ func (a *ActiveDirectoryAuthProviderSuite) SetupSuite() {
 		Username: client.Auth.ActiveDirectory.Config.Users.Admin.Username,
 		Password: client.Auth.ActiveDirectory.Config.Users.Admin.Password,
 	}
-
-	logrus.Info("Enabling Active Directory authentication for test suite")
-	err = a.client.Auth.ActiveDirectory.Enable()
-	require.NoError(a.T(), err, "Failed to enable Active Directory authentication")
 }
 
 func (a *ActiveDirectoryAuthProviderSuite) TearDownSuite() {
@@ -72,19 +68,16 @@ func (a *ActiveDirectoryAuthProviderSuite) TearDownSuite() {
 		if err == nil && adConfig.Enabled {
 			logrus.Info("Disabling Active Directory authentication after test suite")
 			err := a.client.Auth.ActiveDirectory.Disable()
-			if err != nil {
-				logrus.WithError(err).Warn("Failed to disable Active Directory in teardown")
-			}
+			require.NoError(a.T(), err, "Failed to disable Active Directory in teardown")
 		}
 	}
-	a.session.Cleanup()
 }
 
 func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryEnableProvider() {
 	subSession := a.session.NewSession()
 	defer subSession.Cleanup()
 
-	err := a.client.Auth.ActiveDirectory.Enable()
+	err := authactions.EnsureAuthProviderEnabled(a.client, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to enable Active Directory")
 
 	adConfig, err := a.client.Management.AuthConfig.ByID(authactions.ActiveDirectory)
@@ -107,7 +100,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryDisableAndReenable
 	subSession := a.session.NewSession()
 	defer subSession.Cleanup()
 
-	err := a.client.Auth.ActiveDirectory.Enable()
+	err := authactions.EnsureAuthProviderEnabled(a.client, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to enable Active Directory")
 
 	err = a.client.Auth.ActiveDirectory.Disable()
@@ -127,7 +120,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryDisableAndReenable
 	require.Error(a.T(), err, "Password secret should not exist")
 	require.Contains(a.T(), err.Error(), "not found", "Should return not found error")
 
-	err = a.client.Auth.ActiveDirectory.Enable()
+	err = authactions.EnsureAuthProviderEnabled(a.client, authactions.ActiveDirectory)
 	require.NoError(a.T(), err, "Failed to re-enable Active Directory")
 }
 
