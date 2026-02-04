@@ -303,8 +303,33 @@ func VerifyDeleteRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterID 
 	require.NoError(t, err)
 
 	logrus.Infof("Waiting for nodes to be deleted on cluster (%s)", clusterID)
-	err = nodestat.AllNodeDeleted(client, clusterID)
+	err = VerifyAllNodesDeleted(client, clusterID)
 	require.NoError(t, err)
+}
+
+// VerifyAllNodesDeleted validates that a non-rke1 cluster's nodes have been successfully deleted.
+func VerifyAllNodesDeleted(client *rancher.Client, clusterID string) error {
+	logrus.Infof("Waiting for nodes to be deleted on cluster (%s)", clusterID)
+	ctx := context.Background()
+	err := kwait.PollUntilContextTimeout(
+		ctx, oneSecondInterval, defaults.TenMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+			_, err := client.Steve.SteveType(stevetypes.Node).ByID(clusterID)
+			if err != nil {
+				if strings.Contains(err.Error(), notFound) {
+					return true, nil
+				}
+
+				return false, err
+			}
+
+			return false, nil
+		})
+	if err != nil {
+		return err
+	}
+
+	logrus.Infof("All nodes deleted on cluster (%s)", clusterID)
+	return nil
 }
 
 // VerifyACE validates that the ACE resources are healthy in a given cluster
