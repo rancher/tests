@@ -70,8 +70,11 @@ func TestCNI(t *testing.T) {
 	}{
 		{"RKE2_Node_Driver|Calico", r.standardUserClient, "calico"},
 		{"RKE2_Node_Driver|Canal", r.standardUserClient, "canal"},
-		{"RKE2_Node_Driver|Flannel", r.standardUserClient, "flannel"},
 		{"RKE2_Node_Driver|Cilium", r.standardUserClient, "cilium"},
+		{"RKE2_Node_Driver|Flannel", r.standardUserClient, "flannel"},
+		{"RKE2_Node_Driver|Multus_Calico", r.standardUserClient, "multus,calico"},
+		{"RKE2_Node_Driver|Multus_Canal", r.standardUserClient, "multus,canal"},
+		{"RKE2_Node_Driver|Multus_Cilium", r.standardUserClient, "multus,cilium"},
 	}
 
 	for _, tt := range tests {
