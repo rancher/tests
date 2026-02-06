@@ -84,14 +84,29 @@ runs:
             fi
 
             gotestsum --format standard-verbose \
-              --packages=github.com/rancher/tests/validation/nodescaling/ipv6 \
+              --packages=github.com/rancher/tests/validation/nodescaling/rke2/ipv6 \
               --junitfile results.xml \
-              --jsonfile results_node_scale.json \
+              --jsonfile results_rke2_node_scale.json \
               -- -timeout=5h -tags=recurring -v
 
-            node_scale_exit=$?
-            echo "node_scale_exit=$node_scale_exit" >> "$GITHUB_ENV"
-            cp results_node_scale.json results.json
+            rke2_node_scale_exit=$?
+            echo "rke2_node_scale_exit=$rke2_node_scale_exit" >> "$GITHUB_ENV"
+            cp results_rke2_node_scale.json results.json
+
+            if [[ "${{ inputs.reporting }}" == "true" ]]; then
+              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+              ./validation/reporter
+            fi
+
+            gotestsum --format standard-verbose \
+              --packages=github.com/rancher/tests/validation/nodescaling/k3s/ipv6 \
+              --junitfile results.xml \
+              --jsonfile results_k3s_node_scale.json \
+              -- -timeout=5h -tags=recurring -v
+
+            k3s_node_scale_exit=$?
+            echo "k3s_node_scale_exit=$k3s_node_scale_exit" >> "$GITHUB_ENV"
+            cp results_k3s_node_scale.json results.json
 
             if [[ "${{ inputs.reporting }}" == "true" ]]; then
               ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -170,7 +185,8 @@ runs:
           [rke2_cert_exit]="RKE2 Cert Rotation:results_rke2_cert.json"
           [rke2_delete_exit]="Delete RKE2 Cluster:results_rke2_delete.json"
           [k3s_delete_exit]="Delete K3S Cluster:results_k3s_delete.json"
-          [node_scale_exit]="Node Scaling:results_node_scale.json"
+          [rke2_node_scale_exit]="RKE2 Node Scaling:results_rke2_node_scale.json"
+          [k3s_node_scale_exit]="K3S Node Scaling:results_k3s_node_scale.json"
           [prov_exit]="Provisioning:results_prov.json"
           [rke2_snapshot_exit]="RKE2 Snapshot Restore:results_rke2_snapshot.json"
           [k3s_snapshot_exit]="K3S Snapshot Restore:results_k3s_snapshot.json"

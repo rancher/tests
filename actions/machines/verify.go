@@ -13,6 +13,7 @@ import (
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
+// VerifyMachineReplacement verifies that a machine has been successfully replaced by checking for its deletion.
 func VerifyMachineReplacement(client *rancher.Client, replacedMachine *v1.SteveAPIObject) error {
 	err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.TenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		_, err = client.Steve.SteveType(stevetypes.Machine).ByID(replacedMachine.ID)
