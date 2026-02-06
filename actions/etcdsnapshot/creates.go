@@ -24,7 +24,6 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/scalinginput"
 	"github.com/rancher/tests/actions/services"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	deploy "github.com/rancher/tests/actions/workloads/deployment"
@@ -155,13 +154,6 @@ func CreateAndValidateSnapshotRKE1(client *rancher.Client, podTemplate *corev1.P
 	cluster, err := client.Management.Cluster.ByID(clusterID)
 	if err != nil {
 		return nil, "", nil, nil, err
-	}
-
-	if etcdRestore.ReplaceRoles != nil && cluster.RancherKubernetesEngineConfig.Services.Etcd.BackupConfig.S3BackupConfig != nil {
-		err = scalinginput.ReplaceRKE1Nodes(client, clusterName, etcdRestore.ReplaceRoles.Etcd, etcdRestore.ReplaceRoles.ControlPlane, etcdRestore.ReplaceRoles.Worker)
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
 	}
 
 	snapshotToRestore := createdSnapshots[0].ID
@@ -319,7 +311,6 @@ func RestoreAndValidateSnapshotRKE1(client *rancher.Client, snapshotName string,
 // CreateAndValidateSnapshotV2Prov is a helper that takes a snapshot of a given v2prov cluster and validates is resources after the snapshot
 func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1.PodTemplateSpec, deployment *v1.Deployment, clusterName, clusterID string,
 	etcdRestore *Config, isRKE1 bool) (*apisV1.Cluster, string, *steveV1.SteveAPIObject, *steveV1.SteveAPIObject, error) {
-
 	createdSnapshots, err := shepherdsnapshot.CreateRKE2K3SSnapshot(client, clusterName)
 	if err != nil {
 		return nil, "", nil, nil, err
@@ -346,13 +337,6 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 
 	if cluster.Spec.RKEConfig.ETCD.S3 != nil && !s3Found {
 		return nil, "", nil, nil, fmt.Errorf("s3 is enabled for the cluster, but selected snapshot is not from s3")
-	}
-
-	if etcdRestore.ReplaceRoles != nil && cluster.Spec.RKEConfig.ETCD.S3 != nil {
-		err = scalinginput.ReplaceNodes(client, clusterName, etcdRestore.ReplaceRoles.Etcd, etcdRestore.ReplaceRoles.ControlPlane, etcdRestore.ReplaceRoles.Worker)
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
 	}
 
 	postDeploymentResp, postServiceResp, err := createPostBackupWorkloads(client, clusterID, *podTemplate, deployment)
@@ -428,6 +412,7 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 				return nil, "", nil, nil, fmt.Errorf("wokerConcurrency after upgrade %s does not match expected version %s", clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency, etcdRestore.WorkerUnavailableValue)
 			}
 		}
+
 		// sometimes we get a false positive on the cluster's state where it briefly goes 'active'. This is a way to mitigate that.
 		clusterSteveObject, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(clusterID)
 		if err != nil {
@@ -478,7 +463,6 @@ func RestoreAndValidateSnapshotV2Prov(client *rancher.Client, snapshotID string,
 			return err
 		}
 
-		logrus.Info("Restoring snapshot for cluster " + clusterObject.Name)
 		steveCluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + clusterObject.Name)
 		if err != nil {
 			return err
@@ -508,8 +492,13 @@ func RestoreAndValidateSnapshotV2Prov(client *rancher.Client, snapshotID string,
 			return err
 		}
 
+		clusterObject, _, err = clusters.GetProvisioningClusterByName(client, steveCluster.Name, namespaces.FleetDefault)
+		if err != nil {
+			return err
+		}
+
 		if cluster.Spec.KubernetesVersion != clusterObject.Spec.KubernetesVersion {
-			return fmt.Errorf("K8s Version after upgrade %s does not match expected version %s after restore", clusterObject.Spec.KubernetesVersion, etcdRestore.UpgradeKubernetesVersion)
+			return fmt.Errorf("K8s Version after upgrade %s does not match expected version %s after restore", clusterObject.Spec.KubernetesVersion, cluster.Spec.KubernetesVersion)
 		}
 
 		if etcdRestore.SnapshotRestore == all && etcdRestore.ControlPlaneConcurrencyValue != "" && etcdRestore.WorkerConcurrencyValue != "" {
@@ -521,7 +510,7 @@ func RestoreAndValidateSnapshotV2Prov(client *rancher.Client, snapshotID string,
 			}
 
 			if cluster.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency != clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency {
-				return fmt.Errorf("wokerConcurrency after restore %s does not match expected version %s", clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency, cluster.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency)
+				return fmt.Errorf("wokerConcurrency after restore %s does not match expected version %s", clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency, cluster.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency)
 			}
 		}
 	}
