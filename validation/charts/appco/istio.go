@@ -172,11 +172,11 @@ func deleteResources(client *rancher.Client, clusterID string) (string, error) {
 	deleteCommand := []string{
 		"sh", "-c",
 		fmt.Sprintf("%s && %s && %s && %s && %s",
-			"kubectl delete mutatingwebhookconfiguration istio-sidecar-injector",
-			fmt.Sprintf("kubectl delete configmaps -n %s istio-sidecar-injector", charts.RancherIstioNamespace),
+			"kubectl delete mutatingwebhookconfiguration istio-sidecar-injector --ignore-not-found=true",
+			fmt.Sprintf("kubectl delete configmaps -n %s istio-sidecar-injector --ignore-not-found=true", charts.RancherIstioNamespace),
 			"kubectl label namespace default istio-injection-",
-			"kubectl delete $(kubectl get CustomResourceDefinition -l='app.kubernetes.io/part-of=istio' -o name -A)",
-			"kubectl delete validatingwebhookconfiguration istiod-default-validator istio-validator-istio-system"),
+			"kubectl get CustomResourceDefinition -l='app.kubernetes.io/part-of=istio' -o name -A | xargs -r kubectl delete",
+			"kubectl delete validatingwebhookconfiguration istiod-default-validator istio-validator-istio-system --ignore-not-found=true"),
 	}
 
 	return kubectl.Command(client, nil, clusterID, deleteCommand, logBufferSize)

@@ -67,6 +67,9 @@ func (i *IstioTestSuite) SetupSuite() {
 	if !strings.Contains(newCluster.Spec.KubernetesVersion, "k3s") && !strings.Contains(newCluster.Spec.KubernetesVersion, "rke2") {
 		i.clusterName = i.cluster.ID
 	}
+
+	_, err = deleteResources(i.client, i.cluster.ID)
+	require.NoError(i.T(), err)
 }
 
 func (i *IstioTestSuite) TearDownTest() {
