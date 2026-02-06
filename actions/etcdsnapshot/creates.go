@@ -397,7 +397,7 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 		}
 
 		logrus.Infof("Upgrading K8s version to %s on cluster: %s", clusterObject.Spec.KubernetesVersion, clusterObject.Name)
-		_, err = client.Steve.SteveType(stevetypes.Provisioning).Update(clusterResponse, clusterObject)
+		steveCluster, err := client.Steve.SteveType(stevetypes.Provisioning).Update(clusterResponse, clusterObject)
 		if err != nil {
 			return nil, "", nil, nil, err
 		}
@@ -407,9 +407,9 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 			return nil, "", nil, nil, err
 		}
 
-		podErrors := pods.StatusPods(client, clusterID)
-		if len(podErrors) != 0 {
-			return nil, "", nil, nil, errors.New("cluster's pods not in good health post upgrade")
+		err = actionspods.VerifyClusterPods(client, steveCluster)
+		if err != nil {
+			return nil, "", nil, nil, err
 		}
 
 		if upgradeKubernetesVersion != clusterObject.Spec.KubernetesVersion {
