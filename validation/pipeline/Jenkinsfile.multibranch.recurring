@@ -113,6 +113,10 @@ node {
                     def rancherVersion = tagChartMap.get(testTag)
                     rancherVersion = (rancherVersion in [null, '']) ? testTag : rancherVersion
 
+                    if ("${env.RANCHER_VERSION}" != "null" && "${env.RANCHER_VERSION}" != "") {
+                      rancherVersion = "${env.RANCHER_VERSION}"
+                    }
+
                     sh "./yq e '.rancher_version = \"${rancherVersion}\"' -i ${ansibleConfigPath}"
                     sh "./yq e '.rancher_image_tag = \"${testTag}\"' -i ${ansibleConfigPath}"
                     sh "sed -i 's|^aws_hostname_prefix = \".*\"|aws_hostname_prefix = \"${hostname}\"|' ${terraformConfigPath}"
