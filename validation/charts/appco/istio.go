@@ -167,6 +167,7 @@ func createFleetSecret(client *rancher.Client) (string, error) {
 
 // deleteResources follows the Istio uninstall reference guide
 // and deletes the ValidatingWebhookConfiguration to avoid installation conflicts
+// added the --ignore-not-found=true flag and xargs logic to prevent “not found” errors
 // Doc: https://docs.apps.rancher.io/reference-guides/istio#uninstall-the-chart
 func deleteResources(client *rancher.Client, clusterID string) (string, error) {
 	deleteCommand := []string{
