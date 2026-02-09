@@ -4,6 +4,7 @@ package rke2
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -86,6 +87,10 @@ func TestCNI(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
+			if strings.Contains(tt.cni, "cilium") {
+				t.Skip("Known issue: https://github.com/rancher/rancher/issues/53105")
+			}
 
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
