@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -259,4 +260,22 @@ func newIstioChartUpgradeAction(p *PayloadOpts, rancherIstioOpts *RancherIstioOp
 	chartUpgradeAction := NewChartUpgradeAction(p.Namespace, chartUpgrades)
 
 	return chartUpgradeAction
+}
+
+// DeleteIstioResources follows the Istio uninstall reference guide
+// and deletes the ValidatingWebhookConfiguration to avoid installation conflicts
+// added the --ignore-not-found=true flag and xargs logic to prevent “not found” errors
+// Doc: https://docs.apps.rancher.io/reference-guides/istio#uninstall-the-chart
+func DeleteIstioResources(client *rancher.Client, clusterID string) (string, error) {
+	deleteCommand := []string{
+		"sh", "-c",
+		fmt.Sprintf("%s && %s && %s && %s && %s",
+			"kubectl delete mutatingwebhookconfiguration istio-sidecar-injector --ignore-not-found=true",
+			fmt.Sprintf("kubectl delete configmaps -n %s istio-sidecar-injector --ignore-not-found=true", RancherIstioNamespace),
+			"kubectl label namespace default istio-injection-",
+			"kubectl get CustomResourceDefinition -l='app.kubernetes.io/part-of=istio' -o name -A | xargs -r kubectl delete",
+			"kubectl delete validatingwebhookconfiguration istiod-default-validator istio-validator-istio-system --ignore-not-found=true"),
+	}
+
+	return kubectl.Command(client, nil, clusterID, deleteCommand, "2MB")
 }

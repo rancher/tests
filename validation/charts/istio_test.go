@@ -41,9 +41,16 @@ type IstioTestSuite struct {
 	chartInstallOptions *chartInstallOptions
 	chartFeatureOptions *chartFeatureOptions
 	steveClient         *v1.Client
+	cluster             *clusters.ClusterMeta
 }
 
 func (i *IstioTestSuite) TearDownSuite() {
+	i.session.Cleanup()
+}
+
+func (i *IstioTestSuite) TearDownTest() {
+	_, err := charts.DeleteIstioResources(i.client, i.cluster.ID)
+	require.NoError(i.T(), err)
 	i.session.Cleanup()
 }
 
@@ -63,6 +70,8 @@ func (i *IstioTestSuite) SetupSuite() {
 	// Get cluster meta
 	cluster, err := clusters.NewClusterMeta(client, clusterName)
 	require.NoError(i.T(), err)
+
+	i.cluster = cluster
 
 	// Change kiali and jaeger paths if it's not local cluster
 	if !cluster.IsLocal {
