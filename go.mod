@@ -68,7 +68,7 @@ require (
 	github.com/qase-tms/qase-go/pkg/qase-go v1.0.7
 	github.com/qase-tms/qase-go/qase-api-client v1.2.1
 	github.com/rancher/rancher v0.0.0-20251223145833-24cecce3325e
-	github.com/rancher/shepherd v0.0.0-20260122211220-e4fc12acd2be
+	github.com/rancher/shepherd v0.0.0-20260206205036-22f6b44492e1
 	github.com/rancher/tests/actions v0.0.0-20260105193042-a805683addc3
 	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
 	github.com/rancher/tfp-automation v0.0.0-20260126225050-e17784ebc431
@@ -285,5 +285,3 @@ require (
 	sigs.k8s.io/kustomize/api v0.20.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.20.1 // indirect
 )
-
-replace github.com/rancher/shepherd v0.0.0-20260122211220-e4fc12acd2be => github.com/lscalabrini01/shepherd v0.0.0-20260202201601-4b0b21310207

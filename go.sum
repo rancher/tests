@@ -1936,8 +1936,6 @@ github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de h1:9TO3cAIGXtEhn
 github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de/go.mod h1:zAbeS9B/r2mtpb6U+EI2rYA5OAXxsYw6wTamcNW+zcE=
 github.com/lithammer/dedent v1.1.0 h1:VNzHMVCBNG1j0fh3OrsFRkVUwStdDArbgBWoPAffktY=
 github.com/lithammer/dedent v1.1.0/go.mod h1:jrXYCQtgg0nJiN+StA2KgR7w6CiQNv9Fd/Z9BP0jIOc=
-github.com/lscalabrini01/shepherd v0.0.0-20260202201601-4b0b21310207 h1:TAoBb70Laj/S4xxWL/lQCCA6u7tQ5Nn0JsCdptHXiQE=
-github.com/lscalabrini01/shepherd v0.0.0-20260202201601-4b0b21310207/go.mod h1:SJtW8Jqv0rphZzsGnvB965YdyR2FqFtB+TbbzVLt8F4=
 github.com/lyft/protoc-gen-star v0.6.0/go.mod h1:TGAoBVkt8w7MPG72TrKIu85MIdXwDuzJYeZuUPFPNwA=
 github.com/lyft/protoc-gen-star v0.6.1/go.mod h1:TGAoBVkt8w7MPG72TrKIu85MIdXwDuzJYeZuUPFPNwA=
 github.com/lyft/protoc-gen-star/v2 v2.0.1/go.mod h1:RcCdONR2ScXaYnQC5tUzxzlpA3WVYF7/opLeUgcQs/o=
@@ -2190,6 +2188,8 @@ github.com/rancher/rancher/pkg/apis v0.0.0-20260105201356-c4811cb9f2af h1:ZXIKdK
 github.com/rancher/rancher/pkg/apis v0.0.0-20260105201356-c4811cb9f2af/go.mod h1:NwWL+lOkxPRibQ6j+9uFSo6t1CJ18z1oY4OYJMOQ/R0=
 github.com/rancher/rke v1.8.0 h1:87jeoOccnnNCq27YgWgMh4o0GVrrVKbw+zfo+cHMZlo=
 github.com/rancher/rke v1.8.0/go.mod h1:x9N1abruzDFMwTpqq2cnaDYpKCptlNoW8VraNWB6Pc4=
+github.com/rancher/shepherd v0.0.0-20260206205036-22f6b44492e1 h1:Ig+5QXWZkOsDjMeSPrBMmeKfKippcNlG7IQlIcsTL6Y=
+github.com/rancher/shepherd v0.0.0-20260206205036-22f6b44492e1/go.mod h1:SJtW8Jqv0rphZzsGnvB965YdyR2FqFtB+TbbzVLt8F4=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078 h1:1MJSgYkgXhr/Zc5idJkKa10SiBQd0HVtbxVOBoghlzY=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078/go.mod h1:CV2Soy/Skw8/SA9dDJVgpeHxoEdtjYkNpNy6xvvC5kA=
 github.com/rancher/tfp-automation v0.0.0-20260126225050-e17784ebc431 h1:o7ct+rHgC2F8fedrkTTdK4L4IkrAerhdNTnA4rUQF10=
