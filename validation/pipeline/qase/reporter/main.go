@@ -95,7 +95,8 @@ func getAllAutomationTestCases(client *clients.V1Client) (map[string]api_v1_clie
 		offset := int32(offSetCount)
 		tempResult, _, err := client.GetAPIClient().CasesAPI.GetCases(authCtx, qaseactions.RancherManagerProjectID).Offset(offset).Execute()
 		if err != nil {
-			return nil, err
+			logrus.Warnf("Error fetching existing test cases (may have deprecated params): %v", err)
+			return testCaseNameMap, nil
 		}
 
 		testCases = append(testCases, tempResult.Result.Entities...)
@@ -224,7 +225,8 @@ func reportTestQases(client *clients.V1Client, testRunID int64) (int, error) {
 			}
 		}
 	}
-	resp, httpResponse, err := client.GetAPIClient().RunsAPI.GetRun(context.TODO(), qaseactions.RancherManagerProjectID, int32(testRunID)).Execute()
+	authCtx := context.WithValue(context.TODO(), api_v1_client.ContextAPIKeys, map[string]api_v1_client.APIKey{"TokenAuth": {Key: qaseToken}})
+	resp, httpResponse, err := client.GetAPIClient().RunsAPI.GetRun(authCtx, qaseactions.RancherManagerProjectID, int32(testRunID)).Execute()
 	if err != nil {
 		var statusCode int
 		if httpResponse != nil {
@@ -243,7 +245,8 @@ func writeTestSuiteToQase(client *clients.V1Client, testResult testresult.GoTest
 	parentSuite := int64(automationSuiteID)
 	var id int64
 	for _, suiteGo := range testResult.TestSuite {
-		qaseSuites, _, err := client.GetAPIClient().SuitesAPI.GetSuites(context.TODO(), qaseactions.RancherManagerProjectID).Search(suiteGo).Execute()
+		authCtx := context.WithValue(context.TODO(), api_v1_client.ContextAPIKeys, map[string]api_v1_client.APIKey{"TokenAuth": {Key: qaseToken}})
+		qaseSuites, _, err := client.GetAPIClient().SuitesAPI.GetSuites(authCtx, qaseactions.RancherManagerProjectID).Search(suiteGo).Execute()
 		if err != nil {
 			return nil, err
 		}
@@ -261,7 +264,8 @@ func writeTestSuiteToQase(client *clients.V1Client, testResult testresult.GoTest
 				Title:    suiteGo,
 				ParentId: *api_v1_client.NewNullableInt64(&parentSuite),
 			}
-			idResponse, _, err := client.GetAPIClient().SuitesAPI.CreateSuite(context.TODO(), qaseactions.RancherManagerProjectID).SuiteCreate(suiteBody).Execute()
+			authCtx := context.WithValue(context.TODO(), api_v1_client.ContextAPIKeys, map[string]api_v1_client.APIKey{"TokenAuth": {Key: qaseToken}})
+			idResponse, _, err := client.GetAPIClient().SuitesAPI.CreateSuite(authCtx, qaseactions.RancherManagerProjectID).SuiteCreate(suiteBody).Execute()
 			if err != nil {
 				return nil, err
 			}
@@ -291,7 +295,8 @@ func writeTestCaseToQase(client *clients.V1Client, testResult testresult.GoTestR
 			fmt.Sprintf("%d", testSourceID): testSource,
 		},
 	}
-	caseID, _, err := client.GetAPIClient().CasesAPI.CreateCase(context.TODO(), qaseactions.RancherManagerProjectID).TestCaseCreate(testQaseBody).Execute()
+	authCtx := context.WithValue(context.TODO(), api_v1_client.ContextAPIKeys, map[string]api_v1_client.APIKey{"TokenAuth": {Key: qaseToken}})
+	caseID, _, err := client.GetAPIClient().CasesAPI.CreateCase(authCtx, qaseactions.RancherManagerProjectID).TestCaseCreate(testQaseBody).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +321,8 @@ func updateTestInRun(client *clients.V1Client, testResult testresult.GoTestResul
 		Time:    *api_v1_client.NewNullableInt64(api_v1_client.PtrInt64(int64(elapsedTime))),
 	}
 
-	_, resp, err := client.GetAPIClient().ResultsAPI.CreateResult(context.TODO(), qaseactions.RancherManagerProjectID, int32(testRunID)).ResultCreate(resultBody).Execute()
+	authCtx := context.WithValue(context.TODO(), api_v1_client.ContextAPIKeys, map[string]api_v1_client.APIKey{"TokenAuth": {Key: qaseToken}})
+	_, resp, err := client.GetAPIClient().ResultsAPI.CreateResult(authCtx, qaseactions.RancherManagerProjectID, int32(testRunID)).ResultCreate(resultBody).Execute()
 	if err != nil {
 		if resp != nil {
 			return resp.StatusCode, err
