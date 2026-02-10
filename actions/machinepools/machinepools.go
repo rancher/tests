@@ -173,13 +173,13 @@ func ScaleMachinePool(client *rancher.Client, cluster *v1.SteveAPIObject, nodeRo
 		return nil, err
 	}
 
-	err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		clusterResp, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(cluster.ID)
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		cluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(cluster.ID)
 		if err != nil {
 			return false, err
 		}
 
-		if clusterResp.ObjectMeta.State.Name == active && nodestat.AllMachineReady(client, cluster.ID, defaults.ThirtyMinuteTimeout) == nil {
+		if cluster.ObjectMeta.State.Name == active && nodestat.AllMachineReady(client, cluster.ID, defaults.ThirtyMinuteTimeout) == nil {
 			return true, nil
 		}
 

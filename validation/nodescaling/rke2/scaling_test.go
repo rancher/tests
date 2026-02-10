@@ -106,10 +106,10 @@ func (s *NodeScalingTestSuite) TestScalingNodePools() {
 		cluster       *v1.SteveAPIObject
 		isWindows     bool
 	}{
-		{"RKE2_Node_Driver_Scale_Control_Plane", nodeRolesControlPlane, 1, s.cluster, false},
-		{"RKE2_Node_Driver_Scale_ETCD", nodeRolesEtcd, 1, s.cluster, false},
-		{"RKE2_Node_Driver_Scale_Worker", nodeRolesWorker, 1, s.cluster, false},
-		{"RKE2_Node_Driver_Scale_Windows", nodeRolesWindows, 1, s.cluster, true},
+		{"RKE2_Scale_Control_Plane", nodeRolesControlPlane, 1, s.cluster, false},
+		{"RKE2_Scale_ETCD", nodeRolesEtcd, 1, s.cluster, false},
+		{"RKE2_Scale_Worker", nodeRolesWorker, 1, s.cluster, false},
+		{"RKE2_Scale_Windows", nodeRolesWindows, 1, s.cluster, true},
 	}
 
 	for _, tt := range tests {
