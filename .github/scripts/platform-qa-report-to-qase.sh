@@ -7,7 +7,7 @@ QASE_TEST_RUN_ID="${3:-}"
 QASE_AUTOMATION_TOKEN="${4:-}"
 
 # Check required arguments
-if [ -z "$RESULTS_JSON" ] || [ -z "$PACKAGE_NAME" ] || [ -z "$QASE_TEST_RUN_ID" ] || [ -z "$QASE_AUTOMATION_TOKEN" ]; then
+if [[ -z "$RESULTS_JSON" || -z "$PACKAGE_NAME" || -z "$QASE_TEST_RUN_ID" || -z "$QASE_AUTOMATION_TOKEN" ]]; then
   echo "Usage: $0 <results_json> <package_name> <qase_test_run_id> <qase_automation_token>"
   exit 1
 fi
@@ -30,11 +30,17 @@ cp "$RESULTS_JSON" "$PACKAGE_RESULTS_JSON"
 
 # Remove skipped tests
 if command -v jq >/dev/null 2>&1; then
-  jq 'map(select(.Status != "skip" and .Status != "skipped"))' "$PACKAGE_RESULTS_JSON" > "$RESULTS_DIR/results.json"
+  if ! jq -s 'map(select(type=="object" and (.Status // "") != "skip" and (.Status // "") != "skipped"))' \
+      "$PACKAGE_RESULTS_JSON" > "$RESULTS_DIR/results.json"; then
+    echo "❌ Failed to process results JSON. Dumping '$PACKAGE_RESULTS_JSON' for debugging:"
+    cat "$PACKAGE_RESULTS_JSON"
+    exit 1
+  fi
 else
   echo "❌ jq is required to filter skipped tests"
   exit 1
 fi
+
 TEST_COUNT=$(jq length "$RESULTS_DIR/results.json")
 echo "📝 Reporting $TEST_COUNT tests to Qase"
 
