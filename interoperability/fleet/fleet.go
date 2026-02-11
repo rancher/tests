@@ -87,11 +87,6 @@ func VerifyGitRepo(client *rancher.Client, gitRepoID, k8sClusterID, steveCluster
 			return true, errors.New(gitRepo.State.Message)
 		}
 
-		// Added a condition to handle cases where the fleet remains in a Modified state even though all resources are ready
-		if gitStatus.Summary.NotReady == 0 && gitStatus.Summary.Modified > 0 && gitStatus.ResourceCounts.NotReady == 0 {
-			return true, nil
-		}
-
 		if gitStatus.Summary.NotReady > 0 || gitStatus.Summary.DesiredReady == 0 || gitStatus.ReadyClusters == 0 {
 			return false, nil
 		}
@@ -148,8 +143,7 @@ func VerifyGitRepo(client *rancher.Client, gitRepoID, k8sClusterID, steveCluster
 			return true, errors.New(gitRepo.State.Message)
 		}
 
-		// Added a condition to handle cases where the fleet remains in a Modified state even though all resources are ready
-		if (gitStatus.Summary.NotReady == 0 && gitStatus.ReadyClusters == gitStatus.Summary.DesiredReady) || (gitStatus.Summary.NotReady == 0 && gitStatus.Summary.Modified > 0 && gitStatus.ResourceCounts.NotReady == 0) {
+		if gitStatus.Summary.NotReady == 0 && gitStatus.ReadyClusters == gitStatus.Summary.DesiredReady {
 			return true, nil
 		}
 

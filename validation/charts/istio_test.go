@@ -45,11 +45,9 @@ type IstioTestSuite struct {
 }
 
 func (i *IstioTestSuite) TearDownSuite() {
-	i.session.Cleanup()
-}
-
-func (i *IstioTestSuite) TearDownTest() {
-	_, err := charts.DeleteIstioResources(i.client, i.cluster.ID)
+	_, err := charts.DeleteMonitoringResources(i.client, i.cluster.ID)
+	require.NoError(i.T(), err)
+	_, err = charts.DeleteIstioResources(i.client, i.cluster.ID)
 	require.NoError(i.T(), err)
 	i.session.Cleanup()
 }

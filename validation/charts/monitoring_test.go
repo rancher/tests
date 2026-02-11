@@ -41,9 +41,12 @@ type MonitoringTestSuite struct {
 	project             *management.Project
 	chartInstallOptions *charts.InstallOptions
 	chartFeatureOptions *charts.RancherMonitoringOpts
+	cluster             *clusters.ClusterMeta
 }
 
 func (m *MonitoringTestSuite) TearDownSuite() {
+	_, err := charts.DeleteMonitoringResources(m.client, m.cluster.ID)
+	require.NoError(m.T(), err)
 	m.session.Cleanup()
 }
 
@@ -63,6 +66,8 @@ func (m *MonitoringTestSuite) SetupSuite() {
 	// Get cluster meta
 	cluster, err := clusters.NewClusterMeta(client, clusterName)
 	require.NoError(m.T(), err)
+
+	m.cluster = cluster
 
 	// Change alert manager and grafana paths if it's not local cluster
 	if !cluster.IsLocal {
