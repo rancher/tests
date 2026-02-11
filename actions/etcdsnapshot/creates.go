@@ -708,3 +708,12 @@ func createDeployment(steveclient *steveV1.Client, wlName string, deployment *v1
 
 	return deploymentResp, err
 }
+
+// This function validates that spec.rkeConfig.etcd.s3 is not null for S3-specific snapshot tests.
+func VerifyS3Config(cluster *apisV1.Cluster) error {
+	if cluster.Spec.RKEConfig == nil ||
+		cluster.Spec.RKEConfig.ETCD.S3 == nil {
+		return fmt.Errorf("expected S3 config to be set, but spec.rkeConfig.etcd.s3 is empty")
+	}
+	return nil
+}
