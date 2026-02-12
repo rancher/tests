@@ -162,7 +162,7 @@ node {
                         -e AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY} \
                         -v ${workspace}:/workspace \
                         -w /workspace \
-                        rancher-infra-tools:latest \
+                        ${infraToolsImage} \
                         sh -c 'aws s3 cp ${tfvarsPath} s3://${env.S3_BUCKET_NAME}/${s3Path} --region ${env.S3_BUCKET_REGION}'
                 """
                 echo "Uploaded terraform.tfvars to s3://${env.S3_BUCKET_NAME}/${s3Path}"
