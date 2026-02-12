@@ -34,7 +34,7 @@ node {
     def qaseProjectId = env.QASE_PROJECT_ID ?: ''
     def qaseReporterScript = env.QASE_REPORTER_SCRIPT ?: 'build_qase_reporter_v2.sh'
 
-    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SSH_PEM_KEY', 'AWS_SSH_PEM_KEY_NAME', 'QASE_AUTOMATION_TOKEN']) {
+    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SSH_PEM_KEY', 'AWS_SSH_PEM_KEY_NAME']) {
         try {
             stage('Checkout') {
                 deleteDir()
