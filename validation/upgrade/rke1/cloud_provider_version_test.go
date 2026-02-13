@@ -6,14 +6,19 @@ import (
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/clients/rancher/catalog"
+	"github.com/rancher/shepherd/extensions/clusters"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
+	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/storage"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
-	"github.com/rancher/tests/validation/upgrade"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -76,7 +81,17 @@ func (u *UpgradeCloudProviderSuite) TestVsphere() {
 		require.NoError(u.T(), err)
 
 		u.Run(tt.name, func() {
-			upgrade.VsphereCloudProviderCharts(u.T(), u.client, u.client.RancherConfig.ClusterName)
+			logrus.Info("Starting upgrade test...")
+			err := charts.UpgradeVsphereOutOfTreeCharts(u.client, catalog.RancherChartRepo, cluster.Name)
+			require.NoError(u.T(), err)
+
+			clusterID, err := clusters.GetClusterIDByName(u.client, cluster.Name)
+			require.NoError(u.T(), err)
+
+			podErrors := pods.StatusPods(u.client, clusterID)
+			require.Empty(u.T(), podErrors)
+
+			storage.CreatePVCWorkload(u.T(), u.client, clusterID, "")
 		})
 	}
 }

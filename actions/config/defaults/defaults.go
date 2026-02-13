@@ -11,6 +11,7 @@ import (
 
 const (
 	defaultFilePath = "defaults/defaults.yaml"
+	RKE1            = "rke1"
 	RKE2            = "rke2"
 	K3S             = "k3s"
 )

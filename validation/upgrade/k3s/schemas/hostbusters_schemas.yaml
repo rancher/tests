@@ -1,0 +1,23 @@
+- suite: Go Automation/Upgrade/K3S
+  projects: [RRT, RM]
+  cases:
+  - description: Upgrades an existing K3S cluster to the latest Kubernetes version
+    title: Upgrading_K3S_cluster
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Upgrade the existing K3S cluster to the latest Kubernetes version
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster readiness, deployments, and pods
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

@@ -88,17 +88,22 @@ See below how to run the test:
 #### RKE1
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeRKE1KubernetesTestSuite/TestUpgradeRKE1Kubernetes"`
 
-#### RKE2/K3s
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestKubernetesUpgradeTestSuite/TestUpgradeKubernetes"`
-
 #### Windows
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes"`
 
 #### IPv6
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/ipv6 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeIPv6KubernetesTestSuite/TestUpgradeIPv6Kubernetes"`
+RKE2:
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2/ipv6 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeIPv6KubernetesTestSuite/TestUpgradeIPv6Kubernetes"`
+
+K3S:
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/k3s/ipv6 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeIPv6KubernetesTestSuite/TestUpgradeIPv6Kubernetes"`
 
 #### Dualstack
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/dualstack --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeDualstackKubernetesTestSuite/TestUpgradeDualstackKubernetes"`
+RKE2:
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2/dualstack --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeDualstackKubernetesTestSuite/TestUpgradeDualstackKubernetes"`
+
+K3S:
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/k3s/dualstack --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeDualstackKubernetesTestSuite/TestUpgradeDualstackKubernetes"`
 
 ## Cloud Provider Migration
 Migrates a cluster's cloud provider from in-tree to out-of-tree

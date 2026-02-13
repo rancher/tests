@@ -1,0 +1,23 @@
+- suite: Go Automation/Upgrade/RKE2/dualstack
+  projects: [RRT, RM]
+  cases:
+  - description: Upgrades an existing RKE2 dualstack cluster to the latest Kubernetes version
+    title: Upgrading_RKE2_Dualstack_cluster
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Upgrade the existing RKE2 dualstack cluster to the latest Kubernetes version
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify the dualstack cluster upgrade
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

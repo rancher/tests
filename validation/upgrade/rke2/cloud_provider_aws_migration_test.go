@@ -1,6 +1,6 @@
 //go:build validation
 
-package rke2k3s
+package rke2
 
 import (
 	"os"
@@ -9,7 +9,7 @@ import (
 	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	extClusters "github.com/rancher/shepherd/extensions/clusters"
+	extensionsClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
@@ -34,7 +34,7 @@ type MigrateCloudProviderSuite struct {
 	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
 	clusterConfig      *clusters.ClusterConfig
-	rke2Cluster        *v1.SteveAPIObject
+	cluster            *v1.SteveAPIObject
 }
 
 func (u *MigrateCloudProviderSuite) TearDownSuite() {
@@ -50,9 +50,6 @@ func (u *MigrateCloudProviderSuite) SetupSuite() {
 
 	u.client = client
 
-	u.standardUserClient, _, _, err = standard.CreateStandardUser(u.client)
-	require.NoError(u.T(), err)
-
 	u.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	u.cattleConfig, err = defaults.LoadPackageDefaults(u.cattleConfig, "")
@@ -67,30 +64,42 @@ func (u *MigrateCloudProviderSuite) SetupSuite() {
 	u.clusterConfig = new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.clusterConfig)
 
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, u.cattleConfig, awsEC2Configs)
+	rancherConfig := new(rancher.Config)
+	operations.LoadObjectFromMap(defaults.RancherConfigKey, u.cattleConfig, rancherConfig)
 
-	provider := provisioning.CreateProvider(u.clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(u.cattleConfig)
+	if rancherConfig.ClusterName == "" {
+		u.standardUserClient, _, _, err = standard.CreateStandardUser(u.client)
+		require.NoError(u.T(), err)
 
-	logrus.Info("Provisioning RKE2 cluster")
-	u.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), u.standardUserClient, extClusters.RKE2ClusterType.String(), provider, *u.clusterConfig, machineConfigSpec, awsEC2Configs, true, false)
-	require.NoError(u.T(), err)
+		awsEC2Configs := new(ec2.AWSEC2Configs)
+		operations.LoadObjectFromMap(ec2.ConfigurationFileKey, u.cattleConfig, awsEC2Configs)
+
+		provider := provisioning.CreateProvider(u.clusterConfig.Provider)
+		machineConfigSpec := provider.LoadMachineConfigFunc(u.cattleConfig)
+
+		logrus.Info("Provisioning RKE2 cluster")
+		u.cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), u.standardUserClient, defaults.RKE2, provider, *u.clusterConfig, machineConfigSpec, awsEC2Configs, true, false)
+		require.NoError(u.T(), err)
+	} else {
+		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
+		u.cluster, err = u.client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + rancherConfig.ClusterName)
+		require.NoError(u.T(), err)
+	}
 }
 
 func (u *MigrateCloudProviderSuite) TestAWS() {
 	tests := []struct {
-		name      string
-		clusterID string
+		name    string
+		cluster *v1.SteveAPIObject
 	}{
-		{"RKE2 AWS migration", u.rke2Cluster.ID},
+		{"RKE2 AWS migration", u.cluster},
 	}
 
 	for _, tt := range tests {
-		cluster, err := u.client.Steve.SteveType(stevetypes.Provisioning).ByID(tt.clusterID)
+		cluster, err := u.client.Steve.SteveType(stevetypes.Provisioning).ByID(tt.cluster.ID)
 		require.NoError(u.T(), err)
 
-		_, steveClusterObject, err := extClusters.GetProvisioningClusterByName(u.client, cluster.Name, namespaces.FleetDefault)
+		_, steveClusterObject, err := extensionsClusters.GetProvisioningClusterByName(u.client, cluster.Name, namespaces.FleetDefault)
 		require.NoError(u.T(), err)
 
 		u.Run(tt.name, func() {

@@ -161,14 +161,29 @@ runs:
             fi
 
             gotestsum --format standard-verbose \
-              --packages=github.com/rancher/tests/validation/upgrade/ipv6 \
+              --packages=github.com/rancher/tests/validation/upgrade/rke2/ipv6 \
               --junitfile results.xml \
-              --jsonfile results_upgrade.json \
+              --jsonfile results_upgrade_rke2.json \
               -- -timeout=5h -tags=recurring -v
 
-            upgrade_exit=$?
-            echo "upgrade_exit=$upgrade_exit" >> "$GITHUB_ENV"
-            cp results_upgrade.json results.json
+            upgrade_rke2_exit=$?
+            echo "upgrade_rke2_exit=$upgrade_rke2_exit" >> "$GITHUB_ENV"
+            cp results_upgrade_rke2.json results.json
+
+            if [[ "${{ inputs.reporting }}" == "true" ]]; then
+              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+              ./validation/reporter
+            fi
+
+            gotestsum --format standard-verbose \
+              --packages=github.com/rancher/tests/validation/upgrade/k3s/ipv6 \
+              --junitfile results.xml \
+              --jsonfile results_upgrade_k3s.json \
+              -- -timeout=5h -tags=recurring -v
+
+            upgrade_k3s_exit=$?
+            echo "upgrade_k3s_exit=$upgrade_k3s_exit" >> "$GITHUB_ENV"
+            cp results_upgrade_k3s.json results.json
 
             if [[ "${{ inputs.reporting }}" == "true" ]]; then
               ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -190,7 +205,8 @@ runs:
           [prov_exit]="Provisioning:results_prov.json"
           [rke2_snapshot_exit]="RKE2 Snapshot Restore:results_rke2_snapshot.json"
           [k3s_snapshot_exit]="K3S Snapshot Restore:results_k3s_snapshot.json"
-          [upgrade_exit]="Kubernetes Upgrade:results_upgrade.json"
+          [upgrade_rke2_exit]="Kubernetes Upgrade RKE2:results_upgrade_rke2.json"
+          [upgrade_k3s_exit]="Kubernetes Upgrade K3S:results_upgrade_k3s.json"
         )
 
         failed=0

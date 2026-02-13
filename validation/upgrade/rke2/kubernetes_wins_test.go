@@ -1,6 +1,6 @@
 //go:build validation || recurring
 
-package rke2k3s
+package rke2
 
 import (
 	"os"
@@ -11,7 +11,6 @@ import (
 	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
@@ -23,10 +22,11 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
-	"github.com/rancher/tests/actions/upgradeinput"
+	"github.com/rancher/tests/actions/upgrade"
+	"github.com/rancher/tests/actions/workloads/deployment"
+	"github.com/rancher/tests/actions/workloads/pods"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
-	"github.com/rancher/tests/validation/upgrade"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -38,8 +38,7 @@ type UpgradeWindowsKubernetesTestSuite struct {
 	client        *rancher.Client
 	cattleConfig  map[string]any
 	clusterConfig *clusters.ClusterConfig
-	rke2Cluster   *v1.SteveAPIObject
-	clusters      []upgradeinput.Cluster
+	cluster       *v1.SteveAPIObject
 }
 
 func (u *UpgradeWindowsKubernetesTestSuite) TearDownSuite() {
@@ -55,9 +54,6 @@ func (u *UpgradeWindowsKubernetesTestSuite) SetupSuite() {
 
 	u.client = client
 
-	standardUserClient, _, _, err := standard.CreateStandardUser(u.client)
-	require.NoError(u.T(), err)
-
 	u.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	u.cattleConfig, err = defaults.LoadPackageDefaults(u.cattleConfig, "")
@@ -72,61 +68,79 @@ func (u *UpgradeWindowsKubernetesTestSuite) SetupSuite() {
 	u.clusterConfig = new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.clusterConfig)
 
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, u.cattleConfig, awsEC2Configs)
+	rancherConfig := new(rancher.Config)
+	operations.LoadObjectFromMap(defaults.RancherConfigKey, u.cattleConfig, rancherConfig)
 
-	nodeRolesStandard := []provisioninginput.MachinePools{
-		provisioninginput.EtcdMachinePool,
-		provisioninginput.ControlPlaneMachinePool,
-		provisioninginput.WorkerMachinePool,
-		provisioninginput.WindowsMachinePool,
+	if rancherConfig.ClusterName == "" {
+		standardUserClient, _, _, err := standard.CreateStandardUser(u.client)
+		require.NoError(u.T(), err)
+
+		awsEC2Configs := new(ec2.AWSEC2Configs)
+		operations.LoadObjectFromMap(ec2.ConfigurationFileKey, u.cattleConfig, awsEC2Configs)
+
+		nodeRolesStandard := []provisioninginput.MachinePools{
+			provisioninginput.EtcdMachinePool,
+			provisioninginput.ControlPlaneMachinePool,
+			provisioninginput.WorkerMachinePool,
+			provisioninginput.WindowsMachinePool,
+		}
+
+		nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
+		nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
+		nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
+		nodeRolesStandard[3].MachinePoolConfig.Quantity = 1
+
+		u.clusterConfig.MachinePools = nodeRolesStandard
+
+		provider := provisioning.CreateProvider(u.clusterConfig.Provider)
+		machineConfigSpec := provider.LoadMachineConfigFunc(u.cattleConfig)
+
+		logrus.Info("Provisioning RKE2 Windows cluster")
+		u.cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, defaults.RKE2, provider, *u.clusterConfig, machineConfigSpec, awsEC2Configs, false, true)
+		require.NoError(u.T(), err)
+	} else {
+		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
+		u.cluster, err = u.client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + rancherConfig.ClusterName)
+		require.NoError(u.T(), err)
 	}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[3].MachinePoolConfig.Quantity = 1
-
-	u.clusterConfig.MachinePools = nodeRolesStandard
-
-	provider := provisioning.CreateProvider(u.clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(u.cattleConfig)
-
-	logrus.Info("Provisioning RKE2 cluster")
-	u.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *u.clusterConfig, machineConfigSpec, awsEC2Configs, true, true)
-	require.NoError(u.T(), err)
-
-	clusters, err := upgradeinput.LoadUpgradeKubernetesConfig(client)
-	require.NoError(u.T(), err)
-
-	u.clusters = clusters
 }
 
 func (u *UpgradeWindowsKubernetesTestSuite) TestUpgradeWindowsKubernetes() {
 	tests := []struct {
 		name          string
-		clusterID     string
+		cluster       *v1.SteveAPIObject
 		clusterConfig *clusters.ClusterConfig
-		clusterType   string
 	}{
-		{"Upgrading_RKE2_Windows_cluster", u.rke2Cluster.ID, u.clusterConfig, extClusters.RKE2ClusterType.String()},
+		{"Upgrading_RKE2_Windows_cluster", u.cluster, u.clusterConfig},
 	}
 
 	for _, tt := range tests {
-		version, err := kubernetesversions.Default(u.client, tt.clusterType, nil)
+		latestVersion, err := kubernetesversions.Default(u.client, defaults.RKE2, nil)
 		require.NoError(u.T(), err)
-
-		clusterResp, err := u.client.Steve.SteveType(stevetypes.Provisioning).ByID(tt.clusterID)
-		require.NoError(u.T(), err)
-
-		updatedCluster := new(provv1.Cluster)
-		err = v1.ConvertToK8sType(clusterResp, &updatedCluster)
-		require.NoError(u.T(), err)
-
-		tt.clusterConfig.KubernetesVersion = version[0]
 
 		u.Run(tt.name, func() {
-			upgrade.DownstreamCluster(&u.Suite, tt.name, u.client, clusterResp.Name, tt.clusterConfig, tt.clusterID, tt.clusterConfig.KubernetesVersion, false)
+			logrus.Infof("Upgrading cluster (%s) to the latest Kubernetes version", tt.cluster.Name)
+			cluster, err := upgrade.UpgradeCluster(u.T(), u.client, u.cluster, latestVersion[0])
+			require.NoError(u.T(), err)
+
+			updatedClusterSpec := &provv1.ClusterSpec{}
+			err = v1.ConvertToK8sType(cluster.Spec, updatedClusterSpec)
+			require.NoError(u.T(), err)
+			require.Equal(u.T(), latestVersion[0], updatedClusterSpec.KubernetesVersion)
+
+			logrus.Infof("Cluster has been upgraded to: %s", updatedClusterSpec.KubernetesVersion)
+
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			err = provisioning.VerifyClusterReady(u.client, cluster)
+			require.NoError(u.T(), err)
+
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(u.client, cluster)
+			require.NoError(u.T(), err)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			err = pods.VerifyClusterPods(u.client, cluster)
+			require.NoError(u.T(), err)
 		})
 
 		upgradedK8sParam := upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "UpgradedK8sVersion", Values: []string{tt.clusterConfig.KubernetesVersion}}}

@@ -1,6 +1,6 @@
 //go:build validation || recurring
 
-package ipv6
+package k3s
 
 import (
 	"os"
@@ -10,7 +10,6 @@ import (
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
@@ -21,29 +20,30 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/upgrade"
+	"github.com/rancher/tests/actions/workloads/deployment"
+	"github.com/rancher/tests/actions/workloads/pods"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
-	"github.com/rancher/tests/validation/upgrade"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
-type UpgradeIPv6KubernetesTestSuite struct {
+type UpgradeKubernetesTestSuite struct {
 	suite.Suite
 	session       *session.Session
 	client        *rancher.Client
 	cattleConfig  map[string]any
 	clusterConfig *clusters.ClusterConfig
-	rke2Cluster   *v1.SteveAPIObject
-	k3sCluster    *v1.SteveAPIObject
+	cluster       *v1.SteveAPIObject
 }
 
-func (u *UpgradeIPv6KubernetesTestSuite) TearDownSuite() {
+func (u *UpgradeKubernetesTestSuite) TearDownSuite() {
 	u.session.Cleanup()
 }
 
-func (u *UpgradeIPv6KubernetesTestSuite) SetupSuite() {
+func (u *UpgradeKubernetesTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	u.session = testSession
 
@@ -51,9 +51,6 @@ func (u *UpgradeIPv6KubernetesTestSuite) SetupSuite() {
 	require.NoError(u.T(), err)
 
 	u.client = client
-
-	standardUserClient, _, _, err := standard.CreateStandardUser(u.client)
-	require.NoError(u.T(), err)
 
 	u.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
@@ -69,44 +66,61 @@ func (u *UpgradeIPv6KubernetesTestSuite) SetupSuite() {
 	u.clusterConfig = new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, u.cattleConfig, u.clusterConfig)
 
-	provider := provisioning.CreateProvider(u.clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(u.cattleConfig)
+	rancherConfig := new(rancher.Config)
+	operations.LoadObjectFromMap(defaults.RancherConfigKey, u.cattleConfig, rancherConfig)
 
-	logrus.Info("Provisioning RKE2 cluster")
-	u.rke2Cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *u.clusterConfig, machineConfigSpec, nil, false, false)
-	require.NoError(u.T(), err)
+	if rancherConfig.ClusterName == "" {
+		standardUserClient, _, _, err := standard.CreateStandardUser(u.client)
+		require.NoError(u.T(), err)
 
-	logrus.Info("Provisioning K3s cluster")
-	u.k3sCluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *u.clusterConfig, machineConfigSpec, nil, false, false)
-	require.NoError(u.T(), err)
+		provider := provisioning.CreateProvider(u.clusterConfig.Provider)
+		machineConfigSpec := provider.LoadMachineConfigFunc(u.cattleConfig)
+
+		logrus.Info("Provisioning K3S cluster")
+		u.cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), standardUserClient, defaults.K3S, provider, *u.clusterConfig, machineConfigSpec, nil, false, false)
+		require.NoError(u.T(), err)
+	} else {
+		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
+		u.cluster, err = u.client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + rancherConfig.ClusterName)
+		require.NoError(u.T(), err)
+	}
 }
 
-func (u *UpgradeIPv6KubernetesTestSuite) TestUpgradeIPv6Kubernetes() {
+func (u *UpgradeKubernetesTestSuite) TestUpgradeKubernetes() {
 	tests := []struct {
 		name          string
-		clusterID     string
+		cluster       *v1.SteveAPIObject
 		clusterConfig *clusters.ClusterConfig
-		clusterType   string
 	}{
-		{"Upgrading_RKE2_IPv6_cluster", u.rke2Cluster.ID, u.clusterConfig, extClusters.RKE2ClusterType.String()},
-		{"Upgrading_K3S_IPv6_cluster", u.k3sCluster.ID, u.clusterConfig, extClusters.K3SClusterType.String()},
+		{"Upgrading_K3S_cluster", u.cluster, u.clusterConfig},
 	}
 
 	for _, tt := range tests {
-		version, err := kubernetesversions.Default(u.client, tt.clusterType, nil)
+		latestVersion, err := kubernetesversions.Default(u.client, defaults.K3S, nil)
 		require.NoError(u.T(), err)
-
-		clusterResp, err := u.client.Steve.SteveType(stevetypes.Provisioning).ByID(tt.clusterID)
-		require.NoError(u.T(), err)
-
-		updatedCluster := new(provv1.Cluster)
-		err = v1.ConvertToK8sType(clusterResp, &updatedCluster)
-		require.NoError(u.T(), err)
-
-		tt.clusterConfig.KubernetesVersion = version[0]
-
 		u.Run(tt.name, func() {
-			upgrade.DownstreamCluster(&u.Suite, tt.name, u.client, clusterResp.Name, tt.clusterConfig, tt.clusterID, tt.clusterConfig.KubernetesVersion, false)
+			logrus.Infof("Upgrading cluster (%s) to the latest Kubernetes version", tt.cluster.Name)
+			cluster, err := upgrade.UpgradeCluster(u.T(), u.client, u.cluster, latestVersion[0])
+			require.NoError(u.T(), err)
+
+			updatedClusterSpec := &provv1.ClusterSpec{}
+			err = v1.ConvertToK8sType(cluster.Spec, updatedClusterSpec)
+			require.NoError(u.T(), err)
+			require.Equal(u.T(), latestVersion[0], updatedClusterSpec.KubernetesVersion)
+
+			logrus.Infof("Cluster has been upgraded to: %s", updatedClusterSpec.KubernetesVersion)
+
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			err = provisioning.VerifyClusterReady(u.client, cluster)
+			require.NoError(u.T(), err)
+
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(u.client, cluster)
+			require.NoError(u.T(), err)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			err = pods.VerifyClusterPods(u.client, cluster)
+			require.NoError(u.T(), err)
 		})
 
 		upgradedK8sParam := upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "UpgradedK8sVersion", Values: []string{tt.clusterConfig.KubernetesVersion}}}
@@ -120,6 +134,6 @@ func (u *UpgradeIPv6KubernetesTestSuite) TestUpgradeIPv6Kubernetes() {
 	}
 }
 
-func TestUpgradeIPv6KubernetesTestSuite(t *testing.T) {
-	suite.Run(t, new(UpgradeIPv6KubernetesTestSuite))
+func TestKubernetesUpgradeTestSuite(t *testing.T) {
+	suite.Run(t, new(UpgradeKubernetesTestSuite))
 }

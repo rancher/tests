@@ -7,7 +7,7 @@ clusterConfig:
   advanced:
     machineGlobalConfig:
       flannel-ipv6-masq: true
-      
+
 awsMachineConfigs:
   awsMachineConfig:
   - enablePrimaryIPv6: true
