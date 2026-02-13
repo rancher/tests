@@ -98,16 +98,22 @@ func VerifyUserCanGetProject(t *testing.T, client, standardClient *rancher.Clien
 }
 
 // VerifyUserCanCreateProjects validates a user with the required cluster permissions are able/not able to create projects in the downstream cluster
-func VerifyUserCanCreateProjects(t *testing.T, client, standardClient *rancher.Client, clusterID string, role Role) {
-	memberProject, err := projectapi.CreateProject(standardClient, clusterID)
-	switch role {
-	case ClusterOwner, ClusterMember:
-		require.NoError(t, err)
-		log.Info("Created project as a ", role, " is ", memberProject.Name)
-	case ProjectOwner, ProjectMember:
-		require.Error(t, err)
-		assert.True(t, apierrors.IsForbidden(err))
-	}
+func VerifyUserCanCreateProjects(t *testing.T, client, standardClient *rancher.Client, standardUser *management.User, clusterID string, role Role) {
+    projectTemplate := projectapi.NewProjectTemplate(clusterID)
+    if role.String() == ClusterMember.String() {
+        projectTemplate.Annotations = map[string]string{
+            "field.cattle.io/creatorId": standardUser.ID,
+        }
+    }
+    memberProject, err := standardClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
+    switch role {
+    case ClusterOwner, ClusterMember:
+        require.NoError(t, err)
+        log.Info("Created project as a ", role, " is ", memberProject.Name)
+    case ProjectOwner, ProjectMember:
+        require.Error(t, err)
+        assert.True(t, apierrors.IsForbidden(err))
+    }
 }
 
 // VerifyUserCanCreateNamespace validates a user with the required cluster permissions are able/not able to create namespaces in the project they do not own
@@ -129,7 +135,9 @@ func VerifyUserCanCreateNamespace(t *testing.T, client, standardClient *rancher.
 		assert.Equal(t, ActiveStatus, strings.ToLower(actualStatus))
 	case ClusterMember:
 		require.Error(t, checkErr)
-		assert.True(t, apierrors.IsForbidden(checkErr))
+		statusErr, ok := checkErr.(*apierrors.StatusError)
+        require.True(t, ok, "expected error to be a StatusError")
+        assert.Equal(t, int32(403), statusErr.ErrStatus.Code)
 	}
 }
 

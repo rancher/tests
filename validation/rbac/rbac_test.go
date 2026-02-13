@@ -86,7 +86,7 @@ func (rb *RBTestSuite) sequentialTestRBAC(role rbac.Role, member string, user *m
 		rbac.VerifyUserCanGetProject(rb.T(), rb.client, standardClient, rb.cluster.ID, adminProject.Name, role)
 	})
 	rb.Run("Validating if members with role "+role.String()+" is able to create a project in the cluster", func() {
-		rbac.VerifyUserCanCreateProjects(rb.T(), rb.client, standardClient, rb.cluster.ID, role)
+		rbac.VerifyUserCanCreateProjects(rb.T(), rb.client, standardClient, user, rb.cluster.ID, role)
 	})
 	rb.Run("Validating if "+role.String()+" can lists all namespaces in a cluster.", func() {
 		rbac.VerifyUserCanListNamespace(rb.T(), rb.client, standardClient, adminProject, rb.cluster.ID, role)
