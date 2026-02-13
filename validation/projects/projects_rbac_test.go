@@ -13,6 +13,7 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
@@ -238,8 +239,14 @@ func (rbp *RbacProjectTestSuite) TestCrossClusterResourceIsolation() {
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": standardUser.ID,
 	}
-	_, secondNamespace, err := createProjectAndNamespace(standardUserClient, rbp.cluster.ID, projectTemplate)
-	require.NoError(rbp.T(), err, "Failed to create project in downstream cluster")
+	createdProject, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
+	require.NoError(rbp.T(), err)
+
+	err = projectapi.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
+	require.NoError(rbp.T(), err)
+
+	secondNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, rbp.cluster.ID, createdProject.Name, nil)
+	require.NoError(rbp.T(), err)
 
 	log.Infof("As %s, attempting to create a PRTB referencing the project in the local cluster", rbac.ClusterMember.String())
 	prtb.ProjectName = fmt.Sprintf("%s:%s", clusterapi.LocalCluster, firstProject.Name)
@@ -258,7 +265,7 @@ func (rbp *RbacProjectTestSuite) TestCrossClusterResourceIsolation() {
 	require.Error(rbp.T(), err, "User should not have access to the namespace in the local cluster")
 
 	log.Infof("As %s, verifying that the user can access the namespace in the downstream cluster", rbac.ClusterMember.String())
-	userContext, err := standardUserClient.WranglerContext.DownStreamClusterWranglerContext(rbp.cluster.ID)
+	userContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbp.cluster.ID)
 	require.NoError(rbp.T(), err)
 	_, err = userContext.Core.Namespace().Get(secondNamespace.Name, metav1.GetOptions{})
 	require.NoError(rbp.T(), err, "User should be able to access the namespace in the downstream cluster")
