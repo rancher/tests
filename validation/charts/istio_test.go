@@ -46,9 +46,9 @@ type IstioTestSuite struct {
 
 func (i *IstioTestSuite) TearDownSuite() {
 	_, err := charts.DeleteMonitoringResources(i.client, i.cluster.ID)
-	require.NoError(i.T(), err)
+	require.NoError(i.T(), err, "Failed to delete monitoring resources during teardown")
 	_, err = charts.DeleteIstioResources(i.client, i.cluster.ID)
-	require.NoError(i.T(), err)
+	require.NoError(i.T(), err, "Failed to delete istio resources during teardown")
 	i.session.Cleanup()
 }
 

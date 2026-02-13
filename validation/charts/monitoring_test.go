@@ -46,7 +46,7 @@ type MonitoringTestSuite struct {
 
 func (m *MonitoringTestSuite) TearDownSuite() {
 	_, err := charts.DeleteMonitoringResources(m.client, m.cluster.ID)
-	require.NoError(m.T(), err)
+	require.NoError(m.T(), err, "Failed to delete monitoring resources during teardown")
 	m.session.Cleanup()
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -333,17 +334,16 @@ func addMonitoringProviderPrefix(provider clusters.KubernetesProvider, opts *Ran
 
 // DeleteMonitoringResources follows the Monitoring uninstall reference guide
 // and deletes the ValidatingWebhookConfiguration to avoid installation conflicts
-// added the --ignore-not-found=true flag and xargs logic to prevent “not found” errors
 // Doc: There is no documentation available as a reference, but the information is described in the chart
 func DeleteMonitoringResources(client *rancher.Client, clusterID string) (string, error) {
+	logrus.Infof("Deleting Monitoring resources")
 	deleteCommand := []string{
 		"sh", "-c",
-		fmt.Sprintf("%s && %s && %s && %s && %s",
+		fmt.Sprintf("%s && %s && %s && %s",
 			"kubectl get crds -oname | grep 'monitoring.coreos.com' | xargs kubectl delete",
-			"kubectl delete mutatingwebhookconfiguration rancher-monitoring-admission --ignore-not-found=true",
-			"kubectl delete validatingwebhookconfiguration rancher-monitoring-admission --ignore-not-found=true",
-			"kubectl get CustomResourceDefinition -l='app.kubernetes.io/part-of=istio' -o name -A | xargs -r kubectl delete",
-			"kubectl delete apiservices v1beta1.custom.metrics.k8s.io --ignore-not-found=true"),
+			"kubectl delete mutatingwebhookconfiguration rancher-monitoring-admission",
+			"kubectl delete validatingwebhookconfiguration rancher-monitoring-admission",
+			"kubectl delete apiservices v1beta1.custom.metrics.k8s.io"),
 	}
 
 	return kubectl.Command(client, nil, clusterID, deleteCommand, "2MB")

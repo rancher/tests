@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -267,6 +268,7 @@ func newIstioChartUpgradeAction(p *PayloadOpts, rancherIstioOpts *RancherIstioOp
 // added the --ignore-not-found=true flag and xargs logic to prevent “not found” errors
 // Doc: https://docs.apps.rancher.io/reference-guides/istio#uninstall-the-chart
 func DeleteIstioResources(client *rancher.Client, clusterID string) (string, error) {
+	logrus.Infof("Deleting Istio resources")
 	deleteCommand := []string{
 		"sh", "-c",
 		fmt.Sprintf("%s && %s && %s && %s && %s",
