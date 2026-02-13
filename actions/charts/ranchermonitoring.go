@@ -340,7 +340,7 @@ func DeleteMonitoringResources(client *rancher.Client, clusterID string) (string
 	deleteCommand := []string{
 		"sh", "-c",
 		fmt.Sprintf("%s && %s && %s && %s",
-			"kubectl get crds -oname | grep 'monitoring.coreos.com' | xargs kubectl delete",
+			"kubectl get crds -oname | grep 'monitoring.coreos.com' | xargs -r kubectl delete",
 			"kubectl delete mutatingwebhookconfiguration rancher-monitoring-admission",
 			"kubectl delete validatingwebhookconfiguration rancher-monitoring-admission",
 			"kubectl delete apiservices v1beta1.custom.metrics.k8s.io"),
