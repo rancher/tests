@@ -270,15 +270,14 @@ node {
 
                 def adminPassword = env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'
                 def cattleConfigPath = '/workspace/tests/cattle-config.yaml'
-                def tokenPlaybook = "/workspace/${qaInfraPath}/ansible/rancher/token/generate-admin-token.yml"
                 def workspace = pwd()
 
                 // Token configuration options (can be overridden via environment variables)
                 def tokenTtl = env.RANCHER_TOKEN_TTL ?: '0'  // 0 = no expiration
                 def tokenDescription = env.RANCHER_TOKEN_DESCRIPTION ?: "jenkins-airgap-${env.BUILD_NUMBER}"
 
-                // Run the Ansible playbook to generate and inject the admin token
-                // The playbook uses the rancher_token role which:
+                // Run the Ansible playbook that uses the rancher_token role
+                // The rancher_token role:
                 // - Reads external_lb_hostname from inventory (or uses explicit rancher_url)
                 // - Authenticates with Rancher API
                 // - Creates an API token with configurable TTL and description
@@ -289,7 +288,7 @@ node {
                         -v ${workspace}:/workspace \
                         -w /workspace/${ansiblePath} \
                         ${infraToolsImage} \
-                        ansible-playbook -i inventory/inventory.yml ${tokenPlaybook} \
+                        ansible-playbook -i inventory/inventory.yml playbooks/token/generate-admin-token.yml \
                             -e rancher_token_password=${adminPassword} \
                             -e rancher_cattle_config_file=${cattleConfigPath} \
                             -e rancher_token_ttl=${tokenTtl} \
