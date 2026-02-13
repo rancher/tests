@@ -279,5 +279,7 @@ func DeleteIstioResources(client *rancher.Client, clusterID string) (string, err
 			"kubectl delete validatingwebhookconfiguration istiod-default-validator istio-validator-istio-system --ignore-not-found=true"),
 	}
 
-	return kubectl.Command(client, nil, clusterID, deleteCommand, "2MB")
+	log, err := kubectl.Command(client, nil, clusterID, deleteCommand, "2MB")
+	logrus.Infof("Delete Istio command: %s", log)
+	return log, err
 }

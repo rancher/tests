@@ -346,5 +346,7 @@ func DeleteMonitoringResources(client *rancher.Client, clusterID string) (string
 			"kubectl delete apiservices v1beta1.custom.metrics.k8s.io"),
 	}
 
-	return kubectl.Command(client, nil, clusterID, deleteCommand, "2MB")
+	log, err := kubectl.Command(client, nil, clusterID, deleteCommand, "2MB")
+	logrus.Infof("Delete Monitoring command: %s", log)
+	return log, err
 }
