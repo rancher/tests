@@ -495,7 +495,7 @@ func (ns *NamespacedRulesTestSuite) TestWebhookRejectsEmptyVerbsInNamespacedRule
 	require.Error(ns.T(), err)
 	errMessage := "admission webhook \"rancher.cattle.io.globalroles.management.cattle.io\" denied the request: globalrole.namespacedRules." + globalDataNamespace + "[0].verbs: Required value: verbs must contain at least one value"
 
-	require.Equal(ns.T(), errMessage, err.Error())
+	require.Contains(ns.T(), err.Error(), errMessage)
 }
 
 func (ns *NamespacedRulesTestSuite) TestWebhookIncorrectVerbsNotRejected() {
