@@ -161,7 +161,7 @@ func (grw *GlobalRolesV2WebhookTestSuite) TestDeleteCustomRoleTemplateInInherite
 	err = rbacapi.DeleteRoleTemplate(grw.client, inheritedRoleTemplate.ID)
 	require.Error(grw.T(), err)
 
-	pattern := "^admission webhook .*" + regexp.QuoteMeta("cannot be deleted because it is inherited by globalRole(s) \"") + regexp.QuoteMeta(gr.Name) + "\"$"
+	pattern := "admission webhook .*" + regexp.QuoteMeta("cannot be deleted because it is inherited by globalRole(s) \"") + regexp.QuoteMeta(gr.Name) + "\"$"
 	require.Regexp(grw.T(), regexp.MustCompile(pattern), err.Error())
 }
 
