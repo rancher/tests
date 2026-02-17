@@ -238,8 +238,8 @@ github.com/prometheus/common v0.66.1 h1:h5E0h5/Y8niHc5DlaLlWLArTQI7tMrsfQjHV+d9Z
 github.com/prometheus/common v0.66.1/go.mod h1:gcaUsgf3KfRSwHY4dIMXLPV0K/Wg1oZ8+SbZk/HH/dA=
 github.com/prometheus/procfs v0.17.0 h1:FuLQ+05u4ZI+SS/w9+BWEM2TXiHKsUQ9TADiRH7DuK0=
 github.com/prometheus/procfs v0.17.0/go.mod h1:oPQLaDAMRbA+u8H5Pbfq+dl3VDAvHxMUOVhe0wYB2zw=
-github.com/qase-tms/qase-go/qase-api-client v1.2.0 h1:wAOA90XpkbvW3ewPU2jQK/n717HUw84uDQN+GlxhSZ0=
-github.com/qase-tms/qase-go/qase-api-client v1.2.0/go.mod h1:Za2AZQxuqkyc09vqHSlnceLjc40zFAAXMwhPPAMptMo=
+github.com/qase-tms/qase-go/qase-api-client v1.2.1 h1:UHXJx8iwvsQKISOpkkMCvjpiEVQfnj6f+zPLthfLyLA=
+github.com/qase-tms/qase-go/qase-api-client v1.2.1/go.mod h1:Za2AZQxuqkyc09vqHSlnceLjc40zFAAXMwhPPAMptMo=
 github.com/rancher/aks-operator v1.13.0-rc.4 h1:tc7p2gZmRg4c6VBwWTQJYwmh1hlN68kftjoBIdGCnqw=
 github.com/rancher/aks-operator v1.13.0-rc.4/go.mod h1:1ZjZB6zGHK+NGchN9KLplq+xPxRRi+q6Uzet5bjFwxo=
 github.com/rancher/ali-operator v1.13.0-rc.2 h1:a0biHGez+Np9XybJVh3yKN4RGPdaCzfM6D6cAXJac6o=
@@ -266,8 +266,8 @@ github.com/rancher/shepherd v0.0.0-20260122211220-e4fc12acd2be h1:x7+nxYLCqygc5T
 github.com/rancher/shepherd v0.0.0-20260122211220-e4fc12acd2be/go.mod h1:SJtW8Jqv0rphZzsGnvB965YdyR2FqFtB+TbbzVLt8F4=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078 h1:1MJSgYkgXhr/Zc5idJkKa10SiBQd0HVtbxVOBoghlzY=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078/go.mod h1:CV2Soy/Skw8/SA9dDJVgpeHxoEdtjYkNpNy6xvvC5kA=
-github.com/rancher/tfp-automation v0.0.0-20260126225050-e17784ebc431 h1:o7ct+rHgC2F8fedrkTTdK4L4IkrAerhdNTnA4rUQF10=
-github.com/rancher/tfp-automation v0.0.0-20260126225050-e17784ebc431/go.mod h1:VsLwhPUC2mmngFj34NVDEOmsllj7HuPnBYJLEjPAzUo=
+github.com/rancher/tfp-automation v0.0.0-20260217202531-353b5dffaad0 h1:FJ+/Sy6XqVRd2vteiXL+9s+s+/Adm1RE/uR26x2J9wk=
+github.com/rancher/tfp-automation v0.0.0-20260217202531-353b5dffaad0/go.mod h1:SHAVDTRqO8etqSRBtGj1jot25Bkbum1z/Z8NpE9dPyE=
 github.com/rancher/wrangler v1.1.2 h1:oXbXo9k7y/H4drUpb4RM1c++vT9O3rpoNEfyusGykiU=
 github.com/rancher/wrangler v1.1.2/go.mod h1:2k9MyhlBdjcutcBGoOJSUAz0HgDAXnMjv81d3n/AaQc=
 github.com/rancher/wrangler/v3 v3.3.1 h1:YFqRfhxjuLNudUrvWrn+64wUPZ8pnn2KWbTsha75JLg=
