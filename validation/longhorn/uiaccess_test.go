@@ -26,24 +26,10 @@ type LonghornUIAccessTestSuite struct {
 	longhornTestConfig longhorn.TestConfig
 	cluster            *clusters.ClusterMeta
 	project            *management.Project
-	testVolumeName     string
-	longhornAPIClient  *longhornapi.LonghornClient
 }
 
 func (l *LonghornUIAccessTestSuite) TearDownSuite() {
 	l.session.Cleanup()
-}
-
-func (l *LonghornUIAccessTestSuite) TearDownTest() {
-	// Clean up test volume if it was created
-	if l.testVolumeName != "" && l.longhornAPIClient != nil {
-		l.T().Log("Cleaning up test volume")
-		err := longhornapi.DeleteVolume(l.longhornAPIClient, l.testVolumeName)
-		if err != nil {
-			l.T().Logf("Warning: failed to cleanup test volume %s: %v", l.testVolumeName, err)
-		}
-		l.testVolumeName = ""
-	}
 }
 
 func (l *LonghornUIAccessTestSuite) SetupSuite() {
@@ -104,7 +90,6 @@ func (l *LonghornUIAccessTestSuite) TestLonghornUIAccess() {
 	l.T().Log("Verifying Longhorn API accessibility")
 	apiClient, err := longhornapi.NewLonghornClient(l.client, l.cluster.ID, serviceURL)
 	require.NoError(l.T(), err)
-	l.longhornAPIClient = apiClient
 
 	l.T().Log("Validating Longhorn nodes show valid state")
 	err = longhornapi.ValidateNodes(apiClient)
@@ -118,7 +103,12 @@ func (l *LonghornUIAccessTestSuite) TestLonghornUIAccess() {
 	volumeName, err := longhornapi.CreateVolume(l.T(), apiClient)
 	require.NoError(l.T(), err)
 	require.NotEmpty(l.T(), volumeName)
-	l.testVolumeName = volumeName
+
+	// Register cleanup function for the volume
+	l.session.RegisterCleanupFunc(func() error {
+		l.T().Logf("Cleaning up test volume: %s", volumeName)
+		return longhornapi.DeleteVolume(apiClient, volumeName)
+	})
 
 	l.T().Logf("Validating volume %s is active through Longhorn API", volumeName)
 	err = longhornapi.ValidateVolumeActive(l.T(), apiClient, volumeName)
