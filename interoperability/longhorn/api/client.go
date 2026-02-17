@@ -183,6 +183,50 @@ return fmt.Errorf("no Longhorn settings found")
 return nil
 }
 
+// ValidateVolumeInRancherAPI validates that the volume is accessible and in a ready state through Rancher API
+func ValidateVolumeInRancherAPI(t *testing.T, lc *LonghornClient, volumeName string) error {
+	t.Logf("Validating volume %s is accessible through Rancher API", volumeName)
+
+	steveClient, err := lc.Client.Steve.ProxyDownstream(lc.ClusterID)
+	if err != nil {
+		return fmt.Errorf("failed to get downstream client: %w", err)
+	}
+
+	// Get the volume using the Rancher API path
+	volumeID := fmt.Sprintf("%s/%s", longhornNamespace, volumeName)
+	volume, err := steveClient.SteveType(longhornVolumeType).ByID(volumeID)
+	if err != nil {
+		return fmt.Errorf("failed to get volume %s through Rancher API: %w", volumeName, err)
+	}
+
+	// Validate volume has status
+	if volume.Status == nil {
+		return fmt.Errorf("volume %s has no status in Rancher API", volumeName)
+	}
+
+	statusMap, ok := volume.Status.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("volume %s status is not in expected format", volumeName)
+	}
+
+	state, _ := statusMap["state"].(string)
+	robustness, _ := statusMap["robustness"].(string)
+
+	t.Logf("Volume %s in Rancher API - state: %s, robustness: %s", volumeName, state, robustness)
+
+	// Verify volume is in a ready state
+	if state != "detached" {
+		return fmt.Errorf("volume %s is not in detached state through Rancher API, current state: %s", volumeName, state)
+	}
+
+	if robustness != "healthy" && robustness != "unknown" {
+		return fmt.Errorf("volume %s has invalid robustness through Rancher API: %s", volumeName, robustness)
+	}
+
+	t.Logf("Volume %s validated successfully through Rancher API", volumeName)
+	return nil
+}
+
 // ValidateDynamicConfiguration validates Longhorn configuration based on user-provided test config
 func ValidateDynamicConfiguration(t *testing.T, lc *LonghornClient, config longhorn.TestConfig) error {
 steveClient, err := lc.Client.Steve.ProxyDownstream(lc.ClusterID)
