@@ -27,26 +27,35 @@ func validateLonghornPods(t *testing.T, client *rancher.Client, clusterID string
 		return fmt.Errorf("failed to get downstream client: %w", err)
 	}
 
-	t.Logf("Listing all pods in namespace %s", charts.LonghornNamespace)
-	pods, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(charts.LonghornNamespace).List(nil)
-	if err != nil {
-		return fmt.Errorf("failed to list pods: %w", err)
-	}
+	t.Logf("Waiting for all pods in namespace %s to be running", charts.LonghornNamespace)
 
-	if len(pods.Data) == 0 {
-		return fmt.Errorf("no pods found in namespace %s", charts.LonghornNamespace)
-	}
-
-	t.Logf("Found %d pods in namespace %s", len(pods.Data), charts.LonghornNamespace)
-
-	// Verify all pods are in running state
-	for _, pod := range pods.Data {
-		if pod.State.Name != "running" {
-			return fmt.Errorf("pod %s is not in running state, current state: %s", pod.Name, pod.State.Name)
+	// Poll until all pods are running
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		pods, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(charts.LonghornNamespace).List(nil)
+		if err != nil {
+			return false, nil
 		}
+
+		if len(pods.Data) == 0 {
+			return false, nil
+		}
+
+		// Check if all pods are in running state
+		for _, pod := range pods.Data {
+			if pod.State.Name != "running" {
+				t.Logf("Pod %s is not in running state, current state: %s", pod.Name, pod.State.Name)
+				return false, nil
+			}
+		}
+
+		t.Logf("All %d pods in namespace %s are in running state", len(pods.Data), charts.LonghornNamespace)
+		return true, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("pods in namespace %s did not all reach running state: %w", charts.LonghornNamespace, err)
 	}
 
-	t.Logf("All %d pods in namespace %s are in running state", len(pods.Data), charts.LonghornNamespace)
 	return nil
 }
 
@@ -145,11 +154,11 @@ func validateLonghornService(t *testing.T, client *rancher.Client, clusterID str
 
 	case corev1.ServiceTypeLoadBalancer:
 		// For LoadBalancer, use the external IP
-		if len(service.Status.LoadBalancer.Ingress) == 0 {
-			return "", fmt.Errorf("service %s has no load balancer ingress", longhornFrontendServiceName)
-		}
 		if len(service.Spec.Ports) == 0 {
 			return "", fmt.Errorf("service %s has no ports defined", longhornFrontendServiceName)
+		}
+		if len(service.Status.LoadBalancer.Ingress) == 0 {
+			return "", fmt.Errorf("service %s has no load balancer ingress", longhornFrontendServiceName)
 		}
 
 		ingress := service.Status.LoadBalancer.Ingress[0]

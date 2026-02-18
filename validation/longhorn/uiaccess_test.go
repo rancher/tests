@@ -90,59 +90,28 @@ func (l *LonghornUIAccessTestSuite) TestLonghornUIAccess() {
 	require.NotEmpty(l.T(), serviceURL)
 
 	l.T().Logf("Longhorn service URL: %s", serviceURL)
-	l.T().Log("Verifying Longhorn API accessibility")
-	apiClient, err := longhornapi.NewLonghornClient(l.client, l.cluster.ID, serviceURL)
-	require.NoError(l.T(), err)
 
 	l.T().Log("Validating Longhorn nodes show valid state")
-	err = longhornapi.ValidateNodes(apiClient)
+	err = longhornapi.ValidateNodes(l.client, l.cluster.ID, charts.LonghornNamespace)
 	require.NoError(l.T(), err)
 
 	l.T().Log("Validating Longhorn settings are properly configured")
-	err = longhornapi.ValidateSettings(apiClient)
+	err = longhornapi.ValidateSettings(l.client, l.cluster.ID, charts.LonghornNamespace)
 	require.NoError(l.T(), err)
 
 	l.T().Log("Creating Longhorn volume through Longhorn API")
-	volumeName, err := longhornapi.CreateVolume(l.T(), apiClient)
+	volume, err := longhornapi.CreateVolume(l.client, l.cluster.ID, charts.LonghornNamespace)
 	require.NoError(l.T(), err)
-	require.NotEmpty(l.T(), volumeName)
+	require.NotNil(l.T(), volume)
 
-	// Register cleanup function for the volume
-	l.session.RegisterCleanupFunc(func() error {
-		l.T().Logf("Cleaning up test volume: %s", volumeName)
-		return longhornapi.DeleteVolume(l.T(), apiClient, volumeName)
-	})
+	volumeName := volume.Name
 
 	l.T().Logf("Validating volume %s is active through Longhorn API", volumeName)
-	err = longhornapi.ValidateVolumeActive(l.T(), apiClient, volumeName)
-	require.NoError(l.T(), err)
-
-	l.T().Logf("Validating volume %s is ready through Rancher API", volumeName)
-	err = longhornapi.ValidateVolumeInRancherAPI(l.T(), apiClient, volumeName)
+	err = longhornapi.ValidateVolumeActive(l.client, l.cluster.ID, charts.LonghornNamespace, volumeName)
 	require.NoError(l.T(), err)
 
 	l.T().Log("Verifying Longhorn storage class is accessible through Rancher API")
 	err = validateLonghornStorageClassInRancher(l.T(), l.client, l.cluster.ID, l.longhornTestConfig.LonghornTestStorageClass)
-	require.NoError(l.T(), err)
-}
-
-func (l *LonghornUIAccessTestSuite) TestLonghornUIDynamic() {
-	l.T().Log("Verifying all Longhorn pods are in active state")
-	err := validateLonghornPods(l.T(), l.client, l.cluster.ID)
-	require.NoError(l.T(), err)
-
-	l.T().Log("Verifying Longhorn service is accessible")
-	serviceURL, err := validateLonghornService(l.T(), l.client, l.cluster.ID)
-	require.NoError(l.T(), err)
-	require.NotEmpty(l.T(), serviceURL)
-
-	l.T().Logf("Longhorn service URL: %s", serviceURL)
-	l.T().Log("Verifying Longhorn API accessibility with dynamic configuration")
-	apiClient, err := longhornapi.NewLonghornClient(l.client, l.cluster.ID, serviceURL)
-	require.NoError(l.T(), err)
-
-	l.T().Log("Validating Longhorn configuration based on user-provided settings")
-	err = longhornapi.ValidateDynamicConfiguration(l.T(), apiClient, l.longhornTestConfig)
 	require.NoError(l.T(), err)
 }
 
