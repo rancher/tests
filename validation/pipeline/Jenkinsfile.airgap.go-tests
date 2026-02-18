@@ -198,15 +198,15 @@ node {
                 )
             }
 
-            stage('Setup SSH Keys on Nodes') {
-                retry(3) {
-                    ansible.runPlaybook(
-                        dir: ansiblePath,
-                        inventory: 'inventory/inventory.yml',
-                        playbook: 'playbooks/setup/verify-connection.yml'
-                    )
-                }
-            }
+            // stage('Setup SSH Keys on Nodes') {
+            //     retry(3) {
+            //         ansible.runPlaybook(
+            //             dir: ansiblePath,
+            //             inventory: 'inventory/inventory.yml',
+            //             playbook: 'playbooks/setup/verify-connection.yml'
+            //         )
+            //     }
+            // }
 
             stage('Deploy RKE2 Cluster') {
                 retry(3) {
