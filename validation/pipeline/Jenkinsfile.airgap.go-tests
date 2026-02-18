@@ -200,16 +200,11 @@ node {
 
             stage('Setup SSH Keys on Nodes') {
                 retry(3) {
-                    def workspace = pwd()
-                    def sshKeyPath = "/root/.ssh/${env.AWS_SSH_PEM_KEY_NAME}"
-                    sh """
-                        docker run --rm --platform ${dockerPlatform} \
-                            -v ${workspace}:/workspace \
-                            -v ${workspace}/.ssh:/root/.ssh:ro \
-                            -w /workspace \
-                            ${infraToolsImage} \
-                            sh -c 'eval \$(ssh-agent -s) && ssh-add ${sshKeyPath} && cd ${ansiblePath} && ansible-playbook -i inventory/inventory.yml playbooks/setup/verify-connection.yml'
-                    """
+                    ansible.runPlaybook(
+                        dir: ansiblePath,
+                        inventory: 'inventory/inventory.yml',
+                        playbook: 'playbooks/setup/verify-connection.yml'
+                    )
                 }
             }
 
