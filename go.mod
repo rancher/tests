@@ -71,7 +71,7 @@ require (
 	github.com/rancher/shepherd v0.0.0-20260206205036-22f6b44492e1
 	github.com/rancher/tests/actions v0.0.0-20260206233613-bf28ed655999
 	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
-	github.com/rancher/tfp-automation v0.0.0-20260217222648-6f5b3e787ce7
+	github.com/rancher/tfp-automation v0.0.0-20260218000731-aad585fd2634
 )
 
 require (
