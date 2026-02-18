@@ -188,6 +188,9 @@ node {
                 if (!ansibleVars.contains('ssh_private_key_file:')) {
                     ansibleVars += "\nssh_private_key_file: ${sshKeyPath}"
                 }
+                if (!ansibleVars.contains('ansible_ssh_private_key_file:')) {
+                    ansibleVars += "\nansible_ssh_private_key_file: ${sshKeyPath}"
+                }
 
                 ansible.writeInventoryVars(
                     path: "${ansiblePath}/inventory/group_vars/all.yml",
