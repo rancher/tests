@@ -17,6 +17,7 @@ import (
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/secrets"
+	userapi "github.com/rancher/tests/actions/users"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -500,7 +501,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbUserDeletionCleansUp
 	require.NoError(acrd.T(), err)
 
 	log.Infof("Deleting user %s", createdUser.ID)
-	err = acrd.client.WranglerContext.Mgmt.User().Delete(createdUser.ID, &metav1.DeleteOptions{})
+	err = userapi.DeleteUser(acrd.client, createdUser.ID)
 	require.NoError(acrd.T(), err, "Failed to delete user")
 
 	log.Infof("Verifying that the cluster role template binding for user %s is automatically deleted.", createdUser.Username)
@@ -565,7 +566,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbUserDeletionCleansUp
 	require.NoError(acrd.T(), err)
 
 	log.Infof("Deleting user %s", createdUser.ID)
-	err = acrd.client.WranglerContext.Mgmt.User().Delete(createdUser.ID, &metav1.DeleteOptions{})
+	err = userapi.DeleteUser(acrd.client, createdUser.ID)
 	require.NoError(acrd.T(), err, "Failed to delete user")
 
 	log.Infof("Verifying that the project role template binding for user %s is automatically deleted.", createdUser.Username)
