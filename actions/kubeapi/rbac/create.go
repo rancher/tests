@@ -296,8 +296,8 @@ func CreateGroupProjectRoleTemplateBinding(client *rancher.Client, projectID str
 	return prtb, nil
 }
 
-// CreateGlobalRoleWithInheritedClusterRolesWrangler creates a global role with inherited cluster roles using wrangler context
-func CreateGlobalRoleWithInheritedClusterRolesWrangler(client *rancher.Client, inheritedRoles []string) (*v3.GlobalRole, error) {
+// CreateGlobalRoleWithInheritedClusterRoles creates a global role with inherited cluster roles using wrangler context
+func CreateGlobalRoleWithInheritedClusterRoles(client *rancher.Client, inheritedRoles []string) (*v3.GlobalRole, error) {
 	globalRole := v3.GlobalRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namegen.AppendRandomString("testgr"),

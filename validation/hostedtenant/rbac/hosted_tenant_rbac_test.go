@@ -60,7 +60,7 @@ func (h *HostedRancherTestSuite) TestGlobalRoleInheritedClusterRoles() {
 
 	log.Info("Create global role with inheritedClusterRoles")
 	inheritedClusterRoles := []string{rbac.ClusterOwner.String()}
-	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(h.hostClient, inheritedClusterRoles)
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithInheritedClusterRoles(h.hostClient, inheritedClusterRoles)
 	require.NoError(h.T(), err)
 
 	log.Info("Verify the global role is created on the hosted Rancher")

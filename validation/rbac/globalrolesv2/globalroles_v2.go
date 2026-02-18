@@ -121,7 +121,7 @@ func createDownstreamCluster(client *rancher.Client, clusterType string) (*manag
 }
 
 func createGlobalRoleAndUser(client *rancher.Client, inheritedClusterrole []string) (*management.User, *v3.GlobalRole, error) {
-	gr, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(client, inheritedClusterrole)
+	gr, err := rbacapi.CreateGlobalRoleWithInheritedClusterRoles(client, inheritedClusterrole)
 	if err != nil {
 		return nil, nil, err
 	}

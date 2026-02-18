@@ -116,7 +116,7 @@ func (grw *GlobalRolesV2WebhookTestSuite) TestLockedRoleTemplateInInheritedClust
 	lockedRoleTemplate, err := grw.client.WranglerContext.Mgmt.RoleTemplate().Create(roleTemplate)
 	require.NoError(grw.T(), err)
 
-	_, err = rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(grw.client, []string{lockedRoleTemplate.Name})
+	_, err = rbacapi.CreateGlobalRoleWithInheritedClusterRoles(grw.client, []string{lockedRoleTemplate.Name})
 	require.Error(grw.T(), err)
 
 	pattern := "^failed to create global role with inherited cluster roles: admission webhook.*" + regexp.QuoteMeta(lockedRoleTemplate.Name+"\": unable to use locked roleTemplate") + "$"
@@ -133,7 +133,7 @@ func (grw *GlobalRolesV2WebhookTestSuite) TestAddGlobalRoleWithCustomTemplateAnd
 	customRoleTemplate, err := grw.client.WranglerContext.Mgmt.RoleTemplate().Create(roleTemplate)
 	require.NoError(grw.T(), err)
 
-	_, err = rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(grw.client, []string{customRoleTemplate.Name})
+	_, err = rbacapi.CreateGlobalRoleWithInheritedClusterRoles(grw.client, []string{customRoleTemplate.Name})
 	require.NoError(grw.T(), err)
 
 	customRoleTemplate, err = rbacapi.GetRoleTemplateByName(grw.client, customRoleTemplate.Name)
@@ -155,7 +155,7 @@ func (grw *GlobalRolesV2WebhookTestSuite) TestDeleteCustomRoleTemplateInInherite
 	})
 	require.NoError(grw.T(), err)
 
-	gr, err := rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(grw.client, []string{inheritedRoleTemplate.ID})
+	gr, err := rbacapi.CreateGlobalRoleWithInheritedClusterRoles(grw.client, []string{inheritedRoleTemplate.ID})
 	require.NoError(grw.T(), err)
 
 	err = rbacapi.DeleteRoleTemplate(grw.client, inheritedRoleTemplate.ID)
@@ -175,7 +175,7 @@ func (grw *GlobalRolesV2WebhookTestSuite) TestAddProjectRoleTemplateInInheritedC
 	})
 	require.NoError(grw.T(), err)
 
-	_, err = rbacapi.CreateGlobalRoleWithInheritedClusterRolesWrangler(grw.client, []string{inheritedRoleTemplate.ID})
+	_, err = rbacapi.CreateGlobalRoleWithInheritedClusterRoles(grw.client, []string{inheritedRoleTemplate.ID})
 	require.Error(grw.T(), err)
 
 	pattern := "admission webhook.*" + regexp.QuoteMeta("unable to bind a roleTemplate with non-cluster context: project")
