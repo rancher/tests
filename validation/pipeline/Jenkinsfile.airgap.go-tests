@@ -200,7 +200,7 @@ node {
                     ansible.runPlaybook(
                         dir: ansiblePath,
                         inventory: 'inventory/inventory.yml',
-                        playbook: 'playbooks/setup/setup-ssh-keys.yml'
+                        playbook: 'playbooks/setup/verify-connection.yml'
                     )
                 }
             }
@@ -288,7 +288,7 @@ node {
                         -v ${workspace}:/workspace \
                         -w /workspace/${ansiblePath} \
                         ${infraToolsImage} \
-                        ansible-playbook -i inventory/inventory.yml playbooks/token/generate-admin-token.yml \
+                        ansible-playbook -i inventory/inventory.yml /workspace/qa-infra-automation/ansible/rancher/token/generate-admin-token.yml \
                             -e rancher_token_password=${adminPassword} \
                             -e rancher_cattle_config_file=${cattleConfigPath} \
                             -e rancher_token_ttl=${tokenTtl} \
