@@ -1,16 +1,14 @@
 # Dockerfile for Airgap Go Testing
 # Extends infra tools with Go toolchain and gotestsum for test execution
 
-# Pin to specific version for supply chain security
+
 ARG TOFU_VERSION=1.10.7
 ARG GO_VERSION=1.25.0
-ARG GOTESTUM_VERSION=1.13.0
 
 FROM --platform=linux/amd64 alpine:3.22
 
 ARG TOFU_VERSION
 ARG GO_VERSION
-ARG GOTESTUM_VERSION
 
 # Install runtime dependencies
 RUN apk add --no-cache \
@@ -42,7 +40,7 @@ RUN pip3 install --no-cache-dir --break-system-packages awscli
 
 # Install gotestsum for JUnit reporting
 ENV GOBIN=/usr/local/bin
-RUN go install gotest.tools/gotestsum@$1.13.0
+RUN go install gotest.tools/gotestsum@latest
 ENV GOBIN=
 
 # Create working directory
