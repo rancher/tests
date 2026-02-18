@@ -4,7 +4,7 @@
 # Pin to specific version for supply chain security
 ARG TOFU_VERSION=1.10.7
 ARG GO_VERSION=1.25.5
-ARG GOTESTUM_VERSION=1.13.0
+ARG GOTESTUM_VERSION=1.12.3
 
 FROM --platform=linux/amd64 alpine:3.22
 
