@@ -119,9 +119,10 @@ func ValidateVolumeActive(client *rancher.Client, clusterID, namespace, volumeNa
 
 		logrus.Infof("Volume %s state: %s, robustness: %s", volumeName, state, robustness)
 
-		// Volume is ready when it's in detached state with valid robustness
+		// Volume is ready when it's in a valid state (detached or attached) with valid robustness
+		// Valid states: detached (ready to attach), attached (in use)
 		// "unknown" robustness is expected for detached volumes with no replicas scheduled
-		if state == "detached" && (robustness == "healthy" || robustness == "unknown") {
+		if (state == "detached" || state == "attached") && (robustness == "healthy" || robustness == "unknown") {
 			return true, nil
 		}
 
