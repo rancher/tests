@@ -207,11 +207,9 @@ func ValidateSettings(client *rancher.Client, clusterID, namespace string) error
 	hasValidSetting := false
 	for _, setting := range settings.Data {
 		if setting.JSONResp != nil {
-			if valueMap, ok := setting.JSONResp.(map[string]interface{}); ok {
-				if _, exists := valueMap["value"]; exists {
-					hasValidSetting = true
-					break
-				}
+			if _, exists := setting.JSONResp["value"]; exists {
+				hasValidSetting = true
+				break
 			}
 		}
 	}
