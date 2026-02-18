@@ -42,7 +42,7 @@ RUN pip3 install --no-cache-dir --break-system-packages awscli
 
 # Install gotestsum for JUnit reporting
 ENV GOBIN=/usr/local/bin
-RUN go install gotest.tools/gotestsum@$v{GOTESTUM_VERSION}
+RUN go install gotest.tools/gotestsum@$1.13.0
 ENV GOBIN=
 
 # Create working directory
