@@ -189,14 +189,22 @@ Always update relevant documentation when making changes:
 
 ## Testing Philosophy
 
+* all code should build successfully
 * Tests should be independent and not rely on state from other tests
 * Use appropriate timeouts and retry logic for async operations
-* Clean up resources in teardown methods
+* Clean up of any and all resources should only be only in TearDownSuite, setting session cleanup appropriately throughout tests
 * Support both admin and standard user contexts where applicable
 * Use meaningful test names that describe what is being tested
+* use rancher's steve api wherever possible, unless explicitly mentioned to use a different api
 * always validate in a separate function
 * unless the requested test has `pit` in its tag name, only extensions or actions helpers should be used. In other words, only `pit` tests can use external APIs that are not explicitly rancher
 * the featurename should only be in the test's SuiteName, not any of the individual tests
 * there should be at least 2 tests per test file when possible:
   * one of which will always be contain `Dynamic` substring, which will depend on user input from "github.com/rancher/shepherd/pkg/config", wrapped in an action. See actions/fleet/fleet.go for an example
   * one of which will always be as static as possible, where no input is needed from the config
+* provide at least 1 full review of the code before submitting the PR
+* when creating helper functions, default to returning an error instead of accepting a testing.T parameter
+* log with logrus, not testing.T.log
+* return pointers to objects where possible in helper functions
+* if the case of ignoring errors arises, always justify via comment as to why it is ignored
+* strings should be a const wherever possible except for logs and error messages
