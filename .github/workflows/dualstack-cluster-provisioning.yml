@@ -217,6 +217,9 @@ jobs:
               clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
               serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
+            advanced:
+              machineGlobalConfig:
+                flannel-ipv6-masq: true
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
@@ -299,9 +302,10 @@ jobs:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-dualstack-provisioning
+        uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
+          tags: dualstack
 
       - name: Cleanup Infrastructure
         if: always()
@@ -535,6 +539,9 @@ jobs:
               clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
               serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
+            advanced:
+              machineGlobalConfig:
+                flannel-ipv6-masq: true
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
@@ -617,9 +624,10 @@ jobs:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-dualstack-provisioning
+        uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
+          tags: dualstack
 
       - name: Cleanup Infrastructure
         if: always()

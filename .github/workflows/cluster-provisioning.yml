@@ -322,6 +322,7 @@ jobs:
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
+          tags: recurring
 
       - name: Cleanup Infrastructure
         if: always()
@@ -660,6 +661,7 @@ jobs:
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
+          tags: recurring
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1007,6 +1009,7 @@ jobs:
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
+          tags: recurring
 
       - name: Cleanup Infrastructure
         if: always()
