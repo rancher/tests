@@ -373,15 +373,17 @@ node {
                 def testCmd = testArgs.join(' ')
                 echo "Running: ${testCmd}"
 
-                sh """
-                    docker run --rm --platform ${dockerPlatform} \
-                        --name ${containerName} \
-                        --env-file ${envFile} \
-                        -v ${workspace}:/workspace \
-                        -w /workspace/tests \
-                        ${infraToolsImage} \
-                        sh -c 'set -e; set -o pipefail; ${testCmd} | tee go-test.log'
-                """
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    sh """
+                        docker run --rm --platform ${dockerPlatform} \
+                            --name ${containerName} \
+                            --env-file ${envFile} \
+                            -v ${workspace}:/workspace \
+                            -w /workspace/tests \
+                            ${infraToolsImage} \
+                            sh -c 'set -e; set -o pipefail; ${testCmd} | tee go-test.log'
+                    """
+                }
 
                 // Publish results
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
