@@ -47,7 +47,7 @@ Workload upgrade test file and schema file:
 * [workload_test.go](../../validation/upgrade/workload_test.go)
 * [pit_schemas.yaml](../../validation/upgrade/schemas/pit_schemas.yaml)
 
-The yaml file should mirror the structure and style of the provided example bellow
+The yaml file should mirror the structure and style of the provided example below
 ```yaml
 - projects: [RANCHERINT]
   suite: Charts
