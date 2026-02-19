@@ -24,7 +24,7 @@ Fleet test files and schema file:
 
 Fleet upgrade test files and schema file:
 * [upgrade_test.go](../../validation/fleet/upgrade/upgrade_test.go)
-* [pit_schemas.yaml](../../validation/fleet/upgrade/schenas/pit_schemas.yaml)
+* [pit_schemas.yaml](../../validation/fleet/upgrade/schemas/pit_schemas.yaml)
 
 Longhorn chart installation test files and schema file:
 * [installation_test.go](../../validation/longhorn/chartinstall/installation_test.go)
