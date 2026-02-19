@@ -5,7 +5,6 @@ package crtb
 import (
 	"testing"
 
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -22,7 +21,6 @@ type CRTBGenTestSuite struct {
 	client    *rancher.Client
 	session   *session.Session
 	clusterID string
-	newUser   *management.User
 }
 
 func (crtb *CRTBGenTestSuite) TearDownSuite() {
@@ -40,9 +38,6 @@ func (crtb *CRTBGenTestSuite) SetupSuite() {
 
 	crtb.clusterID, err = clusters.GetClusterIDByName(crtb.client, client.RancherConfig.ClusterName)
 	require.NoError(crtb.T(), err, "Error getting cluster ID")
-
-	crtb.newUser, err = users.CreateUserWithRole(client, users.UserConfig())
-	require.NoError(crtb.T(), err)
 }
 
 func (crtb *CRTBGenTestSuite) TestCreateCrtbWithAllRequiredInputValues() {
@@ -56,14 +51,17 @@ func (crtb *CRTBGenTestSuite) TestCreateCrtbWithAllRequiredInputValues() {
 		{crtbManage},
 	}
 	for _, rtn := range tests {
+		newUser, err := users.CreateUserWithRole(client, users.UserConfig())
+		require.NoError(crtb.T(), err)
+
 		crtbName := namegen.RandStringLower(crtbNameWithTenChar)
-		clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, crtb.newUser.ID, rtn.roleTemplateName)
+		clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, newUser.ID, rtn.roleTemplateName)
 
 		resp, err := client.Steve.SteveType(crtbAPIEndPoint).Create(clusterRoleTemplateBinding)
 		require.NoError(crtb.T(), err)
 		assert.Contains(crtb.T(), (*resp).JSONResp["id"], crtbName)
 		assert.Contains(crtb.T(), (*resp).JSONResp["clusterName"], crtb.clusterID)
-		assert.Contains(crtb.T(), (*resp).JSONResp["userName"], crtb.newUser.ID)
+		assert.Contains(crtb.T(), (*resp).JSONResp["userName"], newUser.ID)
 		assert.Contains(crtb.T(), (*resp).JSONResp["roleTemplateName"], rtn.roleTemplateName)
 	}
 }
@@ -72,15 +70,18 @@ func (crtb *CRTBGenTestSuite) TestCreateCrtbWithUserPrincipalNameAsInput() {
 	client := crtb.client
 	crtbName := namegen.RandStringLower(crtbNameWithTenChar)
 
-	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, crtb.newUser.ID, clusterMember)
-	clusterRoleTemplateBinding.UserPrincipalName = "local://" + crtb.newUser.ID
+	newUser, err := users.CreateUserWithRole(client, users.UserConfig())
+	require.NoError(crtb.T(), err)
+
+	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, newUser.ID, clusterMember)
+	clusterRoleTemplateBinding.UserPrincipalName = "local://" + newUser.ID
 
 	resp, err := client.Steve.SteveType(crtbAPIEndPoint).Create(clusterRoleTemplateBinding)
 	require.NoError(crtb.T(), err)
 
 	assert.Contains(crtb.T(), (*resp).JSONResp["id"], crtbName)
 	assert.Contains(crtb.T(), (*resp).JSONResp["clusterName"], crtb.clusterID)
-	assert.Contains(crtb.T(), (*resp).JSONResp["userName"], crtb.newUser.ID)
+	assert.Contains(crtb.T(), (*resp).JSONResp["userName"], newUser.ID)
 	assert.Contains(crtb.T(), (*resp).JSONResp["roleTemplateName"], clusterMember)
 	assert.Equal(crtb.T(), (*resp).JSONResp["userPrincipalName"], clusterRoleTemplateBinding.UserPrincipalName)
 }
@@ -89,7 +90,10 @@ func (crtb *CRTBGenTestSuite) TestCreateCrtbAndInputLabels() {
 	client := crtb.client
 	crtbName := namegen.RandStringLower(crtbNameWithTenChar)
 
-	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, crtb.newUser.ID, clusterMember)
+	newUser, err := users.CreateUserWithRole(client, users.UserConfig())
+	require.NoError(crtb.T(), err)
+
+	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, newUser.ID, clusterMember)
 	clusterRoleTemplateBinding.ObjectMeta.Labels = map[string]string{"Hello": "World"}
 
 	resp, err := client.Steve.SteveType(crtbAPIEndPoint).Create(clusterRoleTemplateBinding)
@@ -97,7 +101,7 @@ func (crtb *CRTBGenTestSuite) TestCreateCrtbAndInputLabels() {
 
 	assert.Contains(crtb.T(), (*resp).JSONResp["id"], crtbName)
 	assert.Contains(crtb.T(), (*resp).JSONResp["clusterName"], crtb.clusterID)
-	assert.Contains(crtb.T(), (*resp).JSONResp["userName"], crtb.newUser.ID)
+	assert.Contains(crtb.T(), (*resp).JSONResp["userName"], newUser.ID)
 	assert.Contains(crtb.T(), (*resp).JSONResp["roleTemplateName"], clusterMember)
 	assert.NotContains(crtb.T(), (*resp).JSONResp, clusterRoleTemplateBinding.Labels)
 }
@@ -106,7 +110,10 @@ func (crtb *CRTBGenTestSuite) TestValidateErrorAlreadyCrtbExisted() {
 	client := crtb.client
 	crtbName := namegen.RandStringLower(crtbNameWithTenChar)
 
-	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, crtb.newUser.ID, clusterMember)
+	newUser, err := users.CreateUserWithRole(client, users.UserConfig())
+	require.NoError(crtb.T(), err)
+
+	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, newUser.ID, clusterMember)
 
 	resp, err := client.Steve.SteveType(crtbAPIEndPoint).Create(clusterRoleTemplateBinding)
 	require.NoError(crtb.T(), err)
@@ -122,10 +129,13 @@ func (crtb *CRTBGenTestSuite) TestValidateErrorRoleTemplateNameDoesNotExist() {
 	client := crtb.client
 	crtbName := namegen.RandStringLower(crtbNameWithTenChar)
 
-	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, crtb.newUser.ID, clusterMember)
+	newUser, err := users.CreateUserWithRole(client, users.UserConfig())
+	require.NoError(crtb.T(), err)
+
+	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, newUser.ID, clusterMember)
 	clusterRoleTemplateBinding.RoleTemplateName = "roleTemplateNameNotExisted"
 
-	_, err := client.Steve.SteveType(crtbAPIEndPoint).Create(clusterRoleTemplateBinding)
+	_, err = client.Steve.SteveType(crtbAPIEndPoint).Create(clusterRoleTemplateBinding)
 	require.Error(crtb.T(), err)
 	require.ErrorContains(crtb.T(), err, badRequest)
 }
@@ -134,10 +144,13 @@ func (crtb *CRTBGenTestSuite) TestValidateErrorBadRequestByPassingDifferentClust
 	client := crtb.client
 	crtbName := namegen.RandStringLower(crtbNameWithTenChar)
 
-	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, crtb.newUser.ID, clusterMember)
+	newUser, err := users.CreateUserWithRole(client, users.UserConfig())
+	require.NoError(crtb.T(), err)
+
+	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, newUser.ID, clusterMember)
 	clusterRoleTemplateBinding.ClusterName = localCluster
 
-	_, err := client.Steve.SteveType(crtbAPIEndPoint).Create(clusterRoleTemplateBinding)
+	_, err = client.Steve.SteveType(crtbAPIEndPoint).Create(clusterRoleTemplateBinding)
 	require.Error(crtb.T(), err)
 	require.ErrorContains(crtb.T(), err, badRequest)
 }
@@ -146,10 +159,13 @@ func (crtb *CRTBGenTestSuite) TestValidateErrorNamespaceNameDoesNotExist() {
 	client := crtb.client
 	crtbName := namegen.RandStringLower(crtbNameWithTenChar)
 
-	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, crtb.newUser.ID, clusterMember)
+	newUser, err := users.CreateUserWithRole(client, users.UserConfig())
+
+	require.NoError(crtb.T(), err)
+	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, newUser.ID, clusterMember)
 	clusterRoleTemplateBinding.ClusterName = "namespacenotexisted"
 
-	_, err := client.Steve.SteveType(crtbAPIEndPoint).Create(clusterRoleTemplateBinding)
+	_, err = client.Steve.SteveType(crtbAPIEndPoint).Create(clusterRoleTemplateBinding)
 	require.Error(crtb.T(), err)
 	require.ErrorContains(crtb.T(), err, badRequest)
 }
@@ -158,10 +174,13 @@ func (crtb *CRTBGenTestSuite) TestValidateErrorClusterNameAndNamespaceNameDiffer
 	client := crtb.client
 	crtbName := namegen.RandStringLower(crtbNameWithTenChar)
 
-	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, crtb.newUser.ID, clusterMember)
+	newUser, err := users.CreateUserWithRole(client, users.UserConfig())
+	require.NoError(crtb.T(), err)
+
+	clusterRoleTemplateBinding := clusterRoleTemplateBindingTemplate(crtb.clusterID, crtbName, newUser.ID, clusterMember)
 	clusterRoleTemplateBinding.ClusterName = localCluster
 
-	_, err := client.Steve.SteveType(crtbAPIEndPoint).Create(clusterRoleTemplateBinding)
+	_, err = client.Steve.SteveType(crtbAPIEndPoint).Create(clusterRoleTemplateBinding)
 	require.Error(crtb.T(), err)
 	require.ErrorContains(crtb.T(), err, cluserNameAndNamespaceSameValue)
 }
