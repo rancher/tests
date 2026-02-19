@@ -79,13 +79,13 @@ func (l *LonghornUIAccessTestSuite) SetupSuite() {
 	}
 }
 
-func (l *LonghornUIAccessTestSuite) TestLonghornUIAccess() {
+func (l *LonghornUIAccessTestSuite) TestUIAndAPIValidation() {
 	l.T().Log("Verifying all Longhorn pods are in active state")
-	err := validateLonghornPods(l.T(), l.client, l.cluster.ID)
+	err := validateLonghornPods(l.client, l.cluster.ID)
 	require.NoError(l.T(), err)
 
 	l.T().Log("Verifying Longhorn service is accessible")
-	serviceURL, err := validateLonghornService(l.T(), l.client, l.cluster.ID)
+	serviceURL, err := validateLonghornService(l.client, l.cluster.ID)
 	require.NoError(l.T(), err)
 	require.NotEmpty(l.T(), serviceURL)
 
@@ -111,7 +111,7 @@ func (l *LonghornUIAccessTestSuite) TestLonghornUIAccess() {
 	require.NoError(l.T(), err)
 
 	l.T().Log("Verifying Longhorn storage class is accessible through Rancher API")
-	err = validateLonghornStorageClassInRancher(l.T(), l.client, l.cluster.ID, l.longhornTestConfig.LonghornTestStorageClass)
+	err = validateLonghornStorageClassInRancher(l.client, l.cluster.ID, l.longhornTestConfig.LonghornTestStorageClass)
 	require.NoError(l.T(), err)
 }
 

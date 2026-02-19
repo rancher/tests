@@ -3,7 +3,6 @@ package longhorn
 import (
 	"context"
 	"fmt"
-	"testing"
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -12,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	shepherdPods "github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/tests/actions/charts"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
@@ -21,13 +21,13 @@ const (
 )
 
 // validateLonghornPods verifies that all pods in the longhorn-system namespace are in an active state
-func validateLonghornPods(t *testing.T, client *rancher.Client, clusterID string) error {
+func validateLonghornPods(client *rancher.Client, clusterID string) error {
 	steveClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return fmt.Errorf("failed to get downstream client: %w", err)
 	}
 
-	t.Logf("Waiting for all pods in namespace %s to be running", charts.LonghornNamespace)
+	logrus.Infof("Waiting for all pods in namespace %s to be running", charts.LonghornNamespace)
 
 	// Poll until all pods are running
 	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
@@ -43,12 +43,12 @@ func validateLonghornPods(t *testing.T, client *rancher.Client, clusterID string
 		// Check if all pods are in running state
 		for _, pod := range pods.Data {
 			if pod.State.Name != "running" {
-				t.Logf("Pod %s is not in running state, current state: %s", pod.Name, pod.State.Name)
+				logrus.Infof("Pod %s is not in running state, current state: %s", pod.Name, pod.State.Name)
 				return false, nil
 			}
 		}
 
-		t.Logf("All %d pods in namespace %s are in running state", len(pods.Data), charts.LonghornNamespace)
+		logrus.Infof("All %d pods in namespace %s are in running state", len(pods.Data), charts.LonghornNamespace)
 		return true, nil
 	})
 
@@ -60,13 +60,13 @@ func validateLonghornPods(t *testing.T, client *rancher.Client, clusterID string
 }
 
 // validateLonghornService verifies that the longhorn-frontend service is accessible and returns its URL
-func validateLonghornService(t *testing.T, client *rancher.Client, clusterID string) (string, error) {
+func validateLonghornService(client *rancher.Client, clusterID string) (string, error) {
 	steveClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get downstream client: %w", err)
 	}
 
-	t.Logf("Looking for service %s in namespace %s", longhornFrontendServiceName, charts.LonghornNamespace)
+	logrus.Infof("Looking for service %s in namespace %s", longhornFrontendServiceName, charts.LonghornNamespace)
 
 	// Wait for the service to be in active state
 	var serviceResp *steveV1.SteveAPIObject
@@ -88,7 +88,7 @@ func validateLonghornService(t *testing.T, client *rancher.Client, clusterID str
 		return "", fmt.Errorf("service %s did not become active: %w", longhornFrontendServiceName, err)
 	}
 
-	t.Logf("Service %s is active", longhornFrontendServiceName)
+	logrus.Infof("Service %s is active", longhornFrontendServiceName)
 
 	// Extract service information
 	service := &corev1.Service{}
@@ -109,7 +109,7 @@ func validateLonghornService(t *testing.T, client *rancher.Client, clusterID str
 			return "", fmt.Errorf("service %s has no ports defined", longhornFrontendServiceName)
 		}
 		serviceURL = fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", longhornFrontendServiceName, charts.LonghornNamespace, service.Spec.Ports[0].Port)
-		t.Logf("Service type is ClusterIP, URL: %s", serviceURL)
+		logrus.Infof("Service type is ClusterIP, URL: %s", serviceURL)
 
 	case corev1.ServiceTypeNodePort:
 		// For NodePort, we need to get a node IP
@@ -122,7 +122,7 @@ func validateLonghornService(t *testing.T, client *rancher.Client, clusterID str
 		}
 
 		// Get a node IP
-		nodes, err := steveClient.SteveType("node").List(nil)
+		nodes, err := steveClient.SteveType(stevetypes.Node).List(nil)
 		if err != nil {
 			return "", fmt.Errorf("failed to get nodes: %w", err)
 		}
@@ -134,6 +134,10 @@ func validateLonghornService(t *testing.T, client *rancher.Client, clusterID str
 		err = steveV1.ConvertToK8sType(nodes.Data[0].JSONResp, node)
 		if err != nil {
 			return "", fmt.Errorf("failed to convert node to k8s type: %w", err)
+		}
+
+		if len(node.Status.Addresses) == 0 {
+			return "", fmt.Errorf("node %s has no addresses", node.Name)
 		}
 
 		// Get the node's internal IP
@@ -150,7 +154,7 @@ func validateLonghornService(t *testing.T, client *rancher.Client, clusterID str
 		}
 
 		serviceURL = fmt.Sprintf("http://%s:%d", nodeIP, nodePort)
-		t.Logf("Service type is NodePort, URL: %s", serviceURL)
+		logrus.Infof("Service type is NodePort, URL: %s", serviceURL)
 
 	case corev1.ServiceTypeLoadBalancer:
 		// For LoadBalancer, use the external IP
@@ -167,7 +171,7 @@ func validateLonghornService(t *testing.T, client *rancher.Client, clusterID str
 			lbAddress = ingress.Hostname
 		}
 		serviceURL = fmt.Sprintf("http://%s:%d", lbAddress, service.Spec.Ports[0].Port)
-		t.Logf("Service type is LoadBalancer, URL: %s", serviceURL)
+		logrus.Infof("Service type is LoadBalancer, URL: %s", serviceURL)
 
 	default:
 		return "", fmt.Errorf("unsupported service type: %s", service.Spec.Type)
@@ -177,13 +181,13 @@ func validateLonghornService(t *testing.T, client *rancher.Client, clusterID str
 }
 
 // validateLonghornStorageClassInRancher verifies that the Longhorn storage class exists and is accessible through Rancher API
-func validateLonghornStorageClassInRancher(t *testing.T, client *rancher.Client, clusterID, storageClassName string) error {
+func validateLonghornStorageClassInRancher(client *rancher.Client, clusterID, storageClassName string) error {
 	steveClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return fmt.Errorf("failed to get downstream client: %w", err)
 	}
 
-	t.Logf("Looking for storage class %s in Rancher", storageClassName)
+	logrus.Infof("Looking for storage class %s in Rancher", storageClassName)
 
 	// Get the storage class
 	storageClasses, err := steveClient.SteveType("storage.k8s.io.storageclass").List(nil)
@@ -193,7 +197,7 @@ func validateLonghornStorageClassInRancher(t *testing.T, client *rancher.Client,
 
 	for _, sc := range storageClasses.Data {
 		if sc.Name == storageClassName {
-			t.Logf("Found storage class %s in Rancher", storageClassName)
+			logrus.Infof("Found storage class %s in Rancher", storageClassName)
 			return nil
 		}
 	}
