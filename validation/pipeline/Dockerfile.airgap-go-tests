@@ -1,33 +1,27 @@
 # Dockerfile for Airgap Go Testing
-# Extends infra tools with Go toolchain and gotestsum for test execution
-
+# Provides Go toolchain, gotestsum, OpenTofu, Ansible, and AWS CLI for test execution
 
 ARG TOFU_VERSION=1.10.7
-ARG GO_VERSION=1.25.0
+ARG GOTESTSUM_VERSION=v1.13.0
 
-FROM --platform=linux/amd64 alpine:3.22
+FROM --platform=linux/amd64 registry.suse.com/bci/golang:1.25
 
 ARG TOFU_VERSION
-ARG GO_VERSION
+ARG GOTESTSUM_VERSION
 
 # Install runtime dependencies
-RUN apk add --no-cache \
+RUN zypper --non-interactive install --no-recommends \
     bash \
     curl \
     git \
-    openssh-client \
+    openssh-clients \
     python3 \
-    py3-pip \
+    python3-pip \
     ca-certificates \
-    ansible \
-    && rm -rf /var/cache/apk/*
+    && zypper clean -a
 
-# Install Go toolchain
-RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.tgz \
-    && tar -C /usr/local -xzf /tmp/go.tgz \
-    && rm /tmp/go.tgz \
-    && ln -s /usr/local/go/bin/go /usr/local/bin/go \
-    && ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+# Install Ansible and AWS CLI
+RUN pip3 install --no-cache-dir ansible awscli
 
 # Install OpenTofu
 RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.tar.gz" \
@@ -35,12 +29,9 @@ RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/dow
     && rm /tmp/tofu.tar.gz \
     && chmod +x /usr/local/bin/tofu
 
-# Install AWS CLI
-RUN pip3 install --no-cache-dir --break-system-packages awscli
-
-# Install gotestsum for JUnit reporting
+# Install gotestsum (pinned version for reproducible builds)
 ENV GOBIN=/usr/local/bin
-RUN go install gotest.tools/gotestsum@latest
+RUN go install gotest.tools/gotestsum@${GOTESTSUM_VERSION}
 ENV GOBIN=
 
 # Create working directory
@@ -53,5 +44,5 @@ RUN tofu version && \
     go version && \
     gotestsum --version
 
-# Default to sh shell (compatible with alpine and docker run sh -c)
+# Default to sh shell (compatible with docker run sh -c)
 CMD ["/bin/sh"]

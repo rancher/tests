@@ -27,10 +27,8 @@ node {
     def cattleTestConfig = env.CATTLE_TEST_CONFIG ?: ''
     def reportArtifacts = (env.REPORT_ARTIFACTS ?: 'true').toBoolean()
 
-    // Optional: always destroy infra at end
     def destroyAfterTests = (env.DESTROY_AFTER_TESTS ?: 'true').toBoolean()
 
-    // Qase test reporting configuration
     def qaseTestRunId = env.QASE_TEST_RUN_ID ?: ''
     def qaseProjectId = env.QASE_PROJECT_ID ?: ''
     def qaseReporterScript = env.QASE_REPORTER_SCRIPT ?: 'build_qase_reporter_v2.sh'
@@ -40,7 +38,6 @@ node {
             stage('Checkout') {
                 deleteDir()
 
-                // Set build display name + description for quick identification
                 def hostnamePrefix = env.HOSTNAME_PREFIX ?: 'unknown'
                 currentBuild.displayName = "#${env.BUILD_NUMBER} - ${hostnamePrefix}"
                 currentBuild.description = "Deploying airgap infrastructure for ${hostnamePrefix}"
@@ -74,26 +71,14 @@ node {
                 sh "docker build --no-cache --platform linux/amd64 -t ${infraToolsImage} -f ${testsPath}/validation/pipeline/Dockerfile.airgap-go-tests ."
             }
 
-            stage('Verify Infra Tools Tooling') {
-                echo 'Verifying gotestsum availability inside infra tools image'
-                sh """
-                    docker run --rm --platform ${dockerPlatform} \
-                        ${infraToolsImage} \
-                        sh -c 'set -e; echo \"PATH=[1m$PATH\"; which gotestsum || true; ls -al /root/go/bin || true; ls -al /usr/local/bin/gotestsum || true'
-                """
-            }
-
-            stage('Configure SSH Key') {
+            stage('Setup Infrastructure') {
                 infrastructure.writeSshKey(
                     keyContent: env.AWS_SSH_PEM_KEY,
                     keyName: env.AWS_SSH_PEM_KEY_NAME,
                     dir: '.ssh'
                 )
-            }
 
-            stage('Configure Tofu Variables') {
                 echo 'Writing Terraform configuration'
-
                 def terraformConfig = infrastructure.parseAndSubstituteVars(
                     content: env.TERRAFORM_CONFIG,
                     envVars: [
@@ -103,14 +88,11 @@ node {
                         'AWS_SSH_PEM_KEY_NAME': env.AWS_SSH_PEM_KEY_NAME
                     ]
                 )
-
                 infrastructure.writeConfig(
                     path: "${tofuModulePath}/terraform.tfvars",
                     content: terraformConfig
                 )
-            }
 
-            stage('Initialize Tofu Backend') {
                 tofu.initBackend(
                     dir: tofuModulePath,
                     bucket: env.S3_BUCKET_NAME,
@@ -118,20 +100,16 @@ node {
                     region: env.S3_BUCKET_REGION,
                     backendInitScript: tofuBackendInitScript
                 )
-            }
 
-            stage('Create Workspace') {
                 workspaceName = infrastructure.generateWorkspaceName(
                     prefix: 'jenkins_airgap_ansible_workspace',
                     suffix: env.HOSTNAME_PREFIX,
                     includeTimestamp: false
                 )
-
                 tofu.createWorkspace(
                     dir: tofuModulePath,
                     name: workspaceName
                 )
-
                 infrastructure.archiveWorkspaceName(
                     workspaceName: workspaceName
                 )
@@ -144,16 +122,14 @@ node {
                     autoApprove: true
                 )
 
-                // Archive generated inventory file
                 def inventoryPath = 'qa-infra-automation/ansible/rke2/airgap/inventory/inventory.yml'
                 if (fileExists(inventoryPath)) {
                     archiveArtifacts artifacts: inventoryPath, fingerprint: true
                     echo "Archived inventory file: ${inventoryPath}"
                 } else {
-                    echo "Warning: Inventory file not found at ${inventoryPath}"
+                    error("Inventory file not found at ${inventoryPath} - Tofu apply may have failed to generate it")
                 }
 
-                // Upload tfvars to S3 (for destroy job reference)
                 def s3Path = "env:/${workspaceName}/terraform.tfvars"
                 def tfvarsPath = "${tofuModulePath}/terraform.tfvars"
                 def workspace = pwd()
@@ -169,7 +145,7 @@ node {
                 echo "Uploaded terraform.tfvars to s3://${env.S3_BUCKET_NAME}/${s3Path}"
             }
 
-            stage('Configure Ansible Variables') {
+            stage('Configure RKE2 Cluster') {
                 echo 'Writing Ansible variables'
 
                 def ansibleVars = infrastructure.parseAndSubstituteVars(
@@ -196,9 +172,7 @@ node {
                     path: "${ansiblePath}/inventory/group_vars/all.yml",
                     content: ansibleVars
                 )
-            }
 
-            stage('Setup SSH Keys on Nodes') {
                 retry(3) {
                     ansible.runPlaybook(
                         dir: ansiblePath,
@@ -229,8 +203,7 @@ node {
             }
 
             stage('Deploy Rancher (Optional)') {
-                def deployRancher = env.ANSIBLE_VARIABLES?.contains('deploy_rancher: true')
-                if (deployRancher) {
+                if (env.ANSIBLE_VARIABLES?.contains('deploy_rancher: true')) {
                     echo 'Deploying Rancher...'
                     retry(3) {
                         ansible.runPlaybook(
@@ -284,17 +257,9 @@ node {
                 def adminPassword = env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'
                 def cattleConfigPath = '/workspace/tests/cattle-config.yaml'
                 def workspace = pwd()
-
-                // Token configuration options (can be overridden via environment variables)
-                def tokenTtl = env.RANCHER_TOKEN_TTL ?: '0'  // 0 = no expiration
+                def tokenTtl = env.RANCHER_TOKEN_TTL ?: '0'
                 def tokenDescription = env.RANCHER_TOKEN_DESCRIPTION ?: "jenkins-airgap-${env.BUILD_NUMBER}"
 
-                // Run the Ansible playbook that uses the rancher_token role
-                // The rancher_token role:
-                // - Reads external_lb_hostname from inventory (or uses explicit rancher_url)
-                // - Authenticates with Rancher API
-                // - Creates an API token with configurable TTL and description
-                // - Updates cattle-config.yaml with the generated token
                 sh """
                     docker run --rm --platform ${dockerPlatform} \
                         --name generate-token \
@@ -310,40 +275,32 @@ node {
                             -e rancher_token_output_file=/workspace/rancher-token.json
                 """
 
-                // Archive the token metadata (JSON format) for debugging/auditing
-                // WARNING: This file contains the full admin API token. Ensure Jenkins artifact
-                // access is restricted and consider rotating this token after test completion.
-                // Archived to enable manual test reruns in the deployed environment.
                 if (fileExists('rancher-token.json')) {
                     archiveArtifacts artifacts: 'rancher-token.json', fingerprint: true
-                    echo 'Archived token metadata: rancher-token.json (contains sensitive credentials)'
+                    echo 'Archived token metadata: rancher-token.json (contains sensitive credentials - restrict artifact access)'
+                } else {
+                    error('rancher-token.json not found - admin token generation failed')
                 }
             }
 
             stage('Run Go Automation Tests') {
                 echo 'Running Go tests with gotestsum (JUnit output)'
 
-                // Prepare env-file for docker run
                 def envFile = '.go_test_env'
                 def lines = []
-                // Provide common test env vars
                 if (rancherHostname) {
                     lines += [
                         "RANCHER_URL=https://${rancherHostname}",
                         "RANCHER_HOSTNAME=${rancherHostname}",
                     ]
                 }
-                // If Ansible variables defined a bootstrap password, default commonly used value
                 lines += ["RANCHER_BOOTSTRAP_PASSWORD=${env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'}"]
 
-                // Point to the cattle config file (already created and token-injected in earlier stages)
-                // NOTE: Do NOT overwrite the file here - it already has the admin token injected
                 def cattleConfigPath = "${testsPath}/cattle-config.yaml"
                 if (fileExists(cattleConfigPath)) {
                     lines += 'CATTLE_TEST_CONFIG=/workspace/tests/cattle-config.yaml'
                     echo "Using existing cattle config with injected token: ${cattleConfigPath}"
                 } else if (cattleTestConfig?.trim()) {
-                    // Fallback: create config if it doesn't exist (should not happen in normal flow)
                     writeFile file: cattleConfigPath, text: cattleTestConfig.trim() + '\n'
                     lines += 'CATTLE_TEST_CONFIG=/workspace/tests/cattle-config.yaml'
                     echo "Warning: Created cattle config without token injection"
@@ -385,7 +342,6 @@ node {
                     """
                 }
 
-                // Publish results
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                     junit allowEmptyResults: true, testResults: testConfig.resultsXML
                 }
@@ -396,7 +352,6 @@ node {
             }
 
             stage('Report to Qase') {
-                // Skip if Qase is not configured
                 if (!qaseTestRunId?.trim() || !qaseProjectId?.trim()) {
                     echo 'Skipping Qase reporting: QASE_TEST_RUN_ID or QASE_PROJECT_ID not provided'
                     return
@@ -411,8 +366,6 @@ node {
 
                 def workspace = pwd()
 
-                // Build and run the Qase reporter
-                // The reporter script builds a Go binary that reads test results and uploads to Qase API
                 sh """
                     docker run --rm --platform ${dockerPlatform} \
                         --name qase-reporter \
@@ -446,7 +399,7 @@ node {
             if ((env.DESTROY_ON_FAILURE ?: 'true').toBoolean() && workspaceName && !infrastructureCleaned) {
                 echo 'DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure...'
                 try {
-                    stage('Cleanup on Failure') {
+                    stage('Destroy Infrastructure') {
                         tofu.selectWorkspace(dir: tofuModulePath, name: workspaceName)
                         tofu.destroy(dir: tofuModulePath, varFile: 'terraform.tfvars', autoApprove: true)
                         tofu.deleteWorkspace(dir: tofuModulePath, name: workspaceName)
@@ -461,7 +414,7 @@ node {
             if (destroyAfterTests && workspaceName && !infrastructureCleaned) {
                 echo 'Destroying infrastructure after tests (configured)'
                 try {
-                    stage('Destroy After Tests') {
+                    stage('Destroy Infrastructure') {
                         tofu.selectWorkspace(dir: tofuModulePath, name: workspaceName)
                         tofu.destroy(dir: tofuModulePath, varFile: 'terraform.tfvars', autoApprove: true)
                         tofu.deleteWorkspace(dir: tofuModulePath, name: workspaceName)
