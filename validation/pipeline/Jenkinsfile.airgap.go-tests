@@ -218,6 +218,16 @@ node {
                 }
             }
 
+            stage('Configure Private Registry') {
+                retry(3) {
+                    ansible.runPlaybook(
+                        dir: ansiblePath,
+                        inventory: 'inventory/inventory.yml',
+                        playbook: 'playbooks/deploy/rke2-registry-config-playbook.yml'
+                    )
+                }
+            }
+
             stage('Deploy Rancher (Optional)') {
                 def deployRancher = env.ANSIBLE_VARIABLES?.contains('deploy_rancher: true')
                 if (deployRancher) {
