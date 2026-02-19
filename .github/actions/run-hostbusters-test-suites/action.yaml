@@ -10,6 +10,10 @@ inputs:
     description: "Enable reporting"
     required: false
     default: "false"
+  tags:
+    description: "Test tags to run (comma-separated)"
+    required: false
+    default: "recurring"
 
 runs:
   using: composite
@@ -27,7 +31,7 @@ runs:
               --packages=github.com/rancher/tests/validation/certificates/rke2 \
               --junitfile results.xml \
               --jsonfile results_rke2_cert.json \
-              -- -timeout=5h -tags=recurring -v
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
 
             rke2_cert_exit=$?
             echo "rke2_cert_exit=$rke2_cert_exit" >> "$GITHUB_ENV"
@@ -42,7 +46,7 @@ runs:
               --packages=github.com/rancher/tests/validation/certificates/k3s \
               --junitfile results.xml \
               --jsonfile results_k3s_cert.json \
-              -- -timeout=5h -tags=recurring -v
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
 
             k3s_cert_exit=$?
             echo "k3s_cert_exit=$k3s_cert_exit" >> "$GITHUB_ENV"
@@ -57,7 +61,7 @@ runs:
               --packages=github.com/rancher/tests/validation/deleting/rke2 \
               --junitfile results.xml \
               --jsonfile results_rke2_delete.json \
-              -- -timeout=5h -tags=recurring -v
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
 
             rke2_delete_exit=$?
             echo "rke2_delete_exit=$rke2_delete_exit" >> "$GITHUB_ENV"
@@ -72,7 +76,7 @@ runs:
               --packages=github.com/rancher/tests/validation/deleting/k3s \
               --junitfile results.xml \
               --jsonfile results_k3s_delete.json \
-              -- -timeout=5h -tags=recurring -v
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
 
             k3s_delete_exit=$?
             echo "k3s_delete_exit=$k3s_delete_exit" >> "$GITHUB_ENV"
@@ -87,7 +91,7 @@ runs:
               --packages=github.com/rancher/tests/validation/nodescaling/rke2 \
               --junitfile results.xml \
               --jsonfile results_rke2_node_scale.json \
-              -- -timeout=5h -tags=recurring -v
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
 
             rke2_node_scale_exit=$?
             echo "rke2_node_scale_exit=$rke2_node_scale_exit" >> "$GITHUB_ENV"
@@ -102,7 +106,7 @@ runs:
               --packages=github.com/rancher/tests/validation/nodescaling/k3s \
               --junitfile results.xml \
               --jsonfile results_k3s_node_scale.json \
-              -- -timeout=5h -tags=recurring -v
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
 
             k3s_node_scale_exit=$?
             echo "k3s_node_scale_exit=$k3s_node_scale_exit" >> "$GITHUB_ENV"
@@ -116,29 +120,14 @@ runs:
           
           rancher-server-two)
             gotestsum --format standard-verbose \
-              --packages=github.com/rancher/tests/validation/provisioning/k3s \
+              --packages=github.com/rancher/tests/validation/provisioning/... \
               --junitfile results.xml \
-              --jsonfile results_k3s.json \
-              -- -timeout=5h -tags=recurring -v
+              --jsonfile results_provisioning.json \
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
 
-            k3s_exit=$?
-            echo "k3s_exit=$k3s_exit" >> "$GITHUB_ENV"
-            cp results_k3s.json results.json
-
-            if [[ "${{ inputs.reporting }}" == "true" ]]; then
-              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-              ./validation/reporter
-            fi
-
-            gotestsum --format standard-verbose \
-              --packages=github.com/rancher/tests/validation/provisioning/rke2 \
-              --junitfile results.xml \
-              --jsonfile results_rke2.json \
-              -- -timeout=5h -tags=recurring -v
-
-            rke2_exit=$?
-            echo "rke2_exit=$rke2_exit" >> "$GITHUB_ENV"
-            cp results_rke2.json results.json
+            provisioning_exit=$?
+            echo "provisioning_exit=$provisioning_exit" >> "$GITHUB_ENV"
+            cp results_provisioning.json results.json
 
             if [[ "${{ inputs.reporting }}" == "true" ]]; then
               ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -149,7 +138,7 @@ runs:
               --packages=github.com/rancher/tests/validation/snapshot/rke2 \
               --junitfile results.xml \
               --jsonfile results_rke2_snapshot.json \
-              -- -timeout=5h -tags=recurring -v
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
 
             rke2_snapshot_exit=$?
             echo "rke2_snapshot_exit=$rke2_snapshot_exit" >> "$GITHUB_ENV"
@@ -164,7 +153,7 @@ runs:
               --packages=github.com/rancher/tests/validation/snapshot/k3s \
               --junitfile results.xml \
               --jsonfile results_k3s_snapshot.json \
-              -- -timeout=5h -tags=recurring -v
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
 
             k3s_snapshot_exit=$?
             echo "k3s_snapshot_exit=$k3s_snapshot_exit" >> "$GITHUB_ENV"
@@ -179,7 +168,7 @@ runs:
               --packages=github.com/rancher/tests/validation/upgrade/k3s \
               --junitfile results.xml \
               --jsonfile results_k3s_upgrade.json \
-              -- -timeout=5h -tags=recurring -v
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
 
             k3s_upgrade_exit=$?
             echo "k3s_upgrade_exit=$k3s_upgrade_exit" >> "$GITHUB_ENV"
@@ -194,7 +183,7 @@ runs:
               --packages=github.com/rancher/tests/validation/upgrade/rke2 \
               --junitfile results.xml \
               --jsonfile results_rke2_upgrade.json \
-              -- -timeout=5h -tags=recurring -v
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
 
             rke2_upgrade_exit=$?
             echo "rke2_upgrade_exit=$rke2_upgrade_exit" >> "$GITHUB_ENV"
@@ -217,8 +206,7 @@ runs:
           [k3s_delete_exit]="Delete K3S Cluster:results_k3s_delete.json"
           [rke2_node_scale_exit]="RKE2 Node Scaling:results_rke2_node_scale.json"
           [k3s_node_scale_exit]="K3S Node Scaling:results_k3s_node_scale.json"
-          [k3s_exit]="K3S:results_k3s.json"
-          [rke2_exit]="RKE2:results_rke2.json"
+          [provisioning_exit]="Provisioning:results_provisioning.json"
           [k3s_snapshot_exit]="K3S Snapshot Restore:results_k3s_snapshot.json"
           [rke2_snapshot_exit]="RKE2 Snapshot Restore:results_rke2_snapshot.json"
           [k3s_upgrade_exit]="K3S Kubernetes Upgrade:results_k3s_upgrade.json"

@@ -322,6 +322,7 @@ jobs:
         with:
           suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
+          tags: recurring
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
@@ -662,6 +663,7 @@ jobs:
         with:
           suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
+          tags: recurring
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
@@ -1011,6 +1013,7 @@ jobs:
         with:
           suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
+          tags: recurring
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure

@@ -1,4 +1,4 @@
-//go:build validation || recurring
+//go:build validation || (recurring && dualstack) || dualstack
 
 package dualstack
 

@@ -1,4 +1,4 @@
-//go:build validation || recurring
+//go:build validation || recurring || ipv6 || dualstack
 
 package rke2
 

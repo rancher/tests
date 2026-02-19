@@ -7,48 +7,29 @@ inputs:
     description: "Enable reporting"
     required: false
     default: "false"
+  tags:
+    description: "Test tags to run (comma-separated)"
+    required: false
+    default: "recurring"
 
 runs:
   using: composite
   steps:
-    - name: Run K3S Provisioning Tests
-      id: k3s
+    - name: Run Provisioning Tests
+      id: provisioning
       shell: bash
       continue-on-error: true
       run: |
         set +e
 
         gotestsum --format standard-verbose \
-          --packages=github.com/rancher/tests/validation/provisioning/k3s \
-          --junitfile results_k3s.xml \
-          --jsonfile results_k3s.json \
-          -- -timeout=3h -tags=recurring -v
+          --packages=github.com/rancher/tests/validation/provisioning/... \
+          --junitfile results_provisioning.xml \
+          --jsonfile results_provisioning.json \
+          -- -timeout=3h -tags=${{ inputs.tags }} -v
 
-        k3s_exit=$?
-        echo "k3s_exit=$k3s_exit" >> "$GITHUB_ENV"
-        cp results_k3s.json results.json
-
-        if [[ "${{ inputs.reporting }}" == "true" ]]; then
-          ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-          ./validation/reporter
-        fi
-
-    - name: Run RKE2 Provisioning Tests
-      id: rke2
-      shell: bash
-      continue-on-error: true
-      run: |
-        set +e
-
-        gotestsum --format standard-verbose \
-          --packages=github.com/rancher/tests/validation/provisioning/rke2 \
-          --junitfile results_rke2.xml \
-          --jsonfile results_rke2.json \
-          -- -timeout=3h -tags=recurring -v
-
-        rke2_exit=$?
-        echo "rke2_exit=$rke2_exit" >> "$GITHUB_ENV"
-        cp results_rke2.json results.json
+        provisioning_exit=$?
+        echo "provisioning_exit=$provisioning_exit" >> "$GITHUB_ENV"
 
         if [[ "${{ inputs.reporting }}" == "true" ]]; then
           ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -58,15 +39,9 @@ runs:
     - name: Show failed tests
       run: |
         failed=0
-        if [ "$k3s_exit" -ne 0 ]; then
-          echo "Failed K3S tests:"
-          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results_k3s.json
-          failed=1
-        fi
-
-        if [ "$rke2_exit" -ne 0 ]; then
-          echo "Failed RKE2 tests:"
-          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results_rke2.json
+        if [ "$provisioning_exit" -ne 0 ]; then
+          echo "Failed Provisioning tests:"
+          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results_provisioning.json
           failed=1
         fi
 

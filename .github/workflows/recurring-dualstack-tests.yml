@@ -227,6 +227,9 @@ jobs:
               clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
               serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
+            advanced:
+              machineGlobalConfig:
+                flannel-ipv6-masq: true
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
@@ -260,6 +263,10 @@ jobs:
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
               subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+              enablePrimaryIPv6: true
+              httpProtocolIpv6: "enabled"
+              ipv6AddressOnly: true
+              ipv6AddressCount: "1"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -312,7 +319,8 @@ jobs:
         with:
           suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
-        uses: ./.github/actions/run-hostbusters-dualstack-test-suites
+          tags: dualstack
+        uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
         if: always()
@@ -556,6 +564,9 @@ jobs:
               clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
               serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
+            advanced:
+              machineGlobalConfig:
+                flannel-ipv6-masq: true
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
@@ -589,6 +600,10 @@ jobs:
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
               subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+              enablePrimaryIPv6: true
+              httpProtocolIpv6: "enabled"
+              ipv6AddressOnly: true
+              ipv6AddressCount: "1"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -641,7 +656,8 @@ jobs:
         with:
           suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
-        uses: ./.github/actions/run-hostbusters-dualstack-test-suites
+          tags: dualstack
+        uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
         if: always()
