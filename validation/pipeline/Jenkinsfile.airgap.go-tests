@@ -202,18 +202,13 @@ node {
                 }
             }
 
-            stage('Deploy Rancher (Optional)') {
-                if (env.ANSIBLE_VARIABLES?.contains('deploy_rancher: true')) {
-                    echo 'Deploying Rancher...'
-                    retry(3) {
-                        ansible.runPlaybook(
-                            dir: ansiblePath,
-                            inventory: 'inventory/inventory.yml',
-                            playbook: 'playbooks/deploy/rancher-helm-deploy-playbook.yml'
-                        )
-                    }
-                } else {
-                    echo 'Skipping Rancher deployment (not enabled in ANSIBLE_VARIABLES)'
+            stage('Deploy Rancher') {
+                retry(3) {
+                    ansible.runPlaybook(
+                        dir: ansiblePath,
+                        inventory: 'inventory/inventory.yml',
+                        playbook: 'playbooks/deploy/rancher-helm-deploy-playbook.yml'
+                    )
                 }
             }
 
@@ -263,11 +258,12 @@ node {
                 sh """
                     docker run --rm --platform ${dockerPlatform} \
                         --name generate-token \
+                        -e RANCHER_TOKEN_PASSWORD=${adminPassword} \
                         -v ${workspace}:/workspace \
                         -w /workspace/${ansiblePath} \
                         ${infraToolsImage} \
                         ansible-playbook -i inventory/inventory.yml /workspace/qa-infra-automation/ansible/rancher/token/generate-admin-token.yml \
-                            -e rancher_token_password=${adminPassword} \
+                            -e rancher_token_password=\$RANCHER_TOKEN_PASSWORD \
                             -e rancher_cattle_config_file=${cattleConfigPath} \
                             -e rancher_token_ttl=${tokenTtl} \
                             -e rancher_token_description=${tokenDescription} \
@@ -313,7 +309,8 @@ node {
                 def names = generate.names()
                 def containerName = names.container
 
-                def testCases = goTestCase?.trim() ? goTestCase.trim() : goTestPackage
+                def trimmedGoTestCase = goTestCase?.trim()
+                def testCases = trimmedGoTestCase ?: goTestPackage
                 def (testArgs, testConfig) = container._goTestCommand([
                     packages: goTestPackage,
                     cases: testCases,
@@ -389,8 +386,6 @@ node {
                             fi
                         '
                 """
-
-                echo "Test results reported to Qase successfully"
             }
         } catch (err) {
             currentBuild.result = 'FAILURE'

@@ -22,10 +22,12 @@ RUN apk add --no-cache \
 # Install Ansible and AWS CLI
 RUN pip3 install --no-cache-dir --break-system-packages ansible awscli
 
-# Install OpenTofu
-RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.tar.gz" \
-    && tar -xzf /tmp/tofu.tar.gz -C /usr/local/bin/ \
-    && rm /tmp/tofu.tar.gz \
+# Install OpenTofu with checksum verification
+RUN curl -Lo /tmp/tofu_${TOFU_VERSION}_linux_amd64.tar.gz "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.tar.gz" \
+    && curl -Lo /tmp/tofu_SHA256SUMS "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" \
+    && cd /tmp && grep "tofu_${TOFU_VERSION}_linux_amd64.tar.gz$" tofu_SHA256SUMS | sha256sum -c - \
+    && tar -xzf /tmp/tofu_${TOFU_VERSION}_linux_amd64.tar.gz -C /usr/local/bin/ \
+    && rm /tmp/tofu_${TOFU_VERSION}_linux_amd64.tar.gz /tmp/tofu_SHA256SUMS \
     && chmod +x /usr/local/bin/tofu
 
 # Install gotestsum (pinned version for reproducible builds)
