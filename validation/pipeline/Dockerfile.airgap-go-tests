@@ -4,24 +4,23 @@
 ARG TOFU_VERSION=1.10.7
 ARG GOTESTSUM_VERSION=v1.13.0
 
-FROM --platform=linux/amd64 registry.suse.com/bci/golang:1.25
+FROM --platform=linux/amd64 golang:1.25-alpine3.22
 
 ARG TOFU_VERSION
 ARG GOTESTSUM_VERSION
 
 # Install runtime dependencies
-RUN zypper --non-interactive install --no-recommends \
+RUN apk add --no-cache \
     bash \
     curl \
     git \
-    openssh-clients \
+    openssh-client \
     python3 \
-    python3-pip \
-    ca-certificates \
-    && zypper clean -a
+    py3-pip \
+    ca-certificates
 
 # Install Ansible and AWS CLI
-RUN pip3 install --no-cache-dir ansible awscli
+RUN pip3 install --no-cache-dir --break-system-packages ansible awscli
 
 # Install OpenTofu
 RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.tar.gz" \
