@@ -3,7 +3,7 @@
   cases:
   - title: "Longhorn UI Access Through Rancher"
     description: "Verify seamless access to Longhorn UI through Rancher interface with proper authentication and session management."
-    automation: 0
+    automation: 2
     steps:
     - action: "Navigate to cluster view in Rancher dashboard"
       data: ""
@@ -45,6 +45,8 @@
       data: ""
       expectedresult: "Volume visible in Rancher Longhorn section"
       position: 10
+    custom_field:
+      "15": "TestUIAndAPIValidation"
   - title: "RBAC Integration Testing"
     description: "Test Role-Based Access Control integration between Rancher and Longhorn for different user permission levels."
     automation: 2
