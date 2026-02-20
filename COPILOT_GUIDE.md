@@ -22,4 +22,4 @@ Initial review should be by the person who assigned copilot to the issue. This r
 
 * Interoperability helper functions may not work very well with this tool yet. We need to add some better instructions for copilot to know when / how to look up other APIs from other repos
 * Sometimes, things you'd expect copilot to get right (i.e. changes it makes shouldn't break go builds) are not right. When this happens, please take note of what happened and create a separate issue/PR for it by adding some lines to `.github/copilot-instructions.md`
-* Copilot currently has no way of knowing if the test passes or fails in a real environment. Currently, this is the biggest slowdown to copilot PRs, as we (test engineers) have to run it manually, then report the result back to copilot
+* **Copilot currently has no way of knowing if the test passes or fails in a real environment. Currently, this is the biggest slowdown to copilot PRs, as we (test engineers) have to run it manually, then report the result back to copilot**
