@@ -258,12 +258,11 @@ node {
                 sh """
                     docker run --rm --platform ${dockerPlatform} \
                         --name generate-token \
-                        -e RANCHER_TOKEN_PASSWORD=${adminPassword} \
+                        -e RANCHER_ADMIN_PASSWORD=${adminPassword} \
                         -v ${workspace}:/workspace \
                         -w /workspace/${ansiblePath} \
                         ${infraToolsImage} \
                         ansible-playbook -i inventory/inventory.yml /workspace/qa-infra-automation/ansible/rancher/token/generate-admin-token.yml \
-                            -e rancher_token_password=\$RANCHER_TOKEN_PASSWORD \
                             -e rancher_cattle_config_file=${cattleConfigPath} \
                             -e rancher_token_ttl=${tokenTtl} \
                             -e rancher_token_description=${tokenDescription} \
