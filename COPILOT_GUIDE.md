@@ -16,7 +16,7 @@ Once you're done writing up the issue, simply assign copilot to the issue. You w
 
 ### Reviewing the PR created by Copilot
 
-Initial review should be by the person who assigned copilot to the issue. This review should be treated just like any other junior engineer's PR; very thourough. This step is very important as the review burden in copilot PRs are on the person working with copilot, not the rest of the team. After you have had a deep review of the code and are as comfortable with it as though you'd written it yourself, then you may assign it to team members for a final approval.
+Initial review should be by the person who assigned copilot to the issue. This review should be treated just like any other junior engineer's PR; be very thorough. This step is very important as the review burden in copilot PRs are on the person working with copilot, not the rest of the team. After you have had a deep review of the code and are as comfortable with it as though you'd written it yourself, then you may assign it to team members for a final approval.
 
 ### Caveats
 
