@@ -157,7 +157,7 @@ func VerifyGitRepo(client *rancher.Client, gitRepoID, k8sClusterID, steveCluster
 	podErrors := pods.StatusPods(client, k8sClusterID)
 	if len(podErrors) > 0 {
 		for _, err := range podErrors {
-			logrus.Errorf(err.Error())
+			logrus.Error(err.Error())
 		}
 		return errors.New("pods are not healthy in " + steveClusterID)
 	}
