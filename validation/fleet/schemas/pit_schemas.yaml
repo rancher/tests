@@ -40,7 +40,7 @@
       expectedresult: ""
       position: 3
     - action: "Deploy dynamic GitRepo object"
-      data: "/validation/fleet/schemas/dynamicgitrepo.yaml"
+      data: "/validation/fleet/schemas/dynamicgit.yaml"
       expectedresult: "Dynamic GitRepo created successfully"
       position: 4
     - action: "Verify dynamic GitRepo"
