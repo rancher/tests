@@ -3,24 +3,20 @@
 package shell
 
 import (
-	"context"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 
 	"github.com/rancher/shepherd/pkg/session"
 
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
-	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/settings"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	corev1 "k8s.io/api/core/v1"
-	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -61,26 +57,24 @@ func (s *ShellTestSuite) TestShell() {
 
 	s.Run("Verify the helm operations for the shell succeeded", func() {
 		steveClient := s.client.Steve
-		err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (bool, error) {
-			podList, err := steveClient.SteveType(pods.PodResourceSteveType).NamespacedSteveClient(cattleSystemNameSpace).List(nil)
-			if err != nil {
-				return false, nil
+		podList, err := steveClient.SteveType(pods.PodResourceSteveType).NamespacedSteveClient(cattleSystemNameSpace).List(nil)
+		require.NoError(s.T(), err)
+
+		for _, pod := range podList.Data {
+			if !strings.Contains(pod.Name, "helm") {
+				continue
 			}
 
-			for _, pod := range podList.Data {
-				if strings.Contains(pod.Name, "helm") {
-					podStatus := &corev1.PodStatus{}
-					if err = steveV1.ConvertToK8sType(pod.Status, podStatus); err != nil {
-						return false, err
-					}
-					if string(podStatus.Phase) != "Succeeded" {
-						return false, nil
-					}
-				}
+			podStatus := &corev1.PodStatus{}
+			err = steveV1.ConvertToK8sType(pod.Status, podStatus)
+			require.NoError(s.T(), err)
+
+			if podStatus.Phase == corev1.PodRunning || podStatus.Phase == corev1.PodPending {
+				continue
 			}
-			return true, nil
-		})
-		require.NoError(s.T(), err)
+
+			assert.Equal(s.T(), string(corev1.PodSucceeded), string(podStatus.Phase), "helm pod %s was not in Succeeded state", pod.Name)
+		}
 	})
 }
 
