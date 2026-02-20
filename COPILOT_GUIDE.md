@@ -10,7 +10,7 @@
 
 ### Creating an Issue for Copilot
 
-Think of this as writing a test plan for a junior engineer. It should be fairly detailed, give examples, and explain vauge or 'word of mouth' knowledge.
+Think of this as writing a test plan for a junior engineer. It should be fairly detailed, give examples, and explain vague or 'word of mouth' knowledge.
 If there's a schema file for your test already, this is a great starting point.
 Once you're done writing up the issue, simply assign copilot to the issue. You will be asked about adding additional instructions and selecting a model, but just use the defaults.
 
