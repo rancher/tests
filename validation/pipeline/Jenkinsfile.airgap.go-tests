@@ -147,7 +147,6 @@ node {
 
             stage('Configure RKE2 Cluster') {
                 echo 'Writing Ansible variables'
-                env.ANSIBLE_CONFIG = "${WORKSPACE}/qa-infra-automation/ansible/ansible.cfg"
 
                 def ansibleVars = infrastructure.parseAndSubstituteVars(
                     content: env.ANSIBLE_VARIABLES,
