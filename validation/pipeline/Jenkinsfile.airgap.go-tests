@@ -71,7 +71,7 @@ node {
                 sh "docker build --no-cache --platform linux/amd64 -t ${infraToolsImage} -f ${testsPath}/validation/pipeline/Dockerfile.airgap-go-tests ."
             }
 
-            stage('Setup Infrastructure') {
+            stage('Setup Infrastructure and Apply Tofu') {
                 infrastructure.writeSshKey(
                     keyContent: env.AWS_SSH_PEM_KEY,
                     keyName: env.AWS_SSH_PEM_KEY_NAME,
@@ -113,9 +113,7 @@ node {
                 infrastructure.archiveWorkspaceName(
                     workspaceName: workspaceName
                 )
-            }
 
-            stage('Apply Tofu') {
                 tofu.apply(
                     dir: tofuModulePath,
                     varFile: 'terraform.tfvars',
@@ -145,7 +143,7 @@ node {
                 echo "Uploaded terraform.tfvars to s3://${env.S3_BUCKET_NAME}/${s3Path}"
             }
 
-            stage('Configure RKE2 Cluster') {
+            stage('Configure and Deploy RKE2 Cluster') {
                 echo 'Writing Ansible variables'
 
                 def ansibleVars = infrastructure.parseAndSubstituteVars(
@@ -180,9 +178,7 @@ node {
                         playbook: 'playbooks/setup/setup-ssh-keys.yml'
                     )
                 }
-            }
 
-            stage('Deploy RKE2 Cluster') {
                 retry(3) {
                     ansible.runPlaybook(
                         dir: ansiblePath,
