@@ -223,28 +223,28 @@ node {
                 }
             }
 
-            stage('Resolve Outputs') {
-                try {
-                    rancherHostname = tofu.getOutputs(
-                        dir: tofuModulePath,
-                        output: 'external_lb_hostname'
-                    )
-                    echo "Rancher Hostname (External): ${rancherHostname}"
-                    currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${workspaceName}"
-                } catch (e) {
-                    echo "Could not retrieve external LB hostname: ${e.message}"
-                }
+            // stage('Resolve Outputs') {
+            //     try {
+            //         rancherHostname = tofu.getOutputs(
+            //             dir: tofuModulePath,
+            //             output: 'external_lb_hostname'
+            //         )
+            //         echo "Rancher Hostname (External): ${rancherHostname}"
+            //         currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${workspaceName}"
+            //     } catch (e) {
+            //         echo "Could not retrieve external LB hostname: ${e.message}"
+            //     }
 
-                try {
-                    def internalLbHostname = tofu.getOutputs(
-                        dir: tofuModulePath,
-                        output: 'internal_lb_hostname'
-                    )
-                    echo "Internal LB Hostname: ${internalLbHostname}"
-                } catch (e) {
-                    echo "Could not retrieve internal LB hostname: ${e.message}"
-                }
-            }
+            //     try {
+            //         def internalLbHostname = tofu.getOutputs(
+            //             dir: tofuModulePath,
+            //             output: 'internal_lb_hostname'
+            //         )
+            //         echo "Internal LB Hostname: ${internalLbHostname}"
+            //     } catch (e) {
+            //         echo "Could not retrieve internal LB hostname: ${e.message}"
+            //     }
+            // }
 
             stage('Inject Admin Token') {
                 echo 'Generating admin token via Ansible playbook and injecting into cattle-config.yaml'
