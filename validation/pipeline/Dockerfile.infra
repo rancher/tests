@@ -28,6 +28,12 @@ RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/dow
 # Install AWS CLI
 RUN pip3 install --no-cache-dir --break-system-packages awscli
 
+# Set Ansible config to the consolidated ansible.cfg in qa-infra-automation.
+# ANSIBLE_ROLES_PATH is set explicitly because roles_path in ansible.cfg resolves
+# relative to the CWD at invocation time, not the ansible.cfg directory.
+ENV ANSIBLE_CONFIG=/workspace/qa-infra-automation/ansible/ansible.cfg \
+    ANSIBLE_ROLES_PATH=/workspace/qa-infra-automation/ansible/roles
+
 # Create working directory
 WORKDIR /workspace
 
