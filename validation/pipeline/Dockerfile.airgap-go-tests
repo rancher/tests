@@ -35,6 +35,9 @@ ENV GOBIN=/usr/local/bin
 RUN go install gotest.tools/gotestsum@${GOTESTSUM_VERSION}
 ENV GOBIN=
 
+# Set Ansible config to the consolidated ansible.cfg in qa-infra-automation
+ENV ANSIBLE_CONFIG=/workspace/qa-infra-automation/ansible/ansible.cfg
+
 # Create working directory
 WORKDIR /workspace
 
