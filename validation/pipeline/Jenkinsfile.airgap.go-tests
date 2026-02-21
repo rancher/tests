@@ -212,7 +212,7 @@ node {
                 }
             }
 
-            stage('Create Test Config') {
+            stage('Create Test Config and Inject Admin Token') {
                 echo 'Creating test config file if needed'
                 if (cattleTestConfig?.trim()) {
                     def cattleConfigPath = "${testsPath}/cattle-config.yaml"
@@ -221,32 +221,26 @@ node {
                 } else {
                     echo 'No CATTLE_TEST_CONFIG provided, skipping config creation'
                 }
-            }
+                try {
+                    rancherHostname = tofu.getOutputs(
+                        dir: tofuModulePath,
+                        output: 'external_lb_hostname'
+                    )
+                    echo "Rancher Hostname (External): ${rancherHostname}"
+                    currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${workspaceName}"
+                } catch (e) {
+                    echo "Could not retrieve external LB hostname: ${e.message}"
+                }
 
-            // stage('Resolve Outputs') {
-            //     try {
-            //         rancherHostname = tofu.getOutputs(
-            //             dir: tofuModulePath,
-            //             output: 'external_lb_hostname'
-            //         )
-            //         echo "Rancher Hostname (External): ${rancherHostname}"
-            //         currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${workspaceName}"
-            //     } catch (e) {
-            //         echo "Could not retrieve external LB hostname: ${e.message}"
-            //     }
-
-            //     try {
-            //         def internalLbHostname = tofu.getOutputs(
-            //             dir: tofuModulePath,
-            //             output: 'internal_lb_hostname'
-            //         )
-            //         echo "Internal LB Hostname: ${internalLbHostname}"
-            //     } catch (e) {
-            //         echo "Could not retrieve internal LB hostname: ${e.message}"
-            //     }
-            // }
-
-            stage('Inject Admin Token') {
+                try {
+                    def internalLbHostname = tofu.getOutputs(
+                        dir: tofuModulePath,
+                        output: 'internal_lb_hostname'
+                    )
+                    echo "Internal LB Hostname: ${internalLbHostname}"
+                } catch (e) {
+                    echo "Could not retrieve internal LB hostname: ${e.message}"
+                }
                 echo 'Generating admin token via Ansible playbook and injecting into cattle-config.yaml'
 
                 def adminPassword = env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'
