@@ -27,7 +27,7 @@ Defaults:
   RKE2_PLAYBOOK_PATH="ansible/rke2/default/rke2-playbook.yml"
   TERRAFORM_INVENTORY="ansible/rke2/default/terraform-inventory.yml"
   TERRAFORM_TEMPLATE="ansible/rke2/default/inventory-template.yml"
-  ANSIBLE_CONFIG="ansible/rke2/default/ansible.cfg"
+  ANSIBLE_CONFIG="ansible/ansible.cfg"
   RANCHER_PLAYBOOK_PATH="ansible/rancher/default-ha/rancher-playbook.yml"
   TFVARS_FILE="cluster.tfvars"
   DOWNSTREAM_TFVARS_FILE="downstream-cluster.tfvars"
@@ -76,7 +76,7 @@ fi
 : "${TERRAFORM_INVENTORY:=ansible/rke2/default/terraform-inventory.yml}"
 : "${TERRAFORM_TEMPLATE:=ansible/rke2/default/inventory-template.yml}"
 
-: "${ANSIBLE_CONFIG:=ansible/rke2/default/ansible.cfg}"
+: "${ANSIBLE_CONFIG:=ansible/ansible.cfg}"
 : "${RANCHER_PLAYBOOK_PATH:=ansible/rancher/default-ha/rancher-playbook.yml}"
 
 : "${TFVARS_FILE:=cluster.tfvars}"
