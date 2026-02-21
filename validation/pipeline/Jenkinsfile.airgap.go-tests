@@ -1,0 +1,416 @@
+#!groovy
+// Load qa-jenkins-library dynamically based on parameter
+def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+library "qa-jenkins-library@${libraryBranch}"
+
+node {
+    def testsPath = './tests'
+    def qaInfraPath = './qa-infra-automation'
+    def tofuModulePath = "${qaInfraPath}/tofu/aws/modules/airgap"
+    def tofuBackendInitScript = './scripts/init-backend.sh'
+    def ansiblePath = "${qaInfraPath}/ansible/rke2/airgap"
+    def workspaceName = ''
+    def rancherHostname = ''
+    def dockerPlatform = config.getDockerPlatform()
+    def infraToolsImage = config.getDockerImage('infraTools')
+    def infrastructureCleaned = false
+
+    def testsBranch = env.RANCHER_TEST_REPO_BRANCH ?: 'main'
+    def testsRepo = env.RANCHER_TEST_REPO_URL ?: 'https://github.com/rancher/tests'
+    def qaInfraBranch = env.QA_INFRA_REPO_BRANCH ?: 'main'
+    def qaInfraRepo = env.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation'
+
+    def goTestPackage = env.GO_TEST_PACKAGE?.trim() ?: './validation/...'
+    def goTestCase = env.GO_TEST_CASE ?: ''
+    def goTags = env.GO_TAGS ?: 'validation'
+    def goTimeout = env.GO_TIMEOUT ?: '45m'
+    def cattleTestConfig = env.CATTLE_TEST_CONFIG ?: ''
+    def reportArtifacts = (env.REPORT_ARTIFACTS ?: 'true').toBoolean()
+
+    def destroyAfterTests = (env.DESTROY_AFTER_TESTS ?: 'true').toBoolean()
+
+    def qaseTestRunId = env.QASE_TEST_RUN_ID ?: ''
+    def qaseProjectId = env.QASE_PROJECT_ID ?: ''
+    def qaseReporterScript = env.QASE_REPORTER_SCRIPT ?: 'build_qase_reporter_v2.sh'
+
+    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SSH_PEM_KEY', 'AWS_SSH_PEM_KEY_NAME']) {
+        try {
+            stage('Checkout') {
+                deleteDir()
+
+                def hostnamePrefix = env.HOSTNAME_PREFIX ?: 'unknown'
+                currentBuild.displayName = "#${env.BUILD_NUMBER} - ${hostnamePrefix}"
+                currentBuild.description = "Deploying airgap infrastructure for ${hostnamePrefix}"
+
+                echo 'Cloning tests repository'
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${testsBranch}"]],
+                    extensions: scm.extensions + [
+                        [$class: 'CleanCheckout'],
+                        [$class: 'RelativeTargetDirectory', relativeTargetDir: 'tests']
+                    ],
+                    userRemoteConfigs: [[url: testsRepo]]
+                ])
+
+                echo 'Cloning qa-infra-automation repository'
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${qaInfraBranch}"]],
+                    extensions: scm.extensions + [
+                        [$class: 'CleanCheckout'],
+                        [$class: 'RelativeTargetDirectory', relativeTargetDir: 'qa-infra-automation']
+                    ],
+                    userRemoteConfigs: [[url: qaInfraRepo]]
+                ])
+            }
+
+            stage('Build Infrastructure Tools Image') {
+                echo 'Building Docker image with Tofu, Ansible, Go toolchain, and gotestsum'
+                sh "docker rmi -f ${infraToolsImage} || true"
+                sh "docker build --no-cache --platform linux/amd64 -t ${infraToolsImage} -f ${testsPath}/validation/pipeline/Dockerfile.airgap-go-tests ."
+            }
+
+            stage('Setup Infrastructure and Apply Tofu') {
+                infrastructure.writeSshKey(
+                    keyContent: env.AWS_SSH_PEM_KEY,
+                    keyName: env.AWS_SSH_PEM_KEY_NAME,
+                    dir: '.ssh'
+                )
+
+                echo 'Writing Terraform configuration'
+                def terraformConfig = infrastructure.parseAndSubstituteVars(
+                    content: env.TERRAFORM_CONFIG,
+                    envVars: [
+                        'AWS_ACCESS_KEY_ID': env.AWS_ACCESS_KEY_ID,
+                        'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+                        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
+                        'AWS_SSH_PEM_KEY_NAME': env.AWS_SSH_PEM_KEY_NAME
+                    ]
+                )
+                infrastructure.writeConfig(
+                    path: "${tofuModulePath}/terraform.tfvars",
+                    content: terraformConfig
+                )
+
+                tofu.initBackend(
+                    dir: tofuModulePath,
+                    bucket: env.S3_BUCKET_NAME,
+                    key: env.S3_KEY_PREFIX,
+                    region: env.S3_BUCKET_REGION,
+                    backendInitScript: tofuBackendInitScript
+                )
+
+                workspaceName = infrastructure.generateWorkspaceName(
+                    prefix: 'jenkins_airgap_ansible_workspace',
+                    suffix: env.HOSTNAME_PREFIX,
+                    includeTimestamp: false
+                )
+                tofu.createWorkspace(
+                    dir: tofuModulePath,
+                    name: workspaceName
+                )
+                infrastructure.archiveWorkspaceName(
+                    workspaceName: workspaceName
+                )
+
+                tofu.apply(
+                    dir: tofuModulePath,
+                    varFile: 'terraform.tfvars',
+                    autoApprove: true
+                )
+
+                def inventoryPath = 'qa-infra-automation/ansible/rke2/airgap/inventory/inventory.yml'
+                if (fileExists(inventoryPath)) {
+                    archiveArtifacts artifacts: inventoryPath, fingerprint: true
+                    echo "Archived inventory file: ${inventoryPath}"
+                } else {
+                    error("Inventory file not found at ${inventoryPath} - Tofu apply may have failed to generate it")
+                }
+
+                def s3Path = "env:/${workspaceName}/terraform.tfvars"
+                def tfvarsPath = "${tofuModulePath}/terraform.tfvars"
+                def workspace = pwd()
+                sh """
+                    docker run --rm --platform linux/amd64 \
+                        -e AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID} \
+                        -e AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY} \
+                        -v ${workspace}:/workspace \
+                        -w /workspace \
+                        ${infraToolsImage} \
+                        sh -c 'aws s3 cp ${tfvarsPath} s3://${env.S3_BUCKET_NAME}/${s3Path} --region ${env.S3_BUCKET_REGION}'
+                """
+                echo "Uploaded terraform.tfvars to s3://${env.S3_BUCKET_NAME}/${s3Path}"
+            }
+
+            stage('Configure and Deploy RKE2 Cluster') {
+                echo 'Writing Ansible variables'
+
+                def ansibleVars = infrastructure.parseAndSubstituteVars(
+                    content: env.ANSIBLE_VARIABLES,
+                    envVars: [
+                        'RKE2_VERSION': env.RKE2_VERSION,
+                        'RANCHER_VERSION': env.RANCHER_VERSION,
+                        'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
+                        'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL ?: '',
+                        'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME ?: '',
+                        'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD ?: ''
+                    ]
+                )
+
+                def sshKeyPath = "/root/.ssh/${env.AWS_SSH_PEM_KEY_NAME}"
+                if (!ansibleVars.contains('ssh_private_key_file:')) {
+                    ansibleVars += "\nssh_private_key_file: ${sshKeyPath}"
+                }
+                if (!ansibleVars.contains('ansible_ssh_private_key_file:')) {
+                    ansibleVars += "\nansible_ssh_private_key_file: ${sshKeyPath}"
+                }
+
+                ansible.writeInventoryVars(
+                    path: "${ansiblePath}/inventory/group_vars/all.yml",
+                    content: ansibleVars
+                )
+
+                retry(3) {
+                    ansible.runPlaybook(
+                        dir: ansiblePath,
+                        inventory: 'inventory/inventory.yml',
+                        playbook: 'playbooks/setup/setup-ssh-keys.yml'
+                    )
+                }
+
+                retry(3) {
+                    ansible.runPlaybook(
+                        dir: ansiblePath,
+                        inventory: 'inventory/inventory.yml',
+                        playbook: 'playbooks/deploy/rke2-tarball-playbook.yml'
+                    )
+                }
+            }
+
+            stage('Configure Private Registry') {
+                retry(3) {
+                    ansible.runPlaybook(
+                        dir: ansiblePath,
+                        inventory: 'inventory/inventory.yml',
+                        playbook: 'playbooks/deploy/rke2-registry-config-playbook.yml'
+                    )
+                }
+            }
+
+            stage('Deploy Rancher') {
+                retry(3) {
+                    ansible.runPlaybook(
+                        dir: ansiblePath,
+                        inventory: 'inventory/inventory.yml',
+                        playbook: 'playbooks/deploy/rancher-helm-deploy-playbook.yml'
+                    )
+                }
+            }
+
+            stage('Create Test Config and Inject Admin Token') {
+                echo 'Creating test config file if needed'
+                if (cattleTestConfig?.trim()) {
+                    def cattleConfigPath = "${testsPath}/cattle-config.yaml"
+                    writeFile file: cattleConfigPath, text: cattleTestConfig.trim() + '\n'
+                    echo "Created test config file: ${cattleConfigPath}"
+                } else {
+                    echo 'No CATTLE_TEST_CONFIG provided, skipping config creation'
+                }
+                try {
+                    rancherHostname = tofu.getOutputs(
+                        dir: tofuModulePath,
+                        output: 'external_lb_hostname'
+                    )
+                    echo "Rancher Hostname (External): ${rancherHostname}"
+                    currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${workspaceName}"
+                } catch (e) {
+                    echo "Could not retrieve external LB hostname: ${e.message}"
+                }
+
+                try {
+                    def internalLbHostname = tofu.getOutputs(
+                        dir: tofuModulePath,
+                        output: 'internal_lb_hostname'
+                    )
+                    echo "Internal LB Hostname: ${internalLbHostname}"
+                } catch (e) {
+                    echo "Could not retrieve internal LB hostname: ${e.message}"
+                }
+                echo 'Generating admin token via Ansible playbook and injecting into cattle-config.yaml'
+
+                def adminPassword = env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'
+                def cattleConfigPath = '/workspace/tests/cattle-config.yaml'
+                def workspace = pwd()
+                def tokenTtl = env.RANCHER_TOKEN_TTL ?: '0'
+                def tokenDescription = env.RANCHER_TOKEN_DESCRIPTION ?: "jenkins-airgap-${env.BUILD_NUMBER}"
+
+                sh """
+                    docker run --rm --platform ${dockerPlatform} \
+                        --name generate-token \
+                        -e RANCHER_ADMIN_PASSWORD=${adminPassword} \
+                        -e ANSIBLE_CONFIG=/workspace/qa-infra-automation/ansible/ansible.cfg \
+                        -v ${workspace}:/workspace \
+                        -w /workspace/${ansiblePath} \
+                        ${infraToolsImage} \
+                        ansible-playbook -i inventory/inventory.yml /workspace/qa-infra-automation/ansible/rancher/token/generate-admin-token.yml \
+                            -e rancher_cattle_config_file=${cattleConfigPath} \
+                            -e rancher_token_ttl=${tokenTtl} \
+                            -e rancher_token_description=${tokenDescription} \
+                            -e rancher_token_output_format=json \
+                            -e rancher_token_output_file=/workspace/rancher-token.json
+                """
+
+                if (fileExists('rancher-token.json')) {
+                    archiveArtifacts artifacts: 'rancher-token.json', fingerprint: true
+                    echo 'Archived token metadata: rancher-token.json (contains sensitive credentials - restrict artifact access)'
+                } else {
+                    error('rancher-token.json not found - admin token generation failed')
+                }
+            }
+
+            stage('Run Go Automation Tests') {
+                echo 'Running Go tests with gotestsum (JUnit output)'
+
+                def envFile = '.go_test_env'
+                def lines = []
+                if (rancherHostname) {
+                    lines += [
+                        "RANCHER_URL=https://${rancherHostname}",
+                        "RANCHER_HOSTNAME=${rancherHostname}",
+                    ]
+                }
+                lines += ["RANCHER_BOOTSTRAP_PASSWORD=${env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'}"]
+
+                def cattleConfigPath = "${testsPath}/cattle-config.yaml"
+                if (fileExists(cattleConfigPath)) {
+                    lines += 'CATTLE_TEST_CONFIG=/workspace/tests/cattle-config.yaml'
+                    echo "Using existing cattle config with injected token: ${cattleConfigPath}"
+                } else if (cattleTestConfig?.trim()) {
+                    writeFile file: cattleConfigPath, text: cattleTestConfig.trim() + '\n'
+                    lines += 'CATTLE_TEST_CONFIG=/workspace/tests/cattle-config.yaml'
+                    echo "Warning: Created cattle config without token injection"
+                }
+
+                def envContent = lines.findAll { it?.trim() }.join('\n')
+                writeFile file: envFile, text: envContent ? envContent + '\n' : ''
+
+                def workspace = pwd()
+                def names = generate.names()
+                def containerName = names.container
+
+                def trimmedGoTestCase = goTestCase?.trim()
+                def testCases = trimmedGoTestCase ?: goTestPackage
+                def (testArgs, testConfig) = container._goTestCommand([
+                    packages: goTestPackage,
+                    cases: testCases,
+                    tags: goTags,
+                    timeout: goTimeout,
+                    resultsXML: 'junit.xml',
+                    resultsJSON: 'gotestsum.json'
+                ])
+
+                if (testArgs && testArgs[-1]?.endsWith(';')) {
+                    testArgs[-1] = testArgs[-1].substring(0, testArgs[-1].length() - 1)
+                }
+
+                def testCmd = testArgs.join(' ')
+                echo "Running: ${testCmd}"
+
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    sh """
+                        docker run --rm --platform ${dockerPlatform} \
+                            --name ${containerName} \
+                            --env-file ${envFile} \
+                            -v ${workspace}:/workspace \
+                            -w /workspace/tests \
+                            ${infraToolsImage} \
+                            sh -c 'set -e; set -o pipefail; ${testCmd} | tee go-test.log'
+                    """
+                }
+
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    junit allowEmptyResults: true, testResults: testConfig.resultsXML
+                }
+
+                if (reportArtifacts) {
+                    archiveArtifacts allowEmptyArchive: true, artifacts: "go-test.log, ${testConfig.resultsXML}, ${testConfig.resultsJSON}", fingerprint: true
+                }
+            }
+
+            stage('Report to Qase') {
+                if (!qaseTestRunId?.trim() || !qaseProjectId?.trim()) {
+                    echo 'Skipping Qase reporting: QASE_TEST_RUN_ID or QASE_PROJECT_ID not provided'
+                    return
+                }
+
+                if (!env.QASE_AUTOMATION_TOKEN?.trim()) {
+                    echo 'Skipping Qase reporting: QASE_AUTOMATION_TOKEN credential not available'
+                    return
+                }
+
+                echo "Reporting test results to Qase (Project: ${qaseProjectId}, Run: ${qaseTestRunId})"
+
+                def workspace = pwd()
+
+                sh """
+                    docker run --rm --platform ${dockerPlatform} \
+                        --name qase-reporter \
+                        -e QASE_TEST_RUN_ID=${qaseTestRunId} \
+                        -e QASE_PROJECT_ID=${qaseProjectId} \
+                        -e QASE_AUTOMATION_TOKEN=${env.QASE_AUTOMATION_TOKEN} \
+                        -v ${workspace}:/workspace \
+                        -w /workspace/tests \
+                        ${infraToolsImage} \
+                        sh -c '
+                            set -e
+                            echo "Building Qase reporter..."
+                            ./validation/pipeline/scripts/${qaseReporterScript}
+
+                            if [ -f ./validation/reporter ]; then
+                                echo "Running Qase reporter..."
+                                ./validation/reporter
+                                echo "Qase reporting complete"
+                            else
+                                echo "Reporter binary not found - reporter script may have skipped build"
+                            fi
+                        '
+                """
+            }
+        } catch (err) {
+            currentBuild.result = 'FAILURE'
+            echo "Build failed: ${err.message}"
+
+            if ((env.DESTROY_ON_FAILURE ?: 'true').toBoolean() && workspaceName && !infrastructureCleaned) {
+                echo 'DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure...'
+                try {
+                    stage('Destroy Infrastructure') {
+                        tofu.selectWorkspace(dir: tofuModulePath, name: workspaceName)
+                        tofu.destroy(dir: tofuModulePath, varFile: 'terraform.tfvars', autoApprove: true)
+                        tofu.deleteWorkspace(dir: tofuModulePath, name: workspaceName)
+                        infrastructureCleaned = true
+                    }
+                } catch (cleanupErr) {
+                    echo "Cleanup failed: ${cleanupErr.message}"
+                }
+            }
+            throw err
+        } finally {
+            if (destroyAfterTests && workspaceName && !infrastructureCleaned) {
+                echo 'Destroying infrastructure after tests (configured)'
+                try {
+                    stage('Destroy Infrastructure') {
+                        tofu.selectWorkspace(dir: tofuModulePath, name: workspaceName)
+                        tofu.destroy(dir: tofuModulePath, varFile: 'terraform.tfvars', autoApprove: true)
+                        tofu.deleteWorkspace(dir: tofuModulePath, name: workspaceName)
+                        infrastructureCleaned = true
+                    }
+                } catch (cleanupErr) {
+                    echo "Destroy-after-tests failed: ${cleanupErr.message}"
+                }
+            } else if (infrastructureCleaned) {
+                echo 'Infrastructure already cleaned up, skipping destroy-after-tests'
+            }
+        }
+    }
+}

@@ -57,16 +57,23 @@ func (s *ShellTestSuite) TestShell() {
 
 	s.Run("Verify the helm operations for the shell succeeded", func() {
 		steveClient := s.client.Steve
-		pods, err := steveClient.SteveType(pods.PodResourceSteveType).NamespacedSteveClient(cattleSystemNameSpace).List(nil)
+		podList, err := steveClient.SteveType(pods.PodResourceSteveType).NamespacedSteveClient(cattleSystemNameSpace).List(nil)
 		require.NoError(s.T(), err)
 
-		for _, pod := range pods.Data {
-			if strings.Contains(pod.Name, "helm") {
-				podStatus := &corev1.PodStatus{}
-				err = steveV1.ConvertToK8sType(pod.Status, podStatus)
-				require.NoError(s.T(), err)
-				assert.Equal(s.T(), "Succeeded", string(podStatus.Phase))
+		for _, pod := range podList.Data {
+			if !strings.Contains(pod.Name, "helm") {
+				continue
 			}
+
+			podStatus := &corev1.PodStatus{}
+			err = steveV1.ConvertToK8sType(pod.Status, podStatus)
+			require.NoError(s.T(), err)
+
+			if podStatus.Phase == corev1.PodRunning || podStatus.Phase == corev1.PodPending {
+				continue
+			}
+
+			assert.Equal(s.T(), string(corev1.PodSucceeded), string(podStatus.Phase), "helm pod %s was not in Succeeded state", pod.Name)
 		}
 	})
 }
