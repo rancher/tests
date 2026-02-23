@@ -1,0 +1,72 @@
+# Required for all tests
+rancher:
+  host: "<required>"
+  adminToken: "<required>"
+  insecure: true
+  cleanup: true
+
+# Required for qainfraautomation tests
+qaInfraAutomation:
+  # Absolute path to the rancher-qa-infra-automation repository on disk.
+  repoPath: "<required>"
+
+  # OpenTofu workspace name for state isolation between test runs.
+  # Use a short unique string (e.g. your name or a CI build ID).
+  workspace: "default"
+
+  harvester:
+    # Path to the Harvester kubeconfig file.
+    # Will be copied to <repoPath>/tofu/harvester/modules/local.yaml.
+    kubeConfigPath: "<required>"
+
+    # Public SSH key injected into VMs via cloud-init.
+    sshPublicKey: "<required>"
+
+    # Path to the matching private SSH key used by Ansible to connect to VMs.
+    sshPrivateKeyPath: "<required>"
+
+    # SSH user for the VM image (e.g. "ubuntu", "ec2-user").
+    sshUser: "ubuntu"
+
+    # Harvester network name (e.g. "harvester-public/vlan2011").
+    networkName: "<required>"
+
+    # Harvester image ID (e.g. "harvester-public/noble-cloudimg-amd64").
+    imageId: "<required>"
+
+    # Harvester namespace (default: "default").
+    namespace: "default"
+
+    # Name prefix for created resources.
+    generateName: "tf"
+
+    # vCPUs per VM.
+    cpu: 4
+
+    # Memory per VM.
+    memory: "6Gi"
+
+    # Disk size per VM.
+    diskSize: "30Gi"
+
+    # Node groups: define one entry per role group.
+    # roles: etcd, cp, worker correspond to Rancher node roles.
+    nodes:
+      - count: 1
+        role: ["etcd", "cp"]
+      - count: 1
+        role: ["worker"]
+
+  customCluster:
+    # Kubernetes version for the Rancher custom downstream cluster.
+    # e.g. "v1.31.4+rke2r1"
+    kubernetesVersion: "<required>"
+
+    # Short name prefix for the cluster created in Rancher.
+    generateName: "tf"
+
+    # Enable network policy on the cluster.
+    isNetworkPolicy: false
+
+    # Pod Security Admission template name (e.g. "rancher-privileged", "").
+    psa: ""
