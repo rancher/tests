@@ -1,0 +1,21 @@
+- projects: [ RANCHERINT ]
+  suite: Fleet
+  cases:
+  - title: "Ensure an airgapped Fleet is not able to install a public GitRepo"
+    description: "Try to install a public GitRepo in an Airgap environment check if it fails."
+    automation: 2
+    steps:
+    - action: "Choose repo path based on the presence of windows nodes on each cluster"
+      data: ""
+      expectedresult: "Path is adjusted accordingly"
+      position: 1
+    - action: "Create GitRepo using https://github.com/rancher/fleet-examples targetting all clusters"
+      data: ""
+      expectedresult: "Creating GitRepo succeeds"
+      position: 2
+    - action: "Verify whether GitRepo deployment succeeded"
+      data: ""
+      expectedresult: "Deployment failed due to being unreachable"
+      position: 3
+    custom_field:
+      "15": "TestGitRepoAllDownstreamClusters"
