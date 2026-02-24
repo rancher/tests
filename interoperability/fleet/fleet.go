@@ -2,6 +2,8 @@ package fleet
 
 import (
 	"errors"
+	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/sirupsen/logrus"
 
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/config"
@@ -162,6 +165,47 @@ func VerifyGitRepo(client *rancher.Client, gitRepoID, k8sClusterID, steveCluster
 		return errors.New("pods are not healthy in " + steveClusterID)
 	}
 	return err
+}
+
+// AddWindowsPathsToGitRepo adds paths to a Fleet GitRepo when needed, considering the presence of windows nodes on the target cluster.
+func AddWindowsPathsToGitRepo(client *rancher.Client, clusterID string, fleetGitRepo *v1alpha1.GitRepo) (bool, error) {
+	urlQuery, err := url.ParseQuery(fmt.Sprintf("labelSelector=%s!=%s", "cattle.io/os", "linux"))
+	if err != nil {
+		return false, err
+	}
+
+	steveClient, err := client.Steve.ProxyDownstream(clusterID)
+	if err != nil {
+		return false, err
+	}
+
+	winsNodeList, err := steveClient.SteveType(stevetypes.Node).List(urlQuery)
+	if err != nil {
+		return false, err
+	}
+
+	usingWindowsVersion := false
+	if len(winsNodeList.Data) > 0 {
+		urlQuery, err = url.ParseQuery(fmt.Sprintf("labelSelector=%s=%s", "kubernetes.io/os", "linux"))
+		if err != nil {
+			return false, err
+		}
+
+		linuxNodeList, err := steveClient.SteveType(stevetypes.Node).List(urlQuery)
+		if err != nil {
+			return false, err
+		}
+
+		if len(winsNodeList.Data) < len(linuxNodeList.Data) {
+			usingWindowsVersion = true
+		}
+	}
+
+	if usingWindowsVersion {
+		fleetGitRepo.Spec.Paths = []string{GitRepoPathWindows}
+	}
+
+	return usingWindowsVersion, nil
 }
 
 // GetDeploymentVersion is a helper that gets the image version from a deployment ID in a given cluster.
