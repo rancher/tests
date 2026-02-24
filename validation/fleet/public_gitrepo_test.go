@@ -3,9 +3,6 @@
 package fleet
 
 import (
-	"fmt"
-	"net/url"
-	"strings"
 	"testing"
 
 	"github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
@@ -18,7 +15,6 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/interoperability/fleet"
 	"github.com/sirupsen/logrus"
@@ -66,68 +62,40 @@ func (f *FleetPublicRepoTestSuite) SetupSuite() {
 }
 
 func (f *FleetPublicRepoTestSuite) TestGitRepoDeployment() {
-	defer f.session.Cleanup()
-
 	fleetVersion, err := fleet.GetDeploymentVersion(f.client, fleet.FleetControllerName, fleet.LocalName)
 	require.NoError(f.T(), err)
 
-	urlQuery, err := url.ParseQuery(fmt.Sprintf("labelSelector=%s=%s", "cattle.io/os", "windows"))
-	require.NoError(f.T(), err)
+	f.T().Log("Running fleet " + fleetVersion)
 
-	steveClient, err := f.client.Steve.ProxyDownstream(f.clusterID)
-	require.NoError(f.T(), err)
-
-	winsNodeList, err := steveClient.SteveType("node").List(urlQuery)
-	require.NoError(f.T(), err)
-
-	if len(winsNodeList.Data) > 0 {
-
-		urlQuery, err = url.ParseQuery(fmt.Sprintf("labelSelector=%s=%s", "kubernetes.io/os", "linux"))
-		require.NoError(f.T(), err)
-
-		linuxNodeList, err := steveClient.SteveType("node").List(urlQuery)
-		require.NoError(f.T(), err)
-
-		if len(winsNodeList.Data) < len(linuxNodeList.Data) {
-			fleetVersion += " windows"
-		}
+	fleetGitRepo := v1alpha1.GitRepo{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fleet.FleetMetaName + namegenerator.RandStringLower(5),
+			Namespace: fleet.Namespace,
+		},
+		Spec: v1alpha1.GitRepoSpec{
+			Repo:            fleet.ExampleRepo,
+			Branch:          fleet.BranchName,
+			Paths:           []string{fleet.GitRepoPathLinux},
+			TargetNamespace: namegenerator.AppendRandomString("fleet-test-namespace"),
+			CorrectDrift:    &v1alpha1.CorrectDrift{},
+			ImageScanCommit: &v1alpha1.CommitSpec{AuthorName: "", AuthorEmail: ""},
+			Targets:         []v1alpha1.GitTarget{{ClusterName: f.clusterID}}, // This actually refers to the cluster ID.
+		},
 	}
 
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(f.client, f.clusterID)
+	usingWindows, err := fleet.AddWindowsPathsToGitRepo(f.client, f.clusterID, &fleetGitRepo)
 	require.NoError(f.T(), err)
 
-	f.Run("fleet "+fleetVersion, func() {
-		fleetGitRepo := v1alpha1.GitRepo{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fleet.FleetMetaName + namegenerator.RandStringLower(5),
-				Namespace: fleet.Namespace,
-			},
-			Spec: v1alpha1.GitRepoSpec{
-				Repo:            fleet.ExampleRepo,
-				Branch:          fleet.BranchName,
-				Paths:           []string{fleet.GitRepoPathLinux},
-				TargetNamespace: namespace.Name,
-				CorrectDrift:    &v1alpha1.CorrectDrift{},
-				ImageScanCommit: &v1alpha1.CommitSpec{AuthorName: "", AuthorEmail: ""},
-				Targets:         []v1alpha1.GitTarget{{ClusterName: f.client.RancherConfig.ClusterName}},
-			},
-		}
+	if usingWindows {
+		f.T().Log("Using " + fleet.GitRepoPathWindows + " due to the presence of windows nodes")
+	}
 
-		if strings.Contains(fleetVersion, "windows") {
-			fleetGitRepo.Spec.Paths = []string{fleet.GitRepoPathWindows}
-		}
+	f.T().Log("Deploying public fleet gitRepo")
+	gitRepoObject, err := extensionsfleet.CreateFleetGitRepo(f.client, &fleetGitRepo)
+	require.NoError(f.T(), err)
 
-		f.client, err = f.client.ReLogin()
-		require.NoError(f.T(), err)
-
-		logrus.Info("Deploying public fleet gitRepo")
-		gitRepoObject, err := extensionsfleet.CreateFleetGitRepo(f.client, &fleetGitRepo)
-		require.NoError(f.T(), err)
-
-		err = fleet.VerifyGitRepo(f.client, gitRepoObject.ID, f.clusterID, fleet.Namespace+"/"+f.client.RancherConfig.ClusterName)
-		require.NoError(f.T(), err)
-
-	})
+	err = fleet.VerifyGitRepo(f.client, gitRepoObject.ID, f.clusterID, f.client.RancherConfig.ClusterName)
+	require.NoError(f.T(), err)
 }
 
 func (f *FleetPublicRepoTestSuite) TestDynamicGitRepoDeployment() {
