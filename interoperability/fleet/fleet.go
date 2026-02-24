@@ -63,6 +63,7 @@ func VerifyGitRepo(client *rancher.Client, gitRepoID, k8sClusterID, steveCluster
 		Steps:    20,
 	}
 
+	logrus.Info("Wait for GitRepo to deploy on cluster" + steveClusterID)
 	err := kwait.ExponentialBackoff(backoff, func() (finished bool, err error) {
 		client, err = client.ReLogin()
 		if err != nil {
@@ -100,7 +101,7 @@ func VerifyGitRepo(client *rancher.Client, gitRepoID, k8sClusterID, steveCluster
 		return err
 	}
 
-	logrus.Info("waiting for bundles to deploy to ", steveClusterID)
+	logrus.Info("Waiting for bundles to deploy to ", steveClusterID)
 	err = kwait.ExponentialBackoff(backoff, func() (finished bool, err error) {
 		client, err = client.ReLogin()
 		if err != nil {
