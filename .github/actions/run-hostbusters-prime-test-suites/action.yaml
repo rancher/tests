@@ -1,0 +1,48 @@
+---
+name: Run Test Suite
+description: "Runs a specific test suite based on input"
+
+inputs:
+  reporting:
+    description: "Enable reporting"
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Run Prime Tests
+      id: run-tests
+      shell: bash
+      continue-on-error: true
+      run: |
+        set +e
+
+        gotestsum --format standard-verbose \
+          --packages=github.com/rancher/tests/validation/prime/autoscaling \
+          --junitfile results_autoscaling.xml \
+          --jsonfile results_autoscaling.json \
+          -- -timeout=1h -tags=prime -v
+
+        autoscaling_exit=$?
+        echo "autoscaling_exit=$autoscaling_exit" >> "$GITHUB_ENV"
+        cp results_autoscaling.json results.json
+
+        if [[ "${{ inputs.reporting }}" == "true" ]]; then
+          ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+          ./validation/reporter
+        fi
+
+    - name: Show failed tests
+      run: |
+        failed=0
+        if [ "$autoscaling_exit" -ne 0 ]; then
+          echo "Failed Autoscaling tests:"
+          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results_autoscaling.json
+          failed=1
+        fi
+
+        if [ "$failed" -eq 1 ]; then
+          exit 1
+        fi
+      shell: bash
