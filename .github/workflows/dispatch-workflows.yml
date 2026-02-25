@@ -19,6 +19,7 @@ jobs:
         workflow:
           - rancher-upgrade-cluster-provisioning.yml
           - post-release-prime.yml
+          - prime-recurring-tests.yml
           - recurring-tests.yml
 
     steps:
