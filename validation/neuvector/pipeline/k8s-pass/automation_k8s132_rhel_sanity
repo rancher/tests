@@ -1,0 +1,10 @@
+#!/groovy
+node('neuvector') {
+    stage('Execution') {
+   withCredentials([string(credentialsId: 'NEUVECTOR_PASSWORD', variable: 'NEUVECTOR_PASSWORD'), string(credentialsId: 'NEUVECTOR_K8S_SERVER_06', variable: 'NEUVECTOR_K8S_SERVER_06')]) {
+    sh '''
+      sshpass -p "$NEUVECTOR_PASSWORD" ssh neuvector@$NEUVECTOR_K8S_SERVER_06 "/mnt/nfs/share/QA/automation/k8s_script.sh $_JOB_TYPE_ $_BUILD_TAG_ $_DIR_"
+    '''
+  }
+ }
+}
