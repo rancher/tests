@@ -1,4 +1,4 @@
-- projects: [RANCHERINT]
+- projects: [ RANCHERINT ]
   suite: Fleet
   cases:
   - title: "Test deploying fleet git repo on provisioned downstream cluster"
@@ -9,20 +9,30 @@
       data: ""
       expectedresult: ""
       position: 1
-    - action: "Provision a kubernetes cluster"
+    - action: "Provision a kubernetes cluster if needed"
       data: "cluster name: testcluster1"
       expectedresult: ""
       position: 2
-    - action: "Create a new project and namespace"
-      data: "project name: fleet-test, namespace-name: fleet-testns"
-      expectedresult: ""
-      position: 3
-    - action: "Deploy a GitRepo object"
+    - action: "Deploy a GitRepo object targetting the specified downstream cluster"
       data: "/validation/fleet/schemas/gitrepo.yaml"
       expectedresult: "the gitRepo itself comes to an active state and the resources defined in the spec are created on the downstream cluster in the fleet-testns namespace"
-      position: 4
+      position: 3
     custom_field:
       "15": "TestGitRepoDeployment"
+  - title: "Test deploying fleet git repo on local cluster"
+    description: "Validate that a git repo cannot be deployed via fleet on a Rancher local cluster within Rancher Manager"
+    automation: 2
+    steps:
+    - action: "Create Rancher"
+      data: ""
+      expectedresult: ""
+      position: 1
+    - action: "Deploy a GitRepo object targetting the local cluster"
+      data: ""
+      expectedresult: "The gitRepo itself never comes to an active state"
+      position: 2
+    custom_field:
+      "15": "TestPublicGitRepoOnLocalCluster"
   - title: "Test deploying dynamic fleet git repo on downstream cluster"
     description: "Validate that a dynamically configured GitRepo can be deployed via Fleet on a downstream cluster within Rancher Manager"
     automation: 2
@@ -35,17 +45,13 @@
       data: "cluster name: testcluster1"
       expectedresult: ""
       position: 2
-    - action: "Create a new project and namespace"
-      data: "project name: fleet-test, namespace-name: fleet-testns"
-      expectedresult: ""
-      position: 3
     - action: "Deploy dynamic GitRepo object"
       data: "/validation/fleet/schemas/dynamicgitrepo.yaml"
       expectedresult: "Dynamic GitRepo created successfully"
-      position: 4
+      position: 3
     - action: "Verify dynamic GitRepo"
       data: "Verify GitRepo status on downstream cluster"
       expectedresult: "Dynamic GitRepo reaches active state and applies resources"
-      position: 5
+      position: 4
     custom_field:
       "15": "TestDynamicGitRepoDeployment"
