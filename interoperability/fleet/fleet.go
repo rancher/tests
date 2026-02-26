@@ -65,11 +65,6 @@ func VerifyGitRepo(client *rancher.Client, gitRepoID, k8sClusterID, steveCluster
 
 	logrus.Info("Wait for GitRepo to deploy on cluster" + steveClusterID)
 	err := kwait.ExponentialBackoff(backoff, func() (finished bool, err error) {
-		client, err = client.ReLogin()
-		if err != nil {
-			return false, err
-		}
-
 		// after checking clusterStatus, check gitRepoStatus. gitRepoStatus starts in a healthy state,
 		// so if errors come up during clusterBundle deployments, its status will update to a negative / error state
 		gitRepo, err := client.Steve.SteveType(extensionsfleet.FleetGitRepoResourceType).ByID(gitRepoID)
@@ -103,11 +98,6 @@ func VerifyGitRepo(client *rancher.Client, gitRepoID, k8sClusterID, steveCluster
 
 	logrus.Info("Waiting for bundles to deploy to ", steveClusterID)
 	err = kwait.ExponentialBackoff(backoff, func() (finished bool, err error) {
-		client, err = client.ReLogin()
-		if err != nil {
-			return false, err
-		}
-
 		cluster, err := client.Steve.SteveType(FleetClusterResourceType).ByID(steveClusterID)
 		if err != nil {
 			return false, err
