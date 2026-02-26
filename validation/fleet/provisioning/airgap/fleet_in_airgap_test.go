@@ -119,8 +119,8 @@ func (a *AirGapRKE2CustomClusterTestSuite) SetupSuite() {
 					ClusterSelector: &metav1.LabelSelector{
 						MatchExpressions: []metav1.LabelSelectorRequirement{
 							{
-								Key:      fleet.MatchKey,
-								Operator: fleet.MatchOperator,
+								Key:      fleet.ProviderMatchKey,
+								Operator: fleet.NotInMatchOperator,
 								Values: []string{
 									fleet.HarvesterName,
 								},
