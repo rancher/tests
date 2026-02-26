@@ -70,3 +70,68 @@ qaInfraAutomation:
 
     # Pod Security Admission template name (e.g. "rancher-privileged", "").
     psa: ""
+
+  rancherCluster:
+    # Kubernetes version for the Rancher-provisioned downstream cluster.
+    # e.g. "v1.32.5+rke2r1"
+    kubernetesVersion: "<required>"
+
+    # Short name prefix for the cluster and related resources created in Rancher.
+    generateName: "tf"
+
+    # Enable network policy on the cluster.
+    isNetworkPolicy: false
+
+    # Pod Security Admission template name (e.g. "rancher-privileged", "").
+    psa: ""
+
+    # Cloud provider node driver Rancher will use to provision nodes.
+    # Supported values: "harvester", "aws", "linode"
+    cloudProvider: "<required>"
+
+    # Machine pools define the node topology. Each entry maps to one machine pool in Rancher.
+    # Omit to default to a single all-roles pool with 1 node.
+    machinePools:
+      - controlPlaneRole: true
+        etcdRole: true
+        workerRole: true
+        quantity: 1
+
+    # nodeConfig holds provider-specific fields passed to the tofu/rancher/cluster module.
+    # Use the prefixed keys that match your chosen cloudProvider.
+
+    # --- Harvester example ---
+    # nodeConfig:
+    #   harvester_cluster_v1_id: "<required>"   # e.g. "c-m-rbx5275x"
+    #   harvester_cluster_type: "imported"
+    #   harvester_ssh_user: "ubuntu"
+    #   harvester_cpu_count: "4"
+    #   harvester_memory_size: "8"
+    #   harvester_vm_namespace: "default"
+    #   harvester_disk_info: |
+    #     {"disks":[{"imageName":"harvester-public/noble-cloudimg-amd64","bootOrder":1,"size":30}]}
+    #   harvester_network_info: |
+    #     {"interfaces":[{"networkName":"harvester-public/vlan2016"}]}
+    #   harvester_user_data: |
+    #     #cloud-config
+    #     package_update: true
+    #     packages:
+    #       - qemu-guest-agent
+    #     runcmd:
+    #       - [systemctl, enable, --now, qemu-guest-agent.service]
+
+    # --- AWS example ---
+    # nodeConfig:
+    #   aws_access_key: "<required>"
+    #   aws_secret_key: "<required>"
+    #   aws_ami: "ami-0e01311d1f112d4d0"
+    #   aws_instance_type: "t3a.2xlarge"
+    #   aws_security_group: ["rancher-nodes"]
+    #   aws_subnet: "<required>"
+    #   aws_availability_zone: "b"
+    #   aws_vpc: "<required>"
+    #   aws_region: "us-west-1"
+    #   aws_volume_size: 50
+    #   aws_volume_type: "gp3"
+
+    nodeConfig: {}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
@@ -28,6 +29,9 @@ const (
 
 	// rancherCustomClusterModulePath is the path within the qa-infra-automation repo to the Rancher custom cluster module.
 	rancherCustomClusterModulePath = "tofu/rancher/custom_cluster"
+
+	// rancherClusterModulePath is the path within the qa-infra-automation repo to the Rancher-provisioned cluster module.
+	rancherClusterModulePath = "tofu/rancher/cluster"
 
 	// customClusterPlaybook is the Ansible playbook path (relative to repo root) for registering nodes to a Rancher custom cluster.
 	customClusterPlaybook = "ansible/rancher/downstream/custom_cluster/custom-cluster-playbook.yml"
@@ -94,6 +98,154 @@ type rancherCustomClusterVars struct {
 	IsNetworkPolicy   bool   `json:"is_network_policy,omitempty"`
 	PSA               string `json:"psa,omitempty"`
 	Insecure          bool   `json:"insecure"`
+}
+
+// rancherClusterMachinePool mirrors the machine_pools object accepted by the tofu/rancher/cluster module.
+type rancherClusterMachinePool struct {
+	Name             string `json:"name,omitempty"`
+	ControlPlaneRole bool   `json:"control_plane_role,omitempty"`
+	WorkerRole       bool   `json:"worker_role,omitempty"`
+	EtcdRole         bool   `json:"etcd_role,omitempty"`
+	Quantity         int    `json:"quantity,omitempty"`
+}
+
+// rancherClusterVars represents the JSON tfvars structure for the tofu/rancher/cluster module.
+type rancherClusterVars struct {
+	KubernetesVersion string                      `json:"kubernetes_version"`
+	FQDN              string                      `json:"fqdn"`
+	APIKey            string                      `json:"api_key"`
+	Insecure          bool                        `json:"insecure"`
+	CloudProvider     string                      `json:"cloud_provider"`
+	GenerateName      string                      `json:"generate_name,omitempty"`
+	IsNetworkPolicy   bool                        `json:"is_network_policy,omitempty"`
+	PSA               string                      `json:"psa,omitempty"`
+	MachinePools      []rancherClusterMachinePool `json:"machine_pools,omitempty"`
+	NodeConfig        map[string]interface{}      `json:"node_config"`
+	CreateNew         bool                        `json:"create_new"`
+}
+
+// ProvisionRancherCluster provisions a downstream cluster in Rancher where Rancher itself manages
+// node provisioning via a cloud provider node driver (e.g. Harvester, AWS, Linode).
+// It uses the tofu/rancher/cluster module from the rancher-qa-infra-automation repository.
+//
+// The returned cleanup function runs `tofu destroy` for the cluster module.
+// Register it with t.Cleanup() in your test.
+//
+// Parameters:
+//   - rancherClient: an authenticated Rancher shepherd client.
+//   - cfg: the top-level QA infra automation config (from the "qaInfraAutomation" config key).
+//   - clusterCfg: parameters for the Rancher-provisioned cluster (cloud provider, node config, k8s version, etc.).
+func ProvisionRancherCluster(
+	rancherClient *rancher.Client,
+	cfg *config.Config,
+	clusterCfg *config.RancherClusterConfig,
+) (*v1.SteveAPIObject, func() error, error) {
+	repoPath := cfg.RepoPath
+	workspace := cfg.Workspace
+	if workspace == "" {
+		workspace = "default"
+	}
+
+	generateName := clusterCfg.GenerateName
+	if generateName == "" {
+		generateName = "tf"
+	}
+
+	// Build machine_pools, defaulting to a single all-roles pool if none specified.
+	machinePools := make([]rancherClusterMachinePool, len(clusterCfg.MachinePools))
+	for i, mp := range clusterCfg.MachinePools {
+		quantity := mp.Quantity
+		if quantity == 0 {
+			quantity = 1
+		}
+		machinePools[i] = rancherClusterMachinePool{
+			Name:             fmt.Sprintf("%s-%d", generateName, i),
+			ControlPlaneRole: mp.ControlPlaneRole,
+			WorkerRole:       mp.WorkerRole,
+			EtcdRole:         mp.EtcdRole,
+			Quantity:         quantity,
+		}
+	}
+	if len(machinePools) == 0 {
+		machinePools = []rancherClusterMachinePool{
+			{Name: generateName, ControlPlaneRole: true, WorkerRole: true, EtcdRole: true, Quantity: 1},
+		}
+	}
+
+	clusterVars := rancherClusterVars{
+		KubernetesVersion: clusterCfg.KubernetesVersion,
+		FQDN:              "https://" + rancherClient.RancherConfig.Host,
+		APIKey:            rancherClient.RancherConfig.AdminToken,
+		Insecure:          true,
+		CloudProvider:     clusterCfg.CloudProvider,
+		GenerateName:      generateName,
+		IsNetworkPolicy:   clusterCfg.IsNetworkPolicy,
+		PSA:               clusterCfg.PSA,
+		MachinePools:      machinePools,
+		NodeConfig:        clusterCfg.NodeConfig,
+		CreateNew:         true,
+	}
+
+	clusterVarFile, err := writeTFVarsJSON(repoPath, "rancher-cluster-vars.json", clusterVars)
+	if err != nil {
+		return nil, nil, fmt.Errorf("write rancher cluster tfvars: %w", err)
+	}
+
+	clusterModuleDir := filepath.Join(repoPath, rancherClusterModulePath)
+	clusterTofu := tofu.NewClient(clusterModuleDir, workspace)
+
+	if err := clusterTofu.Init(); err != nil {
+		return nil, nil, fmt.Errorf("tofu init (rancher cluster): %w", err)
+	}
+	if err := clusterTofu.WorkspaceSelectOrCreate(); err != nil {
+		return nil, nil, fmt.Errorf("tofu workspace (rancher cluster): %w", err)
+	}
+	if err := clusterTofu.Apply(clusterVarFile); err != nil {
+		return nil, nil, fmt.Errorf("tofu apply (rancher cluster): %w", err)
+	}
+
+	// Read the cluster name from the tofu output.
+	clusterName, err := clusterTofu.Output("name")
+	if err != nil {
+		return nil, nil, fmt.Errorf("tofu output name: %w", err)
+	}
+	logrus.Infof("[qainfraautomation] rancher-provisioned cluster name from tofu: %s", clusterName)
+
+	// Fetch the cluster object from Rancher and verify it is ready.
+	clusterObj, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("fetch cluster %q from Rancher: %w", clusterName, err)
+	}
+
+	if err := provisioning.VerifyClusterReady(rancherClient, clusterObj); err != nil {
+		return nil, nil, fmt.Errorf("cluster %q did not become ready: %w", clusterName, err)
+	}
+
+	cleanup := func() error {
+		logrus.Infof("[qainfraautomation] destroying Rancher-provisioned cluster %q (workspace=%s)", clusterName, workspace)
+		if err := clusterTofu.Destroy(clusterVarFile); err != nil {
+			logrus.Warnf("[qainfraautomation] tofu destroy: %v", err)
+		}
+
+		// Ensure the cluster is gone from Rancher. tofu destroy may not always
+		// remove the cluster object if the provider state is inconsistent.
+		existing, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
+		if err != nil {
+			if strings.Contains(err.Error(), "404 Not Found") {
+				return nil
+			}
+			return fmt.Errorf("checking cluster %q after destroy: %w", clusterName, err)
+		}
+
+		logrus.Infof("[qainfraautomation] cluster %q still present after tofu destroy; deleting via Rancher API", clusterName)
+		if err := rancherClient.Steve.SteveType(stevetypes.Provisioning).Delete(existing); err != nil {
+			return fmt.Errorf("delete cluster %q from Rancher: %w", clusterName, err)
+		}
+
+		return nil
+	}
+
+	return clusterObj, cleanup, nil
 }
 
 // ProvisionHarvesterCustomCluster provisions Harvester VMs via OpenTofu, creates a Rancher custom

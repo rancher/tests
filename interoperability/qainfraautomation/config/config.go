@@ -24,6 +24,10 @@ type Config struct {
 
 	// StandaloneCluster holds parameters for the standalone RKE2/K3S cluster provisioning flow.
 	StandaloneCluster *StandaloneClusterConfig `json:"standaloneCluster,omitempty" yaml:"standaloneCluster,omitempty"`
+
+	// RancherCluster holds parameters for the Rancher-provisioned downstream cluster flow,
+	// where Rancher itself provisions nodes via a cloud provider node driver.
+	RancherCluster *RancherClusterConfig `json:"rancherCluster,omitempty" yaml:"rancherCluster,omitempty"`
 }
 
 // HarvesterConfig holds Harvester-specific settings used to provision VMs via OpenTofu.
@@ -119,4 +123,48 @@ type StandaloneClusterConfig struct {
 
 	// KubeconfigOutputPath is the local path where the kubeconfig will be written after cluster creation.
 	KubeconfigOutputPath string `json:"kubeconfigOutputPath" yaml:"kubeconfigOutputPath"`
+}
+
+// RancherClusterConfig holds parameters for provisioning a downstream cluster where Rancher itself
+// provisions nodes via a cloud provider node driver (tofu/rancher/cluster module).
+type RancherClusterConfig struct {
+	// KubernetesVersion is the RKE2/K3S kubernetes version string.
+	// e.g. "v1.31.4+rke2r1"
+	KubernetesVersion string `json:"kubernetesVersion" yaml:"kubernetesVersion"`
+
+	// GenerateName is a short prefix used when naming resources in Rancher (default "tf").
+	GenerateName string `json:"generateName,omitempty" yaml:"generateName,omitempty"`
+
+	// IsNetworkPolicy enables network policy on the cluster.
+	IsNetworkPolicy bool `json:"isNetworkPolicy,omitempty" yaml:"isNetworkPolicy,omitempty"`
+
+	// PSA is the Pod Security Admission template name (e.g. "rancher-privileged").
+	PSA string `json:"psa,omitempty" yaml:"psa,omitempty"`
+
+	// CloudProvider is the node driver to use. Supported values: "aws", "linode", "harvester".
+	CloudProvider string `json:"cloudProvider" yaml:"cloudProvider"`
+
+	// MachinePools defines the node pool topology for the cluster.
+	// Each entry maps to one rancher2_cluster_v2 machine_pools block.
+	MachinePools []RancherMachinePool `json:"machinePools,omitempty" yaml:"machinePools,omitempty"`
+
+	// NodeConfig holds provider-specific node configuration passed verbatim to the tofu module
+	// as the node_config variable. Use the provider-prefixed keys documented in the tofu module
+	// (e.g. harvester_cpu_count, aws_instance_type, linode_instance_type).
+	NodeConfig map[string]interface{} `json:"nodeConfig" yaml:"nodeConfig"`
+}
+
+// RancherMachinePool describes a single machine pool in a Rancher-provisioned cluster.
+type RancherMachinePool struct {
+	// ControlPlaneRole assigns the control-plane role to nodes in this pool.
+	ControlPlaneRole bool `json:"controlPlaneRole,omitempty" yaml:"controlPlaneRole,omitempty"`
+
+	// WorkerRole assigns the worker role to nodes in this pool.
+	WorkerRole bool `json:"workerRole,omitempty" yaml:"workerRole,omitempty"`
+
+	// EtcdRole assigns the etcd role to nodes in this pool.
+	EtcdRole bool `json:"etcdRole,omitempty" yaml:"etcdRole,omitempty"`
+
+	// Quantity is the number of nodes in this pool (default 1).
+	Quantity int `json:"quantity,omitempty" yaml:"quantity,omitempty"`
 }

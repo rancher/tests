@@ -16,18 +16,18 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type CustomClusterTestSuite struct {
+type RancherProvisionedClusterTestSuite struct {
 	suite.Suite
 	client  *rancher.Client
 	session *session.Session
 	cfg     *qaconfig.Config
 }
 
-func (s *CustomClusterTestSuite) TearDownSuite() {
+func (s *RancherProvisionedClusterTestSuite) TearDownSuite() {
 	s.session.Cleanup()
 }
 
-func (s *CustomClusterTestSuite) SetupSuite() {
+func (s *RancherProvisionedClusterTestSuite) SetupSuite() {
 	s.session = session.NewSession()
 
 	client, err := rancher.NewClient("", s.session)
@@ -39,17 +39,16 @@ func (s *CustomClusterTestSuite) SetupSuite() {
 	s.cfg = new(qaconfig.Config)
 	operations.LoadObjectFromMap(qaconfig.ConfigurationFileKey, cattleConfig, s.cfg)
 
-	require.NotNil(s.T(), s.cfg.Harvester, "harvester config is required under qaInfraAutomation.harvester")
-	require.NotNil(s.T(), s.cfg.CustomCluster, "customCluster config is required under qaInfraAutomation.customCluster")
+	require.NotNil(s.T(), s.cfg.RancherCluster, "rancherCluster config is required under qaInfraAutomation.rancherCluster")
 }
 
-// TestHarvesterCustomCluster provisions Harvester VMs via OpenTofu, creates a Rancher
-// custom downstream cluster via Ansible, verifies it is ready, then destroys it.
-func (s *CustomClusterTestSuite) TestHarvesterCustomCluster() {
-	clusterObj, cleanup, err := qainfraautomation.ProvisionHarvesterCustomCluster(
+// TestRancherProvisionedCluster provisions a downstream cluster via Rancher's node driver
+// (cloud provider managed by Rancher itself), verifies it is ready, then destroys it.
+func (s *RancherProvisionedClusterTestSuite) TestRancherProvisionedCluster() {
+	clusterObj, cleanup, err := qainfraautomation.ProvisionRancherCluster(
 		s.client,
 		s.cfg,
-		s.cfg.CustomCluster,
+		s.cfg.RancherCluster,
 	)
 	require.NoError(s.T(), err)
 	s.session.RegisterCleanupFunc(cleanup)
@@ -60,6 +59,6 @@ func (s *CustomClusterTestSuite) TestHarvesterCustomCluster() {
 
 // In order for 'go test' to run this suite, we need to create
 // a normal test function and pass our suite to suite.Run
-func TestCustomClusterTestSuite(t *testing.T) {
-	suite.Run(t, new(CustomClusterTestSuite))
+func TestRancherProvisionedClusterTestSuite(t *testing.T) {
+	suite.Run(t, new(RancherProvisionedClusterTestSuite))
 }
