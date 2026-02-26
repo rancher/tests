@@ -98,6 +98,44 @@ func (f *FleetPublicRepoTestSuite) TestGitRepoDeployment() {
 	require.NoError(f.T(), err)
 }
 
+func (f *FleetPublicRepoTestSuite) TestPublicGitRepoOnLocalCluster() {
+	fleetVersion, err := fleet.GetDeploymentVersion(f.client, fleet.FleetControllerName, fleet.LocalName)
+	require.NoError(f.T(), err)
+
+	f.T().Log("Running fleet " + fleetVersion)
+
+	fleetGitRepo := v1alpha1.GitRepo{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fleet.FleetMetaName + namegenerator.RandStringLower(5),
+			Namespace: fleet.Namespace,
+		},
+		Spec: v1alpha1.GitRepoSpec{
+			Repo:            fleet.ExampleRepo,
+			Branch:          fleet.BranchName,
+			Paths:           []string{fleet.GitRepoPathLinux},
+			TargetNamespace: namegenerator.AppendRandomString("fleet-test-namespace"),
+			CorrectDrift:    &v1alpha1.CorrectDrift{},
+			ImageScanCommit: &v1alpha1.CommitSpec{AuthorName: "", AuthorEmail: ""},
+			Targets:         []v1alpha1.GitTarget{{ClusterName: fleet.LocalName}}, // This actually refers to the cluster ID.
+		},
+	}
+
+	usingWindows, err := fleet.AddWindowsPathsToGitRepo(f.client, fleet.LocalName, &fleetGitRepo)
+	require.NoError(f.T(), err)
+
+	if usingWindows {
+		f.T().Log("Using " + fleet.GitRepoPathWindows + " due to the presence of windows nodes")
+	}
+
+	f.T().Log("Creating public fleet gitRepo for local cluster")
+	gitRepoObject, err := extensionsfleet.CreateFleetGitRepo(f.client, &fleetGitRepo)
+	require.NoError(f.T(), err)
+
+	f.T().Log("Check if GitRepo deploy fails")
+	err = fleet.VerifyGitRepo(f.client, gitRepoObject.ID, fleet.LocalName, fleet.LocalName)
+	require.Error(f.T(), err)
+}
+
 func (f *FleetPublicRepoTestSuite) TestDynamicGitRepoDeployment() {
 
 	testSession := session.NewSession()
