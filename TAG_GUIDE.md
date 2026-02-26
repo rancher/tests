@@ -6,8 +6,8 @@
 
 ## Deprecation of a Feature for an Upcoming Release
 
-we use //go:build tags in our test suites. The new branching strategy requires us to introduce a way to deprecate tests as well. We will be using go:build tags to deprecate tests. 
-**NOTE:** All tests that are deprecated need the tag associated with the rancher version it is supported on to be included when running the test. Remember to do this step when running tests manually. 
+we use //go:build tags in our test suites. The new branching strategy requires us to introduce a way to deprecate tests as well. We will be using go:build tags to deprecate tests.
+**NOTE:** All tests that are deprecated need the tag associated with the rancher version it is supported on to be included when running the test. Remember to do this step when running tests manually.
 
 ### How To Deprecate
 overall, the following steps should be followed:
@@ -21,9 +21,9 @@ overall, the following steps should be followed:
 for an example of how this was done, see the [restrictedadmin rbac test cases](./validation/rbac/deprecated_restrictedadmin_test.go) and [restrictedadmin rbac actions ](./actions/rbac/verify.go)
 
 #### Deprecating Tests
-i.e. restricted admin has been enabled in rancher since at least 2.0.0, and the feature is being deprecated in 2.11.0 release. 
+i.e. restricted admin has been enabled in rancher since at least 2.0.0, and the feature is being deprecated in 2.11.0 release.
 
-At the time of deprecation, 2.10, 2.9, and 2.8 have limited support (as of 2/15/2025). Therefore any test(s) that use restricted admin should have `&& (2.8 || 2.9 || 2.10)` go:build tags added. 
+At the time of deprecation, 2.10, 2.9, and 2.8 have limited support (as of 2/15/2025). Therefore any test(s) that use restricted admin should have `&& (2.8 || 2.9 || 2.10)` go:build tags added.
 
 All tests will fall into the following categories:
 * [a file of tests all specific to the deprecated feature](#deprecating-an-entire-test-file)
@@ -31,7 +31,7 @@ All tests will fall into the following categories:
 
 
 ##### Deprecating an entire test file
-simply add go:build tags to the existing ones at the top of each file. 
+simply add go:build tags to the existing ones at the top of each file.
 
 
 ##### Deprecating a subset of tests within a single test file
@@ -54,7 +54,7 @@ actions/fleet/fleet.go -> contains non-deprecated functions
 actions/fleet/deprecatedfleet.go -> contains deprecated functions. In this new file, rename the package from `fleet` to `deprecatedfleet`
 
 ###### using the deprecated action
-import the `deprecatedfleet` package into test files that will be deprecated. 
+import the `deprecatedfleet` package into test files that will be deprecated.
 
 ##### Example action -> deprecate to test helper
 
@@ -68,7 +68,7 @@ actions/fleet/fleet.go
 
 
 ## Addition of a Feature for an Upcoming Release
-we use //go:build tags in our test suites. The new branching strategy requires us to introduce a way to introduce features and tests around said feature. We will be using go:build tags to add feature tests. 
+we use //go:build tags in our test suites. The new branching strategy requires us to introduce a way to introduce features and tests around said feature. We will be using go:build tags to add feature tests.
 
 ### How to Add Tests for a New Feature
 Tags added to new features should _not_ all versions of rancher that are in limited support and do not support the new feature.
@@ -83,7 +83,7 @@ Follow these steps:
 #### Adding Tests for a New Feature
 i.e. clusterAgent and fleetAgent overrides were introduced in 2.7
 
-At the time of introduction, 2.5 and 2.6 had limited support. Therefore any new test(s) for this feature should have `&& !(2.5 || 2.6)` go:build tags added. 
+At the time of introduction, 2.5 and 2.6 had limited support. Therefore any new test(s) for this feature should have `&& !(2.5 || 2.6)` go:build tags added.
 
 All tests for a new feature should have dedicated file(s) for each area they are being tested in. i.e. for clusterAgent and fleetAgent, there would be the following files added:
 validaiton/provisioning/k3s/agent_test.go
@@ -94,7 +94,7 @@ validaiton/fleet/agent_test.go
 all of which would have the _not_ tags added.
 
 #### PIT TAGS
-The pit tags organizes Go tests using **build tags**. These tags define when and how different categories of tests should be executed (daily, weekly, or event)
+The pit tags organizes Go tests using **build tags**. These tags define when and how different categories of tests should be executed (daily, weekly, airgap or event)
 
 ##### pit.daily
 -  Tests that should run **every day**

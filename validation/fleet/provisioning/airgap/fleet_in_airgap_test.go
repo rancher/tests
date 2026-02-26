@@ -1,4 +1,4 @@
-//go:build validation
+//go:build validation && airgap
 
 package airgap
 
