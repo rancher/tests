@@ -9,7 +9,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 
 	"github.com/rancher/shepherd/extensions/charts"
 	interoperablecharts "github.com/rancher/tests/interoperability/charts"
@@ -22,7 +22,6 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	actionsCharts "github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/projects"
-	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/uiplugins"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -43,8 +42,8 @@ type NeuVectorHardenedTestSuite struct {
 	suite.Suite
 	client  *rancher.Client
 	session *session.Session
-	cluster *clusters.ClusterMeta
-	project *management.Project
+	cfg     *qaconfig.Config
+	cluster *v1.SteveAPIObject
 }
 
 func (n *NeuVectorHardenedTestSuite) TearDownSuite() {
@@ -60,55 +59,20 @@ func (n *NeuVectorHardenedTestSuite) SetupSuite() {
 
 	n.client = client
 
-
 	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
-	
-	cfg := new(qaconfig.Config)
-	operations.LoadObjectFromMap(qaconfig.ConfigurationFileKey, cattleConfig, cfg)
 
-	clusterObj, cleanup, err := qainfraautomation.ProvisionRancherCluster(
-		n.client,
-		cfg,
-		cfg.RancherCluster,
-	)
-	require.NoError(n.T(), err)
-	n.session.RegisterCleanupFunc(cleanup)
+	n.cfg = new(qaconfig.Config)
+	operations.LoadObjectFromMap(qaconfig.ConfigurationFileKey, cattleConfig, n.cfg)
 
-
-	n.T().Logf("Verifying the cluster is ready (%s)", clusterObj.Name)
-	err = provisioning.VerifyClusterReady(n.client, clusterObj)
-	require.NoError(n.T(), err)
-
-	logrus.Infof("Verifying cluster deployments (%s)", clusterObj.Name)
-	err = deployment.VerifyClusterDeployments(n.client, clusterObj)
-	require.NoError(n.T(), err)
-
-	logrus.Infof("Verifying cluster pods (%s)", clusterObj.Name)
-	err = pods.VerifyClusterPods(n.client, clusterObj)
-	require.NoError(n.T(), err)
-
-	require.NotNil(n.T(), clusterObj, "expected a non-nil cluster object")
-	n.T().Logf("cluster %q is ready", clusterObj.Name)
-
-
-	cluster, err := clusters.NewClusterMeta(client, clusterObj.Name)
-	require.NoError(n.T(), err)
-
-	n.cluster = cluster
-
-	n.T().Logf("Creating Project [%s]", actionsCharts.SystemProject)
-	n.project, err = projects.GetProjectByName(n.client, cluster.ID, actionsCharts.SystemProject)
-	require.NoError(n.T(), err)
-	require.Equal(n.T(), actionsCharts.SystemProject, n.project.Name)
+	require.NotNil(n.T(), n.cfg.RancherCluster, "rancherCluster config is required under qaInfraAutomation.rancherCluster")
 
 	_, err = n.client.Catalog.ClusterRepos().Get(context.TODO(), uiPluginChartsRepoName, metav1.GetOptions{})
 	if k8sErrors.IsNotFound(err) {
 		logrus.Infof("UI plugin repo %q not found, creating it", uiPluginChartsRepoName)
 		err = uiplugins.CreateExtensionsRepo(n.client, uiPluginChartsRepoName, uiPluginChartsURL, uiPluginChartsBranch)
 	}
-	
-	require.NoError(n.T(), err)
 
+	require.NoError(n.T(), err)
 
 	n.T().Logf("Checking if NeuVector UI extension [%s] is already installed", interoperablecharts.NeuVectorUIExtensionName)
 	uiExtensionObj, err := charts.GetChartStatus(n.client, "local", interoperablecharts.ExtensionNamespace, interoperablecharts.NeuVectorUIExtensionName)
@@ -129,9 +93,37 @@ func (n *NeuVectorHardenedTestSuite) SetupSuite() {
 		err = uiplugins.InstallUIPlugin(n.client, extensionOptions, uiPluginChartsRepoName)
 		require.NoError(n.T(), err)
 	}
+
+	clusterObj := qainfraautomation.ProvisionRancherCluster(
+		n.T(),
+		n.client,
+		n.cfg,
+		n.cfg.RancherCluster,
+	)
+
+	require.NotNil(n.T(), clusterObj, "expected a non-nil cluster object")
+	n.T().Logf("cluster %q is ready", clusterObj.Name)
+
+	logrus.Infof("Verifying cluster deployments (%s)", clusterObj.Name)
+	err = deployment.VerifyClusterDeployments(n.client, clusterObj)
+	require.NoError(n.T(), err)
+
+	logrus.Infof("Verifying cluster pods (%s)", clusterObj.Name)
+	err = pods.VerifyClusterPods(n.client, clusterObj)
+	require.NoError(n.T(), err)
+
+	n.cluster = clusterObj
 }
 
 func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
+	cluster, err := clusters.NewClusterMeta(n.client, n.cluster.Name)
+	require.NoError(n.T(), err)
+
+	n.T().Logf("Fetching Project [%s]", actionsCharts.SystemProject)
+	project, err := projects.GetProjectByName(n.client, cluster.ID, actionsCharts.SystemProject)
+	require.NoError(n.T(), err)
+	require.Equal(n.T(), actionsCharts.SystemProject, project.Name)
+
 	n.T().Logf("Getting the latest chart version for [%s]", actionsCharts.NeuVectorChartName)
 	latestVersion, err := n.client.Catalog.GetLatestChartVersion(actionsCharts.NeuVectorChartName, catalog.RancherChartRepo)
 	require.NoError(n.T(), err)
@@ -139,28 +131,28 @@ func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
 	payload := actionsCharts.PayloadOpts{
 		Namespace: actionsCharts.NeuVectorNamespace,
 		InstallOptions: actionsCharts.InstallOptions{
-			Cluster:   n.cluster,
+			Cluster:   cluster,
 			Version:   latestVersion,
-			ProjectID: n.project.ID,
+			ProjectID: project.ID,
 		},
 	}
 
-	n.T().Logf("Installing NeuVector on cluster [%s]", n.cluster.Name)
+	n.T().Logf("Installing NeuVector on cluster [%s]", cluster.Name)
 	err = actionsCharts.InstallLatestNeuVectorChart(n.client, payload)
 	require.NoError(n.T(), err)
 
 	n.T().Log("Waiting for NeuVector chart to become active")
-	catalogClient, err := n.client.GetClusterCatalogClient(n.cluster.ID)
+	catalogClient, err := n.client.GetClusterCatalogClient(cluster.ID)
 	require.NoError(n.T(), err)
 
 	err = actionsCharts.WaitChartDeployed(catalogClient, payload.Namespace, actionsCharts.NeuVectorChartName)
 	require.NoError(n.T(), err)
 
 	n.T().Log("Waiting for resources to become active")
-	err = charts.WatchAndWaitDeployments(n.client, n.cluster.ID, payload.Namespace, metav1.ListOptions{})
+	err = charts.WatchAndWaitDeployments(n.client, cluster.ID, payload.Namespace, metav1.ListOptions{})
 	require.NoError(n.T(), err)
 
-	err = charts.WatchAndWaitDaemonSets(n.client, n.cluster.ID, payload.Namespace, metav1.ListOptions{})
+	err = charts.WatchAndWaitDaemonSets(n.client, cluster.ID, payload.Namespace, metav1.ListOptions{})
 	require.NoError(n.T(), err)
 }
 

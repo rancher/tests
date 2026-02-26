@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
@@ -128,18 +129,21 @@ type rancherClusterVars struct {
 // node provisioning via a cloud provider node driver (e.g. Harvester, AWS, Linode).
 // It uses the tofu/rancher/cluster module from the rancher-qa-infra-automation repository.
 //
-// The returned cleanup function runs `tofu destroy` for the cluster module.
-// Register it with t.Cleanup() in your test.
+// Cleanup (tofu destroy + Rancher API delete) is registered automatically via t.Cleanup().
 //
 // Parameters:
+//   - t: the test handle used to register cleanup and fail the test on error.
 //   - rancherClient: an authenticated Rancher shepherd client.
 //   - cfg: the top-level QA infra automation config (from the "qaInfraAutomation" config key).
 //   - clusterCfg: parameters for the Rancher-provisioned cluster (cloud provider, node config, k8s version, etc.).
 func ProvisionRancherCluster(
+	t *testing.T,
 	rancherClient *rancher.Client,
 	cfg *config.Config,
 	clusterCfg *config.RancherClusterConfig,
-) (*v1.SteveAPIObject, func() error, error) {
+) *v1.SteveAPIObject {
+	t.Helper()
+
 	repoPath := cfg.RepoPath
 	workspace := cfg.Workspace
 	if workspace == "" {
@@ -188,40 +192,32 @@ func ProvisionRancherCluster(
 
 	clusterVarFile, err := writeTFVarsJSON(repoPath, "rancher-cluster-vars.json", clusterVars)
 	if err != nil {
-		return nil, nil, fmt.Errorf("write rancher cluster tfvars: %w", err)
+		t.Fatalf("write rancher cluster tfvars: %v", err)
 	}
 
 	clusterModuleDir := filepath.Join(repoPath, rancherClusterModulePath)
 	clusterTofu := tofu.NewClient(clusterModuleDir, workspace)
 
 	if err := clusterTofu.Init(); err != nil {
-		return nil, nil, fmt.Errorf("tofu init (rancher cluster): %w", err)
+		t.Fatalf("tofu init (rancher cluster): %v", err)
 	}
 	if err := clusterTofu.WorkspaceSelectOrCreate(); err != nil {
-		return nil, nil, fmt.Errorf("tofu workspace (rancher cluster): %w", err)
+		t.Fatalf("tofu workspace (rancher cluster): %v", err)
 	}
 	if err := clusterTofu.Apply(clusterVarFile); err != nil {
-		return nil, nil, fmt.Errorf("tofu apply (rancher cluster): %w", err)
+		t.Fatalf("tofu apply (rancher cluster): %v", err)
 	}
 
 	// Read the cluster name from the tofu output.
 	clusterName, err := clusterTofu.Output("name")
 	if err != nil {
-		return nil, nil, fmt.Errorf("tofu output name: %w", err)
+		t.Fatalf("tofu output name: %v", err)
 	}
 	logrus.Infof("[qainfraautomation] rancher-provisioned cluster name from tofu: %s", clusterName)
 
-	// Fetch the cluster object from Rancher and verify it is ready.
-	clusterObj, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
-	if err != nil {
-		return nil, nil, fmt.Errorf("fetch cluster %q from Rancher: %w", clusterName, err)
-	}
-
-	if err := provisioning.VerifyClusterReady(rancherClient, clusterObj); err != nil {
-		return nil, nil, fmt.Errorf("cluster %q did not become ready: %w", clusterName, err)
-	}
-
-	cleanup := func() error {
+	// Register cleanup before verifying readiness so infrastructure is always
+	// torn down even if the cluster never reaches a ready state.
+	t.Cleanup(func() {
 		logrus.Infof("[qainfraautomation] destroying Rancher-provisioned cluster %q (workspace=%s)", clusterName, workspace)
 		if err := clusterTofu.Destroy(clusterVarFile); err != nil {
 			logrus.Warnf("[qainfraautomation] tofu destroy: %v", err)
@@ -232,37 +228,50 @@ func ProvisionRancherCluster(
 		existing, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
 		if err != nil {
 			if strings.Contains(err.Error(), "404 Not Found") {
-				return nil
+				return
 			}
-			return fmt.Errorf("checking cluster %q after destroy: %w", clusterName, err)
+			logrus.Errorf("[qainfraautomation] checking cluster %q after destroy: %v", clusterName, err)
+			return
 		}
 
 		logrus.Infof("[qainfraautomation] cluster %q still present after tofu destroy; deleting via Rancher API", clusterName)
 		if err := rancherClient.Steve.SteveType(stevetypes.Provisioning).Delete(existing); err != nil {
-			return fmt.Errorf("delete cluster %q from Rancher: %w", clusterName, err)
+			logrus.Errorf("[qainfraautomation] delete cluster %q from Rancher: %v", clusterName, err)
 		}
+	})
 
-		return nil
+	// Fetch the cluster object from Rancher and verify it is ready.
+	clusterObj, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
+	if err != nil {
+		t.Fatalf("fetch cluster %q from Rancher: %v", clusterName, err)
 	}
 
-	return clusterObj, cleanup, nil
+	if err := provisioning.VerifyClusterReady(rancherClient, clusterObj); err != nil {
+		t.Fatalf("cluster %q did not become ready: %v", clusterName, err)
+	}
+
+	return clusterObj
 }
 
 // ProvisionHarvesterCustomCluster provisions Harvester VMs via OpenTofu, creates a Rancher custom
 // downstream cluster via OpenTofu + Ansible, and returns a *v1.SteveAPIObject for the cluster.
 //
-// The returned cleanup function runs `tofu destroy` for both the VM and Rancher cluster modules.
-// Register it with t.Cleanup() in your test.
+// Cleanup (tofu destroy for both modules, Rancher cluster first then VMs) is registered
+// automatically via t.Cleanup().
 //
 // Parameters:
+//   - t: the test handle used to register cleanup and fail the test on error.
 //   - rancherClient: an authenticated Rancher shepherd client.
 //   - cfg: the top-level QA infra automation config (from the "qaInfraAutomation" config key).
 //   - clusterCfg: parameters for the Rancher custom cluster (kubernetes version, name prefix, etc.).
 func ProvisionHarvesterCustomCluster(
+	t *testing.T,
 	rancherClient *rancher.Client,
 	cfg *config.Config,
 	clusterCfg *config.CustomClusterConfig,
-) (*v1.SteveAPIObject, func() error, error) {
+) *v1.SteveAPIObject {
+	t.Helper()
+
 	repoPath := cfg.RepoPath
 	workspace := cfg.Workspace
 	if workspace == "" {
@@ -271,7 +280,7 @@ func ProvisionHarvesterCustomCluster(
 
 	h := cfg.Harvester
 	if h == nil {
-		return nil, nil, fmt.Errorf("harvester config is required for ProvisionHarvesterCustomCluster")
+		t.Fatalf("harvester config is required for ProvisionHarvesterCustomCluster")
 	}
 
 	// -------------------------------------------------------------------------
@@ -280,7 +289,7 @@ func ProvisionHarvesterCustomCluster(
 	destKubeconfig := filepath.Join(repoPath, harvesterKubeconfigDest)
 	logrus.Infof("[qainfraautomation] copying Harvester kubeconfig %s → %s", h.KubeConfigPath, destKubeconfig)
 	if err := copyFile(h.KubeConfigPath, destKubeconfig); err != nil {
-		return nil, nil, fmt.Errorf("copy harvester kubeconfig: %w", err)
+		t.Fatalf("copy harvester kubeconfig: %v", err)
 	}
 
 	// -------------------------------------------------------------------------
@@ -289,7 +298,7 @@ func ProvisionHarvesterCustomCluster(
 	vmVars := buildHarvesterVMVars(h)
 	vmVarFile, err := writeTFVarsJSON(repoPath, "harvester-vm-vars.json", vmVars)
 	if err != nil {
-		return nil, nil, fmt.Errorf("write harvester VM tfvars: %w", err)
+		t.Fatalf("write harvester VM tfvars: %v", err)
 	}
 
 	// -------------------------------------------------------------------------
@@ -299,13 +308,13 @@ func ProvisionHarvesterCustomCluster(
 	vmTofu := tofu.NewClient(vmModuleDir, workspace)
 
 	if err := vmTofu.Init(); err != nil {
-		return nil, nil, fmt.Errorf("tofu init (harvester vm): %w", err)
+		t.Fatalf("tofu init (harvester vm): %v", err)
 	}
 	if err := vmTofu.WorkspaceSelectOrCreate(); err != nil {
-		return nil, nil, fmt.Errorf("tofu workspace (harvester vm): %w", err)
+		t.Fatalf("tofu workspace (harvester vm): %v", err)
 	}
 	if err := vmTofu.Apply(vmVarFile); err != nil {
-		return nil, nil, fmt.Errorf("tofu apply (harvester vm): %w", err)
+		t.Fatalf("tofu apply (harvester vm): %v", err)
 	}
 
 	// -------------------------------------------------------------------------
@@ -326,20 +335,20 @@ func ProvisionHarvesterCustomCluster(
 
 	clusterVarFile, err := writeTFVarsJSON(repoPath, "rancher-custom-cluster-vars.json", clusterVars)
 	if err != nil {
-		return nil, nil, fmt.Errorf("write rancher custom cluster tfvars: %w", err)
+		t.Fatalf("write rancher custom cluster tfvars: %v", err)
 	}
 
 	clusterModuleDir := filepath.Join(repoPath, rancherCustomClusterModulePath)
 	clusterTofu := tofu.NewClient(clusterModuleDir, workspace)
 
 	if err := clusterTofu.Init(); err != nil {
-		return nil, nil, fmt.Errorf("tofu init (rancher custom cluster): %w", err)
+		t.Fatalf("tofu init (rancher custom cluster): %v", err)
 	}
 	if err := clusterTofu.WorkspaceSelectOrCreate(); err != nil {
-		return nil, nil, fmt.Errorf("tofu workspace (rancher custom cluster): %w", err)
+		t.Fatalf("tofu workspace (rancher custom cluster): %v", err)
 	}
 	if err := clusterTofu.Apply(clusterVarFile); err != nil {
-		return nil, nil, fmt.Errorf("tofu apply (rancher custom cluster): %w", err)
+		t.Fatalf("tofu apply (rancher custom cluster): %v", err)
 	}
 
 	// -------------------------------------------------------------------------
@@ -352,14 +361,14 @@ func ProvisionHarvesterCustomCluster(
 		"TF_WORKSPACE":          workspace,
 	}
 	if err := ansibleClient.GenerateInventory(customClusterInventoryTemplate, customClusterInventoryOutput, inventoryEnv); err != nil {
-		return nil, nil, fmt.Errorf("generate inventory: %w", err)
+		t.Fatalf("generate inventory: %v", err)
 	}
 
 	// -------------------------------------------------------------------------
 	// Step 6: Add SSH key to agent and run the custom cluster playbook.
 	// -------------------------------------------------------------------------
 	if err := ansibleClient.AddSSHKey(h.SSHPrivateKeyPath); err != nil {
-		return nil, nil, fmt.Errorf("ssh-add: %w", err)
+		t.Fatalf("ssh-add: %v", err)
 	}
 
 	playbookEnv := []string{
@@ -367,7 +376,7 @@ func ProvisionHarvesterCustomCluster(
 		"TERRAFORM_NODE_SOURCE=" + harvesterVMModulePath,
 	}
 	if err := ansibleClient.RunPlaybook(customClusterPlaybook, customClusterInventoryOutput, playbookEnv); err != nil {
-		return nil, nil, fmt.Errorf("ansible-playbook (custom cluster): %w", err)
+		t.Fatalf("ansible-playbook (custom cluster): %v", err)
 	}
 
 	// -------------------------------------------------------------------------
@@ -375,72 +384,76 @@ func ProvisionHarvesterCustomCluster(
 	// -------------------------------------------------------------------------
 	clusterName, err := clusterTofu.Output("cluster_name")
 	if err != nil {
-		return nil, nil, fmt.Errorf("tofu output cluster_name: %w", err)
+		t.Fatalf("tofu output cluster_name: %v", err)
 	}
 	logrus.Infof("[qainfraautomation] cluster name from tofu: %s", clusterName)
+
+	// Register cleanup before verifying readiness so infrastructure is always
+	// torn down even if the cluster never reaches a ready state.
+	// Destroy Rancher cluster resources first, then VMs (LIFO order via two separate t.Cleanup calls).
+	t.Cleanup(func() {
+		logrus.Infof("[qainfraautomation] destroying Harvester VMs (workspace=%s)", workspace)
+		if err := vmTofu.Destroy(vmVarFile); err != nil {
+			logrus.Errorf("[qainfraautomation] tofu destroy (harvester vm): %v", err)
+		}
+	})
+	t.Cleanup(func() {
+		logrus.Infof("[qainfraautomation] destroying Rancher custom cluster resources (workspace=%s)", workspace)
+		if err := clusterTofu.Destroy(clusterVarFile); err != nil {
+			logrus.Errorf("[qainfraautomation] tofu destroy (rancher custom cluster): %v", err)
+		}
+	})
 
 	// -------------------------------------------------------------------------
 	// Step 8: Fetch the cluster object from Rancher and verify it is ready.
 	// -------------------------------------------------------------------------
 	clusterObj, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("fetch cluster %q from Rancher: %w", clusterName, err)
+		t.Fatalf("fetch cluster %q from Rancher: %v", clusterName, err)
 	}
 
 	if err := provisioning.VerifyClusterReady(rancherClient, clusterObj); err != nil {
-		return nil, nil, fmt.Errorf("cluster %q did not become ready: %w", clusterName, err)
+		t.Fatalf("cluster %q did not become ready: %v", clusterName, err)
 	}
 
-	// -------------------------------------------------------------------------
-	// Cleanup function: destroy Rancher cluster resources first, then VMs.
-	// -------------------------------------------------------------------------
-	cleanup := func() error {
-		var errs []error
-		logrus.Infof("[qainfraautomation] destroying Rancher custom cluster resources (workspace=%s)", workspace)
-		if err := clusterTofu.Destroy(clusterVarFile); err != nil {
-			errs = append(errs, fmt.Errorf("tofu destroy (rancher custom cluster): %w", err))
-		}
-		logrus.Infof("[qainfraautomation] destroying Harvester VMs (workspace=%s)", workspace)
-		if err := vmTofu.Destroy(vmVarFile); err != nil {
-			errs = append(errs, fmt.Errorf("tofu destroy (harvester vm): %w", err))
-		}
-		if len(errs) > 0 {
-			return fmt.Errorf("cleanup errors: %v", errs)
-		}
-		return nil
-	}
-
-	return clusterObj, cleanup, nil
+	return clusterObj
 }
 
 // ProvisionHarvesterRKE2Cluster provisions Harvester VMs via OpenTofu and then installs a standalone
 // RKE2 cluster on them via Ansible. It returns the path to the kubeconfig file for the new cluster.
 //
-// The returned cleanup function runs `tofu destroy` for the VM module.
+// Cleanup (tofu destroy for the VM module) is registered automatically via t.Cleanup().
 func ProvisionHarvesterRKE2Cluster(
+	t *testing.T,
 	cfg *config.Config,
 	clusterCfg *config.StandaloneClusterConfig,
-) (kubeconfigPath string, cleanup func() error, err error) {
-	return provisionHarvesterStandaloneCluster(cfg, clusterCfg, "rke2")
+) string {
+	t.Helper()
+	return provisionHarvesterStandaloneCluster(t, cfg, clusterCfg, "rke2")
 }
 
 // ProvisionHarvesterK3SCluster provisions Harvester VMs via OpenTofu and then installs a standalone
 // K3S cluster on them via Ansible. It returns the path to the kubeconfig file for the new cluster.
 //
-// The returned cleanup function runs `tofu destroy` for the VM module.
+// Cleanup (tofu destroy for the VM module) is registered automatically via t.Cleanup().
 func ProvisionHarvesterK3SCluster(
+	t *testing.T,
 	cfg *config.Config,
 	clusterCfg *config.StandaloneClusterConfig,
-) (kubeconfigPath string, cleanup func() error, err error) {
-	return provisionHarvesterStandaloneCluster(cfg, clusterCfg, "k3s")
+) string {
+	t.Helper()
+	return provisionHarvesterStandaloneCluster(t, cfg, clusterCfg, "k3s")
 }
 
 // provisionHarvesterStandaloneCluster is the shared implementation for RKE2 and K3S standalone clusters.
 func provisionHarvesterStandaloneCluster(
+	t *testing.T,
 	cfg *config.Config,
 	clusterCfg *config.StandaloneClusterConfig,
 	clusterType string, // "rke2" or "k3s"
-) (kubeconfigPath string, cleanup func() error, err error) {
+) string {
+	t.Helper()
+
 	repoPath := cfg.RepoPath
 	workspace := cfg.Workspace
 	if workspace == "" {
@@ -449,7 +462,7 @@ func provisionHarvesterStandaloneCluster(
 
 	h := cfg.Harvester
 	if h == nil {
-		return "", nil, fmt.Errorf("harvester config is required for standalone cluster provisioning")
+		t.Fatalf("harvester config is required for standalone cluster provisioning")
 	}
 
 	// Select playbook/inventory/vars paths based on cluster type.
@@ -466,21 +479,21 @@ func provisionHarvesterStandaloneCluster(
 		inventoryOutput = k3sInventoryOutput
 		varsFile = k3sVarsFile
 	default:
-		return "", nil, fmt.Errorf("unsupported cluster type: %s (must be rke2 or k3s)", clusterType)
+		t.Fatalf("unsupported cluster type: %s (must be rke2 or k3s)", clusterType)
 	}
 
 	// Step 1: Copy Harvester kubeconfig.
 	destKubeconfig := filepath.Join(repoPath, harvesterKubeconfigDest)
 	logrus.Infof("[qainfraautomation] copying Harvester kubeconfig %s → %s", h.KubeConfigPath, destKubeconfig)
 	if err := copyFile(h.KubeConfigPath, destKubeconfig); err != nil {
-		return "", nil, fmt.Errorf("copy harvester kubeconfig: %w", err)
+		t.Fatalf("copy harvester kubeconfig: %v", err)
 	}
 
 	// Step 2: Write Harvester VM tfvars.json.
 	vmVars := buildHarvesterVMVars(h)
 	vmVarFile, err := writeTFVarsJSON(repoPath, "harvester-vm-vars.json", vmVars)
 	if err != nil {
-		return "", nil, fmt.Errorf("write harvester VM tfvars: %w", err)
+		t.Fatalf("write harvester VM tfvars: %v", err)
 	}
 
 	// Step 3: Tofu init + workspace + apply for Harvester VM module.
@@ -488,14 +501,22 @@ func provisionHarvesterStandaloneCluster(
 	vmTofu := tofu.NewClient(vmModuleDir, workspace)
 
 	if err := vmTofu.Init(); err != nil {
-		return "", nil, fmt.Errorf("tofu init (harvester vm): %w", err)
+		t.Fatalf("tofu init (harvester vm): %v", err)
 	}
 	if err := vmTofu.WorkspaceSelectOrCreate(); err != nil {
-		return "", nil, fmt.Errorf("tofu workspace (harvester vm): %w", err)
+		t.Fatalf("tofu workspace (harvester vm): %v", err)
 	}
 	if err := vmTofu.Apply(vmVarFile); err != nil {
-		return "", nil, fmt.Errorf("tofu apply (harvester vm): %w", err)
+		t.Fatalf("tofu apply (harvester vm): %v", err)
 	}
+
+	// Register cleanup after VMs are applied so they're always destroyed.
+	t.Cleanup(func() {
+		logrus.Infof("[qainfraautomation] destroying Harvester VMs (workspace=%s)", workspace)
+		if err := vmTofu.Destroy(vmVarFile); err != nil {
+			logrus.Errorf("[qainfraautomation] tofu destroy (harvester vm): %v", err)
+		}
+	})
 
 	// Step 4: Generate inventory.
 	ansibleClient := ansible.NewClient(repoPath)
@@ -504,7 +525,7 @@ func provisionHarvesterStandaloneCluster(
 		"TF_WORKSPACE":          workspace,
 	}
 	if err := ansibleClient.GenerateInventory(inventoryTemplate, inventoryOutput, inventoryEnv); err != nil {
-		return "", nil, fmt.Errorf("generate inventory: %w", err)
+		t.Fatalf("generate inventory: %v", err)
 	}
 
 	// Step 5: Write vars.yaml for the playbook.
@@ -515,12 +536,12 @@ func provisionHarvesterStandaloneCluster(
 		"kubeconfig_file":    clusterCfg.KubeconfigOutputPath,
 	}
 	if err := ansibleClient.WriteVarsYAML(varsFile, vars); err != nil {
-		return "", nil, fmt.Errorf("write vars.yaml: %w", err)
+		t.Fatalf("write vars.yaml: %v", err)
 	}
 
 	// Step 6: Add SSH key + run playbook.
 	if err := ansibleClient.AddSSHKey(h.SSHPrivateKeyPath); err != nil {
-		return "", nil, fmt.Errorf("ssh-add: %w", err)
+		t.Fatalf("ssh-add: %v", err)
 	}
 
 	playbookEnv := []string{
@@ -528,19 +549,10 @@ func provisionHarvesterStandaloneCluster(
 		"TERRAFORM_NODE_SOURCE=" + harvesterVMModulePath,
 	}
 	if err := ansibleClient.RunPlaybook(playbookPath, inventoryOutput, playbookEnv); err != nil {
-		return "", nil, fmt.Errorf("ansible-playbook (%s): %w", clusterType, err)
+		t.Fatalf("ansible-playbook (%s): %v", clusterType, err)
 	}
 
-	// Cleanup: destroy VMs.
-	cleanupFn := func() error {
-		logrus.Infof("[qainfraautomation] destroying Harvester VMs (workspace=%s)", workspace)
-		if err := vmTofu.Destroy(vmVarFile); err != nil {
-			return fmt.Errorf("tofu destroy (harvester vm): %w", err)
-		}
-		return nil
-	}
-
-	return clusterCfg.KubeconfigOutputPath, cleanupFn, nil
+	return clusterCfg.KubeconfigOutputPath
 }
 
 // -------------------------------------------------------------------------
