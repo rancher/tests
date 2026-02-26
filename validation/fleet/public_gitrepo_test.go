@@ -153,7 +153,7 @@ func (f *FleetPublicRepoTestSuite) TestDynamicGitRepoDeployment() {
 	if len(dynamicGitRepo.Spec.Targets) < 1 {
 		dynamicGitRepo.Spec.Targets = []v1alpha1.GitTarget{
 			{
-				ClusterName: client.RancherConfig.ClusterName,
+				ClusterName: f.clusterID,
 			},
 		}
 	}
@@ -171,7 +171,7 @@ func (f *FleetPublicRepoTestSuite) TestDynamicGitRepoDeployment() {
 		require.NoError(f.T(), err)
 
 		// expects dynamicGitRepo.GitRepoSpec.Targets to include RancherConfig.ClusterName
-		err = fleet.VerifyGitRepo(client, gitRepoObject.ID, f.clusterID, fleet.Namespace+"/"+client.RancherConfig.ClusterName)
+		err = fleet.VerifyGitRepo(client, gitRepoObject.ID, f.clusterID, client.RancherConfig.ClusterName)
 		require.NoError(f.T(), err)
 	})
 }
