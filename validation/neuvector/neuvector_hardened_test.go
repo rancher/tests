@@ -94,11 +94,11 @@ func (n *NeuVectorHardenedTestSuite) SetupSuite() {
 		require.NoError(n.T(), err)
 	}
 
-	clusterObj := qainfraautomation.ProvisionRancherCluster(
+	clusterObj := qainfraautomation.ProvisionCustomCluster(
 		n.T(),
 		n.client,
 		n.cfg,
-		n.cfg.RancherCluster,
+		n.cfg.CustomCluster,
 	)
 
 	require.NotNil(n.T(), clusterObj, "expected a non-nil cluster object")

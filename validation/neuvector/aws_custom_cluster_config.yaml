@@ -1,0 +1,79 @@
+# cattle config for ProvisionAWSCustomCluster via qainfraautomation
+#
+# Usage:
+#   export CATTLE_TEST_CONFIG=/path/to/aws_custom_cluster_config.yaml
+#   go test -v -tags validation ./validation/provisioning/qainfraautomation/... -run TestCustomClusterTestSuite
+#
+# Flow:
+#   1. tofu/aws/modules/cluster_nodes  — provisions EC2 instances + NLB + Route53 record
+#   2. tofu/rancher/custom_cluster     — creates a bare rancher2_cluster_v2 shell in Rancher
+#   3. Ansible custom-cluster-playbook — registers each EC2 node to the Rancher cluster
+
+rancher:
+  host: "rancher.example.com"       # Rancher hostname (no https://)
+  adminToken: "token-xxxxx:xxxxxxx" # Rancher API token
+  insecure: true
+  cleanup: true
+
+qaInfraAutomation:
+  # Absolute path to your local clone of rancher-qa-infra-automation.
+  repoPath: "/home/user/rancher-qa-infra-automation"
+
+  # OpenTofu workspace name — isolates state between concurrent runs.
+  workspace: "my-aws-test"
+
+  aws:
+    accessKey: "AKIAIOSFODNN7EXAMPLE"
+    secretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    region: "us-east-2"
+
+    # AMI — must exist in the chosen region.
+    # Example below is SLES 15 SP7 in us-east-2; swap for your preferred distro.
+    ami: "ami-01de4781572fa1285"
+    sshUser: "ec2-user"         # Default user for the AMI (ubuntu for Ubuntu AMIs)
+
+    # SSH key pair — public key is injected into EC2 instances via aws_key_pair,
+    # private key is used by Ansible to connect.
+    sshPublicKeyPath: "/home/user/.ssh/id_rsa.pub"
+    sshPrivateKeyPath: "/home/user/.ssh/id_rsa"
+
+    instanceType: "t3a.xlarge"  # 4 vCPU / 16 GB — adjust to your workload
+
+    vpc: "vpc-0123456789abcdef0"
+    subnet: "subnet-0123456789abcdef0"
+    securityGroups:
+      - "sg-0123456789abcdef0"  # Must allow: 22, 80, 443, 2376, 2379-2380, 6443, 9345, 10250
+
+    volumeSize: 50    # GiB
+    volumeType: "gp3"
+
+    # hostnamePrefix is used for EC2 instance names and the Route53 A/CNAME record.
+    hostnamePrefix: "tf-aws"
+
+    # Route53 hosted zone in which to register the cluster FQDN.
+    # The cluster will be reachable at <hostnamePrefix>.<route53Zone>.
+    route53Zone: "qa.rancher.space"
+
+    airgapSetup: false
+    proxySetup: false
+
+    # Node groups — define your cluster topology here.
+    # Each group gets the listed roles on every node in the group.
+    nodes:
+      # Single all-roles node (smallest valid cluster):
+      - count: 1
+        role: ["etcd", "cp", "worker"]
+
+      # --- HA example (uncomment and remove the single-node entry above): ---
+      # - count: 3
+      #   role: ["etcd"]
+      # - count: 2
+      #   role: ["cp"]
+      # - count: 3
+      #   role: ["worker"]
+
+  customCluster:
+    kubernetesVersion: "v1.31.4+rke2r1"
+    generateName: "tf-aws"         # Prefix for the Rancher cluster name
+    isNetworkPolicy: false
+    psa: "rancher-privileged"      # Leave blank ("") to use the Rancher default

@@ -84,14 +84,71 @@ type HarvesterNodeGroup struct {
 
 // AWSConfig holds AWS-specific settings for provisioning EC2 nodes via OpenTofu.
 type AWSConfig struct {
-	// Region is the AWS region to deploy into.
-	Region string `json:"region,omitempty" yaml:"region,omitempty"`
+	// AccessKey is the AWS access key ID.
+	AccessKey string `json:"accessKey" yaml:"accessKey"`
 
-	// SSHPrivateKeyPath is the path to the private SSH key used by Ansible.
+	// SecretKey is the AWS secret access key.
+	SecretKey string `json:"secretKey" yaml:"secretKey"`
+
+	// Region is the AWS region to deploy into (e.g. "us-east-2").
+	Region string `json:"region" yaml:"region"`
+
+	// AMI is the EC2 AMI ID to use for nodes (e.g. "ami-01de4781572fa1285").
+	AMI string `json:"ami" yaml:"ami"`
+
+	// SSHUser is the default SSH user for the chosen AMI (e.g. "ec2-user", "ubuntu").
+	SSHUser string `json:"sshUser" yaml:"sshUser"`
+
+	// SSHPublicKeyPath is the path to the public SSH key file injected into EC2 instances.
+	SSHPublicKeyPath string `json:"sshPublicKeyPath" yaml:"sshPublicKeyPath"`
+
+	// SSHPrivateKeyPath is the path to the private SSH key used by Ansible to connect to nodes.
 	SSHPrivateKeyPath string `json:"sshPrivateKeyPath" yaml:"sshPrivateKeyPath"`
 
-	// GenerateName is the short name prefix appended to created resources (default "tf").
-	GenerateName string `json:"generateName,omitempty" yaml:"generateName,omitempty"`
+	// InstanceType is the EC2 instance type (e.g. "t3a.xlarge").
+	InstanceType string `json:"instanceType" yaml:"instanceType"`
+
+	// VPC is the VPC ID (e.g. "vpc-0123456789abcdef0").
+	VPC string `json:"vpc" yaml:"vpc"`
+
+	// Subnet is the subnet ID (e.g. "subnet-0123456789abcdef0").
+	Subnet string `json:"subnet" yaml:"subnet"`
+
+	// SecurityGroups is a list of security group IDs (e.g. ["sg-0123456789abcdef0"]).
+	SecurityGroups []string `json:"securityGroups" yaml:"securityGroups"`
+
+	// VolumeSize is the root EBS volume size in GiB (e.g. 50).
+	VolumeSize int `json:"volumeSize,omitempty" yaml:"volumeSize,omitempty"`
+
+	// VolumeType is the EBS volume type (e.g. "gp3").
+	VolumeType string `json:"volumeType,omitempty" yaml:"volumeType,omitempty"`
+
+	// HostnamePrefix is the short prefix used to name EC2 instances and the Route53 record.
+	// Also used as GenerateName for the Rancher custom cluster.
+	HostnamePrefix string `json:"hostnamePrefix,omitempty" yaml:"hostnamePrefix,omitempty"`
+
+	// Route53Zone is the Route53 hosted zone name used to register the cluster FQDN
+	// (e.g. "qa.rancher.space").
+	Route53Zone string `json:"route53Zone" yaml:"route53Zone"`
+
+	// AirgapSetup disables public IP assignment on instances when true.
+	AirgapSetup bool `json:"airgapSetup,omitempty" yaml:"airgapSetup,omitempty"`
+
+	// ProxySetup disables public IP assignment on instances when true.
+	ProxySetup bool `json:"proxySetup,omitempty" yaml:"proxySetup,omitempty"`
+
+	// Nodes defines the EC2 node groups: count and Rancher roles per group.
+	// Roles: "etcd", "cp", "worker".
+	Nodes []AWSNodeGroup `json:"nodes" yaml:"nodes"`
+}
+
+// AWSNodeGroup describes a set of identically-configured EC2 instances sharing the same roles.
+type AWSNodeGroup struct {
+	// Count is the number of EC2 instances in this group.
+	Count int `json:"count" yaml:"count"`
+
+	// Role is the list of Rancher node roles for this group (e.g. ["etcd", "cp"] or ["worker"]).
+	Role []string `json:"role" yaml:"role"`
 }
 
 // CustomClusterConfig holds parameters for provisioning a Rancher custom downstream cluster via Ansible.
