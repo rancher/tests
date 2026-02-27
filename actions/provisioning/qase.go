@@ -27,6 +27,7 @@ func GetProvisioningSchemaParams(client *rancher.Client, cattleConfig map[string
 	params = append(params,
 		getRunType(terraformConfig),
 		getRancherType(terraformConfig),
+		getNetworkStackType(clusterConfig),
 		getOSNameParam(client, clusterConfig),
 		getProviderParam(clusterConfig),
 		getK8sParam(clusterConfig),
@@ -49,7 +50,7 @@ func GetCustomSchemaParams(client *rancher.Client, cattleConfig map[string]any) 
 	params = append(params,
 		getRunType(terraformConfig),
 		getRancherType(terraformConfig),
-		getNetworkStackType(client, clusterConfig),
+		getNetworkStackType(clusterConfig),
 		getOSNameCustomParam(client, cattleConfig, clusterConfig),
 		getProviderParam(clusterConfig),
 		getK8sParam(clusterConfig),
@@ -132,8 +133,15 @@ func getRancherType(terraform *config.TerraformConfig) upstream.TestCaseParamete
 	return upstream.TestCaseParameterCreate{}
 }
 
-func getNetworkStackType(client *rancher.Client, clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
-	return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "NetworkType", Values: []string{clusterConfig.Networking.StackPreference}}}
+func getNetworkStackType(clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
+	var networkParam upstream.TestCaseParameterCreate
+	if clusterConfig.Networking != nil && clusterConfig.Networking.StackPreference != "" {
+		networkParam = upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "NetworkType", Values: []string{clusterConfig.Networking.StackPreference}}}
+	} else {
+		networkParam = upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "NetworkType", Values: []string{"ipv4"}}}
+	}
+
+	return networkParam
 }
 
 func getOSNameParam(client *rancher.Client, clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
