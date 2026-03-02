@@ -304,7 +304,7 @@ jobs:
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: dualstack
+          tags: ipv6
 
       - name: Cleanup Infrastructure
         if: always()
@@ -625,7 +625,7 @@ jobs:
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: dualstack
+          tags: ipv6
 
       - name: Cleanup Infrastructure
         if: always()
