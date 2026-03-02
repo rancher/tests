@@ -47,6 +47,8 @@ const (
 	etcdSnapshotAnnotation      = "etcdsnapshot.rke.io/storage"
 	machineNameAnnotation       = "cluster.x-k8s.io/machine"
 	deploymentNameLabel         = "cluster.x-k8s.io/deployment-name"
+	capiRoleLabel               = "cluster.x-k8s.io/role"
+	rancherRoleLabel            = "rke.cattle.io/role"
 	onDemandPrefix              = "on-demand-"
 	s3                          = "s3"
 	DefaultRancherDataDir       = "/var/lib/rancher"
@@ -117,43 +119,69 @@ func VerifyRKE1Cluster(t *testing.T, client *rancher.Client, clustersConfig *clu
 
 // VerifyClusterReady validates that a non-rke1 cluster and its resources are in a good state, matching a given config.
 func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject) error {
-	err := kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FifteenMinuteTimeout, false, func(context.Context) (done bool, err error) {
-		adminClient, err := client.ReLogin()
-		if err != nil {
-			logrus.Warningf("Unable to get cluster client (%s) retrying", cluster.Name)
-			return false, nil
-		}
+	var lastErr error
 
-		kubeProvisioningClient, err := adminClient.GetKubeAPIProvisioningClient()
-		if err != nil {
-			logrus.Warningf("Unable to get cluster kube client (%s) retrying", cluster.Name)
-			return false, nil
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), defaults.FifteenMinuteTimeout)
+	defer cancel()
 
-		watchInterface, err := kubeProvisioningClient.Clusters(namespaces.FleetDefault).Watch(context.TODO(), metav1.ListOptions{
-			FieldSelector:  "metadata.name=" + cluster.Name,
-			TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-		})
-		if err != nil {
-			return false, nil
-		}
+	err := kwait.PollUntilContextTimeout(
+		ctx,
+		10*time.Second,
+		defaults.FifteenMinuteTimeout,
+		false,
+		func(ctx context.Context) (bool, error) {
 
-		checkFunc := shepherdclusters.IsProvisioningClusterReady
-		err = wait.WatchWait(watchInterface, checkFunc)
-		if err != nil {
-			logrus.Warningf("Unable to get cluster status (%s) Retrying", cluster.Name)
-			return false, nil
-		}
+			adminClient, err := client.ReLogin()
+			if err != nil {
+				logrus.Debugf("Unable to fetch cluster client (%s), retrying", cluster.Name)
+				return false, nil
+			}
 
-		return true, nil
-	})
+			kubeProvisioningClient, err := adminClient.GetKubeAPIProvisioningClient()
+			if err != nil {
+				logrus.Debugf("Unable to fetch cluster kube client (%s), retrying", cluster.Name)
+				return false, nil
+			}
+
+			watchInterface, err := kubeProvisioningClient.
+				Clusters(namespaces.FleetDefault).
+				Watch(
+					ctx,
+					metav1.ListOptions{
+						FieldSelector:  "metadata.name=" + cluster.Name,
+						TimeoutSeconds: &defaults.WatchTimeoutSeconds,
+					},
+				)
+			if err != nil {
+				logrus.Debugf("Unable to watch cluster (%s), retrying", cluster.Name)
+				return false, nil
+			}
+			defer watchInterface.Stop()
+
+			checkFunc := shepherdclusters.IsProvisioningClusterReady
+
+			err = wait.WatchWait(watchInterface, checkFunc)
+			if err != nil {
+				lastErr = err
+				logrus.Debugf("Cluster (%s) not ready yet, retrying: %v", cluster.Name, err)
+				return false, nil
+			}
+
+			return true, nil
+		},
+	)
+
 	if err != nil {
+		logrus.Errorf("Cluster (%s) failed to become ready: %v", cluster.Name, err)
+		dumpProvisioningClusterState(ctx, client, cluster.Name, lastErr)
 		return err
 	}
 
 	logrus.Debugf("Waiting for all machines to be ready on cluster (%s)", cluster.Name)
 	err = nodestat.AllMachineReady(client, cluster.ID, defaults.FiveMinuteTimeout)
 	if err != nil {
+		logrus.Errorf("Machine readiness check failed for cluster (%s)", cluster.Name)
+		dumpProvisioningClusterState(ctx, client, cluster.Name, nil)
 		return err
 	}
 
@@ -163,11 +191,163 @@ func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject)
 		return err
 	}
 
-	if clusterToken != true {
+	if !clusterToken {
 		return fmt.Errorf("cluster token is not valid")
 	}
 
 	return nil
+}
+
+func dumpProvisioningClusterState(ctx context.Context, client *rancher.Client, clusterName string, lastPollingErr error) {
+	adminClient, err := client.ReLogin()
+	if err != nil {
+		logrus.Errorf("Log dump: unable to relogin: %v", err)
+		return
+	}
+
+	kubeProvisioningClient, err := adminClient.GetKubeAPIProvisioningClient()
+	if err != nil {
+		logrus.Errorf("Log dump: unable to get provisioning client: %v", err)
+		return
+	}
+
+	clusterObj, err := kubeProvisioningClient.
+		Clusters(namespaces.FleetDefault).
+		Get(ctx, clusterName, metav1.GetOptions{})
+	if err != nil {
+		logrus.Errorf("Log dump: unable to fetch provisioning cluster: %v", err)
+		return
+	}
+
+	logrus.Errorf("\n")
+	logrus.Errorf("==================================================")
+	logrus.Errorf("CLUSTER FAILED: %s", clusterObj.Name)
+	logrus.Errorf("==================================================\n")
+	logrus.Errorf("\n")
+	if lastPollingErr != nil {
+		logrus.Errorf("Final Error: %v\n", lastPollingErr)
+		logrus.Errorf("\n")
+	}
+
+	logrus.Errorf("Provisioning State")
+	logrus.Errorf("  Ready:        %v\n", clusterObj.Status.Ready)
+	logrus.Errorf("\n")
+
+	logrus.Errorf("Cluster Conditions:")
+	for _, cond := range clusterObj.Status.Conditions {
+		logrus.Errorf("  - Type:       %s", cond.Type)
+		logrus.Errorf("    Status:     %s", cond.Status)
+		logrus.Errorf("    Reason:     %v", populateValue(cond.Reason))
+		logrus.Errorf("    Message:    %v\n", populateValue(cond.Message))
+		logrus.Errorf("\n")
+	}
+
+	machineSteve := adminClient.Steve.SteveType(stevetypes.Machine)
+	machineList, err := machineSteve.List(nil)
+	if err != nil {
+		logrus.Errorf("Log dump: unable to list machines via Steve: %v", err)
+		return
+	}
+
+	type machineInfo struct {
+		Name           string
+		Role           string
+		Phase          any
+		NodeRef        any
+		FailureReason  any
+		FailureMessage any
+	}
+
+	var machines []machineInfo
+
+	for _, m := range machineList.Data {
+		if m.Labels == nil || m.Labels[capi.ClusterNameLabel] != clusterName {
+			continue
+		}
+
+		statusMap, ok := m.Status.(map[string]any)
+		if !ok {
+			logrus.Errorf(
+				"Machine %s has unexpected status format; expected map[string]any, got %T",
+				m.Name,
+				m.Status,
+			)
+			continue
+		}
+
+		role := "unknown"
+		if r, ok := m.Labels[capiRoleLabel]; ok {
+			role = r
+		} else if r, ok := m.Labels[rancherRoleLabel]; ok {
+			role = r
+		}
+
+		machines = append(machines, machineInfo{
+			Name:           m.Name,
+			Role:           role,
+			Phase:          statusMap["phase"],
+			NodeRef:        statusMap["nodeRef"],
+			FailureReason:  statusMap["failureReason"],
+			FailureMessage: statusMap["failureMessage"],
+		})
+	}
+
+	total := len(machines)
+	running, provisioning, failed := 0, 0, 0
+
+	for _, m := range machines {
+		switch m.Phase {
+		case "Running":
+			running++
+		case "Failed":
+			failed++
+		default:
+			provisioning++
+		}
+	}
+
+	logrus.Errorf("Machine Summary:")
+	logrus.Errorf("  Total:        %d", total)
+	logrus.Errorf("  Running:      %d", running)
+	logrus.Errorf("  Provisioning: %d", provisioning)
+	logrus.Errorf("  Failed:       %d\n", failed)
+	logrus.Errorf("\n")
+
+	logrus.Errorf("Machine Details:")
+
+	skippedHealthy := 0
+	for _, m := range machines {
+		if m.Phase == "Running" && m.FailureReason == nil {
+			skippedHealthy++
+			continue
+		}
+
+		logrus.Errorf("  • %s", m.Name)
+		logrus.Errorf("      Role:          %s", m.Role)
+		logrus.Errorf("      Phase:         %v", m.Phase)
+		logrus.Errorf("      NodeRef:       %v", m.NodeRef)
+		logrus.Errorf("      FailureReason: %v", populateValue(m.FailureReason))
+		logrus.Errorf("      FailureMsg:    %v\n", populateValue(m.FailureMessage))
+		logrus.Errorf("\n")
+	}
+
+	if skippedHealthy > 0 {
+		logrus.Infof("  • %d healthy machines detected", skippedHealthy)
+	}
+}
+
+func populateValue(v any) any {
+	switch val := v.(type) {
+	case nil:
+		return "<nil>"
+	case string:
+		if val == "" {
+			return `""`
+		}
+		return val
+	default:
+		return val
+	}
 }
 
 func VerifyPSACT(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
