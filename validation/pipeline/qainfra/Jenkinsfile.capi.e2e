@@ -23,9 +23,10 @@ node("harvester-vpn-1") {
     def ansibleVarsFilename = "vars.yaml"
     def terraformVarsfilename = "cluster.tfvars"
     def capiConfig = env.CAPI_CONFIG
+    def capiClusterConfig = env.CAPI_CLUSTER_CONFIG
     def capiAnsibleConfig = env.CAPI_ANSIBLE_CONFIG
     def capiConfigFile = "capiconfig.yaml"
-    def harvesterConfig = ""
+    def capiClusterConfigFile = "capiclusterconfig.yaml"
     def harvesterConfigfilename = "local.yaml"
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
@@ -66,7 +67,8 @@ node("harvester-vpn-1") {
                           string(credentialsId: 'RANCHER_VALID_TLS_KEY', variable: 'RANCHER_VALID_TLS_KEY'),
                           string(credentialsId: 'RANCHER_BYO_TLS_CERT', variable: 'RANCHER_BYO_TLS_CERT'),
                           string(credentialsId: 'RANCHER_BYO_TLS_KEY', variable: 'RANCHER_BYO_TLS_KEY'),
-                          string(credentialsId: 'QASE_AUTOMATION_TOKEN', variable: 'QASE_AUTOMATION_TOKEN')]) {
+                          string(credentialsId: 'QASE_AUTOMATION_TOKEN', variable: 'QASE_AUTOMATION_TOKEN'),
+                          string(credentialsId: 'AWS_B64ENCODED_CREDENTIALS', variable: 'AWS_B64ENCODED_CREDENTIALS')]) {
           
         withEnv(paramsMap) {
           stage('Checkout') {
@@ -98,6 +100,10 @@ node("harvester-vpn-1") {
               terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC)
               terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS)
               ansibleConfig = ansibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
+              capiConfig = capiConfig.replace('${AWS_B64ENCODED_CREDENTIALS}', env.AWS_B64ENCODED_CREDENTIALS)
+              capiConfig = capiConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
+              capiConfig = capiConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
+              capiClusterConfig = capiClusterConfig.replace('${AWS_SSH_KEY_NAME}', env.AWS_SSH_KEY_NAME)
 
 
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
@@ -122,6 +128,7 @@ node("harvester-vpn-1") {
                 dir ("./ansible/rancher/downstream/capi") {
                   writeFile file: ansibleVarsFilename, text: capiAnsibleConfig
                   writeFile file: capiConfigFile, text: capiConfig
+                  writeFile file: capiClusterConfigFile, text: capiClusterConfig
                 }
               }
               
