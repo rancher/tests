@@ -195,7 +195,7 @@ node {
                             )
             }
 
-            stage('Configure Private Registry (Optional)') {
+            stage('Configure Private Registry') {
                 def registryUrl = env.PRIVATE_REGISTRY_URL ?: ''
 
                 if (registryUrl) {
@@ -211,10 +211,7 @@ node {
             }
 
             stage('Deploy Rancher (Optional)') {
-                // Check if Rancher deployment is enabled
-                def deployRancher = env.ANSIBLE_VARIABLES.contains('deploy_rancher: true')
-
-                if (deployRancher) {
+                if (params.DEPLOY_RANCHER) {
                     echo 'Deploying Rancher...'
                     ansible.runPlaybook(
                                     dir: ansiblePath,
@@ -222,7 +219,7 @@ node {
                                     playbook: 'playbooks/deploy/rancher-helm-deploy-playbook.yml'
                                 )
                             } else {
-                    echo 'Skipping Rancher deployment (not enabled in ANSIBLE_VARIABLES)'
+                    echo 'Skipping Rancher deployment (DEPLOY_RANCHER not checked)'
                 }
             }
 
