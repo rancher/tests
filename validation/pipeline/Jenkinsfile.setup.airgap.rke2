@@ -16,6 +16,10 @@ node {
     def qaInfraRepo = env.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation'
 
     property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SSH_PEM_KEY', 'AWS_SSH_PEM_KEY_NAME']) {
+        withCredentials([
+            string(credentialsId: 'RANCHER_REGISTRY_USER_NAME', variable: 'RANCHER_REGISTRY_USER_NAME'),
+            string(credentialsId: 'RANCHER_REGISTRY_PASSWORD', variable: 'RANCHER_REGISTRY_PASSWORD')
+        ]) {
                     try {
             stage('Checkout') {
                 deleteDir()
@@ -150,8 +154,8 @@ node {
                                     'RANCHER_VERSION': env.RANCHER_VERSION,
                                     'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
                                     'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL ?: '',
-                                    'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME ?: '',
-                                    'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD ?: ''
+                                    'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME ?: env.RANCHER_REGISTRY_USER_NAME ?: '',
+                                    'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD ?: env.RANCHER_REGISTRY_PASSWORD ?: ''
                                 ]
                             )
 
@@ -273,5 +277,6 @@ node {
 
             throw err
                     }
+        } // withCredentials
     }
 }
