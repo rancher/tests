@@ -203,7 +203,7 @@ node {
                     ansible.runPlaybook(
                                     dir: ansiblePath,
                                     inventory: 'inventory/inventory.yml',
-                                    playbook: 'playbooks/setup/rke2-registry-config-playbook.yml'
+                                    playbook: 'playbooks/deploy/rke2-registry-config-playbook.yml'
                                 )
                 } else {
                     echo 'Skipping private registry configuration (PRIVATE_REGISTRY_URL not set)'
