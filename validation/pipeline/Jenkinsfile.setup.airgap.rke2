@@ -15,7 +15,15 @@ node {
     def qaInfraBranch = env.QA_INFRA_REPO_BRANCH ?: 'main'
     def qaInfraRepo = env.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation'
 
-    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SSH_PEM_KEY', 'AWS_SSH_PEM_KEY_NAME']) {
+    property.useWithProperties([
+        'AWS_ACCESS_KEY_ID',
+        'AWS_SECRET_ACCESS_KEY',
+        'AWS_SSH_PEM_KEY',
+        'AWS_SSH_PEM_KEY_NAME',
+        'PRIVATE_REGISTRY_URL',
+        'PRIVATE_REGISTRY_USERNAME',
+        'PRIVATE_REGISTRY_PASSWORD'
+    ]) {
         withCredentials([
             string(credentialsId: 'RANCHER_REGISTRY_USER_NAME', variable: 'RANCHER_REGISTRY_USER_NAME'),
             string(credentialsId: 'RANCHER_REGISTRY_PASSWORD', variable: 'RANCHER_REGISTRY_PASSWORD')
