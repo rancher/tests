@@ -187,6 +187,21 @@ node {
                             )
             }
 
+            stage('Configure Private Registry (Optional)') {
+                def registryUrl = env.PRIVATE_REGISTRY_URL ?: ''
+
+                if (registryUrl) {
+                    echo 'Configuring private registry...'
+                    ansible.runPlaybook(
+                                    dir: ansiblePath,
+                                    inventory: 'inventory/inventory.yml',
+                                    playbook: 'playbooks/setup/rke2-registry-config-playbook.yml'
+                                )
+                } else {
+                    echo 'Skipping private registry configuration (PRIVATE_REGISTRY_URL not set)'
+                }
+            }
+
             stage('Deploy Rancher (Optional)') {
                 // Check if Rancher deployment is enabled
                 def deployRancher = env.ANSIBLE_VARIABLES.contains('deploy_rancher: true')
