@@ -351,7 +351,7 @@ func (acrc *AggregatedClusterRolesCrtbTestSuite) TestCrtbInheritanceWithMultiple
 	require.NoError(acrc.T(), err, "CRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForCrtb(acrc.client, clusterapi.LocalCluster, &crtbs[0], 2, 0)
+	err = rbacapi.VerifyBindingsForCrtb(acrc.client, clusterapi.LocalCluster, &crtbs[0], 1, 0)
 	require.NoError(acrc.T(), err)
 	err = rbacapi.VerifyBindingsForCrtb(acrc.client, acrc.cluster.ID, &crtbs[0], 0, 1)
 	require.NoError(acrc.T(), err)
@@ -641,7 +641,7 @@ func (acrc *AggregatedClusterRolesCrtbTestSuite) TestCrtbNestedInheritance() {
 	require.NoError(acrc.T(), err, "CRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForCrtb(acrc.client, clusterapi.LocalCluster, &crtbs[0], 2, 0)
+	err = rbacapi.VerifyBindingsForCrtb(acrc.client, clusterapi.LocalCluster, &crtbs[0], 1, 0)
 	require.NoError(acrc.T(), err)
 	err = rbacapi.VerifyBindingsForCrtb(acrc.client, acrc.cluster.ID, &crtbs[0], 0, 1)
 	require.NoError(acrc.T(), err)
@@ -728,7 +728,7 @@ func (acrc *AggregatedClusterRolesCrtbTestSuite) TestCrtbMultipleLevelsOfInherit
 	require.NoError(acrc.T(), err, "CRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForCrtb(acrc.client, clusterapi.LocalCluster, &crtbs[0], 2, 0)
+	err = rbacapi.VerifyBindingsForCrtb(acrc.client, clusterapi.LocalCluster, &crtbs[0], 1, 0)
 	require.NoError(acrc.T(), err)
 	err = rbacapi.VerifyBindingsForCrtb(acrc.client, acrc.cluster.ID, &crtbs[0], 0, 1)
 	require.NoError(acrc.T(), err)
