@@ -177,6 +177,24 @@ Hardened test verifies that a cluster can deploy the cis-benchmark(2.11<=)/compl
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestHardened -timeout=1h -v`
 
 
+### Ingress Test
+
+#### Description: 
+Hardened test verifies that a cluster can deploy the cis-benchmark(2.11<=)/compliance(2.12+) chart on a custom cluster
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Machine Config](#machine-config)
+
+#### Table Tests
+1. `RKE2_Ingress_Nginx`
+2. `RKE2_Traefik`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestIngress -timeout=1h -v`
+
+
 ### Node Driver Test
 
 #### Description: 
