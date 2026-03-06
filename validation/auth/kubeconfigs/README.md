@@ -8,9 +8,12 @@ This repository contains Golang automation tests for Ext Kubeconfigs (Public API
 
 ## Test Setup
 
-Your GO suite should be set to `-run ^TestKubeconfigTestSuite$`. You can find specific tests by checking the test file you plan to run.
+Your GO suite should be set to `-run ^Test<TestSuite>$`
 
-In your config file, set the following:
+- To run the kubeconfigs_test.go, set the GO suite to `-run ^TestExtKubeconfigTestSuite$`
+- To run the kubeconfigs_watchlist_test.go set the GO suite to `-run ^TestKubeconfigWatchListTestSuite$`
+
+In your config file for ***TestExtKubeconfigTestSuite***, set the following:
 
 ```yaml
 rancher:
@@ -61,3 +64,13 @@ awsMachineConfigs:
 sshPath:
  sshPath: "<Your ssh path>"
 ```
+
+In your config file for ***TestKubeconfigWatchListTestSuite***, set the following:
+```yaml
+rancher:
+  host: "rancher_server_address"
+  adminToken: "rancher_admin_token"
+  insecure: True #optional
+  cleanup: True #optional
+  clusterName: "downstream_cluster_name"
+  ```
