@@ -155,10 +155,15 @@ node {
                                 ]
                             )
 
-                // Add SSH private key path configuration
+                // Add SSH private key path configuration.
+                // ssh_private_key_file is the custom var used by roles (e.g. ProxyCommand for airgap nodes).
+                // ansible_ssh_private_key_file is the ansible connection var needed for the bastion direct connection.
                 def sshKeyPath = "/root/.ssh/${env.AWS_SSH_PEM_KEY_NAME}"
                 if (!ansibleVars.contains('ssh_private_key_file:')) {
                     ansibleVars += "\nssh_private_key_file: ${sshKeyPath}"
+                }
+                if (!ansibleVars.contains('ansible_ssh_private_key_file:')) {
+                    ansibleVars += "\nansible_ssh_private_key_file: ${sshKeyPath}"
                 }
 
                 ansible.writeInventoryVars(
