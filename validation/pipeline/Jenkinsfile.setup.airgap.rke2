@@ -15,7 +15,19 @@ node {
     def qaInfraBranch = env.QA_INFRA_REPO_BRANCH ?: 'main'
     def qaInfraRepo = env.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation'
 
-    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SSH_PEM_KEY', 'AWS_SSH_PEM_KEY_NAME']) {
+    property.useWithProperties([
+        'AWS_ACCESS_KEY_ID',
+        'AWS_SECRET_ACCESS_KEY',
+        'AWS_SSH_PEM_KEY',
+        'AWS_SSH_PEM_KEY_NAME',
+        'PRIVATE_REGISTRY_URL',
+        'PRIVATE_REGISTRY_USERNAME',
+        'PRIVATE_REGISTRY_PASSWORD'
+    ]) {
+        withCredentials([
+            string(credentialsId: 'RANCHER_REGISTRY_USER_NAME', variable: 'RANCHER_REGISTRY_USER_NAME'),
+            string(credentialsId: 'RANCHER_REGISTRY_PASSWORD', variable: 'RANCHER_REGISTRY_PASSWORD')
+        ]) {
                     try {
             stage('Checkout') {
                 deleteDir()
@@ -148,10 +160,11 @@ node {
                                 envVars: [
                                     'RKE2_VERSION': env.RKE2_VERSION,
                                     'RANCHER_VERSION': env.RANCHER_VERSION,
+                                    'CERT_MANAGER_VERSION': env.CERT_MANAGER_VERSION ?: '',
                                     'HOSTNAME_PREFIX': env.HOSTNAME_PREFIX,
                                     'PRIVATE_REGISTRY_URL': env.PRIVATE_REGISTRY_URL ?: '',
-                                    'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME ?: '',
-                                    'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD ?: ''
+                                    'PRIVATE_REGISTRY_USERNAME': env.PRIVATE_REGISTRY_USERNAME ?: env.RANCHER_REGISTRY_USER_NAME ?: '',
+                                    'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD ?: env.RANCHER_REGISTRY_PASSWORD ?: ''
                                 ]
                             )
 
@@ -183,11 +196,23 @@ node {
                             )
             }
 
-            stage('Deploy Rancher (Optional)') {
-                // Check if Rancher deployment is enabled
-                def deployRancher = env.ANSIBLE_VARIABLES.contains('deploy_rancher: true')
+            stage('Configure Private Registry') {
+                def registryUrl = env.PRIVATE_REGISTRY_URL?.trim() ?: ''
 
-                if (deployRancher) {
+                if (registryUrl) {
+                    echo 'Configuring private registry...'
+                    ansible.runPlaybook(
+                                    dir: ansiblePath,
+                                    inventory: 'inventory/inventory.yml',
+                                    playbook: 'playbooks/deploy/rke2-registry-config-playbook.yml'
+                                )
+                } else {
+                    echo 'Skipping private registry configuration (PRIVATE_REGISTRY_URL not set)'
+                }
+            }
+
+            stage('Deploy Rancher (Optional)') {
+                if (params.DEPLOY_RANCHER) {
                     echo 'Deploying Rancher...'
                     ansible.runPlaybook(
                                     dir: ansiblePath,
@@ -195,7 +220,7 @@ node {
                                     playbook: 'playbooks/deploy/rancher-helm-deploy-playbook.yml'
                                 )
                             } else {
-                    echo 'Skipping Rancher deployment (not enabled in ANSIBLE_VARIABLES)'
+                    echo 'Skipping Rancher deployment (DEPLOY_RANCHER not checked)'
                 }
             }
 
@@ -273,5 +298,6 @@ node {
 
             throw err
                     }
+        } // withCredentials
     }
 }
