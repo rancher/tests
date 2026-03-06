@@ -197,7 +197,7 @@ node {
             }
 
             stage('Configure Private Registry') {
-                def registryUrl = env.PRIVATE_REGISTRY_URL ?: ''
+                def registryUrl = env.PRIVATE_REGISTRY_URL?.trim() ?: ''
 
                 if (registryUrl) {
                     echo 'Configuring private registry...'
