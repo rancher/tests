@@ -466,9 +466,6 @@
     tags: []
     params: {}
     parameters: []
-        title: CNI
-        values:
-        - ""
     customfield:
       "14": Validation
       "18": Hostbusters
@@ -506,9 +503,6 @@
     tags: []
     params: {}
     parameters: []
-        title: CNI
-        values:
-        - ""
     customfield:
       "14": Validation
       "18": Hostbusters
@@ -541,9 +535,6 @@
     tags: []
     params: {}
     parameters: []
-        title: CNI
-        values:
-        - ""
     customfield:
       "14": Validation
       "18": Hostbusters

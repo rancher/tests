@@ -143,8 +143,11 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 		pools = append(pools, pool.Pools)
 	}
 
-	machinePools := machinepools.
+	machinePools, err := machinepools.
 		CreateAllMachinePools(machineConfigs, pools, machinePoolResponses, provider.GetMachineRolesFunc(machineConfigSpec), hostnameTruncation)
+	if err != nil {
+		return nil, err
+	}
 
 	additionalData := make(map[string]interface{})
 	if clustersConfig.CloudProvider == provisioninginput.VsphereCloudProviderName.String() {

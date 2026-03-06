@@ -343,21 +343,34 @@ func (n NodeRoles) String() string {
 }
 
 // CreateAllMachinePools will setup multiple node pools from a given config.
-func CreateAllMachinePools(machineConfigs []MachinePoolConfig, pools []Pools, machineObjects []v1.SteveAPIObject, objectRoles []Roles, hostnameLengthLimits []HostnameTruncation) []apisV1.RKEMachinePool {
+func CreateAllMachinePools(machineConfigs []MachinePoolConfig, pools []Pools, machineObjects []v1.SteveAPIObject, objectRoles []Roles, hostnameLengthLimits []HostnameTruncation) ([]apisV1.RKEMachinePool, error) {
 	machinePools := make([]apisV1.RKEMachinePool, 0, len(machineConfigs))
 
 	for index, machineConfig := range machineConfigs {
 		machineConfig.Name = pool + strconv.Itoa(index)
-		if hostnameLengthLimits != nil && len(hostnameLengthLimits) >= index {
+		if hostnameLengthLimits != nil && len(hostnameLengthLimits) > index {
 			machineConfig.HostnameLengthLimit = hostnameLengthLimits[index].PoolNameLengthLimit
 			machineConfig.Name = hostnameLengthLimits[index].Name
 		}
 		objectIndex := MatchMachineConfigToRolesIndex(&machineConfig, objectRoles)
+		if objectIndex == -1 {
+			if len(machineObjects) == 1 && len(objectRoles) == 1 {
+				logrus.Warnf("unable to match machine pool role (%s); defaulting to the only available machine config", machineConfig.String())
+				objectIndex = 0
+			} else {
+				return nil, fmt.Errorf("unable to match machine pool role (%s) to configured machine config roles", machineConfig.String())
+			}
+		}
+
+		if objectIndex >= len(machineObjects) || objectIndex >= len(pools) {
+			return nil, fmt.Errorf("matched machine config index %d out of range (machineObjects=%d, pools=%d)", objectIndex, len(machineObjects), len(pools))
+		}
+
 		machinePool := NewRKEMachinePool(machineObjects[objectIndex], pools[objectIndex], &machineConfig)
 		machinePools = append(machinePools, machinePool)
 	}
 
-	return machinePools
+	return machinePools, nil
 }
 
 // MatchRoleToPool matches the role of a pool to the Roles of a machine. Returns the index of the matching Roles.
