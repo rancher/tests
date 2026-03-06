@@ -445,6 +445,24 @@ echo "}\\n" >> "${tfvars_filepath}"
                             }
                         }
                     }
+                    stage('Upgrade Downstream Cluster') {
+                        if (env.CONNECT_HARVESTER_AND_RANCHER == "true" && env.KUBERNETES_VERSION_UPGRADE?.trim()) {
+                            dir("infra-repo") {
+                                sh """
+                                docker run -v ${validationVolume}:/root --name ${testContainer}-k8s-upgrade -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c '
+                                . /root/playbook.env
+                                cd /root/go/src/github.com/rancher/qa-infra-automation
+                                ansible-playbook ansible/rancher/default-ha/k8s-upgrade-tasks.yml \
+                                    -e "@ansible/vars.yaml" \
+                                    -e "k8s_upgrade_mode=true" \
+                                    -e "kubernetes_version_upgrade=${KUBERNETES_VERSION_UPGRADE}"
+                                '
+                                docker stop ${testContainer}-k8s-upgrade || true
+                                docker rm ${testContainer}-k8s-upgrade || true
+                                """
+                            }
+                        }
+                    }
                     stage('Run Validation Tests') {
                         
                         if (env.CONNECT_HARVESTER_AND_RANCHER == "true") {
