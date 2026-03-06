@@ -128,6 +128,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -258,6 +259,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -338,6 +340,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -373,6 +376,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -428,6 +432,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -537,6 +542,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -567,6 +573,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -597,6 +604,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -692,6 +700,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects: [RRT, RM]
   suite: Go Automation/Provisioning/RKE2/HostnameTruncation
   cases:
@@ -770,6 +779,10 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
+- projects: [RRT, RM]
+  suite: Go Automation/Provisioning/RKE2/CNI
+  cases:
   - description: Provisions a 3 node split roles node driver cluster
     title: RKE2_Node_Driver|Calico
     priority: 4

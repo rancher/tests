@@ -214,7 +214,7 @@
 - projects:
   - RRT
   - RM
-  suite: Go Automation/Provisioning/DualStack/NodeDriver
+  suite: Go Automation/Provisioning/Dualstack/NodeDriver
   cases:
   - description: Provisions an 8 node 3etcd/2cp/3worker node driver cluster with cluster/service CIDR defined
     title: RKE2_Dual_Stack_Node_Driver_CIDR

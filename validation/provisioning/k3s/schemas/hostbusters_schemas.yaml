@@ -4,19 +4,10 @@
   suite: Go Automation/Provisioning/K3S/NodeDriver
   cases:
   - description: Provisions a 1 node all roles node driver cluster
-    preconditions: null
-    postconditions: null
     title: K3S_Node_Driver|etcd_cp_worker
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -43,22 +34,11 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
   - description: Provisions a 2 node stacked roles node driver cluster
-    preconditions: null
-    postconditions: null
     title: K3S_Node_Driver|etcd_cp|worker
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -85,22 +65,11 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
   - description: Provisions a 3 node split roles node driver cluster
-    preconditions: null
-    postconditions: null
     title: K3S_Node_Driver|etcd|cp|worker
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -127,22 +96,11 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
   - description: Provisions a 8 node 3etcd/2cp/3worker node driver cluster
-    preconditions: null
-    postconditions: null
     title: K3S_Node_Driver|3_etcd|2_cp|3_worker
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -169,27 +127,16 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
 - projects:
   - RRT
   - RM
   suite: Go Automation/Provisioning/K3S/Custom
   cases:
   - description: Provisions a 1 node all roles custom cluster
-    preconditions: null
-    postconditions: null
     title: K3S_Custom|etcd_cp_worker
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -216,22 +163,11 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
   - description: Provisions a 2 node stacked roles custom cluster
-    preconditions: null
-    postconditions: null
     title: K3S_Custom|etcd_cp|worker
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -258,22 +194,11 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
   - description: Provisions a 3 node split roles custom cluster
-    preconditions: null
-    postconditions: null
     title: K3S_Custom|etcd|cp|worker
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -300,22 +225,11 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
   - description: Provisions a 8 node 3etcd/2cp/3worker custom cluster
-    preconditions: null
-    postconditions: null
     title: K3S_Custom|3_etcd|2_cp|3_worker
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -342,27 +256,16 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
 - projects:
   - RRT
   - RM
   suite: Go Automation/Provisioning/K3S/PSACT
   cases:
   - description: Provisions a cluster with psact set to rancher privilaged
-    preconditions: null
-    postconditions: null
     title: K3S_Rancher_Privileged|3_etcd|2_cp|3_worker
-    severity: null
     priority: 5
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -389,22 +292,11 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
   - description: Provisions a cluster with psact set to rancher restricted
-    preconditions: null
-    postconditions: null
     title: K3S_Rancher_Restricted|3_etcd|2_cp|3_worker
-    severity: null
     priority: 5
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -431,22 +323,11 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
   - description: Provisions a cluster with psact set to rancher baseline
-    preconditions: null
-    postconditions: null
     title: K3S_Rancher_Baseline|3_etcd|2_cp|3_worker
-    severity: null
     priority: 5
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -473,27 +354,16 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
 - projects:
   - RRT
   - RM
   suite: Go Automation/Provisioning/K3S/Hardened
   cases:
   - description: Provisions a hardened 3etcd/2cp/3worker custom cluster
-    preconditions: null
-    postconditions: null
     title: K3S_CIS_1.9_Profile|3_etcd|2_cp|3_worker
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -526,27 +396,16 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
 - projects:
   - RRT
   - RM
   suite: Go Automation/Provisioning/K3S/Template
   cases:
   - description: Provisions a 3 node split roles cluster using an K3S template
-    preconditions: null
-    postconditions: null
     title: K3S_Template|etcd|cp|worker
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -573,8 +432,6 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
 - projects:
   - RRT
   - RM
@@ -582,19 +439,10 @@
   cases:
   - description: Provisions a 3 node split roles cluster with hostname truncation
       enabled
-    preconditions: null
-    postconditions: null
     title: K3S_Hostname_Truncation|10_Characters
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -617,49 +465,13 @@
       steps: []
     tags: []
     params: {}
-    parameters:
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: Scheduled Testing
-        values:
-        - ""
-    - parametergroup: null
-      parametershared: null
-      parametersingle: null
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: OS
-        values:
-        - ubuntu-22.04-docker20.10.17-no-workaround
-        - windows-2022-ctw-5-2-22
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: Provider
-        values:
-        - aws
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: K8sVersion
-        values:
-        - v1.34.1+k3s1
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
+    parameters: []
         title: CNI
         values:
         - ""
-    - parametergroup: null
-      parametershared: null
-      parametersingle: null
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
 - projects:
   - RRT
   - RM
@@ -667,19 +479,10 @@
   cases:
   - description: Provisions a 3 node split roles cluster with hostname truncation
       enabled
-    preconditions: null
-    postconditions: null
     title: K3S_Hostname_Truncation|10_Characters
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -702,64 +505,19 @@
       steps: []
     tags: []
     params: {}
-    parameters:
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: Scheduled Testing
-        values:
-        - ""
-    - parametergroup: null
-      parametershared: null
-      parametersingle: null
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: OS
-        values:
-        - ubuntu-22.04-docker20.10.17-no-workaround
-        - windows-2022-ctw-5-2-22
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: Provider
-        values:
-        - aws
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: K8sVersion
-        values:
-        - v1.34.1+k3s1
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
+    parameters: []
         title: CNI
         values:
         - ""
-    - parametergroup: null
-      parametershared: null
-      parametersingle: null
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
   - description: Provisions a 3 node split roles cluster with hostname truncation
       enabled
-    preconditions: null
-    postconditions: null
     title: K3S_Hostname_Truncation|31_Characters
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -782,64 +540,19 @@
       steps: []
     tags: []
     params: {}
-    parameters:
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: Scheduled Testing
-        values:
-        - ""
-    - parametergroup: null
-      parametershared: null
-      parametersingle: null
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: OS
-        values:
-        - ubuntu-22.04-docker20.10.17-no-workaround
-        - windows-2022-ctw-5-2-22
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: Provider
-        values:
-        - aws
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: K8sVersion
-        values:
-        - v1.34.1+k3s1
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
+    parameters: []
         title: CNI
         values:
         - ""
-    - parametergroup: null
-      parametershared: null
-      parametersingle: null
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
   - description: Provisions a 3 node split roles cluster with hostname truncation
       enabled
-    preconditions: null
-    postconditions: null
     title: K3S_Hostname_Truncation|63_Characters
-    severity: null
     priority: 4
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -862,68 +575,20 @@
       steps: []
     tags: []
     params: {}
-    parameters:
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: Scheduled Testing
-        values:
-        - ""
-    - parametergroup: null
-      parametershared: null
-      parametersingle: null
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: OS
-        values:
-        - ubuntu-22.04-docker20.10.17-no-workaround
-        - windows-2022-ctw-5-2-22
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: Provider
-        values:
-        - aws
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: K8sVersion
-        values:
-        - v1.34.1+k3s1
-    - parametergroup: null
-      parametershared: null
-      parametersingle:
-        title: CNI
-        values:
-        - ""
-    - parametergroup: null
-      parametershared: null
-      parametersingle: null
+    parameters: []
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
 - projects:
   - RRT
   - RM
   suite: Go Automation/Provisioning/K3S/ACE
   cases:
   - description: Provisions a 3etcd/2cp/2worker node driver cluster with ACE enabled
-    preconditions: null
-    postconditions: null
     title: K3S_ACE
-    severity: null
     priority: 5
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -950,27 +615,16 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
 - projects:
   - RRT
   - RM
   suite: Go Automation/Provisioning/K3S/DataDirectories
   cases:
   - description: Provisions a 3 node split roles cluster with custom data directories
-    preconditions: null
-    postconditions: null
     title: K3S_Split_Data_Directories
-    severity: null
     priority: 5
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -1003,22 +657,11 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
   - description: Provisions a 3 node split roles cluster with custom data directories
-    preconditions: null
-    postconditions: null
     title: K3S_Grouped_Data_Directories
-    severity: null
     priority: 5
-    behavior: null
     type: 8
-    layer: null
-    isflaky: null
-    suiteid: null
-    milestoneid: null
     automation: 2
-    status: null
     attachments: []
     steps:
     - action: Create rancher provider credentials
@@ -1051,5 +694,3 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-    createdat: null
-    updatedat: null
