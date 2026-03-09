@@ -19,9 +19,6 @@ const (
 	chartPollTimeout  = 10 * time.Minute
 )
 
-// WaitChartDeployed polls the catalog App until it reaches StatusDeployed.
-// Unlike watch-based waiting, polling correctly handles the case where the chart
-// reaches the desired state before the watch is established.
 func WaitChartDeployed(catalogClient *catalog.Client, namespace, chartName string) error {
 	return kwait.PollUntilContextTimeout(context.Background(), chartPollInterval, chartPollTimeout, true, func(ctx context.Context) (bool, error) {
 		app, err := catalogClient.Apps(namespace).Get(ctx, chartName, metav1.GetOptions{})
@@ -41,8 +38,6 @@ func WaitChartDeployed(catalogClient *catalog.Client, namespace, chartName strin
 	})
 }
 
-// waitChartGone polls until the named chart App no longer exists.
-// Handles the case where the chart was never installed — returns immediately when not found.
 func waitChartGone(catalogClient *catalog.Client, namespace, chartName string) error {
 	return kwait.PollUntilContextTimeout(context.Background(), chartPollInterval, chartPollTimeout, true, func(ctx context.Context) (bool, error) {
 		_, err := catalogClient.Apps(namespace).Get(ctx, chartName, metav1.GetOptions{})
@@ -56,7 +51,6 @@ func waitChartGone(catalogClient *catalog.Client, namespace, chartName string) e
 	})
 }
 
-// uninstallChartIfPresent uninstalls a chart only when it exists, then waits for removal.
 func uninstallChartIfPresent(catalogClient *catalog.Client, namespace, chartName string) error {
 	_, err := catalogClient.Apps(namespace).Get(context.TODO(), chartName, metav1.GetOptions{})
 	if err != nil {
@@ -71,12 +65,53 @@ func uninstallChartIfPresent(catalogClient *catalog.Client, namespace, chartName
 	return waitChartGone(catalogClient, namespace, chartName)
 }
 
-// InstallLatestNeuVectorChart installs the NeuVector chart matching the current rancher-charts release,
-// which deploys only neuvector-crd and neuvector (neuvector-monitor is no longer included).
 func InstallLatestNeuVectorChart(client *rancher.Client, payload PayloadOpts) error {
 	catalogClient, err := client.GetClusterCatalogClient(payload.Cluster.ID)
 	if err != nil {
 		return err
+	}
+
+	chartValues, err := client.Catalog.GetChartValues(catalog.RancherChartRepo, NeuVectorChartName, payload.Version)
+	if err != nil {
+		return err
+	}
+
+	if payload.Hardened {
+		chartValues["leastPrivilege"] = true
+
+		enforcer, ok := chartValues["enforcer"].(map[string]interface{})
+		if !ok {
+			enforcer = map[string]interface{}{}
+			chartValues["enforcer"] = enforcer
+		}
+
+		enforcer["podAnnotations"] = map[string]interface{}{
+			"container.apparmor.security.beta.kubernetes.io/neuvector-enforcer-pod": "unconfined",
+		}
+
+		enforcer["securityContext"] = map[string]interface{}{
+			"privileged": false,
+			"capabilities": map[string]interface{}{
+				"add": []string{
+					"SYS_ADMIN",
+					"NET_ADMIN",
+					"SYS_PTRACE",
+					"IPC_LOCK",
+				},
+			},
+			"seccompProfile": map[string]interface{}{
+				"type": "Unconfined",
+			},
+		}
+	}
+
+	if payload.K3s {
+		k3s, ok := chartValues["k3s"].(map[string]interface{})
+		if !ok {
+			k3s = map[string]interface{}{}
+			chartValues["k3s"] = k3s
+		}
+		k3s["enabled"] = true
 	}
 
 	chartInstalls := []types.ChartInstall{
@@ -100,7 +135,7 @@ func InstallLatestNeuVectorChart(client *rancher.Client, payload PayloadOpts) er
 			catalog.RancherChartRepo,
 			payload.ProjectID,
 			payload.DefaultRegistry,
-			nil,
+			chartValues,
 		),
 	}
 
@@ -117,8 +152,6 @@ func InstallLatestNeuVectorChart(client *rancher.Client, payload PayloadOpts) er
 	return nil
 }
 
-// uninstallLatestNeuVectorChart removes the neuvector and neuvector-crd charts from the cluster.
-// Each chart is only uninstalled if present, preventing cleanup errors when installation failed.
 func uninstallLatestNeuVectorChart(client *rancher.Client, namespace string, clusterID string) error {
 	catalogClient, err := client.GetClusterCatalogClient(clusterID)
 	if err != nil {
@@ -131,4 +164,3 @@ func uninstallLatestNeuVectorChart(client *rancher.Client, namespace string, clu
 
 	return uninstallChartIfPresent(catalogClient, namespace, NeuVectorChartName+"-crd")
 }
-

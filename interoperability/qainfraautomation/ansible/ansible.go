@@ -1,9 +1,9 @@
-// Package ansible provides helpers for driving Ansible playbooks from Go tests
-// in the qa-infra-automation integration.
 package ansible
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,15 +13,12 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// runner abstracts command execution for testability.
 type runner func(name string, args []string, dir string, env []string) ([]byte, error)
 
-// defaultRunner executes a command and returns combined stdout+stderr.
 func defaultRunner(name string, args []string, dir string, env []string) ([]byte, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	if len(env) > 0 {
-		// Inherit the current process environment and append extras.
 		cmd.Env = append(os.Environ(), env...)
 	}
 	out, err := cmd.CombinedOutput()
@@ -31,15 +28,11 @@ func defaultRunner(name string, args []string, dir string, env []string) ([]byte
 	return out, nil
 }
 
-// Client drives Ansible playbooks for a specific qa-infra-automation repository.
 type Client struct {
-	// repoPath is the absolute path to the rancher-qa-infra-automation repository.
 	repoPath string
-	// run is the command runner (replaceable for testing).
-	run runner
+	run      runner
 }
 
-// NewClient creates a new Ansible client for the given repo root.
 func NewClient(repoPath string) *Client {
 	return &Client{
 		repoPath: repoPath,
@@ -47,9 +40,10 @@ func NewClient(repoPath string) *Client {
 	}
 }
 
-// AddSSHKey adds the given private key to the running ssh-agent so Ansible can
-// connect to nodes without prompting for a passphrase.
 func (c *Client) AddSSHKey(privateKeyPath string) error {
+	if privateKeyPath == "" {
+		return fmt.Errorf("ssh-add: privateKeyPath is required but was not set — ensure sshPrivateKeyPath is configured in your harvester/aws config")
+	}
 	logrus.Infof("[ansible] ssh-add %s", privateKeyPath)
 	out, err := c.run("ssh-add", []string{privateKeyPath}, c.repoPath, nil)
 	if err != nil {
@@ -59,12 +53,6 @@ func (c *Client) AddSSHKey(privateKeyPath string) error {
 	return nil
 }
 
-// GenerateInventory renders an inventory file from the template by substituting
-// the provided environment variables using envsubst (GNU gettext).
-//
-// templatePath is relative to the repo root (e.g. "ansible/rke2/default/inventory-template.yml").
-// outputPath is the destination path for the rendered inventory (relative or absolute).
-// env is a map of variable name → value to substitute (e.g. {"TERRAFORM_NODE_SOURCE": "tofu/harvester/modules/vm", "TF_WORKSPACE": "mytest"}).
 func (c *Client) GenerateInventory(templatePath, outputPath string, env map[string]string) error {
 	absTemplate := filepath.Join(c.repoPath, templatePath)
 	absOutput := outputPath
@@ -90,8 +78,6 @@ func (c *Client) GenerateInventory(templatePath, outputPath string, env map[stri
 	return nil
 }
 
-// WriteVarsYAML writes an Ansible vars file (YAML) to the given path (relative to repo root).
-// vars is marshalled to YAML and written to the destination.
 func (c *Client) WriteVarsYAML(relPath string, vars map[string]string) error {
 	absPath := filepath.Join(c.repoPath, relPath)
 	logrus.Infof("[ansible] writing vars file %s", absPath)
@@ -107,9 +93,6 @@ func (c *Client) WriteVarsYAML(relPath string, vars map[string]string) error {
 	return nil
 }
 
-// RunPlaybook runs the given playbook with the provided inventory file.
-// All entries in extraEnv are added to the subprocess environment (KEY=VALUE format).
-// playbookPath and inventoryPath are relative to the repo root.
 func (c *Client) RunPlaybook(playbookPath, inventoryPath string, extraEnv []string) error {
 	absPlaybook := filepath.Join(c.repoPath, playbookPath)
 	absInventory := filepath.Join(c.repoPath, inventoryPath)
@@ -121,10 +104,32 @@ func (c *Client) RunPlaybook(playbookPath, inventoryPath string, extraEnv []stri
 		"-i", absInventory,
 	}
 
-	out, err := c.run("ansible-playbook", args, c.repoPath, extraEnv)
-	if err != nil {
-		return fmt.Errorf("ansible-playbook %s: %w", playbookPath, err)
+	cmd := exec.Command("ansible-playbook", args...)
+	cmd.Dir = c.repoPath
+	cmd.Env = append(os.Environ(), extraEnv...)
+
+	pr, pw := io.Pipe()
+	cmd.Stdout = pw
+	cmd.Stderr = pw
+
+	var lines []string
+	streamDone := make(chan struct{})
+	go func() {
+		defer close(streamDone)
+		scanner := bufio.NewScanner(pr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			logrus.Infof("[ansible] %s", line)
+			lines = append(lines, line)
+		}
+	}()
+
+	runErr := cmd.Run()
+	pw.Close()
+	<-streamDone
+
+	if runErr != nil {
+		return fmt.Errorf("ansible-playbook %s: %w\noutput:\n%s", playbookPath, runErr, strings.Join(lines, "\n"))
 	}
-	logrus.Debugf("[ansible] playbook output:\n%s", string(out))
 	return nil
 }

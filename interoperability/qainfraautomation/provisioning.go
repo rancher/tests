@@ -1,6 +1,3 @@
-// Package qainfraautomation provides high-level orchestration functions that
-// combine OpenTofu infrastructure provisioning with Ansible cluster configuration
-// using the rancher-qa-infra-automation repository.
 package qainfraautomation
 
 import (
@@ -21,71 +18,49 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+func cleanupEnabled(rancherClient *rancher.Client) bool {
+	c := rancherClient.RancherConfig.Cleanup
+	return c == nil || *c
+}
+
 const (
-	// harvesterVMModulePath is the path within the qa-infra-automation repo to the Harvester VM module.
-	harvesterVMModulePath = "tofu/harvester/modules/vm"
-
-	// harvesterKubeconfigDest is the hardcoded kubeconfig path expected by the Harvester provider HCL.
-	harvesterKubeconfigDest = "tofu/harvester/modules/local.yaml"
-
-	// rancherCustomClusterModulePath is the path within the qa-infra-automation repo to the Rancher custom cluster module.
+	harvesterVMModulePath          = "tofu/harvester/modules/vm"
+	harvesterKubeconfigDest        = "tofu/harvester/modules/local.yaml"
 	rancherCustomClusterModulePath = "tofu/rancher/custom_cluster"
-
-	// rancherClusterModulePath is the path within the qa-infra-automation repo to the Rancher-provisioned cluster module.
-	rancherClusterModulePath = "tofu/rancher/cluster"
-
-	// customClusterPlaybook is the Ansible playbook path (relative to repo root) for registering nodes to a Rancher custom cluster.
-	customClusterPlaybook = "ansible/rancher/downstream/custom_cluster/custom-cluster-playbook.yml"
-
-	// customClusterInventoryTemplate is the template path for the custom cluster Ansible inventory.
+	rancherClusterModulePath       = "tofu/rancher/cluster"
+	customClusterPlaybook          = "ansible/rancher/downstream/custom_cluster/custom-cluster-playbook.yml"
 	customClusterInventoryTemplate = "ansible/rancher/downstream/custom_cluster/inventory-template.yml"
-
-	// customClusterInventoryOutput is the rendered inventory path used at runtime.
-	customClusterInventoryOutput = "ansible/rancher/downstream/custom_cluster/inventory.yml"
-
-	// rke2Playbook is the Ansible playbook path for standalone RKE2 cluster creation.
-	rke2Playbook = "ansible/rke2/default/rke2-playbook.yml"
-
-	// rke2InventoryTemplate is the template path for the RKE2 Ansible inventory.
-	rke2InventoryTemplate = "ansible/rke2/default/inventory-template.yml"
-
-	// rke2InventoryOutput is the rendered inventory path for RKE2.
-	rke2InventoryOutput = "ansible/rke2/default/inventory.yml"
-
-	// rke2VarsFile is the vars.yaml path for the RKE2 playbook (relative to repo root).
-	rke2VarsFile = "ansible/rke2/default/vars.yaml"
-
-	// k3sPlaybook is the Ansible playbook path for standalone K3S cluster creation.
-	k3sPlaybook = "ansible/k3s/default/k3s-playbook.yml"
-
-	// k3sInventoryTemplate is the template path for the K3S Ansible inventory.
-	k3sInventoryTemplate = "ansible/k3s/default/inventory-template.yml"
-
-	// k3sInventoryOutput is the rendered inventory path for K3S.
-	k3sInventoryOutput = "ansible/k3s/default/inventory.yml"
-
-	// k3sVarsFile is the vars.yaml path for the K3S playbook (relative to repo root).
-	k3sVarsFile = "ansible/k3s/default/vars.yaml"
-
-	// awsClusterNodesModulePath is the path within the qa-infra-automation repo to the AWS cluster nodes module.
-	awsClusterNodesModulePath = "tofu/aws/modules/cluster_nodes"
-
-	// fleetDefaultNamespace is the Rancher namespace where custom downstream clusters are registered.
-	fleetDefaultNamespace = "fleet-default"
+	customClusterInventoryOutput   = "ansible/rancher/downstream/custom_cluster/inventory.yml"
+	rke2Playbook                   = "ansible/rke2/default/rke2-playbook.yml"
+	rke2InventoryTemplate          = "ansible/rke2/default/inventory-template.yml"
+	rke2InventoryOutput            = "ansible/rke2/default/inventory.yml"
+	rke2VarsFile                   = "ansible/rke2/default/vars.yaml"
+	k3sPlaybook                    = "ansible/k3s/default/k3s-playbook.yml"
+	k3sInventoryTemplate           = "ansible/k3s/default/inventory-template.yml"
+	k3sInventoryOutput             = "ansible/k3s/default/inventory.yml"
+	k3sVarsFile                    = "ansible/k3s/default/vars.yaml"
+	awsClusterNodesModulePath      = "tofu/aws/modules/cluster_nodes"
+	fleetDefaultNamespace          = "fleet-default"
 )
 
-// harvesterVMVars represents the JSON tfvars structure expected by the Harvester VM tofu module.
 type harvesterVMVars struct {
-	SSHKey       string              `json:"ssh_key"`
-	Nodes        []harvesterNodeSpec `json:"nodes"`
-	GenerateName string              `json:"generate_name,omitempty"`
-	SSHUser      string              `json:"ssh_user,omitempty"`
-	NetworkName  string              `json:"network_name,omitempty"`
-	ImageID      string              `json:"image_id,omitempty"`
-	Namespace    string              `json:"namespace,omitempty"`
-	CPU          int                 `json:"cpu,omitempty"`
-	Memory       string              `json:"mem,omitempty"`
-	DiskSize     string              `json:"disk_size,omitempty"`
+	SSHKey             string              `json:"ssh_key"`
+	Nodes              []harvesterNodeSpec `json:"nodes"`
+	GenerateName       string              `json:"generate_name,omitempty"`
+	SSHUser            string              `json:"ssh_user,omitempty"`
+	NetworkName        string              `json:"network_name,omitempty"`
+	BackendNetworkName string              `json:"backend_network_name,omitempty"`
+	ImageID            string              `json:"image_id,omitempty"`
+	Namespace          string              `json:"namespace,omitempty"`
+	CPU                int                 `json:"cpu,omitempty"`
+	Memory             string              `json:"mem,omitempty"`
+	DiskSize           string              `json:"disk_size,omitempty"`
+	CreateLoadbalancer bool                `json:"create_loadbalancer"`
+	SubnetCIDR         string              `json:"subnet_cidr,omitempty"`
+	GatewayIP          string              `json:"gateway_ip,omitempty"`
+	RangeIPStart       string              `json:"range_ip_start,omitempty"`
+	RangeIPEnd         string              `json:"range_ip_end,omitempty"`
+	IPPoolName         string              `json:"ippool_name,omitempty"`
 }
 
 type harvesterNodeSpec struct {
@@ -93,7 +68,6 @@ type harvesterNodeSpec struct {
 	Role  []string `json:"role"`
 }
 
-// rancherCustomClusterVars represents the JSON tfvars structure for the rancher/custom_cluster tofu module.
 type rancherCustomClusterVars struct {
 	KubernetesVersion string `json:"kubernetes_version"`
 	FQDN              string `json:"fqdn"`
@@ -104,7 +78,6 @@ type rancherCustomClusterVars struct {
 	Insecure          bool   `json:"insecure"`
 }
 
-// rancherClusterMachinePool mirrors the machine_pools object accepted by the tofu/rancher/cluster module.
 type rancherClusterMachinePool struct {
 	Name             string `json:"name,omitempty"`
 	ControlPlaneRole bool   `json:"control_plane_role,omitempty"`
@@ -113,7 +86,6 @@ type rancherClusterMachinePool struct {
 	Quantity         int    `json:"quantity,omitempty"`
 }
 
-// rancherClusterVars represents the JSON tfvars structure for the tofu/rancher/cluster module.
 type rancherClusterVars struct {
 	KubernetesVersion string                      `json:"kubernetes_version"`
 	FQDN              string                      `json:"fqdn"`
@@ -128,17 +100,6 @@ type rancherClusterVars struct {
 	CreateNew         bool                        `json:"create_new"`
 }
 
-// ProvisionRancherCluster provisions a downstream cluster in Rancher where Rancher itself manages
-// node provisioning via a cloud provider node driver (e.g. Harvester, AWS, Linode).
-// It uses the tofu/rancher/cluster module from the rancher-qa-infra-automation repository.
-//
-// Cleanup (tofu destroy + Rancher API delete) is registered automatically via t.Cleanup().
-//
-// Parameters:
-//   - t: the test handle used to register cleanup and fail the test on error.
-//   - rancherClient: an authenticated Rancher shepherd client.
-//   - cfg: the top-level QA infra automation config (from the "qaInfraAutomation" config key).
-//   - clusterCfg: parameters for the Rancher-provisioned cluster (cloud provider, node config, k8s version, etc.).
 func ProvisionRancherCluster(
 	t *testing.T,
 	rancherClient *rancher.Client,
@@ -158,7 +119,6 @@ func ProvisionRancherCluster(
 		generateName = "tf"
 	}
 
-	// Build machine_pools, defaulting to a single all-roles pool if none specified.
 	machinePools := make([]rancherClusterMachinePool, len(clusterCfg.MachinePools))
 	for i, mp := range clusterCfg.MachinePools {
 		quantity := mp.Quantity
@@ -211,23 +171,18 @@ func ProvisionRancherCluster(
 		t.Fatalf("tofu apply (rancher cluster): %v", err)
 	}
 
-	// Read the cluster name from the tofu output.
 	clusterName, err := clusterTofu.Output("name")
 	if err != nil {
 		t.Fatalf("tofu output name: %v", err)
 	}
 	logrus.Infof("[qainfraautomation] rancher-provisioned cluster name from tofu: %s", clusterName)
 
-	// Register cleanup before verifying readiness so infrastructure is always
-	// torn down even if the cluster never reaches a ready state.
 	t.Cleanup(func() {
 		logrus.Infof("[qainfraautomation] destroying Rancher-provisioned cluster %q (workspace=%s)", clusterName, workspace)
 		if err := clusterTofu.Destroy(clusterVarFile); err != nil {
 			logrus.Warnf("[qainfraautomation] tofu destroy: %v", err)
 		}
 
-		// Ensure the cluster is gone from Rancher. tofu destroy may not always
-		// remove the cluster object if the provider state is inconsistent.
 		existing, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
 		if err != nil {
 			if strings.Contains(err.Error(), "404 Not Found") {
@@ -243,7 +198,6 @@ func ProvisionRancherCluster(
 		}
 	})
 
-	// Fetch the cluster object from Rancher and verify it is ready.
 	clusterObj, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
 	if err != nil {
 		t.Fatalf("fetch cluster %q from Rancher: %v", clusterName, err)
@@ -256,18 +210,6 @@ func ProvisionRancherCluster(
 	return clusterObj
 }
 
-// ProvisionCustomCluster provisions a Rancher custom downstream cluster using whichever node
-// provider is configured in cfg. Exactly one of cfg.AWS or cfg.Harvester must be non-nil;
-// the function fails the test if neither or both are set.
-//
-//   - cfg.AWS != nil      → EC2 nodes via tofu/aws/modules/cluster_nodes
-//   - cfg.Harvester != nil → VMs via tofu/harvester/modules/vm
-//
-// In both cases the shared tofu/rancher/custom_cluster module creates the bare Rancher cluster
-// shell and the ansible/rancher/downstream/custom_cluster playbook registers the nodes.
-//
-// Cleanup (tofu destroy for both modules, Rancher cluster first then nodes) is registered
-// automatically via t.Cleanup().
 func ProvisionCustomCluster(
 	t *testing.T,
 	rancherClient *rancher.Client,
@@ -279,24 +221,24 @@ func ProvisionCustomCluster(
 	switch {
 	case cfg.AWS != nil && cfg.Harvester != nil:
 		t.Fatalf("ProvisionCustomCluster: both aws and harvester are set in config; exactly one must be provided")
-		return nil // unreachable — t.Fatalf calls runtime.Goexit
+		return nil
 	case cfg.AWS != nil:
+		logrus.Infof("[qainfraautomation] ProvisionCustomCluster: provisioning via AWS provider (workspace=%s)", cfg.Workspace)
 		return provisionAWSCustomCluster(t, rancherClient, cfg, clusterCfg)
 	case cfg.Harvester != nil:
+		logrus.Infof("[qainfraautomation] ProvisionCustomCluster: provisioning via Harvester provider (workspace=%s)", cfg.Workspace)
 		return provisionHarvesterCustomCluster(t, rancherClient, cfg, clusterCfg)
 	default:
 		t.Fatalf("ProvisionCustomCluster: neither aws nor harvester config is set; exactly one must be provided")
-		return nil // unreachable — t.Fatalf calls runtime.Goexit
+		return nil
 	}
 }
 
-// awsNodeSpec mirrors the nodes list element accepted by the tofu/aws/modules/cluster_nodes module.
 type awsNodeSpec struct {
 	Count int      `json:"count"`
 	Role  []string `json:"role"`
 }
 
-// awsClusterNodesVars represents the JSON tfvars structure for the tofu/aws/modules/cluster_nodes module.
 type awsClusterNodesVars struct {
 	PublicSSHKey   string        `json:"public_ssh_key"`
 	AccessKey      string        `json:"aws_access_key"`
@@ -317,7 +259,6 @@ type awsClusterNodesVars struct {
 	ProxySetup     bool          `json:"proxy_setup"`
 }
 
-// provisionAWSCustomCluster is the AWS-specific implementation of ProvisionCustomCluster.
 func provisionAWSCustomCluster(
 	t *testing.T,
 	rancherClient *rancher.Client,
@@ -349,9 +290,8 @@ func provisionAWSCustomCluster(
 		volumeType = "gp3"
 	}
 
-	// Step 1: Build EC2 node vars and apply.
-	nodes := make([]awsNodeSpec, len(a.Nodes))
-	for i, n := range a.Nodes {
+	nodes := make([]awsNodeSpec, len(cfg.CustomCluster.Nodes))
+	for i, n := range cfg.CustomCluster.Nodes {
 		nodes[i] = awsNodeSpec{Count: n.Count, Role: n.Role}
 	}
 	if len(nodes) == 0 {
@@ -386,14 +326,26 @@ func provisionAWSCustomCluster(
 	nodeModuleDir := filepath.Join(repoPath, awsClusterNodesModulePath)
 	nodeTofu := tofu.NewClient(nodeModuleDir, workspace)
 
+	logrus.Infof("[qainfraautomation] tofu init (aws cluster nodes): %s", nodeModuleDir)
 	if err := nodeTofu.Init(); err != nil {
 		t.Fatalf("tofu init (aws cluster nodes): %v", err)
 	}
+	logrus.Infof("[qainfraautomation] tofu workspace select-or-create %q (aws cluster nodes)", workspace)
 	if err := nodeTofu.WorkspaceSelectOrCreate(); err != nil {
 		t.Fatalf("tofu workspace (aws cluster nodes): %v", err)
 	}
+	logrus.Infof("[qainfraautomation] tofu apply (aws cluster nodes, workspace=%s)", workspace)
 	if err := nodeTofu.Apply(nodeVarFile); err != nil {
 		t.Fatalf("tofu apply (aws cluster nodes): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu apply complete (aws cluster nodes)")
+	if cleanupEnabled(rancherClient) {
+		t.Cleanup(func() {
+			logrus.Infof("[qainfraautomation] destroying aws EC2 nodes (workspace=%s)", workspace)
+			if err := nodeTofu.Destroy(nodeVarFile); err != nil {
+				logrus.Errorf("[qainfraautomation] tofu destroy (aws EC2 nodes): %v", err)
+			}
+		})
 	}
 
 	generateName := clusterCfg.GenerateName
@@ -402,10 +354,9 @@ func provisionAWSCustomCluster(
 	}
 
 	return provisionCustomClusterShared(t, rancherClient, cfg, clusterCfg, generateName,
-		awsClusterNodesModulePath, a.SSHPrivateKeyPath, nodeTofu, nodeVarFile, "aws EC2 nodes")
+		awsClusterNodesModulePath, a.SSHPrivateKeyPath)
 }
 
-// provisionHarvesterCustomCluster is the Harvester-specific implementation of ProvisionCustomCluster.
 func provisionHarvesterCustomCluster(
 	t *testing.T,
 	rancherClient *rancher.Client,
@@ -422,15 +373,15 @@ func provisionHarvesterCustomCluster(
 
 	h := cfg.Harvester
 
-	// Step 1: Copy Harvester kubeconfig to the hardcoded location expected by HCL.
-	destKubeconfig := filepath.Join(repoPath, harvesterKubeconfigDest)
-	logrus.Infof("[qainfraautomation] copying Harvester kubeconfig %s → %s", h.KubeConfigPath, destKubeconfig)
-	if err := copyFile(h.KubeConfigPath, destKubeconfig); err != nil {
-		t.Fatalf("copy harvester kubeconfig: %v", err)
+	if h.KubeConfigPath != "" {
+		destKubeconfig := filepath.Join(repoPath, harvesterKubeconfigDest)
+		logrus.Infof("[qainfraautomation] copying Harvester kubeconfig %s → %s", h.KubeConfigPath, destKubeconfig)
+		if err := copyFile(h.KubeConfigPath, destKubeconfig); err != nil {
+			t.Fatalf("copy harvester kubeconfig: %v", err)
+		}
 	}
 
-	// Step 2: Write Harvester VM tfvars and apply.
-	vmVars := buildHarvesterVMVars(h)
+	vmVars := buildHarvesterVMVars(h, cfg.CustomCluster.Nodes)
 	vmVarFile, err := writeTFVarsJSON(repoPath, "harvester-vm-vars.json", vmVars)
 	if err != nil {
 		t.Fatalf("write harvester VM tfvars: %v", err)
@@ -439,14 +390,26 @@ func provisionHarvesterCustomCluster(
 	vmModuleDir := filepath.Join(repoPath, harvesterVMModulePath)
 	vmTofu := tofu.NewClient(vmModuleDir, workspace)
 
+	logrus.Infof("[qainfraautomation] tofu init (harvester vm): %s", vmModuleDir)
 	if err := vmTofu.Init(); err != nil {
 		t.Fatalf("tofu init (harvester vm): %v", err)
 	}
+	logrus.Infof("[qainfraautomation] tofu workspace select-or-create %q (harvester vm)", workspace)
 	if err := vmTofu.WorkspaceSelectOrCreate(); err != nil {
 		t.Fatalf("tofu workspace (harvester vm): %v", err)
 	}
+	logrus.Infof("[qainfraautomation] tofu apply (harvester vm, workspace=%s)", workspace)
 	if err := vmTofu.Apply(vmVarFile); err != nil {
 		t.Fatalf("tofu apply (harvester vm): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu apply complete (harvester vm)")
+	if cleanupEnabled(rancherClient) {
+		t.Cleanup(func() {
+			logrus.Infof("[qainfraautomation] destroying Harvester VMs (workspace=%s)", workspace)
+			if err := vmTofu.Destroy(vmVarFile); err != nil {
+				logrus.Errorf("[qainfraautomation] tofu destroy (Harvester VMs): %v", err)
+			}
+		})
 	}
 
 	generateName := clusterCfg.GenerateName
@@ -455,16 +418,9 @@ func provisionHarvesterCustomCluster(
 	}
 
 	return provisionCustomClusterShared(t, rancherClient, cfg, clusterCfg, generateName,
-		harvesterVMModulePath, h.SSHPrivateKeyPath, vmTofu, vmVarFile, "Harvester VMs")
+		harvesterVMModulePath, h.SSHPrivateKeyPath)
 }
 
-// provisionCustomClusterShared contains the steps common to all custom cluster providers:
-// apply the Rancher custom_cluster tofu module, run the Ansible registration playbook,
-// register cleanup, and verify readiness.
-//
-// nodeModulePath is the TERRAFORM_NODE_SOURCE value passed to Ansible (relative to repoPath).
-// nodeTofu / nodeVarFile are used to destroy the node infrastructure during cleanup.
-// nodeLabel is a human-readable string used in log messages (e.g. "AWS EC2 nodes").
 func provisionCustomClusterShared(
 	t *testing.T,
 	rancherClient *rancher.Client,
@@ -473,9 +429,6 @@ func provisionCustomClusterShared(
 	generateName string,
 	nodeModulePath string,
 	sshPrivateKeyPath string,
-	nodeTofu *tofu.Client,
-	nodeVarFile string,
-	nodeLabel string,
 ) *v1.SteveAPIObject {
 	t.Helper()
 
@@ -485,7 +438,6 @@ func provisionCustomClusterShared(
 		workspace = "default"
 	}
 
-	// Apply the bare Rancher custom cluster shell.
 	clusterVars := rancherCustomClusterVars{
 		KubernetesVersion: clusterCfg.KubernetesVersion,
 		FQDN:              "https://" + rancherClient.RancherConfig.Host,
@@ -504,17 +456,29 @@ func provisionCustomClusterShared(
 	clusterModuleDir := filepath.Join(repoPath, rancherCustomClusterModulePath)
 	clusterTofu := tofu.NewClient(clusterModuleDir, workspace)
 
+	logrus.Infof("[qainfraautomation] tofu init (rancher custom cluster): %s", clusterModuleDir)
 	if err := clusterTofu.Init(); err != nil {
 		t.Fatalf("tofu init (rancher custom cluster): %v", err)
 	}
+	logrus.Infof("[qainfraautomation] tofu workspace select-or-create %q (rancher custom cluster)", workspace)
 	if err := clusterTofu.WorkspaceSelectOrCreate(); err != nil {
 		t.Fatalf("tofu workspace (rancher custom cluster): %v", err)
 	}
-	if err := clusterTofu.Apply(clusterVarFile); err != nil {
+	// -refresh=false: the rancher2 provider's kubeconfig fetch rejects newer Rancher ext/token format tokens.
+	logrus.Infof("[qainfraautomation] tofu apply -refresh=false (rancher custom cluster, workspace=%s)", workspace)
+	if err := clusterTofu.ApplyNoRefresh(clusterVarFile); err != nil {
 		t.Fatalf("tofu apply (rancher custom cluster): %v", err)
 	}
+	logrus.Infof("[qainfraautomation] tofu apply complete (rancher custom cluster)")
+	if cleanupEnabled(rancherClient) {
+		t.Cleanup(func() {
+			logrus.Infof("[qainfraautomation] destroying Rancher custom cluster resources (workspace=%s)", workspace)
+			if err := clusterTofu.DestroyNoRefresh(clusterVarFile); err != nil {
+				logrus.Errorf("[qainfraautomation] tofu destroy (rancher custom cluster): %v", err)
+			}
+		})
+	}
 
-	// Generate Ansible inventory and register nodes.
 	ansibleClient := ansible.NewClient(repoPath)
 
 	inventoryEnv := map[string]string{
@@ -533,6 +497,12 @@ func provisionCustomClusterShared(
 		"TF_WORKSPACE=" + workspace,
 		"TERRAFORM_NODE_SOURCE=" + nodeModulePath,
 	}
+	if clusterCfg.Harden {
+		playbookEnv = append(playbookEnv, "HARDEN=true")
+	}
+	if cfg.Ansible != nil && cfg.Ansible.ConfigPath != "" {
+		playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+filepath.Join(repoPath, cfg.Ansible.ConfigPath))
+	}
 	if err := ansibleClient.RunPlaybook(customClusterPlaybook, customClusterInventoryOutput, playbookEnv); err != nil {
 		t.Fatalf("ansible-playbook (custom cluster): %v", err)
 	}
@@ -542,21 +512,6 @@ func provisionCustomClusterShared(
 		t.Fatalf("tofu output cluster_name: %v", err)
 	}
 	logrus.Infof("[qainfraautomation] cluster name from tofu: %s", clusterName)
-
-	// Register cleanup before verifying readiness so infrastructure is always torn down.
-	// t.Cleanup is LIFO: nodes registered first → destroyed last; cluster registered second → destroyed first.
-	t.Cleanup(func() {
-		logrus.Infof("[qainfraautomation] destroying %s (workspace=%s)", nodeLabel, workspace)
-		if err := nodeTofu.Destroy(nodeVarFile); err != nil {
-			logrus.Errorf("[qainfraautomation] tofu destroy (%s): %v", nodeLabel, err)
-		}
-	})
-	t.Cleanup(func() {
-		logrus.Infof("[qainfraautomation] destroying Rancher custom cluster resources (workspace=%s)", workspace)
-		if err := clusterTofu.Destroy(clusterVarFile); err != nil {
-			logrus.Errorf("[qainfraautomation] tofu destroy (rancher custom cluster): %v", err)
-		}
-	})
 
 	clusterObj, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
 	if err != nil {
@@ -570,10 +525,6 @@ func provisionCustomClusterShared(
 	return clusterObj
 }
 
-// ProvisionHarvesterRKE2Cluster provisions Harvester VMs via OpenTofu and then installs a standalone
-// RKE2 cluster on them via Ansible. It returns the path to the kubeconfig file for the new cluster.
-//
-// Cleanup (tofu destroy for the VM module) is registered automatically via t.Cleanup().
 func ProvisionHarvesterRKE2Cluster(
 	t *testing.T,
 	cfg *config.Config,
@@ -583,10 +534,6 @@ func ProvisionHarvesterRKE2Cluster(
 	return provisionHarvesterStandaloneCluster(t, cfg, clusterCfg, "rke2")
 }
 
-// ProvisionHarvesterK3SCluster provisions Harvester VMs via OpenTofu and then installs a standalone
-// K3S cluster on them via Ansible. It returns the path to the kubeconfig file for the new cluster.
-//
-// Cleanup (tofu destroy for the VM module) is registered automatically via t.Cleanup().
 func ProvisionHarvesterK3SCluster(
 	t *testing.T,
 	cfg *config.Config,
@@ -596,12 +543,11 @@ func ProvisionHarvesterK3SCluster(
 	return provisionHarvesterStandaloneCluster(t, cfg, clusterCfg, "k3s")
 }
 
-// provisionHarvesterStandaloneCluster is the shared implementation for RKE2 and K3S standalone clusters.
 func provisionHarvesterStandaloneCluster(
 	t *testing.T,
 	cfg *config.Config,
 	clusterCfg *config.StandaloneClusterConfig,
-	clusterType string, // "rke2" or "k3s"
+	clusterType string,
 ) string {
 	t.Helper()
 
@@ -616,7 +562,6 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("harvester config is required for standalone cluster provisioning")
 	}
 
-	// Select playbook/inventory/vars paths based on cluster type.
 	var playbookPath, inventoryTemplate, inventoryOutput, varsFile string
 	switch clusterType {
 	case "rke2":
@@ -633,21 +578,18 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("unsupported cluster type: %s (must be rke2 or k3s)", clusterType)
 	}
 
-	// Step 1: Copy Harvester kubeconfig.
 	destKubeconfig := filepath.Join(repoPath, harvesterKubeconfigDest)
 	logrus.Infof("[qainfraautomation] copying Harvester kubeconfig %s → %s", h.KubeConfigPath, destKubeconfig)
 	if err := copyFile(h.KubeConfigPath, destKubeconfig); err != nil {
 		t.Fatalf("copy harvester kubeconfig: %v", err)
 	}
 
-	// Step 2: Write Harvester VM tfvars.json.
-	vmVars := buildHarvesterVMVars(h)
+	vmVars := buildHarvesterVMVars(h, cfg.StandaloneCluster.Nodes)
 	vmVarFile, err := writeTFVarsJSON(repoPath, "harvester-vm-vars.json", vmVars)
 	if err != nil {
 		t.Fatalf("write harvester VM tfvars: %v", err)
 	}
 
-	// Step 3: Tofu init + workspace + apply for Harvester VM module.
 	vmModuleDir := filepath.Join(repoPath, harvesterVMModulePath)
 	vmTofu := tofu.NewClient(vmModuleDir, workspace)
 
@@ -661,7 +603,6 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("tofu apply (harvester vm): %v", err)
 	}
 
-	// Register cleanup after VMs are applied so they're always destroyed.
 	t.Cleanup(func() {
 		logrus.Infof("[qainfraautomation] destroying Harvester VMs (workspace=%s)", workspace)
 		if err := vmTofu.Destroy(vmVarFile); err != nil {
@@ -669,7 +610,6 @@ func provisionHarvesterStandaloneCluster(
 		}
 	})
 
-	// Step 4: Generate inventory.
 	ansibleClient := ansible.NewClient(repoPath)
 	inventoryEnv := map[string]string{
 		"TERRAFORM_NODE_SOURCE": harvesterVMModulePath,
@@ -679,7 +619,6 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("generate inventory: %v", err)
 	}
 
-	// Step 5: Write vars.yaml for the playbook.
 	vars := map[string]string{
 		"kubernetes_version": clusterCfg.KubernetesVersion,
 		"cni":                clusterCfg.CNI,
@@ -690,7 +629,6 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("write vars.yaml: %v", err)
 	}
 
-	// Step 6: Add SSH key + run playbook.
 	if err := ansibleClient.AddSSHKey(h.SSHPrivateKeyPath); err != nil {
 		t.Fatalf("ssh-add: %v", err)
 	}
@@ -699,6 +637,9 @@ func provisionHarvesterStandaloneCluster(
 		"TF_WORKSPACE=" + workspace,
 		"TERRAFORM_NODE_SOURCE=" + harvesterVMModulePath,
 	}
+	if cfg.Ansible != nil && cfg.Ansible.ConfigPath != "" {
+		playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+filepath.Join(repoPath, cfg.Ansible.ConfigPath))
+	}
 	if err := ansibleClient.RunPlaybook(playbookPath, inventoryOutput, playbookEnv); err != nil {
 		t.Fatalf("ansible-playbook (%s): %v", clusterType, err)
 	}
@@ -706,35 +647,35 @@ func provisionHarvesterStandaloneCluster(
 	return clusterCfg.KubeconfigOutputPath
 }
 
-// -------------------------------------------------------------------------
-// Internal helpers
-// -------------------------------------------------------------------------
-
-// buildHarvesterVMVars constructs the tofu var struct from a HarvesterConfig.
-func buildHarvesterVMVars(h *config.HarvesterConfig) harvesterVMVars {
-	nodes := make([]harvesterNodeSpec, len(h.Nodes))
-	for i, n := range h.Nodes {
+func buildHarvesterVMVars(h *config.HarvesterConfig, g []config.CustomClusterNodeGroup) harvesterVMVars {
+	nodes := make([]harvesterNodeSpec, len(g))
+	for i, n := range g {
 		nodes[i] = harvesterNodeSpec{
 			Count: n.Count,
 			Role:  n.Role,
 		}
 	}
 	return harvesterVMVars{
-		SSHKey:       h.SSHPublicKey,
-		Nodes:        nodes,
-		GenerateName: h.GenerateName,
-		SSHUser:      h.SSHUser,
-		NetworkName:  h.NetworkName,
-		ImageID:      h.ImageID,
-		Namespace:    h.Namespace,
-		CPU:          h.CPU,
-		Memory:       h.Memory,
-		DiskSize:     h.DiskSize,
+		SSHKey:             h.SSHPublicKey,
+		Nodes:              nodes,
+		GenerateName:       h.GenerateName,
+		SSHUser:            h.SSHUser,
+		NetworkName:        h.NetworkName,
+		BackendNetworkName: h.BackendNetworkName,
+		ImageID:            h.ImageID,
+		Namespace:          h.Namespace,
+		CPU:                h.CPU,
+		Memory:             h.Memory,
+		DiskSize:           h.DiskSize,
+		CreateLoadbalancer: h.CreateLoadbalancer,
+		SubnetCIDR:         h.SubnetCIDR,
+		GatewayIP:          h.GatewayIP,
+		RangeIPStart:       h.RangeIPStart,
+		RangeIPEnd:         h.RangeIPEnd,
+		IPPoolName:         h.IPPoolName,
 	}
 }
 
-// writeTFVarsJSON marshals v as JSON and writes it to <repoPath>/<filename>.
-// Returns the absolute path to the written file.
 func writeTFVarsJSON(repoPath, filename string, v any) (string, error) {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
@@ -748,7 +689,6 @@ func writeTFVarsJSON(repoPath, filename string, v any) (string, error) {
 	return destPath, nil
 }
 
-// copyFile copies the file at src to dst, creating or overwriting dst.
 func copyFile(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {

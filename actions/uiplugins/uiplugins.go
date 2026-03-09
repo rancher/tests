@@ -97,6 +97,18 @@ func InstallUIPlugin(client *rancher.Client, installExtensionOptions *ExtensionO
 		return false, nil
 	})
 
+	if err != nil {
+		logrus.Warnf("Watch for UI plugin %s install ended with error (%v); verifying current app state...", installExtensionOptions.ChartName, err)
+		app, getErr := catalogClient.Apps(extensionNamespace).Get(context.TODO(), installExtensionOptions.ChartName, metav1.GetOptions{})
+		if getErr != nil {
+			return err
+		}
+		if app.Status.Summary.State == string(v1.StatusDeployed) {
+			logrus.Infof("UI plugin %s is deployed despite watch error; continuing.", installExtensionOptions.ChartName)
+			return nil
+		}
+	}
+
 	return err
 }
 

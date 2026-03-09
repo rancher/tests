@@ -4,7 +4,9 @@ package charts
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -12,6 +14,7 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 
 	"github.com/rancher/shepherd/extensions/charts"
+	"github.com/rancher/shepherd/extensions/ingresses"
 	interoperablecharts "github.com/rancher/tests/interoperability/charts"
 	qaconfig "github.com/rancher/tests/interoperability/qainfraautomation/config"
 	"github.com/sirupsen/logrus"
@@ -63,8 +66,9 @@ func (n *NeuVectorHardenedTestSuite) SetupSuite() {
 
 	n.cfg = new(qaconfig.Config)
 	operations.LoadObjectFromMap(qaconfig.ConfigurationFileKey, cattleConfig, n.cfg)
+	n.cfg.CustomCluster.Harden = true
 
-	require.NotNil(n.T(), n.cfg.RancherCluster, "rancherCluster config is required under qaInfraAutomation.rancherCluster")
+	require.NotNil(n.T(), n.cfg.CustomCluster, "rancherCluster config is required under qaInfraAutomation.rancherCluster")
 
 	_, err = n.client.Catalog.ClusterRepos().Get(context.TODO(), uiPluginChartsRepoName, metav1.GetOptions{})
 	if k8sErrors.IsNotFound(err) {
@@ -130,11 +134,14 @@ func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
 
 	payload := actionsCharts.PayloadOpts{
 		Namespace: actionsCharts.NeuVectorNamespace,
+		Host:      n.client.RancherConfig.Host,
 		InstallOptions: actionsCharts.InstallOptions{
 			Cluster:   cluster,
 			Version:   latestVersion,
 			ProjectID: project.ID,
 		},
+		K3s:      strings.Contains(n.cfg.CustomCluster.KubernetesVersion, "k3s"),
+		Hardened: true,
 	}
 
 	n.T().Logf("Installing NeuVector on cluster [%s]", cluster.Name)
@@ -154,6 +161,15 @@ func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
 
 	err = charts.WatchAndWaitDaemonSets(n.client, cluster.ID, payload.Namespace, metav1.ListOptions{})
 	require.NoError(n.T(), err)
+
+	n.T().Log("Verifying NeuVector manager UI is reachable via service proxy")
+	uiProxyPath := fmt.Sprintf(
+		"k8s/clusters/%s/api/v1/namespaces/%s/services/https:neuvector-service-webui:8443/proxy/",
+		cluster.ID,
+		actionsCharts.NeuVectorNamespace,
+	)
+	_, err = ingresses.GetExternalIngressResponse(n.client, n.client.RancherConfig.Host, uiProxyPath, true)
+	require.NoError(n.T(), err, "NeuVector manager UI should be reachable via service proxy")
 }
 
 func TestNeuVectorHardenedTestSuite(t *testing.T) {
