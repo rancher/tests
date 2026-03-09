@@ -24,12 +24,14 @@ func defaultRunner(name string, args []string, dir string, env []string) ([]byte
 	return out, nil
 }
 
+// Client runs OpenTofu commands within a specific module directory and workspace.
 type Client struct {
 	moduleDir string
 	workspace string
 	run       runner
 }
 
+// NewClient returns a Client targeting moduleDir in the given workspace.
 func NewClient(moduleDir, workspace string) *Client {
 	return &Client{
 		moduleDir: moduleDir,
@@ -38,6 +40,7 @@ func NewClient(moduleDir, workspace string) *Client {
 	}
 }
 
+// Init runs `tofu init` in the module directory.
 func (c *Client) Init() error {
 	logrus.Infof("[tofu] init in %s", c.moduleDir)
 	out, err := c.run("tofu", []string{"init", "-input=false"}, c.moduleDir, nil)
@@ -48,6 +51,7 @@ func (c *Client) Init() error {
 	return nil
 }
 
+// WorkspaceSelectOrCreate selects the client's workspace, creating it if it does not exist.
 func (c *Client) WorkspaceSelectOrCreate() error {
 	logrus.Infof("[tofu] selecting workspace %q in %s", c.workspace, c.moduleDir)
 
@@ -65,6 +69,7 @@ func (c *Client) WorkspaceSelectOrCreate() error {
 	return nil
 }
 
+// Apply runs `tofu apply` with the given var file.
 func (c *Client) Apply(varFile string) error {
 	return c.apply(varFile, false)
 }
@@ -115,6 +120,7 @@ func (c *Client) logOutputs() {
 	}
 }
 
+// Destroy runs `tofu destroy` with the given var file.
 func (c *Client) Destroy(varFile string) error {
 	return c.destroy(varFile, false)
 }
@@ -142,6 +148,7 @@ func (c *Client) destroy(varFile string, noRefresh bool) error {
 	return nil
 }
 
+// Output returns the string value of the named tofu output in the current workspace.
 func (c *Client) Output(name string) (string, error) {
 	logrus.Infof("[tofu] output %q in %s (workspace=%s)", name, c.moduleDir, c.workspace)
 	out, err := c.run("tofu", []string{"output", "-json", name}, c.moduleDir, nil)
@@ -155,6 +162,7 @@ func (c *Client) Output(name string) (string, error) {
 	return value, nil
 }
 
+// ShowResources runs `tofu show -json` and returns the parsed state.
 func (c *Client) ShowResources() (*ShowState, error) {
 	logrus.Infof("[tofu] show -json in %s (workspace=%s)", c.moduleDir, c.workspace)
 	out, err := c.run("tofu", []string{"show", "-json"}, c.moduleDir, nil)
@@ -168,18 +176,22 @@ func (c *Client) ShowResources() (*ShowState, error) {
 	return &state, nil
 }
 
+// ShowState is the top-level structure returned by `tofu show -json`.
 type ShowState struct {
 	Values *ShowValues `json:"values"`
 }
 
+// ShowValues holds the root module of a tofu show result.
 type ShowValues struct {
 	RootModule ShowModule `json:"root_module"`
 }
 
+// ShowModule contains the list of resources in a tofu module.
 type ShowModule struct {
 	Resources []ShowResource `json:"resources"`
 }
 
+// ShowResource represents a single resource entry from `tofu show -json`.
 type ShowResource struct {
 	Address string                     `json:"address"`
 	Type    string                     `json:"type"`

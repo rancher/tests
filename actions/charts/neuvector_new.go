@@ -19,6 +19,7 @@ const (
 	chartPollTimeout  = 10 * time.Minute
 )
 
+// WaitChartDeployed polls until the named chart app reaches the Deployed state or returns an error on failure.
 func WaitChartDeployed(catalogClient *catalog.Client, namespace, chartName string) error {
 	return kwait.PollUntilContextTimeout(context.Background(), chartPollInterval, chartPollTimeout, true, func(ctx context.Context) (bool, error) {
 		app, err := catalogClient.Apps(namespace).Get(ctx, chartName, metav1.GetOptions{})
@@ -32,7 +33,7 @@ func WaitChartDeployed(catalogClient *catalog.Client, namespace, chartName strin
 		case string(catalogv1.StatusDeployed):
 			return true, nil
 		case string(catalogv1.StatusFailed):
-			return false, fmt.Errorf("chart %q deploy failed: %s", chartName, app.Status.Summary.Error)
+			return false, fmt.Errorf("chart %q deploy failed: %v", chartName, app.Status.Summary.Error)
 		}
 		return false, nil
 	})
@@ -65,6 +66,7 @@ func uninstallChartIfPresent(catalogClient *catalog.Client, namespace, chartName
 	return waitChartGone(catalogClient, namespace, chartName)
 }
 
+// InstallLatestNeuVectorChart installs the latest NeuVector chart (and its CRD chart) on the target cluster using the provided payload options.
 func InstallLatestNeuVectorChart(client *rancher.Client, payload PayloadOpts) error {
 	catalogClient, err := client.GetClusterCatalogClient(payload.Cluster.ID)
 	if err != nil {

@@ -66,9 +66,9 @@ func (n *NeuVectorHardenedTestSuite) SetupSuite() {
 
 	n.cfg = new(qaconfig.Config)
 	operations.LoadObjectFromMap(qaconfig.ConfigurationFileKey, cattleConfig, n.cfg)
-	n.cfg.CustomCluster.Harden = true
 
-	require.NotNil(n.T(), n.cfg.CustomCluster, "rancherCluster config is required under qaInfraAutomation.rancherCluster")
+	require.NotNil(n.T(), n.cfg.CustomCluster, "customCluster config is required under qaInfraAutomation.customCluster")
+	n.cfg.CustomCluster.Harden = true
 
 	_, err = n.client.Catalog.ClusterRepos().Get(context.TODO(), uiPluginChartsRepoName, metav1.GetOptions{})
 	if k8sErrors.IsNotFound(err) {

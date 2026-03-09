@@ -28,12 +28,8 @@ type PayloadOpts struct {
 	Namespace       string
 	Host            string
 	DefaultRegistry string
-	// K3s indicates the target cluster is running K3s. When true, the NeuVector chart
-	// will set k3s.enabled=true so the enforcer uses the correct containerd socket path.
-	K3s bool
-	// Hardened indicates the target cluster is CIS-hardened. When true, the NeuVector chart
-	// will set leastPrivilege=true and the enforcer securityContext for hardened environments.
-	Hardened bool
+	K3s             bool
+	Hardened        bool
 }
 
 // RancherIstioOpts is a struct of the required options to install Rancher Istio with desired chart values.

@@ -28,11 +28,13 @@ func defaultRunner(name string, args []string, dir string, env []string) ([]byte
 	return out, nil
 }
 
+// Client runs ansible commands within a local repository checkout.
 type Client struct {
 	repoPath string
 	run      runner
 }
 
+// NewClient returns a Client rooted at repoPath.
 func NewClient(repoPath string) *Client {
 	return &Client{
 		repoPath: repoPath,
@@ -40,6 +42,7 @@ func NewClient(repoPath string) *Client {
 	}
 }
 
+// AddSSHKey adds privateKeyPath to the running ssh-agent.
 func (c *Client) AddSSHKey(privateKeyPath string) error {
 	if privateKeyPath == "" {
 		return fmt.Errorf("ssh-add: privateKeyPath is required but was not set — ensure sshPrivateKeyPath is configured in your harvester/aws config")
@@ -53,6 +56,7 @@ func (c *Client) AddSSHKey(privateKeyPath string) error {
 	return nil
 }
 
+// GenerateInventory renders templatePath with env substitutions and writes the result to outputPath.
 func (c *Client) GenerateInventory(templatePath, outputPath string, env map[string]string) error {
 	absTemplate := filepath.Join(c.repoPath, templatePath)
 	absOutput := outputPath
@@ -78,6 +82,7 @@ func (c *Client) GenerateInventory(templatePath, outputPath string, env map[stri
 	return nil
 }
 
+// WriteVarsYAML marshals vars to YAML and writes the file at relPath inside the repository.
 func (c *Client) WriteVarsYAML(relPath string, vars map[string]string) error {
 	absPath := filepath.Join(c.repoPath, relPath)
 	logrus.Infof("[ansible] writing vars file %s", absPath)
@@ -93,6 +98,7 @@ func (c *Client) WriteVarsYAML(relPath string, vars map[string]string) error {
 	return nil
 }
 
+// RunPlaybook executes ansible-playbook with the given playbook and inventory paths, streaming output via logrus.
 func (c *Client) RunPlaybook(playbookPath, inventoryPath string, extraEnv []string) error {
 	absPlaybook := filepath.Join(c.repoPath, playbookPath)
 	absInventory := filepath.Join(c.repoPath, inventoryPath)
@@ -113,6 +119,7 @@ func (c *Client) RunPlaybook(playbookPath, inventoryPath string, extraEnv []stri
 	cmd.Stderr = pw
 
 	var lines []string
+	var scanErr error
 	streamDone := make(chan struct{})
 	go func() {
 		defer close(streamDone)
@@ -122,6 +129,7 @@ func (c *Client) RunPlaybook(playbookPath, inventoryPath string, extraEnv []stri
 			logrus.Infof("[ansible] %s", line)
 			lines = append(lines, line)
 		}
+		scanErr = scanner.Err()
 	}()
 
 	runErr := cmd.Run()
@@ -130,6 +138,9 @@ func (c *Client) RunPlaybook(playbookPath, inventoryPath string, extraEnv []stri
 
 	if runErr != nil {
 		return fmt.Errorf("ansible-playbook %s: %w\noutput:\n%s", playbookPath, runErr, strings.Join(lines, "\n"))
+	}
+	if scanErr != nil {
+		return fmt.Errorf("ansible-playbook %s: reading output: %w\noutput:\n%s", playbookPath, scanErr, strings.Join(lines, "\n"))
 	}
 	return nil
 }

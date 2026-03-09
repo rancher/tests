@@ -1,7 +1,9 @@
 package config
 
+// ConfigurationFileKey is the top-level key used to unmarshal qaInfraAutomation config from the Rancher config file.
 const ConfigurationFileKey = "qaInfraAutomation"
 
+// Config holds all configuration required for QA infrastructure automation.
 type Config struct {
 	RepoPath          string                   `json:"repoPath" yaml:"repoPath"`
 	Workspace         string                   `json:"workspace" yaml:"workspace"`
@@ -13,6 +15,7 @@ type Config struct {
 	Ansible           *AnsibleConfig           `json:"ansible,omitempty" yaml:"ansible,omitempty"`
 }
 
+// HarvesterConfig holds connection and VM configuration for a Harvester provider.
 type HarvesterConfig struct {
 	KubeConfigPath     string `json:"kubeConfigPath" yaml:"kubeConfigPath"`
 	SSHPublicKey       string `json:"sshPublicKey" yaml:"sshPublicKey"`
@@ -34,6 +37,7 @@ type HarvesterConfig struct {
 	IPPoolName         string `json:"ippoolName,omitempty" yaml:"ippoolName,omitempty"`
 }
 
+// AWSConfig holds credentials and instance settings for an AWS provider.
 type AWSConfig struct {
 	AccessKey         string   `json:"accessKey" yaml:"accessKey"`
 	SecretKey         string   `json:"secretKey" yaml:"secretKey"`
@@ -54,11 +58,13 @@ type AWSConfig struct {
 	ProxySetup        bool     `json:"proxySetup,omitempty" yaml:"proxySetup,omitempty"`
 }
 
+// CustomClusterNodeGroup specifies the count and roles for a group of nodes in a custom cluster.
 type CustomClusterNodeGroup struct {
 	Count int      `json:"count" yaml:"count"`
 	Role  []string `json:"role" yaml:"role"`
 }
 
+// CustomClusterConfig describes a custom (node-driver) cluster to provision.
 type CustomClusterConfig struct {
 	KubernetesVersion string                   `json:"kubernetesVersion" yaml:"kubernetesVersion"`
 	GenerateName      string                   `json:"generateName,omitempty" yaml:"generateName,omitempty"`
@@ -68,6 +74,7 @@ type CustomClusterConfig struct {
 	Nodes             []CustomClusterNodeGroup `json:"nodes" yaml:"nodes"`
 }
 
+// StandaloneClusterConfig describes a standalone (non-Rancher-managed) cluster to provision.
 type StandaloneClusterConfig struct {
 	KubernetesVersion    string                   `json:"kubernetesVersion" yaml:"kubernetesVersion"`
 	CNI                  string                   `json:"cni,omitempty" yaml:"cni,omitempty"`
@@ -76,6 +83,7 @@ type StandaloneClusterConfig struct {
 	Nodes                []CustomClusterNodeGroup `json:"nodes" yaml:"nodes"`
 }
 
+// RancherClusterConfig describes a Rancher-managed cluster to provision via the Rancher API.
 type RancherClusterConfig struct {
 	KubernetesVersion string                 `json:"kubernetesVersion" yaml:"kubernetesVersion"`
 	GenerateName      string                 `json:"generateName,omitempty" yaml:"generateName,omitempty"`
@@ -86,6 +94,7 @@ type RancherClusterConfig struct {
 	NodeConfig        map[string]interface{} `json:"nodeConfig" yaml:"nodeConfig"`
 }
 
+// RancherMachinePool defines the role and size of a single machine pool in a Rancher cluster.
 type RancherMachinePool struct {
 	ControlPlaneRole bool `json:"controlPlaneRole,omitempty" yaml:"controlPlaneRole,omitempty"`
 	WorkerRole       bool `json:"workerRole,omitempty" yaml:"workerRole,omitempty"`
@@ -93,6 +102,7 @@ type RancherMachinePool struct {
 	Quantity         int  `json:"quantity,omitempty" yaml:"quantity,omitempty"`
 }
 
+// AnsibleConfig holds optional Ansible configuration for playbook execution.
 type AnsibleConfig struct {
 	ConfigPath string `json:"configPath,omitempty" yaml:"configPath,omitempty"`
 }

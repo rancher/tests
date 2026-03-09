@@ -100,6 +100,7 @@ type rancherClusterVars struct {
 	CreateNew         bool                        `json:"create_new"`
 }
 
+// ProvisionRancherCluster provisions a Rancher-managed cluster via OpenTofu and waits for it to be ready.
 func ProvisionRancherCluster(
 	t *testing.T,
 	rancherClient *rancher.Client,
@@ -177,26 +178,28 @@ func ProvisionRancherCluster(
 	}
 	logrus.Infof("[qainfraautomation] rancher-provisioned cluster name from tofu: %s", clusterName)
 
-	t.Cleanup(func() {
-		logrus.Infof("[qainfraautomation] destroying Rancher-provisioned cluster %q (workspace=%s)", clusterName, workspace)
-		if err := clusterTofu.Destroy(clusterVarFile); err != nil {
-			logrus.Warnf("[qainfraautomation] tofu destroy: %v", err)
-		}
+	if cleanupEnabled(rancherClient) {
+		t.Cleanup(func() {
+			logrus.Infof("[qainfraautomation] destroying Rancher-provisioned cluster %q (workspace=%s)", clusterName, workspace)
+			if err := clusterTofu.Destroy(clusterVarFile); err != nil {
+				logrus.Warnf("[qainfraautomation] tofu destroy: %v", err)
+			}
 
-		existing, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
-		if err != nil {
-			if strings.Contains(err.Error(), "404 Not Found") {
+			existing, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
+			if err != nil {
+				if strings.Contains(err.Error(), "404 Not Found") {
+					return
+				}
+				logrus.Errorf("[qainfraautomation] checking cluster %q after destroy: %v", clusterName, err)
 				return
 			}
-			logrus.Errorf("[qainfraautomation] checking cluster %q after destroy: %v", clusterName, err)
-			return
-		}
 
-		logrus.Infof("[qainfraautomation] cluster %q still present after tofu destroy; deleting via Rancher API", clusterName)
-		if err := rancherClient.Steve.SteveType(stevetypes.Provisioning).Delete(existing); err != nil {
-			logrus.Errorf("[qainfraautomation] delete cluster %q from Rancher: %v", clusterName, err)
-		}
-	})
+			logrus.Infof("[qainfraautomation] cluster %q still present after tofu destroy; deleting via Rancher API", clusterName)
+			if err := rancherClient.Steve.SteveType(stevetypes.Provisioning).Delete(existing); err != nil {
+				logrus.Errorf("[qainfraautomation] delete cluster %q from Rancher: %v", clusterName, err)
+			}
+		})
+	}
 
 	clusterObj, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
 	if err != nil {
@@ -210,6 +213,7 @@ func ProvisionRancherCluster(
 	return clusterObj
 }
 
+// ProvisionCustomCluster provisions a custom (node-driver) Rancher cluster on either AWS or Harvester infrastructure.
 func ProvisionCustomCluster(
 	t *testing.T,
 	rancherClient *rancher.Client,
@@ -290,8 +294,8 @@ func provisionAWSCustomCluster(
 		volumeType = "gp3"
 	}
 
-	nodes := make([]awsNodeSpec, len(cfg.CustomCluster.Nodes))
-	for i, n := range cfg.CustomCluster.Nodes {
+	nodes := make([]awsNodeSpec, len(clusterCfg.Nodes))
+	for i, n := range clusterCfg.Nodes {
 		nodes[i] = awsNodeSpec{Count: n.Count, Role: n.Role}
 	}
 	if len(nodes) == 0 {
@@ -381,7 +385,7 @@ func provisionHarvesterCustomCluster(
 		}
 	}
 
-	vmVars := buildHarvesterVMVars(h, cfg.CustomCluster.Nodes)
+	vmVars := buildHarvesterVMVars(h, clusterCfg.Nodes)
 	vmVarFile, err := writeTFVarsJSON(repoPath, "harvester-vm-vars.json", vmVars)
 	if err != nil {
 		t.Fatalf("write harvester VM tfvars: %v", err)
@@ -525,6 +529,7 @@ func provisionCustomClusterShared(
 	return clusterObj
 }
 
+// ProvisionHarvesterRKE2Cluster provisions a standalone RKE2 cluster on Harvester VMs and returns the kubeconfig path.
 func ProvisionHarvesterRKE2Cluster(
 	t *testing.T,
 	cfg *config.Config,
@@ -534,6 +539,7 @@ func ProvisionHarvesterRKE2Cluster(
 	return provisionHarvesterStandaloneCluster(t, cfg, clusterCfg, "rke2")
 }
 
+// ProvisionHarvesterK3SCluster provisions a standalone K3s cluster on Harvester VMs and returns the kubeconfig path.
 func ProvisionHarvesterK3SCluster(
 	t *testing.T,
 	cfg *config.Config,
