@@ -19,7 +19,6 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
-	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -106,7 +105,6 @@ func TestDynamicCustom(t *testing.T) {
 
 				logrus.Info("Provisioning cluster")
 				cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
-				reports.TimeoutClusterReport(cluster, err)
 				require.NoError(t, err)
 
 				logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)

@@ -21,7 +21,6 @@ import (
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
-	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	cis "github.com/rancher/tests/validation/provisioning/resources/cisbenchmark"
@@ -101,7 +100,6 @@ func TestHardened(t *testing.T) {
 
 			logrus.Infof("Provisioning cluster")
 			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
-			reports.TimeoutClusterReport(cluster, err)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
@@ -124,14 +122,12 @@ func TestHardened(t *testing.T) {
 			}
 
 			clusterMeta, err := extensionscluster.NewClusterMeta(tt.client, cluster.Name)
-			reports.TimeoutClusterReport(cluster, err)
 			require.NoError(t, err)
 
 			latestHardenedChartVersion, err := tt.client.Catalog.GetLatestChartVersion(chartName, catalog.RancherChartRepo)
 			require.NoError(t, err)
 
 			project, err := projects.GetProjectByName(tt.client, clusterMeta.ID, cis.System)
-			reports.TimeoutClusterReport(cluster, err)
 			require.NoError(t, err)
 
 			r.project = project

@@ -27,7 +27,6 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
-	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -117,7 +116,6 @@ func TestTemplate(t *testing.T) {
 			require.NoError(t, err)
 
 			_, cluster, err := clusters.GetProvisioningClusterByName(r.client, clusterName, namespaces.FleetDefault)
-			reports.TimeoutClusterReport(cluster, err)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
