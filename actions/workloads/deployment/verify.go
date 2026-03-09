@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"time"
 
+	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/charts"
-	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/workloads"
@@ -508,14 +508,14 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 
 // VerifyClusterDeployments verifies that all required deployments are present and available in the cluster
 func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject) error {
-	clusterID, err := clusters.GetClusterIDByName(client, cluster.Name)
-	if err != nil {
+	status := &provv1.ClusterStatus{}
+	if err := v1.ConvertToK8sType(cluster.Status, status); err != nil {
 		return err
 	}
 
 	var downstreamClient *v1.Client
-	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
-		downstreamClient, err = client.Steve.ProxyDownstream(clusterID)
+	err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		downstreamClient, err = client.Steve.ProxyDownstream(status.ClusterName)
 		if err != nil {
 			return false, nil
 		}

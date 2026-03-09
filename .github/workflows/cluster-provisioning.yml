@@ -281,7 +281,7 @@ jobs:
           templateTest:
             repo:
               metadata:
-                name: "test"
+                name: "${{ env.HOSTNAME_PREFIX }}-template-test"
               spec:
                 gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
                 gitBranch: main
@@ -620,7 +620,7 @@ jobs:
           templateTest:
             repo:
               metadata:
-                name: "test"
+                name: "${{ env.HOSTNAME_PREFIX }}-template-test"
               spec:
                 gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
                 gitBranch: main
@@ -968,7 +968,7 @@ jobs:
           templateTest:
             repo:
               metadata:
-                name: "test"
+                name: "${{ env.HOSTNAME_PREFIX }}-template-test"
               spec:
                 gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
                 gitBranch: main
