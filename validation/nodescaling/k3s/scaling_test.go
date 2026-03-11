@@ -8,7 +8,6 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -80,7 +79,7 @@ func (s *NodeScalingTestSuite) SetupSuite() {
 		machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
 
 		logrus.Info("Provisioning K3S cluster")
-		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *s.clusterConfig, machineConfigSpec, nil, true, false)
+		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, defaults.K3S, provider, *s.clusterConfig, machineConfigSpec, nil, true, false)
 		require.NoError(s.T(), err)
 	} else {
 		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
