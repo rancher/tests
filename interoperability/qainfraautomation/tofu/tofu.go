@@ -9,6 +9,29 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// ShowState is the top-level structure returned by `tofu show -json`.
+type ShowState struct {
+	Values *ShowValues `json:"values"`
+}
+
+// ShowValues holds the root module of a tofu show result.
+type ShowValues struct {
+	RootModule ShowModule `json:"root_module"`
+}
+
+// ShowModule contains the list of resources in a tofu module.
+type ShowModule struct {
+	Resources []ShowResource `json:"resources"`
+}
+
+// ShowResource represents a single resource entry from `tofu show -json`.
+type ShowResource struct {
+	Address string                     `json:"address"`
+	Type    string                     `json:"type"`
+	Name    string                     `json:"name"`
+	Values  map[string]json.RawMessage `json:"values"`
+}
+
 type runner func(name string, args []string, dir string, env []string) ([]byte, error)
 
 func defaultRunner(name string, args []string, dir string, env []string) ([]byte, error) {
@@ -176,25 +199,3 @@ func (c *Client) ShowResources() (*ShowState, error) {
 	return &state, nil
 }
 
-// ShowState is the top-level structure returned by `tofu show -json`.
-type ShowState struct {
-	Values *ShowValues `json:"values"`
-}
-
-// ShowValues holds the root module of a tofu show result.
-type ShowValues struct {
-	RootModule ShowModule `json:"root_module"`
-}
-
-// ShowModule contains the list of resources in a tofu module.
-type ShowModule struct {
-	Resources []ShowResource `json:"resources"`
-}
-
-// ShowResource represents a single resource entry from `tofu show -json`.
-type ShowResource struct {
-	Address string                     `json:"address"`
-	Type    string                     `json:"type"`
-	Name    string                     `json:"name"`
-	Values  map[string]json.RawMessage `json:"values"`
-}

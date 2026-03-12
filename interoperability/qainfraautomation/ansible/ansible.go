@@ -21,10 +21,12 @@ func defaultRunner(name string, args []string, dir string, env []string) ([]byte
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)
 	}
+
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return out, fmt.Errorf("command %q %v failed: %w\noutput:\n%s", name, args, err, string(out))
 	}
+	
 	return out, nil
 }
 
