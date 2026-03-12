@@ -5,7 +5,6 @@ const ConfigurationFileKey = "qaInfraAutomation"
 
 // Config holds all configuration required for QA infrastructure automation.
 type Config struct {
-	RepoPath          string                   `json:"repoPath" yaml:"repoPath"`
 	Workspace         string                   `json:"workspace" yaml:"workspace"`
 	Harvester         *HarvesterConfig         `json:"harvester,omitempty" yaml:"harvester,omitempty"`
 	AWS               *AWSConfig               `json:"aws,omitempty" yaml:"aws,omitempty"`

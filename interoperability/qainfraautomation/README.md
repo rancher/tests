@@ -1,12 +1,12 @@
 # qainfraautomation
 
-Go orchestration layer combining OpenTofu infrastructure provisioning with Ansible cluster configuration via the [rancher-qa-infra-automation](https://github.com/rancher/rancher-qa-infra-automation) repository.
+Go orchestration layer combining OpenTofu infrastructure provisioning with Ansible cluster configuration. Ansible and Tofu files are embedded from the [rancher-qa-infra-automation](https://github.com/rancher/rancher-qa-infra-automation) Go module at build time via `go:embed` — no local clone of the infra repository is needed.
 
 ## Configuration
 
 All settings live under the `qaInfraAutomation` key in your cattle config YAML.
 
-`ansible.configPath` is relative to `repoPath`. When set, `ANSIBLE_CONFIG` is exported to the playbook subprocess. When omitted, Ansible's normal search order applies — note there is no `ansible.cfg` at the repo root, so it will fall through to your global Ansible config.
+`ansible.configPath` is relative to the embedded infra file tree (e.g. `ansible/rancher/downstream/custom_cluster/ansible.cfg`). When set, `ANSIBLE_CONFIG` is exported to the playbook subprocess. When omitted, Ansible's normal search order applies.
 
 **Exactly one** of `aws` or `harvester` must be set when using `customCluster`. If you set more than 1 it will cause issues.
 
@@ -20,7 +20,6 @@ All settings live under the `qaInfraAutomation` key in your cattle config YAML.
 
 ```yaml
 qaInfraAutomation:
-  repoPath: /path/to/rancher-qa-infra-automation
   workspace: test-workspace
 
   ansible:

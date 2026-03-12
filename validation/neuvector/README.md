@@ -6,7 +6,6 @@ Infrastructure is provisioned via the `interoperability/qainfraautomation` packa
 ## Prerequisites
 
 - A running Rancher instance reachable by the test binary
-- The [`rancher-qa-infra-automation`](https://github.com/rancher/rancher-qa-infra-automation) repository cloned locally
 - OpenTofu installed and in `$PATH`
 - Ansible installed and in `$PATH`
 - provider defined in qaInfraAutomation for use in a custom cluster (custom cluster required for hardening)
@@ -23,7 +22,6 @@ Set exactly one supported provider alongside `customCluster`:
 
 ```yaml
 qaInfraAutomation:
-  repoPath: /path/to/rancher-qa-infra-automation
   workspace: default
   customCluster:
     kubernetesVersion: v1.34.4+rke2r1

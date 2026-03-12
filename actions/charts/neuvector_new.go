@@ -79,7 +79,7 @@ func InstallLatestNeuVectorChart(client *rancher.Client, payload PayloadOpts) er
 	}
 
 	if payload.Hardened {
-		chartValues["leastPrivilege"] = true
+		// chartValues["leastPrivilege"] = true
 
 		enforcer, ok := chartValues["enforcer"].(map[string]interface{})
 		if !ok {

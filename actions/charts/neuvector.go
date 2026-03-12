@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	NeuVectorNamespace = "neuvector-system"
+	NeuVectorNamespace = "cattle-neuvector-system"
 	NeuVectorChartName = "neuvector"
 )
 

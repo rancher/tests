@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	infraAnsible "github.com/rancher/qa-infra-automation/ansible"
+	"github.com/rancher/qa-infra-automation/fsutil"
+	infraTofu "github.com/rancher/qa-infra-automation/tofu"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
@@ -42,6 +45,44 @@ const (
 	awsClusterNodesModulePath      = "tofu/aws/modules/cluster_nodes"
 	fleetDefaultNamespace          = "fleet-default"
 )
+
+// extractInfraFiles extracts the embedded Ansible and Tofu files from
+// the qa-infra-automation module into a temporary directory on disk.
+// It registers a t.Cleanup callback to remove the directory when the
+// test finishes. The returned path contains "ansible/" and "tofu/"
+// subdirectories mirroring the infra repo layout.
+func extractInfraFiles(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.MkdirTemp("", "qa-infra-*")
+	if err != nil {
+		t.Fatalf("create temp dir for infra files: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			logrus.Warnf("[qainfraautomation] failed to remove temp infra dir %s: %v", dir, err)
+		}
+	})
+
+	ansibleDir := filepath.Join(dir, "ansible")
+	if err := os.MkdirAll(ansibleDir, 0755); err != nil {
+		t.Fatalf("mkdir ansible: %v", err)
+	}
+	if err := fsutil.WriteToDisk(infraAnsible.Files, ansibleDir); err != nil {
+		t.Fatalf("extract embedded ansible files: %v", err)
+	}
+
+	tofuDir := filepath.Join(dir, "tofu")
+	if err := os.MkdirAll(tofuDir, 0755); err != nil {
+		t.Fatalf("mkdir tofu: %v", err)
+	}
+	if err := fsutil.WriteToDisk(infraTofu.Files, tofuDir); err != nil {
+		t.Fatalf("extract embedded tofu files: %v", err)
+	}
+
+	logrus.Infof("[qainfraautomation] extracted embedded infra files to %s", dir)
+	return dir
+}
 
 type harvesterVMVars struct {
 	SSHKey             string              `json:"ssh_key"`
@@ -109,7 +150,7 @@ func ProvisionRancherCluster(
 ) *v1.SteveAPIObject {
 	t.Helper()
 
-	repoPath := cfg.RepoPath
+	repoPath := extractInfraFiles(t)
 	workspace := cfg.Workspace
 	if workspace == "" {
 		workspace = "default"
@@ -222,16 +263,18 @@ func ProvisionCustomCluster(
 ) *v1.SteveAPIObject {
 	t.Helper()
 
+	repoPath := extractInfraFiles(t)
+
 	switch {
 	case cfg.AWS != nil && cfg.Harvester != nil:
 		t.Fatalf("ProvisionCustomCluster: both aws and harvester are set in config; exactly one must be provided")
 		return nil
 	case cfg.AWS != nil:
 		logrus.Infof("[qainfraautomation] ProvisionCustomCluster: provisioning via AWS provider (workspace=%s)", cfg.Workspace)
-		return provisionAWSCustomCluster(t, rancherClient, cfg, clusterCfg)
+		return provisionAWSCustomCluster(t, rancherClient, cfg, clusterCfg, repoPath)
 	case cfg.Harvester != nil:
 		logrus.Infof("[qainfraautomation] ProvisionCustomCluster: provisioning via Harvester provider (workspace=%s)", cfg.Workspace)
-		return provisionHarvesterCustomCluster(t, rancherClient, cfg, clusterCfg)
+		return provisionHarvesterCustomCluster(t, rancherClient, cfg, clusterCfg, repoPath)
 	default:
 		t.Fatalf("ProvisionCustomCluster: neither aws nor harvester config is set; exactly one must be provided")
 		return nil
@@ -268,10 +311,10 @@ func provisionAWSCustomCluster(
 	rancherClient *rancher.Client,
 	cfg *config.Config,
 	clusterCfg *config.CustomClusterConfig,
+	repoPath string,
 ) *v1.SteveAPIObject {
 	t.Helper()
 
-	repoPath := cfg.RepoPath
 	workspace := cfg.Workspace
 	if workspace == "" {
 		workspace = "default"
@@ -358,7 +401,7 @@ func provisionAWSCustomCluster(
 	}
 
 	return provisionCustomClusterShared(t, rancherClient, cfg, clusterCfg, generateName,
-		awsClusterNodesModulePath, a.SSHPrivateKeyPath)
+		awsClusterNodesModulePath, a.SSHPrivateKeyPath, repoPath)
 }
 
 func provisionHarvesterCustomCluster(
@@ -366,10 +409,10 @@ func provisionHarvesterCustomCluster(
 	rancherClient *rancher.Client,
 	cfg *config.Config,
 	clusterCfg *config.CustomClusterConfig,
+	repoPath string,
 ) *v1.SteveAPIObject {
 	t.Helper()
 
-	repoPath := cfg.RepoPath
 	workspace := cfg.Workspace
 	if workspace == "" {
 		workspace = "default"
@@ -422,7 +465,7 @@ func provisionHarvesterCustomCluster(
 	}
 
 	return provisionCustomClusterShared(t, rancherClient, cfg, clusterCfg, generateName,
-		harvesterVMModulePath, h.SSHPrivateKeyPath)
+		harvesterVMModulePath, h.SSHPrivateKeyPath, repoPath)
 }
 
 func provisionCustomClusterShared(
@@ -433,10 +476,10 @@ func provisionCustomClusterShared(
 	generateName string,
 	nodeModulePath string,
 	sshPrivateKeyPath string,
+	repoPath string,
 ) *v1.SteveAPIObject {
 	t.Helper()
 
-	repoPath := cfg.RepoPath
 	workspace := cfg.Workspace
 	if workspace == "" {
 		workspace = "default"
@@ -557,7 +600,7 @@ func provisionHarvesterStandaloneCluster(
 ) string {
 	t.Helper()
 
-	repoPath := cfg.RepoPath
+	repoPath := extractInfraFiles(t)
 	workspace := cfg.Workspace
 	if workspace == "" {
 		workspace = "default"

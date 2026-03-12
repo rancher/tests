@@ -1,6 +1,6 @@
 module github.com/rancher/tests
 
-go 1.25.0
+go 1.25.5
 
 replace (
 	github.com/containerd/containerd => github.com/containerd/containerd v1.6.27 // for compatibilty with docker 20.10.x
@@ -15,6 +15,7 @@ replace (
 
 	github.com/rancher/tests/actions => ./actions
 	github.com/rancher/tests/interoperability => ./interoperability
+
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
 	go.opentelemetry.io/otel => go.opentelemetry.io/otel v1.28.0
@@ -70,7 +71,7 @@ require (
 	github.com/rancher/rancher v0.0.0-20251223145833-24cecce3325e
 	github.com/rancher/shepherd v0.0.0-20260226203127-be7fc5d07fbe
 	github.com/rancher/tests/actions v0.0.0-20260206233613-bf28ed655999
-	github.com/rancher/tests/interoperability v0.0.0-00010101000000-000000000000
+	github.com/rancher/tests/interoperability v0.0.0
 	github.com/rancher/tfp-automation v0.0.0-20260223200320-56541017be04
 )
 
@@ -180,6 +181,7 @@ require (
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/qase-tms/qase-go/qase-api-v2-client v1.1.4 // indirect
 	github.com/rancher/ali-operator v1.13.0-rc.2 // indirect
+	github.com/rancher/qa-infra-automation v0.0.0-20260312183744-12eddd0d1370 // indirect
 	github.com/tmccombs/hcl2json v0.6.4 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
