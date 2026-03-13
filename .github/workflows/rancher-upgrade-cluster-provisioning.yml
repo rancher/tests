@@ -3,7 +3,7 @@ name: Upgraded Rancher Cluster Provisioning
 
 on:
   schedule:
-    - cron: "0 10 * * 1,2,4,5"
+    - cron: "0 10 * * 1,5"
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -297,8 +297,6 @@ jobs:
 
           templateTest:
             repo:
-              metadata:
-                name: "${{ env.HOSTNAME_PREFIX }}-template-test"
               spec:
                 gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
                 gitBranch: main
@@ -654,8 +652,6 @@ jobs:
 
           templateTest:
             repo:
-              metadata:
-                name: "${{ env.HOSTNAME_PREFIX }}-template-test"
               spec:
                 gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
                 gitBranch: main
@@ -1011,8 +1007,6 @@ jobs:
 
           templateTest:
             repo:
-              metadata:
-                name: "${{ env.HOSTNAME_PREFIX }}-template-test"
               spec:
                 gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
                 gitBranch: main
