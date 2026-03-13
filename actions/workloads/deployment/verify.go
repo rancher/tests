@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"time"
 
-	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/charts"
+	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/workloads"
@@ -32,6 +33,7 @@ const (
 	Fleet              = "fleet-agent"
 	ClusterAgent       = "cattle-cluster-agent"
 	revisionAnnotation = "deployment.kubernetes.io/revision"
+	v3IDRegex          = "^c-[a-z0-9]{5}$"
 )
 
 // VerifyDeployment waits for a deployment to be ready in the downstream cluster
@@ -508,30 +510,36 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 
 // VerifyClusterDeployments verifies that all required deployments are present and available in the cluster
 func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject) error {
-	status := &provv1.ClusterStatus{}
-	if err := v1.ConvertToK8sType(cluster.Status, status); err != nil {
+	clusterID := cluster.Name
+	isV3ID, err := regexp.MatchString(v3IDRegex, cluster.Name)
+	if err != nil {
 		return err
 	}
 
-	var downstreamClient *v1.Client
-	err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
-		downstreamClient, err = client.Steve.ProxyDownstream(status.ClusterName)
+	if !isV3ID {
+		clusterID, err = clusters.GetClusterIDByName(client, cluster.Name)
 		if err != nil {
-			return false, nil
+			return err
 		}
-
-		return true, nil
-	})
-
-	if downstreamClient == nil {
-		return fmt.Errorf("failed to get downstream steve client for cluster (%s)", cluster.Name)
 	}
 
-	deploymentClient := downstreamClient.SteveType(stevetypes.Deployment)
+	var downstreamClient *v1.Client
 	requiredDeployments := []string{ClusterAgent, Webhook, Fleet, SUC}
 	logrus.Debugf("Verifying all required deployments exist: %v", requiredDeployments)
-	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		clusterDeployments, err := deploymentClient.List(nil)
+	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		if slices.Contains(requiredDeployments, ClusterAgent) {
+			downstreamClient, err = client.Steve.ProxyDownstream(clusterID)
+			if err != nil {
+				return false, nil
+			}
+
+			client, err = client.ReLogin()
+			if err != nil {
+				return false, nil
+			}
+		}
+
+		clusterDeployments, err := downstreamClient.SteveType(stevetypes.Deployment).List(nil)
 		if err != nil {
 			return false, nil
 		}
@@ -561,7 +569,7 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 	logrus.Debug("Verifying all deployments")
 	var failedDeployments []appv1.Deployment
 	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.TenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		clusterDeployments, err := deploymentClient.List(nil)
+		clusterDeployments, err := downstreamClient.SteveType(stevetypes.Deployment).List(nil)
 		if err != nil {
 			return false, nil
 		}
