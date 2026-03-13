@@ -1,6 +1,8 @@
 package workloads
 
 import (
+	"regexp"
+
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
@@ -14,16 +16,23 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	v3IDRegex = "^c-[a-z0-9]{5}$"
+)
+
 // VerifyWorkloads verifies a variety of workloads on a cluster
 func VerifyWorkloads(client *rancher.Client, clusterName string, workloads Workloads) (*Workloads, error) {
-	client, err := client.ReLogin()
+	clusterID := clusterName
+	isV3ID, err := regexp.MatchString(v3IDRegex, clusterName)
 	if err != nil {
 		return nil, err
 	}
 
-	clusterID, err := clusters.GetClusterIDByName(client, clusterName)
-	if err != nil {
-		return nil, err
+	if !isV3ID {
+		clusterID, err = clusters.GetClusterIDByName(client, clusterName)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if workloads.Deployment != nil {
