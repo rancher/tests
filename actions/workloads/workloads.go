@@ -1,6 +1,8 @@
 package workloads
 
 import (
+	"regexp"
+
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters"
 	projectsapi "github.com/rancher/tests/actions/projects"
@@ -32,9 +34,17 @@ type Workloads struct {
 
 // CreateWorkloads creates a variety of workloads on a cluster
 func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workloads) (*Workloads, error) {
-	clusterID, err := clusters.GetClusterIDByName(client, clusterName)
+	clusterID := clusterName
+	isV3ID, err := regexp.MatchString(v3IDRegex, clusterName)
 	if err != nil {
 		return nil, err
+	}
+
+	if !isV3ID {
+		clusterID, err = clusters.GetClusterIDByName(client, clusterName)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	logrus.Debugf("Creating a namespace on %s", clusterName)
