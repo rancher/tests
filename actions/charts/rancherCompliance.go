@@ -17,13 +17,13 @@ import (
 )
 
 const (
-	CISBenchmarkNamespace = "cis-operator-system"
-	CISBenchmarkName      = "rancher-cis-benchmark"
+	ComplianceNamespace = "compliance-operator-system"
+	ComplianceName      = "rancher-compliance"
 )
 
-// InstallHardenedChart is a helper function that installs the cis-benchmark chart.
-func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *PayloadOpts) error {
-	chartInstallAction, err := newCISBenchmarkChartInstallAction(ChartInstallActionPayload)
+// InstallComplianceChart is a helper function that installs the rancher-compliance chart.
+func InstallComplianceChart(client *rancher.Client, ChartInstallActionPayload *PayloadOpts) error {
+	chartInstallAction, err := newRancherComplianceChartInstallAction(ChartInstallActionPayload)
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 		err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
 			switch event.Type {
 			case watch.Error:
-				return false, fmt.Errorf("there was an error uninstalling CIS benchmark chart")
+				return false, fmt.Errorf("there was an error uninstalling Rancher Compliance chart")
 			case watch.Deleted:
 				return true, nil
 			}
@@ -79,7 +79,7 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 		err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
 			chart := event.Object.(*catalogv1.App)
 			if event.Type == watch.Error {
-				return false, fmt.Errorf("there was an error uninstalling CIS benchmark chart")
+				return false, fmt.Errorf("there was an error uninstalling Rancher Compliance chart")
 			} else if event.Type == watch.Deleted {
 				return true, nil
 			} else if chart == nil {
@@ -168,8 +168,9 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 	return nil
 }
 
-// newCISBenchmarkChartInstallAction is a private helper function that returns chart install action with CIS benchmark and payload options.
-func newCISBenchmarkChartInstallAction(p *PayloadOpts) (*types.ChartInstallAction, error) {
+// newRancherComplianceChartInstallAction is a private helper function that returns chart install action with Rancher
+// compliance and payload options.
+func newRancherComplianceChartInstallAction(p *PayloadOpts) (*types.ChartInstallAction, error) {
 	chartInstall := NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
 	chartInstallCRD := NewChartInstall(p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
 	chartInstalls := []types.ChartInstall{*chartInstallCRD, *chartInstall}
@@ -179,8 +180,8 @@ func newCISBenchmarkChartInstallAction(p *PayloadOpts) (*types.ChartInstallActio
 	return chartInstallAction, nil
 }
 
-// UpgradeCISBenchmarkChart is a helper function that upgrades the cis-benchmark chart.
-func UpgradeCISBenchmarkChart(client *rancher.Client, installOptions *InstallOptions) error {
+// UpgradeRancherComplianceChart is a helper function that upgrades the rancher-compliance chart.
+func UpgradeRancherComplianceChart(client *rancher.Client, installOptions *InstallOptions) error {
 	serverSetting, err := client.Management.Setting.ByID(serverURLSettingID)
 	if err != nil {
 		return err
@@ -193,13 +194,13 @@ func UpgradeCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 
 	benchmarkChartUpgradeActionPayload := &PayloadOpts{
 		InstallOptions:  *installOptions,
-		Name:            CISBenchmarkName,
-		Namespace:       CISBenchmarkNamespace,
+		Name:            ComplianceName,
+		Namespace:       ComplianceNamespace,
 		Host:            serverSetting.Value,
 		DefaultRegistry: registrySetting.Value,
 	}
 
-	chartUpgradeAction := newCISBenchmarkChartUpgradeAction(benchmarkChartUpgradeActionPayload)
+	chartUpgradeAction := newRancherComplianceChartUpgradeAction(benchmarkChartUpgradeActionPayload)
 
 	catalogClient, err := client.GetClusterCatalogClient(installOptions.Cluster.ID)
 	if err != nil {
@@ -221,8 +222,8 @@ func UpgradeCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	}
 
-	watchAppInterface, err := adminCatalogClient.Apps(CISBenchmarkNamespace).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + CISBenchmarkName,
+	watchAppInterface, err := adminCatalogClient.Apps(ComplianceNamespace).Watch(context.TODO(), metav1.ListOptions{
+		FieldSelector:  "metadata.name=" + ComplianceName,
 		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 	})
 	if err != nil {
@@ -243,8 +244,8 @@ func UpgradeCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	}
 
-	watchAppInterface, err = adminCatalogClient.Apps(CISBenchmarkNamespace).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + CISBenchmarkName,
+	watchAppInterface, err = adminCatalogClient.Apps(ComplianceNamespace).Watch(context.TODO(), metav1.ListOptions{
+		FieldSelector:  "metadata.name=" + ComplianceName,
 		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 	})
 	if err != nil {
@@ -268,8 +269,8 @@ func UpgradeCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 	return nil
 }
 
-// newCISBenchmarkChartUpgradeAction is a private helper function that returns chart upgrade action.
-func newCISBenchmarkChartUpgradeAction(p *PayloadOpts) *types.ChartUpgradeAction {
+// newRancherComplianceChartUpgradeAction is a private helper function that returns chart upgrade action.
+func newRancherComplianceChartUpgradeAction(p *PayloadOpts) *types.ChartUpgradeAction {
 	chartUpgrade := NewChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, nil)
 	chartUpgradeCRD := NewChartUpgrade(p.Name+"-crd", p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, nil)
 	chartUpgrades := []types.ChartUpgrade{*chartUpgradeCRD, *chartUpgrade}

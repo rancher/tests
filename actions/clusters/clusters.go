@@ -870,6 +870,10 @@ func HardenRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 	v1Cluster := NewK3SRKE2ClusterConfig(clusterName, namespace, clustersConfig, machinePools, cloudCredentialSecretName)
 	v1Cluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName = rancherRestricted
 
+	v1Cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"] = []string{
+		"service-account-extend-token-expiration=false",
+	}
+
 	v1Cluster.Spec.RKEConfig.MachineSelectorConfig = []rkev1.RKESystemConfig{
 		{
 			Config: rkev1.GenericMap{
