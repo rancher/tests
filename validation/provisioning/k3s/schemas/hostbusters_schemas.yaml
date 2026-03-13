@@ -360,7 +360,7 @@
   suite: Go Automation/Provisioning/K3S/Hardened
   cases:
   - description: Provisions a hardened 3etcd/2cp/3worker custom cluster
-    title: K3S_CIS_1.9_Profile|3_etcd|2_cp|3_worker
+    title: K3S_Rancher_Compliance
     priority: 4
     type: 8
     automation: 2

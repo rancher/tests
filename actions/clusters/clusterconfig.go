@@ -64,6 +64,7 @@ func ConvertConfigToClusterConfig(provisioningConfig *provisioningInput.Config) 
 	newConfig.EnableNetworkPolicy = provisioningConfig.EnableNetworkPolicy
 
 	newConfig.Hardened = provisioningConfig.Hardened
+	newConfig.Compliance = provisioningConfig.Compliance
 	newConfig.PSACT = provisioningConfig.PSACT
 	newConfig.PNI = provisioningConfig.PNI
 	newConfig.ClusterSSHTests = provisioningConfig.ClusterSSHTests

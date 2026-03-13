@@ -267,7 +267,7 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 
 	cluster := clusters.NewK3SRKE2ClusterConfig(clusterName, namespaces.FleetDefault, clustersConfig, nil, "")
 
-	if clustersConfig.Hardened && strings.Contains(clustersConfig.KubernetesVersion, shepherdclusters.RKE2ClusterType.String()) {
+	if (clustersConfig.Compliance || clustersConfig.Hardened) && strings.Contains(clustersConfig.KubernetesVersion, shepherdclusters.RKE2ClusterType.String()) {
 		logrus.Debugf("Hardening cluster (%s)", clusterName)
 		err = rke2Hardening.HardenRKE2Nodes(nodes, rolesPerNode)
 		if err != nil {
@@ -379,7 +379,7 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 		totalNodesObserved += int(quantityPerPool[poolIndex])
 	}
 
-	if clustersConfig.Hardened {
+	if clustersConfig.Compliance || clustersConfig.Hardened {
 		if strings.Contains(clustersConfig.KubernetesVersion, shepherdclusters.K3SClusterType.String()) {
 			logrus.Debugf("Hardening cluster (%s)", clusterName)
 			err = k3sHardening.HardenK3SNodes(nodes, rolesPerNode, clustersConfig.KubernetesVersion, clustersConfig.PathToRepo)
@@ -475,7 +475,7 @@ func CreateProvisioningRKE1CustomCluster(client *rancher.Client, externalNodePro
 
 	cluster := clusters.NewRKE1ClusterConfig(clusterName, client, clustersConfig)
 
-	if clustersConfig.Hardened {
+	if clustersConfig.Compliance || clustersConfig.Hardened {
 		err = rke1Hardening.HardenRKE1Nodes(nodes, rolesPerPool)
 		if err != nil {
 			return nil, nil, err
@@ -567,7 +567,7 @@ func CreateProvisioningRKE1CustomCluster(client *rancher.Client, externalNodePro
 		return nil, nil, err
 	}
 
-	if clustersConfig.Hardened {
+	if clustersConfig.Compliance || clustersConfig.Hardened {
 		err = rke1Hardening.PostRKE1HardeningConfig(nodes, rolesPerPool)
 		if err != nil {
 			return nil, nil, err

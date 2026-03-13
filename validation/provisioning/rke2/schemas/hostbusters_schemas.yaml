@@ -347,7 +347,7 @@
   suite: Go Automation/Provisioning/RKE2/Hardened
   cases:
   - description: Provisions a hardened 3etcd/2cp/3worker custom cluster
-    title: RKE2_CIS_1.9_Profile|3_etcd|2_cp|3_worker
+    title: RKE2_Rancher_Compliance
     priority: 4
     type: 8
     is_flaky: 0

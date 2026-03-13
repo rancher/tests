@@ -101,7 +101,7 @@ Dynamic tests do not have a static name
 ### Hardened Test
 
 #### Description: 
-Hardened test verfies that a cluster can deploy the cis-benchmark(2.11<=)/compliance(2.12+) chart on a custom cluster
+Hardened test verfies that a cluster can deploy the rancher-compliance chart on a custom cluster
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
@@ -109,7 +109,7 @@ Hardened test verfies that a cluster can deploy the cis-benchmark(2.11<=)/compli
 3. [Custom Cluster Config](#custom-cluster)
 
 #### Table Tests
-1. `K3S_CIS_1.9_Profile|3_etcd|2_cp|3_worker`
+1. `K3S_Rancher_Compliance`
 
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestHardened -timeout=1h -v`

@@ -124,53 +124,45 @@ func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject)
 	ctx, cancel := context.WithTimeout(context.Background(), defaults.FifteenMinuteTimeout)
 	defer cancel()
 
-	err := kwait.PollUntilContextTimeout(
-		ctx,
-		10*time.Second,
-		defaults.FifteenMinuteTimeout,
-		false,
-		func(ctx context.Context) (bool, error) {
+	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.FifteenMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+		adminClient, err := client.ReLogin()
+		if err != nil {
+			logrus.Debugf("Unable to fetch cluster client (%s), retrying", cluster.Name)
+			return false, nil
+		}
 
-			adminClient, err := client.ReLogin()
-			if err != nil {
-				logrus.Debugf("Unable to fetch cluster client (%s), retrying", cluster.Name)
-				return false, nil
-			}
+		kubeProvisioningClient, err := adminClient.GetKubeAPIProvisioningClient()
+		if err != nil {
+			logrus.Debugf("Unable to fetch cluster kube client (%s), retrying", cluster.Name)
+			return false, nil
+		}
 
-			kubeProvisioningClient, err := adminClient.GetKubeAPIProvisioningClient()
-			if err != nil {
-				logrus.Debugf("Unable to fetch cluster kube client (%s), retrying", cluster.Name)
-				return false, nil
-			}
+		watchInterface, err := kubeProvisioningClient.
+			Clusters(namespaces.FleetDefault).
+			Watch(ctx, metav1.ListOptions{
+				FieldSelector:  "metadata.name=" + cluster.Name,
+				TimeoutSeconds: &defaults.WatchTimeoutSeconds,
+			},
+			)
+		if err != nil {
+			logrus.Debugf("Unable to watch cluster (%s), retrying", cluster.Name)
+			return false, nil
+		}
 
-			watchInterface, err := kubeProvisioningClient.
-				Clusters(namespaces.FleetDefault).
-				Watch(
-					ctx,
-					metav1.ListOptions{
-						FieldSelector:  "metadata.name=" + cluster.Name,
-						TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-					},
-				)
-			if err != nil {
-				logrus.Debugf("Unable to watch cluster (%s), retrying", cluster.Name)
-				return false, nil
-			}
-			defer watchInterface.Stop()
+		defer watchInterface.Stop()
 
-			checkFunc := shepherdclusters.IsProvisioningClusterReady
+		checkFunc := shepherdclusters.IsProvisioningClusterReady
 
-			err = wait.WatchWait(watchInterface, checkFunc)
-			if err != nil {
-				lastErr = err
-				logrus.Debugf("Cluster (%s) not ready yet, retrying: %v", cluster.Name, err)
-				return false, nil
-			}
+		err = wait.WatchWait(watchInterface, checkFunc)
+		if err != nil {
+			lastErr = err
+			logrus.Debugf("Cluster (%s) not ready yet, retrying: %v", cluster.Name, err)
+			return false, nil
+		}
 
-			return true, nil
-		},
+		return true, nil
+	},
 	)
-
 	if err != nil {
 		logrus.Errorf("Cluster (%s) failed to become ready: %v", cluster.Name, err)
 		dumpProvisioningClusterState(ctx, client, cluster.Name, lastErr)
