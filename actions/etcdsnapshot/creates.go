@@ -430,6 +430,22 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 	return cluster, snapshotToRestore, postDeploymentResp, postServiceResp, err
 }
 
+// This function validates that spec.rkeConfig.etcd.s3 is not null for S3-specific snapshot tests.
+func VerifyS3Config(client *rancher.Client, clusterName string) error {
+	cluster, _, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
+	if err != nil {
+		return err
+	}
+
+	if cluster.Spec.RKEConfig.ETCD.S3 == nil {
+		return fmt.Errorf("expected S3 configuration for cluster %s but spec.rkeConfig.etcd.s3 is empty", clusterName)
+	}
+
+	logrus.Infof("Verified S3 configuration exists for cluster %s", clusterName)
+
+	return nil
+}
+
 // RestoreAndValidateSnapshotV2Prov restores a given snapshot for a v2prov cluster and validates its resources
 // after the restore against the original cluster object
 func RestoreAndValidateSnapshotV2Prov(client *rancher.Client, snapshotID string, etcdRestore *Config, cluster *apisV1.Cluster, clusterID string) error {
