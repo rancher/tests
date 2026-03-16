@@ -75,6 +75,9 @@ func (s *S3SnapshotRestoreTestSuite) SetupSuite() {
 		logrus.Info("Provisioning RKE2 cluster")
 		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, false, false)
 		require.NoError(s.T(), err)
+
+		err = etcdsnapshot.VerifyS3Config(s.client, s.cluster.Name)
+		require.NoError(s.T(), err)
 	} else {
 		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
 		s.cluster, err = client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + s.client.RancherConfig.ClusterName)
