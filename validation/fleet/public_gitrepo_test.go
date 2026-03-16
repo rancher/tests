@@ -79,7 +79,7 @@ func (f *FleetPublicRepoTestSuite) TestGitRepoDeployment() {
 			TargetNamespace: namegenerator.AppendRandomString("fleet-test-namespace"),
 			CorrectDrift:    &v1alpha1.CorrectDrift{},
 			ImageScanCommit: &v1alpha1.CommitSpec{AuthorName: "", AuthorEmail: ""},
-			Targets:         []v1alpha1.GitTarget{{ClusterName: f.clusterID}}, // This actually refers to the cluster ID.
+			Targets:         []v1alpha1.GitTarget{{ClusterName: f.client.RancherConfig.ClusterName}}, // This actually refers to the cluster ID.
 		},
 	}
 
@@ -153,7 +153,7 @@ func (f *FleetPublicRepoTestSuite) TestDynamicGitRepoDeployment() {
 	if len(dynamicGitRepo.Spec.Targets) < 1 {
 		dynamicGitRepo.Spec.Targets = []v1alpha1.GitTarget{
 			{
-				ClusterName: f.clusterID,
+				ClusterName: f.client.RancherConfig.ClusterName,
 			},
 		}
 	}
