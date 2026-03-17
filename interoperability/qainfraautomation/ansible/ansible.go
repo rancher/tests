@@ -13,9 +13,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type runner func(name string, args []string, dir string, env []string) ([]byte, error)
-
-func defaultRunner(name string, args []string, dir string, env []string) ([]byte, error) {
+func run(name string, args []string, dir string, env []string) ([]byte, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	if len(env) > 0 {
@@ -26,21 +24,19 @@ func defaultRunner(name string, args []string, dir string, env []string) ([]byte
 	if err != nil {
 		return out, fmt.Errorf("command %q %v failed: %w\noutput:\n%s", name, args, err, string(out))
 	}
-	
+
 	return out, nil
 }
 
 // Client runs ansible commands within a local repository checkout.
 type Client struct {
 	repoPath string
-	run      runner
 }
 
 // NewClient returns a Client rooted at repoPath.
 func NewClient(repoPath string) *Client {
 	return &Client{
 		repoPath: repoPath,
-		run:      defaultRunner,
 	}
 }
 
@@ -50,7 +46,7 @@ func (c *Client) AddSSHKey(privateKeyPath string) error {
 		return fmt.Errorf("ssh-add: privateKeyPath is required but was not set — ensure sshPrivateKeyPath is configured in your harvester/aws config")
 	}
 	logrus.Infof("[ansible] ssh-add %s", privateKeyPath)
-	out, err := c.run("ssh-add", []string{privateKeyPath}, c.repoPath, nil)
+	out, err := run("ssh-add", []string{privateKeyPath}, c.repoPath, nil)
 	if err != nil {
 		return fmt.Errorf("ssh-add: %w", err)
 	}

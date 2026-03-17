@@ -185,7 +185,7 @@ func ProvisionRancherCluster(
 		KubernetesVersion: clusterCfg.KubernetesVersion,
 		FQDN:              "https://" + rancherClient.RancherConfig.Host,
 		APIKey:            rancherClient.RancherConfig.AdminToken,
-		Insecure:          true,
+		Insecure:          *rancherClient.RancherConfig.Insecure,
 		CloudProvider:     clusterCfg.CloudProvider,
 		GenerateName:      generateName,
 		IsNetworkPolicy:   clusterCfg.IsNetworkPolicy,
@@ -195,7 +195,7 @@ func ProvisionRancherCluster(
 		CreateNew:         true,
 	}
 
-	clusterVarFile, err := writeTFVarsJSON(repoPath, "rancher-cluster-vars.json", clusterVars)
+	clusterVarFile, err := writeTFVarsJSON(t, "rancher-cluster-vars.json", clusterVars)
 	if err != nil {
 		t.Fatalf("write rancher cluster tfvars: %v", err)
 	}
@@ -365,7 +365,7 @@ func provisionAWSCustomCluster(
 		ProxySetup:     a.ProxySetup,
 	}
 
-	nodeVarFile, err := writeTFVarsJSON(repoPath, "aws-cluster-nodes-vars.json", nodeVars)
+	nodeVarFile, err := writeTFVarsJSON(t, "aws-cluster-nodes-vars.json", nodeVars)
 	if err != nil {
 		t.Fatalf("write aws cluster nodes tfvars: %v", err)
 	}
@@ -429,7 +429,7 @@ func provisionHarvesterCustomCluster(
 	}
 
 	vmVars := buildHarvesterVMVars(h, clusterCfg.Nodes)
-	vmVarFile, err := writeTFVarsJSON(repoPath, "harvester-vm-vars.json", vmVars)
+	vmVarFile, err := writeTFVarsJSON(t, "harvester-vm-vars.json", vmVars)
 	if err != nil {
 		t.Fatalf("write harvester VM tfvars: %v", err)
 	}
@@ -492,10 +492,10 @@ func provisionCustomClusterShared(
 		GenerateName:      generateName,
 		IsNetworkPolicy:   clusterCfg.IsNetworkPolicy,
 		PSA:               clusterCfg.PSA,
-		Insecure:          true,
+		Insecure:          *rancherClient.RancherConfig.Insecure,
 	}
 
-	clusterVarFile, err := writeTFVarsJSON(repoPath, "rancher-custom-cluster-vars.json", clusterVars)
+	clusterVarFile, err := writeTFVarsJSON(t, "rancher-custom-cluster-vars.json", clusterVars)
 	if err != nil {
 		t.Fatalf("write rancher custom cluster tfvars: %v", err)
 	}
@@ -575,25 +575,28 @@ func provisionCustomClusterShared(
 // ProvisionHarvesterRKE2Cluster provisions a standalone RKE2 cluster on Harvester VMs and returns the kubeconfig path.
 func ProvisionHarvesterRKE2Cluster(
 	t *testing.T,
+	rancherClient *rancher.Client,
 	cfg *config.Config,
 	clusterCfg *config.StandaloneClusterConfig,
 ) string {
 	t.Helper()
-	return provisionHarvesterStandaloneCluster(t, cfg, clusterCfg, "rke2")
+	return provisionHarvesterStandaloneCluster(t, rancherClient, cfg, clusterCfg, "rke2")
 }
 
 // ProvisionHarvesterK3SCluster provisions a standalone K3s cluster on Harvester VMs and returns the kubeconfig path.
 func ProvisionHarvesterK3SCluster(
 	t *testing.T,
+	rancherClient *rancher.Client,
 	cfg *config.Config,
 	clusterCfg *config.StandaloneClusterConfig,
 ) string {
 	t.Helper()
-	return provisionHarvesterStandaloneCluster(t, cfg, clusterCfg, "k3s")
+	return provisionHarvesterStandaloneCluster(t, rancherClient, cfg, clusterCfg, "k3s")
 }
 
 func provisionHarvesterStandaloneCluster(
 	t *testing.T,
+	rancherClient *rancher.Client,
 	cfg *config.Config,
 	clusterCfg *config.StandaloneClusterConfig,
 	clusterType string,
@@ -634,7 +637,7 @@ func provisionHarvesterStandaloneCluster(
 	}
 
 	vmVars := buildHarvesterVMVars(h, cfg.StandaloneCluster.Nodes)
-	vmVarFile, err := writeTFVarsJSON(repoPath, "harvester-vm-vars.json", vmVars)
+	vmVarFile, err := writeTFVarsJSON(t, "harvester-vm-vars.json", vmVars)
 	if err != nil {
 		t.Fatalf("write harvester VM tfvars: %v", err)
 	}
@@ -652,12 +655,14 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("tofu apply (harvester vm): %v", err)
 	}
 
-	t.Cleanup(func() {
-		logrus.Infof("[qainfraautomation] destroying Harvester VMs (workspace=%s)", workspace)
-		if err := vmTofu.Destroy(vmVarFile); err != nil {
-			logrus.Errorf("[qainfraautomation] tofu destroy (harvester vm): %v", err)
-		}
-	})
+	if cleanupEnabled(rancherClient) {
+		t.Cleanup(func() {
+			logrus.Infof("[qainfraautomation] destroying Harvester VMs (workspace=%s)", workspace)
+			if err := vmTofu.Destroy(vmVarFile); err != nil {
+				logrus.Errorf("[qainfraautomation] tofu destroy (harvester vm): %v", err)
+			}
+		})
+	}
 
 	ansibleClient := ansible.NewClient(repoPath)
 	inventoryEnv := map[string]string{
@@ -725,12 +730,13 @@ func buildHarvesterVMVars(h *config.HarvesterConfig, g []config.CustomClusterNod
 	}
 }
 
-func writeTFVarsJSON(repoPath, filename string, v any) (string, error) {
+func writeTFVarsJSON(t *testing.T, filename string, v any) (string, error) {
+	t.Helper()
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("marshal tfvars JSON: %w", err)
 	}
-	destPath := filepath.Join(repoPath, filename)
+	destPath := filepath.Join(t.TempDir(), filename)
 	if err := os.WriteFile(destPath, data, 0600); err != nil {
 		return "", fmt.Errorf("write tfvars file %s: %w", destPath, err)
 	}
