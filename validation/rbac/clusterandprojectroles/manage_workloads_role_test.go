@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/daemonset"
@@ -246,7 +247,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForDeployments() 
 	log.Infof("As user %s, update the deployment %s and scale up the replicas.", workloadUser.Username, createdDeployment.Name)
 	replicas := int32(2)
 	getDeployment.Spec.Replicas = &replicas
-	updatedDeployment, err := deployment.UpdateDeployment(workloadUserClient, mw.cluster.ID, adminNamespace.Name, getDeployment, true)
+	updatedDeployment, err := deploymentapi.UpdateDeployment(workloadUserClient, mw.cluster.ID, adminNamespace.Name, getDeployment, true)
 	require.NoError(mw.T(), err)
 
 	updatedDeployment, err = downstreamContext.Apps.Deployment().Get(adminNamespace.Name, updatedDeployment.Name, metav1.GetOptions{})

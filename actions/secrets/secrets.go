@@ -111,7 +111,7 @@ func CreateProjectScopedSecret(client *rancher.Client, clusterID, projectID stri
 
 // ValidatePropagatedNamespaceSecrets verifies that secrets propagated to project namespaces match the original project-scoped secret
 func ValidatePropagatedNamespaceSecrets(client *rancher.Client, clusterID, projectID string, projectScopedSecret *corev1.Secret, namespaceList []*corev1.Namespace) error {
-	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, true, func(ctx context.Context) (bool, error) {
+	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
 		for _, ns := range namespaceList {
 			nsSecret, err := secretsapi.GetSecretByName(client, clusterID, ns.Name, projectScopedSecret.Name, metav1.GetOptions{})
 			if err != nil {

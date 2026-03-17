@@ -14,7 +14,7 @@ import (
 	"github.com/rancher/shepherd/extensions/kubeconfig"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -208,7 +208,7 @@ func GetPodByName(client *rancher.Client, clusterID, namespaceName, podName stri
 
 // GetPodNamesFromDeployment is a helper to get names of the pod in a deployment
 func GetPodNamesFromDeployment(client *rancher.Client, clusterID, namespaceName string, deploymentName string) ([]string, error) {
-	deploymentList, err := deployments.ListDeployments(client, clusterID, namespaceName, metav1.ListOptions{
+	deploymentList, err := deploymentapi.ListDeployments(client, clusterID, namespaceName, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + deploymentName,
 	})
 	if err != nil {

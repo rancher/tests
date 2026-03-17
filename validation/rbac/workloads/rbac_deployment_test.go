@@ -12,6 +12,7 @@ import (
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/deployment"
@@ -168,7 +169,7 @@ func (rd *RbacDeploymentTestSuite) TestUpdateDeployment() {
 				createdDeployment.Labels = make(map[string]string)
 			}
 			createdDeployment.Labels["updated"] = "true"
-			updatedDeployment, err := deployment.UpdateDeployment(userClient, rd.cluster.ID, namespace.Name, createdDeployment, false)
+			updatedDeployment, err := deploymentapi.UpdateDeployment(userClient, rd.cluster.ID, namespace.Name, createdDeployment, false)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rd.T(), err, "failed to update deployment")
@@ -271,7 +272,7 @@ func (rd *RbacDeploymentTestSuite) TestCrudDeploymentAsClusterMember() {
 		createdDeployment.Labels = make(map[string]string)
 	}
 	createdDeployment.Labels["updated"] = "true"
-	updatedDeployment, err := deployment.UpdateDeployment(userClient, rd.cluster.ID, namespace.Name, createdDeployment, true)
+	updatedDeployment, err := deploymentapi.UpdateDeployment(userClient, rd.cluster.ID, namespace.Name, createdDeployment, true)
 	require.NoError(rd.T(), err, "failed to update deployment")
 	updatedDeployment, err = standardUserContext.Apps.Deployment().Get(namespace.Name, updatedDeployment.Name, metav1.GetOptions{})
 	require.NoError(rd.T(), err, "Failed to get the updated deployment after updating labels.")

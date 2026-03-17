@@ -2,16 +2,24 @@ package deployments
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/api/scheme"
 	"github.com/rancher/shepherd/pkg/wait"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	appv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+)
+
+const (
+	restartAnnotation = "kubectl.kubernetes.io/restartedAt"
 )
 
 // DeploymentGroupVersionResource is the required Group Version Resource for accessing deployments in a cluster,
@@ -76,6 +84,62 @@ func WatchAndWaitDeployments(client *rancher.Client, clusterID, namespace string
 			}
 			return false, nil
 		})
+	}
+
+	return nil
+}
+
+// RestartDeployment triggers a rollout restart of a deployment by updating an annotation
+func RestartDeployment(client *rancher.Client, clusterID, namespaceName, deploymentName string) error {
+	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	deploymentObj, err := wranglerContext.Apps.Deployment().Get(namespaceName, deploymentName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error fetching deployment %s in namespace %s: %w", deploymentName, namespaceName, err)
+	}
+
+	if deploymentObj.Spec.Template.Annotations == nil {
+		deploymentObj.Spec.Template.Annotations = map[string]string{}
+	}
+
+	deploymentObj.Spec.Template.Annotations[restartAnnotation] = time.Now().Format(time.RFC3339)
+
+	_, err = UpdateDeployment(client, clusterID, namespaceName, deploymentObj, true)
+	if err != nil {
+		return fmt.Errorf("error restarting deployment %s in namespace %s: %w", deploymentName, namespaceName, err)
+	}
+
+	return nil
+}
+
+// WaitForDeploymentActive waits for a deployment to become active by polling until replicas match available replicas
+func WaitForDeploymentActive(client *rancher.Client, clusterID, namespaceName, deploymentName string) error {
+	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return fmt.Errorf("error getting wrangler context for cluster %s: %w", clusterID, err)
+	}
+
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		deployment, err := wranglerContext.Apps.Deployment().Get(namespaceName, deploymentName, metav1.GetOptions{})
+		if err != nil {
+			return false, fmt.Errorf("error fetching deployment %s in namespace %s: %w", deploymentName, namespaceName, err)
+		}
+
+		if deployment.Spec.Replicas != nil &&
+			*deployment.Spec.Replicas == deployment.Status.UpdatedReplicas &&
+			*deployment.Spec.Replicas == deployment.Status.ReadyReplicas &&
+			*deployment.Spec.Replicas == deployment.Status.AvailableReplicas {
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("deployment %s in namespace %s did not become active: %w", deploymentName, namespaceName, err)
 	}
 
 	return nil

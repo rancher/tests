@@ -16,9 +16,9 @@ import (
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	secretsapi "github.com/rancher/tests/actions/kubeapi/secrets"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/secrets"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -422,7 +422,7 @@ func (pss *ProjectScopedSecretTestSuite) TestVerifyProjectScopedSecretRancherRes
 	createdProject, namespaceList, createdProjectScopedSecret := pss.testProjectScopedSecret(pss.cluster.ID, corev1.SecretTypeOpaque, opaqueSecretData)
 
 	log.Info("Restart Rancher")
-	err := deployment.RestartDeployment(pss.client, clusterapi.LocalCluster, rbac.RancherDeploymentNamespace, rbac.RancherDeploymentName)
+	err := deploymentapi.RestartDeployment(pss.client, clusterapi.LocalCluster, rbac.RancherDeploymentNamespace, rbac.RancherDeploymentName)
 	require.NoError(pss.T(), err, "Failed to restart Rancher deployment")
 
 	log.Info("Verify that the project scoped secret still exists after Rancher restart.")

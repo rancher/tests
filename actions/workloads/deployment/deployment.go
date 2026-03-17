@@ -18,9 +18,9 @@ import (
 	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	"github.com/rancher/shepherd/pkg/wrangler"
-	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
@@ -30,10 +30,9 @@ import (
 )
 
 const (
-	nginxImageName    = "nginx"
-	ubuntuImageName   = "ubuntu"
-	redisImageName    = "redis"
-	restartAnnotation = "kubectl.kubernetes.io/restartedAt"
+	nginxImageName  = "nginx"
+	ubuntuImageName = "ubuntu"
+	redisImageName  = "redis"
 )
 
 // CreateDeployment is a helper to create a deployment with or without a secret/configmap
@@ -100,40 +99,6 @@ func CreateDeploymentFromConfig(client *v1.Client, clusterID string, deployment 
 	}
 
 	return deployment, nil
-}
-
-// UpdateDeployment is a helper to update deployments
-func UpdateDeployment(client *rancher.Client, clusterID, namespaceName string, deployment *appv1.Deployment, watchDeployment bool) (*appv1.Deployment, error) {
-	var wranglerContext *wrangler.Context
-	var err error
-
-	wranglerContext = client.WranglerContext
-	if clusterID != "local" {
-		wranglerContext, err = client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	latestDeployment, err := wranglerContext.Apps.Deployment().Get(namespaceName, deployment.Name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	deployment.ResourceVersion = latestDeployment.ResourceVersion
-
-	updatedDeployment, err := wranglerContext.Apps.Deployment().Update(deployment)
-	if err != nil {
-		return nil, err
-	}
-
-	if watchDeployment {
-		err = charts.WatchAndWaitDeployments(client, clusterID, namespaceName, metav1.ListOptions{
-			FieldSelector: "metadata.name=" + updatedDeployment.Name,
-		})
-	}
-
-	return updatedDeployment, err
 }
 
 // DeleteDeployment is a helper to delete a deployment
@@ -247,7 +212,7 @@ func UpdateOrRemoveEnvVarForDeployment(client *rancher.Client, namespaceName, de
 		}
 	}
 
-	_, err = UpdateDeployment(client, clusterapi.LocalCluster, namespaceName, modifiedDeployment, true)
+	_, err = deploymentapi.UpdateDeployment(client, clusterapi.LocalCluster, namespaceName, modifiedDeployment, true)
 	if err != nil {
 		return fmt.Errorf("error updating deployment %s in namespace %s: %w", deploymentName, namespaceName, err)
 	}
@@ -278,27 +243,6 @@ func UpdateOrRemoveEnvVarForDeployment(client *rancher.Client, namespaceName, de
 		if envVarValue != "" && !envVarFound {
 			return fmt.Errorf("environment variable %s should have been added or updated but was not found", envVarName)
 		}
-	}
-
-	return nil
-}
-
-// RestartDeployment triggers a rollout restart of a deployment by updating an annotation
-func RestartDeployment(client *rancher.Client, clusterID, namespaceName, deploymentName string) error {
-	deploymentObj, err := client.WranglerContext.Apps.Deployment().Get(namespaceName, deploymentName, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("error fetching deployment %s in namespace %s: %w", deploymentName, namespaceName, err)
-	}
-
-	if deploymentObj.Spec.Template.Annotations == nil {
-		deploymentObj.Spec.Template.Annotations = map[string]string{}
-	}
-
-	deploymentObj.Spec.Template.Annotations[restartAnnotation] = time.Now().Format(time.RFC3339)
-
-	_, err = UpdateDeployment(client, clusterID, namespaceName, deploymentObj, true)
-	if err != nil {
-		return fmt.Errorf("error waiting for deployment %s in namespace %s to restart: %w", deploymentName, namespaceName, err)
 	}
 
 	return nil
