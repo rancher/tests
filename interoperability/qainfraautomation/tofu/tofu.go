@@ -32,9 +32,7 @@ type ShowResource struct {
 	Values  map[string]json.RawMessage `json:"values"`
 }
 
-type runner func(name string, args []string, dir string, env []string) ([]byte, error)
-
-func defaultRunner(name string, args []string, dir string, env []string) ([]byte, error) {
+func run(name string, args []string, dir string, env []string) ([]byte, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	if len(env) > 0 {
@@ -51,7 +49,6 @@ func defaultRunner(name string, args []string, dir string, env []string) ([]byte
 type Client struct {
 	moduleDir string
 	workspace string
-	run       runner
 }
 
 // NewClient returns a Client targeting moduleDir in the given workspace.
@@ -59,14 +56,13 @@ func NewClient(moduleDir, workspace string) *Client {
 	return &Client{
 		moduleDir: moduleDir,
 		workspace: workspace,
-		run:       defaultRunner,
 	}
 }
 
 // Init runs `tofu init` in the module directory.
 func (c *Client) Init() error {
 	logrus.Infof("[tofu] init in %s", c.moduleDir)
-	out, err := c.run("tofu", []string{"init", "-input=false"}, c.moduleDir, nil)
+	out, err := run("tofu", []string{"init", "-input=false"}, c.moduleDir, nil)
 	if err != nil {
 		return fmt.Errorf("tofu init: %w", err)
 	}
@@ -78,13 +74,13 @@ func (c *Client) Init() error {
 func (c *Client) WorkspaceSelectOrCreate() error {
 	logrus.Infof("[tofu] selecting workspace %q in %s", c.workspace, c.moduleDir)
 
-	_, err := c.run("tofu", []string{"workspace", "select", c.workspace}, c.moduleDir, nil)
+	_, err := run("tofu", []string{"workspace", "select", c.workspace}, c.moduleDir, nil)
 	if err == nil {
 		return nil
 	}
 
 	logrus.Infof("[tofu] workspace %q not found, creating", c.workspace)
-	out, err := c.run("tofu", []string{"workspace", "new", c.workspace}, c.moduleDir, nil)
+	out, err := run("tofu", []string{"workspace", "new", c.workspace}, c.moduleDir, nil)
 	if err != nil {
 		return fmt.Errorf("tofu workspace new %q: %w", c.workspace, err)
 	}
@@ -112,7 +108,7 @@ func (c *Client) apply(varFile string, noRefresh bool) error {
 	if varFile != "" {
 		args = append(args, "-var-file="+varFile)
 	}
-	out, err := c.run("tofu", args, c.moduleDir, nil)
+	out, err := run("tofu", args, c.moduleDir, nil)
 	if err != nil {
 		return fmt.Errorf("tofu apply: %w", err)
 	}
@@ -122,7 +118,7 @@ func (c *Client) apply(varFile string, noRefresh bool) error {
 }
 
 func (c *Client) logOutputs() {
-	out, err := c.run("tofu", []string{"output", "-json"}, c.moduleDir, nil)
+	out, err := run("tofu", []string{"output", "-json"}, c.moduleDir, nil)
 	if err != nil {
 		logrus.Warnf("[tofu] could not retrieve outputs after apply in %s: %v", c.moduleDir, err)
 		return
@@ -163,7 +159,7 @@ func (c *Client) destroy(varFile string, noRefresh bool) error {
 	if varFile != "" {
 		args = append(args, "-var-file="+varFile)
 	}
-	out, err := c.run("tofu", args, c.moduleDir, nil)
+	out, err := run("tofu", args, c.moduleDir, nil)
 	if err != nil {
 		return fmt.Errorf("tofu destroy: %w", err)
 	}
@@ -174,7 +170,7 @@ func (c *Client) destroy(varFile string, noRefresh bool) error {
 // Output returns the string value of the named tofu output in the current workspace.
 func (c *Client) Output(name string) (string, error) {
 	logrus.Infof("[tofu] output %q in %s (workspace=%s)", name, c.moduleDir, c.workspace)
-	out, err := c.run("tofu", []string{"output", "-json", name}, c.moduleDir, nil)
+	out, err := run("tofu", []string{"output", "-json", name}, c.moduleDir, nil)
 	if err != nil {
 		return "", fmt.Errorf("tofu output %q: %w", name, err)
 	}
@@ -188,7 +184,7 @@ func (c *Client) Output(name string) (string, error) {
 // ShowResources runs `tofu show -json` and returns the parsed state.
 func (c *Client) ShowResources() (*ShowState, error) {
 	logrus.Infof("[tofu] show -json in %s (workspace=%s)", c.moduleDir, c.workspace)
-	out, err := c.run("tofu", []string{"show", "-json"}, c.moduleDir, nil)
+	out, err := run("tofu", []string{"show", "-json"}, c.moduleDir, nil)
 	if err != nil {
 		return nil, fmt.Errorf("tofu show: %w", err)
 	}
@@ -198,4 +194,3 @@ func (c *Client) ShowResources() (*ShowState, error) {
 	}
 	return &state, nil
 }
-

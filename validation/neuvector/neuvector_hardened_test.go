@@ -145,14 +145,13 @@ func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
 	}
 
 	n.T().Logf("Installing NeuVector on cluster [%s]", cluster.Name)
-	err = actionsCharts.InstallLatestNeuVectorChart(n.client, payload)
+	err = actionsCharts.InstallNeuVectorChart(n.client, payload)
 	require.NoError(n.T(), err)
 
 	n.T().Log("Waiting for NeuVector chart to become active")
 	catalogClient, err := n.client.GetClusterCatalogClient(cluster.ID)
 	require.NoError(n.T(), err)
-
-	err = actionsCharts.WaitChartDeployed(catalogClient, payload.Namespace, actionsCharts.NeuVectorChartName)
+	err = charts.WaitChartInstall(catalogClient, payload.Namespace, actionsCharts.NeuVectorChartName)
 	require.NoError(n.T(), err)
 
 	n.T().Log("Waiting for resources to become active")
