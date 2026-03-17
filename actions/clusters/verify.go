@@ -2,9 +2,12 @@ package clusters
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 
+	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/sirupsen/logrus"
 )
 
@@ -30,6 +33,25 @@ func VerifyNodePoolSize(steveClient *steveV1.Client, labelSelector string, poolS
 
 	if len(nodeList.Data) < poolSize {
 		return errors.New(SmallerPoolMessageError)
+	}
+
+	return nil
+}
+
+// VerifyServiceAccountTokenSecret verifies if a serviceAccountTokenSecret exists or not in the cluster.
+func VerifyServiceAccountTokenSecret(client *rancher.Client, clusterName string) error {
+	clusterID, err := clusters.GetClusterIDByName(client, clusterName)
+	if err != nil {
+		return err
+	}
+
+	cluster, err := client.Management.Cluster.ByID(clusterID)
+	if err != nil {
+		return err
+	}
+
+	if cluster.ServiceAccountTokenSecret == "" {
+		return fmt.Errorf("ServiceAccountTokenSecret does not exist on cluster (%s)", clusterName)
 	}
 
 	return nil

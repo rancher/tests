@@ -21,6 +21,7 @@ import (
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
+	"github.com/rancher/tests/actions/clusters"
 	actionsDefaults "github.com/rancher/tests/actions/config/defaults"
 	configDefaults "github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
@@ -126,6 +127,10 @@ func TestTemplate(t *testing.T) {
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(k.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(k.client, cluster.Name)
 			require.NoError(t, err)
 		})
 	}

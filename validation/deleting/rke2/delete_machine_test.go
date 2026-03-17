@@ -139,6 +139,10 @@ func (d *DeleteMachineTestSuite) TestDeleteMachine() {
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
 			err = pods.VerifyClusterPods(d.client, tt.cluster)
 			require.NoError(d.T(), err)
+
+			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(d.client, tt.cluster.Name)
+			require.NoError(d.T(), err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(d.client, d.cattleConfig)

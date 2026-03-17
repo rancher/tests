@@ -118,6 +118,10 @@ func TestAWSCloudProvider(t *testing.T) {
 			err = pods.VerifyClusterPods(r.client, cluster)
 			require.NoError(t, err)
 
+			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
+			require.NoError(t, err)
+
 			logrus.Infof("Verifying cloud provider (%s)", cluster.Name)
 			provider.VerifyCloudProviderFunc(t, r.client, cluster)
 		})
@@ -183,6 +187,10 @@ func TestVSphereCloudProvider(t *testing.T) {
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(r.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cloud provider (%s)", cluster.Name)
@@ -251,6 +259,10 @@ func TestHarvesterCloudProvider(t *testing.T) {
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(r.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cloud provider (%s)", cluster.Name)

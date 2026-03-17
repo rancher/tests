@@ -76,10 +76,9 @@ func VerifyRKE1Cluster(t *testing.T, client *rancher.Client, clustersConfig *clu
 
 	require.Equal(t, clustersConfig.KubernetesVersion, cluster.RancherKubernetesEngineConfig.Version)
 
-	clusterToken, err := clusters.CheckServiceAccountTokenSecret(client, cluster.Name)
+	err = clusters.VerifyServiceAccountTokenSecret(client, cluster.Name)
 	reports.TimeoutRKEReport(cluster, err)
 	require.NoError(t, err)
-	require.NotEmpty(t, clusterToken)
 
 	err = nodestat.AllManagementNodeReady(client, cluster.ID, defaults.ThirtyMinuteTimeout)
 	reports.TimeoutRKEReport(cluster, err)
@@ -124,67 +123,38 @@ func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject)
 	ctx, cancel := context.WithTimeout(context.Background(), defaults.FifteenMinuteTimeout)
 	defer cancel()
 
-	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.FifteenMinuteTimeout, false, func(ctx context.Context) (bool, error) {
-		adminClient, err := client.ReLogin()
+	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.FifteenMinuteTimeout, false, func(context.Context) (done bool, err error) {
+		client, err = client.ReLogin()
 		if err != nil {
 			logrus.Debugf("Unable to fetch cluster client (%s), retrying", cluster.Name)
 			return false, nil
 		}
 
-		kubeProvisioningClient, err := adminClient.GetKubeAPIProvisioningClient()
+		cluster, err = client.Steve.SteveType(stevetypes.Provisioning).ByID(cluster.ID)
+		clusterStatus := &provv1.ClusterStatus{}
+		err = steveV1.ConvertToK8sType(cluster.Status, clusterStatus)
 		if err != nil {
 			logrus.Debugf("Unable to fetch cluster kube client (%s), retrying", cluster.Name)
 			return false, nil
 		}
 
-		watchInterface, err := kubeProvisioningClient.
-			Clusters(namespaces.FleetDefault).
-			Watch(ctx, metav1.ListOptions{
-				FieldSelector:  "metadata.name=" + cluster.Name,
-				TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-			},
-			)
-		if err != nil {
-			logrus.Debugf("Unable to watch cluster (%s), retrying", cluster.Name)
-			return false, nil
-		}
-
-		defer watchInterface.Stop()
-
-		checkFunc := shepherdclusters.IsProvisioningClusterReady
-
-		err = wait.WatchWait(watchInterface, checkFunc)
-		if err != nil {
+		if !clusterStatus.Ready || cluster.State.Name != "active" || cluster.State.Error == true {
 			lastErr = err
-			logrus.Debugf("Cluster (%s) not ready yet, retrying: %v", cluster.Name, err)
 			return false, nil
 		}
 
 		return true, nil
-	},
-	)
+	})
 	if err != nil {
-		logrus.Errorf("Cluster (%s) failed to become ready: %v", cluster.Name, err)
-		dumpProvisioningClusterState(ctx, client, cluster.Name, lastErr)
 		return err
 	}
 
 	logrus.Debugf("Waiting for all machines to be ready on cluster (%s)", cluster.Name)
 	err = nodestat.AllMachineReady(client, cluster.ID, defaults.FiveMinuteTimeout)
 	if err != nil {
-		logrus.Errorf("Machine readiness check failed for cluster (%s)", cluster.Name)
-		dumpProvisioningClusterState(ctx, client, cluster.Name, nil)
+		logrus.Errorf("Cluster (%s) failed to become ready: %v", cluster.Name, err)
+		dumpProvisioningClusterState(ctx, client, cluster.Name, lastErr)
 		return err
-	}
-
-	logrus.Debugf("Verifying cluster token (%s)", cluster.Name)
-	clusterToken, err := clusters.CheckServiceAccountTokenSecret(client, cluster.Name)
-	if err != nil {
-		return err
-	}
-
-	if !clusterToken {
-		return fmt.Errorf("cluster token is not valid")
 	}
 
 	return nil
@@ -413,10 +383,9 @@ func VerifyHostedCluster(t *testing.T, client *rancher.Client, cluster *manageme
 	reports.TimeoutRKEReport(cluster, err)
 	require.NoError(t, err)
 
-	clusterToken, err := clusters.CheckServiceAccountTokenSecret(client, cluster.Name)
+	err = clusters.VerifyServiceAccountTokenSecret(client, cluster.Name)
 	reports.TimeoutRKEReport(cluster, err)
 	require.NoError(t, err)
-	require.NotEmpty(t, clusterToken)
 
 	err = nodestat.AllManagementNodeReady(client, cluster.ID, defaults.ThirtyMinuteTimeout)
 	reports.TimeoutRKEReport(cluster, err)

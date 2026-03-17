@@ -135,6 +135,10 @@ func (s *NodeScalingTestSuite) TestScalingNodePools() {
 			err = pods.VerifyClusterPods(s.client, tt.cluster)
 			require.NoError(s.T(), err)
 
+			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(s.client, tt.cluster.Name)
+			require.NoError(s.T(), err)
+
 			tt.nodeRoles.Quantity = -tt.scaleQuantity
 			logrus.Infof("Scaling down the node pool (%s)", tt.cluster.Name)
 			_, err = machinepools.ScaleMachinePool(s.client, tt.cluster, tt.nodeRoles)
@@ -150,6 +154,10 @@ func (s *NodeScalingTestSuite) TestScalingNodePools() {
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
 			err = pods.VerifyClusterPods(s.client, tt.cluster)
+			require.NoError(s.T(), err)
+
+			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(s.client, tt.cluster.Name)
 			require.NoError(s.T(), err)
 		})
 
