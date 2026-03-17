@@ -61,6 +61,7 @@ func (l *LonghornTestSuite) SetupSuite() {
 	}
 
 	l.project, err = client.Management.Project.Create(projectConfig)
+
 	require.NoError(l.T(), err)
 
 	chart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
@@ -149,6 +150,11 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	statefulSet, err = statefulset.UpdateStatefulSet(l.client, l.cluster.ID, namespace.Name, statefulSet, true)
 	require.NoError(l.T(), err)
 
+	err = shepherdCharts.WatchAndWaitStatefulSets(l.client, l.cluster.ID, namespaceName, metav1.ListOptions{
+		FieldSelector: "metadata.name=" + statefulSet.Name,
+	})
+	require.NoError(l.T(), err)
+
 	storage.CheckVolumeAllocation(l.T(), l.client, l.cluster.ID, namespace.Name, l.longhornTestConfig.LonghornTestStorageClass, volumeSourceName, storage.MountPath)
 
 	pvcBeforeScaling, err := steveClient.SteveType(persistentvolumeclaims.PersistentVolumeClaimType).NamespacedSteveClient(namespace.Name).List(nil)
@@ -172,6 +178,11 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 		require.NoError(l.T(), err)
 		require.True(l.T(), slices.Contains(volumeNamesAfterScaling, pvcSpec.VolumeName))
 	}
+
+	err = shepherdCharts.WatchAndWaitStatefulSets(l.client, l.cluster.ID, namespaceName, metav1.ListOptions{
+		FieldSelector: "metadata.name=" + statefulSet.Name,
+	})
+	require.NoError(l.T(), err)
 
 	pods, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespace.Name).List(nil)
 	require.NoError(l.T(), err)
