@@ -454,7 +454,6 @@ echo "}\\n" >> "${tfvars_filepath}"
                                 cd /root/go/src/github.com/rancher/qa-infra-automation
                                 ansible-playbook ansible/rancher/default-ha/k8s-upgrade-playbook.yml \
                                     -e "@ansible/vars.yaml" \
-                                    -e "k8s_upgrade_mode=true" \
                                     -e "kubernetes_version_upgrade=${KUBERNETES_VERSION_UPGRADE}"
                                 '
                                 docker stop ${testContainer}-k8s-upgrade || true
