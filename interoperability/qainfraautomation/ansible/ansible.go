@@ -54,19 +54,16 @@ func (c *Client) AddSSHKey(privateKeyPath string) error {
 	return nil
 }
 
-// GenerateInventory renders templatePath with env substitutions and writes the result to outputPath.
-func (c *Client) GenerateInventory(templatePath, outputPath string, env map[string]string) error {
+// GenerateInventory renders templatePath with env substitutions and writes the result to a temp file.
+// It returns the path to the generated inventory file.
+func (c *Client) GenerateInventory(templatePath string, env map[string]string) (string, error) {
 	absTemplate := filepath.Join(c.repoPath, templatePath)
-	absOutput := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absOutput = filepath.Join(c.repoPath, outputPath)
-	}
 
-	logrus.Infof("[ansible] generating inventory from %s → %s", absTemplate, absOutput)
+	logrus.Infof("[ansible] generating inventory from %s", absTemplate)
 
 	templateBytes, err := os.ReadFile(absTemplate)
 	if err != nil {
-		return fmt.Errorf("read inventory template %s: %w", absTemplate, err)
+		return "", fmt.Errorf("read inventory template %s: %w", absTemplate, err)
 	}
 
 	rendered := string(templateBytes)
@@ -74,10 +71,18 @@ func (c *Client) GenerateInventory(templatePath, outputPath string, env map[stri
 		rendered = strings.ReplaceAll(rendered, "$"+k, v)
 	}
 
-	if err := os.WriteFile(absOutput, []byte(rendered), 0644); err != nil {
-		return fmt.Errorf("write inventory to %s: %w", absOutput, err)
+	f, err := os.CreateTemp("", "ansible-inventory-*.yml")
+	if err != nil {
+		return "", fmt.Errorf("create temp inventory file: %w", err)
 	}
-	return nil
+	defer f.Close()
+
+	if _, err := f.WriteString(rendered); err != nil {
+		return "", fmt.Errorf("write inventory to %s: %w", f.Name(), err)
+	}
+
+	logrus.Infof("[ansible] wrote inventory to %s", f.Name())
+	return f.Name(), nil
 }
 
 // WriteVarsYAML marshals vars to YAML and writes the file at relPath inside the repository.
@@ -99,13 +104,12 @@ func (c *Client) WriteVarsYAML(relPath string, vars map[string]string) error {
 // RunPlaybook executes ansible-playbook with the given playbook and inventory paths, streaming output via logrus.
 func (c *Client) RunPlaybook(playbookPath, inventoryPath string, extraEnv []string) error {
 	absPlaybook := filepath.Join(c.repoPath, playbookPath)
-	absInventory := filepath.Join(c.repoPath, inventoryPath)
 
-	logrus.Infof("[ansible] running playbook %s with inventory %s", absPlaybook, absInventory)
+	logrus.Infof("[ansible] running playbook %s with inventory %s", absPlaybook, inventoryPath)
 
 	args := []string{
 		absPlaybook,
-		"-i", absInventory,
+		"-i", inventoryPath,
 	}
 
 	cmd := exec.Command("ansible-playbook", args...)
