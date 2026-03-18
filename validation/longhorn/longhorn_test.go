@@ -61,6 +61,7 @@ func (l *LonghornTestSuite) SetupSuite() {
 	}
 
 	l.project, err = client.Management.Project.Create(projectConfig)
+
 	require.NoError(l.T(), err)
 
 	chart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
@@ -120,13 +121,24 @@ func (l *LonghornTestSuite) TestRBACIntegration() {
 }
 
 func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
+	steveClient, err := l.client.Steve.ProxyDownstream(l.cluster.ID)
+	require.NoError(l.T(), err)
+
+	nodeList, err := steveClient.SteveType("node").List(nil)
+	require.NoError(l.T(), err)
+
+	nodeCount := len(nodeList.Data)
+
+	minStatefulSetReplicas := int32(1)
+	maxStatefulSetReplicas := int32(nodeCount + 1)
+
 	namespaceName := namegenerator.AppendRandomString("lhsts")
 	namespace, err := namespaceActions.CreateNamespace(l.client, namespaceName, "{}", map[string]string{}, map[string]string{}, l.project)
 	require.NoError(l.T(), err)
 	l.T().Logf("Created namespace %s", namespaceName)
 
 	podTemplate := pods.CreateContainerAndPodTemplate()
-	statefulSet, err := statefulset.CreateStatefulSet(l.client, l.cluster.ID, namespace.Name, podTemplate, 3, true, l.longhornTestConfig.LonghornTestStorageClass)
+	statefulSet, err := statefulset.CreateStatefulSet(l.client, l.cluster.ID, namespace.Name, podTemplate, minStatefulSetReplicas, true, l.longhornTestConfig.LonghornTestStorageClass)
 	require.NoError(l.T(), err)
 	l.T().Logf("Created StetefulSet %s on namespace %s", statefulSet.Name, namespaceName)
 
@@ -134,21 +146,21 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	volumeSourceName := statefulSet.Spec.VolumeClaimTemplates[len(statefulSet.Spec.VolumeClaimTemplates)-1].Name
 	storage.CheckVolumeAllocation(l.T(), l.client, l.cluster.ID, namespace.Name, l.longhornTestConfig.LonghornTestStorageClass, volumeSourceName, storage.MountPath)
 
-	var stetefulSetPodReplicas int32 = 5
-	statefulSet.Spec.Replicas = &stetefulSetPodReplicas
+	statefulSet.Spec.Replicas = &maxStatefulSetReplicas
 	statefulSet, err = statefulset.UpdateStatefulSet(l.client, l.cluster.ID, namespace.Name, statefulSet, true)
+	require.NoError(l.T(), err)
+
+	err = shepherdCharts.WatchAndWaitStatefulSets(l.client, l.cluster.ID, namespaceName, metav1.ListOptions{
+		FieldSelector: "metadata.name=" + statefulSet.Name,
+	})
 	require.NoError(l.T(), err)
 
 	storage.CheckVolumeAllocation(l.T(), l.client, l.cluster.ID, namespace.Name, l.longhornTestConfig.LonghornTestStorageClass, volumeSourceName, storage.MountPath)
 
-	steveClient, err := l.client.Steve.ProxyDownstream(l.cluster.ID)
-	require.NoError(l.T(), err)
-
 	pvcBeforeScaling, err := steveClient.SteveType(persistentvolumeclaims.PersistentVolumeClaimType).NamespacedSteveClient(namespace.Name).List(nil)
 	require.NoError(l.T(), err)
 
-	stetefulSetPodReplicas = 2
-	statefulSet.Spec.Replicas = &stetefulSetPodReplicas
+	statefulSet.Spec.Replicas = &minStatefulSetReplicas
 	statefulSet, err = statefulset.UpdateStatefulSet(l.client, l.cluster.ID, namespace.Name, statefulSet, true)
 	require.NoError(l.T(), err)
 
@@ -167,9 +179,14 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 		require.True(l.T(), slices.Contains(volumeNamesAfterScaling, pvcSpec.VolumeName))
 	}
 
+	err = shepherdCharts.WatchAndWaitStatefulSets(l.client, l.cluster.ID, namespaceName, metav1.ListOptions{
+		FieldSelector: "metadata.name=" + statefulSet.Name,
+	})
+	require.NoError(l.T(), err)
+
 	pods, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespace.Name).List(nil)
 	require.NoError(l.T(), err)
-	require.Equal(l.T(), 2, len(pods.Data))
+	require.Equal(l.T(), int(minStatefulSetReplicas), len(pods.Data))
 
 	err = steveClient.SteveType(shepherdPods.PodResourceSteveType).Delete(&pods.Data[0])
 	require.NoError(l.T(), err)
@@ -185,11 +202,11 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 
 	newPods, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespace.Name).List(nil)
 	require.NoError(l.T(), err)
-	require.Equal(l.T(), 2, len(newPods.Data))
+	require.Equal(l.T(), int(minStatefulSetReplicas), len(newPods.Data))
 
 	for _, pod := range newPods.Data {
 		// We are interested in the pod that was created instead of the one that was deleted.
-		if pod.Name != pods.Data[1].Name {
+		if pod.Name != pods.Data[0].Name {
 			newPodVolume, err := storage.GetTargetVolume(pod, volumeSourceName)
 			require.NoError(l.T(), err)
 			require.Equal(l.T(), oldPodVolume.PersistentVolumeClaim.ClaimName, newPodVolume.PersistentVolumeClaim.ClaimName)
