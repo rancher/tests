@@ -1,0 +1,112 @@
+name: RKE Validations
+
+on:
+  workflow_dispatch:
+    inputs:
+      rke_version:
+        description: "RKE version to validate"
+        required: true
+      qase_id:
+        description: "Qase Test Run ID"
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  rke-validation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.IAM_ROLE }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set up SSH Keys
+        uses: ./.github/actions/setup-ssh-keys
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
+          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
+          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+
+      - name: Install gotestsum
+        run: |
+          go install gotest.tools/gotestsum@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Launch EC2 instance
+        id: ec2
+        run: |
+          INSTANCE_ID=$(aws ec2 run-instances \
+            --image-id ${{ secrets.AWS_RKE_AMI }} \
+            --instance-type ${{ vars.AWS_INSTANCE_TYPE }} \
+            --key-name ${{ secrets.SSH_PRIVATE_KEY_NAME }} \
+            --security-group-ids ${{ secrets.AWS_RKE_SECURITY_GROUPS }} \
+            --subnet-id ${{ secrets.AWS_SUBNET_ID }} \
+            --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=rke-validations-${{ github.run_id }}}]' \
+            --block-device-mappings '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":100}}]' \
+            --region ${{ secrets.AWS_REGION }} \
+            --query 'Instances[0].InstanceId' \
+            --output text)
+
+          aws ec2 wait instance-running --instance-ids $INSTANCE_ID
+
+          PUBLIC_IP=$(aws ec2 describe-instances \
+            --instance-ids $INSTANCE_ID \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+
+          PRIVATE_IP=$(aws ec2 describe-instances \
+            --instance-ids $INSTANCE_ID \
+            --query 'Reservations[0].Instances[0].PrivateIpAddress' \
+            --output text)
+
+          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+          echo "PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
+          echo "PRIVATE_IP=$PRIVATE_IP" >> $GITHUB_ENV
+
+      - name: RKE Pre-Release Validations
+        if: contains(github.event.inputs.rke_version, 'rc')
+        env:
+          RKE_VERSION: ${{ github.event.inputs.rke_version }}
+          PEM_FILE: /home/runner/work/tests/tests/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem
+          REGISTRY: ${{ secrets.RKE_STG_REGISTRY }}
+          REGISTRY_USER: ${{ secrets.RKE_STG_REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.RKE_STG_REGISTRY_PASSWORD }}
+          PUBLIC_IP: ${{ env.PUBLIC_IP }}
+          PRIVATE_IP: ${{ env.PRIVATE_IP }}
+          QASE_TEST_RUN_ID: ${{ github.event.inputs.qase_id }}
+          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_PROJECT_ID: ${{ secrets.QASE_PROJECT_ID }}
+        with:
+          qase-id: ${{ github.event.inputs.qase_id }}
+        uses: ./.github/actions/run-rke-validations
+
+      - name: RKE Post-Release Validations
+        if: ! contains(github.event.inputs.rke_version, 'rc')
+        env:
+          RKE_VERSION: ${{ github.event.inputs.rke_version }}
+          PEM_FILE: /home/runner/work/tests/tests/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem
+          REGISTRY: ${{ secrets.RKE_REGISTRY }}
+          REGISTRY_USER: ${{ secrets.RKE_REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.RKE_REGISTRY_PASSWORD }}
+          PUBLIC_IP: ${{ env.PUBLIC_IP }}
+          PRIVATE_IP: ${{ env.PRIVATE_IP }}
+          QASE_TEST_RUN_ID: ${{ github.event.inputs.qase_id }}
+          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
+        with:
+          qase-id: ${{ github.event.inputs.qase_id }}
+        uses: ./.github/actions/run-rke-validations
+
+      - name: Terminate instance
+        if: always()
+        run: |
+          aws ec2 terminate-instances --instance-ids $INSTANCE_ID >/dev/null 2>&1
