@@ -14,12 +14,12 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
-	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/interoperability/qainfraautomation/ansible"
 	"github.com/rancher/tests/interoperability/qainfraautomation/config"
 	"github.com/rancher/tests/interoperability/qainfraautomation/tofu"
 	"github.com/sirupsen/logrus"
 )
+
 
 func cleanupEnabled(rancherClient *rancher.Client) bool {
 	c := rancherClient.RancherConfig.Cleanup
@@ -33,14 +33,11 @@ const (
 	rancherClusterModulePath       = "tofu/rancher/cluster"
 	customClusterPlaybook          = "ansible/rancher/downstream/custom_cluster/custom-cluster-playbook.yml"
 	customClusterInventoryTemplate = "ansible/rancher/downstream/custom_cluster/inventory-template.yml"
-	customClusterInventoryOutput   = "ansible/rancher/downstream/custom_cluster/inventory.yml"
 	rke2Playbook                   = "ansible/rke2/default/rke2-playbook.yml"
 	rke2InventoryTemplate          = "ansible/rke2/default/inventory-template.yml"
-	rke2InventoryOutput            = "ansible/rke2/default/inventory.yml"
 	rke2VarsFile                   = "ansible/rke2/default/vars.yaml"
 	k3sPlaybook                    = "ansible/k3s/default/k3s-playbook.yml"
 	k3sInventoryTemplate           = "ansible/k3s/default/inventory-template.yml"
-	k3sInventoryOutput             = "ansible/k3s/default/inventory.yml"
 	k3sVarsFile                    = "ansible/k3s/default/vars.yaml"
 	awsClusterNodesModulePath      = "tofu/aws/modules/cluster_nodes"
 	fleetDefaultNamespace          = "fleet-default"
@@ -242,13 +239,10 @@ func ProvisionRancherCluster(
 		})
 	}
 
+
 	clusterObj, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
 	if err != nil {
-		t.Fatalf("fetch cluster %q from Rancher: %v", clusterName, err)
-	}
-
-	if err := provisioning.VerifyClusterReady(rancherClient, clusterObj); err != nil {
-		t.Fatalf("cluster %q did not become ready: %v", clusterName, err)
+		t.Fatalf("fetch cluster %q from Rancher after ready: %v", clusterName, err)
 	}
 
 	return clusterObj
@@ -532,7 +526,8 @@ func provisionCustomClusterShared(
 		"TERRAFORM_NODE_SOURCE": nodeModulePath,
 		"TF_WORKSPACE":          workspace,
 	}
-	if err := ansibleClient.GenerateInventory(customClusterInventoryTemplate, customClusterInventoryOutput, inventoryEnv); err != nil {
+	inventoryPath, err := ansibleClient.GenerateInventory(customClusterInventoryTemplate, inventoryEnv)
+	if err != nil {
 		t.Fatalf("generate inventory: %v", err)
 	}
 
@@ -543,6 +538,11 @@ func provisionCustomClusterShared(
 	playbookEnv := []string{
 		"TF_WORKSPACE=" + workspace,
 		"TERRAFORM_NODE_SOURCE=" + nodeModulePath,
+		"RANCHER_URL=https://" + rancherClient.RancherConfig.Host,
+		"RANCHER_TOKEN=" + rancherClient.RancherConfig.AdminToken,
+	}
+	if *rancherClient.RancherConfig.Insecure {
+		playbookEnv = append(playbookEnv, "RANCHER_INSECURE=true")
 	}
 	if clusterCfg.Harden {
 		playbookEnv = append(playbookEnv, "HARDEN=true")
@@ -550,7 +550,7 @@ func provisionCustomClusterShared(
 	if cfg.Ansible != nil && cfg.Ansible.ConfigPath != "" {
 		playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+filepath.Join(repoPath, cfg.Ansible.ConfigPath))
 	}
-	if err := ansibleClient.RunPlaybook(customClusterPlaybook, customClusterInventoryOutput, playbookEnv); err != nil {
+	if err := ansibleClient.RunPlaybook(customClusterPlaybook, inventoryPath, playbookEnv); err != nil {
 		t.Fatalf("ansible-playbook (custom cluster): %v", err)
 	}
 
@@ -562,11 +562,7 @@ func provisionCustomClusterShared(
 
 	clusterObj, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
 	if err != nil {
-		t.Fatalf("fetch cluster %q from Rancher: %v", clusterName, err)
-	}
-
-	if err := provisioning.VerifyClusterReady(rancherClient, clusterObj); err != nil {
-		t.Fatalf("cluster %q did not become ready: %v", clusterName, err)
+		t.Fatalf("fetch cluster %q from Rancher after ready: %v", clusterName, err)
 	}
 
 	return clusterObj
@@ -614,17 +610,15 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("harvester config is required for standalone cluster provisioning")
 	}
 
-	var playbookPath, inventoryTemplate, inventoryOutput, varsFile string
+	var playbookPath, inventoryTemplate, varsFile string
 	switch clusterType {
 	case "rke2":
 		playbookPath = rke2Playbook
 		inventoryTemplate = rke2InventoryTemplate
-		inventoryOutput = rke2InventoryOutput
 		varsFile = rke2VarsFile
 	case "k3s":
 		playbookPath = k3sPlaybook
 		inventoryTemplate = k3sInventoryTemplate
-		inventoryOutput = k3sInventoryOutput
 		varsFile = k3sVarsFile
 	default:
 		t.Fatalf("unsupported cluster type: %s (must be rke2 or k3s)", clusterType)
@@ -669,7 +663,8 @@ func provisionHarvesterStandaloneCluster(
 		"TERRAFORM_NODE_SOURCE": harvesterVMModulePath,
 		"TF_WORKSPACE":          workspace,
 	}
-	if err := ansibleClient.GenerateInventory(inventoryTemplate, inventoryOutput, inventoryEnv); err != nil {
+	inventoryPath, err := ansibleClient.GenerateInventory(inventoryTemplate, inventoryEnv)
+	if err != nil {
 		t.Fatalf("generate inventory: %v", err)
 	}
 
@@ -694,7 +689,7 @@ func provisionHarvesterStandaloneCluster(
 	if cfg.Ansible != nil && cfg.Ansible.ConfigPath != "" {
 		playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+filepath.Join(repoPath, cfg.Ansible.ConfigPath))
 	}
-	if err := ansibleClient.RunPlaybook(playbookPath, inventoryOutput, playbookEnv); err != nil {
+	if err := ansibleClient.RunPlaybook(playbookPath, inventoryPath, playbookEnv); err != nil {
 		t.Fatalf("ansible-playbook (%s): %v", clusterType, err)
 	}
 
