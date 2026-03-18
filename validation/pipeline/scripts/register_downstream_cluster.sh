@@ -13,6 +13,4 @@ tofu -chdir="tofu/rancher/cluster" init
 tofu -chdir="tofu/rancher/cluster" apply -auto-approve -var-file=$TFVARS_FILE -var-file=$GENERATED_TFVARS_FILE
 DOWNSTREAM_CLUSTER_NAME=$(tofu -chdir="tofu/rancher/cluster" output -raw name)
 
-echo "$DOWNSTREAM_CLUSTER_NAME"
-
 yq e ".rancher.clusterName = \"$DOWNSTREAM_CLUSTER_NAME\"" -i "$CONFIG_FILE"
