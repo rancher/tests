@@ -64,13 +64,14 @@ require (
 	github.com/rancher/backup-restore-operator v1.2.1
 	github.com/rancher/fleet/pkg/apis v0.15.0-alpha.4
 	github.com/rancher/norman v0.8.1
-	github.com/rancher/qa-infra-automation v0.0.0-20260316212633-6cfd7f1563ee
+	github.com/rancher/qa-infra-automation v0.0.0-20260319191229-cfc3fdaefc20
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20260226203127-be7fc5d07fbe
 	github.com/rancher/tests/actions v0.0.0-20260206233613-bf28ed655999
 	github.com/rancher/tfp-automation v0.0.0-20260223200320-56541017be04
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
+	golang.org/x/crypto v0.45.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.34.3
 	k8s.io/apiextensions-apiserver v0.34.1
@@ -172,7 +173,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/mod v0.30.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.32.0 // indirect

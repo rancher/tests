@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/ssh"
 
 	infraAnsible "github.com/rancher/qa-infra-automation/ansible"
 	"github.com/rancher/qa-infra-automation/fsutil"
@@ -14,12 +17,12 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	shepnodes "github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/tests/interoperability/qainfraautomation/ansible"
 	"github.com/rancher/tests/interoperability/qainfraautomation/config"
 	"github.com/rancher/tests/interoperability/qainfraautomation/tofu"
 	"github.com/sirupsen/logrus"
 )
-
 
 func cleanupEnabled(rancherClient *rancher.Client) bool {
 	c := rancherClient.RancherConfig.Cleanup
@@ -239,7 +242,6 @@ func ProvisionRancherCluster(
 		})
 	}
 
-
 	clusterObj, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
 	if err != nil {
 		t.Fatalf("fetch cluster %q from Rancher after ready: %v", clusterName, err)
@@ -339,8 +341,18 @@ func provisionAWSCustomCluster(
 		nodes = []awsNodeSpec{{Count: 1, Role: []string{"etcd", "cp", "worker"}}}
 	}
 
+	if a.SSHKeyFileName == "" {
+		t.Fatalf("aws config: sshKeyFileName is required")
+	}
+	privKeyPath := sshKeyFilePath(a.SSHKeyFileName)
+	pubKeyPath, cleanup, err := derivePublicKeyFile(privKeyPath)
+	if err != nil {
+		t.Fatalf("derive public key from %q: %v", privKeyPath, err)
+	}
+	t.Cleanup(cleanup)
+
 	nodeVars := awsClusterNodesVars{
-		PublicSSHKey:   a.SSHPublicKeyPath,
+		PublicSSHKey:   pubKeyPath,
 		AccessKey:      a.AccessKey,
 		SecretKey:      a.SecretKey,
 		Region:         a.Region,
@@ -395,7 +407,7 @@ func provisionAWSCustomCluster(
 	}
 
 	return provisionCustomClusterShared(t, rancherClient, cfg, clusterCfg, generateName,
-		awsClusterNodesModulePath, a.SSHPrivateKeyPath, repoPath)
+		awsClusterNodesModulePath, privKeyPath, repoPath)
 }
 
 func provisionHarvesterCustomCluster(
@@ -748,4 +760,50 @@ func copyFile(src, dst string) error {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(dst), err)
 	}
 	return os.WriteFile(dst, data, 0600)
+}
+
+// sshKeyFilePath resolves a private key filename to its full path using the
+// global sshPath config (shepherd/pkg/nodes), falling back to ~/.ssh if unset.
+func sshKeyFilePath(keyFileName string) string {
+	if filepath.Ext(keyFileName) != ".pem" {
+		keyFileName = keyFileName + ".pem"
+	}
+	sshPathConfig := shepnodes.GetSSHPath()
+	if sshPathConfig.SSHPath == "" {
+		u, err := user.Current()
+		if err == nil {
+			return filepath.Join(u.HomeDir, ".ssh", keyFileName)
+		}
+	}
+	return filepath.Join(sshPathConfig.SSHPath, keyFileName)
+}
+
+// derivePublicKeyFile reads a PEM-encoded private key, derives the corresponding
+// authorized-keys format public key, writes it to a temp file, and returns the
+// file path along with a cleanup func to remove it.
+func derivePublicKeyFile(privKeyPath string) (string, func(), error) {
+	pemBytes, err := os.ReadFile(privKeyPath)
+	if err != nil {
+		return "", nil, fmt.Errorf("read private key: %w", err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(pemBytes)
+	if err != nil {
+		return "", nil, fmt.Errorf("parse private key: %w", err)
+	}
+
+	pubKeyBytes := ssh.MarshalAuthorizedKey(signer.PublicKey())
+
+	f, err := os.CreateTemp("", "pub-*.pub")
+	if err != nil {
+		return "", nil, fmt.Errorf("create temp public key file: %w", err)
+	}
+	if _, err := f.Write(pubKeyBytes); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", nil, fmt.Errorf("write public key file: %w", err)
+	}
+	f.Close()
+
+	return f.Name(), func() { os.Remove(f.Name()) }, nil
 }

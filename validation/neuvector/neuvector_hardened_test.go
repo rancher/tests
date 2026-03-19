@@ -25,6 +25,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	actionsCharts "github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/uiplugins"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -108,6 +109,11 @@ func (n *NeuVectorHardenedTestSuite) SetupSuite() {
 	require.NotNil(n.T(), clusterObj, "expected a non-nil cluster object")
 	n.T().Logf("cluster %q is ready", clusterObj.Name)
 
+	logrus.Infof("Verifying the cluster is ready (%s)", clusterObj.Name)
+	err = provisioning.VerifyClusterReady(n.client, clusterObj)
+	require.NoError(n.T(), err)
+
+
 	logrus.Infof("Verifying cluster deployments (%s)", clusterObj.Name)
 	err = deployment.VerifyClusterDeployments(n.client, clusterObj)
 	require.NoError(n.T(), err)
@@ -129,7 +135,7 @@ func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
 	require.Equal(n.T(), actionsCharts.SystemProject, project.Name)
 
 	n.T().Logf("Getting the latest chart version for [%s]", actionsCharts.NeuVectorChartName)
-	latestVersion, err := n.client.Catalog.GetLatestChartVersion(actionsCharts.NeuVectorChartName, catalog.RancherChartRepo)
+	latestVersions, err := n.client.Catalog.GetListChartVersions(actionsCharts.NeuVectorChartName, catalog.RancherChartRepo)
 	require.NoError(n.T(), err)
 
 	payload := actionsCharts.PayloadOpts{
@@ -137,14 +143,14 @@ func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
 		Host:      n.client.RancherConfig.Host,
 		InstallOptions: actionsCharts.InstallOptions{
 			Cluster:   cluster,
-			Version:   latestVersion,
+			Version:   latestVersions[1],
 			ProjectID: project.ID,
 		},
 		K3s:      strings.Contains(n.cfg.CustomCluster.KubernetesVersion, "k3s"),
 		Hardened: true,
 	}
 
-	n.T().Logf("Installing NeuVector on cluster [%s]", cluster.Name)
+	n.T().Logf("Installing NeuVector %s on cluster %s", latestVersions[1], cluster.Name)
 	err = actionsCharts.InstallNeuVectorChart(n.client, payload)
 	require.NoError(n.T(), err)
 
