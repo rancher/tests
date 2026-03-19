@@ -3,9 +3,12 @@
 package k3s
 
 import (
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
+	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
@@ -13,12 +16,14 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/actions/cloudcredentials"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/etcdsnapshot"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
+	s3resources "github.com/rancher/tests/validation/provisioning/resources/s3Bucket"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
@@ -27,15 +32,27 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+const (
+	s3Region   = "us-east-2"
+	s3Endpoint = "s3.us-east-2.amazonaws.com"
+)
+
 type S3SnapshotRestoreTestSuite struct {
 	suite.Suite
 	session      *session.Session
 	client       *rancher.Client
 	cattleConfig map[string]any
 	cluster      *v1.SteveAPIObject
+	clusterConfig *clusters.ClusterConfig
+	bucketName    string
 }
 
 func (s *S3SnapshotRestoreTestSuite) TearDownSuite() {
+	if s.bucketName != "" {
+		err := s3resources.DeleteBucket(s.bucketName, s3Region)
+		require.NoError(s.T(), err)
+	}
+
 	s.session.Cleanup()
 }
 
@@ -68,6 +85,8 @@ func (s *S3SnapshotRestoreTestSuite) SetupSuite() {
 	rancherConfig := new(rancher.Config)
 	operations.LoadObjectFromMap(defaults.RancherConfigKey, s.cattleConfig, rancherConfig)
 
+	provider := provisioning.CreateProvider(clusterConfig.Provider)
+
 	if rancherConfig.ClusterName == "" {
 		provider := provisioning.CreateProvider(clusterConfig.Provider)
 		machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
@@ -83,6 +102,72 @@ func (s *S3SnapshotRestoreTestSuite) SetupSuite() {
 		s.cluster, err = client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + s.client.RancherConfig.ClusterName)
 		require.NoError(s.T(), err)
 	}
+
+	s.bucketName = fmt.Sprintf("k3s-s3-restore-%d", time.Now().Unix())
+	err = s3resources.CreateBucket(s.bucketName, s3Region)
+	require.NoError(s.T(), err)
+
+	err = s.configureClusterS3(provider)
+	require.NoError(s.T(), err)
+
+	err = etcdsnapshot.VerifyS3Config(s.client, s.cluster.Name)
+	require.NoError(s.T(), err)
+}
+
+func (s *S3SnapshotRestoreTestSuite) configureClusterS3(provider provisioning.Provider) error {
+	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+
+	cloudCredential, err := provider.CloudCredFunc(s.client, credentialSpec)
+	if err != nil {
+		return err
+	}
+
+	cluster, err := s.client.Steve.SteveType(stevetypes.Provisioning).ByID(s.cluster.ID)
+	if err != nil {
+		return err
+	}
+
+	spec, ok := cluster.Object["spec"].(map[string]interface{})
+	if !ok || spec == nil {
+		spec = map[string]interface{}{}
+		cluster.Object["spec"] = spec
+	}
+
+	rkeConfig, ok := spec["rkeConfig"].(map[string]interface{})
+	if !ok || rkeConfig == nil {
+		rkeConfig = map[string]interface{}{}
+		spec["rkeConfig"] = rkeConfig
+	}
+
+	etcdConfig := &rkev1.ETCD{
+		S3: &rkev1.ETCDSnapshotS3{
+			Bucket:              s.bucketName,
+			CloudCredentialName: cloudCredential.Name,
+			Endpoint:            s3Endpoint,
+			Region:              s3Region,
+			SkipSSLVerify:       true,
+		},
+	}
+
+	rkeConfig["etcd"] = map[string]interface{}{
+		"s3": map[string]interface{}{
+			"bucket":              etcdConfig.S3.Bucket,
+			"cloudCredentialName": etcdConfig.S3.CloudCredentialName,
+			"endpoint":            etcdConfig.S3.Endpoint,
+			"region":              etcdConfig.S3.Region,
+			"skipSSLVerify":       etcdConfig.S3.SkipSSLVerify,
+		},
+	}
+
+	updatedCluster, err := s.client.Steve.SteveType(stevetypes.Provisioning).Update(cluster, cluster.Object)
+	if err != nil {
+		return err
+	}
+
+	s.cluster = updatedCluster
+	logrus.Infof("Configured S3 backup target for cluster %s with bucket %s", s.cluster.Name, s.bucketName)
+
+	return nil
 }
 
 func (s *S3SnapshotRestoreTestSuite) TestS3SnapshotRestore() {
