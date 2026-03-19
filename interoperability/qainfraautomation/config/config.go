@@ -38,23 +38,24 @@ type HarvesterConfig struct {
 
 // AWSConfig holds credentials and instance settings for an AWS provider.
 type AWSConfig struct {
-	AccessKey         string   `json:"accessKey" yaml:"accessKey"`
-	SecretKey         string   `json:"secretKey" yaml:"secretKey"`
-	Region            string   `json:"region" yaml:"region"`
-	AMI               string   `json:"ami" yaml:"ami"`
-	SSHUser           string   `json:"sshUser" yaml:"sshUser"`
-	SSHPublicKeyPath  string   `json:"sshPublicKeyPath" yaml:"sshPublicKeyPath"`
-	SSHPrivateKeyPath string   `json:"sshPrivateKeyPath" yaml:"sshPrivateKeyPath"`
-	InstanceType      string   `json:"instanceType" yaml:"instanceType"`
-	VPC               string   `json:"vpc" yaml:"vpc"`
-	Subnet            string   `json:"subnet" yaml:"subnet"`
-	SecurityGroups    []string `json:"securityGroups" yaml:"securityGroups"`
-	VolumeSize        int      `json:"volumeSize,omitempty" yaml:"volumeSize,omitempty"`
-	VolumeType        string   `json:"volumeType,omitempty" yaml:"volumeType,omitempty"`
-	HostnamePrefix    string   `json:"hostnamePrefix,omitempty" yaml:"hostnamePrefix,omitempty"`
-	Route53Zone       string   `json:"route53Zone" yaml:"route53Zone"`
-	AirgapSetup       bool     `json:"airgapSetup,omitempty" yaml:"airgapSetup,omitempty"`
-	ProxySetup        bool     `json:"proxySetup,omitempty" yaml:"proxySetup,omitempty"`
+	AccessKey            string   `json:"accessKey" yaml:"accessKey"`
+	SecretKey            string   `json:"secretKey" yaml:"secretKey"`
+	Region               string   `json:"region" yaml:"region"`
+	AMI                  string   `json:"ami" yaml:"ami"`
+	SSHUser              string   `json:"sshUser" yaml:"sshUser"`
+	AWSSSHKeyName        string   `json:"awsSSHKeyName" yaml:"awsSSHKeyName"`
+	SSHKeyFileName       string   `json:"sshKeyFileName" yaml:"sshKeyFileName"`
+	SSHPublicKeyFileName string   `json:"sshPublicKeyFileName" yaml:"sshPublicKeyFileName"`
+	InstanceType         string   `json:"instanceType" yaml:"instanceType"`
+	VPC                  string   `json:"vpc" yaml:"vpc"`
+	Subnet               string   `json:"subnet" yaml:"subnet"`
+	SecurityGroups       []string `json:"securityGroups" yaml:"securityGroups"`
+	VolumeSize           int      `json:"volumeSize,omitempty" yaml:"volumeSize,omitempty"`
+	VolumeType           string   `json:"volumeType,omitempty" yaml:"volumeType,omitempty"`
+	HostnamePrefix       string   `json:"hostnamePrefix,omitempty" yaml:"hostnamePrefix,omitempty"`
+	Route53Zone          string   `json:"route53Zone" yaml:"route53Zone"`
+	AirgapSetup          bool     `json:"airgapSetup,omitempty" yaml:"airgapSetup,omitempty"`
+	ProxySetup           bool     `json:"proxySetup,omitempty" yaml:"proxySetup,omitempty"`
 }
 
 // CustomClusterNodeGroup specifies the count and roles for a group of nodes in a custom cluster.

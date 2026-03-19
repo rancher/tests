@@ -70,12 +70,12 @@ func waitForRancherChartsRepo(client *rancher.Client, clusterID string) error {
 
 // InstallLatestNeuVectorChart installs the latest NeuVector chart (and its CRD chart) on the target cluster using the provided payload options.
 func InstallNeuVectorChart(client *rancher.Client, payload PayloadOpts) error {
-	catalogClient, err := client.GetClusterCatalogClient(payload.Cluster.ID)
-	if err != nil {
+	if err := waitForRancherChartsRepo(client, payload.Cluster.ID); err != nil {
 		return err
 	}
 
-	if err := waitForRancherChartsRepo(client, payload.Cluster.ID); err != nil {
+	catalogClient, err := client.GetClusterCatalogClient(payload.Cluster.ID)
+	if err != nil {
 		return err
 	}
 
