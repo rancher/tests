@@ -1,0 +1,809 @@
+package qainfraautomation
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/user"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"golang.org/x/crypto/ssh"
+
+	infraAnsible "github.com/rancher/qa-infra-automation/ansible"
+	"github.com/rancher/qa-infra-automation/fsutil"
+	infraTofu "github.com/rancher/qa-infra-automation/tofu"
+	"github.com/rancher/shepherd/clients/rancher"
+	v1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	shepnodes "github.com/rancher/shepherd/pkg/nodes"
+	"github.com/rancher/tests/interoperability/qainfraautomation/ansible"
+	"github.com/rancher/tests/interoperability/qainfraautomation/config"
+	"github.com/rancher/tests/interoperability/qainfraautomation/tofu"
+	"github.com/sirupsen/logrus"
+)
+
+func cleanupEnabled(rancherClient *rancher.Client) bool {
+	c := rancherClient.RancherConfig.Cleanup
+	return c == nil || *c
+}
+
+const (
+	harvesterVMModulePath          = "tofu/harvester/modules/vm"
+	harvesterKubeconfigDest        = "tofu/harvester/modules/local.yaml"
+	rancherCustomClusterModulePath = "tofu/rancher/custom_cluster"
+	rancherClusterModulePath       = "tofu/rancher/cluster"
+	customClusterPlaybook          = "ansible/rancher/downstream/custom_cluster/custom-cluster-playbook.yml"
+	customClusterInventoryTemplate = "ansible/rancher/downstream/custom_cluster/inventory-template.yml"
+	rke2Playbook                   = "ansible/rke2/default/rke2-playbook.yml"
+	rke2InventoryTemplate          = "ansible/rke2/default/inventory-template.yml"
+	rke2VarsFile                   = "ansible/rke2/default/vars.yaml"
+	k3sPlaybook                    = "ansible/k3s/default/k3s-playbook.yml"
+	k3sInventoryTemplate           = "ansible/k3s/default/inventory-template.yml"
+	k3sVarsFile                    = "ansible/k3s/default/vars.yaml"
+	awsClusterNodesModulePath      = "tofu/aws/modules/cluster_nodes"
+	fleetDefaultNamespace          = "fleet-default"
+)
+
+// extractInfraFiles extracts the embedded Ansible and Tofu files from
+// the qa-infra-automation module into a temporary directory on disk.
+// It registers a t.Cleanup callback to remove the directory when the
+// test finishes. The returned path contains "ansible/" and "tofu/"
+// subdirectories mirroring the infra repo layout.
+func extractInfraFiles(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.MkdirTemp("", "qa-infra-*")
+	if err != nil {
+		t.Fatalf("create temp dir for infra files: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			logrus.Warnf("[qainfraautomation] failed to remove temp infra dir %s: %v", dir, err)
+		}
+	})
+
+	ansibleDir := filepath.Join(dir, "ansible")
+	if err := os.MkdirAll(ansibleDir, 0755); err != nil {
+		t.Fatalf("mkdir ansible: %v", err)
+	}
+	if err := fsutil.WriteToDisk(infraAnsible.Files, ansibleDir); err != nil {
+		t.Fatalf("extract embedded ansible files: %v", err)
+	}
+
+	tofuDir := filepath.Join(dir, "tofu")
+	if err := os.MkdirAll(tofuDir, 0755); err != nil {
+		t.Fatalf("mkdir tofu: %v", err)
+	}
+	if err := fsutil.WriteToDisk(infraTofu.Files, tofuDir); err != nil {
+		t.Fatalf("extract embedded tofu files: %v", err)
+	}
+
+	logrus.Infof("[qainfraautomation] extracted embedded infra files to %s", dir)
+	return dir
+}
+
+type harvesterVMVars struct {
+	SSHKey             string              `json:"ssh_key"`
+	Nodes              []harvesterNodeSpec `json:"nodes"`
+	GenerateName       string              `json:"generate_name,omitempty"`
+	SSHUser            string              `json:"ssh_user,omitempty"`
+	NetworkName        string              `json:"network_name,omitempty"`
+	BackendNetworkName string              `json:"backend_network_name,omitempty"`
+	ImageID            string              `json:"image_id,omitempty"`
+	Namespace          string              `json:"namespace,omitempty"`
+	CPU                int                 `json:"cpu,omitempty"`
+	Memory             string              `json:"mem,omitempty"`
+	DiskSize           string              `json:"disk_size,omitempty"`
+	CreateLoadbalancer bool                `json:"create_loadbalancer"`
+	SubnetCIDR         string              `json:"subnet_cidr,omitempty"`
+	GatewayIP          string              `json:"gateway_ip,omitempty"`
+	RangeIPStart       string              `json:"range_ip_start,omitempty"`
+	RangeIPEnd         string              `json:"range_ip_end,omitempty"`
+	IPPoolName         string              `json:"ippool_name,omitempty"`
+}
+
+type harvesterNodeSpec struct {
+	Count int      `json:"count"`
+	Role  []string `json:"role"`
+}
+
+type rancherCustomClusterVars struct {
+	KubernetesVersion string `json:"kubernetes_version"`
+	FQDN              string `json:"fqdn"`
+	APIKey            string `json:"api_key"`
+	GenerateName      string `json:"generate_name,omitempty"`
+	IsNetworkPolicy   bool   `json:"is_network_policy,omitempty"`
+	PSA               string `json:"psa,omitempty"`
+	Insecure          bool   `json:"insecure"`
+}
+
+type rancherClusterMachinePool struct {
+	Name             string `json:"name,omitempty"`
+	ControlPlaneRole bool   `json:"control_plane_role,omitempty"`
+	WorkerRole       bool   `json:"worker_role,omitempty"`
+	EtcdRole         bool   `json:"etcd_role,omitempty"`
+	Quantity         int    `json:"quantity,omitempty"`
+}
+
+type rancherClusterVars struct {
+	KubernetesVersion string                      `json:"kubernetes_version"`
+	FQDN              string                      `json:"fqdn"`
+	APIKey            string                      `json:"api_key"`
+	Insecure          bool                        `json:"insecure"`
+	CloudProvider     string                      `json:"cloud_provider"`
+	GenerateName      string                      `json:"generate_name,omitempty"`
+	IsNetworkPolicy   bool                        `json:"is_network_policy,omitempty"`
+	PSA               string                      `json:"psa,omitempty"`
+	MachinePools      []rancherClusterMachinePool `json:"machine_pools,omitempty"`
+	NodeConfig        map[string]interface{}      `json:"node_config"`
+	CreateNew         bool                        `json:"create_new"`
+}
+
+// ProvisionRancherCluster provisions a Rancher-managed cluster via OpenTofu and waits for it to be ready.
+func ProvisionRancherCluster(
+	t *testing.T,
+	rancherClient *rancher.Client,
+	cfg *config.Config,
+	clusterCfg *config.RancherClusterConfig,
+) *v1.SteveAPIObject {
+	t.Helper()
+
+	repoPath := extractInfraFiles(t)
+	workspace := cfg.Workspace
+	if workspace == "" {
+		workspace = "default"
+	}
+
+	generateName := clusterCfg.GenerateName
+	if generateName == "" {
+		generateName = "tf"
+	}
+
+	machinePools := make([]rancherClusterMachinePool, len(clusterCfg.MachinePools))
+	for i, mp := range clusterCfg.MachinePools {
+		quantity := mp.Quantity
+		if quantity == 0 {
+			quantity = 1
+		}
+		machinePools[i] = rancherClusterMachinePool{
+			Name:             fmt.Sprintf("%s-%d", generateName, i),
+			ControlPlaneRole: mp.ControlPlaneRole,
+			WorkerRole:       mp.WorkerRole,
+			EtcdRole:         mp.EtcdRole,
+			Quantity:         quantity,
+		}
+	}
+	if len(machinePools) == 0 {
+		machinePools = []rancherClusterMachinePool{
+			{Name: generateName, ControlPlaneRole: true, WorkerRole: true, EtcdRole: true, Quantity: 1},
+		}
+	}
+
+	clusterVars := rancherClusterVars{
+		KubernetesVersion: clusterCfg.KubernetesVersion,
+		FQDN:              "https://" + rancherClient.RancherConfig.Host,
+		APIKey:            rancherClient.RancherConfig.AdminToken,
+		Insecure:          *rancherClient.RancherConfig.Insecure,
+		CloudProvider:     clusterCfg.CloudProvider,
+		GenerateName:      generateName,
+		IsNetworkPolicy:   clusterCfg.IsNetworkPolicy,
+		PSA:               clusterCfg.PSA,
+		MachinePools:      machinePools,
+		NodeConfig:        clusterCfg.NodeConfig,
+		CreateNew:         true,
+	}
+
+	clusterVarFile, err := writeTFVarsJSON(t, "rancher-cluster-vars.json", clusterVars)
+	if err != nil {
+		t.Fatalf("write rancher cluster tfvars: %v", err)
+	}
+
+	clusterModuleDir := filepath.Join(repoPath, rancherClusterModulePath)
+	clusterTofu := tofu.NewClient(clusterModuleDir, workspace)
+
+	if err := clusterTofu.Init(); err != nil {
+		t.Fatalf("tofu init (rancher cluster): %v", err)
+	}
+	if err := clusterTofu.WorkspaceSelectOrCreate(); err != nil {
+		t.Fatalf("tofu workspace (rancher cluster): %v", err)
+	}
+	if err := clusterTofu.Apply(clusterVarFile); err != nil {
+		t.Fatalf("tofu apply (rancher cluster): %v", err)
+	}
+
+	clusterName, err := clusterTofu.Output("name")
+	if err != nil {
+		t.Fatalf("tofu output name: %v", err)
+	}
+	logrus.Infof("[qainfraautomation] rancher-provisioned cluster name from tofu: %s", clusterName)
+
+	if cleanupEnabled(rancherClient) {
+		t.Cleanup(func() {
+			logrus.Infof("[qainfraautomation] destroying Rancher-provisioned cluster %q (workspace=%s)", clusterName, workspace)
+			if err := clusterTofu.Destroy(clusterVarFile); err != nil {
+				logrus.Warnf("[qainfraautomation] tofu destroy: %v", err)
+			}
+
+			existing, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
+			if err != nil {
+				if strings.Contains(err.Error(), "404 Not Found") {
+					return
+				}
+				logrus.Errorf("[qainfraautomation] checking cluster %q after destroy: %v", clusterName, err)
+				return
+			}
+
+			logrus.Infof("[qainfraautomation] cluster %q still present after tofu destroy; deleting via Rancher API", clusterName)
+			if err := rancherClient.Steve.SteveType(stevetypes.Provisioning).Delete(existing); err != nil {
+				logrus.Errorf("[qainfraautomation] delete cluster %q from Rancher: %v", clusterName, err)
+			}
+		})
+	}
+
+	clusterObj, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
+	if err != nil {
+		t.Fatalf("fetch cluster %q from Rancher after ready: %v", clusterName, err)
+	}
+
+	return clusterObj
+}
+
+// ProvisionCustomCluster provisions a custom (node-driver) Rancher cluster on either AWS or Harvester infrastructure.
+func ProvisionCustomCluster(
+	t *testing.T,
+	rancherClient *rancher.Client,
+	cfg *config.Config,
+	clusterCfg *config.CustomClusterConfig,
+) *v1.SteveAPIObject {
+	t.Helper()
+
+	repoPath := extractInfraFiles(t)
+
+	switch {
+	case cfg.AWS != nil && cfg.Harvester != nil:
+		t.Fatalf("ProvisionCustomCluster: both aws and harvester are set in config; exactly one must be provided")
+		return nil
+	case cfg.AWS != nil:
+		logrus.Infof("[qainfraautomation] ProvisionCustomCluster: provisioning via AWS provider (workspace=%s)", cfg.Workspace)
+		return provisionAWSCustomCluster(t, rancherClient, cfg, clusterCfg, repoPath)
+	case cfg.Harvester != nil:
+		logrus.Infof("[qainfraautomation] ProvisionCustomCluster: provisioning via Harvester provider (workspace=%s)", cfg.Workspace)
+		return provisionHarvesterCustomCluster(t, rancherClient, cfg, clusterCfg, repoPath)
+	default:
+		t.Fatalf("ProvisionCustomCluster: neither aws nor harvester config is set; exactly one must be provided")
+		return nil
+	}
+}
+
+type awsNodeSpec struct {
+	Count int      `json:"count"`
+	Role  []string `json:"role"`
+}
+
+type awsClusterNodesVars struct {
+	PublicSSHKey   string        `json:"public_ssh_key"`
+	AccessKey      string        `json:"aws_access_key"`
+	SecretKey      string        `json:"aws_secret_key"`
+	Region         string        `json:"aws_region"`
+	AMI            string        `json:"aws_ami"`
+	HostnamePrefix string        `json:"aws_hostname_prefix"`
+	Route53Zone    string        `json:"aws_route53_zone"`
+	SSHUser        string        `json:"aws_ssh_user"`
+	SecurityGroup  []string      `json:"aws_security_group"`
+	VPC            string        `json:"aws_vpc"`
+	VolumeSize     int           `json:"aws_volume_size"`
+	VolumeType     string        `json:"aws_volume_type"`
+	Subnet         string        `json:"aws_subnet"`
+	InstanceType   string        `json:"instance_type"`
+	Nodes          []awsNodeSpec `json:"nodes"`
+	AirgapSetup    bool          `json:"airgap_setup"`
+	ProxySetup     bool          `json:"proxy_setup"`
+}
+
+func provisionAWSCustomCluster(
+	t *testing.T,
+	rancherClient *rancher.Client,
+	cfg *config.Config,
+	clusterCfg *config.CustomClusterConfig,
+	repoPath string,
+) *v1.SteveAPIObject {
+	t.Helper()
+
+	workspace := cfg.Workspace
+	if workspace == "" {
+		workspace = "default"
+	}
+
+	a := cfg.AWS
+
+	hostnamePrefix := a.HostnamePrefix
+	if hostnamePrefix == "" {
+		hostnamePrefix = "tf"
+	}
+
+	volumeSize := a.VolumeSize
+	if volumeSize == 0 {
+		volumeSize = 50
+	}
+
+	volumeType := a.VolumeType
+	if volumeType == "" {
+		volumeType = "gp3"
+	}
+
+	nodes := make([]awsNodeSpec, len(clusterCfg.Nodes))
+	for i, n := range clusterCfg.Nodes {
+		nodes[i] = awsNodeSpec{Count: n.Count, Role: n.Role}
+	}
+	if len(nodes) == 0 {
+		nodes = []awsNodeSpec{{Count: 1, Role: []string{"etcd", "cp", "worker"}}}
+	}
+
+	if a.SSHKeyFileName == "" {
+		t.Fatalf("aws config: sshKeyFileName is required")
+	}
+	privKeyPath := sshKeyFilePath(a.SSHKeyFileName)
+	pubKeyPath, cleanup, err := derivePublicKeyFile(privKeyPath)
+	if err != nil {
+		t.Fatalf("derive public key from %q: %v", privKeyPath, err)
+	}
+	t.Cleanup(cleanup)
+
+	nodeVars := awsClusterNodesVars{
+		PublicSSHKey:   pubKeyPath,
+		AccessKey:      a.AccessKey,
+		SecretKey:      a.SecretKey,
+		Region:         a.Region,
+		AMI:            a.AMI,
+		HostnamePrefix: hostnamePrefix,
+		Route53Zone:    a.Route53Zone,
+		SSHUser:        a.SSHUser,
+		SecurityGroup:  a.SecurityGroups,
+		VPC:            a.VPC,
+		VolumeSize:     volumeSize,
+		VolumeType:     volumeType,
+		Subnet:         a.Subnet,
+		InstanceType:   a.InstanceType,
+		Nodes:          nodes,
+		AirgapSetup:    a.AirgapSetup,
+		ProxySetup:     a.ProxySetup,
+	}
+
+	nodeVarFile, err := writeTFVarsJSON(t, "aws-cluster-nodes-vars.json", nodeVars)
+	if err != nil {
+		t.Fatalf("write aws cluster nodes tfvars: %v", err)
+	}
+
+	nodeModuleDir := filepath.Join(repoPath, awsClusterNodesModulePath)
+	nodeTofu := tofu.NewClient(nodeModuleDir, workspace)
+
+	logrus.Infof("[qainfraautomation] tofu init (aws cluster nodes): %s", nodeModuleDir)
+	if err := nodeTofu.Init(); err != nil {
+		t.Fatalf("tofu init (aws cluster nodes): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu workspace select-or-create %q (aws cluster nodes)", workspace)
+	if err := nodeTofu.WorkspaceSelectOrCreate(); err != nil {
+		t.Fatalf("tofu workspace (aws cluster nodes): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu apply (aws cluster nodes, workspace=%s)", workspace)
+	if err := nodeTofu.Apply(nodeVarFile); err != nil {
+		t.Fatalf("tofu apply (aws cluster nodes): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu apply complete (aws cluster nodes)")
+	if cleanupEnabled(rancherClient) {
+		t.Cleanup(func() {
+			logrus.Infof("[qainfraautomation] destroying aws EC2 nodes (workspace=%s)", workspace)
+			if err := nodeTofu.Destroy(nodeVarFile); err != nil {
+				logrus.Errorf("[qainfraautomation] tofu destroy (aws EC2 nodes): %v", err)
+			}
+		})
+	}
+
+	generateName := clusterCfg.GenerateName
+	if generateName == "" {
+		generateName = hostnamePrefix
+	}
+
+	return provisionCustomClusterShared(t, rancherClient, cfg, clusterCfg, generateName,
+		awsClusterNodesModulePath, privKeyPath, repoPath)
+}
+
+func provisionHarvesterCustomCluster(
+	t *testing.T,
+	rancherClient *rancher.Client,
+	cfg *config.Config,
+	clusterCfg *config.CustomClusterConfig,
+	repoPath string,
+) *v1.SteveAPIObject {
+	t.Helper()
+
+	workspace := cfg.Workspace
+	if workspace == "" {
+		workspace = "default"
+	}
+
+	h := cfg.Harvester
+
+	if h.KubeConfigPath != "" {
+		destKubeconfig := filepath.Join(repoPath, harvesterKubeconfigDest)
+		logrus.Infof("[qainfraautomation] copying Harvester kubeconfig %s → %s", h.KubeConfigPath, destKubeconfig)
+		if err := copyFile(h.KubeConfigPath, destKubeconfig); err != nil {
+			t.Fatalf("copy harvester kubeconfig: %v", err)
+		}
+	}
+
+	vmVars := buildHarvesterVMVars(h, clusterCfg.Nodes)
+	vmVarFile, err := writeTFVarsJSON(t, "harvester-vm-vars.json", vmVars)
+	if err != nil {
+		t.Fatalf("write harvester VM tfvars: %v", err)
+	}
+
+	vmModuleDir := filepath.Join(repoPath, harvesterVMModulePath)
+	vmTofu := tofu.NewClient(vmModuleDir, workspace)
+
+	logrus.Infof("[qainfraautomation] tofu init (harvester vm): %s", vmModuleDir)
+	if err := vmTofu.Init(); err != nil {
+		t.Fatalf("tofu init (harvester vm): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu workspace select-or-create %q (harvester vm)", workspace)
+	if err := vmTofu.WorkspaceSelectOrCreate(); err != nil {
+		t.Fatalf("tofu workspace (harvester vm): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu apply (harvester vm, workspace=%s)", workspace)
+	if err := vmTofu.Apply(vmVarFile); err != nil {
+		t.Fatalf("tofu apply (harvester vm): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu apply complete (harvester vm)")
+	if cleanupEnabled(rancherClient) {
+		t.Cleanup(func() {
+			logrus.Infof("[qainfraautomation] destroying Harvester VMs (workspace=%s)", workspace)
+			if err := vmTofu.Destroy(vmVarFile); err != nil {
+				logrus.Errorf("[qainfraautomation] tofu destroy (Harvester VMs): %v", err)
+			}
+		})
+	}
+
+	generateName := clusterCfg.GenerateName
+	if generateName == "" {
+		generateName = "tf"
+	}
+
+	return provisionCustomClusterShared(t, rancherClient, cfg, clusterCfg, generateName,
+		harvesterVMModulePath, h.SSHPrivateKeyPath, repoPath)
+}
+
+func provisionCustomClusterShared(
+	t *testing.T,
+	rancherClient *rancher.Client,
+	cfg *config.Config,
+	clusterCfg *config.CustomClusterConfig,
+	generateName string,
+	nodeModulePath string,
+	sshPrivateKeyPath string,
+	repoPath string,
+) *v1.SteveAPIObject {
+	t.Helper()
+
+	workspace := cfg.Workspace
+	if workspace == "" {
+		workspace = "default"
+	}
+
+	clusterVars := rancherCustomClusterVars{
+		KubernetesVersion: clusterCfg.KubernetesVersion,
+		FQDN:              "https://" + rancherClient.RancherConfig.Host,
+		APIKey:            rancherClient.RancherConfig.AdminToken,
+		GenerateName:      generateName,
+		IsNetworkPolicy:   clusterCfg.IsNetworkPolicy,
+		PSA:               clusterCfg.PSA,
+		Insecure:          *rancherClient.RancherConfig.Insecure,
+	}
+
+	clusterVarFile, err := writeTFVarsJSON(t, "rancher-custom-cluster-vars.json", clusterVars)
+	if err != nil {
+		t.Fatalf("write rancher custom cluster tfvars: %v", err)
+	}
+
+	clusterModuleDir := filepath.Join(repoPath, rancherCustomClusterModulePath)
+	clusterTofu := tofu.NewClient(clusterModuleDir, workspace)
+
+	logrus.Infof("[qainfraautomation] tofu init (rancher custom cluster): %s", clusterModuleDir)
+	if err := clusterTofu.Init(); err != nil {
+		t.Fatalf("tofu init (rancher custom cluster): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu workspace select-or-create %q (rancher custom cluster)", workspace)
+	if err := clusterTofu.WorkspaceSelectOrCreate(); err != nil {
+		t.Fatalf("tofu workspace (rancher custom cluster): %v", err)
+	}
+	// -refresh=false: the rancher2 provider's kubeconfig fetch rejects newer Rancher ext/token format tokens.
+	logrus.Infof("[qainfraautomation] tofu apply -refresh=false (rancher custom cluster, workspace=%s)", workspace)
+	if err := clusterTofu.ApplyNoRefresh(clusterVarFile); err != nil {
+		t.Fatalf("tofu apply (rancher custom cluster): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu apply complete (rancher custom cluster)")
+	if cleanupEnabled(rancherClient) {
+		t.Cleanup(func() {
+			logrus.Infof("[qainfraautomation] destroying Rancher custom cluster resources (workspace=%s)", workspace)
+			if err := clusterTofu.DestroyNoRefresh(clusterVarFile); err != nil {
+				logrus.Errorf("[qainfraautomation] tofu destroy (rancher custom cluster): %v", err)
+			}
+		})
+	}
+
+	ansibleClient := ansible.NewClient(repoPath)
+
+	inventoryEnv := map[string]string{
+		"TERRAFORM_NODE_SOURCE": nodeModulePath,
+		"TF_WORKSPACE":          workspace,
+	}
+	inventoryPath, err := ansibleClient.GenerateInventory(customClusterInventoryTemplate, inventoryEnv)
+	if err != nil {
+		t.Fatalf("generate inventory: %v", err)
+	}
+
+	if err := ansibleClient.AddSSHKey(sshPrivateKeyPath); err != nil {
+		t.Fatalf("ssh-add: %v", err)
+	}
+
+	playbookEnv := []string{
+		"TF_WORKSPACE=" + workspace,
+		"TERRAFORM_NODE_SOURCE=" + nodeModulePath,
+		"RANCHER_URL=https://" + rancherClient.RancherConfig.Host,
+		"RANCHER_TOKEN=" + rancherClient.RancherConfig.AdminToken,
+	}
+	if *rancherClient.RancherConfig.Insecure {
+		playbookEnv = append(playbookEnv, "RANCHER_INSECURE=true")
+	}
+	if clusterCfg.Harden {
+		playbookEnv = append(playbookEnv, "HARDEN=true")
+	}
+	if cfg.Ansible != nil && cfg.Ansible.ConfigPath != "" {
+		playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+filepath.Join(repoPath, cfg.Ansible.ConfigPath))
+	}
+	if err := ansibleClient.RunPlaybook(customClusterPlaybook, inventoryPath, playbookEnv); err != nil {
+		t.Fatalf("ansible-playbook (custom cluster): %v", err)
+	}
+
+	clusterName, err := clusterTofu.Output("cluster_name")
+	if err != nil {
+		t.Fatalf("tofu output cluster_name: %v", err)
+	}
+	logrus.Infof("[qainfraautomation] cluster name from tofu: %s", clusterName)
+
+	clusterObj, err := rancherClient.Steve.SteveType(stevetypes.Provisioning).ByID(fleetDefaultNamespace + "/" + clusterName)
+	if err != nil {
+		t.Fatalf("fetch cluster %q from Rancher after ready: %v", clusterName, err)
+	}
+
+	return clusterObj
+}
+
+// ProvisionHarvesterRKE2Cluster provisions a standalone RKE2 cluster on Harvester VMs and returns the kubeconfig path.
+func ProvisionHarvesterRKE2Cluster(
+	t *testing.T,
+	rancherClient *rancher.Client,
+	cfg *config.Config,
+	clusterCfg *config.StandaloneClusterConfig,
+) string {
+	t.Helper()
+	return provisionHarvesterStandaloneCluster(t, rancherClient, cfg, clusterCfg, "rke2")
+}
+
+// ProvisionHarvesterK3SCluster provisions a standalone K3s cluster on Harvester VMs and returns the kubeconfig path.
+func ProvisionHarvesterK3SCluster(
+	t *testing.T,
+	rancherClient *rancher.Client,
+	cfg *config.Config,
+	clusterCfg *config.StandaloneClusterConfig,
+) string {
+	t.Helper()
+	return provisionHarvesterStandaloneCluster(t, rancherClient, cfg, clusterCfg, "k3s")
+}
+
+func provisionHarvesterStandaloneCluster(
+	t *testing.T,
+	rancherClient *rancher.Client,
+	cfg *config.Config,
+	clusterCfg *config.StandaloneClusterConfig,
+	clusterType string,
+) string {
+	t.Helper()
+
+	repoPath := extractInfraFiles(t)
+	workspace := cfg.Workspace
+	if workspace == "" {
+		workspace = "default"
+	}
+
+	h := cfg.Harvester
+	if h == nil {
+		t.Fatalf("harvester config is required for standalone cluster provisioning")
+	}
+
+	var playbookPath, inventoryTemplate, varsFile string
+	switch clusterType {
+	case "rke2":
+		playbookPath = rke2Playbook
+		inventoryTemplate = rke2InventoryTemplate
+		varsFile = rke2VarsFile
+	case "k3s":
+		playbookPath = k3sPlaybook
+		inventoryTemplate = k3sInventoryTemplate
+		varsFile = k3sVarsFile
+	default:
+		t.Fatalf("unsupported cluster type: %s (must be rke2 or k3s)", clusterType)
+	}
+
+	destKubeconfig := filepath.Join(repoPath, harvesterKubeconfigDest)
+	logrus.Infof("[qainfraautomation] copying Harvester kubeconfig %s → %s", h.KubeConfigPath, destKubeconfig)
+	if err := copyFile(h.KubeConfigPath, destKubeconfig); err != nil {
+		t.Fatalf("copy harvester kubeconfig: %v", err)
+	}
+
+	vmVars := buildHarvesterVMVars(h, cfg.StandaloneCluster.Nodes)
+	vmVarFile, err := writeTFVarsJSON(t, "harvester-vm-vars.json", vmVars)
+	if err != nil {
+		t.Fatalf("write harvester VM tfvars: %v", err)
+	}
+
+	vmModuleDir := filepath.Join(repoPath, harvesterVMModulePath)
+	vmTofu := tofu.NewClient(vmModuleDir, workspace)
+
+	if err := vmTofu.Init(); err != nil {
+		t.Fatalf("tofu init (harvester vm): %v", err)
+	}
+	if err := vmTofu.WorkspaceSelectOrCreate(); err != nil {
+		t.Fatalf("tofu workspace (harvester vm): %v", err)
+	}
+	if err := vmTofu.Apply(vmVarFile); err != nil {
+		t.Fatalf("tofu apply (harvester vm): %v", err)
+	}
+
+	if cleanupEnabled(rancherClient) {
+		t.Cleanup(func() {
+			logrus.Infof("[qainfraautomation] destroying Harvester VMs (workspace=%s)", workspace)
+			if err := vmTofu.Destroy(vmVarFile); err != nil {
+				logrus.Errorf("[qainfraautomation] tofu destroy (harvester vm): %v", err)
+			}
+		})
+	}
+
+	ansibleClient := ansible.NewClient(repoPath)
+	inventoryEnv := map[string]string{
+		"TERRAFORM_NODE_SOURCE": harvesterVMModulePath,
+		"TF_WORKSPACE":          workspace,
+	}
+	inventoryPath, err := ansibleClient.GenerateInventory(inventoryTemplate, inventoryEnv)
+	if err != nil {
+		t.Fatalf("generate inventory: %v", err)
+	}
+
+	vars := map[string]string{
+		"kubernetes_version": clusterCfg.KubernetesVersion,
+		"cni":                clusterCfg.CNI,
+		"channel":            clusterCfg.Channel,
+		"kubeconfig_file":    clusterCfg.KubeconfigOutputPath,
+	}
+	if err := ansibleClient.WriteVarsYAML(varsFile, vars); err != nil {
+		t.Fatalf("write vars.yaml: %v", err)
+	}
+
+	if err := ansibleClient.AddSSHKey(h.SSHPrivateKeyPath); err != nil {
+		t.Fatalf("ssh-add: %v", err)
+	}
+
+	playbookEnv := []string{
+		"TF_WORKSPACE=" + workspace,
+		"TERRAFORM_NODE_SOURCE=" + harvesterVMModulePath,
+	}
+	if cfg.Ansible != nil && cfg.Ansible.ConfigPath != "" {
+		playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+filepath.Join(repoPath, cfg.Ansible.ConfigPath))
+	}
+	if err := ansibleClient.RunPlaybook(playbookPath, inventoryPath, playbookEnv); err != nil {
+		t.Fatalf("ansible-playbook (%s): %v", clusterType, err)
+	}
+
+	return clusterCfg.KubeconfigOutputPath
+}
+
+func buildHarvesterVMVars(h *config.HarvesterConfig, g []config.CustomClusterNodeGroup) harvesterVMVars {
+	nodes := make([]harvesterNodeSpec, len(g))
+	for i, n := range g {
+		nodes[i] = harvesterNodeSpec{
+			Count: n.Count,
+			Role:  n.Role,
+		}
+	}
+	return harvesterVMVars{
+		SSHKey:             h.SSHPublicKey,
+		Nodes:              nodes,
+		GenerateName:       h.GenerateName,
+		SSHUser:            h.SSHUser,
+		NetworkName:        h.NetworkName,
+		BackendNetworkName: h.BackendNetworkName,
+		ImageID:            h.ImageID,
+		Namespace:          h.Namespace,
+		CPU:                h.CPU,
+		Memory:             h.Memory,
+		DiskSize:           h.DiskSize,
+		CreateLoadbalancer: h.CreateLoadbalancer,
+		SubnetCIDR:         h.SubnetCIDR,
+		GatewayIP:          h.GatewayIP,
+		RangeIPStart:       h.RangeIPStart,
+		RangeIPEnd:         h.RangeIPEnd,
+		IPPoolName:         h.IPPoolName,
+	}
+}
+
+func writeTFVarsJSON(t *testing.T, filename string, v any) (string, error) {
+	t.Helper()
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal tfvars JSON: %w", err)
+	}
+	destPath := filepath.Join(t.TempDir(), filename)
+	if err := os.WriteFile(destPath, data, 0600); err != nil {
+		return "", fmt.Errorf("write tfvars file %s: %w", destPath, err)
+	}
+	logrus.Debugf("[qainfraautomation] wrote tfvars: %s", destPath)
+	return destPath, nil
+}
+
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", src, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", filepath.Dir(dst), err)
+	}
+	return os.WriteFile(dst, data, 0600)
+}
+
+// sshKeyFilePath resolves a private key filename to its full path using the
+// global sshPath config (shepherd/pkg/nodes), falling back to ~/.ssh if unset.
+func sshKeyFilePath(keyFileName string) string {
+	if filepath.Ext(keyFileName) != ".pem" {
+		keyFileName = keyFileName + ".pem"
+	}
+	sshPathConfig := shepnodes.GetSSHPath()
+	if sshPathConfig.SSHPath == "" {
+		u, err := user.Current()
+		if err == nil {
+			return filepath.Join(u.HomeDir, ".ssh", keyFileName)
+		}
+	}
+	return filepath.Join(sshPathConfig.SSHPath, keyFileName)
+}
+
+// derivePublicKeyFile reads a PEM-encoded private key, derives the corresponding
+// authorized-keys format public key, writes it to a temp file, and returns the
+// file path along with a cleanup func to remove it.
+func derivePublicKeyFile(privKeyPath string) (string, func(), error) {
+	pemBytes, err := os.ReadFile(privKeyPath)
+	if err != nil {
+		return "", nil, fmt.Errorf("read private key: %w", err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(pemBytes)
+	if err != nil {
+		return "", nil, fmt.Errorf("parse private key: %w", err)
+	}
+
+	pubKeyBytes := ssh.MarshalAuthorizedKey(signer.PublicKey())
+
+	f, err := os.CreateTemp("", "pub-*.pub")
+	if err != nil {
+		return "", nil, fmt.Errorf("create temp public key file: %w", err)
+	}
+	if _, err := f.Write(pubKeyBytes); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", nil, fmt.Errorf("write public key file: %w", err)
+	}
+	f.Close()
+
+	return f.Name(), func() { os.Remove(f.Name()) }, nil
+}

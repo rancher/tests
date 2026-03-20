@@ -6,6 +6,7 @@ import (
 
 	v1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
@@ -96,6 +97,14 @@ func InstallUIPlugin(client *rancher.Client, installExtensionOptions *ExtensionO
 		}
 		return false, nil
 	})
+
+	if err != nil {
+		logrus.Warnf("Watch for UI plugin %s install ended with error (%v); verifying current app state...", installExtensionOptions.ChartName, err)
+		err = charts.WaitChartInstall(catalogClient, extensionNamespace, installExtensionOptions.ChartName)
+		if err != nil {
+			return err
+		}
+	}
 
 	return err
 }

@@ -28,6 +28,8 @@ type PayloadOpts struct {
 	Namespace       string
 	Host            string
 	DefaultRegistry string
+	K3s             bool
+	Hardened        bool
 }
 
 // RancherIstioOpts is a struct of the required options to install Rancher Istio with desired chart values.
