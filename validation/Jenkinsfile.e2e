@@ -91,17 +91,6 @@ node {
                 sh "docker volume create --name ${validationVolume}"
               }
             }
-            stage("Build Environment") {
-              try {
-                sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
-                "${golangImageName} sh -c \"${workPath}pipeline/scripts/setup_environment.sh\""
-              } catch(err) {
-                sh "docker stop ${buildTestContainer}"
-                sh "docker rm -v ${buildTestContainer}"
-                sh "docker volume rm -f ${validationVolume}"
-                error "Build Environment had failures."
-              }
-            }
             stage('Run Validation Tests') {
               try {
                 sh "docker run --volumes-from ${buildTestContainer} --name ${golangTestContainer} -t --env-file ${envFile} " +
