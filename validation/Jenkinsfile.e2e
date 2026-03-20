@@ -18,29 +18,17 @@ node {
     def envFile = ".env"
     def rancherConfig = "rancher_env.config"
     def branch = "main"
-    def corralBranch = "main"
     def cleanup = env.RANCHER_CLEANUP.toLowerCase()
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"
     }
 
-    if ("${env.RANCHER_CORRAL_PACKAGES_REPO_BRANCH}" != "null" && "${env.RANCHER_CORRAL_PACKAGES_REPO_BRANCH}" != "") {
-      corralBranch = "${env.RANCHER_CORRAL_PACKAGES_REPO_BRANCH}"
-    }
 
     def rancherRepo = scm.getUserRemoteConfigs()[0].getUrl()
     if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
       rancherRepo = "${env.REPO}"
     }
 
-    if (scm.getUserRemoteConfigs().size() > 1) {
-      corralRepo = scm.getUserRemoteConfigs()[1].getUrl()
-    }
-
-    if ("${env.RANCHER_CORRAL_PACKAGES_REPO_URL}" != "null" && "${env.RANCHER_CORRAL_PACKAGES_REPO_URL}" != "") {
-      corralRepo = "${env.RANCHER_CORRAL_PACKAGES_REPO_URL}"
-    }
-  
     def timeout = "60m"
     if ("${env.TIMEOUT}" != "null" && "${env.TIMEOUT}" != "") {
       timeout = "${env.TIMEOUT}" 
@@ -81,26 +69,6 @@ node {
                       userRemoteConfigs: [[url: rancherRepo]]
                     ])
             }
-            dir('./') {
-              echo "cloning corral-packages repo"
-
-              dir('./corral-packages') {
-                checkout([
-                      $class: 'GitSCM',
-                      branches: [[name: "*/${corralBranch}"]],
-                      extensions: scm.extensions + [[$class: 'CleanCheckout']],
-                      userRemoteConfigs: [[url: corralRepo]]
-                    ])
-              }
-              def rancherFilename = "rancher-registry.yaml"
-              def rancherConfigContents = env.RANCHER_CORRAL_CONFIG
-              def registriesFilename = "registry.yaml"
-              def registriesConfigContents = env.REGISTRIES_CORRAL_CONFIG
-              if (rancherConfigContents != null && registriesConfigContents != null) {
-                writeFile file: "./corral-packages/packages/aws/"+rancherFilename, text: rancherConfigContents
-                writeFile file: "./corral-packages/packages/aws/"+registriesFilename, text: registriesConfigContents
-              }
-            }
           }
           dir ("./") {
             stage('Configure and Build') {
@@ -119,7 +87,7 @@ node {
               }
               dir ("./") {
                 sh "./tests/validation/configure.sh"
-                sh "docker build . -f ./tests/validation/Dockerfile.e2e --build-arg CORRAL_VERSION=${env.CORRAL_VERSION} -t ${golangImageName}"
+                sh "docker build . -f ./tests/validation/Dockerfile.e2e -t ${golangImageName}"
                 sh "docker volume create --name ${validationVolume}"
               }
             }
