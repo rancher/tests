@@ -94,7 +94,7 @@ node {
             stage('Run Validation Tests') {
               try {
                 sh "docker run --name ${golangTestContainer} -t --env-file ${envFile} " +
-                "${golangImageName} sh -c \"gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut}  --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
+                "${golangImageName} sh -c \" eval \$(ssh-agent -s) gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut}  --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
                 "${workPath}pipeline/scripts/build_qase_reporter.sh;" +
                 "${workPath}reporter\""
               } catch(err) {
