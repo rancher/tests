@@ -87,7 +87,7 @@ node {
               }
               dir ("./") {
                 sh "./tests/validation/configure.sh"
-                sh "docker build . -f ./tests/validation/Dockerfile.e2e -t ${golangImageName}"
+                sh "docker build . -f ./tests/validation/pipeline/Dockerfile.tofu_and_validation -t ${golangImageName}"
                 sh "docker volume create --name ${validationVolume}"
               }
             }
