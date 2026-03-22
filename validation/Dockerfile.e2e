@@ -33,6 +33,10 @@ RUN python3.11 -m pip install --upgrade pip setuptools && \
 
 ENV PATH="/root/.local/bin:${PATH}"
 
+# Set ANSIBLE_ROLES_PATH explicitly because roles_path in ansible.cfg resolves
+# relative to the CWD at invocation time, not the ansible.cfg directory.
+ENV ANSIBLE_ROLES_PATH=${WORKSPACE2}/ansible/roles
+
 # Install ansible-inventory-terraform plugin from GitHub
 RUN ansible-galaxy collection install cloud.terraform
     
