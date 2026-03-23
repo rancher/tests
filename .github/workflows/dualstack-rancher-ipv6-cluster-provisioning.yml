@@ -223,7 +223,6 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            compliance: true
             networking:
               clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
               serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
@@ -555,7 +554,6 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            compliance: true
             networking:
               clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
               serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
@@ -887,7 +885,6 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            compliance: true
             networking:
               clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
               serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"

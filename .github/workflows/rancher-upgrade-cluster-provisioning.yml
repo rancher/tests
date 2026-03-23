@@ -235,7 +235,6 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            compliance: true
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
@@ -590,7 +589,6 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            compliance: true
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
