@@ -75,7 +75,7 @@ node {
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
                 dir("./tests/.ssh") {
                   def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
-                  writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                  writeFile file: "${AWS_SSH_KEY_NAME}", text: decoded
                 }
               }
               dir("./tests/validation") {
@@ -94,9 +94,9 @@ node {
             stage('Run Validation Tests') {
               try {
                 sh "docker run --name ${golangTestContainer} -t --env-file ${envFile} " +
-                "${golangImageName} sh -c \" eval \$(ssh-agent -s) gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut}  --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
+                "${golangImageName} sh -c \" pwd; eval \$(ssh-agent -s) sleep 5; ssh-add .ssh/je*; gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut}  --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
                 "${workPath}pipeline/scripts/build_qase_reporter.sh;" +
-                "${workPath}reporter\""
+                "if [ -f ${workPath}reporter ]; then ${workPath}reporter; fi\""
               } catch(err) {
                 echo 'Validation tests had failures. Aborting'
               }

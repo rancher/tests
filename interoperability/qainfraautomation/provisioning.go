@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,7 +16,6 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
-	shepnodes "github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/tests/interoperability/qainfraautomation/ansible"
 	"github.com/rancher/tests/interoperability/qainfraautomation/config"
 	"github.com/rancher/tests/interoperability/qainfraautomation/tofu"
@@ -341,13 +339,12 @@ func provisionAWSCustomCluster(
 		nodes = []awsNodeSpec{{Count: 1, Role: []string{"etcd", "cp", "worker"}}}
 	}
 
-	if a.SSHKeyFileName == "" {
-		t.Fatalf("aws config: sshKeyFileName is required")
+	if a.SSHPrivateKeyPath == "" {
+		t.Fatalf("aws config: sshPrivateKeyPath is required")
 	}
-	privKeyPath := sshKeyFilePath(a.SSHKeyFileName)
-	pubKeyPath, cleanup, err := derivePublicKeyFile(privKeyPath)
+	pubKeyPath, cleanup, err := derivePublicKeyFile(a.SSHPrivateKeyPath)
 	if err != nil {
-		t.Fatalf("derive public key from %q: %v", privKeyPath, err)
+		t.Fatalf("derive public key from %q: %v", a.SSHPrivateKeyPath, err)
 	}
 	t.Cleanup(cleanup)
 
@@ -407,7 +404,7 @@ func provisionAWSCustomCluster(
 	}
 
 	return provisionCustomClusterShared(t, rancherClient, cfg, clusterCfg, generateName,
-		awsClusterNodesModulePath, privKeyPath, repoPath)
+		awsClusterNodesModulePath, a.SSHPrivateKeyPath, repoPath)
 }
 
 func provisionHarvesterCustomCluster(
@@ -760,22 +757,6 @@ func copyFile(src, dst string) error {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(dst), err)
 	}
 	return os.WriteFile(dst, data, 0600)
-}
-
-// sshKeyFilePath resolves a private key filename to its full path using the
-// global sshPath config (shepherd/pkg/nodes), falling back to ~/.ssh if unset.
-func sshKeyFilePath(keyFileName string) string {
-	if filepath.Ext(keyFileName) != ".pem" {
-		keyFileName = keyFileName + ".pem"
-	}
-	sshPathConfig := shepnodes.GetSSHPath()
-	if sshPathConfig.SSHPath == "" {
-		u, err := user.Current()
-		if err == nil {
-			return filepath.Join(u.HomeDir, ".ssh", keyFileName)
-		}
-	}
-	return filepath.Join(sshPathConfig.SSHPath, keyFileName)
 }
 
 // derivePublicKeyFile reads a PEM-encoded private key, derives the corresponding
