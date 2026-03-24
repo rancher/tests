@@ -8,6 +8,17 @@ All settings live under the `qaInfraAutomation` key in your cattle config YAML.
 
 `ansible.configPath` is relative to the embedded infra file tree (e.g. `ansible/rancher/downstream/custom_cluster/ansible.cfg`). When set, `ANSIBLE_CONFIG` is exported to the playbook subprocess. When omitted, Ansible's normal search order applies.
 
+### SSH Key Resolution
+
+SSH keys are resolved by name, not by absolute path. Both `awsSSHKeyName` (AWS) and `sshKeyName` (Harvester) specify just the filename (e.g. `jenkins-rke-validation`). The provisioning code looks for the key under shepherd's `sshPath` config (default `.ssh`), trying both the name as-is and with a `.pem` extension. The public key is derived at runtime from the PEM private key — no separate `.pub` file is needed in config.
+
+Set `sshPath` in the shepherd config section of your cattle config:
+
+```yaml
+sshPath:
+  sshPath: /root/go/src/github.com/rancher/tests/.ssh
+```
+
 **Exactly one** of `aws` or `harvester` must be set when using `customCluster`. If you set more than 1 it will cause issues.
 
 `rancherCluster.nodeConfig` keys are provider-prefixed and passed verbatim to the tofu module. Supported providers: `aws`, `harvester`, `linode`. Cloud credentials are included directly in `nodeConfig` — no separate credential object is needed. Required credential keys per provider:
@@ -31,8 +42,7 @@ qaInfraAutomation:
     region: us-east-2
     ami: ami-xxxxxxxxxxxxxxxxx
     sshUser: ec2-user
-    sshPublicKeyPath: /path/to/key.pub
-    sshPrivateKeyPath: /path/to/key
+    awsSSHKeyName: jenkins-rke-validation  # AWS key pair name; also the filename under sshPath
     instanceType: t3a.xlarge
     vpc: vpc-xxxxxxxxxxxxxxxxx
     subnet: subnet-xxxxxxxxxxxxxxxxx
@@ -44,16 +54,10 @@ qaInfraAutomation:
     route53Zone: example.domain
     airgapSetup: false
     proxySetup: false
-    nodes:
-      - count: 1
-        role: [etcd, cp]
-      - count: 2
-        role: [worker]
 
   harvester:
     kubeConfigPath: /path/to/harvester.yaml
-    sshPublicKey: <sensitive>
-    sshPrivateKeyPath: /path/to/key
+    sshKeyName: jenkins-rke-validation     # filename under sshPath (public key derived at runtime)
     sshUser: ubuntu
     networkName: namespace/network-name      # VM NIC network (namespace/name format)
     imageId: namespace/image-name

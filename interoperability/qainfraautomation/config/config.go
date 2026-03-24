@@ -17,8 +17,7 @@ type Config struct {
 // HarvesterConfig holds connection and VM configuration for a Harvester provider.
 type HarvesterConfig struct {
 	KubeConfigPath     string `json:"kubeConfigPath" yaml:"kubeConfigPath"`
-	SSHPublicKey       string `json:"sshPublicKey" yaml:"sshPublicKey"`
-	SSHPrivateKeyPath  string `json:"sshPrivateKeyPath" yaml:"sshPrivateKeyPath"`
+	SSHKeyName         string `json:"sshKeyName" yaml:"sshKeyName"`
 	SSHUser            string `json:"sshUser,omitempty" yaml:"sshUser,omitempty"`
 	NetworkName        string `json:"networkName,omitempty" yaml:"networkName,omitempty"`
 	ImageID            string `json:"imageId,omitempty" yaml:"imageId,omitempty"`

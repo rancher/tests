@@ -428,6 +428,19 @@ func provisionHarvesterCustomCluster(
 
 	h := cfg.Harvester
 
+	if h.SSHKeyName == "" {
+		t.Fatalf("harvester config: sshKeyName is required")
+	}
+	privKeyPath, err := sshKeyFilePath(h.SSHKeyName)
+	if err != nil {
+		t.Fatalf("resolve ssh key %q: %v", h.SSHKeyName, err)
+	}
+
+	sshPubKeyContents, err := derivePublicKeyContents(privKeyPath)
+	if err != nil {
+		t.Fatalf("derive public key from %q: %v", privKeyPath, err)
+	}
+
 	if h.KubeConfigPath != "" {
 		destKubeconfig := filepath.Join(repoPath, harvesterKubeconfigDest)
 		logrus.Infof("[qainfraautomation] copying Harvester kubeconfig %s → %s", h.KubeConfigPath, destKubeconfig)
@@ -436,7 +449,7 @@ func provisionHarvesterCustomCluster(
 		}
 	}
 
-	vmVars := buildHarvesterVMVars(h, clusterCfg.Nodes)
+	vmVars := buildHarvesterVMVars(h, clusterCfg.Nodes, sshPubKeyContents)
 	vmVarFile, err := writeTFVarsJSON(t, "harvester-vm-vars.json", vmVars)
 	if err != nil {
 		t.Fatalf("write harvester VM tfvars: %v", err)
@@ -473,7 +486,7 @@ func provisionHarvesterCustomCluster(
 	}
 
 	return provisionCustomClusterShared(t, rancherClient, cfg, clusterCfg, generateName,
-		harvesterVMModulePath, h.SSHPrivateKeyPath, repoPath)
+		harvesterVMModulePath, privKeyPath, repoPath)
 }
 
 func provisionCustomClusterShared(
@@ -624,6 +637,19 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("harvester config is required for standalone cluster provisioning")
 	}
 
+	if h.SSHKeyName == "" {
+		t.Fatalf("harvester config: sshKeyName is required")
+	}
+	privKeyPath, err := sshKeyFilePath(h.SSHKeyName)
+	if err != nil {
+		t.Fatalf("resolve ssh key %q: %v", h.SSHKeyName, err)
+	}
+
+	sshPubKeyContents, err := derivePublicKeyContents(privKeyPath)
+	if err != nil {
+		t.Fatalf("derive public key from %q: %v", privKeyPath, err)
+	}
+
 	var playbookPath, inventoryTemplate, varsFile string
 	switch clusterType {
 	case "rke2":
@@ -644,7 +670,7 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("copy harvester kubeconfig: %v", err)
 	}
 
-	vmVars := buildHarvesterVMVars(h, cfg.StandaloneCluster.Nodes)
+	vmVars := buildHarvesterVMVars(h, cfg.StandaloneCluster.Nodes, sshPubKeyContents)
 	vmVarFile, err := writeTFVarsJSON(t, "harvester-vm-vars.json", vmVars)
 	if err != nil {
 		t.Fatalf("write harvester VM tfvars: %v", err)
@@ -692,7 +718,7 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("write vars.yaml: %v", err)
 	}
 
-	if err := ansibleClient.AddSSHKey(h.SSHPrivateKeyPath); err != nil {
+	if err := ansibleClient.AddSSHKey(privKeyPath); err != nil {
 		t.Fatalf("ssh-add: %v", err)
 	}
 
@@ -710,7 +736,7 @@ func provisionHarvesterStandaloneCluster(
 	return clusterCfg.KubeconfigOutputPath
 }
 
-func buildHarvesterVMVars(h *config.HarvesterConfig, g []config.CustomClusterNodeGroup) harvesterVMVars {
+func buildHarvesterVMVars(h *config.HarvesterConfig, g []config.CustomClusterNodeGroup, sshPubKey string) harvesterVMVars {
 	nodes := make([]harvesterNodeSpec, len(g))
 	for i, n := range g {
 		nodes[i] = harvesterNodeSpec{
@@ -719,7 +745,7 @@ func buildHarvesterVMVars(h *config.HarvesterConfig, g []config.CustomClusterNod
 		}
 	}
 	return harvesterVMVars{
-		SSHKey:             h.SSHPublicKey,
+		SSHKey:             sshPubKey,
 		Nodes:              nodes,
 		GenerateName:       h.GenerateName,
 		SSHUser:            h.SSHUser,
@@ -788,23 +814,16 @@ func sshKeyFilePath(keyName string) (string, error) {
 // authorized-keys format public key, writes it to a temp file, and returns the
 // file path along with a cleanup func to remove it.
 func derivePublicKeyFile(privKeyPath string) (string, func(), error) {
-	pemBytes, err := os.ReadFile(privKeyPath)
+	pubKey, err := derivePublicKeyContents(privKeyPath)
 	if err != nil {
-		return "", nil, fmt.Errorf("read private key: %w", err)
+		return "", nil, err
 	}
-
-	signer, err := ssh.ParsePrivateKey(pemBytes)
-	if err != nil {
-		return "", nil, fmt.Errorf("parse private key: %w", err)
-	}
-
-	pubKeyBytes := ssh.MarshalAuthorizedKey(signer.PublicKey())
 
 	f, err := os.CreateTemp("", "pub-*.pub")
 	if err != nil {
 		return "", nil, fmt.Errorf("create temp public key file: %w", err)
 	}
-	if _, err := f.Write(pubKeyBytes); err != nil {
+	if _, err := f.WriteString(pubKey); err != nil {
 		f.Close()
 		os.Remove(f.Name())
 		return "", nil, fmt.Errorf("write public key file: %w", err)
@@ -812,4 +831,20 @@ func derivePublicKeyFile(privKeyPath string) (string, func(), error) {
 	f.Close()
 
 	return f.Name(), func() { os.Remove(f.Name()) }, nil
+}
+
+// derivePublicKeyContents reads a PEM-encoded private key and returns the
+// corresponding public key in authorized-keys format as a string.
+func derivePublicKeyContents(privKeyPath string) (string, error) {
+	pemBytes, err := os.ReadFile(privKeyPath)
+	if err != nil {
+		return "", fmt.Errorf("read private key: %w", err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(pemBytes)
+	if err != nil {
+		return "", fmt.Errorf("parse private key: %w", err)
+	}
+
+	return string(ssh.MarshalAuthorizedKey(signer.PublicKey())), nil
 }
