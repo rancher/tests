@@ -93,7 +93,7 @@ node {
             }
             stage('Run Validation Tests') {
               try {
-                sh "docker run --rm --name ${golangTestContainer} -t --env-file ${envFile} " +
+                sh "docker run --name ${golangTestContainer} -t --env-file ${envFile} " +
                 "${golangImageName} sh -c \" pwd; eval \\\$(ssh-agent -s); ssh-add .ssh/je*; gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut}  --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
                 "${workPath}pipeline/scripts/build_qase_reporter.sh;" +
                 "if [ -f ${workPath}reporter ]; then ${workPath}reporter; fi\""

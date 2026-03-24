@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	shepnodes "github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/tests/interoperability/qainfraautomation/ansible"
 	"github.com/rancher/tests/interoperability/qainfraautomation/config"
 	"github.com/rancher/tests/interoperability/qainfraautomation/tofu"
@@ -339,12 +340,16 @@ func provisionAWSCustomCluster(
 		nodes = []awsNodeSpec{{Count: 1, Role: []string{"etcd", "cp", "worker"}}}
 	}
 
-	if a.SSHPrivateKeyPath == "" {
-		t.Fatalf("aws config: sshPrivateKeyPath is required")
+	if a.AWSSSHKeyName == "" {
+		t.Fatalf("aws config: awsSSHKeyName is required")
 	}
-	pubKeyPath, cleanup, err := derivePublicKeyFile(a.SSHPrivateKeyPath)
+	privKeyPath, err := sshKeyFilePath(a.AWSSSHKeyName)
 	if err != nil {
-		t.Fatalf("derive public key from %q: %v", a.SSHPrivateKeyPath, err)
+		t.Fatalf("resolve ssh key %q: %v", a.AWSSSHKeyName, err)
+	}
+	pubKeyPath, cleanup, err := derivePublicKeyFile(privKeyPath)
+	if err != nil {
+		t.Fatalf("derive public key from %q: %v", privKeyPath, err)
 	}
 	t.Cleanup(cleanup)
 
@@ -404,7 +409,7 @@ func provisionAWSCustomCluster(
 	}
 
 	return provisionCustomClusterShared(t, rancherClient, cfg, clusterCfg, generateName,
-		awsClusterNodesModulePath, a.SSHPrivateKeyPath, repoPath)
+		awsClusterNodesModulePath, privKeyPath, repoPath)
 }
 
 func provisionHarvesterCustomCluster(
@@ -757,6 +762,26 @@ func copyFile(src, dst string) error {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(dst), err)
 	}
 	return os.WriteFile(dst, data, 0600)
+}
+
+// sshKeyFilePath resolves an SSH key name to its full path on disk.
+// It reads the sshPath config from shepherd and tries the key name
+// as-is and with a .pem extension, returning the first path that exists.
+func sshKeyFilePath(keyName string) (string, error) {
+	sshDir := shepnodes.GetSSHPath().SSHPath
+
+	candidates := []string{
+		filepath.Join(sshDir, keyName),
+		filepath.Join(sshDir, keyName+".pem"),
+	}
+
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+
+	return "", fmt.Errorf("ssh key %q not found; tried %v", keyName, candidates)
 }
 
 // derivePublicKeyFile reads a PEM-encoded private key, derives the corresponding
