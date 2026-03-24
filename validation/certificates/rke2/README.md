@@ -11,40 +11,6 @@
 ## Test Cases
 All of the test cases in this package are listed below, keep in mind that all configuration for these tests have built in defaults [Configuration Defaults](#defaults). These tests will provision a cluster if one is not provided via the rancher.ClusterName field.
 
-### IPv6 Certificate Tests
-
-#### Description:
-The IPv6 certificate test verifies that a cluster can rotate certificates.
-
-#### Required Configurations:
-1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config) (with IPv6 settings)
-3. [Machine Config](#machine-config)
-
-#### Table Tests:
-1. `RKE2_IPv6_Certificate_Rotation`
-
-#### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCertRotationIPv6TestSuite/TestCertRotationIPv6$  -timeout=2h -v`
-
-
-### Dualstack Certificate Tests
-
-#### Description:
-The Dualstack certificate test verifies that a cluster can rotate certificates.
-
-#### Required Configurations:
-1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config) (with dualstack settings)
-3. [Machine Config](#machine-config)
-
-#### Table Tests:
-1. `RKE2_Dualstack_Certificate_Rotation`
-
-#### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2/dualstack --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCertRotationDualstackTestSuite/TestCertRotationDualstack$ -timeout=2h -v`
-
-
 ### Windows Certificate Tests
 
 #### Description:

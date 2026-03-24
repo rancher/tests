@@ -73,44 +73,10 @@ The snapshot S3 test validates that snapshots can be stored and restored from an
 4. S3 configuration in etcd section of cluster config
 
 #### Table Tests:
-1. `K3S_Snapshot_S3`
+1. `K3S_S3_Snapshot`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotS3TestSuite/TestSnapshotS3 -timeout=1h -v`
-
-### Dualstack Snapshot Restore Test
-
-#### Description:
-The dualstack snapshot restore test validates that a cluster configured for dualstack networking can create and restore snapshots successfully.
-
-#### Required Configurations:
-1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config)
-3. [Machine Config](#machine-config)
-
-#### Table Tests:
-1. `K3S_Dualstack_Snapshot_Restore`
-
-#### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s/dualstack --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotDualstackRestoreTestSuite/TestSnapshotDualstackRestore -timeout=1h -v`
-
-### IPv6 Snapshot Tests
-
-#### Description:
-The IPv6 snapshot tests validate snapshot creation and restore functionality on clusters configured with IPv6 networking.
-
-#### Required Configurations:
-1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config) (with IPv6 settings)
-3. [Machine Config](#machine-config)
-
-#### Table Tests:
-1. `K3S_IPv6_Restore_ETCD`
-2. `K3S_IPv6_Restore_ETCD_K8sVersion`
-3. `K3S_IPv6_Restore_Upgrade_Strategy`
-
-#### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotIPv6RestoreTestSuite/TestSnapshotIPv6Restore -timeout=2h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestS3SnapshotRestoreTestSuite/TestS3Snapshot -timeout=1h -v`
 
 ## Configurations
 
