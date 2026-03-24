@@ -28,7 +28,6 @@ const (
 	checkCPU        provisioninginput.SSHTestCase = "CheckCPU"
 	checkCPUCommand                               = "ps -C agent -o %cpu --no-header"
 	nodeReboot      provisioninginput.SSHTestCase = "NodeReboot"
-	activeState                                   = "active"
 	runningState                                  = "running"
 )
 
