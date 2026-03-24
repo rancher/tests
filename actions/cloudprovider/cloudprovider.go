@@ -1,21 +1,27 @@
 package cloudprovider
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 
+	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/sirupsen/logrus"
 
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/vsphere"
+	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/secrets"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -35,6 +41,58 @@ const (
 	controlPlaneRole                  = "control-plane-role"
 	workerRole                        = "worker-role"
 )
+
+// IsCloudProviderEnabled verifies whether cloud provider components are installed on the cluster.
+func IsCloudProviderEnabled(client *rancher.Client, clusterID string) (bool, error) {
+	logrus.Debug("Checking cluster version and if the cloud-controller-manager is installed")
+	catalogClient, err := client.GetClusterCatalogClient(clusterID)
+	if err != nil {
+		return false, err
+	}
+
+	provisioningClusterID, err := extensionscluster.GetV1ProvisioningClusterByName(client, client.RancherConfig.ClusterName)
+	if err != nil {
+		return false, err
+	}
+
+	cluster, err := client.Steve.SteveType(extensionscluster.ProvisioningSteveResourceType).ByID(provisioningClusterID)
+	if err != nil {
+		return false, err
+	}
+
+	newCluster := &provv1.Cluster{}
+	err = steveV1.ConvertToK8sType(cluster, newCluster)
+	if err != nil {
+		return false, err
+	}
+
+	if strings.Contains(newCluster.Spec.KubernetesVersion, "k3s") {
+		wranglerContext, err := client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
+		if err != nil {
+			return false, err
+		}
+		latestDaemonset, err := wranglerContext.Apps.DaemonSet().List(namespaces.KubeSystem, metav1.ListOptions{})
+		if err != nil {
+			return false, err
+		}
+		for _, item := range latestDaemonset.Items {
+			if strings.Contains(item.Name, "svclb-traefik") {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	app, err := catalogClient.Apps(namespaces.KubeSystem).Get(context.TODO(), awsUpstreamChartName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	return app != nil, nil
+}
 
 func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.ClusterConfig, credentials cloudcredentials.CloudCredential, additionalData map[string]interface{}) (*clusters.ClusterConfig, error) {
 	currentSelectors := []rkev1.RKESystemConfig{}
@@ -107,7 +165,6 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 		}
 
 	case provisioninginput.HarvesterProviderName.String():
-	
 
 		data := map[string][]byte{
 			"credential": []byte(credentials.HarvesterCredentialConfig.KubeconfigContent),
