@@ -77,10 +77,6 @@ node {
                   def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
                   writeFile file: "${AWS_SSH_KEY_NAME}", text: decoded
                 }
-                dir("./tests/validation/.ssh") {
-                  def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
-                  writeFile file: AWS_SSH_KEY_NAME, text: decoded
-                }
               }
               dir("./tests/validation") {
                 def filename = "config.yaml"
@@ -97,7 +93,7 @@ node {
             }
             stage('Run Validation Tests') {
               try {
-                sh "docker run --name ${golangTestContainer} -t --env-file ${envFile} " +
+                sh "docker run --rm --name ${golangTestContainer} -t --env-file ${envFile} " +
                 "${golangImageName} sh -c \" pwd; eval \\\$(ssh-agent -s); ssh-add .ssh/je*; gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut}  --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
                 "${workPath}pipeline/scripts/build_qase_reporter.sh;" +
                 "if [ -f ${workPath}reporter ]; then ${workPath}reporter; fi\""
@@ -105,31 +101,11 @@ node {
                 echo 'Validation tests had failures. Aborting'
               }
             }
-            stage('Cleanup Rancher Environment') {
-              try {
-                if (cleanup.toBoolean()) {
-                  sh "docker run --volumes-from ${buildTestContainer} --name ${cleanupTestContainer} -t --env-file ${envFile} " +
-                  "${golangImageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh\""
-                }
-              } catch(err) {
-                sh "docker stop ${buildTestContainer}"
-                sh "docker rm -v ${buildTestContainer}"
-                sh "docker stop ${golangTestContainer}"
-                sh "docker rm -v ${golangTestContainer}"
-                sh "docker stop ${cleanupTestContainer}"
-                sh "docker rm -v ${cleanupTestContainer}"
-                sh "docker rmi -f ${golangImageName}"
-                sh "docker volume rm -f ${validationVolume}"
-                error "Cleanup had failures."
-              }
-            }
             stage('Test Report') {
               try {
                 sh "docker cp ${golangTestContainer}:${rootPath}${testResultsOut} ."
                 step([$class: 'JUnitResultArchiver', testResults: "**/${testResultsOut}"])
               } catch (err) {
-                sh "docker stop ${buildTestContainer}"
-                sh "docker rm -v ${buildTestContainer}"
                 sh "docker stop ${golangTestContainer}"
                 sh "docker rm -v ${golangTestContainer}"
                 if (cleanup.toBoolean()) {
@@ -140,19 +116,6 @@ node {
                 sh "docker volume rm -f ${validationVolume}"
                 error 'Report had failures.'
               }
-            }
-            stage('Clean Up Images and Volume') {
-              echo 'Cleaning test images and volume.'
-              sh "docker stop ${buildTestContainer}"
-              sh "docker rm -v ${buildTestContainer}"
-              sh "docker stop ${golangTestContainer}"
-              sh "docker rm -v ${golangTestContainer}"
-              if (cleanup.toBoolean()) {
-                  sh "docker stop ${cleanupTestContainer}"
-                  sh "docker rm -v ${cleanupTestContainer}"
-              }
-              sh "docker rmi -f ${golangImageName}"
-              sh "docker volume rm -f ${validationVolume}"
             }
           } // dir 
         } // withEnv
