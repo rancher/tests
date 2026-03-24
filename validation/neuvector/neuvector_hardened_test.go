@@ -143,14 +143,14 @@ func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
 		Host:      n.client.RancherConfig.Host,
 		InstallOptions: actionsCharts.InstallOptions{
 			Cluster:   cluster,
-			Version:   latestVersions[1],
+			Version:   latestVersions[0],
 			ProjectID: project.ID,
 		},
 		K3s:      strings.Contains(n.cfg.CustomCluster.KubernetesVersion, "k3s"),
 		Hardened: true,
 	}
 
-	n.T().Logf("Installing NeuVector %s on cluster %s", latestVersions[1], cluster.Name)
+	n.T().Logf("Installing NeuVector %s on cluster %s", latestVersions[0], cluster.Name)
 	err = actionsCharts.InstallNeuVectorChart(n.client, payload)
 	require.NoError(n.T(), err)
 
