@@ -113,7 +113,6 @@ func (n *NeuVectorHardenedTestSuite) SetupSuite() {
 	err = provisioning.VerifyClusterReady(n.client, clusterObj)
 	require.NoError(n.T(), err)
 
-
 	logrus.Infof("Verifying cluster deployments (%s)", clusterObj.Name)
 	err = deployment.VerifyClusterDeployments(n.client, clusterObj)
 	require.NoError(n.T(), err)
