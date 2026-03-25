@@ -77,7 +77,7 @@ jobs:
           cache-dependency-path: "**/*.sum"
 
       - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@latest
+        run: go install gotest.tools/gotestsum@c4a0df2e75a225d979a444342dd3db752b53619f # v1.13.0
 
       - name: Create SSH key file
         env:
@@ -91,7 +91,7 @@ jobs:
           echo "SSH_PRIVATE_KEY_PATH=$HOME/.ssh" >> $GITHUB_ENV
 
       - name: Fetch and Set DockerHub Credentials
-        uses: rancher-eio/read-vault-secrets@main
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
