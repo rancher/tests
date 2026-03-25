@@ -24,7 +24,7 @@ sshPath:
 `rancherCluster.nodeConfig` keys are provider-prefixed and passed verbatim to the tofu module. Supported providers: `aws`, `harvester`, `linode`. Cloud credentials are included directly in `nodeConfig` — no separate credential object is needed. Required credential keys per provider:
 
 | Provider | Credential keys |
-|---|---|
+| --- | --- |
 | `aws` | `aws_access_key`, `aws_secret_key`, `aws_region` |
 | `linode` | `linode_token` |
 | `harvester` | `harvester_cluster_v1_id`, `harvester_cluster_type`, `harvester_kubeconfig_content` |

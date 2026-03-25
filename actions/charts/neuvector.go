@@ -47,11 +47,6 @@ func uninstallChartIfPresent(catalogClient *catalog.Client, namespace, chartName
 	return waitChartGone(catalogClient, namespace, chartName)
 }
 
-// waitForRancherChartsRepo polls the downstream cluster's Steve API until the
-// rancher-charts ClusterRepo exists and is in the "active" state, or until
-// chartPollTimeout is reached.  This is necessary because Rancher creates the
-// ClusterRepo asynchronously after a cluster registers, and attempting to
-// install a chart before it is active returns an "unknown" server error.
 func waitForRancherChartsRepo(client *rancher.Client, clusterID string) error {
 	downstreamClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
@@ -61,9 +56,13 @@ func waitForRancherChartsRepo(client *rancher.Client, clusterID string) error {
 	return kwait.PollUntilContextTimeout(context.Background(), chartPollInterval, chartPollTimeout, true, func(ctx context.Context) (bool, error) {
 		repo, err := downstreamClient.SteveType(repoType).ByID(catalog.RancherChartRepo)
 		if err != nil {
-			// Treat any error (including 404) as "not ready yet".
-			return false, nil
+			if k8sErrors.IsNotFound(err) {
+				return false, nil
+			}
+
+			return false, err
 		}
+
 		return repo.State.Name == active, nil
 	})
 }

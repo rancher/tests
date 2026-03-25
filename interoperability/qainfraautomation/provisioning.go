@@ -670,7 +670,7 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("copy harvester kubeconfig: %v", err)
 	}
 
-	vmVars := buildHarvesterVMVars(h, cfg.StandaloneCluster.Nodes, sshPubKeyContents)
+	vmVars := buildHarvesterVMVars(h, clusterCfg.Nodes, sshPubKeyContents)
 	vmVarFile, err := writeTFVarsJSON(t, "harvester-vm-vars.json", vmVars)
 	if err != nil {
 		t.Fatalf("write harvester VM tfvars: %v", err)
