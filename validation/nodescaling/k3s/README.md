@@ -29,42 +29,6 @@ The node scaling test validates that node pools can be scaled up and down. All c
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestNodeScalingTestSuite/TestScalingNodePools -timeout=60m -v`
 
-### IPv6 Node Scaling Test
-
-#### Description:
-The IPv6 node scaling test validates that node pools can be scaled up and down on clusters configured with IPv6 networking.
-
-#### Required Configurations:
-1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config)
-3. [Machine Config](#machine-config)
-
-#### Table Tests:
-1. `K3S_IPv6_Scale_Control_Plane`
-2. `K3S_IPv6_Scale_ETCD`
-3. `K3S_IPv6_Scale_Worker`
-
-#### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/k3s/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestNodeScalingIPv6TestSuite/TestScalingIPv6NodePools -timeout=60m -v`
-
-### Dualstack Node Scaling Test
-
-#### Description:
-The dualstack node scaling test validates that node pools can be scaled up and down on clusters configured with dualstack networking.
-
-#### Required Configurations:
-1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config)
-3. [Machine Config](#machine-config)
-
-#### Table Tests:
-1. `K3S_Dualstack_Scale_Control_Plane`
-2. `K3S_Dualstack_Scale_ETCD`
-3. `K3S_Dualstack_Scale_Worker`
-
-#### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/k3s/dualstack --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestNodeScalingDualstackTestSuite/TestScalingDualstackNodePools -timeout=60m -v`
-
 ## Configurations
 
 ### Existing cluster:

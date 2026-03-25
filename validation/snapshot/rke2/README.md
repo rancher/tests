@@ -94,7 +94,7 @@ The snapshot S3 test validates that snapshots can be stored and restored from an
 4. S3 configuration in etcd section of cluster config
 
 #### Table Tests:
-1. `RKE2_Snapshot_S3`
+1. `RKE2_S3_Restore`
 
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestS3SnapshotRestoreTestSuite/TestS3SnapshotRestore -timeout=1h -v`

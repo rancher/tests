@@ -3,43 +3,38 @@
 package connectivity
 
 import (
-	"errors"
-	"net/url"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	client "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/sshkeys"
-	shepworkloads "github.com/rancher/shepherd/extensions/workloads"
+	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/namespaces"
+	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
+	"github.com/rancher/tests/actions/networking"
+	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/workloads"
-	"github.com/stretchr/testify/assert"
+	"github.com/rancher/tests/actions/workloads/daemonset"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"golang.org/x/crypto/ssh"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 type NetworkPolicyTestSuite struct {
 	suite.Suite
-	session     *session.Session
-	client      *rancher.Client
-	project     *management.Project
-	clusterName string
-	namespace   *v1.SteveAPIObject
-	steveClient *v1.Client
+	session          *session.Session
+	client           *rancher.Client
+	cluster          *client.Cluster
+	cattleConfig     map[string]any
+	downstreamClient *v1.Client
+	namespace        *corev1.Namespace
 }
-
-const (
-	nodeRole = "control-plane"
-	// Ping once
-	pingCmd        = "ping -c 1"
-	successfulPing = "0% packet loss"
-)
 
 func (n *NetworkPolicyTestSuite) TearDownSuite() {
 	n.session.Cleanup()
@@ -54,82 +49,57 @@ func (n *NetworkPolicyTestSuite) SetupSuite() {
 
 	n.client = client
 
-	clusterName := client.RancherConfig.ClusterName
-	require.NotEmpty(n.T(), clusterName, "Cluster name to install is not set")
-	n.clusterName = clusterName
+	n.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	cluster, err := clusters.NewClusterMeta(client, clusterName)
+	n.cattleConfig, err = defaults.LoadPackageDefaults(n.cattleConfig, "")
 	require.NoError(n.T(), err)
 
-	projectConfig := &management.Project{
-		ClusterID: cluster.ID,
-		Name:      pingPodProjectName,
-	}
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, n.cattleConfig, loggingConfig)
 
-	createdProject, err := client.Management.Project.Create(projectConfig)
-	require.NoError(n.T(), err)
-	require.Equal(n.T(), createdProject.Name, pingPodProjectName)
-	n.project = createdProject
-
-	names := newNames()
-
-	namespaceName := names.random["namespaceName"]
-	daemonsetName := names.random["daemonsetName"]
-
-	n.T().Logf("Creating namespace with name [%v]", namespaceName)
-	n.namespace, err = namespaces.CreateNamespace(n.client, namespaceName, "{}", map[string]string{}, map[string]string{}, n.project)
-	require.NoError(n.T(), err)
-	assert.Equal(n.T(), n.namespace.Name, namespaceName)
-
-	n.steveClient, err = n.client.Steve.ProxyDownstream(n.project.ClusterID)
+	err = logging.SetLogger(loggingConfig)
 	require.NoError(n.T(), err)
 
-	testContainerPodTemplate := newPodTemplateWithTestContainer()
+	clusterID, err := clusters.GetClusterIDByName(n.client, n.client.RancherConfig.ClusterName)
+	require.NoError(n.T(), err, "Error getting cluster ID")
 
-	n.T().Logf("Creating a daemonset with the test container with name [%v]", daemonsetName)
-	daemonsetTemplate := shepworkloads.NewDaemonSetTemplate(daemonsetName, n.namespace.Name, testContainerPodTemplate, true, nil)
-	createdDaemonSet, err := n.steveClient.SteveType(workloads.DaemonsetSteveType).Create(daemonsetTemplate)
+	n.cluster, err = n.client.Management.Cluster.ByID(clusterID)
 	require.NoError(n.T(), err)
-	assert.Equal(n.T(), createdDaemonSet.Name, daemonsetName)
 
-	n.T().Logf("Waiting for daemonset [%v] to have expected number of available replicas", daemonsetName)
-	err = charts.WatchAndWaitDaemonSets(n.client, n.project.ClusterID, n.namespace.Name, metav1.ListOptions{})
+	n.downstreamClient, err = n.client.Steve.ProxyDownstream(n.cluster.ID)
+	require.NoError(n.T(), err)
+
+	_, n.namespace, err = projectsapi.CreateProjectAndNamespace(n.client, n.cluster.ID)
 	require.NoError(n.T(), err)
 }
 
 func (n *NetworkPolicyTestSuite) TestPingPodsFromCPNode() {
+	networkPolicyTests := []struct {
+		name string
+	}{
+		{"Network_Policy_Connectivity"},
+	}
 
-	// Get downstream cluster wrangler context
-	wc, err := n.client.WranglerContext.DownStreamClusterWranglerContext(n.project.ClusterID)
-	require.NoError(n.T(), err)
+	for _, networkPolicyTest := range networkPolicyTests {
+		n.Suite.Run(networkPolicyTest.name, func() {
+			workloadConfigs := new(workloads.Workloads)
+			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, n.cattleConfig, workloadConfigs)
 
-	pods, err := wc.Core.Pod().List(n.namespace.Name, metav1.ListOptions{})
-	assert.NoError(n.T(), err)
-	assert.NotEmpty(n.T(), pods)
+			workloadConfigs.DaemonSet.ObjectMeta.Namespace = n.namespace.Name
+			workloadConfigs.DaemonSet.ObjectMeta.GenerateName = strings.ToLower(networkPolicyTest.name) + "-"
 
-	query, err := url.ParseQuery("labelSelector=node-role.kubernetes.io/" + nodeRole + "=true")
-	assert.NoError(n.T(), err)
+			logrus.Infof("Creating daemonset with name prefix: %s", workloadConfigs.DaemonSet.ObjectMeta.GenerateName)
+			testDaemonset, err := daemonset.CreateDaemonSetFromConfig(n.downstreamClient, n.cluster.ID, workloadConfigs.DaemonSet)
+			require.NoError(n.T(), err)
 
-	nodeList, err := n.steveClient.SteveType("node").List(query)
-	assert.NoError(n.T(), err)
-	assert.NotEmpty(n.T(), nodeList, err)
+			logrus.Infof("Verifying daemonset %s is running", testDaemonset.Name)
+			err = daemonset.VerifyDaemonset(n.client, n.cluster.ID, n.namespace.Name, testDaemonset.Name)
+			require.NoError(n.T(), err)
 
-	for _, machine := range nodeList.Data {
-		sshNode, err := sshkeys.GetSSHNodeFromMachine(n.client, &machine)
-		assert.NoError(n.T(), err)
-
-		n.T().Logf("Running ping on [%v]", machine.Name)
-
-		for i := 0; i < len(pods.Items); i++ {
-			podIP := pods.Items[i].Status.PodIP
-			pingExecCmd := pingCmd + " " + podIP
-			excmdLog, err := sshNode.ExecuteCommand(pingExecCmd)
-			if err != nil && !errors.Is(err, &ssh.ExitMissingError{}) {
-				assert.NoError(n.T(), err)
-			}
-			n.T().Logf("Log of the ping command {%v}", excmdLog)
-			assert.Contains(n.T(), excmdLog, successfulPing, "Unable to ping the pod")
-		}
+			logrus.Infof("Verifying network policy by pinging pods from control plane node")
+			err = networking.VerifyNetworkPolicy(n.client, n.cluster.ID, n.namespace.Name)
+			require.NoError(n.T(), err)
+		})
 	}
 }
 
