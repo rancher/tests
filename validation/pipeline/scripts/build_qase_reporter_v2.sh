@@ -6,7 +6,8 @@ cd $(dirname $0)/../../../
 
 if [[ -z "${QASE_TEST_RUN_ID}" ]]; then
   echo "No QASE test run ID provided"
-elif [[ -z "${QASE_PROJECT_ID}" ]]; then
+fi
+if [[ -z "${QASE_PROJECT_ID}" ]]; then
   echo "No QASE project ID provided"
 else
   echo "Building QASE reporter binary"
