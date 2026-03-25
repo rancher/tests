@@ -46,10 +46,15 @@ func main() {
 		projectIDEnvVar = qaseactions.RancherManagerProjectID
 	}
 
-	if runIDEnvVar != "" {
+	if runIDEnvVar != "" || testRunName != "" {
 		qaseService := qase.SetupQaseClient()
 
-		runID, err := strconv.ParseInt(runIDEnvVar, 10, 64)
+		runID := int64(0)
+		err := error(nil)
+
+		if runIDEnvVar != "" {
+			runID, err = strconv.ParseInt(runIDEnvVar, 10, 64)
+		}
 
 		runDescription := createRunDescription(buildUrl)
 
