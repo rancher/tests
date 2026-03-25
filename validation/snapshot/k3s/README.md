@@ -76,7 +76,7 @@ The snapshot S3 test validates that snapshots can be stored and restored from an
 1. `K3S_Snapshot_S3`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotS3TestSuite/TestSnapshotS3 -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestS3SnapshotRestoreTestSuite/TestS3SnapshotRestore -timeout=1h -v`
 
 ### Dualstack Snapshot Restore Test
 
