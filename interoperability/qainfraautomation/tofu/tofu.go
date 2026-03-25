@@ -36,7 +36,7 @@ func run(name string, args []string, dir string, env []string) ([]byte, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	if len(env) > 0 {
-		cmd.Env = env
+		cmd.Env = append(cmd.Env, env...)
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {

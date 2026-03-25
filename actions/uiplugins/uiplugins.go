@@ -106,7 +106,7 @@ func InstallUIPlugin(client *rancher.Client, installExtensionOptions *ExtensionO
 		}
 	}
 
-	return err
+	return nil
 }
 
 // CreateExtensionsRepo is a helper that utilizes the rancher client and add the ui extensions repo to the list if repositories in the local cluster.
