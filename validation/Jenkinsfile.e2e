@@ -18,29 +18,17 @@ node {
     def envFile = ".env"
     def rancherConfig = "rancher_env.config"
     def branch = "main"
-    def corralBranch = "main"
     def cleanup = env.RANCHER_CLEANUP.toLowerCase()
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"
     }
 
-    if ("${env.RANCHER_CORRAL_PACKAGES_REPO_BRANCH}" != "null" && "${env.RANCHER_CORRAL_PACKAGES_REPO_BRANCH}" != "") {
-      corralBranch = "${env.RANCHER_CORRAL_PACKAGES_REPO_BRANCH}"
-    }
 
     def rancherRepo = scm.getUserRemoteConfigs()[0].getUrl()
     if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
       rancherRepo = "${env.REPO}"
     }
 
-    if (scm.getUserRemoteConfigs().size() > 1) {
-      corralRepo = scm.getUserRemoteConfigs()[1].getUrl()
-    }
-
-    if ("${env.RANCHER_CORRAL_PACKAGES_REPO_URL}" != "null" && "${env.RANCHER_CORRAL_PACKAGES_REPO_URL}" != "") {
-      corralRepo = "${env.RANCHER_CORRAL_PACKAGES_REPO_URL}"
-    }
-  
     def timeout = "60m"
     if ("${env.TIMEOUT}" != "null" && "${env.TIMEOUT}" != "") {
       timeout = "${env.TIMEOUT}" 
@@ -81,33 +69,13 @@ node {
                       userRemoteConfigs: [[url: rancherRepo]]
                     ])
             }
-            dir('./') {
-              echo "cloning corral-packages repo"
-
-              dir('./corral-packages') {
-                checkout([
-                      $class: 'GitSCM',
-                      branches: [[name: "*/${corralBranch}"]],
-                      extensions: scm.extensions + [[$class: 'CleanCheckout']],
-                      userRemoteConfigs: [[url: corralRepo]]
-                    ])
-              }
-              def rancherFilename = "rancher-registry.yaml"
-              def rancherConfigContents = env.RANCHER_CORRAL_CONFIG
-              def registriesFilename = "registry.yaml"
-              def registriesConfigContents = env.REGISTRIES_CORRAL_CONFIG
-              if (rancherConfigContents != null && registriesConfigContents != null) {
-                writeFile file: "./corral-packages/packages/aws/"+rancherFilename, text: rancherConfigContents
-                writeFile file: "./corral-packages/packages/aws/"+registriesFilename, text: registriesConfigContents
-              }
-            }
           }
           dir ("./") {
             stage('Configure and Build') {
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
-                dir("./tests/validation/.ssh") {
+                dir("./tests/.ssh") {
                   def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
-                  writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                  writeFile file: "${AWS_SSH_KEY_NAME}", text: decoded
                 }
               }
               dir("./tests/validation") {
@@ -119,47 +87,18 @@ node {
               }
               dir ("./") {
                 sh "./tests/validation/configure.sh"
-                sh "docker build . -f ./tests/validation/Dockerfile.e2e --build-arg CORRAL_VERSION=${env.CORRAL_VERSION} -t ${golangImageName}"
+                sh "docker build . -f ./tests/validation/pipeline/Dockerfile.tofu_and_validation -t ${golangImageName}"
                 sh "docker volume create --name ${validationVolume}"
-              }
-            }
-            stage("Build Environment") {
-              try {
-                sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
-                "${golangImageName} sh -c \"${workPath}pipeline/scripts/setup_environment.sh\""
-              } catch(err) {
-                sh "docker stop ${buildTestContainer}"
-                sh "docker rm -v ${buildTestContainer}"
-                sh "docker volume rm -f ${validationVolume}"
-                error "Build Environment had failures."
               }
             }
             stage('Run Validation Tests') {
               try {
-                sh "docker run --volumes-from ${buildTestContainer} --name ${golangTestContainer} -t --env-file ${envFile} " +
-                "${golangImageName} sh -c \"gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut}  --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
+                sh "docker run --name ${golangTestContainer} -t --env-file ${envFile} " +
+                "${golangImageName} sh -c \" pwd; eval \\\$(ssh-agent -s); ssh-add .ssh/je*; gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut}  --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
                 "${workPath}pipeline/scripts/build_qase_reporter.sh;" +
-                "${workPath}reporter\""
+                "if [ -f ${workPath}reporter ]; then ${workPath}reporter; fi\""
               } catch(err) {
                 echo 'Validation tests had failures. Aborting'
-              }
-            }
-            stage('Cleanup Rancher Environment') {
-              try {
-                if (cleanup.toBoolean()) {
-                  sh "docker run --volumes-from ${buildTestContainer} --name ${cleanupTestContainer} -t --env-file ${envFile} " +
-                  "${golangImageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh\""
-                }
-              } catch(err) {
-                sh "docker stop ${buildTestContainer}"
-                sh "docker rm -v ${buildTestContainer}"
-                sh "docker stop ${golangTestContainer}"
-                sh "docker rm -v ${golangTestContainer}"
-                sh "docker stop ${cleanupTestContainer}"
-                sh "docker rm -v ${cleanupTestContainer}"
-                sh "docker rmi -f ${golangImageName}"
-                sh "docker volume rm -f ${validationVolume}"
-                error "Cleanup had failures."
               }
             }
             stage('Test Report') {
@@ -167,8 +106,6 @@ node {
                 sh "docker cp ${golangTestContainer}:${rootPath}${testResultsOut} ."
                 step([$class: 'JUnitResultArchiver', testResults: "**/${testResultsOut}"])
               } catch (err) {
-                sh "docker stop ${buildTestContainer}"
-                sh "docker rm -v ${buildTestContainer}"
                 sh "docker stop ${golangTestContainer}"
                 sh "docker rm -v ${golangTestContainer}"
                 if (cleanup.toBoolean()) {
@@ -179,19 +116,6 @@ node {
                 sh "docker volume rm -f ${validationVolume}"
                 error 'Report had failures.'
               }
-            }
-            stage('Clean Up Images and Volume') {
-              echo 'Cleaning test images and volume.'
-              sh "docker stop ${buildTestContainer}"
-              sh "docker rm -v ${buildTestContainer}"
-              sh "docker stop ${golangTestContainer}"
-              sh "docker rm -v ${golangTestContainer}"
-              if (cleanup.toBoolean()) {
-                  sh "docker stop ${cleanupTestContainer}"
-                  sh "docker rm -v ${cleanupTestContainer}"
-              }
-              sh "docker rmi -f ${golangImageName}"
-              sh "docker volume rm -f ${validationVolume}"
             }
           } // dir 
         } // withEnv
