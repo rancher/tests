@@ -144,9 +144,9 @@ node {
             }
             stage("Upgrade Rancher") {
               try {
-                def setUpgradeRancerEnv = "UPGRADE_PLAYBOOK_PATH=ansible/rancher/default-ha UPGRADE_PLAYBOOK_FILE=rancher-upgrade-playbook.yml"
+                def setUpgradeRancherEnv = "UPGRADE_PLAYBOOK_PATH=ansible/rancher/default-ha UPGRADE_PLAYBOOK_FILE=rancher-upgrade-playbook.yml"
                 sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer}-rancher -t --env-file ${envFile} " +
-                "${imageName} sh -c \"chmod +x ${workPath}pipeline/scripts/upgrade_qa_infra.sh && ${setUpgradeRancerEnv} ${workPath}pipeline/scripts/upgrade_qa_infra.sh\""
+                "${imageName} sh -c \"chmod +x ${workPath}pipeline/scripts/upgrade_qa_infra.sh && ${setUpgradeRancherEnv} ${workPath}pipeline/scripts/upgrade_qa_infra.sh\""
               } catch(err) {
                   sh "docker stop ${buildTestContainer}-rancher"
                   sh "docker rm -v ${buildTestContainer}-rancher"
@@ -186,6 +186,7 @@ node {
                     }
                     parallel jobs
                   } catch(err) {
+                    currentBuild.result = 'UNSTABLE'
                     echo "Test validations had failures: " + err
                   }
               }
