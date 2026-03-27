@@ -32,7 +32,6 @@ node {
     def filename = "config.yaml"
     def ansibleVarsFilename = "vars.yaml"
     def kubeconfigFilename = "kubeconfig.yaml"
-    // def individualJob = (jobName =~ /(go-recurring-[a-z]+)/)[0][1]
     def individualJob = "go-recurring-daily"
     individualJob = "${individualJob}-individual-job"
     if ("${env.INDIVIDUAL_JOB}" != "null" && "${env.INDIVIDUAL_JOB}" != "") {
@@ -43,6 +42,7 @@ node {
       branch = "${env.BRANCH}"
     }
 
+    def rancherRepo = scm.getUserRemoteConfigs()[0].getUrl()
     if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
       rancherRepo = "${env.REPO}"
     }
