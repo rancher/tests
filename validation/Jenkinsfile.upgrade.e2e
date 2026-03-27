@@ -65,8 +65,9 @@ node {
       withFolderProperties {
         paramsMap = []
         params.each {
-          if (it.value && it.value.trim() != "") {
-              paramsMap << "$it.key=$it.value"
+          def value = it.value?.toString()
+          if (value && value.trim() != "") {
+              paramsMap << "$it.key=${value}"
           }
         }
         withCredentials([ string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
@@ -177,6 +178,8 @@ node {
                       string(name: 'TEST_PACKAGE', value: "${env.TEST_PACKAGE}"),
                       string(name: 'GOTEST_TESTCASE', value: "${env.GOTEST_TESTCASE}"),
                       string(name: 'TAGS', value: "${env.VALIDATION_TEST_TAGS}"),
+                      text(name: 'ENV_VARIABLE', value: env.ENV_VARIABLE),
+                      booleanParam(name: 'CAPTURE_IMAGES', value: env.CAPTURE_IMAGES),
                     ]
                     if ("${env.VALIDATION_TEST_TAGS}" != "null" && "${env.VALIDATION_TEST_TAGS}" != "") {
                       jobs["test-validation"] = { build job: individualJob, parameters: goValidationParams }
@@ -191,8 +194,10 @@ node {
             }
             stage('Clean Up Images and Volume') {
               echo 'Cleaning test images and volume.'
-              sh "docker stop ${buildTestContainer}"
-              sh "docker rm -v ${buildTestContainer}"
+              sh "docker stop ${buildTestContainer}-rancher"
+              sh "docker rm -v ${buildTestContainer}-rancher"
+              sh "docker stop ${buildTestContainer}-downstream-cluster"
+              sh "docker rm -v ${buildTestContainer}-downstream-cluster"
               sh "docker rmi -f ${imageName}"
               sh "docker volume rm -f ${validationVolume}"
             }
