@@ -1,0 +1,210 @@
+#!groovy
+node {
+    def rootPath = "/root/go/src/github.com/rancher/tests/"
+    def workPath = "/root/go/src/github.com/rancher/tests/validation/"
+    def qaInfraWorkPath = "/root/go/src/github.com/rancher/qa-infra-automation"
+    def jobName = "${JOB_NAME}"
+    if (jobName.contains('/')) { 
+      jobNames = jobName.split('/')
+      jobName = jobNames[jobNames.size() - 1] 
+    }
+    def golangTestContainer = "${jobName}${env.BUILD_NUMBER}-golangtest"
+    def buildTestContainer = "${jobName}${env.BUILD_NUMBER}-buildtest"
+    def configGeneratorContainer = "${jobName}${env.BUILD_NUMBER}_generator"
+    def cleanupTestContainer = "${jobName}${env.BUILD_NUMBER}-cleanuptest"
+    def imageName = "rancher-recurring-runs-validation-${jobName}${env.BUILD_NUMBER}"
+    def validationVolume = "RecurringRunsSharedVolume-${jobName}${env.BUILD_NUMBER}"
+    def testsDir = "/root/go/src/github.com/rancher/tests/validation/"
+    def configsDir = "cattle-configs"
+    def patchedConfigsDir = "patched-cattle-configs"
+    def testResultsOut = "results.xml"
+    def envFile = ".env"
+    def rancherConfig = "rancher_env.config"
+    def branch = "main"
+    def qaInfraBranch = "main"
+    def qaInfraRepo = "https://github.com/rancher/qa-infra-automation"
+    def config = env.CONFIG
+    def rancherAnsibleConfig = env.RANCHER_ANSIBLE_CONFIG
+    def rancherKubeConfig = env.RANCHER_KUBECONFIG_FILE
+    def ansibleConfig = env.ANSIBLE_CONFIG
+    def kubeConfig = env.KUBECONFIG_FILE
+    def rancherToken = ""
+    def filename = "config.yaml"
+    def ansibleVarsFilename = "vars.yaml"
+    def kubeconfigFilename = "kubeconfig.yaml"
+    def individualJob = "go-recurring-daily"
+    individualJob = "${individualJob}-individual-job"
+    if ("${env.INDIVIDUAL_JOB}" != "null" && "${env.INDIVIDUAL_JOB}" != "") {
+      individualJob = "${env.INDIVIDUAL_JOB}"
+    }
+
+    if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
+      branch = "${env.BRANCH}"
+    }
+
+    def rancherRepo = scm.getUserRemoteConfigs()[0].getUrl()
+    if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
+      rancherRepo = "${env.REPO}"
+    }
+
+    if ("${env.QA_INFRA_REPO_BRANCH}" != "null" && "${env.QA_INFRA_REPO_BRANCH}" != "") {
+      qaInfraBranch = "${env.QA_INFRA_REPO_BRANCH}"
+    }
+
+    if ("${env.QA_INFRA_REPO_URL}" != "null" && "${env.QA_INFRA_REPO_URL}" != "") {
+      qaInfraRepo = "${env.QA_INFRA_REPO_URL}"
+    }
+  
+    def timeout = "60m"
+    if ("${env.TIMEOUT}" != "null" && "${env.TIMEOUT}" != "") {
+      timeout = "${env.TIMEOUT}" 
+    }
+
+    def configFiles = []
+    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
+      withFolderProperties {
+        paramsMap = []
+        params.each {
+          def value = it.value?.toString()
+          if (value && value.trim() != "") {
+              paramsMap << "$it.key=${value}"
+          }
+        }
+        withCredentials([ string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+                          string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+                          string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'RANCHER_EKS_ACCESS_KEY'),
+                          string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'RANCHER_EKS_SECRET_KEY'),
+                          string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+                          string(credentialsId: 'RANCHER_SSH_KEY', variable: 'RANCHER_SSH_KEY'),
+                          string(credentialsId: 'RANCHER_REGISTRY_USER_NAME', variable: 'RANCHER_REGISTRY_USER_NAME'),
+                          string(credentialsId: 'RANCHER_REGISTRY_PASSWORD', variable: 'RANCHER_REGISTRY_PASSWORD'),
+                          string(credentialsId: 'ADMIN_PASSWORD', variable: 'ADMIN_PASSWORD'),
+                          string(credentialsId: 'USER_PASSWORD', variable: 'USER_PASSWORD'),
+                          string(credentialsId: 'RANCHER_VALID_TLS_CERT', variable: 'RANCHER_VALID_TLS_CERT'),
+                          string(credentialsId: 'RANCHER_VALID_TLS_KEY', variable: 'RANCHER_VALID_TLS_KEY'),
+                          string(credentialsId: 'RANCHER_BYO_TLS_CERT', variable: 'RANCHER_BYO_TLS_CERT'),
+                          string(credentialsId: 'RANCHER_BYO_TLS_KEY', variable: 'RANCHER_BYO_TLS_KEY'),
+                          string(credentialsId: 'SLACK_WEBHOOK', variable: 'SLACK_WEBHOOK'),
+                          string(credentialsId: 'QASE_AUTOMATION_TOKEN', variable: 'QASE_AUTOMATION_TOKEN')]) {
+          
+        withEnv(paramsMap) {
+          stage('Checkout') {
+            deleteDir()
+            dir("./tests") {
+              echo "cloning rancher tests"
+              checkout([
+                      $class: 'GitSCM',
+                      branches: [[name: "*/${branch}"]],
+                      extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                      userRemoteConfigs: [[url: rancherRepo]]
+                    ])
+            }
+            dir('./qa-infra-automation') {
+              echo "cloning qa-infra-automation repo"
+              checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${qaInfraBranch}"]],
+                    extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                    userRemoteConfigs: [[url: qaInfraRepo]]
+                  ])
+            }
+          }
+          dir ("./") {
+            stage('Configure and Build') {
+              config = config.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
+              rancherAnsibleConfig = rancherAnsibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
+
+
+              if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
+                dir("./tests/.ssh") {
+                  def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
+                  writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                }
+              }
+              dir("./tests/validation") {
+                writeFile file: filename, text: config
+                env.CATTLE_TEST_CONFIG = "${workPath}${filename}"
+              }
+              dir("./qa-infra-automation") {
+                dir ("./ansible/rancher/downstream") {
+                  writeFile file: ansibleVarsFilename, text: ansibleConfig
+                  writeFile file: kubeconfigFilename, text: kubeConfig
+                }
+                dir ("./ansible/rancher/default-ha") {
+                  writeFile file: ansibleVarsFilename, text: rancherAnsibleConfig
+                  writeFile file: kubeconfigFilename, text: rancherKubeConfig
+                }
+              }
+              
+              dir ("./") {
+                sh "./tests/validation/configure.sh"
+                sh "docker build . -f ./tests/validation/Dockerfile.e2e -t ${imageName}"
+                sh "docker volume create --name ${validationVolume}"
+              }
+            }
+            stage("Upgrade Rancher") {
+              try {
+                def setUpgradeRancherEnv = "UPGRADE_PLAYBOOK_PATH=ansible/rancher/default-ha UPGRADE_PLAYBOOK_FILE=rancher-upgrade-playbook.yml"
+                sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer}-rancher -t --env-file ${envFile} " +
+                "${imageName} sh -c \"chmod +x ${workPath}pipeline/scripts/upgrade_qa_infra.sh && ${setUpgradeRancherEnv} ${workPath}pipeline/scripts/upgrade_qa_infra.sh\""
+              } catch(err) {
+                  sh "docker stop ${buildTestContainer}-rancher"
+                  sh "docker rm -v ${buildTestContainer}-rancher"
+                  sh "docker volume rm -f ${validationVolume}"
+                  error "Build Environment had failures."
+              }
+            }
+            stage("Upgrade Downstream Cluster") {
+              try {
+                sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer}-downstream-cluster -t --env-file ${envFile} " +
+                "${imageName} sh -c \"chmod +x ${workPath}pipeline/scripts/upgrade_qa_infra.sh && ${workPath}pipeline/scripts/upgrade_qa_infra.sh\""
+              } catch(err) {
+                  sh "docker stop ${buildTestContainer}-downstream-cluster"
+                  sh "docker rm -v ${buildTestContainer}-downstream-cluster"
+                  sh "docker volume rm -f ${validationVolume}"
+                  error "Build Environment had failures."
+              }
+            }
+            try {
+              stage('Run Test Validations') {
+                  try {
+                    jobs = [:]
+
+                    def goValidationParams = [
+                      string(name: 'TIMEOUT', value: timeout),
+                      text(name: 'CONFIG', value: config),
+                      string(name: 'REPO', value: "${rancherRepo}"),
+                      string(name: 'BRANCH', value: "${branch}"),
+                      string(name: 'TEST_PACKAGE', value: "${env.TEST_PACKAGE}"),
+                      string(name: 'GOTEST_TESTCASE', value: "${env.GOTEST_TESTCASE}"),
+                      string(name: 'TAGS', value: "${env.VALIDATION_TEST_TAGS}"),
+                      text(name: 'ENV_VARIABLE', value: env.ENV_VARIABLE),
+                      booleanParam(name: 'CAPTURE_IMAGES', value: env.CAPTURE_IMAGES),
+                    ]
+                    if ("${env.VALIDATION_TEST_TAGS}" != "null" && "${env.VALIDATION_TEST_TAGS}" != "") {
+                      jobs["test-validation"] = { build job: individualJob, parameters: goValidationParams }
+                    }
+                    parallel jobs
+                  } catch(err) {
+                    currentBuild.result = 'UNSTABLE'
+                    echo "Test validations had failures: " + err
+                  }
+              }
+            } catch(err) {
+              echo "Failures " + err
+            }
+            stage('Clean Up Images and Volume') {
+              echo 'Cleaning test images and volume.'
+              sh "docker stop ${buildTestContainer}-rancher"
+              sh "docker rm -v ${buildTestContainer}-rancher"
+              sh "docker stop ${buildTestContainer}-downstream-cluster"
+              sh "docker rm -v ${buildTestContainer}-downstream-cluster"
+              sh "docker rmi -f ${imageName}"
+              sh "docker volume rm -f ${validationVolume}"
+            }
+          } // dir 
+        } // withEnv
+      } // creds
+    } // folder properties
+  } // wrap 
+} // node

@@ -78,6 +78,7 @@ fi
 
 : "${ANSIBLE_CONFIG:=ansible/rke2/default/ansible.cfg}"
 : "${RANCHER_PLAYBOOK_PATH:=ansible/rancher/default-ha/rancher-playbook.yml}"
+: "${DOWNSTREAM_UPGRADE_PLAYBOOK_PATH:=ansible/rancher/downstream/downstream-upgrade-playbook.yml}"
 
 : "${TFVARS_FILE:=cluster.tfvars}"
 : "${DOWNSTREAM_TFVARS_FILE:=downstream-cluster.tfvars}"
@@ -204,6 +205,7 @@ if [[ "$BUILD_DOWNSTREAM_CLUSTER" == "true" ]]; then
         exit 1
     fi
     yq e ".rancher.clusterName = \"$DOWNSTREAM_CLUSTER_NAME\"" -i "$CONFIG_FILE"
+    ansible-playbook "$DOWNSTREAM_UPGRADE_PLAYBOOK_PATH" -e "@$VARS_FILE" -e "k8s_downstream_cluster_name=$DOWNSTREAM_CLUSTER_NAME"
 fi
 
 
