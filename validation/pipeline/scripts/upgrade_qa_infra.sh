@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
 
-echo "Upgrade downstream cluster"
+echo "Upgrade QA Infra Script"
 
 : "${QAINFRA_SCRIPT_PATH:=/root/go/src/github.com/rancher/qa-infra-automation}"
 : "${UPGRADE_PLAYBOOK_PATH:=ansible/rancher/downstream}"

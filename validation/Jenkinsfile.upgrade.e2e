@@ -24,6 +24,8 @@ node {
     def qaInfraBranch = "main"
     def qaInfraRepo = "https://github.com/rancher/qa-infra-automation"
     def config = env.CONFIG
+    def rancherAnsibleConfig = env.RANCHER_ANSIBLE_CONFIG
+    def rancherKubeConfig = env.RANCHER_KUBECONFIG_FILE
     def ansibleConfig = env.ANSIBLE_CONFIG
     def kubeConfig = env.KUBECONFIG_FILE
     def rancherToken = ""
@@ -109,7 +111,7 @@ node {
           dir ("./") {
             stage('Configure and Build') {
               config = config.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
-              ansibleConfig = ansibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
+              rancherAnsibleConfig = rancherAnsibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
 
 
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
@@ -127,12 +129,28 @@ node {
                   writeFile file: ansibleVarsFilename, text: ansibleConfig
                   writeFile file: kubeconfigFilename, text: kubeConfig
                 }
+                dir ("./ansible/rancher/default-ha") {
+                  writeFile file: ansibleVarsFilename, text: rancherAnsibleConfig
+                  writeFile file: kubeconfigFilename, text: rancherKubeConfig
+                }
               }
               
               dir ("./") {
                 sh "./tests/validation/configure.sh"
                 sh "docker build . -f ./tests/validation/Dockerfile.e2e -t ${imageName}"
                 sh "docker volume create --name ${validationVolume}"
+              }
+            }
+            stage("Upgrade Rancher") {
+              try {
+                def setUpgradeRancerEnv = "UPGRADE_PLAYBOOK_PATH=ansible/rancher/default-ha UPGRADE_PLAYBOOK_FILE=rancher-upgrade-playbook.yml"
+                sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
+                "${imageName} sh -c \"chmod +x ${workPath}pipeline/scripts/upgrade_qa_infra.sh && ${setUpgradeRancerEnv} ${workPath}pipeline/scripts/upgrade_qa_infra.sh\""
+              } catch(err) {
+                  sh "docker stop ${buildTestContainer}"
+                  sh "docker rm -v ${buildTestContainer}"
+                  sh "docker volume rm -f ${validationVolume}"
+                  error "Build Environment had failures."
               }
             }
             stage("Upgrade Downstream Cluster") {
@@ -154,10 +172,6 @@ node {
                     def mainRancherConfigPath = "./${filename}"
 
                     sh "./yq e '.rancher.cleanup = true' -i ${mainRancherConfigPath}"
-                    
-                    def desiredflags = 'InstallRancher|Short'
-
-                    sh "./yq e '.flags.desiredflags = \"${desiredflags}\"' -i ${mainRancherConfigPath}"
 
                     def configYaml = readFile(file: "${mainRancherConfigPath}")
 
