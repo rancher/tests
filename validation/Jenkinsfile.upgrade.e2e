@@ -144,22 +144,22 @@ node {
             stage("Upgrade Rancher") {
               try {
                 def setUpgradeRancerEnv = "UPGRADE_PLAYBOOK_PATH=ansible/rancher/default-ha UPGRADE_PLAYBOOK_FILE=rancher-upgrade-playbook.yml"
-                sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
+                sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer}-rancher -t --env-file ${envFile} " +
                 "${imageName} sh -c \"chmod +x ${workPath}pipeline/scripts/upgrade_qa_infra.sh && ${setUpgradeRancerEnv} ${workPath}pipeline/scripts/upgrade_qa_infra.sh\""
               } catch(err) {
-                  sh "docker stop ${buildTestContainer}"
-                  sh "docker rm -v ${buildTestContainer}"
+                  sh "docker stop ${buildTestContainer}-rancher"
+                  sh "docker rm -v ${buildTestContainer}-rancher"
                   sh "docker volume rm -f ${validationVolume}"
                   error "Build Environment had failures."
               }
             }
             stage("Upgrade Downstream Cluster") {
               try {
-                sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
+                sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer}-downstream-cluster -t --env-file ${envFile} " +
                 "${imageName} sh -c \"chmod +x ${workPath}pipeline/scripts/upgrade_qa_infra.sh && ${workPath}pipeline/scripts/upgrade_qa_infra.sh\""
               } catch(err) {
-                  sh "docker stop ${buildTestContainer}"
-                  sh "docker rm -v ${buildTestContainer}"
+                  sh "docker stop ${buildTestContainer}-downstream-cluster"
+                  sh "docker rm -v ${buildTestContainer}-downstream-cluster"
                   sh "docker volume rm -f ${validationVolume}"
                   error "Build Environment had failures."
               }
@@ -169,19 +169,13 @@ node {
                   try {
                     jobs = [:]
 
-                    def mainRancherConfigPath = "./${filename}"
-
-                    sh "./yq e '.rancher.cleanup = true' -i ${mainRancherConfigPath}"
-
-                    def configYaml = readFile(file: "${mainRancherConfigPath}")
-
                     def goValidationParams = [
                       string(name: 'TIMEOUT', value: timeout),
-                      text(name: 'CONFIG', value: configYaml),
+                      text(name: 'CONFIG', value: config),
                       string(name: 'REPO', value: "${rancherRepo}"),
                       string(name: 'BRANCH', value: "${branch}"),
                       string(name: 'TEST_PACKAGE', value: "${env.TEST_PACKAGE}"),
-                      string(name: 'GOTEST_TESTCASE', value: "${env.GOTEST_TESTCASE_VALIDATION} -p 1"),
+                      string(name: 'GOTEST_TESTCASE', value: "${env.GOTEST_TESTCASE}"),
                       string(name: 'TAGS', value: "${env.VALIDATION_TEST_TAGS}"),
                     ]
                     if ("${env.VALIDATION_TEST_TAGS}" != "null" && "${env.VALIDATION_TEST_TAGS}" != "") {
