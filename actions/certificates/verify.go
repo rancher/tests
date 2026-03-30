@@ -6,6 +6,10 @@ import "github.com/sirupsen/logrus"
 func VerifyCertificateRotation(oldCertificates, newCertificates map[string]map[string]string) bool {
 	isRotated := true
 	for nodeID := range oldCertificates {
+		if len(oldCertificates[nodeID]) != len(newCertificates[nodeID]) {
+			logrus.Warningf("Number of certs for node %s changed from %d to %d", nodeID, len(oldCertificates[nodeID]), len(newCertificates[nodeID]))
+		}
+
 		for certType := range oldCertificates[nodeID] {
 			if oldCertificates[nodeID][certType] == newCertificates[nodeID][certType] {
 				logrus.Warningf("%s %s was not updated: %s", nodeID, certType, oldCertificates[nodeID][certType])
