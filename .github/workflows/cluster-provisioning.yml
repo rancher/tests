@@ -69,6 +69,11 @@ jobs:
           repository: rancher/tfp-automation
           path: tfp-automation
 
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5
+        with:
+          version: "latest"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
@@ -417,6 +422,11 @@ jobs:
           repository: rancher/tfp-automation
           path: tfp-automation
 
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5
+        with:
+          version: "latest"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
@@ -764,6 +774,11 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5
+        with:
+          version: "latest"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6

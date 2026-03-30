@@ -3,22 +3,20 @@ package provisioning
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
-
-	"github.com/rancher/tests/actions/clusters"
-	"github.com/rancher/tests/actions/provisioninginput"
-	wranglername "github.com/rancher/wrangler/pkg/name"
-
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	shepherdclusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/bundledclusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	shephDefaults "github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
@@ -26,9 +24,12 @@ import (
 	"github.com/rancher/shepherd/extensions/sshkeys"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/wait"
+	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/provisioninginput"
 	psadeploy "github.com/rancher/tests/actions/psact"
 	"github.com/rancher/tests/actions/registries"
 	"github.com/rancher/tests/actions/reports"
+	wranglername "github.com/rancher/wrangler/pkg/name"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,6 +38,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -520,6 +523,179 @@ func VerifyACE(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIOb
 		for _, pod := range resp.Items {
 			logrus.Debugf("Pod %v", pod.GetName())
 		}
+	}
+}
+
+// VerifyACELocalUnavailable validates that the ACE resources are healthy in a given cluster when the local cluster is unavailable.
+func VerifyACELocalUnavailable(t *testing.T, rancherClient *rancher.Client, cluster *steveV1.SteveAPIObject, clusterStatus *provv1.ClusterStatus, pemFilePath string, sshUser string) {
+	localKubeconfigPath := "./local-kubeconfig.yaml"
+
+	kubeConfigPtr, err := kubeconfig.GetKubeconfig(rancherClient, "local")
+	require.NoError(t, err, "failed to get local cluster kubeconfig")
+	require.NotNil(t, kubeConfigPtr, "local kubeconfig is nil")
+	kubeConfig := *kubeConfigPtr
+
+	rawConfig, err := kubeConfig.RawConfig()
+	require.NoError(t, err, "failed to get raw kubeconfig")
+
+	localRestConfig, err := clientcmd.NewDefaultClientConfig(rawConfig, &clientcmd.ConfigOverrides{}).ClientConfig()
+	require.NoError(t, err, "failed to create REST config from local kubeconfig")
+
+	localClient, err := kubernetes.NewForConfig(localRestConfig)
+	require.NoError(t, err, "failed to create local Kubernetes client")
+
+	nodes, err := localClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+	require.NoError(t, err, "failed to list nodes in local cluster")
+
+	var controlPlaneIP string
+
+	for _, node := range nodes.Items {
+		if node.Labels["node-role.kubernetes.io/control-plane"] == "true" {
+			for _, addr := range node.Status.Addresses {
+				if addr.Type == corev1.NodeExternalIP {
+					controlPlaneIP = addr.Address
+					break
+				}
+			}
+			if controlPlaneIP != "" {
+				break
+			}
+		}
+	}
+	require.NotEmpty(t, controlPlaneIP, "could not find controlplane node IP")
+
+	scpCmd := exec.Command(
+		"ssh",
+		"-i", pemFilePath,
+		"-o", "StrictHostKeyChecking=no",
+		fmt.Sprintf("%s@%s", sshUser, controlPlaneIP),
+		fmt.Sprintf("sudo cat /etc/rancher/rke2/rke2.yaml"),
+	)
+
+	scpOutput, err := scpCmd.CombinedOutput()
+	require.NoErrorf(t, err, "failed to fetch kubeconfig: %s", string(scpOutput))
+	err = os.WriteFile(localKubeconfigPath, scpOutput, 0600)
+	require.NoError(t, err)
+
+	rawLocalConfig, err := clientcmd.LoadFromFile(localKubeconfigPath)
+	require.NoError(t, err, "failed to load local kubeconfig for patching")
+
+	for _, cluster := range rawLocalConfig.Clusters {
+		cluster.Server = fmt.Sprintf("https://%s:6443", controlPlaneIP)
+	}
+
+	err = clientcmd.WriteToFile(*rawLocalConfig, localKubeconfigPath)
+	require.NoError(t, err, "failed to write patched kubeconfig")
+
+	downstreamConfigPtr, err := kubeconfig.GetKubeconfig(rancherClient, clusterStatus.ClusterName)
+	require.NoError(t, err)
+	require.NotNil(t, downstreamConfigPtr)
+	downstreamConfig := *downstreamConfigPtr
+
+	rawDownstreamConfig, err := downstreamConfig.RawConfig()
+	require.NoError(t, err)
+
+	for name, ctx := range rawDownstreamConfig.Contexts {
+		cluster := rawDownstreamConfig.Clusters[ctx.Cluster]
+		if strings.Contains(cluster.Server, ":6443") && !strings.Contains(cluster.Server, "/k8s/clusters/") {
+			rawDownstreamConfig.CurrentContext = name
+			break
+		}
+	}
+
+	downstreamClientConfig := clientcmd.NewDefaultClientConfig(rawDownstreamConfig, &clientcmd.ConfigOverrides{})
+	downstreamRestConfig, err := downstreamClientConfig.ClientConfig()
+	require.NoError(t, err)
+
+	downstreamClient, err := kubernetes.NewForConfig(downstreamRestConfig)
+	require.NoError(t, err)
+
+	logrus.Info("Scaling Rancher deployment to 0 replicas")
+	localDeployment, err := rancherClient.Steve.SteveType("apps.deployment").ByID("cattle-system/rancher")
+	require.NoError(t, err)
+
+	obj := localDeployment.JSONResp
+	spec, ok := obj["spec"].(map[string]any)
+	require.True(t, ok)
+	spec["replicas"] = int64(0)
+
+	_, err = rancherClient.Steve.SteveType("apps.deployment").Update(localDeployment, obj)
+	require.NoError(t, err)
+
+	logrus.Info("Waiting for Rancher deployment to scale down")
+	_ = kwait.PollUntilContextTimeout(context.TODO(), 1*time.Second, shephDefaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		_, err = rancherClient.Steve.SteveType("apps.deployment").ByID("cattle-system/rancher")
+		if err != nil && (strings.Contains(err.Error(), "500") ||
+			strings.Contains(err.Error(), "502") ||
+			strings.Contains(err.Error(), "503") ||
+			strings.Contains(err.Error(), "504") ||
+			strings.Contains(err.Error(), "EOF")) {
+
+			logrus.Info("Rancher deployment scaled to 0")
+			return true, nil
+		}
+		return false, nil
+	})
+
+	podsClient := downstreamClient.CoreV1().Pods("cattle-system")
+
+	podList, err := podsClient.List(context.TODO(), metav1.ListOptions{
+		LabelSelector: "app=kube-api-auth",
+	})
+	if err != nil {
+		require.NoError(t, err)
+	}
+	require.NotEmpty(t, podList.Items, "kube-api-auth pod not found in cattle-system namespace")
+
+	kubeAPIPod := podList.Items[0]
+	var image string
+	for _, c := range kubeAPIPod.Spec.Containers {
+		if c.Name == "kube-api-auth" {
+			image = c.Image
+			break
+		}
+	}
+	require.NotEmpty(t, image, "kube-api-auth container image not found")
+
+	parts := strings.Split(image, ":")
+	version := parts[len(parts)-1]
+	logrus.Infof("kube-api-auth pod version (downstream): %s", version)
+
+	allPods, err := downstreamClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		require.NoError(t, err)
+	} else {
+		for _, p := range allPods.Items {
+			logrus.Debugf("Pod %s (downstream, ns=%s)", p.Name, p.Namespace)
+		}
+	}
+
+	scaleCmd := exec.Command(
+		"kubectl",
+		"--kubeconfig", localKubeconfigPath,
+		"-n", "cattle-system",
+		"scale", "deployment/rancher",
+		"--replicas=3",
+	)
+	output, err := scaleCmd.CombinedOutput()
+	require.NoErrorf(t, err, "failed to scale Rancher back up: %s", string(output))
+	logrus.Infof("Rancher deployment scale command output:\n%s", string(output))
+
+	waitCmd := exec.Command(
+		"kubectl",
+		"--kubeconfig", localKubeconfigPath,
+		"-n", "cattle-system",
+		"rollout", "status", "deployment/rancher",
+		"--timeout=5m",
+	)
+	waitOutput, err := waitCmd.CombinedOutput()
+	require.NoErrorf(t, err, "Rancher rollout did not complete: %s", string(waitOutput))
+	logrus.Infof("Rancher deployment rollout complete:\n%s", string(waitOutput))
+
+	if err := os.Remove(localKubeconfigPath); err != nil {
+		logrus.Warnf("failed to remove local kubeconfig %s: %v", localKubeconfigPath, err)
+	} else {
+		logrus.Infof("Removed local kubeconfig: %s", localKubeconfigPath)
 	}
 }
 
