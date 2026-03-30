@@ -73,7 +73,7 @@ jobs:
           echo "PRIVATE_IP=$PRIVATE_IP" >> $GITHUB_ENV
 
       - name: RKE Pre-Release Validations
-        if: contains(github.event.inputs.rke_version, 'rc')
+        if: contains(github.event.inputs.rke_version, 'rc') == true
         env:
           RKE_VERSION: ${{ github.event.inputs.rke_version }}
           PEM_FILE: /home/runner/work/tests/tests/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem
@@ -90,7 +90,7 @@ jobs:
         uses: ./.github/actions/run-rke-validations
 
       - name: RKE Post-Release Validations
-        if: ! contains(github.event.inputs.rke_version, 'rc')
+        if: contains(github.event.inputs.rke_version, 'rc') == false
         env:
           RKE_VERSION: ${{ github.event.inputs.rke_version }}
           PEM_FILE: /home/runner/work/tests/tests/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem
