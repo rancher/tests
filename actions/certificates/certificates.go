@@ -163,10 +163,11 @@ func getCertificatesFromMachine(client *rancher.Client, machineNode *v1.SteveAPI
 	}
 
 	for _, filename := range certsList {
-		// ignoring errors since node roles have different subsets of the certs.
-		certString, _ := sshNode.ExecuteCommand("openssl x509 -enddate -noout -in " + certsPath + filename + certFileExtension)
-
-		if certString != "" {
+		// Ignoring if certificate doesn't exist because some certs are not present on some node types
+		certString, _ := sshNode.ExecuteCommand("sudo openssl x509 -enddate -noout -in " + certsPath + filename + certFileExtension)
+		if strings.Contains(certString, "No such file or directory") {
+			logrus.Tracef("Certificate %v does not exist", filename)
+		} else if certString != "" {
 			certificates[filename] = certString
 		}
 	}
