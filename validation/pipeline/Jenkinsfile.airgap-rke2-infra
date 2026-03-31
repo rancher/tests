@@ -180,9 +180,12 @@ pipeline {
                             }
 
                             stage('Setup: Upload Terraform Variables to S3') {
+                                def wsName = env.WORKSPACE_NAME
+                                def tfvarsPath = "${tofuModulePath}/terraform.tfvars"
+                                echo "DEBUG: workspaceName=${wsName}, localPath=${tfvarsPath}, s3Key=terraform.tfvars"
                                 s3.uploadArtifact(
-                                    workspaceName: env.WORKSPACE_NAME,
-                                    localPath:     "${tofuModulePath}/terraform.tfvars",
+                                    workspaceName: wsName,
+                                    localPath:     tfvarsPath,
                                     s3Key:         'terraform.tfvars'
                                 )
                             }
