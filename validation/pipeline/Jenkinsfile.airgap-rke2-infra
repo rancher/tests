@@ -55,9 +55,19 @@ pipeline {
             description: 'Branch of qa-jenkins-library to use'
         )
         string(
+            name: 'TESTS_REPO_URL',
+            defaultValue: 'https://github.com/rancher/tests',
+            description: 'URL of rancher/tests repository'
+        )
+        string(
             name: 'TESTS_BRANCH',
             defaultValue: 'main',
             description: 'Branch of rancher/tests repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_URL',
+            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            description: 'URL of qa-infra-automation repository'
         )
         string(
             name: 'QA_INFRA_BRANCH',
@@ -77,8 +87,8 @@ pipeline {
             steps {
                 script {
                     def dirs = airgap.standardCheckout(
-                        testsRepo: [branch: params.TESTS_BRANCH],
-                        infraRepo: [branch: params.QA_INFRA_BRANCH]
+                        testsRepo: [url: params.TESTS_REPO_URL, branch: params.TESTS_BRANCH],
+                        infraRepo: [url: params.QA_INFRA_REPO_URL, branch: params.QA_INFRA_BRANCH]
                     )
                     env.TESTS_DIR = dirs.testsDir
                     env.INFRA_DIR = dirs.infraDir
