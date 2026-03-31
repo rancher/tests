@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"testing"
 
+	upstream "github.com/qase-tms/qase-go/qase-api-client"
+	"github.com/rancher/tests/actions/qase"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 )
@@ -59,6 +61,13 @@ func (r *RKEValidationsTestSuite) TestRKEValidations() {
 				t.Fatalf("RKE validation script failed: %v", err)
 			}
 		})
+
+		var params []upstream.TestCaseParameterCreate
+		params = append(params, upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "RKE Version", Values: []string{rkeVersion}}})
+		err := qase.UpdateSchemaParameters(tt.name, params)
+		if err != nil {
+			logrus.Warningf("Failed to upload schema parameters %s", err)
+		}
 	}
 }
 

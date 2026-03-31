@@ -7,7 +7,7 @@ on:
         description: "RKE version to validate"
         required: true
       qase_id:
-        description: "Qase Test Run ID"
+        description: "Optional override for Qase Test Run ID"
         required: false
 
 permissions:
@@ -20,13 +20,49 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Create Qase test run
+        id: qase
+        run: |
+          PROJECT="${{ secrets.HB_QASE_PROJECT_ID }}"
+          TOKEN="${{ secrets.QASE_AUTOMATION_TOKEN }}"
+
+          # Use manual override if provided
+          if [ -n "${{ github.event.inputs.qase_id }}" ]; then
+            echo "Using manual override Qase ID: ${{ github.event.inputs.qase_id }}"
+            echo "run_id=${{ github.event.inputs.qase_id }}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          VERSION="${{ github.event.inputs.rke_version }}"
+
+          RUN_NAME="RKE $VERSION"
+
+          echo "Creating new Qase test run: $RUN_NAME"
+
+          RESPONSE=$(curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "Token: $TOKEN" \
+            -d "{\"title\": \"$RUN_NAME\", \"is_autotest\": true}" \
+            "https://api.qase.io/v1/run/$PROJECT")
+
+          RUN_ID=$(echo "$RESPONSE" | jq -r '.result.id')
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "Failed to create Qase run"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+          echo "Created Qase run ID: $RUN_ID"
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
       - name: Set up SSH Keys
         uses: ./.github/actions/setup-ssh-keys
@@ -76,35 +112,59 @@ jobs:
         if: contains(github.event.inputs.rke_version, 'rc') == true
         env:
           RKE_VERSION: ${{ github.event.inputs.rke_version }}
+          QASE_TEST_RUN_ID: ${{ steps.qase.outputs.run_id }}
           PEM_FILE: /home/runner/work/tests/tests/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem
           REGISTRY: ${{ secrets.RKE_STG_REGISTRY }}
           REGISTRY_USER: ${{ secrets.RKE_STG_REGISTRY_USER }}
           REGISTRY_PASSWORD: ${{ secrets.RKE_STG_REGISTRY_PASSWORD }}
           PUBLIC_IP: ${{ env.PUBLIC_IP }}
           PRIVATE_IP: ${{ env.PRIVATE_IP }}
-          QASE_TEST_RUN_ID: ${{ github.event.inputs.qase_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
-          QASE_PROJECT_ID: ${{ secrets.QASE_PROJECT_ID }}
+          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
-          qase-id: ${{ github.event.inputs.qase_id }}
+          qase-id: ${{ steps.qase.outputs.run_id }}
         uses: ./.github/actions/run-rke-validations
 
       - name: RKE Post-Release Validations
         if: contains(github.event.inputs.rke_version, 'rc') == false
         env:
           RKE_VERSION: ${{ github.event.inputs.rke_version }}
+          QASE_TEST_RUN_ID: ${{ steps.qase.outputs.run_id }}
           PEM_FILE: /home/runner/work/tests/tests/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem
           REGISTRY: ${{ secrets.RKE_REGISTRY }}
           REGISTRY_USER: ${{ secrets.RKE_REGISTRY_USER }}
           REGISTRY_PASSWORD: ${{ secrets.RKE_REGISTRY_PASSWORD }}
           PUBLIC_IP: ${{ env.PUBLIC_IP }}
           PRIVATE_IP: ${{ env.PRIVATE_IP }}
-          QASE_TEST_RUN_ID: ${{ github.event.inputs.qase_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
-          qase-id: ${{ github.event.inputs.qase_id }}
+          qase-id: ${{ steps.qase.outputs.run_id }}
         uses: ./.github/actions/run-rke-validations
+
+      - name: Close Qase Test Run
+        if: success() && contains(github.event.inputs.rke_version, 'rc') == false && github.event.inputs.qase_id == ''
+        run: |
+          RUN_ID="${{ steps.qase.outputs.run_id }}"
+          PROJECT="${{ secrets.HB_QASE_PROJECT_ID }}"
+          TOKEN="${{ secrets.QASE_AUTOMATION_TOKEN }}"
+
+          echo "Closing Qase run ID: $RUN_ID"
+
+          RESPONSE=$(curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "Token: $TOKEN" \
+            "https://api.qase.io/v1/run/$PROJECT/$RUN_ID/complete")
+
+          STATUS=$(echo "$RESPONSE" | jq -r '.status')
+
+          if [ "$STATUS" != "true" ]; then
+            echo "Failed to close Qase run"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+          echo "Qase run successfully closed"
 
       - name: Terminate instance
         if: always()
