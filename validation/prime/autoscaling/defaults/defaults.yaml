@@ -24,11 +24,6 @@ awsMachineConfigs:
     vpcId: "<required>"
     retries: "5"
     zone: "a"
-
-#Required for non prime environments
-autoScalingConfig:
-  autoscalerChartRepository: "<required>" 
-  autoScalerImage: "<required>"
   
 logging:
    level: "info"
