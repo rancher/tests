@@ -114,6 +114,7 @@ pipeline {
                     ]) {
                         def tofuModulePath = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
                         def ansiblePath   = "${env.INFRA_DIR}/ansible/rke2/airgap"
+                        def workspaceName = ''
 
                         if (params.ACTION == 'setup') {
                             // ── Setup ────────────────────────────────────────
@@ -128,15 +129,15 @@ pipeline {
                             }
 
                             stage('Setup: Create Workspace') {
-                                def wsName = infrastructure.generateWorkspaceName(
+                                workspaceName = infrastructure.generateWorkspaceName(
                                     prefix:           'jenkins_airgap_ansible_workspace',
                                     suffix:           env.HOSTNAME_PREFIX,
                                     includeTimestamp: false
                                 )
-                                env.WORKSPACE_NAME = wsName
+                                env.WORKSPACE_NAME = workspaceName
 
-                                tofu.createWorkspace(dir: tofuModulePath, name: wsName)
-                                infrastructure.archiveWorkspaceName(workspaceName: wsName)
+                                tofu.createWorkspace(dir: tofuModulePath, name: workspaceName)
+                                infrastructure.archiveWorkspaceName(workspaceName: workspaceName)
                             }
 
                             stage('Setup: Configure SSH Key') {
@@ -180,12 +181,9 @@ pipeline {
                             }
 
                             stage('Setup: Upload Terraform Variables to S3') {
-                                def wsName = env.WORKSPACE_NAME
-                                def tfvarsPath = "${tofuModulePath}/terraform.tfvars"
-                                echo "DEBUG: workspaceName=${wsName}, localPath=${tfvarsPath}, s3Key=terraform.tfvars"
                                 s3.uploadArtifact(
-                                    workspaceName: wsName,
-                                    localPath:     tfvarsPath,
+                                    workspaceName: workspaceName,
+                                    localPath:     "${tofuModulePath}/terraform.tfvars",
                                     s3Key:         'terraform.tfvars'
                                 )
                             }
@@ -251,7 +249,7 @@ pipeline {
 
                             stage('Setup: Output Infrastructure Details') {
                                 echo '=== Infrastructure Setup Complete ==='
-                                echo "Workspace Name: ${env.WORKSPACE_NAME}"
+                                echo "Workspace Name: ${workspaceName}"
 
                                 try {
                                     def bastionDns = tofu.getOutputs(
@@ -267,7 +265,7 @@ pipeline {
                                         dir: tofuModulePath, output: 'external_lb_hostname'
                                     )
                                     echo "Rancher Hostname (External): ${rancherHostname}"
-                                    currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${env.WORKSPACE_NAME}"
+                                    currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${workspaceName}"
                                 } catch (e) {
                                     echo "Could not retrieve external LB hostname: ${e.message}"
                                 }
@@ -291,7 +289,7 @@ pipeline {
                                     error 'TARGET_WORKSPACE parameter is required for destroy action'
                                 }
                                 echo "Target workspace for destruction: ${params.TARGET_WORKSPACE}"
-                                env.WORKSPACE_NAME = params.TARGET_WORKSPACE
+                                workspaceName = params.TARGET_WORKSPACE
                             }
 
                             stage('Destroy: Initialize Tofu Backend') {
@@ -357,16 +355,16 @@ pipeline {
                 if (params.ACTION == 'setup' && params.DESTROY_ON_FAILURE && env.WORKSPACE_NAME) {
                     echo 'DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure...'
 
-                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
-                        try {
+                    try {
+                        property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
                             airgap.teardownInfrastructure(
                                 dir:     "${env.INFRA_DIR}/tofu/aws/modules/airgap",
                                 name:    env.WORKSPACE_NAME,
                                 varFile: 'terraform.tfvars'
                             )
-                        } catch (cleanupErr) {
-                            echo "Cleanup failed: ${cleanupErr.message}"
                         }
+                    } catch (cleanupErr) {
+                        echo "Cleanup failed: ${cleanupErr.message}"
                     }
                 }
             }
