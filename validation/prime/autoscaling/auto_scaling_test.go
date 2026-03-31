@@ -1,7 +1,7 @@
 //go:build validation || prime
 
 //nolint:forbidigo
-package rke2k3s
+package autoscaling
 
 import (
 	"os"
@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
@@ -51,6 +52,12 @@ func autoScalingSetup(t *testing.T) autoScalingTest {
 	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
 	s.cattleConfig, err = defaults.LoadPackageDefaults(s.cattleConfig, "")
+	require.NoError(t, err)
+
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, s.cattleConfig, loggingConfig)
+
+	err = logging.SetLogger(loggingConfig)
 	require.NoError(t, err)
 
 	return s

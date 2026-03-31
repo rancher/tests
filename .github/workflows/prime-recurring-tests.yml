@@ -217,10 +217,6 @@ jobs:
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
-          
-          autoScalingConfig:
-            chartRepository: "${{ secrets.AUTOSCALER_CHART_REPO }}"
-            image: "${{ secrets.AUTOSCALER_IMAGE }}"
 
           clusterConfig:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
