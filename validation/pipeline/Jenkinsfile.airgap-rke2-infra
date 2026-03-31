@@ -134,10 +134,12 @@ pipeline {
                                     suffix:           env.HOSTNAME_PREFIX,
                                     includeTimestamp: false
                                 )
-                                env.WORKSPACE_NAME = workspaceName
 
                                 tofu.createWorkspace(dir: tofuModulePath, name: workspaceName)
                                 infrastructure.archiveWorkspaceName(workspaceName: workspaceName)
+
+                                // Set env after all calls succeed so post-failure cleanup can use it
+                                env.WORKSPACE_NAME = workspaceName
                             }
 
                             stage('Setup: Configure SSH Key') {
@@ -184,7 +186,9 @@ pipeline {
                                 s3.uploadArtifact(
                                     workspaceName: workspaceName,
                                     localPath:     "${tofuModulePath}/terraform.tfvars",
-                                    s3Key:         'terraform.tfvars'
+                                    s3Key:         'terraform.tfvars',
+                                    bucket:        env.S3_BUCKET_NAME,
+                                    region:        env.S3_BUCKET_REGION
                                 )
                             }
 
@@ -306,7 +310,9 @@ pipeline {
                                 s3.downloadArtifact(
                                     workspaceName: params.TARGET_WORKSPACE,
                                     s3Key:         'terraform.tfvars',
-                                    localPath:     "${tofuModulePath}/terraform.tfvars"
+                                    localPath:     "${tofuModulePath}/terraform.tfvars",
+                                    bucket:        env.S3_BUCKET_NAME,
+                                    region:        env.S3_BUCKET_REGION
                                 )
                             }
 
@@ -321,7 +327,9 @@ pipeline {
                             stage('Destroy: Delete S3 Artifacts') {
                                 s3.deleteArtifact(
                                     workspaceName: params.TARGET_WORKSPACE,
-                                    s3Key:         'terraform.tfvars'
+                                    s3Key:         'terraform.tfvars',
+                                    bucket:        env.S3_BUCKET_NAME,
+                                    region:        env.S3_BUCKET_REGION
                                 )
                             }
 
