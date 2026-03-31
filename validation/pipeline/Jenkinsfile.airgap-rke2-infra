@@ -112,15 +112,13 @@ pipeline {
                 script {
                     env.TOFU_MODULE_PATH = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
 
-                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
-                        tofu.initBackend(
-                            dir:               env.TOFU_MODULE_PATH,
-                            bucket:            env.S3_BUCKET_NAME,
-                            key:               env.S3_KEY_PREFIX,
-                            region:            env.S3_BUCKET_REGION,
-                            backendInitScript: './scripts/init-backend.sh'
-                        )
-                    }
+                    tofu.initBackend(
+                        dir:               env.TOFU_MODULE_PATH,
+                        bucket:            env.S3_BUCKET_NAME,
+                        key:               env.S3_KEY_PREFIX,
+                        region:            env.S3_BUCKET_REGION,
+                        backendInitScript: './scripts/init-backend.sh'
+                    )
                 }
             }
         }
@@ -138,12 +136,10 @@ pipeline {
                     )
                     env.WORKSPACE_NAME = wsName
 
-                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
-                        tofu.createWorkspace(
-                            dir:  env.TOFU_MODULE_PATH,
-                            name: wsName
-                        )
-                    }
+                    tofu.createWorkspace(
+                        dir:  env.TOFU_MODULE_PATH,
+                        name: wsName
+                    )
 
                     infrastructure.archiveWorkspaceName(workspaceName: wsName)
                 }
@@ -156,13 +152,11 @@ pipeline {
             }
             steps {
                 script {
-                    property.useWithProperties(['AWS_SSH_PEM_KEY']) {
-                        infrastructure.writeSshKey(
-                            keyContent: env.AWS_SSH_PEM_KEY,
-                            keyName:    env.AWS_SSH_PEM_KEY_NAME,
-                            dir:        '.ssh'
-                        )
-                    }
+                    infrastructure.writeSshKey(
+                        keyContent: env.AWS_SSH_PEM_KEY,
+                        keyName:    env.AWS_SSH_PEM_KEY_NAME,
+                        dir:        '.ssh'
+                    )
                 }
             }
         }
@@ -173,22 +167,20 @@ pipeline {
             }
             steps {
                 script {
-                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
-                        def terraformConfig = infrastructure.parseAndSubstituteVars(
-                            content: env.TERRAFORM_CONFIG,
-                            envVars: [
-                                'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
-                                'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
-                                'HOSTNAME_PREFIX':       env.HOSTNAME_PREFIX,
-                                'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
-                            ]
-                        )
+                    def terraformConfig = infrastructure.parseAndSubstituteVars(
+                        content: env.TERRAFORM_CONFIG,
+                        envVars: [
+                            'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
+                            'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+                            'HOSTNAME_PREFIX':       env.HOSTNAME_PREFIX,
+                            'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                        ]
+                    )
 
-                        infrastructure.writeConfig(
-                            path:    "${env.TOFU_MODULE_PATH}/terraform.tfvars",
-                            content: terraformConfig
-                        )
-                    }
+                    infrastructure.writeConfig(
+                        path:    "${env.TOFU_MODULE_PATH}/terraform.tfvars",
+                        content: terraformConfig
+                    )
                 }
             }
         }
@@ -199,13 +191,11 @@ pipeline {
             }
             steps {
                 script {
-                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
-                        tofu.apply(
-                            dir:         env.TOFU_MODULE_PATH,
-                            varFile:     'terraform.tfvars',
-                            autoApprove: true
-                        )
-                    }
+                    tofu.apply(
+                        dir:         env.TOFU_MODULE_PATH,
+                        varFile:     'terraform.tfvars',
+                        autoApprove: true
+                    )
 
                     def inventoryPath = "${env.INFRA_DIR}/ansible/rke2/airgap/inventory/inventory.yml"
                     if (fileExists(inventoryPath)) {
@@ -223,13 +213,11 @@ pipeline {
             }
             steps {
                 script {
-                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
-                        s3.uploadArtifact(
-                            workspaceName: env.WORKSPACE_NAME,
-                            localPath:     "${env.TOFU_MODULE_PATH}/terraform.tfvars",
-                            s3Key:         'terraform.tfvars'
-                        )
-                    }
+                    s3.uploadArtifact(
+                        workspaceName: env.WORKSPACE_NAME,
+                        localPath:     "${env.TOFU_MODULE_PATH}/terraform.tfvars",
+                        s3Key:         'terraform.tfvars'
+                    )
                 }
             }
         }
@@ -242,35 +230,29 @@ pipeline {
                 script {
                     def ansiblePath = "${env.INFRA_DIR}/ansible/rke2/airgap"
 
-                    property.useWithProperties([
-                        'PRIVATE_REGISTRY_URL',
-                        'PRIVATE_REGISTRY_USERNAME',
-                        'PRIVATE_REGISTRY_PASSWORD'
-                    ]) {
-                        airgap.configureAnsible(
-                            sshKey: [
-                                content: env.AWS_SSH_PEM_KEY,
-                                name:    env.AWS_SSH_PEM_KEY_NAME,
-                                dir:     '.ssh'
-                            ],
-                            inventoryVars: [
-                                content: env.ANSIBLE_VARIABLES,
-                                path:    "${ansiblePath}/inventory/group_vars/all.yml",
-                                envVars: [
-                                    'RKE2_VERSION':              env.RKE2_VERSION,
-                                    'RANCHER_VERSION':           env.RANCHER_VERSION,
-                                    'CERT_MANAGER_VERSION':      env.CERT_MANAGER_VERSION ?: '',
-                                    'HOSTNAME_PREFIX':           env.HOSTNAME_PREFIX,
-                                    'PRIVATE_REGISTRY_URL':      env.PRIVATE_REGISTRY_URL ?: '',
-                                    'PRIVATE_REGISTRY_USERNAME':  env.PRIVATE_REGISTRY_USERNAME ?: '',
-                                    'PRIVATE_REGISTRY_PASSWORD':  env.PRIVATE_REGISTRY_PASSWORD ?: ''
-                                ]
-                            ],
-                            ansibleDir:    ansiblePath,
-                            inventoryFile: 'inventory/inventory.yml',
-                            validate:      false
-                        )
-                    }
+                    airgap.configureAnsible(
+                        sshKey: [
+                            content: env.AWS_SSH_PEM_KEY,
+                            name:    env.AWS_SSH_PEM_KEY_NAME,
+                            dir:     '.ssh'
+                        ],
+                        inventoryVars: [
+                            content: env.ANSIBLE_VARIABLES,
+                            path:    "${ansiblePath}/inventory/group_vars/all.yml",
+                            envVars: [
+                                'RKE2_VERSION':              env.RKE2_VERSION,
+                                'RANCHER_VERSION':           env.RANCHER_VERSION,
+                                'CERT_MANAGER_VERSION':      env.CERT_MANAGER_VERSION ?: '',
+                                'HOSTNAME_PREFIX':           env.HOSTNAME_PREFIX,
+                                'PRIVATE_REGISTRY_URL':      env.PRIVATE_REGISTRY_URL ?: '',
+                                'PRIVATE_REGISTRY_USERNAME':  env.PRIVATE_REGISTRY_USERNAME ?: '',
+                                'PRIVATE_REGISTRY_PASSWORD':  env.PRIVATE_REGISTRY_PASSWORD ?: ''
+                            ]
+                        ],
+                        ansibleDir:    ansiblePath,
+                        inventoryFile: 'inventory/inventory.yml',
+                        validate:      false
+                    )
                 }
             }
         }
@@ -342,37 +324,35 @@ pipeline {
                     echo '=== Infrastructure Setup Complete ==='
                     echo "Workspace Name: ${env.WORKSPACE_NAME}"
 
-                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
-                        try {
-                            def bastionDns = tofu.getOutputs(
-                                dir:    env.TOFU_MODULE_PATH,
-                                output: 'bastion_public_dns'
-                            )
-                            echo "Bastion Host: ${bastionDns}"
-                        } catch (e) {
-                            echo "Could not retrieve bastion DNS: ${e.message}"
-                        }
+                    try {
+                        def bastionDns = tofu.getOutputs(
+                            dir:    env.TOFU_MODULE_PATH,
+                            output: 'bastion_public_dns'
+                        )
+                        echo "Bastion Host: ${bastionDns}"
+                    } catch (e) {
+                        echo "Could not retrieve bastion DNS: ${e.message}"
+                    }
 
-                        try {
-                            def rancherHostname = tofu.getOutputs(
-                                dir:    env.TOFU_MODULE_PATH,
-                                output: 'external_lb_hostname'
-                            )
-                            echo "Rancher Hostname (External): ${rancherHostname}"
-                            currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${env.WORKSPACE_NAME}"
-                        } catch (e) {
-                            echo "Could not retrieve external LB hostname: ${e.message}"
-                        }
+                    try {
+                        def rancherHostname = tofu.getOutputs(
+                            dir:    env.TOFU_MODULE_PATH,
+                            output: 'external_lb_hostname'
+                        )
+                        echo "Rancher Hostname (External): ${rancherHostname}"
+                        currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${env.WORKSPACE_NAME}"
+                    } catch (e) {
+                        echo "Could not retrieve external LB hostname: ${e.message}"
+                    }
 
-                        try {
-                            def internalLb = tofu.getOutputs(
-                                dir:    env.TOFU_MODULE_PATH,
-                                output: 'internal_lb_hostname'
-                            )
-                            echo "Internal LB Hostname: ${internalLb}"
-                        } catch (e) {
-                            echo "Could not retrieve internal LB hostname: ${e.message}"
-                        }
+                    try {
+                        def internalLb = tofu.getOutputs(
+                            dir:    env.TOFU_MODULE_PATH,
+                            output: 'internal_lb_hostname'
+                        )
+                        echo "Internal LB Hostname: ${internalLb}"
+                    } catch (e) {
+                        echo "Could not retrieve internal LB hostname: ${e.message}"
                     }
 
                     echo '========================================'
@@ -404,15 +384,13 @@ pipeline {
             }
             steps {
                 script {
-                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
-                        tofu.initBackend(
-                            dir:               env.TOFU_MODULE_PATH,
-                            bucket:            env.S3_BUCKET_NAME,
-                            key:               env.S3_KEY_PREFIX,
-                            region:            env.S3_BUCKET_REGION ?: env.S3_REGION,
-                            backendInitScript: './scripts/init-backend.sh'
-                        )
-                    }
+                    tofu.initBackend(
+                        dir:               env.TOFU_MODULE_PATH,
+                        bucket:            env.S3_BUCKET_NAME,
+                        key:               env.S3_KEY_PREFIX,
+                        region:            env.S3_BUCKET_REGION ?: env.S3_REGION,
+                        backendInitScript: './scripts/init-backend.sh'
+                    )
                 }
             }
         }
@@ -423,13 +401,11 @@ pipeline {
             }
             steps {
                 script {
-                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
-                        s3.downloadArtifact(
-                            workspaceName: params.TARGET_WORKSPACE,
-                            s3Key:         'terraform.tfvars',
-                            localPath:     "${env.TOFU_MODULE_PATH}/terraform.tfvars"
-                        )
-                    }
+                    s3.downloadArtifact(
+                        workspaceName: params.TARGET_WORKSPACE,
+                        s3Key:         'terraform.tfvars',
+                        localPath:     "${env.TOFU_MODULE_PATH}/terraform.tfvars"
+                    )
                 }
             }
         }
@@ -440,13 +416,11 @@ pipeline {
             }
             steps {
                 script {
-                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
-                        airgap.teardownInfrastructure(
-                            dir:     env.TOFU_MODULE_PATH,
-                            name:    params.TARGET_WORKSPACE,
-                            varFile: 'terraform.tfvars'
-                        )
-                    }
+                    airgap.teardownInfrastructure(
+                        dir:     env.TOFU_MODULE_PATH,
+                        name:    params.TARGET_WORKSPACE,
+                        varFile: 'terraform.tfvars'
+                    )
                 }
             }
         }
@@ -457,12 +431,10 @@ pipeline {
             }
             steps {
                 script {
-                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
-                        s3.deleteArtifact(
-                            workspaceName: params.TARGET_WORKSPACE,
-                            s3Key:         'terraform.tfvars'
-                        )
-                    }
+                    s3.deleteArtifact(
+                        workspaceName: params.TARGET_WORKSPACE,
+                        s3Key:         'terraform.tfvars'
+                    )
                 }
             }
         }
@@ -505,13 +477,11 @@ pipeline {
                     echo 'DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure...'
 
                     try {
-                        property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
-                            airgap.teardownInfrastructure(
-                                dir:     env.TOFU_MODULE_PATH,
-                                name:    env.WORKSPACE_NAME,
-                                varFile: 'terraform.tfvars'
-                            )
-                        }
+                        airgap.teardownInfrastructure(
+                            dir:     env.TOFU_MODULE_PATH,
+                            name:    env.WORKSPACE_NAME,
+                            varFile: 'terraform.tfvars'
+                        )
                     } catch (cleanupErr) {
                         echo "Cleanup failed: ${cleanupErr.message}"
                     }
