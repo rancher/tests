@@ -24,6 +24,6 @@ awsMachineConfigs:
     vpcId: "<required>"
     retries: "5"
     zone: "a"
-  
+
 logging:
    level: "info"

@@ -359,5 +359,4 @@ func TestAutoScalingPause(t *testing.T) {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
 		}
 	}
-
 }
