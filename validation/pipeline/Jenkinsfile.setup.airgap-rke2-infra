@@ -18,7 +18,7 @@
  *   rancher  — Deploy Rancher via Helm
  */
 
-def libraryBranch = params.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
 library "qa-jenkins-library@${libraryBranch}"
 
 pipeline {
@@ -91,10 +91,20 @@ pipeline {
             defaultValue: '',
             description: 'Private registry username'
         )
-        string(
+        password(
             name: 'PRIVATE_REGISTRY_PASSWORD',
             defaultValue: '',
             description: 'Private registry password'
+        )
+        password(
+            name: 'RANCHER_BOOTSTRAP_PASSWORD',
+            defaultValue: 'rancherrocks',
+            description: 'Rancher bootstrap password for initial setup'
+        )
+        password(
+            name: 'RANCHER_ADMIN_PASSWORD',
+            defaultValue: 'rancherrocks',
+            description: 'Rancher admin password after bootstrap'
         )
         string(
             name: 'S3_BUCKET_NAME',
@@ -190,15 +200,15 @@ private_registry_configs:
       insecure_skip_verify: true
 
 # Whether to enable private registry configuration
-enable_private_registry: true
+enable_private_registry: ${ENABLE_PRIVATE_REGISTRY}
 
 # Deploy Rancher
-deploy_rancher: true
+deploy_rancher: ${DEPLOY_RANCHER_ANSIBLE}
 install_helm: true
 
 rancher_hostname: "${HOSTNAME_PREFIX}.qa.rancher.space"
-rancher_bootstrap_password: "rancherrocks"
-rancher_admin_password: "rancherrocks"
+rancher_bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
+rancher_admin_password: "${RANCHER_ADMIN_PASSWORD}"
 rancher_image_tag: ${RANCHER_VERSION}
 rancher_use_bundled_system_charts: true'''
         )
@@ -339,7 +349,11 @@ rancher_use_bundled_system_charts: true'''
                                         'HOSTNAME_PREFIX':           env.HOSTNAME_PREFIX,
                                         'PRIVATE_REGISTRY_URL':      env.PRIVATE_REGISTRY_URL ?: '',
                                         'PRIVATE_REGISTRY_USERNAME':  env.PRIVATE_REGISTRY_USERNAME ?: '',
-                                        'PRIVATE_REGISTRY_PASSWORD':  env.PRIVATE_REGISTRY_PASSWORD ?: ''
+                                        'PRIVATE_REGISTRY_PASSWORD':  env.PRIVATE_REGISTRY_PASSWORD ?: '',
+                                        'RANCHER_BOOTSTRAP_PASSWORD': env.RANCHER_BOOTSTRAP_PASSWORD ?: '',
+                                        'RANCHER_ADMIN_PASSWORD':     env.RANCHER_ADMIN_PASSWORD ?: '',
+                                        'ENABLE_PRIVATE_REGISTRY':    env.PRIVATE_REGISTRY_URL ? 'true' : 'false',
+                                        'DEPLOY_RANCHER_ANSIBLE':     params.DEPLOY_RANCHER ? 'true' : 'false'
                                     ]
                                 ],
                                 ansibleDir:    ansiblePath,
@@ -361,7 +375,7 @@ rancher_use_bundled_system_charts: true'''
                         stage('Deploy RKE2 Cluster') {
                             make.runTarget(
                                 target:       'cluster',
-                                dir:          'qa-infra-automation',
+                                dir:          env.INFRA_DIR,
                                 makeArgs:     'ENV=airgap',
                                 passAwsCreds: false
                             )
@@ -372,7 +386,7 @@ rancher_use_bundled_system_charts: true'''
                             if (env.PRIVATE_REGISTRY_URL?.trim()) {
                                 make.runTarget(
                                     target:       'registry',
-                                    dir:          'qa-infra-automation',
+                                    dir:          env.INFRA_DIR,
                                     makeArgs:     'ENV=airgap',
                                     passAwsCreds: false
                                 )
@@ -386,7 +400,7 @@ rancher_use_bundled_system_charts: true'''
                             if (params.DEPLOY_RANCHER) {
                                 make.runTarget(
                                     target:       'rancher',
-                                    dir:          'qa-infra-automation',
+                                    dir:          env.INFRA_DIR,
                                     makeArgs:     'ENV=airgap',
                                     passAwsCreds: false
                                 )
@@ -398,9 +412,9 @@ rancher_use_bundled_system_charts: true'''
                         // ── Archive Rancher admin token ─────────────────────
                         stage('Archive Rancher Admin Token') {
                             if (params.DEPLOY_RANCHER) {
-                                def tokenPath = 'qa-infra-automation/tmp/rancher-admin-token.json'
+                                def tokenPath = "${env.INFRA_DIR}/tmp/rancher-admin-token.json"
                                 if (fileExists(tokenPath)) {
-                                    archiveArtifacts artifacts: tokenPath, fingerprint: true
+                                    archiveArtifacts artifacts: tokenPath
                                     echo "Archived Rancher admin token from ${tokenPath}"
                                 } else {
                                     echo "Warning: Rancher admin token file not found at ${tokenPath}"
@@ -469,7 +483,8 @@ rancher_use_bundled_system_charts: true'''
                     try {
                         property.useWithProperties([
                             'AWS_ACCESS_KEY_ID',
-                            'AWS_SECRET_ACCESS_KEY'
+                            'AWS_SECRET_ACCESS_KEY',
+                            'AWS_SSH_PEM_KEY_NAME'
                         ]) {
                             def tofuDir = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
 
