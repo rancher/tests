@@ -8,7 +8,7 @@
  * Consumes shared functions from qa-jenkins-library:
  *   airgap.standardCheckout, airgap.configureAnsible, airgap.deployRKE2,
  *   airgap.deployRancher, airgap.teardownInfrastructure,
- *   tofu.getOutputs,
+ *   tofu.initBackend, tofu.createWorkspace, tofu.apply, tofu.getOutputs,
  *   infrastructure.parseAndSubstituteVars, infrastructure.writeConfig,
  *   make.runTarget
  *
@@ -21,7 +21,7 @@
  *   rancher  — Deploy Rancher via Helm
  */
 
-def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+def libraryBranch = params.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
 library "qa-jenkins-library@${libraryBranch}"
 
 pipeline {
