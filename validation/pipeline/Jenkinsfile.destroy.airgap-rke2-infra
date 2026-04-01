@@ -15,7 +15,7 @@
  *   infrastructure.writeConfig, infrastructure.cleanupArtifacts
  */
 
-def libraryBranch = params.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
 library "qa-jenkins-library@${libraryBranch}"
 
 pipeline {
@@ -155,8 +155,7 @@ provision_registry = false'''
                                 envVars: [
                                     'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
                                     'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
-                                    'HOSTNAME_PREFIX':       env.HOSTNAME_PREFIX,
-                                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                                    'HOSTNAME_PREFIX':       env.HOSTNAME_PREFIX
                                 ]
                             )
 
