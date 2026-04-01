@@ -367,9 +367,20 @@ pipeline {
     post {
         failure {
             script {
-                echo "DEBUG: ACTION=${params.ACTION}, DESTROY_ON_FAILURE=${params.DESTROY_ON_FAILURE}, WORKSPACE_NAME='${env.WORKSPACE_NAME}', INFRA_DIR='${env.INFRA_DIR}'"
+                // Read workspace name from the file written by archiveWorkspaceName
+                // (env.WORKSPACE_NAME doesn't persist from inside useWithProperties)
+                def wsName = ''
+                try {
+                    if (fileExists('workspace_name.txt')) {
+                        wsName = readFile('workspace_name.txt')?.trim()
+                    }
+                } catch (e) {
+                    echo "Could not read workspace_name.txt: ${e.message}"
+                }
 
-                if (params.ACTION == 'setup' && params.DESTROY_ON_FAILURE && env.WORKSPACE_NAME) {
+                echo "DEBUG: ACTION=${params.ACTION}, DESTROY_ON_FAILURE=${params.DESTROY_ON_FAILURE}, WORKSPACE_NAME='${wsName}', INFRA_DIR='${env.INFRA_DIR}'"
+
+                if (params.ACTION == 'setup' && params.DESTROY_ON_FAILURE && wsName) {
                     echo 'DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure...'
 
                     try {
@@ -396,7 +407,7 @@ pipeline {
 
                             airgap.teardownInfrastructure(
                                 dir:     tofuDir,
-                                name:    env.WORKSPACE_NAME,
+                                name:    wsName,
                                 varFile: 'terraform.tfvars'
                             )
                         }
@@ -404,7 +415,7 @@ pipeline {
                         echo "Cleanup failed: ${cleanupErr.message}"
                     }
                 } else {
-                    echo "Skipping teardown: ACTION=${params.ACTION}, DESTROY_ON_FAILURE=${params.DESTROY_ON_FAILURE}, WORKSPACE_NAME='${env.WORKSPACE_NAME}'"
+                    echo "Skipping teardown: ACTION=${params.ACTION}, DESTROY_ON_FAILURE=${params.DESTROY_ON_FAILURE}, WORKSPACE_NAME='${wsName}'"
                 }
             }
         }
