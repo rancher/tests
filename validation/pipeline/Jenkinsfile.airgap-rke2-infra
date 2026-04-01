@@ -173,13 +173,75 @@ pipeline {
                                     varFile:     'terraform.tfvars',
                                     autoApprove: true
                                 )
+                            }
 
-                                def inventoryPath = "${ansiblePath}/inventory/inventory.yml"
-                                if (fileExists(inventoryPath)) {
-                                    archiveArtifacts artifacts: inventoryPath, fingerprint: true
-                                } else {
-                                    echo "Warning: Inventory file not found at ${inventoryPath}"
+                            stage('Setup: Generate Inventory') {
+                                // The tofu module outputs inventory data as JSON;
+                                // the pipeline generates the Ansible inventory file.
+                                def inventoryJson = tofu.getOutputs(
+                                    dir: tofuModulePath, output: 'airgap_inventory_json'
+                                )
+                                def inventory = readJSON text: inventoryJson
+
+                                // Build inventory YAML from tofu output
+                                def sshKey   = inventory.ssh_key
+                                def sshUser  = inventory.ssh_user
+                                def bastion  = inventory.bastion_host
+                                def extLb    = inventory.external_lb_hostname
+                                def intLb    = inventory.internal_lb_hostname
+                                def regHost  = inventory.registry_host
+                                def groups   = inventory.node_groups
+
+                                def yaml = """all:
+  vars:
+    ssh_private_key_file: ${sshKey}
+    ansible_ssh_private_key_file: "{{ ssh_private_key_file }}"
+    bastion_user: ${sshUser}
+    bastion_host: ${bastion}
+    external_lb_hostname: ${extLb}
+    internal_lb_hostname: ${intLb}"""
+                                if (regHost) {
+                                    yaml += "\n    registry_host: ${regHost}"
                                 }
+                                yaml += """
+  children:
+    bastion:
+      hosts:
+        bastion-node:
+          ansible_host: "{{ bastion_host }}"
+          ansible_user: "{{ bastion_user }}"
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+"""
+                                if (regHost) {
+                                    yaml += """    registry:
+      hosts:
+        registry-node:
+          ansible_host: "{{ registry_host }}"
+          ansible_user: "{{ bastion_user }}"
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+"""
+                                }
+                                yaml += """    airgap_nodes:
+      vars:
+        ansible_user: ${sshUser}
+        ansible_ssh_common_args: "-o ProxyCommand='ssh -i {{ ssh_private_key_file }} -W %h:%p {{ bastion_user }}@{{ bastion_host }} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        bastion_ip: "{{ bastion_host }}"
+      children:
+"""
+                                def groupNames = groups.keySet() as List
+                                for (int gi = 0; gi < groupNames.size(); gi++) {
+                                    def groupName = groupNames[gi]
+                                    def addresses = groups[groupName]
+                                    yaml += "        ${groupName}:\n          hosts:\n"
+                                    for (int ai = 0; ai < addresses.size(); ai++) {
+                                        yaml += "            ${groupName}_node_${ai + 1}:\n              ansible_host: ${addresses[ai]}\n"
+                                    }
+                                }
+
+                                def inventoryDir = "${ansiblePath}/inventory"
+                                sh "mkdir -p ${inventoryDir}"
+                                writeFile file: "${inventoryDir}/inventory.yml", text: yaml
+                                echo "Inventory file written to ${inventoryDir}/inventory.yml"
                             }
 
                             stage('Setup: Upload Terraform Variables to S3') {
