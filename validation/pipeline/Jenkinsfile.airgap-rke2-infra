@@ -12,8 +12,8 @@
  * Consumes shared functions from qa-jenkins-library:
  *   airgap.standardCheckout, airgap.configureAnsible, airgap.deployRKE2,
  *   airgap.deployRancher, airgap.teardownInfrastructure,
- *   s3.uploadArtifact, s3.downloadArtifact, s3.deleteArtifact,
- *   tofu.initBackend, tofu.createWorkspace, tofu.apply, tofu.getOutputs
+ *   tofu.initBackend, tofu.createWorkspace, tofu.apply, tofu.getOutputs,
+ *   infrastructure.parseAndSubstituteVars, infrastructure.writeConfig
  */
 
 def libraryBranch = params.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
@@ -186,20 +186,11 @@ pipeline {
                                             tofu -chdir=${tofuModulePath} output -raw airgap_inventory_json > /tmp/airgap.json &&
                                             python3 ./qa-infra-automation/scripts/generate_inventory.py \
                                                 --input /tmp/airgap.json \
+                                                --schema ./qa-infra-automation/ansible/_inventory-schema.yaml \
                                                 --distro rke2 --env airgap \
                                                 --output-dir ${ansiblePath}/inventory
                                         '
                                 """
-                            }
-
-                            stage('Setup: Upload Terraform Variables to S3') {
-                                s3.uploadArtifact(
-                                    workspaceName: workspaceName,
-                                    localPath:     "${tofuModulePath}/terraform.tfvars",
-                                    s3Key:         'terraform.tfvars',
-                                    bucket:        env.S3_BUCKET_NAME,
-                                    region:        env.S3_BUCKET_REGION
-                                )
                             }
 
                             stage('Setup: Configure Ansible Variables') {
@@ -316,13 +307,20 @@ pipeline {
                                 )
                             }
 
-                            stage('Destroy: Download Terraform Variables from S3') {
-                                s3.downloadArtifact(
-                                    workspaceName: params.TARGET_WORKSPACE,
-                                    s3Key:         'terraform.tfvars',
-                                    localPath:     "${tofuModulePath}/terraform.tfvars",
-                                    bucket:        env.S3_BUCKET_NAME,
-                                    region:        env.S3_BUCKET_REGION
+                            stage('Destroy: Configure Tofu Variables') {
+                                def terraformConfig = infrastructure.parseAndSubstituteVars(
+                                    content: env.TERRAFORM_CONFIG,
+                                    envVars: [
+                                        'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
+                                        'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+                                        'HOSTNAME_PREFIX':       env.HOSTNAME_PREFIX,
+                                        'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                                    ]
+                                )
+
+                                infrastructure.writeConfig(
+                                    path:    "${tofuModulePath}/terraform.tfvars",
+                                    content: terraformConfig
                                 )
                             }
 
@@ -331,15 +329,6 @@ pipeline {
                                     dir:     tofuModulePath,
                                     name:    params.TARGET_WORKSPACE,
                                     varFile: 'terraform.tfvars'
-                                )
-                            }
-
-                            stage('Destroy: Delete S3 Artifacts') {
-                                s3.deleteArtifact(
-                                    workspaceName: params.TARGET_WORKSPACE,
-                                    s3Key:         'terraform.tfvars',
-                                    bucket:        env.S3_BUCKET_NAME,
-                                    region:        env.S3_BUCKET_REGION
                                 )
                             }
 
@@ -374,9 +363,29 @@ pipeline {
                     echo 'DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure...'
 
                     try {
-                        property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
+                        property.useWithProperties([
+                            'AWS_ACCESS_KEY_ID',
+                            'AWS_SECRET_ACCESS_KEY'
+                        ]) {
+                            def tofuDir = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
+
+                            // Reconstruct tfvars from the Jenkins job parameters
+                            def terraformConfig = infrastructure.parseAndSubstituteVars(
+                                content: env.TERRAFORM_CONFIG,
+                                envVars: [
+                                    'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
+                                    'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+                                    'HOSTNAME_PREFIX':       env.HOSTNAME_PREFIX,
+                                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                                ]
+                            )
+                            infrastructure.writeConfig(
+                                path:    "${tofuDir}/terraform.tfvars",
+                                content: terraformConfig
+                            )
+
                             airgap.teardownInfrastructure(
-                                dir:     "${env.INFRA_DIR}/tofu/aws/modules/airgap",
+                                dir:     tofuDir,
                                 name:    env.WORKSPACE_NAME,
                                 varFile: 'terraform.tfvars'
                             )
