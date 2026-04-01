@@ -219,6 +219,14 @@ pipeline {
                                 )
                             }
 
+                            stage('Setup: Copy SSH Keys to Nodes') {
+                                ansible.runPlaybook(
+                                    dir:       ansiblePath,
+                                    inventory: 'inventory/inventory.yml',
+                                    playbook:  'playbooks/setup/setup-ssh-keys.yml'
+                                )
+                            }
+
                             stage('Setup: Deploy RKE2 Cluster') {
                                 airgap.deployRKE2(
                                     dir:       ansiblePath,
