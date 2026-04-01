@@ -367,6 +367,8 @@ pipeline {
     post {
         failure {
             script {
+                echo "DEBUG: ACTION=${params.ACTION}, DESTROY_ON_FAILURE=${params.DESTROY_ON_FAILURE}, WORKSPACE_NAME='${env.WORKSPACE_NAME}', INFRA_DIR='${env.INFRA_DIR}'"
+
                 if (params.ACTION == 'setup' && params.DESTROY_ON_FAILURE && env.WORKSPACE_NAME) {
                     echo 'DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure...'
 
@@ -401,6 +403,8 @@ pipeline {
                     } catch (cleanupErr) {
                         echo "Cleanup failed: ${cleanupErr.message}"
                     }
+                } else {
+                    echo "Skipping teardown: ACTION=${params.ACTION}, DESTROY_ON_FAILURE=${params.DESTROY_ON_FAILURE}, WORKSPACE_NAME='${env.WORKSPACE_NAME}'"
                 }
             }
         }
