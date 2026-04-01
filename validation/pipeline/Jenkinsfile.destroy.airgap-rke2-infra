@@ -81,23 +81,22 @@ pipeline {
         text(
             name: 'TERRAFORM_CONFIG',
             description: 'Terraform config values (same as used during setup)',
-            default: |
-                aws_access_key = "${AWS_ACCESS_KEY_ID}"
-                aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
-                aws_ami = "ami-09457fad1d2c34c31"
-                instance_type = "t3a.xlarge"
-                aws_security_group = ["sg-08e8243a8cfbea8a0"]
-                aws_subnet = "subnet-ee8cac86"
-                aws_volume_size = 100
-                aws_hostname_prefix = "${HOSTNAME_PREFIX}"
-                aws_region = "us-east-2"
-                aws_route53_zone = "qa.rancher.space"
-                aws_ssh_user = "ubuntu"
-                aws_vpc = "vpc-bfccf4d7"
-                user_id = "ubuntu"
-                ssh_key = "/root/.ssh/jenkins-elliptic-validation.pem"
-                ssh_key_name = "jenkins-elliptic-validation"
-                provision_registry = false
+            defaultValue: '''aws_access_key = "${AWS_ACCESS_KEY_ID}"
+aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
+aws_ami = "ami-09457fad1d2c34c31"
+instance_type = "t3a.xlarge"
+aws_security_group = ["sg-08e8243a8cfbea8a0"]
+aws_subnet = "subnet-ee8cac86"
+aws_volume_size = 100
+aws_hostname_prefix = "${HOSTNAME_PREFIX}"
+aws_region = "us-east-2"
+aws_route53_zone = "qa.rancher.space"
+aws_ssh_user = "ubuntu"
+aws_vpc = "vpc-bfccf4d7"
+user_id = "ubuntu"
+ssh_key = "/root/.ssh/jenkins-elliptic-validation.pem"
+ssh_key_name = "jenkins-elliptic-validation"
+provision_registry = false'''
         )
     }
 
