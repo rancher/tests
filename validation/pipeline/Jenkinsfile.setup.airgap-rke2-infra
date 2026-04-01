@@ -21,7 +21,7 @@
  *   rancher  — Deploy Rancher via Helm
  */
 
-def libraryBranch = params.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
 library "qa-jenkins-library@${libraryBranch}"
 
 pipeline {
