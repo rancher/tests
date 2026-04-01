@@ -359,8 +359,7 @@ rancher_use_bundled_system_charts: true'''
 
                         // ── Make: deploy RKE2 cluster ───────────────────────
                         stage('Deploy RKE2 Cluster') {
-                            def mk = new make()
-                            mk.runTarget(
+                            make.runTarget(
                                 target:       'cluster',
                                 dir:          'qa-infra-automation',
                                 makeArgs:     'ENV=airgap',
@@ -371,8 +370,7 @@ rancher_use_bundled_system_charts: true'''
                         // ── Make: configure private registry ────────────────
                         stage('Configure Private Registry') {
                             if (env.PRIVATE_REGISTRY_URL?.trim()) {
-                                def mk = new make()
-                                mk.runTarget(
+                                make.runTarget(
                                     target:       'registry',
                                     dir:          'qa-infra-automation',
                                     makeArgs:     'ENV=airgap',
@@ -386,8 +384,7 @@ rancher_use_bundled_system_charts: true'''
                         // ── Make: deploy Rancher ────────────────────────────
                         stage('Deploy Rancher') {
                             if (params.DEPLOY_RANCHER) {
-                                def mk = new make()
-                                mk.runTarget(
+                                make.runTarget(
                                     target:       'rancher',
                                     dir:          'qa-infra-automation',
                                     makeArgs:     'ENV=airgap',
