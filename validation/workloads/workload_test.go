@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || sanity || pit.daily || pit.elemental || pit.harvester.daily) && !stress && !extended
+//go:build (validation || infra.any || cluster.any || sanity || pit.daily || pit.elemental.daily || pit.harvester.daily) && !stress && !extended
 
 package workloads
 

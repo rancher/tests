@@ -1,4 +1,4 @@
-//go:build validation || pit.daily || pit.elemental
+//go:build validation || pit.daily || pit.elemental.daily
 
 package upgrade
 
