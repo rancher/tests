@@ -10,8 +10,9 @@ WORKDIR $WORKSPACE/validation
 
 COPY [".", "$WORKSPACE"]
 
+ARG GOTESTSUM_VERSION=v1.13.0
 RUN go mod download && \
-    go install gotest.tools/gotestsum@latest
+    go install gotest.tools/gotestsum@${GOTESTSUM_VERSION}
 
 RUN mkdir /root/.ssh && chmod 600 .ssh/jenkins-*
 RUN zypper install -y openssh
@@ -25,10 +26,9 @@ RUN CGO_ENABLED=0
 SHELL ["/bin/bash", "-c"] 
 
 
-ARG RKE_VERSION
-RUN if [[ -n "$RKE_VERSION" ]] ; then echo installing latest version RKE && \
-    curl -0Ls https://github.com/rancher/rke/releases/latest/download/rke_linux-amd64 > rke ; else echo installing ${RKE_VERSION} version RKE && \
-    curl -0Ls https://github.com/rancher/rke/releases/download/$RKE_VERSION/rke_linux-amd64 > rke; fi;
+ARG RKE_VERSION=v1.7.3
+RUN echo installing ${RKE_VERSION} version RKE && \
+    curl -0Ls https://github.com/rancher/rke/releases/download/$RKE_VERSION/rke_linux-amd64 > rke
 RUN mv rke /bin/rke && \
     chmod +x /bin/rke
 

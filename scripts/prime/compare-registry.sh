@@ -17,9 +17,9 @@ prereq() {
         . /etc/os-release
 
         # Ubuntu 20.10 or higher are needed for skopeo.
-        [[ "${ID}" == "ubuntu" || "${ID}" == "debian" ]] && sudo apt update && sudo apt -y install skopeo
-        [[ "${ID}" == "rhel" || "${ID}" == "fedora" ]] && sudo yum install skopeo -y
-        [[ "${ID}" == "opensuse-leap" || "${ID}" == "sles" ]] && sudo zypper install  -y skopeo
+        [[ "${ID}" == "ubuntu" || "${ID}" == "debian" ]] && sudo apt update && sudo apt -y install skopeo=v1.22.0
+        [[ "${ID}" == "rhel" || "${ID}" == "fedora" ]] && sudo yum install skopeo-v1.22.0 -y
+        [[ "${ID}" == "opensuse-leap" || "${ID}" == "sles" ]] && sudo zypper install  -y skopeo=v1.22.0
     fi
 }
 
