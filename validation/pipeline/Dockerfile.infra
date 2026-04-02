@@ -1,11 +1,9 @@
 # Lean Dockerfile for Infrastructure Operations
 # Contains only essentials for running Ansible, Tofu, and AWS
+FROM --platform=linux/amd64 alpine:3.22@sha256:55ae5d250caebc548793f321534bc6a8ef1d116f334f18f4ada1b2daad3251b2
 
 ARG TOFU_VERSION=1.10.7
-
-FROM --platform=linux/amd64 alpine:3.22
-
-ARG TOFU_VERSION
+ARG AWSCLI_VERSION=1.44.44
 
 # Install runtime dependencies
 RUN apk add --no-cache \
@@ -26,7 +24,7 @@ RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/dow
     && chmod +x /usr/local/bin/tofu
 
 # Install AWS CLI
-RUN pip3 install --no-cache-dir --break-system-packages awscli
+RUN pip3 install --no-cache-dir --break-system-packages awscli==${AWSCLI_VERSION}
 
 # Create working directory
 WORKDIR /workspace
