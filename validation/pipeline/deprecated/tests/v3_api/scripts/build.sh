@@ -24,7 +24,7 @@ cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )/../../../" && pwd )"
 
 count=0
 while [[ 3 -gt $count ]]; do    
-    docker build -q -f Dockerfile.v3api --build-arg CLI_VERSION="$CLI_VERSION" --build-arg RKE_VERSION="$RKE_VERSION" --build-arg RANCHER_HELM_VERSION="$RANCHER_HELM_VERSION" --build-arg KUBECTL_VERSION="$KUBECTL_VERSION" --build-arg SONOBUOY_VERSION="$SONOBUOY_VERSION" --build-arg TERRAFORM_VERSION="$TERRAFORM_VERSION" --build-arg EXTERNAL_ENCODED_VPN="$EXTERNAL_ENCODED_VPN" --build-arg VPN_ENCODED_LOGIN="$VPN_ENCODED_LOGIN" -t rancher-validation-"${TRIM_JOB_NAME}""${BUILD_NUMBER}" .
+    docker build -f Dockerfile.v3api --build-arg CLI_VERSION="$CLI_VERSION" --build-arg RKE_VERSION="$RKE_VERSION" --build-arg RANCHER_HELM_VERSION="$RANCHER_HELM_VERSION" --build-arg KUBECTL_VERSION="$KUBECTL_VERSION" --build-arg SONOBUOY_VERSION="$SONOBUOY_VERSION" --build-arg TERRAFORM_VERSION="$TERRAFORM_VERSION" --build-arg EXTERNAL_ENCODED_VPN="$EXTERNAL_ENCODED_VPN" --build-arg VPN_ENCODED_LOGIN="$VPN_ENCODED_LOGIN" -t rancher-validation-"${TRIM_JOB_NAME}""${BUILD_NUMBER}" .
 
     if [[ $? -eq 0 ]]; then break; fi
     count=$(($count + 1))
