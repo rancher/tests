@@ -94,7 +94,7 @@ node {
                   ])
         }
 
-        dir ("tests/validation") {
+        dir ("validation/pipeline/deprecated") {
           stage('Configure and Build') {
             if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
               dir(".ssh") {

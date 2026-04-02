@@ -71,7 +71,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 
         try {
           try {
-            dir ("tests/validation") {
+            dir ("validation/pipeline/deprecated") {
               stage('Configure and Build') {
                 if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
                   dir(".ssh") {

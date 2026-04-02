@@ -11,7 +11,7 @@ node {
                           string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY')
                         ]){
         checkout scm
-        dir ("tests/validation") {
+        dir ("validation/pipeline/deprecated") {
             stage('Configure and Build') {
               sh "./tests/rke/scripts/configure.sh"
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {

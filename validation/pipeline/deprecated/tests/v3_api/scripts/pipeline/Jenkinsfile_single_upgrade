@@ -79,13 +79,13 @@ node {
 
         stage('Configure and Build') {
           if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
-            dir("./tests/validation/.ssh") {
+            dir("./validation/pipeline/deprecated/.ssh") {
               def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
               writeFile file: AWS_SSH_KEY_NAME, text: decoded
             }
           }
-          sh "./tests/validation/tests/v3_api/scripts/configure.sh"
-          sh "./tests/validation/tests/v3_api/scripts/build.sh"
+          sh "./validation/pipeline/deprecated/tests/v3_api/scripts/configure.sh"
+          sh "./validation/pipeline/deprecated/tests/v3_api/scripts/build.sh"
         }
 
         stage('Deploy Rancher server') {
@@ -153,14 +153,14 @@ node {
                   ])
 
             if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
-              dir("./tests/validation/.ssh") {
+              dir("./validation/pipeline/deprecated/.ssh") {
                 def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
                 writeFile file: AWS_SSH_KEY_NAME, text: decoded
               }
             }
 
-            sh "./tests/validation/tests/v3_api/scripts/configure.sh"
-            sh "./tests/validation/tests/v3_api/scripts/build.sh"
+            sh "./validation/pipeline/deprecated/tests/v3_api/scripts/configure.sh"
+            sh "./validation/pipeline/deprecated/tests/v3_api/scripts/build.sh"
         }
 
         stage('Run upgrade') {

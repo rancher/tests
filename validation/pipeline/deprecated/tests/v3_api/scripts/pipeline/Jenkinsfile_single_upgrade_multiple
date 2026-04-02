@@ -57,7 +57,7 @@ node {
             checkoutBranch(PREUPGRADE_BRANCH)
           }
           
-          dir ("tests/validation") {
+          dir ("validation/pipeline/deprecated") {
             stage('Build container / Deploy Rancher Server') {
                 buildContainer()
                 deployRancherServer()
@@ -119,7 +119,7 @@ node {
             unstash name: "reportsstash"
           }
 
-          dir ("tests/validation") {
+          dir ("validation/pipeline/deprecated") {
             stage('Rebuild / Run Upgrade') {
               buildContainer()
               upgradeRancher()
@@ -590,7 +590,7 @@ def collectReports() {
 
 def publishReports() {
   dir('.') {
-    def reportFilesString = sh(script: 'find ./tests/validation/reports -name "*.html"', returnStdout: true).split().join(',')
+    def reportFilesString = sh(script: 'find ./validation/pipeline/deprecated/reports -name "*.html"', returnStdout: true).split().join(',')
     echo "reportFiles: " + reportFilesString
 
     publishHTML (target: [
