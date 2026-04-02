@@ -57,6 +57,7 @@ This repository uses Go build tags extensively to control which tests run in dif
 3. **Test tier tags**: `sanity`, `extended`, `stress`
 4. **PIT (Platform Interoperability Testing) tags**:
    * `pit.daily`: Tests that run daily
+   * `pit.elemental.daily`: Daily tests for Elemental setup
    * `pit.harvester.daily`: Daily tests for Harvester setup
    * `pit.weekly`: Tests that run weekly
    * `pit.event`: Tests that run on Alpha/RC releases
