@@ -1,0 +1,756 @@
+#!groovy
+/**
+ * Airgap RKE2 full lifecycle test pipeline.
+ *
+ * Provisions AWS infrastructure via OpenTofu, deploys an airgapped RKE2 cluster
+ * with Rancher, runs Go automation tests, and tears down infrastructure.
+ *
+ * Consumes shared functions from qa-jenkins-library:
+ *   airgap.standardCheckout, airgap.configureAnsible, airgap.teardownInfrastructure,
+ *   tofu.initBackend, tofu.createWorkspace, tofu.apply, tofu.getOutputs,
+ *   infrastructure.parseAndSubstituteVars, infrastructure.writeConfig,
+ *   infrastructure.generateWorkspaceName, infrastructure.archiveWorkspaceName,
+ *   infrastructure.writeSshKey, infrastructure.cleanupArtifacts,
+ *   make.runTarget, container._goTestCommand, generate.names,
+ *   property.useWithProperties
+ *
+ * Make targets (run via make.runTarget in Docker):
+ *   cluster  — Deploy RKE2 via Ansible tarball playbook
+ *   registry — Configure private registry on cluster nodes
+ *   rancher  — Deploy Rancher via Helm
+ */
+
+def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+library "qa-jenkins-library@${libraryBranch}"
+
+pipeline {
+    agent any
+
+    options {
+        ansiColor('xterm')
+        timeout(time: 240, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    parameters {
+        // ── Go test parameters ─────────────────────────────────────
+        string(
+            name: 'GO_TEST_PACKAGE',
+            defaultValue: './validation/...',
+            description: 'Go test package path (relative to repo root)'
+        )
+        string(
+            name: 'GO_TEST_CASE',
+            defaultValue: '',
+            description: 'Optional go test -run pattern (e.g. ^TestProvisioningTestSuite$)'
+        )
+        string(
+            name: 'GO_TAGS',
+            defaultValue: 'validation',
+            description: 'Go build tags (space-separated)'
+        )
+        string(
+            name: 'GO_TIMEOUT',
+            defaultValue: '45m',
+            description: 'Go test timeout (e.g. 45m, 1h)'
+        )
+        text(
+            name: 'CATTLE_TEST_CONFIG',
+            description: 'Inline cattle-config.yaml content passed to the Go tests',
+            defaultValue: '# Paste your cattle-config.yaml here'
+        )
+        booleanParam(
+            name: 'REPORT_ARTIFACTS',
+            defaultValue: false,
+            description: 'Archive junit.xml and go-test.log artifacts'
+        )
+
+        // ── Infrastructure behavior ────────────────────────────────
+        booleanParam(
+            name: 'DESTROY_ON_FAILURE',
+            defaultValue: true,
+            description: 'Destroy infrastructure when pipeline fails'
+        )
+        booleanParam(
+            name: 'DESTROY_AFTER_TESTS',
+            defaultValue: true,
+            description: 'Destroy infrastructure after tests complete'
+        )
+
+        // ── Version pins ───────────────────────────────────────────
+        string(
+            name: 'RKE2_VERSION',
+            defaultValue: 'v1.34.3+rke2r3',
+            description: 'RKE2 version to deploy'
+        )
+        string(
+            name: 'RANCHER_VERSION',
+            defaultValue: 'v2.13.2',
+            description: 'Rancher version to deploy'
+        )
+
+        // ── Hostname and networking ────────────────────────────────
+        string(
+            name: 'HOSTNAME_PREFIX',
+            defaultValue: '',
+            description: 'Hostname prefix for *.qa.rancher.space and AWS resources'
+        )
+        string(
+            name: 'PRIVATE_REGISTRY_URL',
+            defaultValue: '',
+            description: 'Private registry URL'
+        )
+        string(
+            name: 'PRIVATE_REGISTRY_USERNAME',
+            defaultValue: '',
+            description: 'Private registry username'
+        )
+        password(
+            name: 'PRIVATE_REGISTRY_PASSWORD',
+            defaultValue: '',
+            description: 'Private registry password'
+        )
+        password(
+            name: 'RANCHER_BOOTSTRAP_PASSWORD',
+            defaultValue: 'rancherrocks',
+            description: 'Rancher bootstrap password for initial setup'
+        )
+
+        // ── Qase test reporting ────────────────────────────────────
+        string(
+            name: 'QASE_TEST_RUN_ID',
+            defaultValue: '',
+            description: 'Qase test run ID to report results to (leave empty to skip)'
+        )
+        string(
+            name: 'QASE_PROJECT_ID',
+            defaultValue: '',
+            description: 'Qase project ID (e.g. RANCHER)'
+        )
+        choice(
+            name: 'REPORTER_BUILD_SCRIPT',
+            choices: ['build_qase_reporter_v2.sh', 'build_qase_reporter.sh'],
+            description: 'Qase reporter build script to use'
+        )
+
+        // ── Repositories and branches ──────────────────────────────
+        string(
+            name: 'QA_JENKINS_LIBRARY_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-jenkins-library to use'
+        )
+        string(
+            name: 'TESTS_REPO_URL',
+            defaultValue: 'https://github.com/rancher/tests',
+            description: 'URL of rancher/tests repository'
+        )
+        string(
+            name: 'TESTS_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of rancher/tests repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_URL',
+            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            description: 'URL of qa-infra-automation repository'
+        )
+        string(
+            name: 'QA_INFRA_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-infra-automation repository'
+        )
+
+        // ── S3 backend ─────────────────────────────────────────────
+        string(
+            name: 'S3_BUCKET_NAME',
+            defaultValue: 'jenkins-terraform-state-storage',
+            description: 'S3 bucket name where Terraform state is stored'
+        )
+        string(
+            name: 'S3_BUCKET_REGION',
+            defaultValue: 'us-east-2',
+            description: 'AWS region where the S3 bucket is located'
+        )
+        string(
+            name: 'S3_KEY_PREFIX',
+            defaultValue: 'terraform.tfstate',
+            description: 'S3 key prefix for the Terraform state files'
+        )
+
+        // ── Terraform config (tfvars template) ─────────────────────
+        text(
+            name: 'TERRAFORM_CONFIG',
+            description: 'Terraform config values for the VM instances',
+            defaultValue: '''aws_access_key = "${AWS_ACCESS_KEY_ID}"
+aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
+aws_ami = "ami-09457fad1d2c34c31"
+instance_type = "t3a.xlarge"
+aws_security_group = ["sg-04f28c5d02555da26"]
+aws_subnet_airgap   = "subnet-0b80e9a553633f5a9"
+aws_subnet_bastion  = "subnet-ee8cac86"
+aws_volume_size = 100
+aws_hostname_prefix = "${HOSTNAME_PREFIX}"
+aws_region = "us-east-2"
+aws_route53_zone = "qa.rancher.space"
+aws_ssh_user = "ubuntu"
+aws_vpc = "vpc-bfccf4d7"
+user_id = "ubuntu"
+ssh_key = "/root/.ssh/jenkins-elliptic-validation.pem"
+ssh_key_name = "jenkins-elliptic-validation"
+provision_registry = false'''
+        )
+
+        // ── Ansible variables ──────────────────────────────────────
+        text(
+            name: 'ANSIBLE_VARIABLES',
+            description: 'Ansible config values for the RKE2 airgap deployment',
+            defaultValue: '''---
+# Global variables for RKE2 airgap deployment with tarball installation
+
+# RKE2 Configuration
+rke2_version: ${RKE2_VERSION}
+rke2_server_options: |
+  cluster-cidr: {{ cluster_cidr }}
+  service-cidr: {{ service_cidr }}
+  cluster-dns: {{ cluster_dns }}
+  disable:
+    - rke2-snapshot-controller
+    - rke2-snapshot-controller-crd
+    - rke2-snapshot-validation-webhook
+rke2_agent_options: ""
+installation_method: "tarball"
+
+# Network Configuration
+cluster_cidr: "10.42.0.0/16"
+service_cidr: "10.43.0.0/16"
+cluster_dns: "10.43.0.10"
+
+# CNI Configuration
+cni: "calico"
+
+# Logging and Monitoring
+enable_audit_log: false
+audit_log_path: "/var/lib/rancher/rke2/server/logs/audit.log"
+audit_log_maxage: 30
+audit_log_maxbackup: 10
+audit_log_maxsize: 100
+
+# Registry mirrors configuration
+private_registry_mirrors:
+  - registry: "docker.io"
+    endpoints:
+      - "https://${PRIVATE_REGISTRY_URL}"
+    rewrite:
+      - pattern: "^(.*)"
+        replacement: "proxycache/$1"
+  - registry: "quay.io"
+    endpoints:
+      - "https://${PRIVATE_REGISTRY_URL}"
+    rewrite:
+      - pattern: "^(.*)"
+        replacement: "quaycache/$1"
+
+# Registry authentication and TLS configuration
+private_registry_configs:
+  - registry: ${PRIVATE_REGISTRY_URL}
+    auth:
+      username: ${PRIVATE_REGISTRY_USERNAME}
+      password: ${PRIVATE_REGISTRY_PASSWORD}
+    tls:
+      insecure_skip_verify: true
+
+# Whether to enable private registry configuration
+enable_private_registry: true
+
+# Deploy Rancher
+deploy_rancher: true
+install_helm: true
+
+rancher_hostname: "${HOSTNAME_PREFIX}.qa.rancher.space"
+rancher_bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
+rancher_image_tag: ${RANCHER_VERSION}
+rancher_use_bundled_system_charts: true'''
+        )
+    }
+
+    environment {
+        WORKSPACE_NAME = ''
+        INFRA_CLEANED = 'false'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    def dirs = airgap.standardCheckout(
+                        testsRepo: [url: params.TESTS_REPO_URL, branch: params.TESTS_BRANCH],
+                        infraRepo: [url: params.QA_INFRA_REPO_URL, branch: params.QA_INFRA_BRANCH]
+                    )
+                    env.TESTS_DIR = dirs.testsDir
+                    env.INFRA_DIR = dirs.infraDir
+
+                    def hostnamePrefix = env.HOSTNAME_PREFIX ?: 'unknown'
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${hostnamePrefix}"
+                    currentBuild.description = "Deploying airgap infrastructure for ${hostnamePrefix}"
+                }
+            }
+        }
+
+        stage('Build Infrastructure Tools Image') {
+            steps {
+                sh "docker build --no-cache --platform linux/amd64 -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.airgap-go-tests ."
+            }
+        }
+
+        stage('Provision Infrastructure') {
+            steps {
+                script {
+                    property.useWithProperties([
+                        'AWS_ACCESS_KEY_ID',
+                        'AWS_SECRET_ACCESS_KEY',
+                        'AWS_SSH_PEM_KEY',
+                        'AWS_SSH_PEM_KEY_NAME',
+                        'PRIVATE_REGISTRY_URL',
+                        'PRIVATE_REGISTRY_USERNAME',
+                        'PRIVATE_REGISTRY_PASSWORD'
+                    ]) {
+                        def tofuModulePath = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
+                        def ansiblePath   = "${env.INFRA_DIR}/ansible/rke2/airgap"
+                        def workspaceName = ''
+
+                        // ── Tofu: init backend ─────────────────────────────
+                        stage('Initialize Tofu Backend') {
+                            tofu.initBackend(
+                                dir:               tofuModulePath,
+                                bucket:            env.S3_BUCKET_NAME,
+                                key:               env.S3_KEY_PREFIX,
+                                region:            env.S3_BUCKET_REGION,
+                                backendInitScript: './scripts/init-backend.sh'
+                            )
+                        }
+
+                        // ── Tofu: create workspace ─────────────────────────
+                        stage('Create Workspace') {
+                            workspaceName = infrastructure.generateWorkspaceName(
+                                prefix:           'jenkins_airgap_ansible_workspace',
+                                suffix:           env.HOSTNAME_PREFIX,
+                                includeTimestamp: false
+                            )
+
+                            tofu.createWorkspace(dir: tofuModulePath, name: workspaceName)
+                            infrastructure.archiveWorkspaceName(workspaceName: workspaceName)
+                            env.WORKSPACE_NAME = workspaceName
+                        }
+
+                        // ── SSH key setup ───────────────────────────────────
+                        stage('Configure SSH Key') {
+                            infrastructure.writeSshKey(
+                                keyContent: env.AWS_SSH_PEM_KEY,
+                                keyName:    env.AWS_SSH_PEM_KEY_NAME,
+                                dir:        '.ssh'
+                            )
+                        }
+
+                        // ── Tofu: configure variables ──────────────────────
+                        stage('Configure Tofu Variables') {
+                            def terraformConfig = infrastructure.parseAndSubstituteVars(
+                                content: env.TERRAFORM_CONFIG,
+                                envVars: [
+                                    'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
+                                    'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+                                    'HOSTNAME_PREFIX':       env.HOSTNAME_PREFIX,
+                                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                                ]
+                            )
+
+                            infrastructure.writeConfig(
+                                path:    "${tofuModulePath}/terraform.tfvars",
+                                content: terraformConfig
+                            )
+                        }
+
+                        // ── Tofu: apply ─────────────────────────────────────
+                        stage('Apply Tofu') {
+                            tofu.apply(
+                                dir:         tofuModulePath,
+                                varFile:     'terraform.tfvars',
+                                autoApprove: true
+                            )
+                        }
+
+                        // ── Inventory generation ────────────────────────────
+                        stage('Generate Inventory') {
+                            sh """
+                                docker run --rm --platform linux/amd64 \
+                                    -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
+                                    -v \$(pwd):/workspace -w /workspace \
+                                    rancher-infra-tools:latest sh -c '
+                                        tofu -chdir=${tofuModulePath} output -raw airgap_inventory_json > /tmp/airgap.json &&
+                                        python3 ./qa-infra-automation/scripts/generate_inventory.py \
+                                            --input /tmp/airgap.json \
+                                            --schema ./qa-infra-automation/ansible/_inventory-schema.yaml \
+                                            --distro rke2 --env airgap \
+                                            --output-dir ${ansiblePath}/inventory
+                                    '
+                            """
+                        }
+
+                        // ── Ansible: configure variables ────────────────────
+                        stage('Configure Ansible Variables') {
+                            airgap.configureAnsible(
+                                sshKey: [
+                                    content: env.AWS_SSH_PEM_KEY,
+                                    name:    env.AWS_SSH_PEM_KEY_NAME,
+                                    dir:     '.ssh'
+                                ],
+                                inventoryVars: [
+                                    content: env.ANSIBLE_VARIABLES,
+                                    path:    "${ansiblePath}/inventory/group_vars/all.yml",
+                                    envVars: [
+                                        'RKE2_VERSION':              env.RKE2_VERSION,
+                                        'RANCHER_VERSION':           env.RANCHER_VERSION,
+                                        'CERT_MANAGER_VERSION':      env.CERT_MANAGER_VERSION ?: '',
+                                        'HOSTNAME_PREFIX':           env.HOSTNAME_PREFIX,
+                                        'PRIVATE_REGISTRY_URL':      env.PRIVATE_REGISTRY_URL ?: '',
+                                        'PRIVATE_REGISTRY_USERNAME':  env.PRIVATE_REGISTRY_USERNAME ?: '',
+                                        'PRIVATE_REGISTRY_PASSWORD':  env.PRIVATE_REGISTRY_PASSWORD ?: '',
+                                        'RANCHER_BOOTSTRAP_PASSWORD': env.RANCHER_BOOTSTRAP_PASSWORD ?: '',
+                                        'ENABLE_PRIVATE_REGISTRY':    env.PRIVATE_REGISTRY_URL ? 'true' : 'false',
+                                        'DEPLOY_RANCHER_ANSIBLE':     'true'
+                                    ]
+                                ],
+                                ansibleDir:    ansiblePath,
+                                inventoryFile: 'inventory/inventory.yml',
+                                validate:      false
+                            )
+                        }
+
+                        // ── Ansible: copy SSH keys to nodes ─────────────────
+                        stage('Copy SSH Keys to Nodes') {
+                            ansible.runPlaybook(
+                                dir:       ansiblePath,
+                                inventory: 'inventory/inventory.yml',
+                                playbook:  'playbooks/setup/setup-ssh-keys.yml'
+                            )
+                        }
+
+                        // ── Make: deploy RKE2 cluster ───────────────────────
+                        stage('Deploy RKE2 Cluster') {
+                            make.runTarget(
+                                target:       'cluster',
+                                dir:          env.INFRA_DIR,
+                                makeArgs:     'ENV=airgap',
+                                passAwsCreds: false
+                            )
+                        }
+
+                        // ── Make: configure private registry ────────────────
+                        stage('Configure Private Registry') {
+                            if (env.PRIVATE_REGISTRY_URL?.trim()) {
+                                make.runTarget(
+                                    target:       'registry',
+                                    dir:          env.INFRA_DIR,
+                                    makeArgs:     'ENV=airgap',
+                                    passAwsCreds: false
+                                )
+                            } else {
+                                echo 'Skipping private registry configuration (PRIVATE_REGISTRY_URL not set)'
+                            }
+                        }
+
+                        // ── Make: deploy Rancher (unconditional) ─────────────
+                        stage('Deploy Rancher') {
+                            make.runTarget(
+                                target:       'rancher',
+                                dir:          env.INFRA_DIR,
+                                makeArgs:     'ENV=airgap',
+                                passAwsCreds: false
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Generate Admin Token and Test Config') {
+            steps {
+                script {
+                    // ── Write cattle-config.yaml if provided ────────────
+                    if (params.CATTLE_TEST_CONFIG?.trim()) {
+                        def cattleConfigPath = "${env.TESTS_DIR}/cattle-config.yaml"
+                        writeFile file: cattleConfigPath, text: params.CATTLE_TEST_CONFIG.trim() + '\n'
+                        echo "Created test config file: ${cattleConfigPath}"
+                    } else {
+                        echo 'No CATTLE_TEST_CONFIG provided, skipping config creation'
+                    }
+
+                    // ── Retrieve Rancher hostname from tofu outputs ──────
+                    def tofuModulePath = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
+                    def rancherHostname = ''
+
+                    try {
+                        rancherHostname = tofu.getOutputs(
+                            dir: tofuModulePath, output: 'external_lb_hostname'
+                        )
+                        echo "Rancher Hostname (External): ${rancherHostname}"
+                        currentBuild.description = "Testing: https://${rancherHostname} | Workspace: ${env.WORKSPACE_NAME}"
+                    } catch (e) {
+                        echo "Could not retrieve external LB hostname: ${e.message}"
+                    }
+
+                    try {
+                        def internalLb = tofu.getOutputs(
+                            dir: tofuModulePath, output: 'internal_lb_hostname'
+                        )
+                        echo "Internal LB Hostname: ${internalLb}"
+                    } catch (e) {
+                        echo "Could not retrieve internal LB hostname: ${e.message}"
+                    }
+
+                    // ── Generate admin token via Ansible ─────────────────
+                    def ansiblePath   = "${env.INFRA_DIR}/ansible/rke2/airgap"
+                    def dockerPlatform = config.getDockerPlatform()
+                    def infraToolsImage = config.getDockerImage()
+                    def adminPassword  = env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'
+                    def cattleConfigPath = "/workspace/${env.TESTS_DIR}/cattle-config.yaml"
+                    def tokenTtl        = env.RANCHER_TOKEN_TTL ?: '0'
+                    def tokenDescription = env.RANCHER_TOKEN_DESCRIPTION ?: "jenkins-airgap-${env.BUILD_NUMBER}"
+
+                    sh """
+                        docker run --rm --platform ${dockerPlatform} \
+                            --name generate-token \
+                            -e RANCHER_ADMIN_PASSWORD=${adminPassword} \
+                            -e ANSIBLE_CONFIG=/workspace/${env.INFRA_DIR}/ansible/ansible.cfg \
+                            -v \$(pwd):/workspace \
+                            -w /workspace/${ansiblePath} \
+                            ${infraToolsImage} \
+                            ansible-playbook -i inventory/inventory.yml /workspace/${env.INFRA_DIR}/ansible/rancher/token/generate-admin-token.yml \
+                                -e rancher_cattle_config_file=${cattleConfigPath} \
+                                -e rancher_token_ttl=${tokenTtl} \
+                                -e rancher_token_description=${tokenDescription} \
+                                -e rancher_token_output_format=json \
+                                -e rancher_token_output_file=/workspace/rancher-token.json
+                    """
+
+                    if (fileExists('rancher-token.json')) {
+                        archiveArtifacts artifacts: 'rancher-token.json'
+                        echo 'Archived token metadata: rancher-token.json'
+                    } else {
+                        error 'rancher-token.json not found — admin token generation failed'
+                    }
+
+                    // ── Store hostname for test execution ────────────────
+                    env.RANCHER_HOSTNAME = rancherHostname
+                }
+            }
+        }
+
+        stage('Run Go Automation Tests') {
+            steps {
+                script {
+                    def goTestPackage = params.GO_TEST_PACKAGE?.trim() ?: './validation/...'
+                    def goTestCase    = params.GO_TEST_CASE?.trim() ?: ''
+                    def goTags        = params.GO_TAGS ?: 'validation'
+                    def goTimeout     = params.GO_TIMEOUT ?: '45m'
+                    def testCases     = goTestCase ?: goTestPackage
+
+                    // ── Build env file ───────────────────────────────────
+                    def lines = []
+                    if (env.RANCHER_HOSTNAME) {
+                        lines += "RANCHER_URL=https://${env.RANCHER_HOSTNAME}"
+                        lines += "RANCHER_HOSTNAME=${env.RANCHER_HOSTNAME}"
+                    }
+                    lines += "RANCHER_BOOTSTRAP_PASSWORD=${env.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'}"
+
+                    def cattleConfigPath = "${env.TESTS_DIR}/cattle-config.yaml"
+                    if (fileExists(cattleConfigPath)) {
+                        echo "Using existing cattle config with injected token: ${cattleConfigPath}"
+                    } else if (params.CATTLE_TEST_CONFIG?.trim()) {
+                        writeFile file: cattleConfigPath, text: params.CATTLE_TEST_CONFIG.trim() + '\n'
+                        echo "Warning: Created cattle config without token injection"
+                    } else {
+                        error 'No cattle config available: CATTLE_TEST_CONFIG was not provided and no config was generated by the token injection stage'
+                    }
+                    lines += 'CATTLE_TEST_CONFIG=/workspace/tests/cattle-config.yaml'
+
+                    def envContent = lines.findAll { it?.trim() }.join('\n')
+                    writeFile file: '.go_test_env', text: envContent ? envContent + '\n' : ''
+
+                    // ── Build gotestsum command ───────────────────────────
+                    def (testArgs, testConfig) = container._goTestCommand([
+                        packages:    goTestPackage,
+                        cases:       testCases,
+                        tags:        goTags,
+                        timeout:     goTimeout,
+                        resultsXML:  'junit.xml',
+                        resultsJSON: 'gotestsum.json'
+                    ])
+
+                    def testCmd = testArgs.join(' ')
+                    echo "Running: ${testCmd}"
+
+                    // ── Execute tests in Docker ──────────────────────────
+                    def dockerPlatform  = config.getDockerPlatform()
+                    def infraToolsImage = config.getDockerImage()
+                    def names           = generate.names()
+                    def containerName   = names.container
+
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                        sh """
+                            docker run --rm --platform ${dockerPlatform} \
+                                --name ${containerName} \
+                                --env-file .go_test_env \
+                                -v \$(pwd):/workspace \
+                                -w /workspace/tests \
+                                ${infraToolsImage} \
+                                sh -c 'set -e; set -o pipefail; ${testCmd} | tee go-test.log'
+                        """
+                    }
+
+                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                        junit allowEmptyResults: true, testResults: "tests/${testConfig.resultsXML}"
+                    }
+
+                    if (params.REPORT_ARTIFACTS) {
+                        archiveArtifacts allowEmptyArchive: true, artifacts: "tests/go-test.log,tests/${testConfig.resultsXML},tests/${testConfig.resultsJSON}"
+                    }
+                }
+            }
+        }
+
+        stage('Report to Qase') {
+            steps {
+                script {
+                    def qaseTestRunId = params.QASE_TEST_RUN_ID?.trim()
+                    def qaseProjectId = params.QASE_PROJECT_ID?.trim()
+
+                    if (!qaseTestRunId || !qaseProjectId) {
+                        echo 'Skipping Qase reporting: QASE_TEST_RUN_ID or QASE_PROJECT_ID not provided'
+                        return
+                    }
+
+                    if (!env.QASE_AUTOMATION_TOKEN?.trim()) {
+                        echo 'Skipping Qase reporting: QASE_AUTOMATION_TOKEN credential not available'
+                        return
+                    }
+
+                    echo "Reporting test results to Qase (Project: ${qaseProjectId}, Run: ${qaseTestRunId})"
+
+                    def dockerPlatform  = config.getDockerPlatform()
+                    def infraToolsImage = config.getDockerImage()
+                    def reporterScript  = params.REPORTER_BUILD_SCRIPT
+
+                    sh """
+                        docker run --rm --platform ${dockerPlatform} \
+                            --name qase-reporter \
+                            -e QASE_TEST_RUN_ID=${qaseTestRunId} \
+                            -e QASE_PROJECT_ID=${qaseProjectId} \
+                            -e QASE_AUTOMATION_TOKEN=${env.QASE_AUTOMATION_TOKEN} \
+                            -v \$(pwd):/workspace \
+                            -w /workspace/tests \
+                            ${infraToolsImage} \
+                            sh -c '
+                                set -e
+                                echo "Building Qase reporter..."
+                                ./validation/pipeline/scripts/${reporterScript}
+
+                                if [ -f ./validation/reporter ]; then
+                                    echo "Running Qase reporter..."
+                                    ./validation/reporter
+                                    echo "Qase reporting complete"
+                                else
+                                    echo "Reporter binary not found — reporter script may have skipped build"
+                                fi
+                            '
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            script {
+                if (params.DESTROY_ON_FAILURE) {
+                    teardownIfAvailable('DESTROY_ON_FAILURE')
+                } else {
+                    echo "Skipping teardown: DESTROY_ON_FAILURE=${params.DESTROY_ON_FAILURE}"
+                }
+            }
+        }
+        always {
+            script {
+                if (params.DESTROY_AFTER_TESTS) {
+                    teardownIfAvailable('DESTROY_AFTER_TESTS')
+                } else if (env.INFRA_CLEANED == 'true') {
+                    echo 'Infrastructure already cleaned up, skipping destroy-after-tests'
+                } else {
+                    echo "Skipping teardown: DESTROY_AFTER_TESTS=${params.DESTROY_AFTER_TESTS}"
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Shared teardown logic for post blocks.
+ * Reads workspace name from file, initializes tofu backend, reconfigures
+ * tfvars, and runs airgap.teardownInfrastructure().
+ * Sets env.INFRA_CLEANED to prevent double-cleanup.
+ */
+def teardownIfAvailable(String reason) {
+    if (env.INFRA_CLEANED == 'true') {
+        echo "Infrastructure already cleaned up, skipping ${reason}"
+        return
+    }
+
+    def wsName = ''
+    try {
+        if (fileExists('workspace_name.txt')) {
+            wsName = readFile('workspace_name.txt')?.trim()
+        }
+    } catch (e) {
+        echo "Could not read workspace_name.txt: ${e.message}"
+    }
+
+    if (!wsName) {
+        echo "Skipping ${reason}: no workspace name found"
+        return
+    }
+
+    echo "${reason} is enabled. Cleaning up infrastructure..."
+
+    try {
+        property.useWithProperties([
+            'AWS_ACCESS_KEY_ID',
+            'AWS_SECRET_ACCESS_KEY',
+            'AWS_SSH_PEM_KEY_NAME'
+        ]) {
+            def tofuDir = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
+
+            def terraformConfig = infrastructure.parseAndSubstituteVars(
+                content: env.TERRAFORM_CONFIG,
+                envVars: [
+                    'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
+                    'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+                    'HOSTNAME_PREFIX':       env.HOSTNAME_PREFIX,
+                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                ]
+            )
+            infrastructure.writeConfig(
+                path:    "${tofuDir}/terraform.tfvars",
+                content: terraformConfig
+            )
+
+            airgap.teardownInfrastructure(
+                dir:     tofuDir,
+                name:    wsName,
+                varFile: 'terraform.tfvars'
+            )
+
+            env.INFRA_CLEANED = 'true'
+        }
+    } catch (cleanupErr) {
+        echo "Cleanup failed: ${cleanupErr.message}"
+    }
+}
