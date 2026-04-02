@@ -8,6 +8,7 @@ REGISTRY_USER="$4"
 REGISTRY_PASSWORD="$5"
 PUBLIC_IP="$6"
 PRIVATE_IP="$7"
+KUBECTL_VERSION="${8:-v1.33.1}"
 RESULTS=()
 
 SSH_USER="ubuntu"
@@ -106,12 +107,13 @@ echo
 
 echo "Installing kubectl..."
 
-curl -fsSL https://dl.k8s.io/release/stable.txt -o stable.txt
-K8S=$(cat stable.txt)
-
-curl -fsSL https://dl.k8s.io/release/$K8S/bin/linux/amd64/kubectl -o kubectl
+curl -fsSL https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl -o kubectl
+curl -fsSL https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl.sha256 -o kubectl.sha256
+awk '{print $1 "  kubectl"}' kubectl.sha256 > kubectl.sha256.check
+sha256sum -c kubectl.sha256.check | grep -q ': OK$'
 chmod +x kubectl
 sudo mv kubectl /usr/local/bin/
+rm -f kubectl.sha256 kubectl.sha256.check
 
 echo "Successfully installed kubectl."
 echo
