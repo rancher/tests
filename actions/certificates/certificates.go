@@ -7,22 +7,24 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/rancher/norman/types"
 	apiv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
+	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
-	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
 	"github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 )
 
@@ -106,21 +108,23 @@ func RotateCerts(client *rancher.Client, clusterName string) error {
 		return err
 	}
 
-	kubeRKEClient, err := client.GetKubeAPIRKEClient()
-	if err != nil {
-		return err
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaults.FifteenMinuteTimeout)
+	defer cancel()
 
-	result, err := kubeRKEClient.RKEControlPlanes(namespaces.FleetDefault).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + clusterName,
-		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
+	err = kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.ThirtyMinuteTimeout, false, func(context.Context) (done bool, err error) {
+		cluster, err = client.Steve.SteveType(stevetypes.Provisioning).ByID(cluster.ID)
+		clusterStatus := &provv1.ClusterStatus{}
+		err = steveV1.ConvertToK8sType(cluster.Status, clusterStatus)
+		if err != nil {
+			return false, nil
+		}
+
+		if !clusterStatus.Ready || cluster.State.Name != "active" || cluster.State.Error == true {
+			return false, nil
+		}
+
+		return true, nil
 	})
-	if err != nil {
-		return err
-	}
-
-	checkFunc := CertRotationCompleteCheckFunc(generation)
-	err = wait.WatchWait(result, checkFunc)
 	if err != nil {
 		return err
 	}

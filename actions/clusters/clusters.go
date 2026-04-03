@@ -286,6 +286,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 				"cni":                 clustersConfig.CNI,
 				"disable-kube-proxy":  false,
 				"etcd-expose-metrics": false,
+				"ingress-controller":  "traefik",
 				"profile":             nil,
 				"service-cidr":        clustersConfig.Networking.ServiceCIDR,
 			},
@@ -296,6 +297,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 				"cni":                 clustersConfig.CNI,
 				"disable-kube-proxy":  false,
 				"etcd-expose-metrics": false,
+				"ingress-controller":  "traefik",
 				"profile":             nil,
 			},
 		}
