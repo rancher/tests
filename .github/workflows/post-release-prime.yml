@@ -37,7 +37,26 @@ env:
   CLOUD_PROVIDER_VERSION: "6.34.0"
 
 jobs:
+  create-qase-run:
+    runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.create-qase-run.outputs.id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
+        with:
+          submodules: recursive
+      
+      - name: Create Qase test run
+        id: create-qase-run
+        uses: ./.github/actions/create-qase-test-run
+        with:
+          test_run_name: "Post Rancher Prime Release UI Validations"
+          qase_project_id: ${{ secrets.HB_QASE_PROJECT_ID }}
+          qase_token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+  
   v2-14:
+    needs: [create-qase-run]
     if: |
       github.event.inputs.run_all_versions == 'true' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
@@ -140,13 +159,6 @@ jobs:
           rancher-version: ${{ env.RANCHER_VERSION }}
           fallback-repo: ${{ secrets.RANCHER_REPO }}
 
-      - name: Get Qase ID
-        id: get-qase-id
-        uses: ./.github/actions/get-qase-id
-        with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_14 }}
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
@@ -239,7 +251,7 @@ jobs:
 
       - name: Run Prime UI Checks
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-prime-ui-checks
@@ -287,6 +299,7 @@ jobs:
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
   
   v2-13:
+    needs: [create-qase-run]
     if: |
       github.event.inputs.run_all_versions == 'true' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
@@ -389,13 +402,6 @@ jobs:
           rancher-version: ${{ env.RANCHER_VERSION }}
           fallback-repo: ${{ secrets.RANCHER_REPO }}
 
-      - name: Get Qase ID
-        id: get-qase-id
-        uses: ./.github/actions/get-qase-id
-        with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
@@ -488,7 +494,7 @@ jobs:
 
       - name: Run Prime UI Checks
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-prime-ui-checks
@@ -534,3 +540,20 @@ jobs:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  close-qase-run:
+    needs: [create-qase-run, v2-14, v2-13]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
+        with:
+          submodules: recursive
+
+      - name: Close Qase test run
+        uses: ./.github/actions/close-qase-test-run
+        with:
+          qase_run_id: ${{ needs.create-qase-run.outputs.run_id }}
+          qase_project_id: ${{ secrets.HB_QASE_PROJECT_ID }}
+          qase_token: ${{ secrets.QASE_AUTOMATION_TOKEN }}

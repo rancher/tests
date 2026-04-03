@@ -7,13 +7,15 @@ import (
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/rancherversion"
-	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	prime "github.com/rancher/tests/actions/prime"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -143,8 +145,11 @@ func (t *PrimeTestSuite) TestLocalClusterRancherImages() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func() {
-			podErrors := pods.StatusPods(t.client, localCluster)
-			assert.Empty(t.T(), podErrors)
+			cluster, err := t.client.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetLocal + "/" + localCluster)
+			require.NoError(t.T(), err)
+
+			err = pods.VerifyClusterPods(t.client, cluster)
+			require.NoError(t.T(), err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(t.client, t.cattleConfig)
