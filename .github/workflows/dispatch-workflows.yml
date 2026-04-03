@@ -17,6 +17,7 @@ jobs:
     strategy:
       matrix:
         workflow:
+          - cluster-provisioning.yml
           - rancher-upgrade-cluster-provisioning.yml
           - post-release-prime.yml
           - prime-recurring-tests.yml
