@@ -1,0 +1,520 @@
+#!groovy
+/**
+ * Airgap RKE2 infrastructure setup pipeline.
+ *
+ * Provisions AWS infrastructure via OpenTofu, deploys an airgapped RKE2
+ * cluster, optionally configures a private registry, and deploys Rancher.
+ *
+ * Consumes shared functions from qa-jenkins-library:
+ *   airgap.standardCheckout, airgap.configureAnsible, airgap.deployRKE2,
+ *   airgap.deployRancher, airgap.teardownInfrastructure,
+ *   tofu.initBackend, tofu.createWorkspace, tofu.apply, tofu.getOutputs,
+ *   infrastructure.parseAndSubstituteVars, infrastructure.writeConfig,
+ *   make.runTarget
+ *
+ * Make targets (run via make.runTarget in Docker):
+ *   cluster  — Deploy RKE2 via Ansible tarball playbook
+ *   registry — Configure private registry on cluster nodes
+ *   rancher  — Deploy Rancher via Helm
+ */
+
+def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+library "qa-jenkins-library@${libraryBranch}"
+
+pipeline {
+    agent any
+
+    options {
+        ansiColor('xterm')
+        timeout(time: 180, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+
+    parameters {
+        booleanParam(
+            name: 'DEPLOY_RANCHER',
+            defaultValue: true,
+            description: 'Deploy Rancher via helm after RKE2 setup'
+        )
+        booleanParam(
+            name: 'DESTROY_ON_FAILURE',
+            defaultValue: true,
+            description: 'Tear down infrastructure if setup fails'
+        )
+        string(
+            name: 'QA_JENKINS_LIBRARY_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-jenkins-library to use'
+        )
+        string(
+            name: 'TESTS_REPO_URL',
+            defaultValue: 'https://github.com/rancher/tests',
+            description: 'URL of rancher/tests repository'
+        )
+        string(
+            name: 'TESTS_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of rancher/tests repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_URL',
+            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            description: 'URL of qa-infra-automation repository'
+        )
+        string(
+            name: 'QA_INFRA_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-infra-automation repository'
+        )
+        string(
+            name: 'RKE2_VERSION',
+            defaultValue: 'v1.33.6+rke2r1',
+            description: 'RKE2 version to deploy'
+        )
+        string(
+            name: 'RANCHER_VERSION',
+            defaultValue: 'v2.13.0',
+            description: 'Rancher version to deploy'
+        )
+        string(
+            name: 'HOSTNAME_PREFIX',
+            defaultValue: '',
+            description: 'Hostname prefix for *.qa.rancher.space and other AWS resources'
+        )
+        string(
+            name: 'PRIVATE_REGISTRY_URL',
+            defaultValue: '',
+            description: 'Private registry URL'
+        )
+        string(
+            name: 'PRIVATE_REGISTRY_USERNAME',
+            defaultValue: '',
+            description: 'Private registry username'
+        )
+        password(
+            name: 'PRIVATE_REGISTRY_PASSWORD',
+            defaultValue: '',
+            description: 'Private registry password'
+        )
+        password(
+            name: 'RANCHER_BOOTSTRAP_PASSWORD',
+            defaultValue: 'rancherrocks',
+            description: 'Rancher bootstrap password for initial setup'
+        )
+        password(
+            name: 'RANCHER_ADMIN_PASSWORD',
+            defaultValue: 'rancherrocks',
+            description: 'Rancher admin password after bootstrap'
+        )
+        string(
+            name: 'S3_BUCKET_NAME',
+            defaultValue: 'jenkins-terraform-state-storage',
+            description: 'S3 bucket name where Terraform state is stored'
+        )
+        string(
+            name: 'S3_BUCKET_REGION',
+            defaultValue: 'us-east-2',
+            description: 'AWS region where the S3 bucket is located'
+        )
+        string(
+            name: 'S3_KEY_PREFIX',
+            defaultValue: 'terraform.tfstate',
+            description: 'S3 key prefix for the Terraform state files'
+        )
+        text(
+            name: 'TERRAFORM_CONFIG',
+            description: 'Terraform config values for the VM instances',
+            defaultValue: '''aws_access_key = "${AWS_ACCESS_KEY_ID}"
+aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
+aws_ami = "ami-09457fad1d2c34c31"
+instance_type = "t3a.xlarge"
+aws_security_group = ["sg-08e8243a8cfbea8a0"]
+aws_subnet = "subnet-ee8cac86"
+aws_volume_size = 100
+aws_hostname_prefix = "${HOSTNAME_PREFIX}"
+aws_region = "us-east-2"
+aws_route53_zone = "qa.rancher.space"
+aws_ssh_user = "ubuntu"
+aws_vpc = "vpc-bfccf4d7"
+user_id = "ubuntu"
+ssh_key = "/root/.ssh/jenkins-elliptic-validation.pem"
+ssh_key_name = "jenkins-elliptic-validation"
+provision_registry = false'''
+        )
+        text(
+            name: 'ANSIBLE_VARIABLES',
+            description: 'Ansible config values for the RKE2 airgap deployment',
+            defaultValue: '''---
+# Global variables for RKE2 airgap deployment with tarball installation
+
+# RKE2 Configuration
+rke2_version: ${RKE2_VERSION}
+rke2_server_options: |
+  cluster-cidr: {{ cluster_cidr }}
+  service-cidr: {{ service_cidr }}
+  cluster-dns: {{ cluster_dns }}
+  disable:
+    - rke2-snapshot-controller
+    - rke2-snapshot-controller-crd
+    - rke2-snapshot-validation-webhook
+rke2_agent_options: ""
+installation_method: "tarball"
+
+# Network Configuration
+cluster_cidr: "10.42.0.0/16"
+service_cidr: "10.43.0.0/16"
+cluster_dns: "10.43.0.10"
+
+# CNI Configuration
+cni: "calico"
+
+# Logging and Monitoring
+enable_audit_log: false
+audit_log_path: "/var/lib/rancher/rke2/server/logs/audit.log"
+audit_log_maxage: 30
+audit_log_maxbackup: 10
+audit_log_maxsize: 100
+
+# Registry mirrors configuration
+private_registry_mirrors:
+  - registry: "docker.io"
+    endpoints:
+      - "https://privateregistry.qa.rancher.space"
+    rewrite:
+      - pattern: "^(.*)"
+        replacement: "proxycache/$1"
+  - registry: "quay.io"
+    endpoints:
+      - "https://privateregistry.qa.rancher.space"
+    rewrite:
+      - pattern: "^(.*)"
+        replacement: "quaycache/$1"
+
+# Registry authentication and TLS configuration
+private_registry_configs:
+  - registry: ${PRIVATE_REGISTRY_URL}
+    auth:
+      username: ${PRIVATE_REGISTRY_USERNAME}
+      password: ${PRIVATE_REGISTRY_PASSWORD}
+    tls:
+      insecure_skip_verify: true
+
+# Whether to enable private registry configuration
+enable_private_registry: ${ENABLE_PRIVATE_REGISTRY}
+
+# Deploy Rancher
+deploy_rancher: ${DEPLOY_RANCHER_ANSIBLE}
+install_helm: true
+
+rancher_hostname: "${HOSTNAME_PREFIX}.qa.rancher.space"
+rancher_bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
+rancher_admin_password: "${RANCHER_ADMIN_PASSWORD}"
+rancher_image_tag: ${RANCHER_VERSION}
+rancher_use_bundled_system_charts: true'''
+        )
+    }
+
+    environment {
+        WORKSPACE_NAME = ''
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    def dirs = airgap.standardCheckout(
+                        testsRepo: [url: params.TESTS_REPO_URL, branch: params.TESTS_BRANCH],
+                        infraRepo: [url: params.QA_INFRA_REPO_URL, branch: params.QA_INFRA_BRANCH]
+                    )
+                    env.TESTS_DIR = dirs.testsDir
+                    env.INFRA_DIR = dirs.infraDir
+                }
+            }
+        }
+
+        stage('Build Infrastructure Tools Image') {
+            steps {
+                sh "docker build --platform linux/amd64 -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.infra ."
+            }
+        }
+
+        stage('Provision Infrastructure') {
+            steps {
+                script {
+                    property.useWithProperties([
+                        'AWS_ACCESS_KEY_ID',
+                        'AWS_SECRET_ACCESS_KEY',
+                        'AWS_SSH_PEM_KEY',
+                        'AWS_SSH_PEM_KEY_NAME',
+                        'PRIVATE_REGISTRY_URL',
+                        'PRIVATE_REGISTRY_USERNAME',
+                        'PRIVATE_REGISTRY_PASSWORD'
+                    ]) {
+                        def tofuModulePath = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
+                        def ansiblePath   = "${env.INFRA_DIR}/ansible/rke2/airgap"
+                        def workspaceName = ''
+
+                        // ── Tofu: init backend ─────────────────────────────
+                        stage('Initialize Tofu Backend') {
+                            tofu.initBackend(
+                                dir:               tofuModulePath,
+                                bucket:            env.S3_BUCKET_NAME,
+                                key:               env.S3_KEY_PREFIX,
+                                region:            env.S3_BUCKET_REGION,
+                                backendInitScript: './scripts/init-backend.sh'
+                            )
+                        }
+
+                        // ── Tofu: create workspace ─────────────────────────
+                        stage('Create Workspace') {
+                            workspaceName = infrastructure.generateWorkspaceName(
+                                prefix:           'jenkins_airgap_ansible_workspace',
+                                suffix:           env.HOSTNAME_PREFIX,
+                                includeTimestamp: false
+                            )
+
+                            tofu.createWorkspace(dir: tofuModulePath, name: workspaceName)
+                            infrastructure.archiveWorkspaceName(workspaceName: workspaceName)
+                            env.WORKSPACE_NAME = workspaceName
+                        }
+
+                        // ── SSH key setup ───────────────────────────────────
+                        stage('Configure SSH Key') {
+                            infrastructure.writeSshKey(
+                                keyContent: env.AWS_SSH_PEM_KEY,
+                                keyName:    env.AWS_SSH_PEM_KEY_NAME,
+                                dir:        '.ssh'
+                            )
+                        }
+
+                        // ── Tofu: configure variables ──────────────────────
+                        stage('Configure Tofu Variables') {
+                            def terraformConfig = infrastructure.parseAndSubstituteVars(
+                                content: env.TERRAFORM_CONFIG,
+                                envVars: [
+                                    'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
+                                    'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+                                    'HOSTNAME_PREFIX':       env.HOSTNAME_PREFIX,
+                                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                                ]
+                            )
+
+                            infrastructure.writeConfig(
+                                path:    "${tofuModulePath}/terraform.tfvars",
+                                content: terraformConfig
+                            )
+                        }
+
+                        // ── Tofu: apply ─────────────────────────────────────
+                        stage('Apply Tofu') {
+                            tofu.apply(
+                                dir:         tofuModulePath,
+                                varFile:     'terraform.tfvars',
+                                autoApprove: true
+                            )
+                        }
+
+                        // ── Inventory generation ────────────────────────────
+                        stage('Generate Inventory') {
+                            sh """
+                                docker run --rm --platform linux/amd64 \
+                                    -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
+                                    -v \$(pwd):/workspace -w /workspace \
+                                    rancher-infra-tools:latest sh -c '
+                                        tofu -chdir=${tofuModulePath} output -raw airgap_inventory_json > /tmp/airgap.json &&
+                                        python3 ./qa-infra-automation/scripts/generate_inventory.py \
+                                            --input /tmp/airgap.json \
+                                            --schema ./qa-infra-automation/ansible/_inventory-schema.yaml \
+                                            --distro rke2 --env airgap \
+                                            --output-dir ${ansiblePath}/inventory
+                                    '
+                            """
+                        }
+
+                        // ── Ansible: configure variables ────────────────────
+                        stage('Configure Ansible Variables') {
+                            airgap.configureAnsible(
+                                sshKey: [
+                                    content: env.AWS_SSH_PEM_KEY,
+                                    name:    env.AWS_SSH_PEM_KEY_NAME,
+                                    dir:     '.ssh'
+                                ],
+                                inventoryVars: [
+                                    content: env.ANSIBLE_VARIABLES,
+                                    path:    "${ansiblePath}/inventory/group_vars/all.yml",
+                                    envVars: [
+                                        'RKE2_VERSION':              env.RKE2_VERSION,
+                                        'RANCHER_VERSION':           env.RANCHER_VERSION,
+                                        'CERT_MANAGER_VERSION':      env.CERT_MANAGER_VERSION ?: '',
+                                        'HOSTNAME_PREFIX':           env.HOSTNAME_PREFIX,
+                                        'PRIVATE_REGISTRY_URL':      env.PRIVATE_REGISTRY_URL ?: '',
+                                        'PRIVATE_REGISTRY_USERNAME':  env.PRIVATE_REGISTRY_USERNAME ?: '',
+                                        'PRIVATE_REGISTRY_PASSWORD':  env.PRIVATE_REGISTRY_PASSWORD ?: '',
+                                        'RANCHER_BOOTSTRAP_PASSWORD': env.RANCHER_BOOTSTRAP_PASSWORD ?: '',
+                                        'RANCHER_ADMIN_PASSWORD':     env.RANCHER_ADMIN_PASSWORD ?: '',
+                                        'ENABLE_PRIVATE_REGISTRY':    env.PRIVATE_REGISTRY_URL ? 'true' : 'false',
+                                        'DEPLOY_RANCHER_ANSIBLE':     params.DEPLOY_RANCHER ? 'true' : 'false'
+                                    ]
+                                ],
+                                ansibleDir:    ansiblePath,
+                                inventoryFile: 'inventory/inventory.yml',
+                                validate:      false
+                            )
+                        }
+
+                        // ── Ansible: copy SSH keys to nodes ─────────────────
+                        stage('Copy SSH Keys to Nodes') {
+                            ansible.runPlaybook(
+                                dir:       ansiblePath,
+                                inventory: 'inventory/inventory.yml',
+                                playbook:  'playbooks/setup/setup-ssh-keys.yml'
+                            )
+                        }
+
+                        // ── Make: deploy RKE2 cluster ───────────────────────
+                        stage('Deploy RKE2 Cluster') {
+                            make.runTarget(
+                                target:       'cluster',
+                                dir:          env.INFRA_DIR,
+                                makeArgs:     'ENV=airgap',
+                                passAwsCreds: false
+                            )
+                        }
+
+                        // ── Make: configure private registry ────────────────
+                        stage('Configure Private Registry') {
+                            if (env.PRIVATE_REGISTRY_URL?.trim()) {
+                                make.runTarget(
+                                    target:       'registry',
+                                    dir:          env.INFRA_DIR,
+                                    makeArgs:     'ENV=airgap',
+                                    passAwsCreds: false
+                                )
+                            } else {
+                                echo 'Skipping private registry configuration (PRIVATE_REGISTRY_URL not set)'
+                            }
+                        }
+
+                        // ── Make: deploy Rancher ────────────────────────────
+                        stage('Deploy Rancher') {
+                            if (params.DEPLOY_RANCHER) {
+                                make.runTarget(
+                                    target:       'rancher',
+                                    dir:          env.INFRA_DIR,
+                                    makeArgs:     'ENV=airgap',
+                                    passAwsCreds: false
+                                )
+                            } else {
+                                echo 'Skipping Rancher deployment (DEPLOY_RANCHER not checked)'
+                            }
+                        }
+
+                        // ── Archive Rancher admin token ─────────────────────
+                        stage('Archive Rancher Admin Token') {
+                            if (params.DEPLOY_RANCHER) {
+                                def tokenPath = env.INFRA_DIR.replaceAll('^\\./', '') + "/tmp/rancher-admin-token.json"
+                                if (fileExists(tokenPath)) {
+                                    archiveArtifacts artifacts: tokenPath
+                                    echo "Archived Rancher admin token from ${tokenPath}"
+                                } else {
+                                    echo "Warning: Rancher admin token file not found at ${tokenPath}"
+                                }
+                            }
+                        }
+
+                        // ── Output infrastructure details ───────────────────
+                        stage('Output Infrastructure Details') {
+                            echo '=== Infrastructure Setup Complete ==='
+                            echo "Workspace Name: ${workspaceName}"
+
+                            try {
+                                def bastionDns = tofu.getOutputs(
+                                    dir: tofuModulePath, output: 'bastion_public_dns'
+                                )
+                                echo "Bastion Host: ${bastionDns}"
+                            } catch (e) {
+                                echo "Could not retrieve bastion DNS: ${e.message}"
+                            }
+
+                            try {
+                                def rancherHostname = tofu.getOutputs(
+                                    dir: tofuModulePath, output: 'external_lb_hostname'
+                                )
+                                echo "Rancher Hostname (External): ${rancherHostname}"
+                                currentBuild.description = "Deployed: https://${rancherHostname} | Workspace: ${workspaceName}"
+                            } catch (e) {
+                                echo "Could not retrieve external LB hostname: ${e.message}"
+                            }
+
+                            try {
+                                def internalLb = tofu.getOutputs(
+                                    dir: tofuModulePath, output: 'internal_lb_hostname'
+                                )
+                                echo "Internal LB Hostname: ${internalLb}"
+                            } catch (e) {
+                                echo "Could not retrieve internal LB hostname: ${e.message}"
+                            }
+
+                            echo '========================================'
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            script {
+                def wsName = ''
+                try {
+                    if (fileExists('workspace_name.txt')) {
+                        wsName = readFile('workspace_name.txt')?.trim()
+                    }
+                } catch (e) {
+                    echo "Could not read workspace_name.txt: ${e.message}"
+                }
+
+                echo "DEBUG: DESTROY_ON_FAILURE=${params.DESTROY_ON_FAILURE}, WORKSPACE_NAME='${wsName}', INFRA_DIR='${env.INFRA_DIR}'"
+
+                if (params.DESTROY_ON_FAILURE && wsName) {
+                    echo 'DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure...'
+
+                    try {
+                        property.useWithProperties([
+                            'AWS_ACCESS_KEY_ID',
+                            'AWS_SECRET_ACCESS_KEY',
+                            'AWS_SSH_PEM_KEY_NAME'
+                        ]) {
+                            def tofuDir = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
+
+                            def terraformConfig = infrastructure.parseAndSubstituteVars(
+                                content: env.TERRAFORM_CONFIG,
+                                envVars: [
+                                    'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
+                                    'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+                                    'HOSTNAME_PREFIX':       env.HOSTNAME_PREFIX,
+                                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                                ]
+                            )
+                            infrastructure.writeConfig(
+                                path:    "${tofuDir}/terraform.tfvars",
+                                content: terraformConfig
+                            )
+
+                            airgap.teardownInfrastructure(
+                                dir:     tofuDir,
+                                name:    wsName,
+                                varFile: 'terraform.tfvars'
+                            )
+                        }
+                    } catch (cleanupErr) {
+                        echo "Cleanup failed: ${cleanupErr.message}"
+                    }
+                } else {
+                    echo "Skipping teardown: DESTROY_ON_FAILURE=${params.DESTROY_ON_FAILURE}, WORKSPACE_NAME='${wsName}'"
+                }
+            }
+        }
+    }
+}
