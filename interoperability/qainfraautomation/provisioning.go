@@ -3,6 +3,8 @@ package qainfraautomation
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,11 +23,20 @@ import (
 	"github.com/rancher/tests/interoperability/qainfraautomation/config"
 	"github.com/rancher/tests/interoperability/qainfraautomation/tofu"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 )
 
 func cleanupEnabled(rancherClient *rancher.Client) bool {
 	c := rancherClient.RancherConfig.Cleanup
 	return c == nil || *c
+}
+
+// infraCleanupEnabled returns whether infrastructure cleanup should run after the test.
+func infraCleanupEnabled(cfg *config.Config) bool {
+	if cfg.RancherInstall != nil && cfg.RancherInstall.Cleanup != nil {
+		return *cfg.RancherInstall.Cleanup
+	}
+	return true
 }
 
 const (
@@ -43,25 +54,29 @@ const (
 	k3sVarsFile                    = "ansible/k3s/default/vars.yaml"
 	awsClusterNodesModulePath      = "tofu/aws/modules/cluster_nodes"
 	fleetDefaultNamespace          = "fleet-default"
+	rancherInstallPlaybook         = "ansible/rancher/default-ha/rancher-playbook.yml"
+	rancherInstallVarsFile         = "ansible/rancher/default-ha/vars.yaml"
 )
 
-// extractInfraFiles extracts the embedded Ansible and Tofu files from
-// the qa-infra-automation module into a temporary directory on disk.
-// It registers a t.Cleanup callback to remove the directory when the
-// test finishes. The returned path contains "ansible/" and "tofu/"
-// subdirectories mirroring the infra repo layout.
-func extractInfraFiles(t *testing.T) string {
+// extractInfraFiles extracts the embedded Ansible and Tofu files into a temporary
+// directory on disk. When keepOnDisk is true, the directory is not removed after
+// the test finishes (preserving Tofu state for a later manual destroy).
+func extractInfraFiles(t *testing.T, keepOnDisk bool) string {
 	t.Helper()
 
 	dir, err := os.MkdirTemp("", "qa-infra-*")
 	if err != nil {
 		t.Fatalf("create temp dir for infra files: %v", err)
 	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(dir); err != nil {
-			logrus.Warnf("[qainfraautomation] failed to remove temp infra dir %s: %v", dir, err)
-		}
-	})
+	if keepOnDisk {
+		logrus.Warnf("[qainfraautomation] cleanup disabled: temp infra dir will be preserved at %s", dir)
+	} else {
+		t.Cleanup(func() {
+			if err := os.RemoveAll(dir); err != nil {
+				logrus.Warnf("[qainfraautomation] failed to remove temp infra dir %s: %v", dir, err)
+			}
+		})
+	}
 
 	ansibleDir := filepath.Join(dir, "ansible")
 	if err := os.MkdirAll(ansibleDir, 0755); err != nil {
@@ -149,7 +164,7 @@ func ProvisionRancherCluster(
 ) *v1.SteveAPIObject {
 	t.Helper()
 
-	repoPath := extractInfraFiles(t)
+	repoPath := extractInfraFiles(t, false)
 	workspace := cfg.Workspace
 	if workspace == "" {
 		workspace = "default"
@@ -258,7 +273,7 @@ func ProvisionCustomCluster(
 ) *v1.SteveAPIObject {
 	t.Helper()
 
-	repoPath := extractInfraFiles(t)
+	repoPath := extractInfraFiles(t, false)
 
 	switch {
 	case cfg.AWS != nil && cfg.Harvester != nil:
@@ -574,8 +589,8 @@ func provisionCustomClusterShared(
 	if clusterCfg.Harden {
 		playbookEnv = append(playbookEnv, "HARDEN=true")
 	}
-	if cfg.Ansible != nil && cfg.Ansible.ConfigPath != "" {
-		playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+filepath.Join(repoPath, cfg.Ansible.ConfigPath))
+	if ansibleCfg := resolveAnsibleConfig(repoPath, customClusterPlaybook, cfg); ansibleCfg != "" {
+		playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+ansibleCfg)
 	}
 	if err := ansibleClient.RunPlaybook(customClusterPlaybook, inventoryPath, playbookEnv); err != nil {
 		t.Fatalf("ansible-playbook (custom cluster): %v", err)
@@ -626,7 +641,7 @@ func provisionHarvesterStandaloneCluster(
 ) string {
 	t.Helper()
 
-	repoPath := extractInfraFiles(t)
+	repoPath := extractInfraFiles(t, false)
 	workspace := cfg.Workspace
 	if workspace == "" {
 		workspace = "default"
@@ -708,12 +723,7 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("generate inventory: %v", err)
 	}
 
-	vars := map[string]string{
-		"kubernetes_version": clusterCfg.KubernetesVersion,
-		"cni":                clusterCfg.CNI,
-		"channel":            clusterCfg.Channel,
-		"kubeconfig_file":    clusterCfg.KubeconfigOutputPath,
-	}
+	vars := buildStandaloneVars(clusterCfg)
 	if err := ansibleClient.WriteVarsYAML(varsFile, vars); err != nil {
 		t.Fatalf("write vars.yaml: %v", err)
 	}
@@ -726,14 +736,509 @@ func provisionHarvesterStandaloneCluster(
 		"TF_WORKSPACE=" + workspace,
 		"TERRAFORM_NODE_SOURCE=" + harvesterVMModulePath,
 	}
-	if cfg.Ansible != nil && cfg.Ansible.ConfigPath != "" {
-		playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+filepath.Join(repoPath, cfg.Ansible.ConfigPath))
+	if ansibleCfg := resolveAnsibleConfig(repoPath, playbookPath, cfg); ansibleCfg != "" {
+		playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+ansibleCfg)
 	}
 	if err := ansibleClient.RunPlaybook(playbookPath, inventoryPath, playbookEnv); err != nil {
 		t.Fatalf("ansible-playbook (%s): %v", clusterType, err)
 	}
 
 	return clusterCfg.KubeconfigOutputPath
+}
+
+// ProvisionAWSRKE2Cluster provisions a standalone RKE2 cluster on AWS EC2 instances
+// and returns the kubeconfig path and Route53 FQDN.
+func ProvisionAWSRKE2Cluster(
+	t *testing.T,
+	cfg *config.Config,
+	clusterCfg *config.StandaloneClusterConfig,
+) StandaloneClusterResult {
+	t.Helper()
+	return provisionAWSStandaloneCluster(t, cfg, clusterCfg, "rke2")
+}
+
+// ProvisionAWSK3SCluster provisions a standalone K3s cluster on AWS EC2 instances
+// and returns the kubeconfig path and Route53 FQDN.
+func ProvisionAWSK3SCluster(
+	t *testing.T,
+	cfg *config.Config,
+	clusterCfg *config.StandaloneClusterConfig,
+) StandaloneClusterResult {
+	t.Helper()
+	return provisionAWSStandaloneCluster(t, cfg, clusterCfg, "k3s")
+}
+
+// StandaloneClusterResult holds the outputs from provisioning a standalone cluster.
+type StandaloneClusterResult struct {
+	KubeconfigPath string
+	FQDN           string
+}
+
+func provisionAWSStandaloneCluster(
+	t *testing.T,
+	cfg *config.Config,
+	clusterCfg *config.StandaloneClusterConfig,
+	clusterType string,
+) StandaloneClusterResult {
+	t.Helper()
+
+	repoPath := extractInfraFiles(t, !infraCleanupEnabled(cfg))
+	workspace := cfg.Workspace
+	if workspace == "" {
+		workspace = "default"
+	}
+
+	a := cfg.AWS
+	if a == nil {
+		t.Fatalf("aws config is required for standalone cluster provisioning")
+	}
+
+	if a.AWSSSHKeyName == "" {
+		t.Fatalf("aws config: awsSSHKeyName is required")
+	}
+	privKeyPath, err := sshKeyFilePath(a.AWSSSHKeyName)
+	if err != nil {
+		t.Fatalf("resolve ssh key %q: %v", a.AWSSSHKeyName, err)
+	}
+	pubKeyPath, cleanup, err := derivePublicKeyFile(privKeyPath)
+	if err != nil {
+		t.Fatalf("derive public key from %q: %v", privKeyPath, err)
+	}
+	t.Cleanup(cleanup)
+
+	hostnamePrefix := a.HostnamePrefix
+	if hostnamePrefix == "" {
+		hostnamePrefix = "tf"
+	}
+	volumeSize := a.VolumeSize
+	if volumeSize == 0 {
+		volumeSize = 50
+	}
+	volumeType := a.VolumeType
+	if volumeType == "" {
+		volumeType = "gp3"
+	}
+
+	nodes := make([]awsNodeSpec, len(clusterCfg.Nodes))
+	for i, n := range clusterCfg.Nodes {
+		nodes[i] = awsNodeSpec{Count: n.Count, Role: n.Role}
+	}
+	if len(nodes) == 0 {
+		nodes = []awsNodeSpec{{Count: 1, Role: []string{"etcd", "cp", "worker"}}}
+	}
+
+	nodeVars := awsClusterNodesVars{
+		PublicSSHKey:   pubKeyPath,
+		AccessKey:      a.AccessKey,
+		SecretKey:      a.SecretKey,
+		Region:         a.Region,
+		AMI:            a.AMI,
+		HostnamePrefix: hostnamePrefix,
+		Route53Zone:    a.Route53Zone,
+		SSHUser:        a.SSHUser,
+		SecurityGroup:  a.SecurityGroups,
+		VPC:            a.VPC,
+		VolumeSize:     volumeSize,
+		VolumeType:     volumeType,
+		Subnet:         a.Subnet,
+		InstanceType:   a.InstanceType,
+		Nodes:          nodes,
+		AirgapSetup:    a.AirgapSetup,
+		ProxySetup:     a.ProxySetup,
+	}
+
+	nodeVarFile, err := writeTFVarsJSON(t, "aws-standalone-nodes-vars.json", nodeVars)
+	if err != nil {
+		t.Fatalf("write aws standalone nodes tfvars: %v", err)
+	}
+
+	nodeModuleDir := filepath.Join(repoPath, awsClusterNodesModulePath)
+	nodeTofu := tofu.NewClient(nodeModuleDir, workspace)
+
+	logrus.Infof("[qainfraautomation] tofu init (aws standalone nodes): %s", nodeModuleDir)
+	if err := nodeTofu.Init(); err != nil {
+		t.Fatalf("tofu init (aws standalone nodes): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu workspace select-or-create %q (aws standalone nodes)", workspace)
+	if err := nodeTofu.WorkspaceSelectOrCreate(); err != nil {
+		t.Fatalf("tofu workspace (aws standalone nodes): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu apply (aws standalone nodes, workspace=%s)", workspace)
+	if err := nodeTofu.Apply(nodeVarFile); err != nil {
+		t.Fatalf("tofu apply (aws standalone nodes): %v", err)
+	}
+	logrus.Infof("[qainfraautomation] tofu apply complete (aws standalone nodes)")
+
+	if infraCleanupEnabled(cfg) {
+		t.Cleanup(func() {
+			logrus.Infof("[qainfraautomation] destroying aws standalone EC2 nodes (workspace=%s)", workspace)
+			if err := nodeTofu.Destroy(nodeVarFile); err != nil {
+				logrus.Errorf("[qainfraautomation] tofu destroy (aws standalone EC2 nodes): %v", err)
+			}
+		})
+	} else {
+		logrus.Warn("[qainfraautomation] cleanup disabled: EC2 nodes will NOT be destroyed after test")
+	}
+
+	var playbookPath, inventoryTemplate, varsFile string
+	switch clusterType {
+	case "rke2":
+		playbookPath = rke2Playbook
+		inventoryTemplate = rke2InventoryTemplate
+		varsFile = rke2VarsFile
+	case "k3s":
+		playbookPath = k3sPlaybook
+		inventoryTemplate = k3sInventoryTemplate
+		varsFile = k3sVarsFile
+	default:
+		t.Fatalf("unsupported cluster type: %s (must be rke2 or k3s)", clusterType)
+	}
+
+	ansibleClient := ansible.NewClient(repoPath)
+	inventoryEnv := map[string]string{
+		"TERRAFORM_NODE_SOURCE": awsClusterNodesModulePath,
+		"TF_WORKSPACE":          workspace,
+	}
+	inventoryPath, err := ansibleClient.GenerateInventory(inventoryTemplate, inventoryEnv)
+	if err != nil {
+		t.Fatalf("generate inventory: %v", err)
+	}
+
+	vars := buildStandaloneVars(clusterCfg)
+	if clusterCfg.ServerFlags != "" {
+		vars["server_flags"] = clusterCfg.ServerFlags
+	}
+	if err := ansibleClient.WriteVarsYAML(varsFile, vars); err != nil {
+		t.Fatalf("write vars.yaml: %v", err)
+	}
+
+	// Download any optional files (e.g. PSA config) that have URLs
+	for _, of := range clusterCfg.OptionalFiles {
+		if of.URL != "" {
+			logrus.Infof("[qainfraautomation] downloading optional file %s -> %s", of.URL, of.Path)
+			if err := downloadFile(of.URL, of.Path); err != nil {
+				t.Fatalf("download optional file %s: %v", of.URL, err)
+			}
+		}
+	}
+
+	if err := ansibleClient.AddSSHKey(privKeyPath); err != nil {
+		t.Fatalf("ssh-add: %v", err)
+	}
+
+	playbookEnv := []string{
+		"TF_WORKSPACE=" + workspace,
+		"TERRAFORM_NODE_SOURCE=" + awsClusterNodesModulePath,
+	}
+	if ansibleCfg := resolveAnsibleConfig(repoPath, playbookPath, cfg); ansibleCfg != "" {
+		playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+ansibleCfg)
+	}
+	if err := ansibleClient.RunPlaybook(playbookPath, inventoryPath, playbookEnv); err != nil {
+		t.Fatalf("ansible-playbook (%s): %v", clusterType, err)
+	}
+
+	// Retrieve the Route53 FQDN from Tofu output
+	fqdn, err := nodeTofu.Output("fqdn")
+	if err != nil {
+		logrus.Warnf("[qainfraautomation] could not retrieve fqdn output: %v", err)
+	} else {
+		logrus.Infof("[qainfraautomation] Route53 FQDN: %s", fqdn)
+	}
+
+	return StandaloneClusterResult{
+		KubeconfigPath: clusterCfg.KubeconfigOutputPath,
+		FQDN:           fqdn,
+	}
+}
+
+// InstallRancherResult holds the outputs from a Rancher HA installation.
+type InstallRancherResult struct {
+	FQDN       string
+	AdminToken string
+}
+
+// InstallRancher installs Rancher on an existing Kubernetes cluster using the
+// default-ha Ansible playbook from qa-infra-automation. Returns the FQDN and
+// admin API token on success.
+func InstallRancher(
+	t *testing.T,
+	cfg *config.Config,
+	kubeconfigPath string,
+	fqdn string,
+) InstallRancherResult {
+	t.Helper()
+
+	rancherCfg := cfg.RancherInstall
+	if rancherCfg == nil {
+		rancherCfg = &config.RancherInstallConfig{}
+	}
+
+	repoPath := extractInfraFiles(t, !infraCleanupEnabled(cfg))
+	workspace := cfg.Workspace
+	if workspace == "" {
+		workspace = "default"
+	}
+
+	absKubeconfig, err := filepath.Abs(kubeconfigPath)
+	if err != nil {
+		t.Fatalf("resolve kubeconfig path %q: %v", kubeconfigPath, err)
+	}
+
+	vars := map[string]interface{}{
+		"kubeconfig_file": absKubeconfig,
+	}
+
+	if fqdn != "" {
+		vars["fqdn"] = fqdn
+	}
+
+	chartVersion := rancherCfg.ChartVersion
+	if chartVersion == "" {
+		chartVersion = "head"
+	}
+	vars["rancher_version"] = chartVersion
+
+	if rancherCfg.ImageTag != "" {
+		vars["rancher_image_tag"] = rancherCfg.ImageTag
+	} else {
+		vars["rancher_image_tag"] = ">=0.0.0-0"
+	}
+
+	if rancherCfg.CertManagerVersion != "" {
+		vars["cert_manager_version"] = rancherCfg.CertManagerVersion
+	} else {
+		vars["cert_manager_version"] = ""
+	}
+
+	if rancherCfg.HelmRepo != "" {
+		vars["rancher_chart_repo"] = rancherCfg.HelmRepo
+	}
+	if rancherCfg.HelmRepoURL != "" {
+		vars["rancher_chart_repo_url"] = rancherCfg.HelmRepoURL
+	}
+
+	if rancherCfg.TLSSource != "" {
+		vars["ingress_tls_source"] = rancherCfg.TLSSource
+	}
+	if rancherCfg.LetsEncryptEmail != "" {
+		vars["letsencrypt_email"] = rancherCfg.LetsEncryptEmail
+	}
+	if rancherCfg.TLSCertPath != "" {
+		absCert, err := filepath.Abs(rancherCfg.TLSCertPath)
+		if err != nil {
+			t.Fatalf("resolve tls cert path %q: %v", rancherCfg.TLSCertPath, err)
+		}
+		vars["tls_cert_path"] = absCert
+	}
+	if rancherCfg.TLSKeyPath != "" {
+		absKey, err := filepath.Abs(rancherCfg.TLSKeyPath)
+		if err != nil {
+			t.Fatalf("resolve tls key path %q: %v", rancherCfg.TLSKeyPath, err)
+		}
+		vars["tls_key_path"] = absKey
+	}
+	if rancherCfg.TLSCACertPath != "" {
+		absCA, err := filepath.Abs(rancherCfg.TLSCACertPath)
+		if err != nil {
+			t.Fatalf("resolve tls CA cert path %q: %v", rancherCfg.TLSCACertPath, err)
+		}
+		vars["tls_ca_cert_path"] = absCA
+	}
+
+	bootstrapPassword := rancherCfg.BootstrapPassword
+	if bootstrapPassword == "" {
+		bootstrapPassword = "admin"
+	}
+	vars["bootstrap_password"] = bootstrapPassword
+
+	password := rancherCfg.Password
+	if password == "" {
+		password = bootstrapPassword
+	}
+	vars["password"] = password
+
+	varsPath := filepath.Join(repoPath, rancherInstallVarsFile)
+	if err := writeYAMLFile(varsPath, vars); err != nil {
+		t.Fatalf("write rancher install vars: %v", err)
+	}
+
+	ansibleClient := ansible.NewClient(repoPath)
+
+	playbookEnv := []string{
+		"TF_WORKSPACE=" + workspace,
+		"TERRAFORM_NODE_SOURCE=" + awsClusterNodesModulePath,
+	}
+	if ansibleCfg := resolveAnsibleConfig(repoPath, rancherInstallPlaybook, cfg); ansibleCfg != "" {
+		playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+ansibleCfg)
+	} else {
+		topLevelCfg := filepath.Join(repoPath, "ansible", "ansible.cfg")
+		if _, err := os.Stat(topLevelCfg); err == nil {
+			playbookEnv = append(playbookEnv, "ANSIBLE_CONFIG="+topLevelCfg)
+		}
+	}
+
+	logrus.Info("[qainfraautomation] running Rancher HA install playbook")
+	if err := ansibleClient.RunPlaybook(rancherInstallPlaybook, "localhost,", playbookEnv); err != nil {
+		t.Fatalf("ansible-playbook (rancher install): %v", err)
+	}
+
+	generatedVarsPath := findGeneratedTFVars(repoPath)
+	if generatedVarsPath == "" {
+		t.Fatalf("parse generated.tfvars after rancher install: file not found (searched repoPath tree %s, $HOME, and CWD)", repoPath)
+	}
+	logrus.Infof("[qainfraautomation] found generated.tfvars at %s", generatedVarsPath)
+	result, err := parseGeneratedTFVars(generatedVarsPath)
+	if err != nil {
+		t.Fatalf("parse generated.tfvars after rancher install: %v", err)
+	}
+
+	logrus.Infof("[qainfraautomation] Rancher installed successfully at %s", result.FQDN)
+	return result
+}
+
+// writeYAMLFile marshals data to YAML and writes it to the given absolute path.
+func writeYAMLFile(absPath string, data map[string]interface{}) error {
+	logrus.Infof("[qainfraautomation] writing YAML file %s", absPath)
+
+	if err := os.MkdirAll(filepath.Dir(absPath), 0755); err != nil {
+		return fmt.Errorf("mkdir for %s: %w", absPath, err)
+	}
+
+	yamlBytes, err := yaml.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("marshal YAML: %w", err)
+	}
+
+	return os.WriteFile(absPath, yamlBytes, 0644)
+}
+
+const generatedTFVarsFilename = "generated.tfvars"
+
+// findGeneratedTFVars locates the generated.tfvars file written by the Rancher install
+// playbook, searching $HOME, CWD, repoPath, and recursively under repoPath.
+func findGeneratedTFVars(repoPath string) string {
+	var candidates []string
+
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(homeDir, generatedTFVarsFilename))
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, filepath.Join(cwd, generatedTFVarsFilename))
+	}
+	candidates = append(candidates, filepath.Join(repoPath, generatedTFVarsFilename))
+
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+
+	var found string
+	_ = filepath.WalkDir(repoPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.Name() == generatedTFVarsFilename {
+			found = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
+}
+
+// parseGeneratedTFVars reads a generated.tfvars file and extracts the fqdn and api_key values.
+func parseGeneratedTFVars(path string) (InstallRancherResult, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return InstallRancherResult{}, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var result InstallRancherResult
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.Trim(strings.TrimSpace(parts[1]), `"`)
+
+		switch key {
+		case "fqdn":
+			result.FQDN = strings.TrimPrefix(strings.TrimPrefix(value, "https://"), "http://")
+		case "api_key":
+			result.AdminToken = value
+		}
+	}
+
+	if result.FQDN == "" {
+		return result, fmt.Errorf("fqdn not found in %s", path)
+	}
+	if result.AdminToken == "" {
+		return result, fmt.Errorf("api_key not found in %s", path)
+	}
+
+	return result, nil
+}
+
+// downloadFile fetches a URL and writes it to the given path on disk.
+func downloadFile(url, destPath string) error {
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return fmt.Errorf("mkdir for %s: %w", destPath, err)
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("GET %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("GET %s: HTTP %d", url, resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response body from %s: %w", url, err)
+	}
+
+	return os.WriteFile(destPath, data, 0644)
+}
+
+// resolveAnsibleConfig returns the ANSIBLE_CONFIG path for a playbook.
+// Priority: explicit user config > ansible.cfg co-located with the playbook.
+func resolveAnsibleConfig(repoPath string, playbookRelPath string, cfg *config.Config) string {
+	if cfg.Ansible != nil && cfg.Ansible.ConfigPath != "" {
+		return filepath.Join(repoPath, cfg.Ansible.ConfigPath)
+	}
+
+	playbookDir := filepath.Dir(filepath.Join(repoPath, playbookRelPath))
+	candidate := filepath.Join(playbookDir, "ansible.cfg")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+
+	return ""
+}
+
+// buildStandaloneVars constructs the Ansible vars map for a standalone cluster,
+// omitting empty values so that Ansible defaults are preserved.
+func buildStandaloneVars(clusterCfg *config.StandaloneClusterConfig) map[string]string {
+	vars := make(map[string]string)
+	if clusterCfg.KubernetesVersion != "" {
+		vars["kubernetes_version"] = clusterCfg.KubernetesVersion
+	}
+	if clusterCfg.CNI != "" {
+		vars["cni"] = clusterCfg.CNI
+	}
+	if clusterCfg.Channel != "" {
+		vars["channel"] = clusterCfg.Channel
+	}
+	if clusterCfg.KubeconfigOutputPath != "" {
+		vars["kubeconfig_file"] = clusterCfg.KubeconfigOutputPath
+	}
+	return vars
 }
 
 func buildHarvesterVMVars(h *config.HarvesterConfig, g []config.CustomClusterNodeGroup, sshPubKey string) harvesterVMVars {
