@@ -412,7 +412,7 @@ rancher_use_bundled_system_charts: true'''
                         // ── Archive Rancher admin token ─────────────────────
                         stage('Archive Rancher Admin Token') {
                             if (params.DEPLOY_RANCHER) {
-                                def tokenPath = "${env.INFRA_DIR}/tmp/rancher-admin-token.json"
+                                def tokenPath = env.INFRA_DIR.replaceAll('^\\./', '') + "/tmp/rancher-admin-token.json"
                                 if (fileExists(tokenPath)) {
                                     archiveArtifacts artifacts: tokenPath
                                     echo "Archived Rancher admin token from ${tokenPath}"
