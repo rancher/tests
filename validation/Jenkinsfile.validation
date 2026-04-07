@@ -1,0 +1,335 @@
+#!groovy
+/**
+ * Unified validation test pipeline.
+ *
+ * Replaces three nearly-identical Jenkinsfiles (validation/Jenkinsfile,
+ * validation/Jenkinsfile.harvester, validation/Jenkinsfile.vsphere) with a
+ * single parameterized Declarative Pipeline.
+ *
+ * Consumes shared functions from qa-jenkins-library:
+ *   property.useWithProperties — for color wrapper and folder properties
+ *
+ * Credential loading uses raw withCredentials because the original pipelines
+ * remap several credential IDs to different variable names (e.g.
+ * AZURE_AKS_SUBSCRIPTION_ID -> RANCHER_AKS_SUBSCRIPTION_ID). The shared
+ * library's useWithProperties does not support this remapping.
+ *
+ * Original files remain in place for parallel coexistence during migration.
+ */
+
+def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+library "qa-jenkins-library@${libraryBranch}"
+
+pipeline {
+    agent { label params.NODE_LABEL ?: '' }
+
+    options {
+        ansiColor('xterm')
+        timeout(time: 60, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+
+    parameters {
+        choice(
+            name: 'NODE_LABEL',
+            choices: ['', 'harvester-vpn-1', 'vsphere-vpn-1'],
+            description: 'Agent label. Empty = any available agent (unallocated).'
+        )
+        string(
+            name: 'TEST_PACKAGE',
+            defaultValue: 'validation',
+            description: 'Go test package to run (e.g. validation, validation/...)'
+        )
+        text(
+            name: 'CONFIG',
+            defaultValue: '',
+            description: 'Test configuration YAML content.'
+        )
+        string(
+            name: 'BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of rancher/tests repository.'
+        )
+        string(
+            name: 'REPO',
+            defaultValue: '',
+            description: 'Override repo URL. Empty = use SCM config.'
+        )
+        string(
+            name: 'TIMEOUT',
+            defaultValue: '60m',
+            description: 'Go test timeout duration.'
+        )
+        string(
+            name: 'TAGS',
+            defaultValue: 'validation',
+            description: 'Go build tags.'
+        )
+        string(
+            name: 'GOTEST_TESTCASE',
+            defaultValue: '',
+            description: 'Specific test case regex (-run flag). Empty = all tests.'
+        )
+        string(
+            name: 'REPORTER_BUILD_SCRIPT',
+            defaultValue: 'build_qase_reporter.sh',
+            description: 'Qase reporter script name in pipeline/scripts/.'
+        )
+        string(
+            name: 'QASE_TEST_RUN_ID',
+            defaultValue: '',
+            description: 'Qase test run ID. Enables Qase reporting when set.'
+        )
+        string(
+            name: 'QA_JENKINS_LIBRARY_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-jenkins-library to use.'
+        )
+        string(
+            name: 'ENV_VARIABLE',
+            defaultValue: '',
+            description: 'Extra environment variable to append to .env file.'
+        )
+        booleanParam(
+            name: 'CAPTURE_IMAGES',
+            defaultValue: false,
+            description: 'Start a sidecar container to capture images used by the cluster.'
+        )
+        string(
+            name: 'AWS_SSH_KEY_NAME',
+            defaultValue: '',
+            description: 'PEM key filename (e.g. jenkins-elliptic-validation.pem).'
+        )
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    deleteDir()
+
+                    def branch = params.BRANCH
+                    def repo = params.REPO ? [[url: params.REPO]] : scm.userRemoteConfigs
+
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: "*/${branch}"]],
+                        extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                        userRemoteConfigs: repo
+                    ])
+                }
+            }
+        }
+
+        stage('Configure and Build') {
+            steps {
+                script {
+                    // Build parameter env map (matches original withEnv(paramsMap) behavior)
+                    def paramsMap = []
+                    params.each {
+                        if ((it.value instanceof String && it.value.trim() != '') || it.value instanceof Boolean) {
+                            paramsMap << "$it.key=$it.value"
+                        }
+                    }
+
+                    // Load credentials using withCredentials to support credential ID -> variable
+                    // name remapping (e.g. AZURE_AKS_SUBSCRIPTION_ID -> RANCHER_AKS_SUBSCRIPTION_ID).
+                    // useWithProperties cannot handle remapping, so we use withCredentials directly.
+                    //
+                    // The credential set is the superset covering all three variants:
+                    //   - Unallocated (full set)
+                    //   - Harvester VPN (drops APPCO_*, uses AWS_RSA_KEY_NAME for RSA)
+                    //   - vSphere VPN (drops APPCO_*/RANCHER_LINODE_ACCESSKEY)
+                    // Extra credentials are simply unused on agents that don't need them.
+                    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg': 1]) {
+                        withFolderProperties {
+                            withCredentials([
+                                string(credentialsId: 'AWS_ACCESS_KEY_ID',                      variable: 'AWS_ACCESS_KEY_ID'),
+                                string(credentialsId: 'AWS_SECRET_ACCESS_KEY',                   variable: 'AWS_SECRET_ACCESS_KEY'),
+                                string(credentialsId: 'AWS_ACCESS_KEY_ID',                       variable: 'RANCHER_EKS_ACCESS_KEY'),
+                                string(credentialsId: 'AWS_SECRET_ACCESS_KEY',                   variable: 'RANCHER_EKS_SECRET_KEY'),
+                                string(credentialsId: 'DO_ACCESSKEY',                            variable: 'DO_ACCESSKEY'),
+                                string(credentialsId: 'AWS_SSH_PEM_KEY',                         variable: 'AWS_SSH_PEM_KEY'),
+                                string(credentialsId: 'AWS_SSH_RSA_KEY',                         variable: 'AWS_SSH_RSA_KEY'),
+                                string(credentialsId: 'AWS_RSA_KEY_NAME',                        variable: 'AWS_RSA_KEY_NAME'),
+                                string(credentialsId: 'RANCHER_SSH_KEY',                         variable: 'RANCHER_SSH_KEY'),
+                                string(credentialsId: 'AZURE_SUBSCRIPTION_ID',                   variable: 'AZURE_SUBSCRIPTION_ID'),
+                                string(credentialsId: 'AZURE_TENANT_ID',                         variable: 'AZURE_TENANT_ID'),
+                                string(credentialsId: 'AZURE_CLIENT_ID',                         variable: 'AZURE_CLIENT_ID'),
+                                string(credentialsId: 'AZURE_CLIENT_SECRET',                     variable: 'AZURE_CLIENT_SECRET'),
+                                string(credentialsId: 'AZURE_AKS_SUBSCRIPTION_ID',               variable: 'RANCHER_AKS_SUBSCRIPTION_ID'),
+                                string(credentialsId: 'AZURE_TENANT_ID',                         variable: 'RANCHER_AKS_TENANT_ID'),
+                                string(credentialsId: 'AZURE_CLIENT_ID',                         variable: 'RANCHER_AKS_CLIENT_ID'),
+                                string(credentialsId: 'AZURE_CLIENT_SECRET',                     variable: 'RANCHER_AKS_SECRET_KEY'),
+                                string(credentialsId: 'RANCHER_REGISTRY_USER_NAME',              variable: 'RANCHER_REGISTRY_USER_NAME'),
+                                string(credentialsId: 'RANCHER_REGISTRY_PASSWORD',               variable: 'RANCHER_REGISTRY_PASSWORD'),
+                                string(credentialsId: 'RANCHER_AD_SPECIAL_CHAR_PASSWORD',        variable: 'RANCHER_AD_SPECIAL_CHAR_PASSWORD'),
+                                string(credentialsId: 'ADMIN_PASSWORD',                          variable: 'ADMIN_PASSWORD'),
+                                string(credentialsId: 'USER_PASSWORD',                           variable: 'USER_PASSWORD'),
+                                string(credentialsId: 'RANCHER_GKE_CREDENTIAL',                 variable: 'RANCHER_GKE_CREDENTIAL'),
+                                string(credentialsId: 'RANCHER_AUTH_USER_PASSWORD',              variable: 'RANCHER_AUTH_USER_PASSWORD'),
+                                string(credentialsId: 'RANCHER_HOSTNAME_OR_IP_ADDRESS',          variable: 'RANCHER_HOSTNAME_OR_IP_ADDRESS'),
+                                string(credentialsId: 'RANCHER_CA_CERTIFICATE',                  variable: 'RANCHER_CA_CERTIFICATE'),
+                                string(credentialsId: 'RANCHER_SERVICE_ACCOUNT_NAME',            variable: 'RANCHER_SERVICE_ACCOUNT_NAME'),
+                                string(credentialsId: 'RANCHER_SERVICE_ACCOUNT_PASSWORD',        variable: 'RANCHER_SERVICE_ACCOUNT_PASSWORD'),
+                                string(credentialsId: 'RANCHER_USER_SEARCH_BASE',                variable: 'RANCHER_USER_SEARCH_BASE'),
+                                string(credentialsId: 'RANCHER_DEFAULT_LOGIN_DOMAIN',            variable: 'RANCHER_DEFAULT_LOGIN_DOMAIN'),
+                                string(credentialsId: 'RANCHER_OPENLDAP_SERVICE_ACCOUNT_NAME',   variable: 'RANCHER_OPENLDAP_SERVICE_ACCOUNT_NAME'),
+                                string(credentialsId: 'RANCHER_OPENLDAP_SERVICE_ACCOUNT_PASSWORD', variable: 'RANCHER_OPENLDAP_SERVICE_ACCOUNT_PASSWORD'),
+                                string(credentialsId: 'RANCHER_OPENLDAP_USER_SEARCH_BASE',       variable: 'RANCHER_OPENLDAP_USER_SEARCH_BASE'),
+                                string(credentialsId: 'RANCHER_OPENLDAP_AUTH_USER_PASSWORD',     variable: 'RANCHER_OPENLDAP_AUTH_USER_PASSWORD'),
+                                string(credentialsId: 'RANCHER_OPENLDAP_HOSTNAME_OR_IP_ADDRESS', variable: 'RANCHER_OPENLDAP_HOSTNAME_OR_IP_ADDRESS'),
+                                string(credentialsId: 'RANCHER_OPENLDAP_SPECIAL_CHAR_PASSWORD',  variable: 'RANCHER_OPENLDAP_SPECIAL_CHAR_PASSWORD'),
+                                string(credentialsId: 'RANCHER_FREEIPA_SERVICE_ACCOUNT_NAME',    variable: 'RANCHER_FREEIPA_SERVICE_ACCOUNT_NAME'),
+                                string(credentialsId: 'RANCHER_FREEIPA_SERVICE_ACCOUNT_PASSWORD', variable: 'RANCHER_FREEIPA_SERVICE_ACCOUNT_PASSWORD'),
+                                string(credentialsId: 'RANCHER_FREEIPA_USER_SEARCH_BASE',        variable: 'RANCHER_FREEIPA_USER_SEARCH_BASE'),
+                                string(credentialsId: 'RANCHER_FREEIPA_GROUP_SEARCH_BASE',       variable: 'RANCHER_FREEIPA_GROUP_SEARCH_BASE'),
+                                string(credentialsId: 'RANCHER_FREEIPA_AUTH_USER_PASSWORD',      variable: 'RANCHER_FREEIPA_AUTH_USER_PASSWORD'),
+                                string(credentialsId: 'RANCHER_FREEIPA_HOSTNAME_OR_IP_ADDRESS',  variable: 'RANCHER_FREEIPA_HOSTNAME_OR_IP_ADDRESS'),
+                                string(credentialsId: 'RANCHER_FREEIPA_SPECIAL_CHAR_PASSWORD',   variable: 'RANCHER_FREEIPA_SPECIAL_CHAR_PASSWORD'),
+                                string(credentialsId: 'RANCHER_VALID_TLS_CERT',                  variable: 'RANCHER_VALID_TLS_CERT'),
+                                string(credentialsId: 'RANCHER_VALID_TLS_KEY',                   variable: 'RANCHER_VALID_TLS_KEY'),
+                                string(credentialsId: 'RANCHER_BYO_TLS_CERT',                    variable: 'RANCHER_BYO_TLS_CERT'),
+                                string(credentialsId: 'RANCHER_BYO_TLS_KEY',                     variable: 'RANCHER_BYO_TLS_KEY'),
+                                string(credentialsId: 'QASE_AUTOMATION_TOKEN',                   variable: 'QASE_AUTOMATION_TOKEN'),
+                                string(credentialsId: 'SLACK_WEBHOOK',                           variable: 'SLACK_WEBHOOK'),
+                                string(credentialsId: 'RANCHER_LINODE_ACCESSKEY',                variable: 'RANCHER_LINODE_ACCESSKEY'),
+                                string(credentialsId: 'APPCO_USERNAME',                          variable: 'APPCO_USERNAME'),
+                                string(credentialsId: 'APPCO_ACCESS_TOKEN',                      variable: 'APPCO_ACCESS_TOKEN')
+                            ]) {
+                                withEnv(paramsMap) {
+                                    dir('./') {
+                                        // ── SSH key setup ──────────────────────
+                                        if (env.AWS_SSH_PEM_KEY && params.AWS_SSH_KEY_NAME) {
+                                            dir('./validation/.ssh') {
+                                                def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
+                                                writeFile file: params.AWS_SSH_KEY_NAME, text: decoded
+                                            }
+                                        }
+
+                                        dir('./validation/.ssh') {
+                                            def decodedRsa = new String(env.AWS_SSH_RSA_KEY.decodeBase64())
+                                            // Only harvester uses AWS_RSA_KEY_NAME for the RSA key;
+                                            // unallocated and vsphere use JENKINS_RKE_VALIDATION
+                                            def rsaKeyName = (params.NODE_LABEL == 'harvester-vpn-1') ? env.AWS_RSA_KEY_NAME : 'JENKINS_RKE_VALIDATION'
+                                            writeFile file: rsaKeyName, text: decodedRsa
+                                        }
+
+                                        // ── Write test config ──────────────────
+                                        dir('./validation') {
+                                            writeFile file: 'config.yaml', text: params.CONFIG
+                                            env.CATTLE_TEST_CONFIG = '/root/go/src/github.com/rancher/tests/validation/config.yaml'
+                                        }
+
+                                        // ── Build Docker image ─────────────────
+                                        sh './validation/configure.sh'
+                                        sh './validation/build.sh'
+
+                                        if (params.ENV_VARIABLE) {
+                                            def envText = readFile('.env')
+                                            writeFile file: '.env', text: envText + params.ENV_VARIABLE
+                                        }
+
+                                        // ── Derive Docker names ────────────────
+                                        def jobName = env.JOB_NAME.split('/').last()
+                                        env.TEST_CONTAINER = "${jobName}${env.BUILD_NUMBER}_test"
+                                        env.IMAGE_NAME = "rancher-validation-${jobName}${env.BUILD_NUMBER}"
+
+                                        // ── Run tests ──────────────────────────
+                                        stage('Run Validation Tests') {
+                                            def rootPath = '/root/go/src/github.com/rancher/tests/validation/'
+                                            def testsDir = "github.com/rancher/tests/validation/${params.TEST_PACKAGE}"
+                                            def testResultsOut = 'results.xml'
+                                            def testResultsJSON = 'results.json'
+                                            def envFile = '.env'
+                                            def reporterScript = params.REPORTER_BUILD_SCRIPT
+
+                                            sh 'mkdir -p ./validation/images'
+
+                                            try {
+                                                if (params.CAPTURE_IMAGES) {
+                                                    sh """
+                                                        docker run -d --name imageCapturer \
+                                                        -v ./validation/config.yaml:/app/config.yaml \
+                                                        -v ./validation/images/:/app/images \
+                                                        -t ${env.IMAGE_NAME} sh -c 'go build ../scripts/capture_images/capture_images.go && CATTLE_TEST_CONFIG=/app/config.yaml ./capture_images'
+                                                    """
+                                                    sh 'grep -m 1 "Listening to events on cluster" <(docker logs -f imageCapturer)'
+                                                }
+
+                                                sh """
+                                                    docker run --name ${env.TEST_CONTAINER} -v ./validation/images/:/app/images -t --env-file ${envFile} ${env.IMAGE_NAME} \
+                                                    sh -c "/root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -tags=${params.TAGS} ${params.GOTEST_TESTCASE} -timeout=${params.TIMEOUT} -v; \
+                                                    ${rootPath}pipeline/scripts/${reporterScript}; \
+                                                    if [ -f ${rootPath}reporter ]; then ${rootPath}reporter; else echo \\"Reporter script not present\\"; fi"
+                                                """
+
+                                                if (params.CAPTURE_IMAGES) {
+                                                    stage('Showing images used on this run') {
+                                                        sh 'docker kill --signal SIGTERM imageCapturer && docker wait imageCapturer'
+                                                        def imagefiles = sh(script: 'ls -1 ./validation/images', returnStdout: true).split('\n').toList()
+                                                        if (imagefiles.isEmpty()) {
+                                                            echo 'No image list found, showing docker logs:'
+                                                            def logs = sh(script: 'docker logs imageCapturer', returnStdout: true)
+                                                            echo "${logs}"
+                                                        } else {
+                                                            imagefiles.each { file ->
+                                                                echo "Images used within cluster ${file}"
+                                                                def content = readFile("./validation/images/${file}")
+                                                                echo "${content}"
+                                                            }
+                                                        }
+                                                        sh 'docker rm imageCapturer'
+                                                    }
+                                                }
+                                            } catch (err) {
+                                                echo 'Test run had failures. Collecting results...'
+                                            }
+                                        }
+
+                                        // ── Archive test results ───────────────
+                                        stage('Test Report') {
+                                            sh "docker cp ${env.TEST_CONTAINER}:/root/go/src/github.com/rancher/tests/validation/results.xml ."
+                                            step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
+                                        }
+
+                                        // ── Optional Qase reporting ────────────
+                                        stage('Report to Qase') {
+                                            if (!params.QASE_TEST_RUN_ID?.trim()) {
+                                                echo 'Skipping Qase reporting: QASE_TEST_RUN_ID not set'
+                                                return
+                                            }
+
+                                            if (!env.QASE_AUTOMATION_TOKEN?.trim()) {
+                                                echo 'Skipping Qase reporting: QASE_AUTOMATION_TOKEN not available'
+                                                return
+                                            }
+
+                                            echo "Reporting to Qase (Run: ${params.QASE_TEST_RUN_ID})"
+                                            sh """
+                                                docker exec ${env.TEST_CONTAINER} sh -c '
+                                                    cd /root/go/src/github.com/rancher/tests/validation && \
+                                                    pipeline/scripts/${params.REPORTER_BUILD_SCRIPT} && \
+                                                    if [ -f ./reporter ]; then QASE_TEST_RUN_ID=${params.QASE_TEST_RUN_ID} ./reporter; fi'
+                                            """
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                sh "docker stop ${env.TEST_CONTAINER} || true"
+                sh "docker rm -v ${env.TEST_CONTAINER} || true"
+                sh "docker rmi -f ${env.IMAGE_NAME} || true"
+            }
+        }
+    }
+}
