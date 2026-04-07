@@ -75,6 +75,7 @@ policies:
   description: |
     Delete any marked instances which have been 
     marked for deletion for more than 1 day.
+    Skips instances with termination protection enabled (disableApiTermination).
   filters:
     - or:
       - type: marked-for-op
@@ -83,6 +84,10 @@ policies:
       - type: marked-for-op
         tag: ec2_known_user
         op: terminate
+    - type: instance-attribute
+      attribute: disableApiTermination
+      key: DisableApiTermination.Value
+      value: false
   actions:
     - type: terminate
 
@@ -428,14 +433,9 @@ policies:
 - name: schedule-release-elasticip
   resource: network-addr
   filters:
-    - type: value
-      key: "length(Tags[?Key=='DoNotDelete'])"
-      value: 0
-      op: eq
-    - type: value
-      key: "length(Tags[?Key=='ec2_known_user'])"
-      value: 0
-      op: eq
+    - 'tag:DoNotDelete': absent
+    - 'tag:doNotDelete': absent
+    - 'tag:ec2_known_user': absent
   actions:
     - type: mark-for-op
       tag: ec2_known_user
@@ -459,14 +459,9 @@ policies:
 - name: schedule-delete-targetgroup
   resource: app-elb-target-group
   filters:
-    - type: value
-      key: "length(Tags[?Key=='DoNotDelete'])"
-      value: 0
-      op: eq
-    - type: value
-      key: "length(Tags[?Key=='ec2_known_user'])"
-      value: 0
-      op: eq
+    - 'tag:DoNotDelete': absent
+    - 'tag:doNotDelete': absent
+    - 'tag:ec2_known_user': absent
   actions:
     - type: mark-for-op
       tag: ec2_known_user
