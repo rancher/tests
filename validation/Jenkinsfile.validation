@@ -211,7 +211,7 @@ pipeline {
                                             def decodedRsa = new String(env.AWS_SSH_RSA_KEY.decodeBase64())
                                             // Only harvester uses AWS_RSA_KEY_NAME for the RSA key;
                                             // unallocated and vsphere use JENKINS_RKE_VALIDATION
-                                            def rsaKeyName = (params.NODE_LABEL == 'harvester-vpn-1') ? env.AWS_RSA_KEY_NAME : 'JENKINS_RKE_VALIDATION'
+                                            def rsaKeyName = (params.NODE_LABEL == 'harvester-vpn-1') ? env.AWS_RSA_KEY_NAME : env.JENKINS_RKE_VALIDATION
                                             writeFile file: rsaKeyName, text: decodedRsa
                                         }
 
