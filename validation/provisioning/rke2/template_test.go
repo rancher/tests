@@ -112,7 +112,7 @@ func TestTemplate(t *testing.T) {
 			err = charts.InstallTemplateChart(r.client, r.templateConfig.Repo.ObjectMeta.Name, r.templateConfig.TemplateName, templateClusterName, k8sversions[0], r.cloudCredentials)
 			require.NoError(t, err)
 
-			cluster, err := r.client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + templateClusterName)
+			cluster, err := clusters.GetClusterByName(r.client, templateClusterName)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
