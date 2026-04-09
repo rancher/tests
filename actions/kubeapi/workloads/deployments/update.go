@@ -60,6 +60,9 @@ func UpdateOrchestration(client *rancher.Client, clusterID, namespaceName string
 		err = charts.WatchAndWaitDeployments(client, clusterID, namespaceName, metav1.ListOptions{
 			FieldSelector: "metadata.name=" + updatedDeployment.Name,
 		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return updatedDeployment, err
