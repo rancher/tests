@@ -306,7 +306,6 @@ rancher_use_bundled_system_charts: true'''
 
         stage('Build Docker Images') {
             steps {
-                sh "docker build --platform linux/amd64 -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.infra ."
                 sh "docker build --no-cache --platform linux/amd64 -t rancher-go-test:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.airgap-go-tests ."
             }
         }
@@ -391,7 +390,7 @@ rancher_use_bundled_system_charts: true'''
                                 docker run --rm --platform linux/amd64 \
                                     -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
                                     -v \$(pwd):/workspace -w /workspace \
-                                    rancher-infra-tools:latest sh -c '
+                                    rancher-go-test:latest sh -c '
                                         tofu -chdir=${tofuModulePath} output -raw airgap_inventory_json > /tmp/airgap.json &&
                                         python3 ./qa-infra-automation/scripts/generate_inventory.py \
                                             --input /tmp/airgap.json \
@@ -523,7 +522,7 @@ rancher_use_bundled_system_charts: true'''
                                 -e ANSIBLE_CONFIG=/workspace/qa-infra-automation/ansible/ansible.cfg \
                                 -v ${workspace}:/workspace \
                                 -w /workspace/${env.INFRA_DIR}/ansible/rke2/airgap \
-                                rancher-infra-tools:latest \
+                                rancher-go-test:latest \
                                 ansible-playbook -i inventory/inventory.yml /workspace/qa-infra-automation/ansible/rancher/token/generate-admin-token.yml \
                                     -e rancher_cattle_config_file=${cattleConfigPath} \
                                     -e rancher_token_ttl=${tokenTtl} \
@@ -732,7 +731,6 @@ rancher_use_bundled_system_charts: true'''
                 }
 
                 // Docker cleanup
-                sh 'docker rmi -f rancher-infra-tools:latest || true'
                 sh 'docker rmi -f rancher-go-test:latest || true'
             }
         }
