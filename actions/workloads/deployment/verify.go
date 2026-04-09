@@ -435,15 +435,7 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 
 	logrus.Debugf("Pausing orchestration on deployment: %s", deployment.Name)
 	deployment.Spec.Paused = true
-	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, false)
-	if err != nil {
-		return err
-	}
-
-	logrus.Debugf("Waiting orchestration on deployment: %s", deployment.Name)
-	err = charts.WatchAndWaitDeployments(client, clusterID, deployment.Namespace, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + deployment.Name,
-	})
+	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
 	if err != nil {
 		return err
 	}
@@ -468,15 +460,7 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 	deployment.Spec.Template.Spec.Containers = []corev1.Container{newContainerTemplate}
 
 	logrus.Debugf("Updating deployment (%s) image: %s replicas: %v", deployment.Name, redisImageName, replicas)
-	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, false)
-	if err != nil {
-		return err
-	}
-
-	logrus.Debugf("Waiting orchestration on deployment: %s", deployment.Name)
-	err = charts.WatchAndWaitDeployments(client, clusterID, deployment.Namespace, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + deployment.Name,
-	})
+	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
 	if err != nil {
 		return err
 	}
@@ -499,15 +483,7 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 
 	logrus.Debug("Resuming orchestration")
 	deployment.Spec.Paused = false
-	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, false)
-	if err != nil {
-		return err
-	}
-
-	logrus.Debugf("Waiting orchestration on deployment: %s", deployment.Name)
-	err = charts.WatchAndWaitDeployments(client, clusterID, deployment.Namespace, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + deployment.Name,
-	})
+	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
 	if err != nil {
 		return err
 	}
