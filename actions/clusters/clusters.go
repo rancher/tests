@@ -1,9 +1,11 @@
 package clusters
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -15,6 +17,7 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/steve"
 	"github.com/rancher/tests/actions/machinepools"
@@ -22,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -982,4 +986,33 @@ func DeleteInitMachine(client *rancher.Client, clusterID string) error {
 	}
 
 	return nil
+}
+
+func GetClusterByName(client *rancher.Client, clusterName string) (*v1.SteveAPIObject, error) {
+	var cluster *v1.SteveAPIObject
+	var clientErr error
+
+	err := kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		adminClient, adminClientErr := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
+		if adminClientErr != nil {
+			logrus.Warningf("Unable to get admin cluster client (%s) retrying", clusterName)
+			clientErr = adminClientErr
+			return false, nil
+		}
+
+		clientErr = nil
+		cluster, err = adminClient.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + clusterName)
+		if err != nil {
+			logrus.Warningf("Unable to get cluster (%s) retrying", clusterName)
+			return false, nil
+		}
+
+		return true, nil
+	})
+	if err != nil {
+		logrus.Warning(clientErr)
+		return nil, err
+	}
+
+	return cluster, nil
 }
