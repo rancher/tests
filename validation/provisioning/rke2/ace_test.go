@@ -4,11 +4,15 @@ package rke2
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
+	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	v1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -39,17 +43,14 @@ func aceSetup(t *testing.T) aceTest {
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(t, err)
-
 	r.client = client
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
-
 	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
-
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(t, err)
 
@@ -63,77 +64,92 @@ func aceSetup(t *testing.T) aceTest {
 }
 
 func TestACE(t *testing.T) {
-	t.Parallel()
 	r := aceSetup(t)
 
-	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-
+	nodeRolesStandard := []provisioninginput.MachinePools{
+		provisioninginput.EtcdMachinePool,
+		provisioninginput.ControlPlaneMachinePool,
+		provisioninginput.WorkerMachinePool,
+	}
 	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
 	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
-	tests := []struct {
-		name         string
-		machinePools []provisioninginput.MachinePools
-		client       *rancher.Client
-	}{
-		{"RKE2_ACE", nodeRolesStandard, r.standardUserClient},
+	clusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
+	clusterConfig.Networking = &provisioninginput.Networking{
+		LocalClusterAuthEndpoint: &v1.LocalClusterAuthEndpoint{
+			Enabled: true,
+		},
 	}
+	clusterConfig.MachinePools = nodeRolesStandard
 
-	for _, tt := range tests {
-		var err error
-		t.Cleanup(func() {
-			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
-		})
+	provider := provisioning.CreateProvider(clusterConfig.Provider)
+	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
 
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	logrus.Info("Provisioning downstream cluster")
+	cluster, err := provisioning.CreateProvisioningCluster(r.standardUserClient, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+	require.NoError(t, err)
 
-			clusterConfig := new(clusters.ClusterConfig)
-			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+	logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+	err = provisioning.VerifyClusterReady(r.client, cluster)
+	require.NoError(t, err)
 
-			networking := provisioninginput.Networking{
-				LocalClusterAuthEndpoint: &v1.LocalClusterAuthEndpoint{
-					Enabled: true,
-				},
-			}
+	logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+	err = deployment.VerifyClusterDeployments(r.standardUserClient, cluster)
+	require.NoError(t, err)
 
-			clusterConfig.Networking = &networking
-			clusterConfig.MachinePools = tt.machinePools
+	logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+	err = pods.VerifyClusterPods(r.client, cluster)
+	require.NoError(t, err)
 
-			provider := provisioning.CreateProvider(clusterConfig.Provider)
-			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
-			machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
+	logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+	err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
+	require.NoError(t, err)
 
-			logrus.Info("Provisioning cluster")
-			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
-			require.NoError(t, err)
+	r.client, err = r.client.ReLogin()
+	require.NoError(t, err)
 
-			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			err = provisioning.VerifyClusterReady(r.client, cluster)
-			require.NoError(t, err)
+	provClusterObj, err := r.client.Steve.SteveType("provisioning.cattle.io.cluster").ByID(cluster.ID)
+	require.NoError(t, err)
 
-			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(tt.client, cluster)
-			require.NoError(t, err)
+	clusterStatus := &provv1.ClusterStatus{}
+	err = steveV1.ConvertToK8sType(provClusterObj.Status, clusterStatus)
+	require.NoError(t, err)
 
-			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(r.client, cluster)
-			require.NoError(t, err)
+	pemFilePath := filepath.Join(
+		r.cattleConfig["sshPath"].(map[string]any)["sshPath"].(string),
+		r.cattleConfig["awsEC2Configs"].(map[string]any)["awsEC2Config"].([]map[string]any)[0]["awsSSHKeyName"].(string),
+	)
 
-			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
-			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
-			require.NoError(t, err)
+	sshUser := r.cattleConfig["awsEC2Configs"].(map[string]any)["awsEC2Config"].([]map[string]any)[0]["awsUser"].(string)
 
-			logrus.Infof("Verifying ACE (%s)", cluster.Name)
-			provisioning.VerifyACE(t, r.client, cluster)
-		})
+	t.Cleanup(func() {
+		logrus.Infof("Running cleanup")
 
-		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
-		err = qase.UpdateSchemaParameters(tt.name, params)
-		if err != nil {
-			logrus.Warningf("Failed to upload schema parameters %s", err)
+		if cluster != nil {
+			extClusters.DeleteK3SRKE2Cluster(r.client, cluster.ID)
+			provisioning.VerifyDeleteRKE2K3SCluster(t, r.client, cluster.ID)
 		}
+
+		r.session.Cleanup()
+	})
+
+	t.Run("Local_Available", func(t *testing.T) {
+		logrus.Infof("Verifying ACE (%s)", cluster.Name)
+		provisioning.VerifyACE(t, r.client, cluster)
+	})
+
+	t.Run("Local_Unavailable", func(t *testing.T) {
+		logrus.Infof("Verifying ACE (%s), with local unavailable", cluster.Name)
+		provisioning.VerifyACELocalUnavailable(t, r.client, cluster, clusterStatus, pemFilePath, sshUser)
+	})
+
+	params := provisioning.GetProvisioningSchemaParams(r.standardUserClient, r.cattleConfig)
+	err = qase.UpdateSchemaParameters("RKE2_ACE", params)
+	if err != nil {
+		logrus.Warningf("Failed to upload schema parameters %s", err)
 	}
 }

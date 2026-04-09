@@ -22,6 +22,8 @@ ACE(Authorized Cluster Endpoint) test verifies that a node driver cluster can be
 2. [Cluster Config](#cluster-config)
 3. [Machine Config](#machine-config)
 
+NOTE - ACE tests are only supported with RKE2 local clusters
+
 #### Table Tests:
 1. `RKE2_ACE`
 
