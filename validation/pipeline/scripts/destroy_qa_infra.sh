@@ -14,6 +14,8 @@ DOWNSTREAM_TFVARS_FILE="downstream-cluster.tfvars"
 GENERATED_TFVARS_FILE="$REPO_ROOT/ansible/rancher/default-ha/generated.tfvars"
 : "${BUILD_DOWNSTREAM_CLUSTER:=true}"
 
+export TF_WORKSPACE="$WORKSPACE_NAME"
+
 if [[ "$BUILD_DOWNSTREAM_CLUSTER" == "true" ]]; then
     # --- Rancher Cluster Module Destroy ---
     echo "--- Rancher Cluster Module Destroy ---"
@@ -29,15 +31,6 @@ if [[ "$BUILD_DOWNSTREAM_CLUSTER" == "true" ]]; then
 fi
 # --- Terraform Steps ---
 echo "--- Terraform Destroy ---"
-
-# Select the Terraform workspace
-tofu -chdir="$TERRAFORM_DIR" workspace select "$WORKSPACE_NAME"
-if [ $? -ne 0 ]; then
-    echo "Error: Terraform workspace select failed."
-    exit 1
-fi
-
-export TF_WORKSPACE="$WORKSPACE_NAME"
 
 # Destroy the Terraform infrastructure
 tofu -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$TFVARS_FILE"
