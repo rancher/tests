@@ -134,6 +134,10 @@ func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject)
 		}
 
 		cluster, err = client.Steve.SteveType(stevetypes.Provisioning).ByID(cluster.ID)
+		if err != nil {
+			return false, nil
+		}
+
 		clusterStatus := &provv1.ClusterStatus{}
 		err = steveV1.ConvertToK8sType(cluster.Status, clusterStatus)
 		if err != nil {
