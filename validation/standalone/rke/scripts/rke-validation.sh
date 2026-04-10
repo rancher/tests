@@ -36,7 +36,7 @@ echo
 echo "Preparing node..."
 echo
 
-ssh $SSH_OPTS $SSH_USER@$PUBLIC_IP bash -s <<'REMOTE'
+ssh $SSH_OPTS $SSH_USER@$PUBLIC_IP env KUBECTL_VERSION="$KUBECTL_VERSION" bash -s <<'REMOTE'
 set -e
 
 export DEBIAN_FRONTEND=noninteractive
