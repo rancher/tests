@@ -39,7 +39,11 @@ RUN echo "installing ${RKE_VERSION} version RKE" && \
 ARG CLI_VERSION
 RUN if [[ -n "$CLI_VERSION" ]] ; then  \
         echo installing CLI version $CLI_VERSION ; \
-        curl -LO https://github.com/rancher/cli/releases/download/$CLI_VERSION/rancher-linux-amd64-$CLI_VERSION.tar.gz ; \
-        tar -xf rancher-linux-amd64-$CLI_VERSION.tar.gz && \
+    CLI_TAR="rancher-linux-amd64-$CLI_VERSION.tar.gz" ; \
+    curl -fLO https://github.com/rancher/cli/releases/download/$CLI_VERSION/$CLI_TAR ; \
+    curl -fLO https://github.com/rancher/cli/releases/download/$CLI_VERSION/sha256sum.txt ; \
+    grep " $CLI_TAR$" sha256sum.txt | sha256sum -c - ; \
+    tar -xf $CLI_TAR && \
         mv rancher-$CLI_VERSION/rancher /bin/rancher && \
-        chmod +x /bin/rancher; fi;
+    chmod +x /bin/rancher && \
+    rm -f $CLI_TAR sha256sum.txt ; fi;
