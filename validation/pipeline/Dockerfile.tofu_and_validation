@@ -54,12 +54,14 @@ RUN for pem_file in /root/.ssh/jenkins-*; do \
         ssh-keygen -f "$pem_file" -y > "/root/.ssh/$(basename "$pem_file").pub"; \
     done
 
-# Install OpenTofu (with verbose wget for network diagnostics)
+# Install OpenTofu (with checksum verification)
 RUN TOFU_ZIP="tofu_${TOFU_VERSION}_linux_amd64.zip" && \
     wget --verbose "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/${TOFU_ZIP}" && \
+    wget --verbose "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" && \
+    grep "${TOFU_ZIP}$" "tofu_${TOFU_VERSION}_SHA256SUMS" | sha256sum -c - && \
     unzip "${TOFU_ZIP}" -d /usr/local/bin/ && \
     chmod +x /usr/local/bin/tofu && \
-    rm "${TOFU_ZIP}"
+    rm "${TOFU_ZIP}" "tofu_${TOFU_VERSION}_SHA256SUMS"
 # Create a link for terraform to point to opentofu
 RUN ln -s /usr/local/bin/tofu /usr/local/bin/terraform
 

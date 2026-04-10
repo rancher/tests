@@ -1,6 +1,6 @@
 # Lean Dockerfile for Infrastructure Operations
 # Contains only essentials for running Ansible, Tofu, and AWS
-FROM --platform=linux/amd64 alpine:3.22@sha256:55ae5d250caebc548793f321534bc6a8ef1d116f334f18f4ada1b2daad3251b2
+FROM --platform=linux/amd64 alpine:3.22@sha256:e0baf8c394150ac5a14925e179100519f5e37c53547f647acbd9f8eb3e5c4528
 
 ARG TOFU_VERSION=1.10.7
 ARG AWSCLI_VERSION=1.44.44
@@ -18,10 +18,13 @@ RUN apk add --no-cache \
     && rm -rf /var/cache/apk/*
 
 # Install OpenTofu
-RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.tar.gz" \
-    && tar -xzf /tmp/tofu.tar.gz -C /usr/local/bin/ \
-    && rm /tmp/tofu.tar.gz \
-    && chmod +x /usr/local/bin/tofu
+RUN TOFU_TAR="tofu_${TOFU_VERSION}_linux_amd64.tar.gz" && \
+    curl -Lo "/tmp/${TOFU_TAR}" "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/${TOFU_TAR}" && \
+    curl -Lo /tmp/tofu_SHA256SUMS "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" && \
+    cd /tmp && grep "${TOFU_TAR}$" tofu_SHA256SUMS | sha256sum -c - && \
+    tar -xzf "/tmp/${TOFU_TAR}" -C /usr/local/bin/ && \
+    rm "/tmp/${TOFU_TAR}" /tmp/tofu_SHA256SUMS && \
+    chmod +x /usr/local/bin/tofu
 
 # Install AWS CLI
 RUN pip3 install --no-cache-dir --break-system-packages awscli==${AWSCLI_VERSION}

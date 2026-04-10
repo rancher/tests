@@ -26,12 +26,18 @@ prereq() {
 scanRegistries() {
     echo -e "\nPulling rancher-images.txt file..."
     wget https://github.com/rancher/rancher/releases/download/"${RANCHER_VERSION}"/rancher-images.txt
+    wget https://github.com/rancher/rancher/releases/download/"${RANCHER_VERSION}"/sha256sum.txt
+
+    echo -e "\nVerifying rancher-images.txt checksum..."
+    grep " rancher-images.txt$" sha256sum.txt | sha256sum -c -
 
     echo -e "\nRunning scan-registry.sh against Docker Hub..."
     "${SCAN_REGISTRY_PATH}" -l "$(pwd)/rancher-images.txt" -r "${DOCKER_REGISTRY}" >> "${DOCKER_IMAGES_PATH}"
 
     echo -e "\nRunning scan-registry.sh against specified registry..."
     "${SCAN_REGISTRY_PATH}" -l "$(pwd)/rancher-images.txt" -r "${USER_REGISTRY}" >> "${USER_REGISTRY_IMAGES_PATH}"
+
+    rm -f sha256sum.txt
 }
 
 compareResults() {
