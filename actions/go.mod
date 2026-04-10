@@ -247,3 +247,5 @@ require (
 	sigs.k8s.io/kustomize/kyaml v0.20.1 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+replace github.com/rancher/shepherd => github.com/dasarinaidu/shepherd v0.0.0-20260428152415-27f0509de372
