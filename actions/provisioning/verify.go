@@ -554,19 +554,37 @@ func VerifyACELocalUnavailable(t *testing.T, rancherClient *rancher.Client, clus
 	var controlPlaneIP string
 
 	for _, node := range nodes.Items {
-		if node.Labels["node-role.kubernetes.io/control-plane"] == "true" {
-			for _, addr := range node.Status.Addresses {
-				if addr.Type == corev1.NodeExternalIP {
-					controlPlaneIP = addr.Address
-					break
-				}
-			}
-			if controlPlaneIP != "" {
-				break
+
+		var externalIP, hostname string
+
+		for _, addr := range node.Status.Addresses {
+			switch addr.Type {
+			case corev1.NodeExternalIP:
+				externalIP = addr.Address
+			case corev1.NodeHostName:
+				hostname = addr.Address
 			}
 		}
+
+		candidates := []string{externalIP, hostname}
+
+		for _, ip := range candidates {
+			if ip == "" {
+				continue
+			}
+			if strings.HasPrefix(ip, "172.") || strings.HasPrefix(ip, "192.") || strings.HasPrefix(ip, "10.") {
+				continue
+			}
+
+			controlPlaneIP = ip
+			break
+		}
+
+		if controlPlaneIP != "" {
+			break
+		}
 	}
-	require.NotEmpty(t, controlPlaneIP, "could not find controlplane node IP")
+	require.NotEmpty(t, controlPlaneIP, "no usable public IP found on any node")
 
 	scpCmd := exec.Command(
 		"ssh",
