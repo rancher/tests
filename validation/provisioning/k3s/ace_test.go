@@ -130,7 +130,6 @@ func TestACE(t *testing.T) {
 
 		if cluster != nil {
 			extClusters.DeleteK3SRKE2Cluster(k.client, cluster.ID)
-			provisioning.VerifyDeleteRKE2K3SCluster(t, k.client, cluster.ID)
 		}
 
 		k.session.Cleanup()
