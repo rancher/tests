@@ -55,7 +55,7 @@ ADD ./* ./
 SHELL ["/bin/bash", "-c"] 
 
 RUN apt-get update && apt-get install -y python3 python3-pip python3-venv apt-transport-https ca-certificates gnupg curl
-RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg  add - && apt-get update -y && apt-get install google-cloud-cli=${GOOGLE_CLOUD_CLI_VERSION} -y
+RUN mkdir -p /etc/apt/keyrings && curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /etc/apt/keyrings/cloud.google.gpg && echo "deb [signed-by=/etc/apt/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list && apt-get update -y && apt-get install google-cloud-cli=${GOOGLE_CLOUD_CLI_VERSION} -y
 RUN curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /etc/apt/keyrings/microsoft.gpg && \
     echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ noble main" | tee /etc/apt/sources.list.d/azure-cli.list && \
     apt-get update -y && \
