@@ -27,10 +27,13 @@ SHELL ["/bin/bash", "-c"]
 
 
 ARG RKE_VERSION=v1.7.3
-RUN echo installing ${RKE_VERSION} version RKE && \
-    curl -0Ls https://github.com/rancher/rke/releases/download/$RKE_VERSION/rke_linux-amd64 > rke
-RUN mv rke /bin/rke && \
-    chmod +x /bin/rke
+RUN echo "installing ${RKE_VERSION} version RKE" && \
+    curl -fSL "https://github.com/rancher/rke/releases/download/${RKE_VERSION}/rke_linux-amd64" -o rke_linux-amd64 && \
+    curl -fSL "https://github.com/rancher/rke/releases/download/${RKE_VERSION}/rke_linux-amd64.sha256" -o rke_linux-amd64.sha256 && \
+    sha256sum -c rke_linux-amd64.sha256 && \
+    mv rke_linux-amd64 /bin/rke && \
+    chmod +x /bin/rke && \
+    rm -f rke_linux-amd64.sha256
 
 
 ARG CLI_VERSION

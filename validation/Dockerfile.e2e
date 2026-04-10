@@ -100,10 +100,15 @@ RUN if [[ "$RANCHER2_PROVIDER_VERSION" == *"-dev"* ]]; then \
     fi; \
     wait
 
-RUN echo installing ${RKE_VERSION} version RKE && \
-    curl -0Ls https://github.com/rancher/rke/releases/download/$RKE_VERSION/rke_linux-amd64 > rke
-RUN mv rke /bin/rke && \
-    chmod +x /bin/rke
+RUN echo "installing ${RKE_VERSION} version RKE" && \
+    RKE_BASE_URL="https://github.com/rancher/rke/releases/download/${RKE_VERSION}" && \
+    RKE_BIN="rke_linux-amd64" && \
+    curl -fsSL "${RKE_BASE_URL}/${RKE_BIN}" -o "${RKE_BIN}" && \
+    curl -fsSL "${RKE_BASE_URL}/${RKE_BIN}.sha256" -o "${RKE_BIN}.sha256" && \
+    sha256sum -c "${RKE_BIN}.sha256" && \
+    mv "${RKE_BIN}" /bin/rke && \
+    chmod +x /bin/rke && \
+    rm "${RKE_BIN}.sha256"
 
 ARG CLI_VERSION
 RUN if [[ -n "$CLI_VERSION" ]] ; then  \
