@@ -484,6 +484,9 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 	logrus.Debug("Resuming orchestration")
 	deployment.Spec.Paused = false
 	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	if err != nil {
+		return err
+	}
 
 	logrus.Debugf("Verifying that the deployment image was updated to %s", redisImageName)
 	err = VerifyDeploymentScale(client, clusterID, deployment.Namespace, deployment, redisImageName, int(replicas))

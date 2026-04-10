@@ -129,9 +129,10 @@ func WaitForDeploymentActive(client *rancher.Client, clusterID, namespaceName, d
 		}
 
 		if deployment.Spec.Replicas != nil &&
-			*deployment.Spec.Replicas == deployment.Status.UpdatedReplicas &&
-			*deployment.Spec.Replicas == deployment.Status.ReadyReplicas &&
-			*deployment.Spec.Replicas == deployment.Status.AvailableReplicas {
+			*deployment.Spec.Replicas == deployment.Status.AvailableReplicas &&
+			(deployment.Spec.Paused ||
+				(*deployment.Spec.Replicas == deployment.Status.UpdatedReplicas &&
+					*deployment.Spec.Replicas == deployment.Status.ReadyReplicas)) {
 			return true, nil
 		}
 

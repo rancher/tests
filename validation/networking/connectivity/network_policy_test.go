@@ -73,11 +73,14 @@ func (n *NetworkPolicyTestSuite) SetupSuite() {
 	require.NoError(n.T(), err)
 }
 
+// The NetworkPolicy name must follow RFC 1123 rules: it should contain only lowercase alphanumeric characters, -, or .
+// and must start and end with an alphanumeric character, and match the regex:
+// [a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*
 func (n *NetworkPolicyTestSuite) TestPingPodsFromCPNode() {
 	networkPolicyTests := []struct {
 		name string
 	}{
-		{"Network_Policy_Connectivity"},
+		{"Network-Policy-Connectivity"},
 	}
 
 	for _, networkPolicyTest := range networkPolicyTests {
@@ -86,7 +89,7 @@ func (n *NetworkPolicyTestSuite) TestPingPodsFromCPNode() {
 			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, n.cattleConfig, workloadConfigs)
 
 			workloadConfigs.DaemonSet.ObjectMeta.Namespace = n.namespace.Name
-			workloadConfigs.DaemonSet.ObjectMeta.GenerateName = strings.ToLower(networkPolicyTest.name) + "-"
+			workloadConfigs.DaemonSet.ObjectMeta.GenerateName = strings.ToLower(networkPolicyTest.name)
 
 			logrus.Infof("Creating daemonset with name prefix: %s", workloadConfigs.DaemonSet.ObjectMeta.GenerateName)
 			testDaemonset, err := daemonset.CreateDaemonSetFromConfig(n.downstreamClient, n.cluster.ID, workloadConfigs.DaemonSet)
