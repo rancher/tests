@@ -14,6 +14,8 @@ DOWNSTREAM_TFVARS_FILE="downstream-cluster.tfvars"
 GENERATED_TFVARS_FILE="$REPO_ROOT/ansible/rancher/default-ha/generated.tfvars"
 : "${BUILD_DOWNSTREAM_CLUSTER:=true}"
 
+export TF_WORKSPACE="$WORKSPACE_NAME"
+
 if [[ "$BUILD_DOWNSTREAM_CLUSTER" == "true" ]]; then
     # --- Rancher Cluster Module Destroy ---
     echo "--- Rancher Cluster Module Destroy ---"
