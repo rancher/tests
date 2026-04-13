@@ -1,4 +1,4 @@
-//go:build (validation || recurring || ipv6 || dualstack || infra.rke2k3s || cluster.any || stress || pit.daily) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke1 && !sanity && !extended
+//go:build (validation || recurring || ipv6 || dualstack || infra.rke2k3s || cluster.any || stress || pit.weekly) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke1 && !sanity && !extended
 
 package rke2
 
