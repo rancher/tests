@@ -1000,15 +1000,26 @@ func GetClusterByName(client *rancher.Client, clusterName string) (*v1.SteveAPIO
 			return false, nil
 		}
 
+		v3Name, err := clusters.GetClusterIDByName(adminClient, clusterName)
+		if err != nil {
+			return false, nil
+		}
+
 		clientErr = nil
 		cluster, err = adminClient.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + clusterName)
 		if err != nil {
-			logrus.Warningf("Unable to get cluster (%s) retrying", clusterName)
-			return false, nil
+			cluster, err = adminClient.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + v3Name)
+			if err != nil {
+				return false, nil
+			}
 		}
 
 		return true, nil
 	})
+	if cluster != nil {
+		return cluster, nil
+	}
+
 	if err != nil {
 		logrus.Warning(clientErr)
 		return nil, err
