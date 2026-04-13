@@ -58,7 +58,10 @@ RUN for pem_file in /root/.ssh/jenkins-*; do \
 RUN TOFU_ZIP="tofu_${TOFU_VERSION}_linux_amd64.zip" && \
     wget --verbose "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/${TOFU_ZIP}" && \
     wget --verbose "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" && \
-    grep "${TOFU_ZIP}$" "tofu_${TOFU_VERSION}_SHA256SUMS" | sha256sum -c - && \
+    grep "${TOFU_ZIP}$" "tofu_${TOFU_VERSION}_SHA256SUMS" > /tmp/tofu.sha256 && \
+    test -s /tmp/tofu.sha256 && \
+    sha256sum -c /tmp/tofu.sha256 && \
+    rm /tmp/tofu.sha256 && \
     unzip "${TOFU_ZIP}" -d /usr/local/bin/ && \
     chmod +x /usr/local/bin/tofu && \
     rm "${TOFU_ZIP}" "tofu_${TOFU_VERSION}_SHA256SUMS"
