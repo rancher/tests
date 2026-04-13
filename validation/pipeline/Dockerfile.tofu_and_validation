@@ -73,12 +73,14 @@ RUN KUBECTL_BIN_URL="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd6
     curl -fsSL -o /tmp/kubectl "${KUBECTL_BIN_URL}" && \
     curl -fsSL -o /tmp/kubectl.sha256 "${KUBECTL_BIN_URL}.sha256" && \
     awk '{print $1 "  /tmp/kubectl"}' /tmp/kubectl.sha256 > /tmp/kubectl.sha256.check && \
+    test -s /tmp/kubectl.sha256.check && \
     sha256sum -c /tmp/kubectl.sha256.check | grep -q ': OK$' && \
     install -m 0755 /tmp/kubectl /usr/local/bin/kubectl && \
     HELM_TAR="helm-${HELM_VERSION}-linux-amd64.tar.gz" && \
     curl -fsSL -o "/tmp/${HELM_TAR}" "https://get.helm.sh/${HELM_TAR}" && \
     curl -fsSL -o "/tmp/${HELM_TAR}.sha256sum" "https://get.helm.sh/${HELM_TAR}.sha256sum" && \
     awk '{print $1 "  /tmp/'"${HELM_TAR}"'"}' "/tmp/${HELM_TAR}.sha256sum" > /tmp/helm.sha256.check && \
+    test -s /tmp/helm.sha256.check && \
     sha256sum -c /tmp/helm.sha256.check | grep -q ': OK$' && \
     tar -xzf "/tmp/${HELM_TAR}" -C /tmp && \
     install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm && \
@@ -87,6 +89,7 @@ RUN KUBECTL_BIN_URL="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd6
     curl -fsSL -o /tmp/yq_checksums "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/checksums" && \
     grep -q ' yq_linux_amd64$' /tmp/yq_checksums && \
     awk '/ yq_linux_amd64$/ {print $1 "  /tmp/yq"}' /tmp/yq_checksums > /tmp/yq.sha256.check && \
+    test -s /tmp/yq.sha256.check && \
     sha256sum -c /tmp/yq.sha256.check | grep -q ': OK$' && \
     install -m 0755 /tmp/yq /usr/local/bin/yq && \
     rm -rf /tmp/kubectl /tmp/kubectl.sha256 /tmp/kubectl.sha256.check /tmp/${HELM_TAR} /tmp/${HELM_TAR}.sha256sum /tmp/helm.sha256.check /tmp/linux-amd64 /tmp/yq /tmp/yq_checksums /tmp/yq.sha256.check

@@ -271,7 +271,7 @@ node {
                 }
               }
               stage('Setup') {
-                sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/download/v4.47.2/yq_linux_amd64 && wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/v4.47.2/checksums && awk "/ yq_linux_amd64$/ {print \$1 \"  ./yq\"}" ./yq_checksums | sha256sum -c - | grep -q ": OK$" && rm -f ./yq_checksums'
+                sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/download/v4.47.2/yq_linux_amd64 && wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/v4.47.2/checksums && awk "/ yq_linux_amd64$/ {print \$1 \"  ./yq\"}" ./yq_checksums > ./yq.sha256 && test -s ./yq.sha256 && sha256sum -c ./yq.sha256 | grep -q ": OK$" && rm -f ./yq_checksums ./yq.sha256'
                 sh returnStdout:true, script: 'chmod a+x ./yq'
               }
               stage("Build Environment") {
