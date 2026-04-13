@@ -61,9 +61,9 @@ RUN curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -
     apt-get update -y && \
     apt-get install azure-cli=${AZURE_CLI_VERSION} -y
 
-RUN python3 -m venv custodian-venv
-RUN . custodian-venv/bin/activate
-RUN pip3 install c7n==${C7N_VERSION} c7n_azure==${C7N_AZURE_VERSION} c7n_gcp==${C7N_GCP_VERSION} c7n_mailer==${C7N_MAILER_VERSION} --break-system-packages
+RUN python3 -m venv custodian-venv && \
+    ./custodian-venv/bin/pip install c7n==${C7N_VERSION} c7n_azure==${C7N_AZURE_VERSION} c7n_gcp==${C7N_GCP_VERSION} c7n_mailer==${C7N_MAILER_VERSION}
+ENV PATH="/usr/app/src/custodian-venv/bin:${PATH}"
 
 RUN az login -u ${AZURE_CLIENT_ID} --service-principal -p ${AZURE_CLIENT_SECRET} --tenant ${AZURE_TENANT_ID} > /dev/null
 RUN gcloud auth activate-service-account --key-file $GOOGLE_APPLICATION_CREDENTIALS > /dev/null

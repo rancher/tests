@@ -153,6 +153,10 @@ node {
             echo "Destroy operation failed: ${err.message}"
             echo "Manual cleanup may be required for workspace: ${targetWorkspace}"
             throw err
+        } finally {
+            stage('Cleanup Docker Image') {
+                sh "docker rmi -f ${infraToolsImage} >/dev/null 2>&1 || true"
+            }
         }
     }
 }
