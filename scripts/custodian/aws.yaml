@@ -86,7 +86,7 @@ policies:
         op: terminate
     - type: instance-attribute
       attribute: disableApiTermination
-      key: DisableApiTermination.Value
+      key: Value
       value: false
   actions:
     - type: terminate
