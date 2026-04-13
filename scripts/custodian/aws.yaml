@@ -70,12 +70,13 @@ policies:
     - type: remove-tag
       tags: ['ec2_unknown_user', 'ec2_known_user']
 
+
 - name: ec2-terminate-instances
   resource: aws.ec2
   description: |
     Delete any marked instances which have been 
     marked for deletion for more than 1 day.
-    Skips instances with termination protection enabled (disableApiTermination).
+    Skips instances with termination protection enabled.
   filters:
     - or:
       - type: marked-for-op
@@ -84,16 +85,11 @@ policies:
       - type: marked-for-op
         tag: ec2_known_user
         op: terminate
-    - type: instance-attribute
-      attribute: disableApiTermination
-      key: Value
-      value: false
-    - type: instance-attribute
-      attribute: disableApiStop
-      key: Value
-      value: false
+    - not:
+      - type: termination-protected
   actions:
     - type: terminate
+
 
 # EKS Policies Disclaimer
 # Note: cannot manage EKS nodegroups at this time, but the
