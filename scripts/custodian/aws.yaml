@@ -88,6 +88,10 @@ policies:
       attribute: disableApiTermination
       key: Value
       value: false
+    - type: instance-attribute
+      attribute: disableApiStop
+      key: Value
+      value: false
   actions:
     - type: terminate
 
