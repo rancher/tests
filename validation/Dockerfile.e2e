@@ -61,7 +61,10 @@ RUN for pem_file in /root/.ssh/jenkins-*; do \
 RUN TOFU_ZIP="tofu_${TOFU_VERSION}_linux_amd64.zip" && \
     wget --verbose "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/${TOFU_ZIP}" && \
     wget --verbose "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" && \
-    grep "${TOFU_ZIP}$" "tofu_${TOFU_VERSION}_SHA256SUMS" | sha256sum -c - && \
+    grep "${TOFU_ZIP}$" "tofu_${TOFU_VERSION}_SHA256SUMS" > /tmp/tofu.sha256 && \
+    test -s /tmp/tofu.sha256 && \
+    sha256sum -c /tmp/tofu.sha256 && \
+    rm /tmp/tofu.sha256 && \
     unzip "${TOFU_ZIP}" -d /usr/local/bin/ && \
     chmod +x /usr/local/bin/tofu && \
     rm "${TOFU_ZIP}" "tofu_${TOFU_VERSION}_SHA256SUMS"
@@ -118,7 +121,10 @@ RUN if [[ -n "$CLI_VERSION" ]] ; then  \
     CLI_TAR="rancher-linux-amd64-$CLI_VERSION.tar.gz" ; \
     curl -fLO https://github.com/rancher/cli/releases/download/$CLI_VERSION/$CLI_TAR ; \
     curl -fLO https://github.com/rancher/cli/releases/download/$CLI_VERSION/sha256sum.txt ; \
-    grep " $CLI_TAR$" sha256sum.txt | sha256sum -c - ; \
+    grep " $CLI_TAR$" sha256sum.txt > /tmp/cli.sha256 && \
+    test -s /tmp/cli.sha256 && \
+    sha256sum -c /tmp/cli.sha256 && \
+    rm /tmp/cli.sha256 ; \
     tar -xf $CLI_TAR && \
         mv rancher-$CLI_VERSION/rancher /bin/rancher && \
     chmod +x /bin/rancher && \

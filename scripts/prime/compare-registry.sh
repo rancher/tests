@@ -29,7 +29,7 @@ scanRegistries() {
     wget https://github.com/rancher/rancher/releases/download/"${RANCHER_VERSION}"/sha256sum.txt
 
     echo -e "\nVerifying rancher-images.txt checksum..."
-    grep " rancher-images.txt$" sha256sum.txt | sha256sum -c -
+    grep " rancher-images.txt$" sha256sum.txt > /tmp/rancher-verify.sha256 && test -s /tmp/rancher-verify.sha256 && sha256sum -c /tmp/rancher-verify.sha256 && rm /tmp/rancher-verify.sha256
 
     echo -e "\nRunning scan-registry.sh against Docker Hub..."
     "${SCAN_REGISTRY_PATH}" -l "$(pwd)/rancher-images.txt" -r "${DOCKER_REGISTRY}" >> "${DOCKER_IMAGES_PATH}"

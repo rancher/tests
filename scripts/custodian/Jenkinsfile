@@ -80,7 +80,7 @@ node("vsphere-vpn-1") {
                 writeFile file: 'google_credentials.json', text: decoded
                 sh returnStdout: true, script: "curl -fsSL -o ./jq https://github.com/jqlang/jq/releases/download/${jqVersion}/jq-linux-amd64"
                 sh returnStdout: true, script: "curl -fsSL -o ./sha256sum.txt https://github.com/jqlang/jq/releases/download/${jqVersion}/sha256sum.txt"
-                sh returnStdout: true, script: "grep ' jq-linux-amd64$' ./sha256sum.txt | sha256sum -c -"
+                sh returnStdout: true, script: "grep ' jq-linux-amd64\$' ./sha256sum.txt > ./jq.sha256 && test -s ./jq.sha256 && sha256sum -c ./jq.sha256 && rm ./jq.sha256"
                 sh returnStdout:true, script: 'chmod a+x ./jq && rm -f ./sha256sum.txt'
                 sh """
 docker build -t ${imageName} -f Dockerfile . \
