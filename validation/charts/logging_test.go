@@ -19,10 +19,12 @@ import (
 
 type LoggingTestSuite struct {
 	suite.Suite
-	client  *rancher.Client
-	session *session.Session
-	project *management.Project
-	cluster *clusters.ClusterMeta
+	client              *rancher.Client
+	session             *session.Session
+	project             *management.Project
+	cluster             *clusters.ClusterMeta
+	chartInstallOptions *charts.InstallOptions
+	chartFeatureOptions *charts.RancherLoggingOpts
 }
 
 func (l *LoggingTestSuite) TearDownSuite() {
@@ -55,29 +57,46 @@ func (l *LoggingTestSuite) SetupSuite() {
 	require.Equal(l.T(), charts.SystemProject, createdProject.Name)
 
 	l.project = createdProject
-}
-
-func (l *LoggingTestSuite) TestLoggingInstallation() {
 	l.T().Logf("Resolving latest chart version for [%s] from repository [%s]", charts.RancherLoggingName, catalog.RancherChartRepo)
 	latestLoggingVersion, err := l.client.Catalog.GetLatestChartVersion(charts.RancherLoggingName, catalog.RancherChartRepo)
 	require.NoError(l.T(), err)
 
-	installOptions := &charts.InstallOptions{
+	l.chartInstallOptions = &charts.InstallOptions{
 		Cluster:   l.cluster,
 		Version:   latestLoggingVersion,
 		ProjectID: l.project.ID,
 	}
 
-	featureOptions := &charts.RancherLoggingOpts{
+	l.chartFeatureOptions = &charts.RancherLoggingOpts{
 		AdditionalLoggingSources: true,
 	}
+}
 
-	l.T().Logf("Installing Rancher Logging chart on cluster [%s] with version [%s]", l.cluster.Name, latestLoggingVersion)
-	err = charts.InstallRancherLoggingChart(l.client, installOptions, featureOptions)
+func (l *LoggingTestSuite) TestLoggingInstallation() {
+	l.T().Logf("Checking if logging chart is already installed in namespace [%s]", charts.RancherLoggingNamespace)
+	loggingChartStatus, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.RancherLoggingNamespace, charts.RancherLoggingName)
 	require.NoError(l.T(), err)
 
-	l.T().Logf("Waiting for logging deployments to become ready in namespace [%s]", charts.RancherLoggingNamespace)
-	err = shepherdCharts.WatchAndWaitDeployments(l.client, l.cluster.ID, charts.RancherLoggingNamespace, metav1.ListOptions{})
+	if !loggingChartStatus.IsAlreadyInstalled {
+		l.T().Logf("Installing Rancher Logging chart on cluster [%s] with version [%s]", l.cluster.Name, l.chartInstallOptions.Version)
+		err = charts.InstallRancherLoggingChart(l.client, l.chartInstallOptions, l.chartFeatureOptions)
+		require.NoError(l.T(), err)
+
+		l.T().Logf("Waiting for logging Deployments to become ready in namespace [%s]", charts.RancherLoggingNamespace)
+		err = shepherdCharts.WatchAndWaitDeployments(l.client, l.cluster.ID, charts.RancherLoggingNamespace, metav1.ListOptions{})
+		require.NoError(l.T(), err)
+	}
+
+	l.T().Logf("Verifying logging collectors are running (step 1: logs being collected)")
+	err = verifyLoggingCollectorsRunning(l.client, l.cluster.ID)
+	require.NoError(l.T(), err)
+
+	l.T().Logf("Creating logging pipeline (ClusterOutput + ClusterFlow) to verify pipeline is working (step 3)")
+	outputName, flowName, err := createLoggingPipeline(l.client, l.cluster.ID)
+	require.NoError(l.T(), err)
+
+	l.T().Logf("Verifying logging pipeline is active (ClusterOutput [%s], ClusterFlow [%s])", outputName, flowName)
+	err = verifyLoggingPipelineActive(l.client, l.cluster.ID, outputName, flowName)
 	require.NoError(l.T(), err)
 }
 
