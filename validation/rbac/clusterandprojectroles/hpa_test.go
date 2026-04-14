@@ -3,7 +3,6 @@
 package clusterandprojectroles
 
 import (
-	"net/url"
 	"testing"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -19,6 +18,22 @@ import (
 	"github.com/stretchr/testify/suite"
 	corev1 "k8s.io/api/core/v1"
 )
+
+// allRBACRoles is the common set of roles tested across all RBAC subtests.
+var allRBACRoles = []rbac.Role{
+	rbac.ClusterOwner,
+	rbac.ProjectOwner,
+	rbac.ProjectMember,
+	rbac.ReadOnly,
+	rbac.ClusterMember,
+}
+
+// roleContext holds the user client, Steve client, and namespace prepared for a specific role's subtest.
+type roleContext struct {
+	userClient      *rancher.Client
+	userSteveClient *v1.Client
+	namespaceName   string
+}
 
 type HPATestSuite struct {
 	suite.Suite
@@ -63,15 +78,77 @@ func (h *HPATestSuite) SetupSuite() {
 	require.NoError(h.T(), err)
 }
 
-func (h *HPATestSuite) getDownstreamSteveClient(userClient *rancher.Client) (*v1.Client, error) {
-	return userClient.Steve.ProxyDownstream(h.cluster.ID)
-}
-
+// setupUserForRole creates a standard user, assigns the given role scoped to the project
+// (or cluster-scoped when project is nil), and returns the user's clients.
 func (h *HPATestSuite) setupUserForRole(role rbac.Role, project *v3.Project) (*management.User, *rancher.Client, error) {
 	return rbac.AddUserWithRoleToCluster(h.client, rbac.StandardUser.String(), role.String(), h.cluster, project)
 }
 
-// TestCreate validates basic HPA creation.
+// setupRoleInSharedProject creates a user with the given role in the shared project and returns
+// a roleContext ready for use. For ClusterMember, a new project and namespace are created instead
+// since cluster members cannot be scoped to another user's project.
+func (h *HPATestSuite) setupRoleInSharedProject(role rbac.Role) roleContext {
+	h.T().Helper()
+
+	if role == rbac.ClusterMember {
+		_, userClient, err := h.setupUserForRole(role, nil)
+		require.NoError(h.T(), err)
+
+		_, userNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(userClient, h.cluster.ID)
+		require.NoError(h.T(), err)
+
+		userSteveClient, err := userClient.Steve.ProxyDownstream(h.cluster.ID)
+		require.NoError(h.T(), err)
+
+		return roleContext{
+			userClient:      userClient,
+			userSteveClient: userSteveClient,
+			namespaceName:   userNamespace.Name,
+		}
+	}
+
+	_, userClient, err := h.setupUserForRole(role, h.sharedProject)
+	require.NoError(h.T(), err)
+
+	userSteveClient, err := userClient.Steve.ProxyDownstream(h.cluster.ID)
+	require.NoError(h.T(), err)
+
+	return roleContext{
+		userClient:      userClient,
+		userSteveClient: userSteveClient,
+		namespaceName:   h.sharedNamespace.Name,
+	}
+}
+
+// setupRoleForNegativeTest creates a user with the given role for cross-project (negative) testing.
+// Cluster-scoped roles get nil project; project-scoped roles get the shared project.
+func (h *HPATestSuite) setupRoleForNegativeTest(role rbac.Role) roleContext {
+	h.T().Helper()
+
+	var project *v3.Project
+	if role != rbac.ClusterMember {
+		project = h.sharedProject
+	}
+
+	_, userClient, err := h.setupUserForRole(role, project)
+	require.NoError(h.T(), err)
+
+	userSteveClient, err := userClient.Steve.ProxyDownstream(h.cluster.ID)
+	require.NoError(h.T(), err)
+
+	return roleContext{
+		userClient:      userClient,
+		userSteveClient: userSteveClient,
+		namespaceName:   h.unsharedNamespace.Name,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Basic CRUD Tests
+// ---------------------------------------------------------------------------
+
+// TestCreate validates that an HPA can be created, its fields match expectations,
+// and the target workload scales to minReplicas.
 func (h *HPATestSuite) TestCreate() {
 	subSession := h.session.NewSession()
 	defer subSession.Cleanup()
@@ -89,7 +166,8 @@ func (h *HPATestSuite) TestCreate() {
 	require.NoError(h.T(), deleteHPA(h.steveClient, hpaResp, h.sharedNamespace.Name))
 }
 
-// TestEdit validates HPA update with new min/max replicas.
+// TestEdit validates that an HPA can be updated with new min/max replicas and the
+// workload scales to the updated minReplicas.
 func (h *HPATestSuite) TestEdit() {
 	subSession := h.session.NewSession()
 	defer subSession.Cleanup()
@@ -107,7 +185,7 @@ func (h *HPATestSuite) TestEdit() {
 	require.NoError(h.T(), deleteHPA(h.steveClient, updatedHPA, h.sharedNamespace.Name))
 }
 
-// TestDelete validates HPA deletion.
+// TestDelete validates that an HPA can be deleted and no longer appears in the API.
 func (h *HPATestSuite) TestDelete() {
 	subSession := h.session.NewSession()
 	defer subSession.Cleanup()
@@ -119,57 +197,42 @@ func (h *HPATestSuite) TestDelete() {
 	require.NoError(h.T(), err)
 }
 
-// TestRBACCreate validates HPA creation permissions for each role.
-func (h *HPATestSuite) TestRBACCreate() {
-	roles := []rbac.Role{rbac.ClusterOwner, rbac.ProjectOwner, rbac.ProjectMember, rbac.ReadOnly, rbac.ClusterMember}
+// ---------------------------------------------------------------------------
+// RBAC Tests — Create
+// ---------------------------------------------------------------------------
 
-	for _, role := range roles {
+// TestRBACCreate validates HPA creation permissions in the user's own/shared project.
+//   - ClusterOwner, ProjectOwner, ProjectMember, ClusterMember: allowed
+//   - ReadOnly: forbidden (403)
+func (h *HPATestSuite) TestRBACCreate() {
+	for _, role := range allRBACRoles {
 		role := role
 		h.Run(role.String(), func() {
 			subSession := h.session.NewSession()
 			defer subSession.Cleanup()
 
-			var userClient *rancher.Client
-			var userSteveClient *v1.Client
-			var namespaceName string
-			var err error
-
-			if role == rbac.ClusterMember {
-				_, userClient, err = h.setupUserForRole(role, nil)
-				require.NoError(h.T(), err)
-
-				userProject, userNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(userClient, h.cluster.ID)
-				require.NoError(h.T(), err)
-				_ = userProject
-				namespaceName = userNamespace.Name
-			} else {
-				_, userClient, err = h.setupUserForRole(role, h.sharedProject)
-				require.NoError(h.T(), err)
-				namespaceName = h.sharedNamespace.Name
-			}
-
-			userSteveClient, err = h.getDownstreamSteveClient(userClient)
-			require.NoError(h.T(), err)
+			rc := h.setupRoleInSharedProject(role)
 
 			if role == rbac.ReadOnly {
 				log.Infof("Verifying that %s cannot create HPA", role)
-				_, _, err := createHPA(userClient, userSteveClient, h.cluster.ID, namespaceName, nil)
+				_, _, err := createHPA(rc.userClient, rc.userSteveClient, h.cluster.ID, rc.namespaceName, nil)
 				require.Error(h.T(), err)
-			} else {
-				log.Infof("Verifying that %s can create HPA", role)
-				hpaResp, _, err := createHPA(userClient, userSteveClient, h.cluster.ID, namespaceName, nil)
-				require.NoError(h.T(), err)
-				require.NoError(h.T(), deleteHPA(userSteveClient, hpaResp, namespaceName))
+				return
 			}
+
+			log.Infof("Verifying that %s can create HPA", role)
+			hpaResp, _, err := createHPA(rc.userClient, rc.userSteveClient, h.cluster.ID, rc.namespaceName, nil)
+			require.NoError(h.T(), err)
+			require.NoError(h.T(), deleteHPA(rc.userSteveClient, hpaResp, rc.namespaceName))
 		})
 	}
 }
 
-// TestRBACCreateNegative validates cross-project HPA creation is denied for non-cluster-owners.
+// TestRBACCreateNegative validates cross-project HPA creation.
+//   - ClusterOwner: allowed (has cross-project access)
+//   - All others: forbidden (403)
 func (h *HPATestSuite) TestRBACCreateNegative() {
-	roles := []rbac.Role{rbac.ClusterOwner, rbac.ProjectOwner, rbac.ProjectMember, rbac.ReadOnly, rbac.ClusterMember}
-
-	for _, role := range roles {
+	for _, role := range allRBACRoles {
 		role := role
 		h.Run(role.String(), func() {
 			subSession := h.session.NewSession()
@@ -179,34 +242,37 @@ func (h *HPATestSuite) TestRBACCreateNegative() {
 				log.Info("Verifying cluster-owner can create HPA in unshared project")
 				_, userClient, err := h.setupUserForRole(role, nil)
 				require.NoError(h.T(), err)
-				userSteveClient, err := h.getDownstreamSteveClient(userClient)
+				userSteveClient, err := userClient.Steve.ProxyDownstream(h.cluster.ID)
 				require.NoError(h.T(), err)
+
 				hpaResp, _, err := createHPA(userClient, userSteveClient, h.cluster.ID, h.unsharedNamespace.Name, nil)
 				require.NoError(h.T(), err)
 				require.NoError(h.T(), deleteHPA(userSteveClient, hpaResp, h.unsharedNamespace.Name))
-			} else {
-				log.Infof("Verifying that %s cannot create HPA in unshared project", role)
-				// Create workload as admin in unshared project
-				workload, err := createHPAWorkload(h.client, h.cluster.ID, h.unsharedNamespace.Name)
-				require.NoError(h.T(), err)
-
-				_, userClient, err := h.setupUserForRole(role, h.sharedProject)
-				require.NoError(h.T(), err)
-				userSteveClient, err := h.getDownstreamSteveClient(userClient)
-				require.NoError(h.T(), err)
-
-				_, _, err = createHPA(userClient, userSteveClient, h.cluster.ID, h.unsharedNamespace.Name, workload)
-				require.Error(h.T(), err)
+				return
 			}
+
+			log.Infof("Verifying that %s cannot create HPA in unshared project", role)
+			// Create workload as admin so the user only needs HPA-create permission
+			workload, err := createHPAWorkload(h.client, h.cluster.ID, h.unsharedNamespace.Name)
+			require.NoError(h.T(), err)
+
+			rc := h.setupRoleForNegativeTest(role)
+			_, _, err = createHPA(rc.userClient, rc.userSteveClient, h.cluster.ID, h.unsharedNamespace.Name, workload)
+			require.Error(h.T(), err)
 		})
 	}
 }
 
-// TestRBACEdit validates HPA edit permissions for each role.
-func (h *HPATestSuite) TestRBACEdit() {
-	roles := []rbac.Role{rbac.ClusterOwner, rbac.ProjectOwner, rbac.ProjectMember, rbac.ReadOnly, rbac.ClusterMember}
+// ---------------------------------------------------------------------------
+// RBAC Tests — Edit
+// ---------------------------------------------------------------------------
 
-	for _, role := range roles {
+// TestRBACEdit validates HPA edit permissions in the user's own/shared project.
+//   - ClusterOwner, ProjectOwner, ProjectMember: allowed
+//   - ClusterMember: allowed in own project, forbidden in the shared project
+//   - ReadOnly: forbidden (403)
+func (h *HPATestSuite) TestRBACEdit() {
+	for _, role := range allRBACRoles {
 		role := role
 		h.Run(role.String(), func() {
 			subSession := h.session.NewSession()
@@ -215,51 +281,42 @@ func (h *HPATestSuite) TestRBACEdit() {
 			switch role {
 			case rbac.ReadOnly:
 				log.Info("Verifying that read-only user cannot edit HPA")
-				_, userClient, err := h.setupUserForRole(role, h.sharedProject)
-				require.NoError(h.T(), err)
-				userSteveClient, err := h.getDownstreamSteveClient(userClient)
-				require.NoError(h.T(), err)
-				err = verifyEditForbidden(userSteveClient, h.steveClient, h.client, h.cluster.ID, h.sharedNamespace.Name)
+				rc := h.setupRoleInSharedProject(role)
+				err := verifyEditForbidden(rc.userSteveClient, h.steveClient, h.client, h.cluster.ID, h.sharedNamespace.Name)
 				require.NoError(h.T(), err)
 
 			case rbac.ClusterMember:
+				// Cluster members can edit HPAs in their own project...
 				log.Info("Verifying that cluster-member can edit HPA in own project")
-				_, userClient, err := h.setupUserForRole(role, nil)
-				require.NoError(h.T(), err)
+				rc := h.setupRoleInSharedProject(role)
 
-				userProject, userNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(userClient, h.cluster.ID)
+				updatedHPA, _, err := editHPA(rc.userClient, rc.userSteveClient, h.cluster.ID, rc.namespaceName)
 				require.NoError(h.T(), err)
-				_ = userProject
-				userSteveClient, err := h.getDownstreamSteveClient(userClient)
-				require.NoError(h.T(), err)
+				require.NoError(h.T(), deleteHPA(rc.userSteveClient, updatedHPA, rc.namespaceName))
 
-				updatedHPA, _, err := editHPA(userClient, userSteveClient, h.cluster.ID, userNamespace.Name)
-				require.NoError(h.T(), err)
-				require.NoError(h.T(), deleteHPA(userSteveClient, updatedHPA, userNamespace.Name))
-
+				// ...but not in another user's project
 				log.Info("Verifying that cluster-member cannot edit HPA in shared project")
-				err = verifyEditForbidden(userSteveClient, h.steveClient, h.client, h.cluster.ID, h.sharedNamespace.Name)
+				err = verifyEditForbidden(rc.userSteveClient, h.steveClient, h.client, h.cluster.ID, h.sharedNamespace.Name)
 				require.NoError(h.T(), err)
 
 			default:
+				// ClusterOwner, ProjectOwner, ProjectMember
 				log.Infof("Verifying that %s can edit HPA", role)
-				_, userClient, err := h.setupUserForRole(role, h.sharedProject)
+				rc := h.setupRoleInSharedProject(role)
+
+				updatedHPA, _, err := editHPA(rc.userClient, rc.userSteveClient, h.cluster.ID, rc.namespaceName)
 				require.NoError(h.T(), err)
-				userSteveClient, err := h.getDownstreamSteveClient(userClient)
-				require.NoError(h.T(), err)
-				updatedHPA, _, err := editHPA(userClient, userSteveClient, h.cluster.ID, h.sharedNamespace.Name)
-				require.NoError(h.T(), err)
-				require.NoError(h.T(), deleteHPA(userSteveClient, updatedHPA, h.sharedNamespace.Name))
+				require.NoError(h.T(), deleteHPA(rc.userSteveClient, updatedHPA, rc.namespaceName))
 			}
 		})
 	}
 }
 
-// TestRBACEditNegative validates cross-project HPA edit is denied for non-cluster-owners.
+// TestRBACEditNegative validates cross-project HPA edit.
+//   - ClusterOwner: allowed
+//   - All others: forbidden (403)
 func (h *HPATestSuite) TestRBACEditNegative() {
-	roles := []rbac.Role{rbac.ClusterOwner, rbac.ProjectOwner, rbac.ProjectMember, rbac.ReadOnly, rbac.ClusterMember}
-
-	for _, role := range roles {
+	for _, role := range allRBACRoles {
 		role := role
 		h.Run(role.String(), func() {
 			subSession := h.session.NewSession()
@@ -269,86 +326,66 @@ func (h *HPATestSuite) TestRBACEditNegative() {
 				log.Info("Verifying cluster-owner can edit HPA in unshared project")
 				_, userClient, err := h.setupUserForRole(role, nil)
 				require.NoError(h.T(), err)
-				userSteveClient, err := h.getDownstreamSteveClient(userClient)
+				userSteveClient, err := userClient.Steve.ProxyDownstream(h.cluster.ID)
 				require.NoError(h.T(), err)
+
 				updatedHPA, _, err := editHPA(userClient, userSteveClient, h.cluster.ID, h.unsharedNamespace.Name)
 				require.NoError(h.T(), err)
 				require.NoError(h.T(), deleteHPA(userSteveClient, updatedHPA, h.unsharedNamespace.Name))
-			} else {
-				log.Infof("Verifying that %s cannot edit HPA in unshared project", role)
-				var project *v3.Project
-				if role == rbac.ClusterMember {
-					project = nil
-				} else {
-					project = h.sharedProject
-				}
-				_, userClient, err := h.setupUserForRole(role, project)
-				require.NoError(h.T(), err)
-				userSteveClient, err := h.getDownstreamSteveClient(userClient)
-				require.NoError(h.T(), err)
-				err = verifyEditForbidden(userSteveClient, h.steveClient, h.client, h.cluster.ID, h.unsharedNamespace.Name)
-				require.NoError(h.T(), err)
+				return
 			}
+
+			log.Infof("Verifying that %s cannot edit HPA in unshared project", role)
+			rc := h.setupRoleForNegativeTest(role)
+			err := verifyEditForbidden(rc.userSteveClient, h.steveClient, h.client, h.cluster.ID, h.unsharedNamespace.Name)
+			require.NoError(h.T(), err)
 		})
 	}
 }
 
-// TestRBACDelete validates HPA deletion permissions for each role.
-func (h *HPATestSuite) TestRBACDelete() {
-	roles := []rbac.Role{rbac.ClusterOwner, rbac.ProjectOwner, rbac.ProjectMember, rbac.ReadOnly, rbac.ClusterMember}
+// ---------------------------------------------------------------------------
+// RBAC Tests — Delete
+// ---------------------------------------------------------------------------
 
-	for _, role := range roles {
+// TestRBACDelete validates HPA deletion permissions in the user's own/shared project.
+//   - ClusterOwner, ProjectOwner, ProjectMember, ClusterMember: allowed
+//   - ReadOnly: forbidden (403)
+func (h *HPATestSuite) TestRBACDelete() {
+	for _, role := range allRBACRoles {
 		role := role
 		h.Run(role.String(), func() {
 			subSession := h.session.NewSession()
 			defer subSession.Cleanup()
 
-			var userClient *rancher.Client
-			var userSteveClient *v1.Client
-			var namespaceName string
-			var err error
-
-			if role == rbac.ClusterMember {
-				_, userClient, err = h.setupUserForRole(role, nil)
-				require.NoError(h.T(), err)
-				userProject, userNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(userClient, h.cluster.ID)
-				require.NoError(h.T(), err)
-				_ = userProject
-				namespaceName = userNamespace.Name
-			} else {
-				_, userClient, err = h.setupUserForRole(role, h.sharedProject)
-				require.NoError(h.T(), err)
-				namespaceName = h.sharedNamespace.Name
-			}
-
-			userSteveClient, err = h.getDownstreamSteveClient(userClient)
-			require.NoError(h.T(), err)
+			rc := h.setupRoleInSharedProject(role)
 
 			if role == rbac.ReadOnly {
 				log.Info("Verifying that read-only user cannot delete HPA")
-				hpaResp, _, err := createHPA(h.client, h.steveClient, h.cluster.ID, namespaceName, nil)
+				// Create HPA as admin since read-only cannot create
+				hpaResp, _, err := createHPA(h.client, h.steveClient, h.cluster.ID, rc.namespaceName, nil)
 				require.NoError(h.T(), err)
 
-				err = userSteveClient.SteveType(hpaSteveType).Delete(hpaResp)
+				err = rc.userSteveClient.SteveType(hpaSteveType).Delete(hpaResp)
 				require.Error(h.T(), err)
 
 				// Cleanup as admin
-				require.NoError(h.T(), deleteHPA(h.steveClient, hpaResp, namespaceName))
-			} else {
-				log.Infof("Verifying that %s can delete HPA", role)
-				hpaResp, _, err := createHPA(userClient, userSteveClient, h.cluster.ID, namespaceName, nil)
-				require.NoError(h.T(), err)
-				require.NoError(h.T(), deleteHPA(userSteveClient, hpaResp, namespaceName))
+				require.NoError(h.T(), deleteHPA(h.steveClient, hpaResp, rc.namespaceName))
+				return
 			}
+
+			log.Infof("Verifying that %s can delete HPA", role)
+			hpaResp, _, err := createHPA(rc.userClient, rc.userSteveClient, h.cluster.ID, rc.namespaceName, nil)
+			require.NoError(h.T(), err)
+			require.NoError(h.T(), deleteHPA(rc.userSteveClient, hpaResp, rc.namespaceName))
 		})
 	}
 }
 
-// TestRBACDeleteNegative validates cross-project HPA deletion is denied for non-cluster-owners.
+// TestRBACDeleteNegative validates cross-project HPA deletion.
+//   - ClusterOwner: allowed
+//   - All others: forbidden (403)
 func (h *HPATestSuite) TestRBACDeleteNegative() {
-	roles := []rbac.Role{rbac.ClusterOwner, rbac.ProjectOwner, rbac.ProjectMember, rbac.ReadOnly, rbac.ClusterMember}
-
-	for _, role := range roles {
+	for _, role := range allRBACRoles {
 		role := role
 		h.Run(role.String(), func() {
 			subSession := h.session.NewSession()
@@ -358,103 +395,77 @@ func (h *HPATestSuite) TestRBACDeleteNegative() {
 				log.Info("Verifying cluster-owner can delete HPA in unshared project")
 				_, userClient, err := h.setupUserForRole(role, nil)
 				require.NoError(h.T(), err)
-				userSteveClient, err := h.getDownstreamSteveClient(userClient)
+				userSteveClient, err := userClient.Steve.ProxyDownstream(h.cluster.ID)
 				require.NoError(h.T(), err)
+
 				hpaResp, _, err := createHPA(userClient, userSteveClient, h.cluster.ID, h.unsharedNamespace.Name, nil)
 				require.NoError(h.T(), err)
 				require.NoError(h.T(), deleteHPA(userSteveClient, hpaResp, h.unsharedNamespace.Name))
-			} else {
-				log.Infof("Verifying that %s cannot delete HPA in unshared project", role)
-				// Create HPA as admin in unshared project
-				hpaResp, _, err := createHPA(h.client, h.steveClient, h.cluster.ID, h.unsharedNamespace.Name, nil)
-				require.NoError(h.T(), err)
-
-				var project *v3.Project
-				if role == rbac.ClusterMember {
-					project = nil
-				} else {
-					project = h.sharedProject
-				}
-				_, userClient, err := h.setupUserForRole(role, project)
-				require.NoError(h.T(), err)
-				userSteveClient, err := h.getDownstreamSteveClient(userClient)
-				require.NoError(h.T(), err)
-
-				err = userSteveClient.SteveType(hpaSteveType).Delete(hpaResp)
-				require.Error(h.T(), err)
-
-				// Cleanup as admin
-				require.NoError(h.T(), deleteHPA(h.steveClient, hpaResp, h.unsharedNamespace.Name))
+				return
 			}
+
+			log.Infof("Verifying that %s cannot delete HPA in unshared project", role)
+			// Create HPA as admin in unshared project
+			hpaResp, _, err := createHPA(h.client, h.steveClient, h.cluster.ID, h.unsharedNamespace.Name, nil)
+			require.NoError(h.T(), err)
+
+			rc := h.setupRoleForNegativeTest(role)
+			err = rc.userSteveClient.SteveType(hpaSteveType).Delete(hpaResp)
+			require.Error(h.T(), err)
+
+			// Cleanup as admin
+			require.NoError(h.T(), deleteHPA(h.steveClient, hpaResp, h.unsharedNamespace.Name))
 		})
 	}
 }
 
-// TestRBACList validates HPA list permissions for each role.
-func (h *HPATestSuite) TestRBACList() {
-	roles := []rbac.Role{rbac.ClusterOwner, rbac.ProjectOwner, rbac.ProjectMember, rbac.ReadOnly, rbac.ClusterMember}
+// ---------------------------------------------------------------------------
+// RBAC Tests — List
+// ---------------------------------------------------------------------------
 
-	for _, role := range roles {
+// TestRBACList validates that all roles can list an HPA in their own/shared project.
+// Every role (including ReadOnly) should see exactly 1 result.
+func (h *HPATestSuite) TestRBACList() {
+	for _, role := range allRBACRoles {
 		role := role
 		h.Run(role.String(), func() {
 			subSession := h.session.NewSession()
 			defer subSession.Cleanup()
 
-			var userClient *rancher.Client
-			var userSteveClient *v1.Client
-			var namespaceName string
+			rc := h.setupRoleInSharedProject(role)
+
+			// ClusterMember creates its own HPA; all others use admin-created HPA in the shared namespace
 			var hpaResp *v1.SteveAPIObject
-			var err error
-
+			var cleanupSteveClient *v1.Client
 			if role == rbac.ClusterMember {
-				_, userClient, err = h.setupUserForRole(role, nil)
+				var err error
+				hpaResp, _, err = createHPA(rc.userClient, rc.userSteveClient, h.cluster.ID, rc.namespaceName, nil)
 				require.NoError(h.T(), err)
-
-				userProject, userNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(userClient, h.cluster.ID)
-				require.NoError(h.T(), err)
-				_ = userProject
-				namespaceName = userNamespace.Name
-				userSteveClient, err = h.getDownstreamSteveClient(userClient)
-				require.NoError(h.T(), err)
-
-				hpaResp, _, err = createHPA(userClient, userSteveClient, h.cluster.ID, namespaceName, nil)
-				require.NoError(h.T(), err)
+				cleanupSteveClient = rc.userSteveClient
 			} else {
-				// Create HPA as admin in shared project
-				hpaResp, _, err = createHPA(h.client, h.steveClient, h.cluster.ID, h.sharedNamespace.Name, nil)
+				var err error
+				hpaResp, _, err = createHPA(h.client, h.steveClient, h.cluster.ID, rc.namespaceName, nil)
 				require.NoError(h.T(), err)
-				namespaceName = h.sharedNamespace.Name
-
-				_, userClient, err = h.setupUserForRole(role, h.sharedProject)
-				require.NoError(h.T(), err)
-				userSteveClient, err = h.getDownstreamSteveClient(userClient)
-				require.NoError(h.T(), err)
+				cleanupSteveClient = h.steveClient
 			}
 
 			log.Infof("Verifying that %s can list HPA", role)
-			hpaList, err := userSteveClient.SteveType(hpaSteveType).NamespacedSteveClient(namespaceName).List(url.Values{
-				"fieldSelector": {"metadata.name=" + hpaResp.Name},
-			})
+			hpaList, err := listHPAsByName(rc.userSteveClient, rc.namespaceName, hpaResp.Name)
 			require.NoError(h.T(), err)
 			require.Len(h.T(), hpaList.Data, 1)
 			require.Equal(h.T(), hpaSteveType, hpaList.Data[0].Type)
 			require.Equal(h.T(), hpaResp.Name, hpaList.Data[0].Name)
 
-			// Cleanup
-			if role == rbac.ClusterMember {
-				require.NoError(h.T(), deleteHPA(userSteveClient, hpaResp, namespaceName))
-			} else {
-				require.NoError(h.T(), deleteHPA(h.steveClient, hpaResp, namespaceName))
-			}
+			require.NoError(h.T(), deleteHPA(cleanupSteveClient, hpaResp, rc.namespaceName))
 		})
 	}
 }
 
-// TestRBACListNegative validates cross-project HPA listing returns empty for non-cluster-owners.
+// TestRBACListNegative validates cross-project HPA listing.
+//   - ClusterOwner: sees 1 result (has cross-project access)
+//   - All others: see 0 results (empty list)
 func (h *HPATestSuite) TestRBACListNegative() {
-	roles := []rbac.Role{rbac.ClusterOwner, rbac.ProjectOwner, rbac.ProjectMember, rbac.ReadOnly, rbac.ClusterMember}
-
-	for _, role := range roles {
+	for _, role := range allRBACRoles {
 		role := role
 		h.Run(role.String(), func() {
 			subSession := h.session.NewSession()
@@ -468,32 +479,19 @@ func (h *HPATestSuite) TestRBACListNegative() {
 				log.Info("Verifying cluster-owner can list HPA in unshared project")
 				_, userClient, err := h.setupUserForRole(role, nil)
 				require.NoError(h.T(), err)
-				userSteveClient, err := h.getDownstreamSteveClient(userClient)
+				userSteveClient, err := userClient.Steve.ProxyDownstream(h.cluster.ID)
 				require.NoError(h.T(), err)
 
-				hpaList, err := userSteveClient.SteveType(hpaSteveType).NamespacedSteveClient(h.unsharedNamespace.Name).List(url.Values{
-					"fieldSelector": {"metadata.name=" + hpaResp.Name},
-				})
+				hpaList, err := listHPAsByName(userSteveClient, h.unsharedNamespace.Name, hpaResp.Name)
 				require.NoError(h.T(), err)
 				require.Len(h.T(), hpaList.Data, 1)
 				require.Equal(h.T(), hpaSteveType, hpaList.Data[0].Type)
 				require.Equal(h.T(), hpaResp.Name, hpaList.Data[0].Name)
 			} else {
 				log.Infof("Verifying that %s cannot list HPA in unshared project", role)
-				var project *v3.Project
-				if role == rbac.ClusterMember {
-					project = nil
-				} else {
-					project = h.sharedProject
-				}
-				_, userClient, err := h.setupUserForRole(role, project)
-				require.NoError(h.T(), err)
-				userSteveClient, err := h.getDownstreamSteveClient(userClient)
-				require.NoError(h.T(), err)
+				rc := h.setupRoleForNegativeTest(role)
 
-				hpaList, err := userSteveClient.SteveType(hpaSteveType).NamespacedSteveClient(h.unsharedNamespace.Name).List(url.Values{
-					"fieldSelector": {"metadata.name=" + hpaResp.Name},
-				})
+				hpaList, err := listHPAsByName(rc.userSteveClient, h.unsharedNamespace.Name, hpaResp.Name)
 				require.NoError(h.T(), err)
 				require.Empty(h.T(), hpaList.Data)
 			}
