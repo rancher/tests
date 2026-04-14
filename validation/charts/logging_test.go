@@ -73,30 +73,36 @@ func (l *LoggingTestSuite) SetupSuite() {
 }
 
 func (l *LoggingTestSuite) TestLoggingInstallation() {
+	subSession := l.session.NewSession()
+	defer subSession.Cleanup()
+
+	client, err := l.client.WithSession(subSession)
+	require.NoError(l.T(), err)
+
 	l.T().Logf("Checking if logging chart is already installed in namespace [%s]", charts.RancherLoggingNamespace)
-	loggingChartStatus, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.RancherLoggingNamespace, charts.RancherLoggingName)
+	loggingChartStatus, err := shepherdCharts.GetChartStatus(client, l.cluster.ID, charts.RancherLoggingNamespace, charts.RancherLoggingName)
 	require.NoError(l.T(), err)
 
 	if !loggingChartStatus.IsAlreadyInstalled {
 		l.T().Logf("Installing Rancher Logging chart on cluster [%s] with version [%s]", l.cluster.Name, l.chartInstallOptions.Version)
-		err = charts.InstallRancherLoggingChart(l.client, l.chartInstallOptions, l.chartFeatureOptions)
+		err = charts.InstallRancherLoggingChart(client, l.chartInstallOptions, l.chartFeatureOptions)
 		require.NoError(l.T(), err)
 
 		l.T().Logf("Waiting for logging Deployments to become ready in namespace [%s]", charts.RancherLoggingNamespace)
-		err = shepherdCharts.WatchAndWaitDeployments(l.client, l.cluster.ID, charts.RancherLoggingNamespace, metav1.ListOptions{})
+		err = shepherdCharts.WatchAndWaitDeployments(client, l.cluster.ID, charts.RancherLoggingNamespace, metav1.ListOptions{})
 		require.NoError(l.T(), err)
 	}
 
-	l.T().Logf("Verifying logging collectors are running (step 1: logs being collected)")
-	err = verifyLoggingCollectorsRunning(l.client, l.cluster.ID)
+	l.T().Log("Verifying logging collectors are running")
+	err = verifyLoggingCollectorsRunning(client, l.cluster.ID)
 	require.NoError(l.T(), err)
 
-	l.T().Logf("Creating logging pipeline (ClusterOutput + ClusterFlow) to verify pipeline is working (step 3)")
-	outputName, flowName, err := createLoggingPipeline(l.client, l.cluster.ID)
+	l.T().Log("Creating logging pipeline to verify pipeline is working")
+	outputName, flowName, err := createLoggingPipeline(client, l.cluster.ID)
 	require.NoError(l.T(), err)
 
-	l.T().Logf("Verifying logging pipeline is active (ClusterOutput [%s], ClusterFlow [%s])", outputName, flowName)
-	err = verifyLoggingPipelineActive(l.client, l.cluster.ID, outputName, flowName)
+	l.T().Logf("Verifying logging pipeline is active [%s] [%s]", outputName, flowName)
+	err = verifyLoggingPipelineActive(client, l.cluster.ID, outputName, flowName)
 	require.NoError(l.T(), err)
 }
 

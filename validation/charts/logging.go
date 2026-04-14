@@ -83,15 +83,14 @@ func createLoggingPipeline(client *rancher.Client, clusterID string) (outputName
 	outputName = namegen.AppendRandomString("test-output")
 	flowName = namegen.AppendRandomString("test-flow")
 
-	logrus.Infof("Creating ClusterOutput [%s] in namespace [%s]", outputName, charts.RancherLoggingNamespace)
+	logrus.Infof("Creating ClusterOutput [%s]", outputName)
 	clusterOutput := &loggingClusterOutput{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "logging.banzaicloud.io/v1beta1",
 			Kind:       "ClusterOutput",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      outputName,
-			Namespace: charts.RancherLoggingNamespace,
+			Name: outputName,
 		},
 		Spec: loggingClusterOutputSpec{
 			Stdout: map[string]interface{}{},
@@ -103,15 +102,14 @@ func createLoggingPipeline(client *rancher.Client, clusterID string) (outputName
 		return "", "", fmt.Errorf("failed to create ClusterOutput [%s]: %w", outputName, err)
 	}
 
-	logrus.Infof("Creating ClusterFlow [%s] in namespace [%s]", flowName, charts.RancherLoggingNamespace)
+	logrus.Infof("Creating ClusterFlow [%s]", flowName)
 	clusterFlow := &loggingClusterFlow{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "logging.banzaicloud.io/v1beta1",
 			Kind:       "ClusterFlow",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      flowName,
-			Namespace: charts.RancherLoggingNamespace,
+			Name: flowName,
 		},
 		Spec: loggingClusterFlowSpec{
 			GlobalOutputRefs: []string{outputName},
@@ -134,10 +132,9 @@ func verifyLoggingPipelineActive(client *rancher.Client, clusterID, outputName, 
 		return err
 	}
 
-	outputID := charts.RancherLoggingNamespace + "/" + outputName
-	logrus.Infof("Waiting for ClusterOutput [%s] to become active", outputID)
+	logrus.Infof("Waiting for ClusterOutput [%s] to become active", outputName)
 	err = kwait.PollUntilContextTimeout(context.TODO(), loggingPipelinePollInterval, loggingPipelinePollTimeout, true, func(ctx context.Context) (bool, error) {
-		obj, err := steveClient.SteveType(clusterOutputSteveType).ByID(outputID)
+		obj, err := steveClient.SteveType(clusterOutputSteveType).ByID(outputName)
 		if err != nil {
 			return false, err
 		}
@@ -147,10 +144,9 @@ func verifyLoggingPipelineActive(client *rancher.Client, clusterID, outputName, 
 		return fmt.Errorf("ClusterOutput [%s] did not reach active state: %w", outputName, err)
 	}
 
-	flowID := charts.RancherLoggingNamespace + "/" + flowName
-	logrus.Infof("Waiting for ClusterFlow [%s] to become active", flowID)
+	logrus.Infof("Waiting for ClusterFlow [%s] to become active", flowName)
 	err = kwait.PollUntilContextTimeout(context.TODO(), loggingPipelinePollInterval, loggingPipelinePollTimeout, true, func(ctx context.Context) (bool, error) {
-		obj, err := steveClient.SteveType(clusterFlowSteveType).ByID(flowID)
+		obj, err := steveClient.SteveType(clusterFlowSteveType).ByID(flowName)
 		if err != nil {
 			return false, err
 		}
@@ -158,37 +154,6 @@ func verifyLoggingPipelineActive(client *rancher.Client, clusterID, outputName, 
 	})
 	if err != nil {
 		return fmt.Errorf("ClusterFlow [%s] did not reach active state: %w", flowName, err)
-	}
-
-	return nil
-}
-
-// verifyAdditionalLoggingSourcesDaemonsets checks that more than one DaemonSet is deployed in
-// the logging namespace, confirming that the AdditionalLoggingSources option deployed extra
-// collectors (e.g. systemd/containerd log collectors for RKE/RKE2/K3s).
-func verifyAdditionalLoggingSourcesDaemonsets(client *rancher.Client, clusterID string) error {
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	if err != nil {
-		return err
-	}
-
-	adminDynamicClient, err := adminClient.GetDownStreamClusterClient(clusterID)
-	if err != nil {
-		return err
-	}
-
-	daemonSetResource := adminDynamicClient.Resource(daemonSetLoggingGVR).Namespace(charts.RancherLoggingNamespace)
-
-	daemonSets, err := daemonSetResource.List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
-
-	logrus.Infof("Found %d DaemonSet(s) in namespace [%s]", len(daemonSets.Items), charts.RancherLoggingNamespace)
-
-	if len(daemonSets.Items) <= 1 {
-		return fmt.Errorf("expected more than 1 DaemonSet for AdditionalLoggingSources in namespace [%s], got %d",
-			charts.RancherLoggingNamespace, len(daemonSets.Items))
 	}
 
 	return nil
