@@ -20,10 +20,11 @@ import (
 
 type NeuVectorTestSuite struct {
 	suite.Suite
-	client  *rancher.Client
-	session *session.Session
-	cluster *clusters.ClusterMeta
-	project *management.Project
+	client              *rancher.Client
+	session             *session.Session
+	cluster             *clusters.ClusterMeta
+	project             *management.Project
+	chartInstallOptions *actionsCharts.PayloadOpts
 }
 
 func (n *NeuVectorTestSuite) TearDownSuite() {
@@ -51,14 +52,11 @@ func (n *NeuVectorTestSuite) SetupSuite() {
 	n.project, err = projects.GetProjectByName(n.client, cluster.ID, actionsCharts.SystemProject)
 	require.NoError(n.T(), err)
 	require.Equal(n.T(), actionsCharts.SystemProject, n.project.Name)
-}
 
-func (n *NeuVectorTestSuite) TestNeuVectorInstallation() {
-	n.T().Logf("Getting the latest chart version for [%s]", actionsCharts.NeuVectorChartName)
-	latestVersion, err := n.client.Catalog.GetLatestChartVersion(actionsCharts.NeuVectorChartName, catalog.RancherChartRepo)
+	latestVersion, err := client.Catalog.GetLatestChartVersion(actionsCharts.NeuVectorChartName, catalog.RancherChartRepo)
 	require.NoError(n.T(), err)
 
-	payload := actionsCharts.PayloadOpts{
+	n.chartInstallOptions = &actionsCharts.PayloadOpts{
 		Namespace: actionsCharts.NeuVectorNamespace,
 		InstallOptions: actionsCharts.InstallOptions{
 			Cluster:   n.cluster,
@@ -66,23 +64,46 @@ func (n *NeuVectorTestSuite) TestNeuVectorInstallation() {
 			ProjectID: n.project.ID,
 		},
 	}
+}
 
-	n.T().Logf("Installing NeuVector on cluster [%s]", n.cluster.Name)
-	err = actionsCharts.InstallNeuVectorChart(n.client, payload)
+func (n *NeuVectorTestSuite) TestNeuVectorInstallation() {
+	subSession := n.session.NewSession()
+	defer subSession.Cleanup()
+
+	client, err := n.client.WithSession(subSession)
 	require.NoError(n.T(), err)
 
-	n.T().Log("Waiting for NeuVector chart to become active")
-	catalogClient, err := n.client.GetClusterCatalogClient(n.cluster.ID)
+	n.T().Logf("Checking if NeuVector chart is already installed in namespace [%s]", actionsCharts.NeuVectorNamespace)
+	neuVectorChartStatus, err := charts.GetChartStatus(client, n.cluster.ID, actionsCharts.NeuVectorNamespace, actionsCharts.NeuVectorChartName)
 	require.NoError(n.T(), err)
 
-	err = charts.WaitChartInstall(catalogClient, payload.Namespace, actionsCharts.NeuVectorChartName)
+	if !neuVectorChartStatus.IsAlreadyInstalled {
+		n.T().Logf("Installing NeuVector on cluster [%s] with version [%s]", n.cluster.Name, n.chartInstallOptions.Version)
+		err = actionsCharts.InstallNeuVectorChart(client, *n.chartInstallOptions)
+		require.NoError(n.T(), err)
+
+		n.T().Logf("Waiting for NeuVector chart to become active in namespace [%s]", actionsCharts.NeuVectorNamespace)
+		catalogClient, err := client.GetClusterCatalogClient(n.cluster.ID)
+		require.NoError(n.T(), err)
+
+		err = charts.WaitChartInstall(catalogClient, actionsCharts.NeuVectorNamespace, actionsCharts.NeuVectorChartName)
+		require.NoError(n.T(), err)
+	}
+
+	n.T().Log("Waiting for NeuVector Deployments to become ready")
+	err = charts.WatchAndWaitDeployments(client, n.cluster.ID, actionsCharts.NeuVectorNamespace, metav1.ListOptions{})
 	require.NoError(n.T(), err)
 
-	n.T().Log("Waiting for resources to become active")
-	err = charts.WatchAndWaitDeployments(n.client, n.cluster.ID, payload.Namespace, metav1.ListOptions{})
+	n.T().Log("Waiting for NeuVector DaemonSets to become ready")
+	err = charts.WatchAndWaitDaemonSets(client, n.cluster.ID, actionsCharts.NeuVectorNamespace, metav1.ListOptions{})
 	require.NoError(n.T(), err)
 
-	err = charts.WatchAndWaitDaemonSets(n.client, n.cluster.ID, payload.Namespace, metav1.ListOptions{})
+	n.T().Log("Verifying all expected NeuVector services are active")
+	err = verifyNeuVectorServicesActive(client, n.cluster.ID)
+	require.NoError(n.T(), err)
+
+	n.T().Log("Verifying NeuVector manager web UI is accessible via service proxy")
+	err = verifyNeuVectorWebUIAccessible(client, n.cluster.ID)
 	require.NoError(n.T(), err)
 }
 
