@@ -99,21 +99,21 @@ func VerifyUserCanGetProject(t *testing.T, client, standardClient *rancher.Clien
 
 // VerifyUserCanCreateProjects validates a user with the required cluster permissions are able/not able to create projects in the downstream cluster
 func VerifyUserCanCreateProjects(t *testing.T, client, standardClient *rancher.Client, standardUser *management.User, clusterID string, role Role) {
-    projectTemplate := projectapi.NewProjectTemplate(clusterID)
-    if role.String() == ClusterMember.String() {
-        projectTemplate.Annotations = map[string]string{
-            "field.cattle.io/creatorId": standardUser.ID,
-        }
-    }
-    memberProject, err := standardClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
-    switch role {
-    case ClusterOwner, ClusterMember:
-        require.NoError(t, err)
-        log.Info("Created project as a ", role, " is ", memberProject.Name)
-    case ProjectOwner, ProjectMember:
-        require.Error(t, err)
-        assert.True(t, apierrors.IsForbidden(err))
-    }
+	projectTemplate := projectapi.NewProjectTemplate(clusterID)
+	if role.String() == ClusterMember.String() {
+		projectTemplate.Annotations = map[string]string{
+			"field.cattle.io/creatorId": standardUser.ID,
+		}
+	}
+	memberProject, err := standardClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
+	switch role {
+	case ClusterOwner, ClusterMember:
+		require.NoError(t, err)
+		log.Info("Created project as a ", role, " is ", memberProject.Name)
+	case ProjectOwner, ProjectMember:
+		require.Error(t, err)
+		assert.True(t, apierrors.IsForbidden(err))
+	}
 }
 
 // VerifyUserCanCreateNamespace validates a user with the required cluster permissions are able/not able to create namespaces in the project they do not own
@@ -136,8 +136,8 @@ func VerifyUserCanCreateNamespace(t *testing.T, client, standardClient *rancher.
 	case ClusterMember:
 		require.Error(t, checkErr)
 		statusErr, ok := checkErr.(*apierrors.StatusError)
-        require.True(t, ok, "expected error to be a StatusError")
-        assert.Equal(t, int32(403), statusErr.ErrStatus.Code)
+		require.True(t, ok, "expected error to be a StatusError")
+		assert.Equal(t, int32(403), statusErr.ErrStatus.Code)
 	}
 }
 
@@ -241,4 +241,81 @@ func VerifyUserCanDeleteProject(t *testing.T, client *rancher.Client, project *v
 func VerifyUserCanRemoveClusterRoles(t *testing.T, client *rancher.Client, user *management.User) {
 	err := users.RemoveClusterRoleFromUser(client, user)
 	require.NoError(t, err)
+}
+
+// VerifyUserCanCreateHPA validates that a user with the given role can or cannot create an HPA in the project namespace
+func VerifyUserCanCreateHPA(t *testing.T, client, standardClient *rancher.Client, clusterID, namespaceName string, role Role) {
+	log.Info("Validating if ", role, " can create HPA in the project namespace.")
+
+	workload, err := CreateHPAWorkload(client, clusterID, namespaceName)
+	require.NoError(t, err)
+
+	hpa, _, err := CreateHPA(standardClient, clusterID, namespaceName, workload)
+	switch role {
+	case ClusterOwner, ProjectOwner, ProjectMember:
+		require.NoError(t, err)
+		err = DeleteHPA(client, clusterID, namespaceName, hpa.Name)
+		assert.NoError(t, err)
+	case ClusterMember:
+		require.Error(t, err)
+	}
+}
+
+// VerifyUserCanEditHPA validates that a user with the given role can or cannot edit an HPA in the project namespace
+func VerifyUserCanEditHPA(t *testing.T, client, standardClient *rancher.Client, clusterID, namespaceName string, role Role) {
+	log.Info("Validating if ", role, " can edit HPA in the project namespace.")
+
+	switch role {
+	case ClusterOwner, ProjectOwner, ProjectMember:
+		updatedHPA, _, err := EditHPA(standardClient, clusterID, namespaceName)
+		require.NoError(t, err)
+		err = VerifyHPAFields(updatedHPA, updatedHPA.Name, 3, 6)
+		assert.NoError(t, err)
+		err = DeleteHPA(client, clusterID, namespaceName, updatedHPA.Name)
+		assert.NoError(t, err)
+	case ClusterMember:
+		err := VerifyEditForbidden(standardClient, client, clusterID, namespaceName)
+		assert.NoError(t, err)
+	}
+}
+
+// VerifyUserCanDeleteHPA validates that a user with the given role can or cannot delete an HPA in the project namespace
+func VerifyUserCanDeleteHPA(t *testing.T, client, standardClient *rancher.Client, clusterID, namespaceName string, role Role) {
+	log.Info("Validating if ", role, " can delete HPA in the project namespace.")
+
+	hpa, _, err := CreateHPA(client, clusterID, namespaceName, nil)
+	require.NoError(t, err)
+
+	switch role {
+	case ClusterOwner, ProjectOwner, ProjectMember:
+		err = DeleteHPA(standardClient, clusterID, namespaceName, hpa.Name)
+		assert.NoError(t, err)
+	case ClusterMember:
+		err = DeleteHPA(standardClient, clusterID, namespaceName, hpa.Name)
+		assert.Error(t, err)
+		deleteErr := DeleteHPA(client, clusterID, namespaceName, hpa.Name)
+		assert.NoError(t, deleteErr)
+	}
+}
+
+// VerifyUserCanListHPA validates that a user with the given role can or cannot list HPAs in the project namespace
+func VerifyUserCanListHPA(t *testing.T, client, standardClient *rancher.Client, clusterID, namespaceName string, role Role) {
+	log.Info("Validating if ", role, " can list HPAs in the project namespace.")
+
+	hpa, _, err := CreateHPA(client, clusterID, namespaceName, nil)
+	require.NoError(t, err)
+
+	hpaList, err := ListHPAsByName(standardClient, clusterID, namespaceName, hpa.Name)
+	require.NoError(t, err)
+
+	switch role {
+	case ClusterOwner, ProjectOwner, ProjectMember:
+		assert.Len(t, hpaList.Items, 1)
+		assert.Equal(t, hpa.Name, hpaList.Items[0].Name)
+	case ClusterMember:
+		assert.Empty(t, hpaList.Items)
+	}
+
+	err = DeleteHPA(client, clusterID, namespaceName, hpa.Name)
+	assert.NoError(t, err)
 }
