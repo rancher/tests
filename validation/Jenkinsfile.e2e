@@ -15,7 +15,7 @@
  *   tofu.initBackend, tofu.createWorkspace, tofu.apply, tofu.getOutputs,
  *   infrastructure.parseAndSubstituteVars, infrastructure.writeConfig,
  *   infrastructure.generateWorkspaceName, infrastructure.archiveWorkspaceName,
- *   infrastructure.writeSshKey, infrastructure.cleanupArtifacts,
+ *   infrastructure.writeSshKey,
  *   make.runTarget, property.useWithProperties, ansible.runPlaybook
  *
  * Make targets (run via make.runTarget in Docker):
@@ -30,6 +30,57 @@
 
 def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
 library "qa-jenkins-library@${libraryBranch}"
+
+/**
+ * Shared teardown helper: re-creates tfvars from params, tears down Tofu workspace.
+ * Sets env.INFRA_CLEANED to 'true' on success.
+ */
+def destroyInfrastructure(String reason) {
+    def wsName = ''
+    try {
+        if (fileExists('workspace_name.txt')) {
+            wsName = readFile('workspace_name.txt')?.trim()
+        }
+    } catch (e) {
+        echo "Could not read workspace_name.txt: ${e.message}"
+    }
+
+    if (!wsName || env.INFRA_CLEANED == 'true') {
+        echo "Skipping teardown (${reason}): no workspace or already cleaned"
+        return
+    }
+
+    try {
+        property.useWithProperties([
+            'AWS_ACCESS_KEY_ID',
+            'AWS_SECRET_ACCESS_KEY',
+            'AWS_SSH_PEM_KEY_NAME'
+        ]) {
+            def tofuDir = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
+            def terraformConfig = infrastructure.parseAndSubstituteVars(
+                content: params.TERRAFORM_CONFIG,
+                envVars: [
+                    'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
+                    'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+                    'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
+                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                ]
+            )
+            infrastructure.writeConfig(
+                path:    "${tofuDir}/terraform.tfvars",
+                content: terraformConfig
+            )
+            airgap.teardownInfrastructure(
+                dir:     tofuDir,
+                name:    wsName,
+                varFile: 'terraform.tfvars'
+            )
+            env.INFRA_CLEANED = 'true'
+        }
+    } catch (cleanupErr) {
+        echo "Teardown failed (${reason}): ${cleanupErr.message}"
+    }
+}
 
 pipeline {
     agent any
@@ -157,8 +208,8 @@ aws_route53_zone = "qa.rancher.space"
 aws_ssh_user = "ubuntu"
 aws_vpc = "vpc-bfccf4d7"
 user_id = "ubuntu"
-ssh_key = "/root/.ssh/jenkins-elliptic-validation.pem"
-ssh_key_name = "jenkins-elliptic-validation"
+ssh_key = "/root/.ssh/${AWS_SSH_PEM_KEY_NAME}.pem"
+ssh_key_name = "${AWS_SSH_PEM_KEY_NAME}"
 provision_registry = false'''
         )
         text(
@@ -199,13 +250,13 @@ audit_log_maxsize: 100
 private_registry_mirrors:
   - registry: "docker.io"
     endpoints:
-      - "https://privateregistry.qa.rancher.space"
+      - "${PRIVATE_REGISTRY_URL}"
     rewrite:
       - pattern: "^(.*)"
         replacement: "proxycache/$1"
   - registry: "quay.io"
     endpoints:
-      - "https://privateregistry.qa.rancher.space"
+      - "${PRIVATE_REGISTRY_URL}"
     rewrite:
       - pattern: "^(.*)"
         replacement: "quaycache/$1"
@@ -392,9 +443,9 @@ rancher_use_bundled_system_charts: true'''
                                     -v \$(pwd):/workspace -w /workspace \
                                     rancher-go-test:latest sh -c '
                                         tofu -chdir=${tofuModulePath} output -raw airgap_inventory_json > /tmp/airgap.json &&
-                                        python3 ./qa-infra-automation/scripts/generate_inventory.py \
+                                        python3 /workspace/${env.INFRA_DIR}/scripts/generate_inventory.py \
                                             --input /tmp/airgap.json \
-                                            --schema ./qa-infra-automation/ansible/_inventory-schema.yaml \
+                                            --schema /workspace/${env.INFRA_DIR}/ansible/_inventory-schema.yaml \
                                             --distro rke2 --env airgap \
                                             --output-dir ${ansiblePath}/inventory
                                     '
@@ -510,7 +561,7 @@ rancher_use_bundled_system_charts: true'''
 
                         // Generate admin token via Ansible playbook
                         def adminPassword = params.RANCHER_ADMIN_PASSWORD ?: 'rancherrocks'
-                        def cattleConfigPath = '/workspace/tests/cattle-config.yaml'
+                        def cattleConfigPath = "/workspace/${env.TESTS_DIR}/cattle-config.yaml"
                         def workspace = pwd()
                         def tokenTtl = env.RANCHER_TOKEN_TTL ?: '0'
                         def tokenDescription = "jenkins-e2e-${env.BUILD_NUMBER}"
@@ -519,11 +570,11 @@ rancher_use_bundled_system_charts: true'''
                             docker run --rm --platform linux/amd64 \
                                 --name generate-token \
                                 -e RANCHER_ADMIN_PASSWORD=${adminPassword} \
-                                -e ANSIBLE_CONFIG=/workspace/qa-infra-automation/ansible/ansible.cfg \
+                                -e ANSIBLE_CONFIG=/workspace/${env.INFRA_DIR}/ansible/ansible.cfg \
                                 -v ${workspace}:/workspace \
                                 -w /workspace/${env.INFRA_DIR}/ansible/rke2/airgap \
                                 rancher-go-test:latest \
-                                ansible-playbook -i inventory/inventory.yml /workspace/qa-infra-automation/ansible/rancher/token/generate-admin-token.yml \
+                                ansible-playbook -i inventory/inventory.yml /workspace/${env.INFRA_DIR}/ansible/rancher/token/generate-admin-token.yml \
                                     -e rancher_cattle_config_file=${cattleConfigPath} \
                                     -e rancher_token_ttl=${tokenTtl} \
                                     -e rancher_token_description=${tokenDescription} \
@@ -532,8 +583,15 @@ rancher_use_bundled_system_charts: true'''
                         """
 
                         if (fileExists('rancher-token.json')) {
-                            archiveArtifacts artifacts: 'rancher-token.json', fingerprint: true
-                            echo 'Archived token metadata: rancher-token.json'
+                            def tokenData = readJSON file: 'rancher-token.json'
+                            ['token', 'bearerToken', 'accessKey', 'secretKey', 'value'].each { secretField ->
+                                if (tokenData instanceof Map && tokenData.containsKey(secretField)) {
+                                    tokenData.remove(secretField)
+                                }
+                            }
+                            writeJSON file: 'rancher-token-metadata.json', json: tokenData, pretty: 2
+                            archiveArtifacts artifacts: 'rancher-token-metadata.json', fingerprint: true
+                            echo 'Archived redacted token metadata: rancher-token-metadata.json'
                         }
                     }
                 }
@@ -559,7 +617,7 @@ rancher_use_bundled_system_charts: true'''
                     if (!fileExists(cattleConfigPath) && params.CATTLE_TEST_CONFIG?.trim()) {
                         writeFile file: cattleConfigPath, text: params.CATTLE_TEST_CONFIG.trim() + '\n'
                     }
-                    lines += 'CATTLE_TEST_CONFIG=/workspace/tests/cattle-config.yaml'
+                    lines += "CATTLE_TEST_CONFIG=/workspace/${env.TESTS_DIR}/cattle-config.yaml"
 
                     def envContent = lines.findAll { it?.trim() }.join('\n')
                     writeFile file: envFile, text: envContent ? envContent + '\n' : ''
@@ -639,99 +697,69 @@ rancher_use_bundled_system_charts: true'''
     post {
         failure {
             script {
-                def wsName = ''
-                try {
-                    if (fileExists('workspace_name.txt')) {
-                        wsName = readFile('workspace_name.txt')?.trim()
-                    }
-                } catch (e) {
-                    echo "Could not read workspace_name.txt: ${e.message}"
-                }
-
-                if (params.DESTROY_ON_FAILURE && wsName && env.INFRA_CLEANED != 'true') {
-                    echo 'DESTROY_ON_FAILURE is enabled. Cleaning up infrastructure...'
-                    try {
-                        property.useWithProperties([
-                            'AWS_ACCESS_KEY_ID',
-                            'AWS_SECRET_ACCESS_KEY',
-                            'AWS_SSH_PEM_KEY_NAME'
-                        ]) {
-                            def tofuDir = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
-                            def terraformConfig = infrastructure.parseAndSubstituteVars(
-                                content: params.TERRAFORM_CONFIG,
-                                envVars: [
-                                    'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
-                                    'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
-                                    'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
-                                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
-                                ]
-                            )
-                            infrastructure.writeConfig(
-                                path:    "${tofuDir}/terraform.tfvars",
-                                content: terraformConfig
-                            )
-                            airgap.teardownInfrastructure(
-                                dir:     tofuDir,
-                                name:    wsName,
-                                varFile: 'terraform.tfvars'
-                            )
-                            env.INFRA_CLEANED = 'true'
-                        }
-                    } catch (cleanupErr) {
-                        echo "Cleanup failed: ${cleanupErr.message}"
-                    }
+                if (params.DESTROY_ON_FAILURE) {
+                    destroyInfrastructure('DESTROY_ON_FAILURE')
                 }
             }
         }
 
         always {
             script {
-                // DESTROY_AFTER_TESTS
-                def wsName = ''
-                try {
-                    if (fileExists('workspace_name.txt')) {
-                        wsName = readFile('workspace_name.txt')?.trim()
-                    }
-                } catch (e) { /* ignore */ }
-
-                if (params.DESTROY_AFTER_TESTS && wsName && env.INFRA_CLEANED != 'true') {
-                    echo 'Destroying infrastructure after tests (DESTROY_AFTER_TESTS enabled)'
-                    try {
-                        property.useWithProperties([
-                            'AWS_ACCESS_KEY_ID',
-                            'AWS_SECRET_ACCESS_KEY',
-                            'AWS_SSH_PEM_KEY_NAME'
-                        ]) {
-                            def tofuDir = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
-                            def terraformConfig = infrastructure.parseAndSubstituteVars(
-                                content: params.TERRAFORM_CONFIG,
-                                envVars: [
-                                    'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
-                                    'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
-                                    'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
-                                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
-                                ]
-                            )
-                            infrastructure.writeConfig(
-                                path:    "${tofuDir}/terraform.tfvars",
-                                content: terraformConfig
-                            )
-                            airgap.teardownInfrastructure(
-                                dir:     tofuDir,
-                                name:    wsName,
-                                varFile: 'terraform.tfvars'
-                            )
-                            env.INFRA_CLEANED = 'true'
-                        }
-                    } catch (cleanupErr) {
-                        echo "Destroy-after-tests failed: ${cleanupErr.message}"
-                    }
-                } else if (env.INFRA_CLEANED == 'true') {
-                    echo 'Infrastructure already cleaned up, skipping destroy-after-tests'
+                if (params.DESTROY_AFTER_TESTS) {
+                    destroyInfrastructure('DESTROY_AFTER_TESTS')
                 }
 
                 // Docker cleanup
                 sh 'docker rmi -f rancher-go-test:latest || true'
+
+                // Sensitive artifact cleanup — shred or remove credentials from workspace
+                sh '''
+                    set +e
+
+                    cleanup_file() {
+                        if [ -f "$1" ]; then
+                            if command -v shred >/dev/null 2>&1; then
+                                shred -u "$1" || rm -f "$1"
+                            else
+                                rm -f "$1"
+                            fi
+                        fi
+                    }
+
+                    cleanup_dir() {
+                        if [ -d "$1" ]; then
+                            find "$1" -type f -exec sh -c '
+                                for file do
+                                    if command -v shred >/dev/null 2>&1; then
+                                        shred -u "$file" || rm -f "$file"
+                                    else
+                                        rm -f "$file"
+                                    fi
+                                done
+                            ' sh {} +
+                            rm -rf "$1"
+                        fi
+                    }
+
+                    cleanup_file ".go_test_env"
+                    cleanup_file "rancher-token.json"
+                    cleanup_file "rancher-token-metadata.json"
+                    cleanup_file "workspace_name.txt"
+
+                    if [ -n "${INFRA_DIR}" ] && [ -d "${INFRA_DIR}" ]; then
+                        find "${INFRA_DIR}" -type f \( -name 'terraform.tfvars' -o -name '*.pem' -o -name 'id_rsa' -o -name 'id_ed25519' \) -exec sh -c '
+                            for file do
+                                if command -v shred >/dev/null 2>&1; then
+                                    shred -u "$file" || rm -f "$file"
+                                else
+                                    rm -f "$file"
+                                fi
+                            done
+                        ' sh {} +
+                    fi
+
+                    cleanup_dir ".ssh"
+                '''
             }
         }
     }
