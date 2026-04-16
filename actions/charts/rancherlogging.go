@@ -193,7 +193,6 @@ func newLoggingChartInstallAction(p *PayloadOpts, rancherLoggingOpts *RancherLog
 		"logging": map[string]any{
 			"enabled": rancherLoggingOpts.LoggingEnabledSources,
 		},
-
 		"testReceiver": map[string]any{
 			"enabled": rancherLoggingOpts.LoggingEnabledSources,
 		},

@@ -53,6 +53,7 @@ func (n *NeuVectorTestSuite) SetupSuite() {
 	require.NoError(n.T(), err)
 	require.Equal(n.T(), actionsCharts.SystemProject, n.project.Name)
 
+	n.T().Logf("Getting the latest chart version for [%s]", actionsCharts.NeuVectorChartName)
 	latestVersion, err := client.Catalog.GetLatestChartVersion(actionsCharts.NeuVectorChartName, catalog.RancherChartRepo)
 	require.NoError(n.T(), err)
 
