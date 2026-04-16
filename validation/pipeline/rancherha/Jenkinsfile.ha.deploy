@@ -1,0 +1,265 @@
+#!groovy
+library('qa-jenkins-library')
+node {
+    def rootPath = "/root/go/src/github.com/rancher/tests/"
+    def workPath = "/root/go/src/github.com/rancher/tests/validation/"
+    def jobName = "${JOB_NAME}"
+    if (jobName.contains('/')) {
+      def jobNames = jobName.split('/')
+      jobName = jobNames[jobNames.size() - 1]
+    }
+    def imageName = "rancher-validation-${jobName}${env.BUILD_NUMBER}"
+    def validationVolume = "ValidationSharedVolume-${jobName}${env.BUILD_NUMBER}"
+    def testsDir = "/root/go/src/github.com/rancher/tests/validation/${env.TEST_PACKAGE ?: 'pipeline/rancherha/install'}"
+    def testResultsOut = "results.xml"
+    def testResultsJSON = "results.json"
+    def envFile = ".env"
+    def configFile = "config.yaml"
+    def branch = "main"
+    def cleanup = (env.RANCHER_CLEANUP ?: "true").toLowerCase()
+    def tags = env.TAGS ?: "validation"
+    def goTestCase = env.GOTEST_TESTCASE ?: "-run TestRancherHAInstallTestSuite"
+    if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
+      branch = "${env.BRANCH}"
+    }
+
+    def rancherRepo = scm.getUserRemoteConfigs()[0].getUrl()
+    if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
+      rancherRepo = "${env.REPO}"
+    }
+
+    def timeout = "120m"
+    if ("${env.TIMEOUT}" != "null" && "${env.TIMEOUT}" != "") {
+      timeout = "${env.TIMEOUT}"
+    }
+
+    def names = generate.names()
+    def golangTestContainer = names.container
+
+    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
+      withFolderProperties {
+        paramsMap = []
+        params.each {
+          if (it.value && it.value.trim() != "") {
+              paramsMap << "$it.key=$it.value"
+          }
+        }
+        withCredentials([ string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+                          string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+                          string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+                          string(credentialsId: 'RANCHER_SSH_KEY', variable: 'RANCHER_SSH_KEY'),
+                          string(credentialsId: 'ADMIN_PASSWORD', variable: 'ADMIN_PASSWORD'),
+                          string(credentialsId: 'RANCHER_VALID_TLS_CERT', variable: 'RANCHER_VALID_TLS_CERT'),
+                          string(credentialsId: 'RANCHER_VALID_TLS_KEY', variable: 'RANCHER_VALID_TLS_KEY'),
+                          string(credentialsId: 'RANCHER_BYO_TLS_CERT', variable: 'RANCHER_BYO_TLS_CERT'),
+                          string(credentialsId: 'RANCHER_BYO_TLS_KEY', variable: 'RANCHER_BYO_TLS_KEY'),
+                          string(credentialsId: 'QASE_AUTOMATION_TOKEN', variable: 'QASE_AUTOMATION_TOKEN')]) {
+
+        withEnv(paramsMap) {
+          stage('Checkout') {
+            deleteDir()
+            dir("./tests") {
+              checkout([
+                      $class: 'GitSCM',
+                      branches: [[name: "*/${branch}"]],
+                      extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                      userRemoteConfigs: [[url: rancherRepo]]
+                    ])
+            }
+          }
+          dir ("./") {
+            stage('Configure and Build') {
+              if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
+                dir("./tests/.ssh") {
+                  def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
+                  writeFile file: "${AWS_SSH_KEY_NAME}", text: decoded
+                }
+              }
+              dir("./tests/validation") {
+                def configContents = env.CONFIG ?: ""
+                writeFile file: configFile, text: configContents
+                env.CATTLE_TEST_CONFIG = "${workPath}${configFile}"
+
+                sh 'which yq || (wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && chmod +x /usr/local/bin/yq)'
+                injectConfigParams(configFile)
+              }
+              dir ("./") {
+                sh "./tests/validation/configure.sh"
+                sh "docker build . -f ./tests/validation/pipeline/Dockerfile.tofu_and_validation -t ${imageName}"
+                sh "docker volume create --name ${validationVolume}"
+              }
+            }
+            stage('Run Validation Tests') {
+              def (testArgs, testConfig) = container._goTestCommand([
+                  packages: testsDir,
+                  cases: goTestCase,
+                  tags: tags,
+                  timeout: timeout,
+                  resultsXML: testResultsOut,
+                  resultsJSON: testResultsJSON
+              ])
+              def testCmd = testArgs.join(' ')
+              try {
+                sh "docker run --name ${golangTestContainer} -t --env-file ${envFile} " +
+                "${imageName} sh -c \" eval \\\$(ssh-agent -s); ssh-add /root/.ssh/je*; ${testCmd};" +
+                "${workPath}pipeline/scripts/build_qase_reporter.sh;" +
+                "if [ -f ${workPath}reporter ]; then ${workPath}reporter; fi\""
+              } catch(err) {
+                echo 'Validation tests had failures.'
+              }
+            }
+            stage('Test Report') {
+              try {
+                sh "docker cp ${golangTestContainer}:${rootPath}${testResultsOut} ."
+                step([$class: 'JUnitResultArchiver', testResults: "**/${testResultsOut}", allowEmptyResults: true])
+              } catch (err) {
+                container.remove([[name: golangTestContainer, image: imageName]])
+                sh "docker volume rm -f ${validationVolume}"
+                error 'Report had failures.'
+              }
+            }
+            stage('Clean Up') {
+              container.remove([[name: golangTestContainer, image: imageName]])
+              sh "docker volume rm -f ${validationVolume}"
+            }
+          } // dir
+        } // withEnv
+      } // creds
+    } // folder properties
+  } // wrap
+} // node
+
+def injectConfigParams(String configFile) {
+    sh "yq e '.sshPath.sshPath = \"/root/.ssh\"' -i ${configFile}"
+
+    injectIfSet('.qaInfraAutomation.rancherInstall.chartVersion', env.RANCHER_CHART_VERSION, configFile)
+    injectIfSet('.qaInfraAutomation.rancherInstall.imageTag', env.RANCHER_IMAGE_TAG, configFile)
+    injectIfSet('.qaInfraAutomation.rancherInstall.certManagerVersion', env.RANCHER_CERT_MANAGER_VERSION, configFile)
+    injectIfSet('.qaInfraAutomation.rancherInstall.letsEncryptEmail', env.RANCHER_LETSENCRYPT_EMAIL, configFile)
+    injectIfSet('.qaInfraAutomation.rancherInstall.existingKubeconfig', env.RANCHER_HA_KUBECONFIG, configFile)
+    injectIfSet('.qaInfraAutomation.aws.hostnamePrefix', env.RANCHER_HOSTNAME_PREFIX, configFile)
+    injectIfSet('.qaInfraAutomation.aws.ami', env.AWS_AMI, configFile)
+    injectIfSet('.qaInfraAutomation.aws.sshUser', env.AWS_USER, configFile)
+    injectIfSet('.qaInfraAutomation.aws.instanceType', env.AWS_INSTANCE_TYPE, configFile)
+    injectIfSet('.qaInfraAutomation.aws.region', env.AWS_REGION, configFile)
+    injectIfSet('.qaInfraAutomation.aws.vpc', env.AWS_VPC, configFile)
+    injectIfSet('.qaInfraAutomation.aws.subnet', env.AWS_SUBNET, configFile)
+    injectIfSet('.qaInfraAutomation.aws.awsSSHKeyName', env.AWS_SSH_KEY_NAME, configFile)
+
+    if (env.AWS_VOLUME_SIZE && env.AWS_VOLUME_SIZE.trim() != "") {
+        sh "yq e '.qaInfraAutomation.aws.volumeSize = ${env.AWS_VOLUME_SIZE.trim()}' -i ${configFile}"
+    }
+
+    if (env.AWS_SECURITY_GROUPS && env.AWS_SECURITY_GROUPS.trim() != "") {
+        sh "yq e '.qaInfraAutomation.aws.securityGroups[0] = \"${env.AWS_SECURITY_GROUPS.trim()}\"' -i ${configFile}"
+    }
+
+    injectHelmRepo(configFile)
+    injectTLSSource(configFile)
+    injectKubernetesVersion(configFile)
+    injectServerFlags(configFile)
+    injectOptionalFiles(configFile)
+    injectExtraHelmValues(configFile)
+}
+
+def injectIfSet(String yamlPath, String value, String configFile) {
+    if (value && value.trim() != "") {
+        sh "yq e '${yamlPath} = \"${value.trim()}\"' -i ${configFile}"
+    }
+}
+
+def injectHelmRepo(String configFile) {
+    if (env.RANCHER_HELM_REPO && env.RANCHER_HELM_REPO.trim() != "") {
+        def repo = env.RANCHER_HELM_REPO.trim()
+        sh "yq e '.qaInfraAutomation.rancherInstall.helmRepo = \"rancher-${repo}\"' -i ${configFile}"
+    }
+    if (env.RANCHER_HELM_URL && env.RANCHER_HELM_URL.trim() != "") {
+        def helmURL = env.RANCHER_HELM_URL.trim()
+        def repo = env.RANCHER_HELM_REPO ? env.RANCHER_HELM_REPO.trim() : "latest"
+        if (!helmURL.endsWith("/")) { helmURL += "/" }
+        sh "yq e '.qaInfraAutomation.rancherInstall.helmRepoURL = \"${helmURL}${repo}\"' -i ${configFile}"
+    }
+}
+
+def injectTLSSource(String configFile) {
+    if (!env.RANCHER_HA_CERT_OPTION || env.RANCHER_HA_CERT_OPTION.trim() == "") { return }
+    def certOption = env.RANCHER_HA_CERT_OPTION.trim()
+    def tlsSource = ""
+    switch(certOption) {
+        case "letsencrypt":
+            tlsSource = "letsEncrypt"
+            break
+        case "byo-self-signed":
+        case "byo-valid":
+            tlsSource = "secret"
+            break
+        case "rancher-self-signed":
+        default:
+            return
+    }
+    sh "yq e '.qaInfraAutomation.rancherInstall.tlsSource = \"${tlsSource}\"' -i ${configFile}"
+}
+
+def injectKubernetesVersion(String configFile) {
+    def version = ""
+    def nodeCount = ""
+    if (env.RANCHER_RKE2_VERSION && env.RANCHER_RKE2_VERSION.trim() != "") {
+        version = env.RANCHER_RKE2_VERSION.trim()
+        nodeCount = env.RANCHER_RKE2_NO_OF_SERVER_NODES?.trim() ?: ""
+    } else if (env.RANCHER_K3S_VERSION && env.RANCHER_K3S_VERSION.trim() != "") {
+        version = env.RANCHER_K3S_VERSION.trim()
+        nodeCount = env.RANCHER_K3S_NO_OF_SERVER_NODES?.trim() ?: ""
+    }
+    if (version != "") {
+        sh "yq e '.qaInfraAutomation.standaloneCluster.kubernetesVersion = \"${version}\"' -i ${configFile}"
+    }
+    if (nodeCount != "") {
+        sh "yq e '.qaInfraAutomation.standaloneCluster.nodes[0].count = ${nodeCount}' -i ${configFile}"
+    }
+}
+
+def injectServerFlags(String configFile) {
+    def flags = ""
+    if (env.RANCHER_RKE2_VERSION && env.RANCHER_RKE2_VERSION.trim() != "") {
+        flags = env.RANCHER_RKE2_SERVER_FLAGS?.trim() ?: ""
+    } else {
+        flags = env.RANCHER_K3S_SERVER_FLAGS?.trim() ?: ""
+    }
+    if (flags == "") { return }
+
+    def converted = flags.replace('\\n', '\n')
+    sh "yq e '.qaInfraAutomation.standaloneCluster.serverFlags = \"${converted}\"' -i ${configFile}"
+}
+
+def injectOptionalFiles(String configFile) {
+    if (!env.RANCHER_OPTIONAL_FILES || env.RANCHER_OPTIONAL_FILES.trim() == "") { return }
+
+    // Format: "path1,url1 path2,url2"
+    def entries = env.RANCHER_OPTIONAL_FILES.trim().split('\\s+')
+    entries.eachWithIndex { entry, idx ->
+        entry = entry.trim()
+        if (entry == "" || !entry.contains(",")) { return }
+        def parts = entry.split(',', 2)
+        sh "yq e '.qaInfraAutomation.standaloneCluster.optionalFiles[${idx}].path = \"${parts[0].trim()}\"' -i ${configFile}"
+        sh "yq e '.qaInfraAutomation.standaloneCluster.optionalFiles[${idx}].url = \"${parts[1].trim()}\"' -i ${configFile}"
+    }
+}
+
+@NonCPS
+def parseHelmSetFlags(String settings) {
+    def result = []
+    def matcher = (settings =~ /--set\s+'?([^'=\s]+)=([^'\s]*)'?/)
+    while (matcher.find()) {
+        result.add([key: matcher.group(1), value: matcher.group(2)])
+    }
+    return result
+}
+
+def injectExtraHelmValues(String configFile) {
+    if (!env.RANCHER_HELM_EXTRA_SETTINGS || env.RANCHER_HELM_EXTRA_SETTINGS.trim() == "") { return }
+
+    def flags = parseHelmSetFlags(env.RANCHER_HELM_EXTRA_SETTINGS.trim())
+    flags.each { flag ->
+        sh "yq e '.qaInfraAutomation.rancherInstall.extraHelmValues.\"${flag.key}\" = \"${flag.value}\"' -i ${configFile}"
+    }
+}

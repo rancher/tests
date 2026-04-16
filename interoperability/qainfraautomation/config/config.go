@@ -115,18 +115,19 @@ type AnsibleConfig struct {
 
 // RancherInstallConfig holds configuration for installing Rancher via the default-ha Ansible playbook.
 type RancherInstallConfig struct {
-	ExistingKubeconfig string `json:"existingKubeconfig,omitempty" yaml:"existingKubeconfig,omitempty"`
-	ChartVersion       string `json:"chartVersion,omitempty" yaml:"chartVersion,omitempty"`
-	ImageTag           string `json:"imageTag,omitempty" yaml:"imageTag,omitempty"`
-	HelmRepo           string `json:"helmRepo,omitempty" yaml:"helmRepo,omitempty"`
-	HelmRepoURL        string `json:"helmRepoURL,omitempty" yaml:"helmRepoURL,omitempty"`
-	CertManagerVersion string `json:"certManagerVersion,omitempty" yaml:"certManagerVersion,omitempty"`
-	TLSSource          string `json:"tlsSource,omitempty" yaml:"tlsSource,omitempty"`
-	TLSCertPath        string `json:"tlsCertPath,omitempty" yaml:"tlsCertPath,omitempty"`
-	TLSKeyPath         string `json:"tlsKeyPath,omitempty" yaml:"tlsKeyPath,omitempty"`
-	TLSCACertPath      string `json:"tlsCACertPath,omitempty" yaml:"tlsCACertPath,omitempty"`
-	LetsEncryptEmail   string `json:"letsEncryptEmail,omitempty" yaml:"letsEncryptEmail,omitempty"`
-	BootstrapPassword  string `json:"bootstrapPassword,omitempty" yaml:"bootstrapPassword,omitempty"`
-	Password           string `json:"password,omitempty" yaml:"password,omitempty"`
-	Cleanup            *bool  `json:"cleanup,omitempty" yaml:"cleanup,omitempty"`
+	ExistingKubeconfig string                 `json:"existingKubeconfig,omitempty" yaml:"existingKubeconfig,omitempty"`
+	ChartVersion       string                 `json:"chartVersion,omitempty" yaml:"chartVersion,omitempty"`
+	ImageTag           string                 `json:"imageTag,omitempty" yaml:"imageTag,omitempty"`
+	HelmRepo           string                 `json:"helmRepo,omitempty" yaml:"helmRepo,omitempty"`
+	HelmRepoURL        string                 `json:"helmRepoURL,omitempty" yaml:"helmRepoURL,omitempty"`
+	CertManagerVersion string                 `json:"certManagerVersion,omitempty" yaml:"certManagerVersion,omitempty"`
+	TLSSource          string                 `json:"tlsSource,omitempty" yaml:"tlsSource,omitempty"`
+	TLSCertPath        string                 `json:"tlsCertPath,omitempty" yaml:"tlsCertPath,omitempty"`
+	TLSKeyPath         string                 `json:"tlsKeyPath,omitempty" yaml:"tlsKeyPath,omitempty"`
+	TLSCACertPath      string                 `json:"tlsCACertPath,omitempty" yaml:"tlsCACertPath,omitempty"`
+	LetsEncryptEmail   string                 `json:"letsEncryptEmail,omitempty" yaml:"letsEncryptEmail,omitempty"`
+	BootstrapPassword  string                 `json:"bootstrapPassword,omitempty" yaml:"bootstrapPassword,omitempty"`
+	Password           string                 `json:"password,omitempty" yaml:"password,omitempty"`
+	ExtraHelmValues    map[string]interface{} `json:"extraHelmValues,omitempty" yaml:"extraHelmValues,omitempty"`
+	Cleanup            *bool                  `json:"cleanup,omitempty" yaml:"cleanup,omitempty"`
 }

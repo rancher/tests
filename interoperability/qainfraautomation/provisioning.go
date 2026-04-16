@@ -1057,6 +1057,10 @@ func InstallRancher(
 	}
 	vars["password"] = password
 
+	if len(rancherCfg.ExtraHelmValues) > 0 {
+		vars["extra_helm_values"] = rancherCfg.ExtraHelmValues
+	}
+
 	varsPath := filepath.Join(repoPath, rancherInstallVarsFile)
 	if err := writeYAMLFile(varsPath, vars); err != nil {
 		t.Fatalf("write rancher install vars: %v", err)
