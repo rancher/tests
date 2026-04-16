@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	getLogsLoggingReceiver string = `kubectl logs --namespace %s -f svc/rancher-logging-test-receiver`
+	getLogsLoggingReceiver string = `kubectl logs --namespace %s svc/rancher-logging-test-receiver --tail=50`
 )
 
 func verifyLoggingReceiver(client *rancher.Client, clusterID string) (string, error) {

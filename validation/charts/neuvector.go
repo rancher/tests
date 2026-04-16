@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/defaults/stevestates"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/ingresses"
 	"github.com/rancher/tests/actions/charts"
@@ -42,8 +43,8 @@ func verifyNeuVectorServicesActive(client *rancher.Client, clusterID string) err
 			return fmt.Errorf("failed to get NeuVector service [%s]: %w", svcName, err)
 		}
 
-		if svc.ObjectMeta.State == nil || svc.ObjectMeta.State.Error {
-			return fmt.Errorf("NeuVector service [%s] is not in a healthy state", svcName)
+		if svc.ObjectMeta.State == nil || svc.ObjectMeta.State.Error || svc.ObjectMeta.State.Name != stevestates.Active {
+			return fmt.Errorf("NeuVector service [%s] is not active (state: %v)", svcName, svc.ObjectMeta.State)
 		}
 	}
 
@@ -52,14 +53,15 @@ func verifyNeuVectorServicesActive(client *rancher.Client, clusterID string) err
 
 // verifyNeuVectorWebUIAccessible verifies that the NeuVector manager web UI is reachable
 // through the Rancher service proxy endpoint.
-func verifyNeuVectorWebUIAccessible(client *rancher.Client, clusterID string) error {
+func verifyNeuVectorWebUIAccessible(client *rancher.Client, clusterID string) (string, error) {
 	proxyPath := fmt.Sprintf(neuVectorWebUIServiceProxyFmt, clusterID, charts.NeuVectorNamespace, neuVectorWebUIService, neuVectorWebUIPort)
 
 	logrus.Infof("Verifying NeuVector manager UI is accessible at path [%s]", proxyPath)
-	_, err := ingresses.GetExternalIngressResponse(client, client.RancherConfig.Host, proxyPath, true)
+	resp, err := ingresses.GetExternalIngressResponse(client, client.RancherConfig.Host, proxyPath, true)
 	if err != nil {
-		return fmt.Errorf("NeuVector manager UI is not accessible via service proxy: %w", err)
+		return resp, fmt.Errorf("NeuVector manager UI is not accessible via service proxy: %w", err)
 	}
+	logrus.Infof("NeuVector manager UI responded successfully: %s", resp)
 
-	return nil
+	return resp, nil
 }

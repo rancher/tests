@@ -54,7 +54,7 @@ func (n *NeuVectorTestSuite) SetupSuite() {
 	require.Equal(n.T(), actionsCharts.SystemProject, n.project.Name)
 
 	n.T().Logf("Getting the latest chart version for [%s]", actionsCharts.NeuVectorChartName)
-	latestVersion, err := client.Catalog.GetLatestChartVersion(actionsCharts.NeuVectorChartName, catalog.RancherChartRepo)
+	latestVersion, err := n.client.Catalog.GetLatestChartVersion(actionsCharts.NeuVectorChartName, catalog.RancherChartRepo)
 	require.NoError(n.T(), err)
 
 	n.chartInstallOptions = &actionsCharts.PayloadOpts{
@@ -104,8 +104,9 @@ func (n *NeuVectorTestSuite) TestNeuVectorInstallation() {
 	require.NoError(n.T(), err)
 
 	n.T().Log("Verifying NeuVector manager web UI is accessible via service proxy")
-	err = verifyNeuVectorWebUIAccessible(client, n.cluster.ID)
-	require.NoError(n.T(), err)
+	respUI, err := verifyNeuVectorWebUIAccessible(client, n.cluster.ID)
+	require.NoError(n.T(), err, "NeuVector manager web UI should be accessible via Rancher service proxy")
+	require.NotEmpty(n.T(), respUI, "Expected non-empty response from NeuVector manager web UI")
 }
 
 func TestNeuVectorTestSuite(t *testing.T) {

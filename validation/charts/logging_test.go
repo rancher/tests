@@ -77,7 +77,7 @@ func (l *LoggingTestSuite) TestLoggingInstallation() {
 			},
 		}
 
-		l.T().Logf("Installing Lonhgorn chart in cluster [%v] with latest version [%v] in project [%v] and namespace [%v]", l.cluster.Name, payloadOpts.Version, l.project.Name, payloadOpts.Namespace)
+		l.T().Logf("Installing Longhorn chart in cluster [%v] with latest version [%v] in project [%v] and namespace [%v]", l.cluster.Name, payloadOpts.Version, l.project.Name, payloadOpts.Namespace)
 		err = charts.InstallLonghornChart(l.client, payloadOpts, nil)
 		require.NoError(l.T(), err)
 	}
