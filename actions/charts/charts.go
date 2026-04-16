@@ -55,6 +55,7 @@ type RancherMonitoringOpts struct {
 // RancherLoggingOpts is a struct of the required options to install Rancher Logging with desired chart values.
 type RancherLoggingOpts struct {
 	AdditionalLoggingSources bool
+	LoggingEnabledSources    bool
 }
 
 // RancherAlertingOpts is a struct of the required options to install Rancher Alerting Drivers with desired chart values.

@@ -260,6 +260,7 @@ func createPreUpgradeWorkloads(t *testing.T, client *rancher.Client, clusterName
 
 			loggingChartFeatureOption := &charts.RancherLoggingOpts{
 				AdditionalLoggingSources: true,
+				LoggingEnabledSources:    false,
 			}
 
 			logrus.Infof("Installing logging chart's latest version: %v", latestLoggingVersion)
