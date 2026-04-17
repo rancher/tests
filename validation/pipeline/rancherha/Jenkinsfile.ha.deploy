@@ -102,6 +102,8 @@ node {
               ])
               def testCmd = testArgs.join(' ')
               try {
+                sh "docker run --rm ${imageName} ls -la ${testsDir} || echo 'DEBUG: directory listing failed'"
+                sh "docker run --rm ${imageName} sh -c 'go version; go test -tags=validation -list . ${testsDir} 2>&1 || true'"
                 sh "docker run --name ${golangTestContainer} -t --env-file ${envFile} " +
                 "${imageName} sh -c \" eval \\\$(ssh-agent -s); ssh-add /root/.ssh/je*; ${testCmd};" +
                 "${workPath}pipeline/scripts/build_qase_reporter.sh;" +
