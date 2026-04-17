@@ -16,7 +16,6 @@ node {
     def envFile = ".env"
     def configFile = "config.yaml"
     def branch = "main"
-    def cleanup = (env.RANCHER_CLEANUP ?: "true").toLowerCase()
     def tags = env.TAGS ?: "validation"
     def goTestCase = env.GOTEST_TESTCASE ?: "-run TestRancherHAInstallTestSuite"
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
@@ -131,6 +130,11 @@ node {
 
 def injectConfigParams(String configFile) {
     sh "yq e '.sshPath.sshPath = \"/root/.ssh\"' -i ${configFile}"
+
+    if (env.RANCHER_CLEANUP && env.RANCHER_CLEANUP.trim() != "") {
+        def cleanupVal = env.RANCHER_CLEANUP.trim().toLowerCase()
+        sh "yq e '.qaInfraAutomation.rancherInstall.cleanup = ${cleanupVal}' -i ${configFile}"
+    }
 
     injectIfSet('.qaInfraAutomation.rancherInstall.chartVersion', env.RANCHER_CHART_VERSION, configFile)
     injectIfSet('.qaInfraAutomation.rancherInstall.imageTag', env.RANCHER_IMAGE_TAG, configFile)
