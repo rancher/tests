@@ -190,6 +190,12 @@ func newLoggingChartInstallAction(p *PayloadOpts, rancherLoggingOpts *RancherLog
 				"enabled": rancherLoggingOpts.AdditionalLoggingSources,
 			},
 		},
+		"logging": map[string]any{
+			"enabled": rancherLoggingOpts.LoggingEnabledSources,
+		},
+		"testReceiver": map[string]any{
+			"enabled": rancherLoggingOpts.LoggingEnabledSources,
+		},
 	}
 
 	chartInstall := NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, loggingValues)

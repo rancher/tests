@@ -58,27 +58,69 @@ func (l *LoggingTestSuite) SetupSuite() {
 }
 
 func (l *LoggingTestSuite) TestLoggingInstallation() {
-	l.T().Logf("Resolving latest chart version for [%s] from repository [%s]", charts.RancherLoggingName, catalog.RancherChartRepo)
-	latestLoggingVersion, err := l.client.Catalog.GetLatestChartVersion(charts.RancherLoggingName, catalog.RancherChartRepo)
+	l.T().Logf("Resolving latest chart version for [%s] from repository [%s]", charts.LonghornNamespace, charts.LonghornChartName)
+	longhornChart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(l.T(), err)
 
-	installOptions := &charts.InstallOptions{
-		Cluster:   l.cluster,
-		Version:   latestLoggingVersion,
-		ProjectID: l.project.ID,
+	if !longhornChart.IsAlreadyInstalled {
+		// Get latest versions of longhorn
+		latestLonghornVersion, err := l.client.Catalog.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
+		require.NoError(l.T(), err)
+
+		payloadOpts := charts.PayloadOpts{
+			Namespace: charts.LonghornNamespace,
+			Host:      l.client.RancherConfig.Host,
+			InstallOptions: charts.InstallOptions{
+				Cluster:   l.cluster,
+				Version:   latestLonghornVersion,
+				ProjectID: l.project.ID,
+			},
+		}
+
+		l.T().Logf("Installing Longhorn chart in cluster [%v] with latest version [%v] in project [%v] and namespace [%v]", l.cluster.Name, payloadOpts.Version, l.project.Name, payloadOpts.Namespace)
+		err = charts.InstallLonghornChart(l.client, payloadOpts, nil)
+		require.NoError(l.T(), err)
 	}
 
-	featureOptions := &charts.RancherLoggingOpts{
-		AdditionalLoggingSources: true,
-	}
-
-	l.T().Logf("Installing Rancher Logging chart on cluster [%s] with version [%s]", l.cluster.Name, latestLoggingVersion)
-	err = charts.InstallRancherLoggingChart(l.client, installOptions, featureOptions)
+	loggingChart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.RancherLoggingNamespace, charts.RancherLoggingName)
 	require.NoError(l.T(), err)
+
+	if !loggingChart.IsAlreadyInstalled {
+		l.T().Logf("Resolving latest chart version for [%s] from repository [%s]", charts.RancherLoggingName, catalog.RancherChartRepo)
+		latestLoggingVersion, err := l.client.Catalog.GetLatestChartVersion(charts.RancherLoggingName, catalog.RancherChartRepo)
+		require.NoError(l.T(), err)
+
+		installOptions := &charts.InstallOptions{
+			Cluster:   l.cluster,
+			Version:   latestLoggingVersion,
+			ProjectID: l.project.ID,
+		}
+
+		featureOptions := &charts.RancherLoggingOpts{
+			AdditionalLoggingSources: true,
+			LoggingEnabledSources:    true,
+		}
+
+		l.T().Logf("Installing Rancher Logging chart on cluster [%s] with version [%s]", l.cluster.Name, latestLoggingVersion)
+		err = charts.InstallRancherLoggingChart(l.client, installOptions, featureOptions)
+		require.NoError(l.T(), err)
+	}
+
+	l.T().Logf("Waiting for logging deamonsets to become ready in namespace [%s]", charts.RancherLoggingNamespace)
+	err = shepherdCharts.WatchAndWaitDaemonSets(l.client, l.cluster.ID, charts.RancherLoggingNamespace, metav1.ListOptions{})
+	require.NoError(l.T(), err, "FluentBit DaemonSets not ready")
 
 	l.T().Logf("Waiting for logging deployments to become ready in namespace [%s]", charts.RancherLoggingNamespace)
 	err = shepherdCharts.WatchAndWaitDeployments(l.client, l.cluster.ID, charts.RancherLoggingNamespace, metav1.ListOptions{})
-	require.NoError(l.T(), err)
+	require.NoError(l.T(), err, "rancher-logging Deployments not ready")
+
+	l.T().Logf("Waiting for logging statefulsets to become ready in namespace [%s]", charts.RancherLoggingNamespace)
+	err = shepherdCharts.WatchAndWaitStatefulSets(l.client, l.cluster.ID, charts.RancherLoggingNamespace, metav1.ListOptions{})
+	require.NoError(l.T(), err, "Fluentd StatefulSets not ready")
+
+	logs, err := verifyLoggingReceiver(l.client, l.cluster.ID)
+	require.NoError(l.T(), err, "Verify Logging Receiver error")
+	require.NotEmpty(l.T(), logs, "Logs are empty")
 }
 
 func TestLoggingTestSuite(t *testing.T) {

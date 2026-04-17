@@ -170,6 +170,7 @@ func (i *InstallationTestSuite) TestInstallLoggingChart() {
 
 		loggingChartFeatureOption := &charts.RancherLoggingOpts{
 			AdditionalLoggingSources: true,
+			LoggingEnabledSources:    false,
 		}
 
 		i.T().Logf("Installing logging chart with the latest version in cluster [%v] with version [%v]", i.cluster.Name, latestLoggingVersion)
