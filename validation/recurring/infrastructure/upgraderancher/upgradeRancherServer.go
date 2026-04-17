@@ -23,11 +23,33 @@ func main() {
 	t := &testing.T{}
 
 	cattleConfig := shepherdConfig.LoadConfigFromFile(os.Getenv(shepherdConfig.ConfigEnvironmentKey))
-	_, _, _, _ = tfpConfig.LoadTFPConfigs(cattleConfig)
+	_, terraformConfig, _, _ := tfpConfig.LoadTFPConfigs(cattleConfig)
+
+	testSession := session.NewSession()
 
 	switch {
+	case terraformConfig.AWSConfig.AWSVpcIP != "":
+		client, err = upgradeAirgapRancher(t, testSession)
+		if err != nil {
+			logrus.Fatalf("Failed to setup Airgap Rancher: %v", err)
+		}
+	case !terraformConfig.AWSConfig.EnablePrimaryIPv6 && terraformConfig.AWSConfig.ClusterCIDR != "":
+		client, err = upgradeDualStackRancher(t, testSession)
+		if err != nil {
+			logrus.Fatalf("Failed to setup Dual Stack Rancher: %v", err)
+		}
+	case terraformConfig.AWSConfig.EnablePrimaryIPv6:
+		client, err = upgradeIPv6Rancher(t, testSession)
+		if err != nil {
+			logrus.Fatalf("Failed to setup IPv6 Rancher: %v", err)
+		}
+	case terraformConfig.Proxy != nil:
+		client, err = upgradeProxyRancher(t, testSession)
+		if err != nil {
+			logrus.Fatalf("Failed to setup Proxy Rancher: %v", err)
+		}
 	default:
-		client, err = upgradeRancher(t)
+		client, err = upgradeRancher(t, testSession)
 		if err != nil {
 			logrus.Fatalf("Failed to setup Rancher: %v", err)
 		}
@@ -41,12 +63,37 @@ func main() {
 	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
 }
 
-func upgradeRancher(t *testing.T) (*rancher.Client, error) {
-	testSession := session.NewSession()
+func upgradeAirgapRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
+	client, registry, bastion, _, _, cattleConfig, _ := ranchers.SetupAirgapRancher(t, testSession, keypath.AirgapKeyPath)
+	client, _, _, _ = ranchers.UpgradeAirgapRancher(t, client, bastion, registry, testSession, cattleConfig, nil)
 
+	return client, nil
+}
+
+func upgradeDualStackRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
+	client, serverNodeOne, _, _, cattleConfig := ranchers.SetupDualStackRancher(t, testSession, keypath.DualStackKeyPath)
+	client, _, _, _ = ranchers.UpgradeDualStackRancher(t, client, serverNodeOne, testSession, cattleConfig)
+
+	return client, nil
+}
+
+func upgradeIPv6Rancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
+	client, serverNodeOne, _, _, cattleConfig := ranchers.SetupIPv6Rancher(t, testSession, keypath.IPv6KeyPath)
+	client, _, _, _ = ranchers.UpgradeIPv6Rancher(t, client, serverNodeOne, testSession, cattleConfig)
+
+	return client, nil
+}
+
+func upgradeProxyRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
+	client, proxyBastion, proxyPrivateIP, _, _, cattleConfig := ranchers.SetupProxyRancher(t, testSession, keypath.ProxyKeyPath)
+	client, _, _, _ = ranchers.UpgradeProxyRancher(t, client, proxyPrivateIP, proxyBastion, testSession, cattleConfig)
+
+	return client, nil
+}
+
+func upgradeRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
 	client, serverNodeOne, _, _, cattleConfig := ranchers.SetupRancher(t, testSession, keypath.SanityKeyPath)
 	client, _, _, _ = ranchers.UpgradeRancher(t, client, serverNodeOne, testSession, cattleConfig)
 
 	return client, nil
-
 }

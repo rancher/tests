@@ -64,7 +64,6 @@ replace (
 require github.com/rancher/rancher/pkg/apis v0.0.0
 
 require (
-	github.com/gruntwork-io/terratest v0.49.0
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/qase-tms/qase-go/pkg/qase-go v1.0.7
 	github.com/qase-tms/qase-go/qase-api-client v1.2.1
@@ -163,6 +162,7 @@ require (
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2 // indirect
+	github.com/gruntwork-io/terratest v0.49.0 // indirect
 	github.com/harvester/harvester v1.5.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-getter/v2 v2.2.3 // indirect
