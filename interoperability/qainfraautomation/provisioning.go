@@ -1240,7 +1240,11 @@ func buildStandaloneVars(clusterCfg *config.StandaloneClusterConfig) map[string]
 		vars["channel"] = clusterCfg.Channel
 	}
 	if clusterCfg.KubeconfigOutputPath != "" {
-		vars["kubeconfig_file"] = clusterCfg.KubeconfigOutputPath
+		absPath, err := filepath.Abs(clusterCfg.KubeconfigOutputPath)
+		if err != nil {
+			absPath = clusterCfg.KubeconfigOutputPath
+		}
+		vars["kubeconfig_file"] = absPath
 	}
 	return vars
 }
