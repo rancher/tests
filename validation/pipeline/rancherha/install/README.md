@@ -19,8 +19,6 @@ qaInfraAutomation:
   workspace: rancher-ha-test-0
 
   aws:
-    accessKey: <AWS_ACCESS_KEY>
-    secretKey: <AWS_SECRET_KEY>
     region: us-west-1
     ami: ami-0e01311d1f112d4d0
     sshUser: ec2-user
@@ -33,7 +31,7 @@ qaInfraAutomation:
     volumeSize: 50       # optional, default: 50
     volumeType: gp3      # optional, default: gp3
     hostnamePrefix: ctw-t
-    route53Zone: qa.rancher.space
+    route53Zone: qa.rancher.space  # injected by Jenkinsfile from AWS_ROUTE53_ZONE param; set manually for local runs
 
   standaloneCluster:
     # Use +k3s suffix for K3s, +rke2 suffix for RKE2 — cluster type is auto-detected.
@@ -80,3 +78,14 @@ qaInfraAutomation:
     # tlsKeyPath: /path/to/tls.key
     # tlsCACertPath: /path/to/ca.pem  # optional — omit if cert is publicly trusted; enables privateCA when set
 ```
+
+## Jenkins-injected fields
+
+When running via the `rancher-ha-deploy` Jenkins job, the Jenkinsfile automatically injects the following fields into the config YAML. For local runs, add these to your config manually:
+
+- `qaInfraAutomation.aws.accessKey` — resolved from `${AWS_ACCESS_KEY_ID}` placeholder in CONFIG via Jenkins credentials
+- `qaInfraAutomation.aws.secretKey` — resolved from `${AWS_SECRET_ACCESS_KEY}` placeholder in CONFIG via Jenkins credentials
+- `qaInfraAutomation.rancherInstall.bootstrapPassword` — resolved from `${ADMIN_PASSWORD}` placeholder in CONFIG via Jenkins credentials
+- `qaInfraAutomation.aws.route53Zone` — injected from the `AWS_ROUTE53_ZONE` Jenkins parameter via `yq`
+
+All other fields (chart version, AMI, instance type, etc.) are injected from their corresponding Jenkins parameters via `yq`, overriding whatever is in the CONFIG text box.

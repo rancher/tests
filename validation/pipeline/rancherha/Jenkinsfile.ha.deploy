@@ -76,6 +76,9 @@ node {
               }
               dir("./tests/validation") {
                 def configContents = env.CONFIG ?: ""
+                configContents = configContents.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID ?: '')
+                configContents = configContents.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY ?: '')
+                configContents = configContents.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD ?: '')
                 writeFile file: configFile, text: configContents
                 env.CATTLE_TEST_CONFIG = "${workPath}${configFile}"
 
@@ -149,13 +152,21 @@ def injectConfigParams(String configFile) {
     injectIfSet('.qaInfraAutomation.aws.vpc', env.AWS_VPC, configFile)
     injectIfSet('.qaInfraAutomation.aws.subnet', env.AWS_SUBNET, configFile)
     injectIfSet('.qaInfraAutomation.aws.awsSSHKeyName', env.AWS_SSH_KEY_NAME, configFile)
+    injectIfSet('.qaInfraAutomation.aws.route53Zone', env.AWS_ROUTE53_ZONE, configFile)
 
     if (env.AWS_VOLUME_SIZE && env.AWS_VOLUME_SIZE.trim() != "") {
         sh "yq e '.qaInfraAutomation.aws.volumeSize = ${env.AWS_VOLUME_SIZE.trim()}' -i ${configFile}"
     }
 
     if (env.AWS_SECURITY_GROUPS && env.AWS_SECURITY_GROUPS.trim() != "") {
-        sh "yq e '.qaInfraAutomation.aws.securityGroups[0] = \"${env.AWS_SECURITY_GROUPS.trim()}\"' -i ${configFile}"
+        def sgs = env.AWS_SECURITY_GROUPS.trim().split(',')
+        sgs.eachWithIndex { sg, idx ->
+            sg = sg.trim()
+            if (sg == "") {
+                error "AWS_SECURITY_GROUPS contains an empty entry at position ${idx}. Fix the comma-separated list."
+            }
+            sh "yq e '.qaInfraAutomation.aws.securityGroups[${idx}] = \"${sg}\"' -i ${configFile}"
+        }
     }
 
     injectHelmRepo(configFile)
@@ -232,7 +243,10 @@ def injectServerFlags(String configFile) {
     if (flags == "") { return }
 
     def converted = flags.replace('\\n', '\n')
-    sh "yq e '.qaInfraAutomation.standaloneCluster.serverFlags = \"${converted}\"' -i ${configFile}"
+    def tmpFlags = "${configFile}.serverflags.tmp"
+    writeFile file: tmpFlags, text: converted
+    sh "yq e '.qaInfraAutomation.standaloneCluster.serverFlags = load_str(\"${tmpFlags}\")' -i ${configFile}"
+    sh "rm -f ${tmpFlags}"
 }
 
 def injectOptionalFiles(String configFile) {
