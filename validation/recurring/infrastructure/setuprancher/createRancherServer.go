@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/config"
 	shepherdConfig "github.com/rancher/shepherd/pkg/config"
@@ -26,24 +25,35 @@ func main() {
 	cattleConfig := shepherdConfig.LoadConfigFromFile(os.Getenv(shepherdConfig.ConfigEnvironmentKey))
 	_, terraformConfig, _, _ := tfpConfig.LoadTFPConfigs(cattleConfig)
 
+	testSession := session.NewSession()
+
 	switch {
-	case terraformConfig.AWSConfig.EnablePrimaryIPv6:
-		client, _, _, _, _, err = setupIPv6Rancher(t)
+	case terraformConfig.AWSConfig.AWSVpcIP != "":
+		client, err = setupAirgapRancher(t, testSession)
 		if err != nil {
-			logrus.Fatalf("Failed to setup Rancher: %v", err)
+			logrus.Fatalf("Failed to setup Airgap Rancher: %v", err)
 		}
 	case !terraformConfig.AWSConfig.EnablePrimaryIPv6 && terraformConfig.AWSConfig.ClusterCIDR != "":
-		client, _, _, _, _, err = setupDualStackRancher(t)
+		client, err = setupDualStackRancher(t, testSession)
 		if err != nil {
-			logrus.Fatalf("Failed to setup Rancher: %v", err)
+			logrus.Fatalf("Failed to setup Dual Stack Rancher: %v", err)
+		}
+	case terraformConfig.AWSConfig.EnablePrimaryIPv6:
+		client, err = setupIPv6Rancher(t, testSession)
+		if err != nil {
+			logrus.Fatalf("Failed to setup IPv6 Rancher: %v", err)
+		}
+	case terraformConfig.Proxy != nil:
+		client, err = setupProxyRancher(t, testSession)
+		if err != nil {
+			logrus.Fatalf("Failed to setup Proxy Rancher: %v", err)
 		}
 	default:
-		client, _, _, _, _, err = setupRancher(t)
+		client, err = setupRancher(t, testSession)
 		if err != nil {
 			logrus.Fatalf("Failed to setup Rancher: %v", err)
 		}
 	}
-
 	_, err = operations.ReplaceValue([]string{"rancher", "adminToken"}, client.RancherConfig.AdminToken, cattleConfig)
 	if err != nil {
 		logrus.Fatalf("Failed to replace admin token: %v", err)
@@ -52,23 +62,32 @@ func main() {
 	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
 }
 
-func setupRancher(t *testing.T) (*rancher.Client, string, *terraform.Options, *terraform.Options, map[string]any, error) {
-	testSession := session.NewSession()
-	client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig := ranchers.SetupRancher(t, testSession, keypath.SanityKeyPath)
+func setupAirgapRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
+	client, _, _, _, _, _, _ := ranchers.SetupAirgapRancher(t, testSession, keypath.AirgapKeyPath)
 
-	return client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig, nil
+	return client, nil
 }
 
-func setupIPv6Rancher(t *testing.T) (*rancher.Client, string, *terraform.Options, *terraform.Options, map[string]any, error) {
-	testSession := session.NewSession()
-	client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig := ranchers.SetupIPv6Rancher(t, testSession, keypath.IPv6KeyPath)
+func setupDualStackRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
+	client, _, _, _, _ := ranchers.SetupDualStackRancher(t, testSession, keypath.DualStackKeyPath)
 
-	return client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig, nil
+	return client, nil
 }
 
-func setupDualStackRancher(t *testing.T) (*rancher.Client, string, *terraform.Options, *terraform.Options, map[string]any, error) {
-	testSession := session.NewSession()
-	client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig := ranchers.SetupDualStackRancher(t, testSession, keypath.DualStackKeyPath)
+func setupIPv6Rancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
+	client, _, _, _, _ := ranchers.SetupIPv6Rancher(t, testSession, keypath.IPv6KeyPath)
 
-	return client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig, nil
+	return client, nil
+}
+
+func setupProxyRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
+	client, _, _, _, _, _ := ranchers.SetupProxyRancher(t, testSession, keypath.ProxyKeyPath)
+
+	return client, nil
+}
+
+func setupRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
+	client, _, _, _, _ := ranchers.SetupRancher(t, testSession, keypath.SanityKeyPath)
+
+	return client, nil
 }
