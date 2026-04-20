@@ -210,4 +210,4 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace github.com/rancher/qa-infra-automation => github.com/slickwarren/rancher-qa-infra-automation v0.0.0-20260417185826-39a52bd10918
+replace github.com/rancher/qa-infra-automation => github.com/slickwarren/rancher-qa-infra-automation v0.0.0-20260420150110-8fe9a04cd602
