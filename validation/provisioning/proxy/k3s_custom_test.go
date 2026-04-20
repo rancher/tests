@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
+	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type nodeDriverK3SProxyTest struct {
+type customK3SProxyTest struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
@@ -34,14 +34,15 @@ type nodeDriverK3SProxyTest struct {
 	terraformConfig    *tfpConfig.TerraformConfig
 }
 
-func nodeDriverK3SProxySetup(t *testing.T) nodeDriverK3SProxyTest {
-	var k nodeDriverK3SProxyTest
+func customK3SProxySetup(t *testing.T) customK3SProxyTest {
+	var k customK3SProxyTest
 
 	testSession := session.NewSession()
 	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(t, err)
+
 	k.client = client
 
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
@@ -67,9 +68,9 @@ func nodeDriverK3SProxySetup(t *testing.T) nodeDriverK3SProxyTest {
 	return k
 }
 
-func TestNodeDriverK3SProxy(t *testing.T) {
+func TestCustomK3SProxy(t *testing.T) {
 	t.Parallel()
-	k := nodeDriverK3SProxySetup(t)
+	k := customK3SProxySetup(t)
 
 	nodeRolesStandard := []provisioninginput.MachinePools{
 		provisioninginput.EtcdMachinePool,
@@ -107,11 +108,10 @@ func TestNodeDriverK3SProxy(t *testing.T) {
 		machinePools []provisioninginput.MachinePools
 		proxyVars    []rkev1.EnvVar
 	}{
-		{"K3S_Proxy_Node_Driver", k.standardUserClient, nodeRolesStandard, []rkev1.EnvVar{httpProxy, httpsProxy, noProxy}},
+		{"K3S_Proxy_Custom", k.standardUserClient, nodeRolesStandard, []rkev1.EnvVar{httpProxy, httpsProxy, noProxy}},
 	}
 
 	for _, tt := range tests {
-		var err error
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
 			k.session.Cleanup()
@@ -126,12 +126,13 @@ func TestNodeDriverK3SProxy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			provider := provisioning.CreateProvider(clusterConfig.Provider)
-			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
-			machineConfigSpec := provider.LoadMachineConfigFunc(k.cattleConfig)
+			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
+
+			awsEC2Configs := new(ec2.AWSEC2Configs)
+			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, k.cattleConfig, awsEC2Configs)
 
 			logrus.Info("Provisioning cluster")
-			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
@@ -145,11 +146,10 @@ func TestNodeDriverK3SProxy(t *testing.T) {
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(tt.client, cluster)
 			require.NoError(t, err)
-
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(tt.client, k.cattleConfig)
-		err = qase.UpdateSchemaParameters(tt.name, params)
+		params := provisioning.GetCustomSchemaParams(tt.client, k.cattleConfig)
+		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
 		}

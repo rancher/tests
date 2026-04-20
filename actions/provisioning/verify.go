@@ -123,10 +123,10 @@ func VerifyRKE1Cluster(t *testing.T, client *rancher.Client, clustersConfig *clu
 func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject) error {
 	var lastErr error
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaults.FifteenMinuteTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaults.ThirtyMinuteTimeout)
 	defer cancel()
 
-	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.FifteenMinuteTimeout, false, func(context.Context) (done bool, err error) {
+	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.ThirtyMinuteTimeout, false, func(context.Context) (done bool, err error) {
 		client, err = client.ReLogin()
 		if err != nil {
 			logrus.Debugf("Unable to fetch cluster client (%s), retrying", cluster.Name)

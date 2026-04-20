@@ -3,7 +3,7 @@ name: Upgraded Rancher Cluster Provisioning
 
 on:
   schedule:
-    - cron: "0 10 * * 1,5"
+    - cron: "0 10 * * 1"
   workflow_dispatch:
     inputs:
       rancher_version:

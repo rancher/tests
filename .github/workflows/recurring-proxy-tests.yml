@@ -1,9 +1,9 @@
 ---
-name: Cluster Provisioning
+name: Recurring Proxy Runs
 
 on:
   schedule:
-    - cron: "0 10 * * 3,5"
+    - cron: "0 5 * * 2"
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -47,8 +47,14 @@ jobs:
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: head
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - rancher-server-one
+          - rancher-server-two
     env:
-      HOSTNAME_PREFIX: "gha-prov-215"
+      HOSTNAME_PREFIX: "ghap-r215"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
@@ -68,11 +74,6 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5
-        with:
-          version: "latest"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
@@ -153,6 +154,7 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
+          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_15 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_15 }}
 
       - name: Set Rancher chart url
@@ -179,6 +181,8 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
+            proxy:
+              proxyBastion: ""
             awsCredentials:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
@@ -198,12 +202,6 @@ jobs:
               awsUser: "${{ secrets.AWS_USER }}"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
               timeout: "${{ vars.TIMEOUT }}"
-              windowsAWSUser: "${{ secrets.AWS_WINDOWS_USER }}" 
-              windows2019AMI: "${{ secrets.WINDOWS_2019_AMI }}"
-              windows2022AMI: "${{ secrets.WINDOWS_2022_AMI }}"
-              windows2019Password: "${{ secrets.AWS_WINDOWS_2019_PASSWORD }}"
-              windows2022Password: "${{ secrets.AWS_WINDOWS_2022_PASSWORD }}"
-              windowsInstanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
               ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
               loadBalancerType: "${{ vars.LOAD_BALANCER_TYPE }}"
               targetType: "${{ vars.TARGET_TYPE }}"
@@ -226,15 +224,23 @@ jobs:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
+          scalingInput:
+            nodeProvider: "ec2"
+
           clusterConfig:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
+            agentEnvVars:
+            - name: HTTP_PROXY
+              value: http://<replace me>:3228
+            - name: HTTPS_PROXY
+              value: http://<replace me>:3228
+            - name: NO_PROXY
+              value: localhost,127.0.0.0/8,10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,.svc,.cluster.local,cattle-system.svc,169.254.169.254
             registries:
-              rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
-              rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
@@ -244,7 +250,6 @@ jobs:
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
-                    insecureSkipVerify: true
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
@@ -263,7 +268,7 @@ jobs:
               zone: "${{ vars.AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
+              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE }}"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -280,8 +285,7 @@ jobs:
                 awsUser: "${{ secrets.AWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
-              - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-                awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
+              - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
@@ -295,6 +299,8 @@ jobs:
 
           templateTest:
             repo:
+              metadata:
+                name: "${{ env.HOSTNAME_PREFIX }}-template-test"
               spec:
                 gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
                 gitBranch: main
@@ -327,19 +333,20 @@ jobs:
       - name: Creating Rancher server
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
-      - name: Run Provisioning tests
+      - name: Run Test Suites
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-provisioning
         with:
+          suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: recurring
+          tags: proxy
+        uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/sanity/aws
+        working-directory: tfp-automation/modules/proxy/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
@@ -394,27 +401,32 @@ jobs:
       - name: Save test result as artifact for weekly summary
         if: always() && github.event_name == 'schedule'
         run: |
-          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"cluster-provisioning\", \"job\": \"v2-15\" }" > test-result-cluster-provisioning-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"recurring-proxy-test\", \"job\": \"v2-15\" }" > test-result-recurring-proxy-test-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
         shell: bash
 
       - name: Upload test result weekly summary
         if: always() && github.event_name == 'schedule'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
         with:
-          name: test-result-cluster-provisioning-v2-15-${{ github.run_id }}
-          path: test-result-cluster-provisioning-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
-
+          name: test-result-recurring-proxy-test-v2-15-${{ github.run_id }}
+          path: test-result-recurring-proxy-test-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
+  
   v2-14:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && contains(github.event.inputs.rancher_version, '-alpha') ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && contains(inputs.rancher_version, '-alpha')
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: head
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - rancher-server-one
+          - rancher-server-two
     env:
-      HOSTNAME_PREFIX: "gha-prov-214"
+      HOSTNAME_PREFIX: "ghap-r214"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
@@ -434,11 +446,6 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5
-        with:
-          version: "latest"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
@@ -519,6 +526,7 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
+          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_14 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_14 }}
 
       - name: Set Rancher chart url
@@ -545,6 +553,8 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
+            proxy:
+              proxyBastion: ""
             awsCredentials:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
@@ -564,12 +574,6 @@ jobs:
               awsUser: "${{ secrets.AWS_USER }}"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
               timeout: "${{ vars.TIMEOUT }}"
-              windowsAWSUser: "${{ secrets.AWS_WINDOWS_USER }}" 
-              windows2019AMI: "${{ secrets.WINDOWS_2019_AMI }}"
-              windows2022AMI: "${{ secrets.WINDOWS_2022_AMI }}"
-              windows2019Password: "${{ secrets.AWS_WINDOWS_2019_PASSWORD }}"
-              windows2022Password: "${{ secrets.AWS_WINDOWS_2022_PASSWORD }}"
-              windowsInstanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
               ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
               loadBalancerType: "${{ vars.LOAD_BALANCER_TYPE }}"
               targetType: "${{ vars.TARGET_TYPE }}"
@@ -592,15 +596,23 @@ jobs:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
+          scalingInput:
+            nodeProvider: "ec2"
+
           clusterConfig:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
+            agentEnvVars:
+            - name: HTTP_PROXY
+              value: http://<replace me>:3228
+            - name: HTTPS_PROXY
+              value: http://<replace me>:3228
+            - name: NO_PROXY
+              value: localhost,127.0.0.0/8,10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,.svc,.cluster.local,cattle-system.svc,169.254.169.254
             registries:
-              rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
-              rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
@@ -610,7 +622,6 @@ jobs:
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
-                    insecureSkipVerify: true
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
@@ -646,8 +657,7 @@ jobs:
                 awsUser: "${{ secrets.AWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
-              - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-                awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
+              - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
@@ -661,6 +671,8 @@ jobs:
 
           templateTest:
             repo:
+              metadata:
+                name: "${{ env.HOSTNAME_PREFIX }}-template-test"
               spec:
                 gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
                 gitBranch: main
@@ -693,19 +705,20 @@ jobs:
       - name: Creating Rancher server
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
-      - name: Run Provisioning tests
+      - name: Run Test Suites
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-provisioning
         with:
+          suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: recurring
+          tags: proxy
+        uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/sanity/aws
+        working-directory: tfp-automation/modules/proxy/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
@@ -760,27 +773,32 @@ jobs:
       - name: Save test result as artifact for weekly summary
         if: always() && github.event_name == 'schedule'
         run: |
-          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"cluster-provisioning\", \"job\": \"v2-14\" }" > test-result-cluster-provisioning-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"recurring-proxy-test\", \"job\": \"v2-14\" }" > test-result-recurring-proxy-test-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
         shell: bash
 
       - name: Upload test result weekly summary
         if: always() && github.event_name == 'schedule'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
         with:
-          name: test-result-cluster-provisioning-v2-14-${{ github.run_id }}
-          path: test-result-cluster-provisioning-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
+          name: test-result-recurring-proxy-test-v2-14-${{ github.run_id }}
+          path: test-result-recurring-proxy-test-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
 
   v2-13:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && contains(github.event.inputs.rancher_version, '-alpha') ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && contains(inputs.rancher_version, '-alpha')
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: staging-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - rancher-server-one
+          - rancher-server-two
     env:
-      HOSTNAME_PREFIX: "gha-prov-213"
+      HOSTNAME_PREFIX: "ghap-r213"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
@@ -800,11 +818,6 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5
-        with:
-          version: "latest"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
@@ -885,6 +898,7 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
+          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_13 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
 
       - name: Set Rancher chart url
@@ -911,6 +925,8 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
+            proxy:
+              proxyBastion: ""
             awsCredentials:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
@@ -930,12 +946,6 @@ jobs:
               awsUser: "${{ secrets.AWS_USER }}"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
               timeout: "${{ vars.TIMEOUT }}"
-              windowsAWSUser: "${{ secrets.AWS_WINDOWS_USER }}" 
-              windows2019AMI: "${{ secrets.WINDOWS_2019_AMI }}"
-              windows2022AMI: "${{ secrets.WINDOWS_2022_AMI }}"
-              windows2019Password: "${{ secrets.AWS_WINDOWS_2019_PASSWORD }}"
-              windows2022Password: "${{ secrets.AWS_WINDOWS_2022_PASSWORD }}"
-              windowsInstanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
               ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
               loadBalancerType: "${{ vars.LOAD_BALANCER_TYPE }}"
               targetType: "${{ vars.TARGET_TYPE }}"
@@ -959,15 +969,23 @@ jobs:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
+          scalingInput:
+            nodeProvider: "ec2"
+
           clusterConfig:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             cni: "${{ secrets.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
+            agentEnvVars:
+            - name: HTTP_PROXY
+              value: http://<replace me>:3228
+            - name: HTTPS_PROXY
+              value: http://<replace me>:3228
+            - name: NO_PROXY
+              value: localhost,127.0.0.0/8,10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,.svc,.cluster.local,cattle-system.svc,169.254.169.254
             registries:
-              rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
-              rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
@@ -977,7 +995,6 @@ jobs:
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
-                    insecureSkipVerify: true
 
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
@@ -1013,8 +1030,7 @@ jobs:
                 awsUser: "${{ secrets.AWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
-              - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-                awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
+              - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
@@ -1028,6 +1044,8 @@ jobs:
 
           templateTest:
             repo:
+              metadata:
+                name: "${{ env.HOSTNAME_PREFIX }}-template-test"
               spec:
                 gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
                 gitBranch: main
@@ -1060,19 +1078,20 @@ jobs:
       - name: Creating Rancher server
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
 
-      - name: Run Provisioning tests
+      - name: Run Test Suites
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-provisioning
         with:
+          suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: recurring
+          tags: proxy
+        uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/sanity/aws
+        working-directory: tfp-automation/modules/proxy/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
@@ -1127,12 +1146,12 @@ jobs:
       - name: Save test result as artifact for weekly summary
         if: always() && github.event_name == 'schedule'
         run: |
-          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"cluster-provisioning\", \"job\": \"v2-13\" }" > test-result-cluster-provisioning-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"recurring-proxy-test\", \"job\": \"v2-13\" }" > test-result-recurring-proxy-test-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
         shell: bash
 
       - name: Upload test result weekly summary
         if: always() && github.event_name == 'schedule'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
         with:
-          name: test-result-cluster-provisioning-v2-13-${{ github.run_id }}
-          path: test-result-cluster-provisioning-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
+          name: test-result-recurring-proxy-test-v2-13-${{ github.run_id }}
+          path: test-result-recurring-proxy-test-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
