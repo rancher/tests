@@ -103,6 +103,16 @@ func (s *RancherHAInstallTestSuite) provisionCluster() qainfraautomation.Standal
 }
 
 func (s *RancherHAInstallTestSuite) TestInstallRancherHA() {
+	s.T().Logf("Starting TestInstallRancherHA: kubeconfigPath=%s fqdn=%s", s.kubeconfigPath, s.fqdn)
+	s.T().Logf("RancherInstall config: %+v", s.infraCfg.RancherInstall)
+
+	absKC, _ := filepath.Abs(s.kubeconfigPath)
+	if _, err := os.Stat(absKC); err != nil {
+		s.T().Logf("WARNING: kubeconfig file does not exist at %s: %v", absKC, err)
+	} else {
+		s.T().Logf("kubeconfig file exists at %s", absKC)
+	}
+
 	s.T().Log("Installing Rancher via Ansible playbook")
 	result := qainfraautomation.InstallRancher(
 		s.T(),
