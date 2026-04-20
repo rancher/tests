@@ -161,6 +161,11 @@ pipeline {
             description: 'Rancher admin password after bootstrap'
         )
         booleanParam(
+            name: 'ENABLE_PRIVATE_REGISTRY',
+            defaultValue: false,
+            description: 'Enable private registry configuration. Auto-set to true if PRIVATE_REGISTRY_URL is provided.'
+        )
+        booleanParam(
             name: 'DEPLOY_RANCHER',
             defaultValue: true,
             description: 'Deploy Rancher via Helm after RKE2 setup'
@@ -472,7 +477,7 @@ rancher_use_bundled_system_charts: true'''
                                         'PRIVATE_REGISTRY_PASSWORD':  params.PRIVATE_REGISTRY_PASSWORD ?: '',
                                         'RANCHER_BOOTSTRAP_PASSWORD': params.RANCHER_BOOTSTRAP_PASSWORD ?: '',
                                         'RANCHER_ADMIN_PASSWORD':     params.RANCHER_ADMIN_PASSWORD ?: '',
-                                        'ENABLE_PRIVATE_REGISTRY':    params.PRIVATE_REGISTRY_URL ? 'true' : 'false',
+                                         'ENABLE_PRIVATE_REGISTRY':    params.ENABLE_PRIVATE_REGISTRY ? 'true' : (params.PRIVATE_REGISTRY_URL ? 'true' : 'false'),
                                         'DEPLOY_RANCHER_ANSIBLE':     params.DEPLOY_RANCHER ? 'true' : 'false'
                                     ]
                                 ],
@@ -503,7 +508,7 @@ rancher_use_bundled_system_charts: true'''
 
                         // ── Make: configure private registry ────────────
                         stage('Configure Private Registry') {
-                            if (params.PRIVATE_REGISTRY_URL?.trim()) {
+                            if (params.ENABLE_PRIVATE_REGISTRY || params.PRIVATE_REGISTRY_URL?.trim()) {
                                 make.runTarget(
                                     target:       'registry',
                                     dir:          env.INFRA_DIR,
