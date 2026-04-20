@@ -953,8 +953,13 @@ func provisionAWSStandaloneCluster(
 		logrus.Infof("[qainfraautomation] Route53 FQDN: %s", fqdn)
 	}
 
+	kubeconfigPath := clusterCfg.KubeconfigOutputPath
+	if kubeconfigPath == "" {
+		kubeconfigPath = "kubeconfig.yaml"
+	}
+
 	return StandaloneClusterResult{
-		KubeconfigPath: clusterCfg.KubeconfigOutputPath,
+		KubeconfigPath: kubeconfigPath,
 		FQDN:           fqdn,
 	}
 }
@@ -1251,6 +1256,12 @@ func buildStandaloneVars(clusterCfg *config.StandaloneClusterConfig) map[string]
 		absPath, err := filepath.Abs(clusterCfg.KubeconfigOutputPath)
 		if err != nil {
 			absPath = clusterCfg.KubeconfigOutputPath
+		}
+		vars["kubeconfig_file"] = absPath
+	} else {
+		absPath, err := filepath.Abs("kubeconfig.yaml")
+		if err != nil {
+			absPath = "kubeconfig.yaml"
 		}
 		vars["kubeconfig_file"] = absPath
 	}
