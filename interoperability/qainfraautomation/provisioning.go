@@ -349,7 +349,11 @@ func provisionAWSCustomCluster(
 
 	nodes := make([]awsNodeSpec, len(clusterCfg.Nodes))
 	for i, n := range clusterCfg.Nodes {
-		nodes[i] = awsNodeSpec{Count: n.Count, Role: n.Role}
+		role := n.Role
+		if len(role) == 0 {
+			role = []string{"etcd", "cp", "worker"}
+		}
+		nodes[i] = awsNodeSpec{Count: n.Count, Role: role}
 	}
 	if len(nodes) == 0 {
 		nodes = []awsNodeSpec{{Count: 1, Role: []string{"etcd", "cp", "worker"}}}
@@ -821,7 +825,11 @@ func provisionAWSStandaloneCluster(
 
 	nodes := make([]awsNodeSpec, len(clusterCfg.Nodes))
 	for i, n := range clusterCfg.Nodes {
-		nodes[i] = awsNodeSpec{Count: n.Count, Role: n.Role}
+		role := n.Role
+		if len(role) == 0 {
+			role = []string{"etcd", "cp", "worker"}
+		}
+		nodes[i] = awsNodeSpec{Count: n.Count, Role: role}
 	}
 	if len(nodes) == 0 {
 		nodes = []awsNodeSpec{{Count: 1, Role: []string{"etcd", "cp", "worker"}}}
