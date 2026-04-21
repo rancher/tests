@@ -16,12 +16,11 @@
  *   infrastructure.parseAndSubstituteVars, infrastructure.writeConfig,
  *   infrastructure.generateWorkspaceName, infrastructure.archiveWorkspaceName,
  *   infrastructure.writeSshKey,
- *   make.runTarget, property.useWithProperties, ansible.runPlaybook
+ *   property.useWithProperties, ansible.runPlaybook
  *
- * Make targets (run via make.runTarget in Docker):
- *   cluster  — Deploy RKE2 via Ansible tarball playbook
- *   registry — Configure private registry on cluster nodes
- *   rancher  — Deploy Rancher via Helm
+ * Ansible playbooks (run via ansible.runPlaybook):
+ *   rke2-playbook.yml           — Deploy RKE2 cluster
+ *   rancher-playbook.yml        — Deploy Rancher via Helm
  *
  * Replaces the original validation/Jenkinsfile.e2e which expected
  * pre-existing infrastructure. This version provisions and tears down
@@ -496,38 +495,28 @@ rancher_use_bundled_system_charts: true'''
                             )
                         }
 
-                        // ── Make: deploy RKE2 cluster ───────────────────
+                        // ── Ansible: deploy RKE2 cluster ────────────────
                         stage('Deploy RKE2 Cluster') {
-                            make.runTarget(
-                                target:       'cluster',
-                                dir:          env.INFRA_DIR,
-                                makeArgs:     'ENV=default',
-                                passAwsCreds: false
+                            ansible.runPlaybook(
+                                dir:       ansiblePath,
+                                inventory: 'inventory/inventory.yml',
+                                playbook:  "${ansiblePath}/rke2-playbook.yml"
                             )
                         }
 
-                        // ── Make: configure private registry ────────────
+                        // ── Registry: configured via Ansible vars ───────
                         stage('Configure Private Registry') {
-                            if (params.ENABLE_PRIVATE_REGISTRY || params.PRIVATE_REGISTRY_URL?.trim()) {
-                                make.runTarget(
-                                    target:       'registry',
-                                    dir:          env.INFRA_DIR,
-                                    makeArgs:     'ENV=default',
-                                    passAwsCreds: false
-                                )
-                            } else {
-                                echo 'Skipping private registry configuration (PRIVATE_REGISTRY_URL not set)'
-                            }
+                            echo 'Registry configuration is handled by RKE2 playbook via ansible variables (private_registry_mirrors, enable_private_registry)'
                         }
 
-                        // ── Make: deploy Rancher ────────────────────────
+                        // ── Ansible: deploy Rancher ──────────────────────
                         stage('Deploy Rancher') {
                             if (params.DEPLOY_RANCHER) {
-                                make.runTarget(
-                                    target:       'rancher',
-                                    dir:          env.INFRA_DIR,
-                                    makeArgs:     'ENV=default',
-                                    passAwsCreds: false
+                                def rancherPlaybook = "${env.INFRA_DIR}/ansible/rancher/default-ha/rancher-playbook.yml"
+                                ansible.runPlaybook(
+                                    dir:       ansiblePath,
+                                    inventory: 'inventory/inventory.yml',
+                                    playbook:  rancherPlaybook
                                 )
                             } else {
                                 echo 'Skipping Rancher deployment (DEPLOY_RANCHER not checked)'
