@@ -7,7 +7,10 @@
  *   2. Deploys an airgapped RKE2 cluster via qa-infra-automation Makefile
  *   3. Deploys Rancher
  *   4. Runs Go validation tests
- *   5. Tears down infrastructure after tests (or on failure)
+ *   5. Triggers downstream test jobs in parallel
+ *   6. Tears down infrastructure after tests (or on failure)
+ *
+ * Replaces validation/pipeline/Jenkinsfile.recurring.
  *
  * Consumes shared functions from qa-jenkins-library:
  *   airgap.standardCheckout, airgap.configureAnsible,
@@ -289,26 +292,6 @@ rancher_use_bundled_system_charts: true'''
         )
 
         // ── Test parameters ────────────────────────────────────
-        string(
-            name: 'GO_TEST_PACKAGE',
-            defaultValue: './validation/...',
-            description: 'Go test package to run'
-        )
-        string(
-            name: 'GO_TEST_CASE',
-            defaultValue: '',
-            description: 'Specific test case regex (-run flag). Empty = all tests.'
-        )
-        string(
-            name: 'GO_TAGS',
-            defaultValue: 'validation',
-            description: 'Go build tags'
-        )
-        string(
-            name: 'GO_TIMEOUT',
-            defaultValue: '45m',
-            description: 'Go test timeout duration'
-        )
         text(
             name: 'CATTLE_TEST_CONFIG',
             defaultValue: '',
@@ -319,15 +302,42 @@ rancher_use_bundled_system_charts: true'''
             defaultValue: true,
             description: 'Archive test logs and results as build artifacts'
         )
+
+        // ── Downstream job parameters ─────────────────────────
         string(
-            name: 'QASE_TEST_RUN_ID',
-            defaultValue: '',
-            description: 'Qase test run ID. Enables Qase reporting when set.'
+            name: 'INDIVIDUAL_JOB',
+            defaultValue: 'go-recurring-daily-individual-job',
+            description: 'Name of the downstream Jenkins job that runs individual Go test suites'
         )
         string(
-            name: 'QASE_PROJECT_ID',
+            name: 'TEST_PACKAGE',
+            defaultValue: './validation/...',
+            description: 'Go test package path passed to the downstream job'
+        )
+        string(
+            name: 'GOTEST_TESTCASE_PROVISIONING',
             defaultValue: '',
-            description: 'Qase project ID'
+            description: 'Go test case regex for provisioning tests (-run flag). Empty = all provisioning tests.'
+        )
+        string(
+            name: 'GOTEST_TESTCASE_VALIDATION',
+            defaultValue: '',
+            description: 'Go test case regex for validation tests (-run flag). Empty = all validation tests.'
+        )
+        string(
+            name: 'PROVISIONING_TAGS',
+            defaultValue: '',
+            description: 'Go build tags for provisioning tests. Triggers test-provisioning downstream job when set.'
+        )
+        string(
+            name: 'VALIDATION_TEST_TAGS',
+            defaultValue: '',
+            description: 'Go build tags for validation tests. Triggers test-validation downstream job when set.'
+        )
+        string(
+            name: 'TEST_TIMEOUT',
+            defaultValue: '60m',
+            description: 'Timeout for downstream test jobs'
         )
         string(
             name: 'QASE_REPORTER_SCRIPT',
@@ -362,6 +372,13 @@ rancher_use_bundled_system_charts: true'''
         stage('Build Docker Images') {
             steps {
                 sh "docker build --no-cache --platform linux/amd64 -t rancher-go-test:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.airgap-go-tests ."
+            }
+        }
+
+        stage('Setup Tools') {
+            steps {
+                sh 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 || true'
+                sh 'chmod +x ./yq || true'
             }
         }
 
@@ -592,96 +609,87 @@ rancher_use_bundled_system_charts: true'''
             }
         }
 
-        stage('Run Go Validation Tests') {
+        stage('Run Test Validations') {
             steps {
                 script {
-                    def rancherHostname = env.RANCHER_HOSTNAME ?: ''
-                    def envFile = '.go_test_env'
-                    def lines = []
-
-                    if (rancherHostname) {
-                        lines += [
-                            "RANCHER_URL=https://${rancherHostname}",
-                            "RANCHER_HOSTNAME=${rancherHostname}"
-                        ]
-                    }
-                    lines += "RANCHER_BOOTSTRAP_PASSWORD=${params.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks'}"
-
-                    def cattleConfigPath = "${env.TESTS_DIR}/cattle-config.yaml"
-                    if (!fileExists(cattleConfigPath) && params.CATTLE_TEST_CONFIG?.trim()) {
-                        writeFile file: cattleConfigPath, text: params.CATTLE_TEST_CONFIG.trim() + '\n'
-                    }
-                    lines += "CATTLE_TEST_CONFIG=/workspace/${env.TESTS_DIR}/cattle-config.yaml"
-
-                    def envContent = lines.findAll { it?.trim() }.join('\n')
-                    writeFile file: envFile, text: envContent ? envContent + '\n' : ''
-
                     def workspace = pwd()
-                    def containerName = "gotest-${env.BUILD_NUMBER}"
+                    def cattleConfigPath = "${env.TESTS_DIR}/cattle-config.yaml"
+                    def testRunConfig = "${workspace}/testrunconfig.yaml"
+                    def qaseBinary = "${workspace}/testrun"
 
-                    def testCmd = "/root/go/bin/gotestsum --format standard-verbose --packages=${params.GO_TEST_PACKAGE} --junitfile junit.xml --jsonfile gotestsum.json -- -tags=${params.GO_TAGS} ${params.GO_TEST_CASE} -timeout=${params.GO_TIMEOUT} -v"
+                    // Build qase testrun binary
+                    sh """
+                        docker run --rm --platform linux/amd64 \
+                            -v ${workspace}:/workspace \
+                            -w /workspace/${env.TESTS_DIR} \
+                            rancher-go-test:latest \
+                            sh -c 'env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o validation/testrun ./validation/pipeline/qase/testrun'
+                    """
 
-                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-                        sh """
-                            docker run --rm --platform linux/amd64 \
-                                --name ${containerName} \
-                                --env-file ${envFile} \
-                                -v ${workspace}:/workspace \
-                                -w /workspace/tests \
-                                rancher-go-test:latest \
-                                sh -c 'set -e; set -o pipefail; ${testCmd} | tee go-test.log'
-                        """
+                    // Start qase test run
+                    if (fileExists(qaseBinary)) {
+                        sh "${qaseBinary} --startRun=true"
                     }
 
-                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                        junit allowEmptyResults: true, testResults: "tests/junit.xml"
+                    // Read test run ID
+                    def testRunID = ''
+                    if (fileExists(testRunConfig)) {
+                        testRunID = sh(
+                            script: "./yq '.id' ${testRunConfig}",
+                            returnStdout: true
+                        ).trim()
                     }
 
-                    if (params.REPORT_ARTIFACTS) {
-                        archiveArtifacts allowEmptyArchive: true, artifacts: 'tests/go-test.log, tests/junit.xml, tests/gotestsum.json', fingerprint: true
+                    // Update cattle-config with cleanup and desiredflags
+                    if (fileExists(cattleConfigPath)) {
+                        sh "./yq e '.rancher.cleanup = true' -i ${cattleConfigPath}"
+                        sh "./yq e '.flags.desiredflags = \"InstallRancher|Short\"' -i ${cattleConfigPath}"
                     }
 
-                    env.TEST_CONTAINER = containerName
-                }
-            }
-        }
+                    def configYaml = readFile(file: cattleConfigPath)
 
-        stage('Report to Qase') {
-            when {
-                allOf {
-                    expression { params.QASE_TEST_RUN_ID?.trim() }
-                    expression { params.QASE_PROJECT_ID?.trim() }
-                }
-            }
-            steps {
-                script {
-                    property.useWithProperties(['QASE_AUTOMATION_TOKEN']) {
-                        echo "Reporting to Qase (Project: ${params.QASE_PROJECT_ID}, Run: ${params.QASE_TEST_RUN_ID})"
+                    // Trigger downstream jobs in parallel
+                    def jobs = [:]
 
-                        def workspace = pwd()
-                        sh """
-                            docker run --rm --platform linux/amd64 \
-                                --name qase-reporter \
-                                -e QASE_TEST_RUN_ID=${params.QASE_TEST_RUN_ID} \
-                                -e QASE_PROJECT_ID=${params.QASE_PROJECT_ID} \
-                                -e QASE_AUTOMATION_TOKEN=${env.QASE_AUTOMATION_TOKEN} \
-                                -v ${workspace}:/workspace \
-                                -w /workspace/tests \
-                                rancher-go-test:latest \
-                                sh -c '
-                                    set -e
-                                    echo "Building Qase reporter..."
-                                    ./validation/pipeline/scripts/${params.QASE_REPORTER_SCRIPT}
+                    if (params.PROVISIONING_TAGS?.trim()) {
+                        def goProvisioningParams = [
+                            string(name: 'TIMEOUT', value: params.TEST_TIMEOUT),
+                            text(name: 'CONFIG', value: configYaml),
+                            string(name: 'REPO', value: params.TESTS_REPO_URL),
+                            string(name: 'BRANCH', value: params.TESTS_BRANCH),
+                            string(name: 'QASE_TEST_RUN_ID', value: testRunID),
+                            string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
+                            string(name: 'GOTEST_TESTCASE', value: params.GOTEST_TESTCASE_PROVISIONING),
+                            string(name: 'TAGS', value: params.PROVISIONING_TAGS),
+                        ]
+                        jobs['test-provisioning'] = { build job: params.INDIVIDUAL_JOB, parameters: goProvisioningParams }
+                    }
 
-                                    if [ -f ./validation/reporter ]; then
-                                        echo "Running Qase reporter..."
-                                        ./validation/reporter
-                                        echo "Qase reporting complete"
-                                    else
-                                        echo "Reporter binary not found - reporter script may have skipped build"
-                                    fi
-                                '
-                        """
+                    if (params.VALIDATION_TEST_TAGS?.trim()) {
+                        def goValidationParams = [
+                            string(name: 'TIMEOUT', value: params.TEST_TIMEOUT),
+                            text(name: 'CONFIG', value: configYaml),
+                            string(name: 'REPO', value: params.TESTS_REPO_URL),
+                            string(name: 'BRANCH', value: params.TESTS_BRANCH),
+                            string(name: 'QASE_TEST_RUN_ID', value: testRunID),
+                            string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
+                            string(name: 'GOTEST_TESTCASE', value: "${params.GOTEST_TESTCASE_VALIDATION} -p 1"),
+                            string(name: 'TAGS', value: params.VALIDATION_TEST_TAGS),
+                        ]
+                        jobs['test-validation'] = { build job: params.INDIVIDUAL_JOB, parameters: goValidationParams }
+                    }
+
+                    if (jobs) {
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                            parallel jobs
+                        }
+                    } else {
+                        echo 'No downstream jobs configured — set PROVISIONING_TAGS or VALIDATION_TEST_TAGS to trigger tests.'
+                    }
+
+                    // Complete qase test run
+                    if (fileExists(qaseBinary)) {
+                        sh "${qaseBinary} --startRun=false"
                     }
                 }
             }
