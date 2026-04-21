@@ -3,15 +3,14 @@ package rbac
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
-	hpaapi "github.com/rancher/tests/actions/kubeapi/workloads/horizontalpodautoscalers"
+	deploymentapi "github.com/rancher/tests/actions/workloads/deployment"
+	hpaapi "github.com/rancher/tests/actions/workloads/horizontalpodautoscalers"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -29,8 +28,6 @@ const (
 
 // CreateHPAWorkload creates a deployment with resource requests and limits required for HPA metrics.
 func CreateHPAWorkload(client *rancher.Client, clusterID, namespaceName string) (*appv1.Deployment, error) {
-	deploymentName := namegen.AppendRandomString("test-hpa-wl")
-
 	container := workloads.NewContainer(
 		hpaContainerName,
 		ImageName,
@@ -50,23 +47,14 @@ func CreateHPAWorkload(client *rancher.Client, clusterID, namespaceName string) 
 		},
 	}
 
-	podTemplate := workloads.NewPodTemplate(
-		[]corev1.Container{container},
-		[]corev1.Volume{},
-		[]corev1.LocalObjectReference{},
-		nil, nil,
-	)
-
-	replicas := int32(1)
-	createdDeployment, err := deploymentapi.CreateDeployment(client, clusterID, deploymentName, namespaceName, podTemplate, replicas)
+	replicas := 1
+	createdDeployment, err := deploymentapi.CreateDeployment(client, clusterID, namespaceName, replicas, "", "", false, false, false, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create workload: %w", err)
 	}
 
 	logrus.Infof("Waiting for deployment %s to become active", createdDeployment.Name)
-	err = deploymentapi.WatchAndWaitDeployments(client, clusterID, namespaceName, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + createdDeployment.Name,
-	})
+	err = deploymentapi.WaitForDeploymentUpdate(client, clusterID, namespaceName, createdDeployment.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed waiting for deployment to be active: %w", err)
 	}
@@ -154,16 +142,10 @@ func EditHPA(client *rancher.Client, clusterID, namespaceName string) (*autoscal
 	return resultHPA, workload, nil
 }
 
-// DeleteHPA removes an HPA and verifies it no longer exists.
-func DeleteHPA(client *rancher.Client, clusterID, namespaceName, hpaName string) error {
-	logrus.Infof("Deleting HPA %s", hpaName)
-	return hpaapi.DeleteHPA(client, clusterID, namespaceName, hpaName)
-}
-
 // WaitForDeploymentReplicas polls until the deployment has the expected number of available replicas.
 func WaitForDeploymentReplicas(client *rancher.Client, clusterID, namespaceName, deploymentName string, expectedReplicas int32) error {
 	logrus.Infof("Waiting for deployment %s to scale to %d replicas", deploymentName, expectedReplicas)
-	return kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		wranglerCtx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
 		if err != nil {
 			return false, err
@@ -216,7 +198,7 @@ func VerifyEditForbidden(userClient, ownerClient *rancher.Client, clusterID, nam
 }
 
 // ListHPAsByName lists HPAs in a namespace filtered by name.
-func ListHPAsByName(client *rancher.Client, clusterID, namespaceName, hpaName string) (*hpaapi.HPAList, error) {
+func ListHPAsByName(client *rancher.Client, clusterID, namespaceName, hpaName string) ([]autoscalingv2.HorizontalPodAutoscaler, error) {
 	return hpaapi.ListHPAs(client, clusterID, namespaceName, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + hpaName,
 	})

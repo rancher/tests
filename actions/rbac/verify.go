@@ -18,6 +18,7 @@ import (
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/namespaces"
+	hpaapi "github.com/rancher/tests/actions/workloads/horizontalpodautoscalers"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -254,7 +255,7 @@ func VerifyUserCanCreateHPA(t *testing.T, client, standardClient *rancher.Client
 	switch role {
 	case ClusterOwner, ProjectOwner, ProjectMember:
 		require.NoError(t, err)
-		err = DeleteHPA(client, clusterID, namespaceName, hpa.Name)
+		err = hpaapi.DeleteHPA(client, clusterID, namespaceName, hpa.Name)
 		assert.NoError(t, err)
 	case ClusterMember:
 		require.Error(t, err)
@@ -271,7 +272,7 @@ func VerifyUserCanEditHPA(t *testing.T, client, standardClient *rancher.Client, 
 		require.NoError(t, err)
 		err = VerifyHPAFields(updatedHPA, updatedHPA.Name, 3, 6)
 		assert.NoError(t, err)
-		err = DeleteHPA(client, clusterID, namespaceName, updatedHPA.Name)
+		err = hpaapi.DeleteHPA(client, clusterID, namespaceName, updatedHPA.Name)
 		assert.NoError(t, err)
 	case ClusterMember:
 		err := VerifyEditForbidden(standardClient, client, clusterID, namespaceName)
@@ -288,12 +289,12 @@ func VerifyUserCanDeleteHPA(t *testing.T, client, standardClient *rancher.Client
 
 	switch role {
 	case ClusterOwner, ProjectOwner, ProjectMember:
-		err = DeleteHPA(standardClient, clusterID, namespaceName, hpa.Name)
+		err = hpaapi.DeleteHPA(standardClient, clusterID, namespaceName, hpa.Name)
 		assert.NoError(t, err)
 	case ClusterMember:
-		err = DeleteHPA(standardClient, clusterID, namespaceName, hpa.Name)
+		err = hpaapi.DeleteHPA(standardClient, clusterID, namespaceName, hpa.Name)
 		assert.Error(t, err)
-		deleteErr := DeleteHPA(client, clusterID, namespaceName, hpa.Name)
+		deleteErr := hpaapi.DeleteHPA(client, clusterID, namespaceName, hpa.Name)
 		assert.NoError(t, deleteErr)
 	}
 }
@@ -310,12 +311,12 @@ func VerifyUserCanListHPA(t *testing.T, client, standardClient *rancher.Client, 
 
 	switch role {
 	case ClusterOwner, ProjectOwner, ProjectMember:
-		assert.Len(t, hpaList.Items, 1)
-		assert.Equal(t, hpa.Name, hpaList.Items[0].Name)
+		assert.Len(t, hpaList, 1)
+		assert.Equal(t, hpa.Name, hpaList[0].Name)
 	case ClusterMember:
-		assert.Empty(t, hpaList.Items)
+		assert.Empty(t, hpaList)
 	}
 
-	err = DeleteHPA(client, clusterID, namespaceName, hpa.Name)
+	err = hpaapi.DeleteHPA(client, clusterID, namespaceName, hpa.Name)
 	assert.NoError(t, err)
 }
