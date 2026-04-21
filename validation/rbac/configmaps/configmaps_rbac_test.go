@@ -10,8 +10,8 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
-	"github.com/rancher/tests/actions/configmaps"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	configmapapi "github.com/rancher/tests/actions/kubeapi/configmaps"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/projects"
@@ -22,14 +22,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	k8sError "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
 	data = map[string]string{"foo": "bar"}
 )
 
-type ConfigmapsRBACTestSuite struct {
+type ConfigMapRBACTestSuite struct {
 	suite.Suite
 	client     *rancher.Client
 	session    *session.Session
@@ -37,11 +37,11 @@ type ConfigmapsRBACTestSuite struct {
 	ctxAsAdmin *wrangler.Context
 }
 
-func (cm *ConfigmapsRBACTestSuite) TearDownSuite() {
+func (cm *ConfigMapRBACTestSuite) TearDownSuite() {
 	cm.session.Cleanup()
 }
 
-func (cm *ConfigmapsRBACTestSuite) SetupSuite() {
+func (cm *ConfigMapRBACTestSuite) SetupSuite() {
 	cm.session = session.NewSession()
 
 	client, err := rancher.NewClient("", cm.session)
@@ -60,7 +60,7 @@ func (cm *ConfigmapsRBACTestSuite) SetupSuite() {
 	require.NoError(cm.T(), err)
 }
 
-func (cm *ConfigmapsRBACTestSuite) TestCreateConfigmapAsVolume() {
+func (cm *ConfigMapRBACTestSuite) TestCreateConfigmapAsVolume() {
 	subSession := cm.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -78,30 +78,29 @@ func (cm *ConfigmapsRBACTestSuite) TestCreateConfigmapAsVolume() {
 	for _, tt := range tests {
 		cm.Run("Validate config map creation for user with role "+tt.role.String(), func() {
 			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
-			require.NoError(cm.T(), err)
+			assert.NoError(cm.T(), err)
 
-			newUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
-			require.NoError(cm.T(), err)
-			cm.T().Logf("Created user: %v", newUser.Username)
+			_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
+			assert.NoError(cm.T(), err)
 
-			configMapCreatedByUser, err := configmaps.CreateConfigmap(namespace.Name, standardUserClient, data, cm.cluster.ID)
+			configMapCreatedByUser, err := configmapapi.CreateConfigMap(standardUserClient, cm.cluster.ID, namespace.Name, nil, nil, data)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
-				require.NoError(cm.T(), err)
+				assert.NoError(cm.T(), err)
 				_, err = deployment.CreateDeployment(standardUserClient, cm.cluster.ID, namespace.Name, 1, "", configMapCreatedByUser.Name, false, true, false, true)
-				require.NoError(cm.T(), err)
-				getConfigMapAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().Get(namespace.Name, configMapCreatedByUser.Name, metav1.GetOptions{})
-				require.NoError(cm.T(), err)
-				require.Equal(cm.T(), getConfigMapAsAdmin.Data, configMapCreatedByUser.Data)
+				assert.NoError(cm.T(), err)
+				getConfigMapAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().Get(namespace.Name, configMapCreatedByUser.Name, metaV1.GetOptions{})
+				assert.NoError(cm.T(), err)
+				assert.Equal(cm.T(), getConfigMapAsAdmin.Data, configMapCreatedByUser.Data)
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
-				require.Error(cm.T(), err)
-				require.True(cm.T(), k8sError.IsForbidden(err))
+				assert.Error(cm.T(), err)
+				assert.True(cm.T(), k8sError.IsForbidden(err))
 			}
 		})
 	}
 }
 
-func (cm *ConfigmapsRBACTestSuite) TestCreateConfigmapAsEnvVar() {
+func (cm *ConfigMapRBACTestSuite) TestCreateConfigmapAsEnvVar() {
 	subSession := cm.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -118,30 +117,29 @@ func (cm *ConfigmapsRBACTestSuite) TestCreateConfigmapAsEnvVar() {
 	for _, tt := range tests {
 		cm.Run("Validate config map creation of config map and verify adding it as a an env variable for user with role "+tt.role.String(), func() {
 			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
-			require.NoError(cm.T(), err)
+			assert.NoError(cm.T(), err)
 
-			newUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
-			require.NoError(cm.T(), err)
-			cm.T().Logf("Created user: %v", newUser.Username)
+			_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
+			assert.NoError(cm.T(), err)
 
-			configMapCreatedByUser, err := configmaps.CreateConfigmap(namespace.Name, standardUserClient, data, cm.cluster.ID)
+			configMapCreatedByUser, err := configmapapi.CreateConfigMap(standardUserClient, cm.cluster.ID, namespace.Name, nil, nil, data)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
-				require.NoError(cm.T(), err)
+				assert.NoError(cm.T(), err)
 				_, err = deployment.CreateDeployment(standardUserClient, cm.cluster.ID, namespace.Name, 1, "", configMapCreatedByUser.Name, true, false, false, true)
-				require.NoError(cm.T(), err)
-				getConfigMapAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().Get(namespace.Name, configMapCreatedByUser.Name, metav1.GetOptions{})
-				require.NoError(cm.T(), err)
-				require.Equal(cm.T(), getConfigMapAsAdmin.Data, configMapCreatedByUser.Data)
+				assert.NoError(cm.T(), err)
+				getConfigMapAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().Get(namespace.Name, configMapCreatedByUser.Name, metaV1.GetOptions{})
+				assert.NoError(cm.T(), err)
+				assert.Equal(cm.T(), getConfigMapAsAdmin.Data, configMapCreatedByUser.Data)
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
-				require.Error(cm.T(), err)
-				require.True(cm.T(), k8sError.IsForbidden(err))
+				assert.Error(cm.T(), err)
+				assert.True(cm.T(), k8sError.IsForbidden(err))
 			}
 		})
 	}
 }
 
-func (cm *ConfigmapsRBACTestSuite) TestUpdateConfigmap() {
+func (cm *ConfigMapRBACTestSuite) TestUpdateConfigmap() {
 	subSession := cm.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -159,37 +157,36 @@ func (cm *ConfigmapsRBACTestSuite) TestUpdateConfigmap() {
 	for _, tt := range tests {
 		cm.Run("Validate updating config map for user with role "+tt.role.String(), func() {
 			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
-			require.NoError(cm.T(), err)
+			assert.NoError(cm.T(), err)
 
-			newUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
-			require.NoError(cm.T(), err)
-			cm.T().Logf("Created user: %v", newUser.Username)
+			_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
+			assert.NoError(cm.T(), err)
 
-			configmapCreate, err := configmaps.CreateConfigmap(namespace.Name, cm.client, data, cm.cluster.ID)
-			require.NoError(cm.T(), err)
+			configmapCreate, err := configmapapi.CreateConfigMap(standardUserClient, cm.cluster.ID, namespace.Name, nil, nil, data)
+			assert.NoError(cm.T(), err)
 
 			configmapCreate.Data["foo1"] = "bar1"
 			userDownstreamWranglerContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
-			require.NoError(cm.T(), err)
+			assert.NoError(cm.T(), err)
 			configMapUpdatedByUser, userErr := userDownstreamWranglerContext.Core.ConfigMap().Update(configmapCreate)
 
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
-				require.NoError(cm.T(), userErr)
+				assert.NoError(cm.T(), userErr)
 				_, err = deployment.CreateDeployment(cm.client, cm.cluster.ID, namespace.Name, 1, "", configmapCreate.Name, true, false, false, true)
-				require.NoError(cm.T(), err)
-				getCMAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().Get(namespace.Name, configMapUpdatedByUser.Name, metav1.GetOptions{})
-				require.NoError(cm.T(), err)
+				assert.NoError(cm.T(), err)
+				getCMAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().Get(namespace.Name, configMapUpdatedByUser.Name, metaV1.GetOptions{})
+				assert.NoError(cm.T(), err)
 				assert.Equal(cm.T(), configMapUpdatedByUser.Data, getCMAsAdmin.Data)
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
-				require.Error(cm.T(), userErr)
-				require.True(cm.T(), k8sError.IsForbidden(userErr))
+				assert.Error(cm.T(), userErr)
+				assert.True(cm.T(), k8sError.IsForbidden(userErr))
 			}
 		})
 	}
 }
 
-func (cm *ConfigmapsRBACTestSuite) TestListConfigmaps() {
+func (cm *ConfigMapRBACTestSuite) TestListConfigmaps() {
 	subSession := cm.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -206,34 +203,33 @@ func (cm *ConfigmapsRBACTestSuite) TestListConfigmaps() {
 	for _, tt := range tests {
 		cm.Run("Validate listing config maps for user with role "+tt.role.String(), func() {
 			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
-			require.NoError(cm.T(), err)
+			assert.NoError(cm.T(), err)
 
-			newUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
-			require.NoError(cm.T(), err)
-			cm.T().Logf("Created user: %v", newUser.Username)
+			_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
+			assert.NoError(cm.T(), err)
 
-			configMapCreatedByAdmin, err := configmaps.CreateConfigmap(namespace.Name, cm.client, data, cm.cluster.ID)
-			require.NoError(cm.T(), err)
+			configMapCreatedByAdmin, err := configmapapi.CreateConfigMap(cm.client, cm.cluster.ID, namespace.Name, nil, nil, data)
+			assert.NoError(cm.T(), err)
 
 			downstreamWranglerContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
-			require.NoError(cm.T(), err)
-			configMapListAsUser, err := downstreamWranglerContext.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{
+			assert.NoError(cm.T(), err)
+			configMapListAsUser, err := downstreamWranglerContext.Core.ConfigMap().List(namespace.Name, metaV1.ListOptions{
 				FieldSelector: "metadata.name=" + configMapCreatedByAdmin.Name,
 			})
 
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
-				require.NoError(cm.T(), err)
-				require.Equal(cm.T(), len(configMapListAsUser.Items), 1)
+				assert.NoError(cm.T(), err)
+				assert.Equal(cm.T(), len(configMapListAsUser.Items), 1)
 			case rbac.ClusterMember.String():
-				require.Error(cm.T(), err)
-				require.True(cm.T(), k8sError.IsForbidden(err))
+				assert.Error(cm.T(), err)
+				assert.True(cm.T(), k8sError.IsForbidden(err))
 			}
 		})
 	}
 }
 
-func (cm *ConfigmapsRBACTestSuite) TestDeleteConfigmap() {
+func (cm *ConfigMapRBACTestSuite) TestDeleteConfigmap() {
 	subSession := cm.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -251,36 +247,35 @@ func (cm *ConfigmapsRBACTestSuite) TestDeleteConfigmap() {
 	for _, tt := range tests {
 		cm.Run("Validate deletion of config map for user with role "+tt.role.String(), func() {
 			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
-			require.NoError(cm.T(), err)
+			assert.NoError(cm.T(), err)
 
 			_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
-			require.NoError(cm.T(), err)
+			assert.NoError(cm.T(), err)
 
-			configMapCreatedByAdmin, err := configmaps.CreateConfigmap(namespace.Name, cm.client, data, cm.cluster.ID)
-			require.NoError(cm.T(), err)
+			configMapCreatedByAdmin, err := configmapapi.CreateConfigMap(cm.client, cm.cluster.ID, namespace.Name, nil, nil, data)
+			assert.NoError(cm.T(), err)
 
 			userDownstreamWranglerContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
-			require.NoError(cm.T(), err)
-			err = userDownstreamWranglerContext.Core.ConfigMap().Delete(namespace.Name, configMapCreatedByAdmin.Name, &metav1.DeleteOptions{})
-			configMapListAsAdmin, errList := cm.ctxAsAdmin.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{
+			assert.NoError(cm.T(), err)
+			err = userDownstreamWranglerContext.Core.ConfigMap().Delete(namespace.Name, configMapCreatedByAdmin.Name, &metaV1.DeleteOptions{})
+			configMapListAsAdmin, listErr := cm.ctxAsAdmin.Core.ConfigMap().List(namespace.Name, metaV1.ListOptions{
 				FieldSelector: "metadata.name=" + configMapCreatedByAdmin.Name,
 			})
-			require.NoError(cm.T(), errList)
-
+			assert.NoError(cm.T(), listErr)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
-				require.NoError(cm.T(), err)
-				require.Equal(cm.T(), len(configMapListAsAdmin.Items), 0)
+				assert.NoError(cm.T(), err)
+				assert.Equal(cm.T(), len(configMapListAsAdmin.Items), 0)
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
-				require.Error(cm.T(), err)
-				require.True(cm.T(), k8sError.IsForbidden(err))
-				require.Equal(cm.T(), len(configMapListAsAdmin.Items), 1)
+				assert.Error(cm.T(), err)
+				assert.True(cm.T(), k8sError.IsForbidden(err))
+				assert.Equal(cm.T(), len(configMapListAsAdmin.Items), 1)
 			}
 		})
 	}
 }
 
-func (cm *ConfigmapsRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
+func (cm *ConfigMapRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
 	subSession := cm.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -302,20 +297,20 @@ func (cm *ConfigmapsRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
 	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, cm.cluster.ID, createdProject.Name, nil)
 	require.NoError(cm.T(), err)
 
-	configMapCreatedByAdmin, err := configmaps.CreateConfigmap(namespace.Name, cm.client, data, cm.cluster.ID)
+	configMapCreatedByAdmin, err := configmapapi.CreateConfigMap(cm.client, cm.cluster.ID, namespace.Name, nil, nil, data)
 	require.NoError(cm.T(), err)
 
 	log.Infof("Validating CRUD operations on config maps in the project %s created by cluster member %s", createdProject.Name, standardUser.Username)
-	configMapCreatedByClusterMember, err := configmaps.CreateConfigmap(namespace.Name, standardUserClient, data, cm.cluster.ID)
+	configMapCreatedByClusterMember, err := configmapapi.CreateConfigMap(standardUserClient, cm.cluster.ID, namespace.Name, nil, nil, data)
 	require.NoError(cm.T(), err)
 	_, err = deployment.CreateDeployment(standardUserClient, cm.cluster.ID, namespace.Name, 1, "", configMapCreatedByClusterMember.Name, true, false, false, true)
 	require.NoError(cm.T(), err)
 
 	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
-	assert.NoError(cm.T(), err)
-	configMapListAsClusterMember, err := standardUserContext.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{})
 	require.NoError(cm.T(), err)
-	configMapListAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{})
+	configMapListAsClusterMember, err := standardUserContext.Core.ConfigMap().List(namespace.Name, metaV1.ListOptions{})
+	require.NoError(cm.T(), err)
+	configMapListAsAdmin, err := cm.ctxAsAdmin.Core.ConfigMap().List(namespace.Name, metaV1.ListOptions{})
 	require.NoError(cm.T(), err)
 	require.Equal(cm.T(), len(configMapListAsClusterMember.Items), len(configMapListAsAdmin.Items))
 
@@ -325,13 +320,13 @@ func (cm *ConfigmapsRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
 	require.Contains(cm.T(), updatedConfigMap.Data, "foo1")
 	require.Equal(cm.T(), updatedConfigMap.Data["foo1"], "bar1")
 
-	err = standardUserContext.Core.ConfigMap().Delete(namespace.Name, configMapCreatedByAdmin.Name, &metav1.DeleteOptions{})
+	err = standardUserContext.Core.ConfigMap().Delete(namespace.Name, configMapCreatedByAdmin.Name, &metaV1.DeleteOptions{})
 	require.NoError(cm.T(), err)
-	configMapListAsClusterMember, err = standardUserContext.Core.ConfigMap().List(namespace.Name, metav1.ListOptions{})
+	configMapListAsClusterMember, err = standardUserContext.Core.ConfigMap().List(namespace.Name, metaV1.ListOptions{})
 	require.NoError(cm.T(), err)
 	require.Equal(cm.T(), len(configMapListAsClusterMember.Items), len(configMapListAsAdmin.Items)-1)
 }
 
-func TestConfigmapsRBACTestSuite(t *testing.T) {
-	suite.Run(t, new(ConfigmapsRBACTestSuite))
+func TestConfigMapRBACTestSuite(t *testing.T) {
+	suite.Run(t, new(ConfigMapRBACTestSuite))
 }
