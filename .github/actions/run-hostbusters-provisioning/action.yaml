@@ -24,13 +24,13 @@ runs:
 
         gotestsum --format standard-verbose \
           --packages=github.com/rancher/tests/validation/provisioning/... \
-          --junitfile results_provisioning.xml \
-          --jsonfile results_provisioning.json \
+          --junitfile results.xml \
+          --jsonfile results.json \
           -- -timeout=3h -tags=${{ inputs.tags }} -v
 
         provisioning_exit=$?
         echo "provisioning_exit=$provisioning_exit" >> "$GITHUB_ENV"
-
+  
         if [[ "${{ inputs.reporting }}" == "true" ]]; then
           ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
           ./validation/reporter
@@ -41,7 +41,7 @@ runs:
         failed=0
         if [ "$provisioning_exit" -ne 0 ]; then
           echo "Failed Provisioning tests:"
-          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results_provisioning.json
+          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
           failed=1
         fi
 

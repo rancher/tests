@@ -190,7 +190,7 @@ func parseTestResults(outputs []testresult.GoTestOutput) map[string]*testresult.
 func reportTestQases(qaseService *qase.Service, testRunID int32) error {
 	resultsOutputs, err := readTestResults()
 	if err != nil {
-		return nil
+		return err
 	}
 
 	goTestResults := parseTestResults(resultsOutputs)
