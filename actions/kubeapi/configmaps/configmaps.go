@@ -1,26 +1,15 @@
 package configmaps
 
 import (
-	"context"
-
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/unstructured"
-	"github.com/rancher/shepherd/pkg/api/scheme"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	coreV1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ConfigMapGroupVersionResource is the required Group Version Resource for accessing config maps in a cluster,
-// using the dynamic client.
-var ConfigMapGroupVersionResource = schema.GroupVersionResource{
-	Group:    "",
-	Version:  "v1",
-	Resource: "configmaps",
-}
-
 // NewConfigmapTemplate is a constructor that creates a configmap template
-func NewConfigmapTemplate(configmapName, namespace string, annotations, labels, data map[string]string) coreV1.ConfigMap {
+func NewConfigmapTemplate(configMapName, namespace string, annotations, labels, data map[string]string) coreV1.ConfigMap {
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
@@ -32,8 +21,8 @@ func NewConfigmapTemplate(configmapName, namespace string, annotations, labels, 
 	}
 
 	return coreV1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        configmapName,
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:        configMapName,
 			Namespace:   namespace,
 			Annotations: annotations,
 			Labels:      labels,
@@ -42,37 +31,20 @@ func NewConfigmapTemplate(configmapName, namespace string, annotations, labels, 
 	}
 }
 
-// CreateConfigMap is a helper function that uses the dynamic client to create a config map on a namespace for a specific cluster.
-// It registers a delete fuction.
-func CreateConfigMap(client *rancher.Client, clusterName, configMapName, description, namespace string, data, labels, annotations map[string]string) (*coreV1.ConfigMap, error) {
-	// ConfigMap object for a namespace in a cluster
-	annotations["field.cattle.io/description"] = description
-	configMap := &coreV1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        configMapName,
-			Annotations: annotations,
-			Namespace:   namespace,
-			Labels:      labels,
-		},
-		Data: data,
-	}
+// CreateConfigMap is a helper function that uses the wrangler context to create a config map on a namespace for a specific cluster.
+func CreateConfigMap(client *rancher.Client, clusterID, namespace string, annotations, labels, data map[string]string) (*coreV1.ConfigMap, error) {
+	configMapName := namegen.AppendRandomString("testcm")
 
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterName)
+	wranglerCtx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	configMapResource := dynamicClient.Resource(ConfigMapGroupVersionResource).Namespace(namespace)
-
-	unstructuredResp, err := configMapResource.Create(context.TODO(), unstructured.MustToUnstructured(configMap), metav1.CreateOptions{})
+	newConfigMap := NewConfigmapTemplate(configMapName, namespace, annotations, labels, data)
+	configMap, err := wranglerCtx.Core.ConfigMap().Create(&newConfigMap)
 	if err != nil {
 		return nil, err
 	}
 
-	newConfig := &coreV1.ConfigMap{}
-	err = scheme.Scheme.Convert(unstructuredResp, newConfig, unstructuredResp.GroupVersionKind())
-	if err != nil {
-		return nil, err
-	}
-	return newConfig, nil
+	return configMap, nil
 }

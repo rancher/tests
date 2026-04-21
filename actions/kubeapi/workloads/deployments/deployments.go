@@ -115,33 +115,26 @@ func RestartDeployment(client *rancher.Client, clusterID, namespaceName, deploym
 	return nil
 }
 
-// WaitForDeploymentActive waits for a deployment to become active by polling until replicas match available replicas
+// WaitForDeploymentActive uses wrangler context to wait for a deployment to become active
 func WaitForDeploymentActive(client *rancher.Client, clusterID, namespaceName, deploymentName string) error {
 	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
-		return fmt.Errorf("error getting wrangler context for cluster %s: %w", clusterID, err)
+		return err
 	}
 
-	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+	return kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (bool, error) {
 		deployment, err := wranglerContext.Apps.Deployment().Get(namespaceName, deploymentName, metav1.GetOptions{})
 		if err != nil {
-			return false, fmt.Errorf("error fetching deployment %s in namespace %s: %w", deploymentName, namespaceName, err)
+			return false, nil
 		}
 
-		if deployment.Spec.Replicas != nil &&
-			*deployment.Spec.Replicas == deployment.Status.AvailableReplicas &&
-			(deployment.Spec.Paused ||
-				(*deployment.Spec.Replicas == deployment.Status.UpdatedReplicas &&
-					*deployment.Spec.Replicas == deployment.Status.ReadyReplicas)) {
-			return true, nil
+		desired := *deployment.Spec.Replicas
+
+		if deployment.Status.ReadyReplicas != desired {
+			return false, nil
 		}
 
-		return false, nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("deployment %s in namespace %s did not become active: %w", deploymentName, namespaceName, err)
-	}
-
-	return nil
+		return true, nil
+	},
+	)
 }
