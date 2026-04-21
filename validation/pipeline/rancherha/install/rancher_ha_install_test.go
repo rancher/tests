@@ -3,7 +3,6 @@
 package install
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,7 +56,6 @@ func (s *RancherHAInstallTestSuite) SetupSuite() {
 	prevKubeconfig := os.Getenv("KUBECONFIG")
 	os.Setenv("KUBECONFIG", absKubeconfig)
 	logrus.Infof("[rancherha] KUBECONFIG set to %s", absKubeconfig)
-	fmt.Println(">>> DEBUG: SetupSuite COMPLETED SUCCESSFULLY")
 	s.T().Cleanup(func() {
 		if prevKubeconfig != "" {
 			os.Setenv("KUBECONFIG", prevKubeconfig)
@@ -105,17 +103,6 @@ func (s *RancherHAInstallTestSuite) provisionCluster() qainfraautomation.Standal
 }
 
 func (s *RancherHAInstallTestSuite) TestInstallRancherHA() {
-	fmt.Println(">>> DEBUG: TestInstallRancherHA ENTERED")
-	s.T().Logf("Starting TestInstallRancherHA: kubeconfigPath=%s fqdn=%s", s.kubeconfigPath, s.fqdn)
-	s.T().Logf("RancherInstall config: %+v", s.infraCfg.RancherInstall)
-
-	absKC, _ := filepath.Abs(s.kubeconfigPath)
-	if _, err := os.Stat(absKC); err != nil {
-		s.T().Logf("WARNING: kubeconfig file does not exist at %s: %v", absKC, err)
-	} else {
-		s.T().Logf("kubeconfig file exists at %s", absKC)
-	}
-
 	s.T().Log("Installing Rancher via Ansible playbook")
 	result := qainfraautomation.InstallRancher(
 		s.T(),

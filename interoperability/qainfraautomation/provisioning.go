@@ -1018,7 +1018,7 @@ func InstallRancher(
 	}
 
 	if rancherCfg.CertManagerVersion != "" {
-		vars["cert_manager_version"] = rancherCfg.CertManagerVersion
+		vars["cert_manager_version"] = strings.TrimPrefix(rancherCfg.CertManagerVersion, "v")
 	} else {
 		vars["cert_manager_version"] = ""
 	}
