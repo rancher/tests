@@ -329,20 +329,25 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 		return nil, err
 	}
 
-	logrus.Debug("Registering Windows Nodes")
-
 	totalNodesObserved = 0
 	for poolIndex := 0; poolIndex < len(rolesPerPool); poolIndex++ {
 		if strings.Contains(rolesPerPool[poolIndex], "windows") {
+			logrus.Debug("Registering Windows Nodes")
+
 			for nodeIndex := 0; nodeIndex < int(quantityPerPool[poolIndex]); nodeIndex++ {
 				node := nodes[totalNodesObserved+nodeIndex]
 
 				logrus.Tracef("Execute Registration Command for node %s", node.NodeID)
 				logrus.Tracef("Windows pool detected, using powershell.exe...")
-				command = fmt.Sprintf("powershell.exe %s ", token.InsecureWindowsNodeCommand)
+
+				escCommand := strings.ReplaceAll(token.InsecureWindowsNodeCommand, `"`, `\"`)
+				command = fmt.Sprintf(`powershell.exe -Command "%s"`, escCommand)
+
 				if clustersConfig.MachinePools[poolIndex].IsSecure {
-					command = fmt.Sprintf("powershell.exe %s ", token.WindowsNodeCommand)
+					escCommand := strings.ReplaceAll(token.WindowsNodeCommand, `"`, `\"`)
+					command = fmt.Sprintf(`powershell.exe -Command "%s"`, escCommand)
 				}
+
 				command = createWindowsRegistrationCommand(command, node.PublicIPAddress, node.PrivateIPAddress, clustersConfig.MachinePools[poolIndex])
 				logrus.Tracef("Command: %s", command)
 
@@ -894,7 +899,8 @@ func AddRKE2K3SCustomClusterNodes(client *rancher.Client, cluster *v1.SteveAPIOb
 	for key, node := range nodes {
 		logrus.Infof("Adding node %s to cluster %s", node.NodeID, cluster.Name)
 		if strings.Contains(rolesPerNode[key], "windows") {
-			command = fmt.Sprintf("powershell.exe %s", token.InsecureWindowsNodeCommand)
+			escCommand := strings.ReplaceAll(token.InsecureWindowsNodeCommand, `"`, `\"`)
+			command = fmt.Sprintf(`powershell.exe -Command "%s"`, escCommand)
 		} else {
 			command = fmt.Sprintf("%s %s", token.InsecureNodeCommand, rolesPerNode[key])
 		}

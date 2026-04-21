@@ -21,6 +21,8 @@ jobs:
           - rancher-upgrade-cluster-provisioning.yml
           - post-release-prime.yml
           - prime-recurring-tests.yml
+          - proxy-cluster-provisioning.yml
+          - rancher-upgrade-proxy-cluster-provisioning.yml
           - recurring-tests.yml
 
     steps:

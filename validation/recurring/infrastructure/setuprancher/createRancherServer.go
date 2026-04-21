@@ -44,10 +44,20 @@ func main() {
 			logrus.Fatalf("Failed to setup IPv6 Rancher: %v", err)
 		}
 	case terraformConfig.Proxy != nil:
-		client, err = setupProxyRancher(t, testSession)
+		var proxyBastion string
+
+		client, proxyBastion, err = setupProxyRancher(t, testSession)
 		if err != nil {
 			logrus.Fatalf("Failed to setup Proxy Rancher: %v", err)
 		}
+
+		_, err = operations.ReplaceValue([]string{"terraform", "proxy", "proxyBastion"}, proxyBastion, cattleConfig)
+		if err != nil {
+			logrus.Fatalf("Failed to replace proxy bastion: %v", err)
+		}
+
+		infraConfig.UpdateAgentEnvVar(cattleConfig, "HTTP_PROXY", "http://"+proxyBastion+":3228")
+		infraConfig.UpdateAgentEnvVar(cattleConfig, "HTTPS_PROXY", "http://"+proxyBastion+":3228")
 	default:
 		client, err = setupRancher(t, testSession)
 		if err != nil {
@@ -80,10 +90,10 @@ func setupIPv6Rancher(t *testing.T, testSession *session.Session) (*rancher.Clie
 	return client, nil
 }
 
-func setupProxyRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
-	client, _, _, _, _, _ := ranchers.SetupProxyRancher(t, testSession, keypath.ProxyKeyPath)
+func setupProxyRancher(t *testing.T, testSession *session.Session) (*rancher.Client, string, error) {
+	client, proxyBastion, _, _, _, _ := ranchers.SetupProxyRancher(t, testSession, keypath.ProxyKeyPath)
 
-	return client, nil
+	return client, proxyBastion, nil
 }
 
 func setupRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
