@@ -112,7 +112,11 @@ func (s *RancherHAInstallTestSuite) TestInstallRancherHA() {
 	)
 
 	logrus.Infof("[rancherha] Rancher installed at https://%s", result.FQDN)
-	logrus.Infof("[rancherha] Admin token: %s... (truncated)", result.AdminToken[:15])
+	tokenPreview := result.AdminToken
+	if len(tokenPreview) > 15 {
+		tokenPreview = tokenPreview[:15] + "..."
+	}
+	logrus.Infof("[rancherha] Admin token: %s (truncated)", tokenPreview)
 
 	s.T().Log("Validating Rancher API access")
 	insecure := true
