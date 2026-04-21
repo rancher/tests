@@ -162,7 +162,7 @@ func (cm *ConfigMapRBACTestSuite) TestUpdateConfigmap() {
 			_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
 			assert.NoError(cm.T(), err)
 
-			configmapCreate, err := configmapapi.CreateConfigMap(standardUserClient, cm.cluster.ID, namespace.Name, nil, nil, data)
+			configmapCreate, err := configmapapi.CreateConfigMap(cm.client, cm.cluster.ID, namespace.Name, nil, nil, data)
 			assert.NoError(cm.T(), err)
 
 			configmapCreate.Data["foo1"] = "bar1"
