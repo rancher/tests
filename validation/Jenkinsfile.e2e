@@ -1,4 +1,4 @@
-#!groovy
+/#!groovy
 /**
  * E2E validation pipeline with infrastructure provisioning.
  *
@@ -56,7 +56,7 @@ def destroyInfrastructure(String reason) {
             'AWS_SECRET_ACCESS_KEY',
             'AWS_SSH_PEM_KEY_NAME'
         ]) {
-            def tofuDir = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
+            def tofuDir = "${env.INFRA_DIR}/tofu/aws/modules/cluster_nodes"
             def terraformConfig = infrastructure.parseAndSubstituteVars(
                 content: params.TERRAFORM_CONFIG,
                 envVars: [
@@ -378,8 +378,8 @@ rancher_use_bundled_system_charts: true'''
                         'PRIVATE_REGISTRY_USERNAME',
                         'PRIVATE_REGISTRY_PASSWORD'
                     ]) {
-                        def tofuModulePath = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
-                        def ansiblePath   = "${env.INFRA_DIR}/ansible/rke2/airgap"
+                        def tofuModulePath = "${env.INFRA_DIR}/tofu/aws/modules/cluster_nodes"
+                        def ansiblePath   = "${env.INFRA_DIR}/ansible/rke2/default"
                         def workspaceName = ''
 
                         // ── Tofu: init backend ─────────────────────────
@@ -447,11 +447,11 @@ rancher_use_bundled_system_charts: true'''
                                     -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
                                     -v \$(pwd):/workspace -w /workspace \
                                     rancher-go-test:latest sh -c '
-                                        tofu -chdir=${tofuModulePath} output -raw airgap_inventory_json > /tmp/airgap.json &&
+                                        tofu -chdir=${tofuModulePath} output -raw cluster_nodes_json > /tmp/cluster_nodes.json &&
                                         python3 /workspace/${env.INFRA_DIR}/scripts/generate_inventory.py \
-                                            --input /tmp/airgap.json \
+                                            --input /tmp/cluster_nodes.json \
                                             --schema /workspace/${env.INFRA_DIR}/ansible/_inventory-schema.yaml \
-                                            --distro rke2 --env airgap \
+                                            --distro rke2 --env default \
                                             --output-dir ${ansiblePath}/inventory
                                     '
                             """
@@ -501,7 +501,7 @@ rancher_use_bundled_system_charts: true'''
                             make.runTarget(
                                 target:       'cluster',
                                 dir:          env.INFRA_DIR,
-                                makeArgs:     'ENV=airgap',
+                                makeArgs:     'ENV=default',
                                 passAwsCreds: false
                             )
                         }
@@ -512,7 +512,7 @@ rancher_use_bundled_system_charts: true'''
                                 make.runTarget(
                                     target:       'registry',
                                     dir:          env.INFRA_DIR,
-                                    makeArgs:     'ENV=airgap',
+                                    makeArgs:     'ENV=default',
                                     passAwsCreds: false
                                 )
                             } else {
@@ -526,7 +526,7 @@ rancher_use_bundled_system_charts: true'''
                                 make.runTarget(
                                     target:       'rancher',
                                     dir:          env.INFRA_DIR,
-                                    makeArgs:     'ENV=airgap',
+                                    makeArgs:     'ENV=default',
                                     passAwsCreds: false
                                 )
                             } else {
@@ -577,7 +577,7 @@ rancher_use_bundled_system_charts: true'''
                                 -e RANCHER_ADMIN_PASSWORD=${adminPassword} \
                                 -e ANSIBLE_CONFIG=/workspace/${env.INFRA_DIR}/ansible/ansible.cfg \
                                 -v ${workspace}:/workspace \
-                                -w /workspace/${env.INFRA_DIR}/ansible/rke2/airgap \
+                                -w /workspace/${env.INFRA_DIR}/ansible/rke2/default \
                                 rancher-go-test:latest \
                                 ansible-playbook -i inventory/inventory.yml /workspace/${env.INFRA_DIR}/ansible/rancher/token/generate-admin-token.yml \
                                     -e rancher_cattle_config_file=${cattleConfigPath} \
