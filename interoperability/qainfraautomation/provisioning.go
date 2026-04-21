@@ -1013,8 +1013,6 @@ func InstallRancher(
 
 	if rancherCfg.ImageTag != "" {
 		vars["rancher_image_tag"] = rancherCfg.ImageTag
-	} else {
-		vars["rancher_image_tag"] = ">=0.0.0-0"
 	}
 
 	if rancherCfg.CertManagerVersion != "" {
