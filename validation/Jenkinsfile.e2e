@@ -535,7 +535,7 @@ rancher_use_bundled_system_charts: true'''
                             ansible.runPlaybook(
                                 dir:       ansiblePath,
                                 inventory: 'inventory/inventory.yml',
-                                playbook:  "${ansiblePath}/rke2-playbook.yml"
+                                playbook:  'rke2-playbook.yml'
                             )
                         }
 
@@ -547,7 +547,7 @@ rancher_use_bundled_system_charts: true'''
                         // ── Ansible: deploy Rancher ──────────────────────
                         stage('Deploy Rancher') {
                             if (params.DEPLOY_RANCHER) {
-                                def rancherPlaybook = "${env.INFRA_DIR}/ansible/rancher/default-ha/rancher-playbook.yml"
+                                def rancherPlaybook = "../../rancher/default-ha/rancher-playbook.yml"
                                 ansible.runPlaybook(
                                     dir:       ansiblePath,
                                     inventory: 'inventory/inventory.yml',
