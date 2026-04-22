@@ -1,4 +1,4 @@
-/#!groovy
+#!groovy
 /**
  * E2E validation pipeline with infrastructure provisioning.
  *
