@@ -28,14 +28,10 @@ import (
 const (
 	RKE2CustomCluster    = "rke2Custom"
 	RKE2ProvisionCluster = "rke2"
-	RKE2AirgapCluster    = "rke2Airgap"
 	K3SCustomCluster     = "k3sCustom"
 	K3SProvisionCluster  = "k3s"
-	K3SAirgapCluster     = "k3sAirgap"
 	RKE1CustomCluster    = "rke1Custom"
 	RKE1ProvisionCluster = "rke1"
-	RKE1AirgapCluster    = "rke1Airgap"
-	CorralProvider       = "corral"
 )
 
 // RunTestPermutations runs through all relevant perumutations in a given config file, including node providers, k8s versions, and CNIs
@@ -154,38 +150,6 @@ func RunTestPermutations(s *suite.Suite, testNamePrefix string, client *rancher.
 						require.NoError(s.T(), err)
 						require.NotEmpty(s.T(), etcdVersion)
 
-					// airgap currently uses corral to create nodes and register with rancher
-					case RKE2AirgapCluster, K3SAirgapCluster:
-						testClusterConfig.KubernetesVersion = kubeVersion
-						clusterObject, err = provisioning.CreateProvisioningAirgapCustomCluster(client, testClusterConfig, corralPackages)
-						reports.TimeoutClusterReport(clusterObject, err)
-						require.NoError(s.T(), err)
-
-						logrus.Infof("Verifying the cluster is ready (%s)", clusterObject.Name)
-						err = provisioning.VerifyClusterReady(client, clusterObject)
-						require.NoError(s.T(), err)
-
-						logrus.Infof("Verifying cluster pods (%s)", clusterObject.Name)
-						err = pods.VerifyClusterPods(client, clusterObject)
-						require.NoError(s.T(), err)
-
-						logrus.Infof("Verifying cluster features (%s)", clusterObject.Name)
-						provisioning.VerifyDynamicCluster(s.T(), client, clusterObject)
-
-					case RKE1AirgapCluster:
-						testClusterConfig.KubernetesVersion = kubeVersion
-						// workaround to simplify config for rke1 clusters with cloud provider set. This will allow external charts to be installed
-						// while using the rke2 CloudProvider name in the
-						if testClusterConfig.CloudProvider == provisioninginput.VsphereCloudProviderName.String() {
-							testClusterConfig.CloudProvider = "external"
-						}
-
-						clusterObject, err := provisioning.CreateProvisioningRKE1AirgapCustomCluster(client, testClusterConfig, corralPackages)
-						reports.TimeoutRKEReport(clusterObject, err)
-						require.NoError(s.T(), err)
-
-						provisioning.VerifyRKE1Cluster(s.T(), client, testClusterConfig, clusterObject)
-
 					default:
 						s.T().Fatalf("Invalid cluster type: %s", clusterType)
 					}
@@ -223,12 +187,6 @@ func GetClusterProvider(clusterType string, nodeProviderName string, provisionin
 	case RKE1CustomCluster:
 		customProvider = provisioning.ExternalNodeProviderSetup(nodeProviderName)
 		kubeVersions = provisioningConfig.RKE1KubernetesVersions
-	case K3SAirgapCluster:
-		kubeVersions = provisioningConfig.K3SKubernetesVersions
-	case RKE1AirgapCluster:
-		kubeVersions = provisioningConfig.RKE1KubernetesVersions
-	case RKE2AirgapCluster:
-		kubeVersions = provisioningConfig.RKE2KubernetesVersions
 	default:
 		panic("Cluster type not found")
 	}

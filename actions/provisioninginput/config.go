@@ -234,6 +234,8 @@ type Config struct {
 	RKE1CustomClusterDockerInstall *RKE1CustomClusterDockerInstall          `json:"rke1CustomClusterDockerInstall,omitempty" yaml:"rke1CustomClusterDockerInstall,omitempty"`
 	PathToRepo                     string                                   `json:"pathToRepo" yaml:"pathToRepo"`
 	IPv6Cluster                    bool                                     `json:"ipv6Cluster,omitempty" yaml:"ipv6Cluster,omitempty" default:"false"`
+	BastionUser                    string                                   `json:"bastionUser,omitempty" yaml:"bastionUser,omitempty" default:""`
+	BastionWindowsUser             string                                   `json:"bastionWindowsUser,omitempty" yaml:"bastionWindowsUser,omitempty" default:""`
 }
 
 type TemplateConfig struct {

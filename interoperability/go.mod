@@ -67,8 +67,8 @@ require (
 	github.com/rancher/qa-infra-automation v0.0.0-20260319191229-cfc3fdaefc20
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20260417171403-fce40497b62e
-	github.com/rancher/tests/actions v0.0.0-20260206233613-bf28ed655999
-	github.com/rancher/tfp-automation v0.0.0-20260223200320-56541017be04
+	github.com/rancher/tests/actions v0.0.0-20260421170401-642ea66e1af4
+	github.com/rancher/tfp-automation v0.0.0-20260421175526-4dfd0e02e9ac
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.45.0

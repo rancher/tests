@@ -1,6 +1,6 @@
 module github.com/rancher/tests/actions
 
-go 1.25.0
+go 1.25.5
 
 replace (
 	github.com/containerd/containerd => github.com/containerd/containerd v1.6.27 // for compatibilty with docker 20.10.x
@@ -59,7 +59,7 @@ require (
 	github.com/qase-tms/qase-go/qase-api-client v1.2.1
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20260417171403-fce40497b62e
-	github.com/rancher/tfp-automation v0.0.0-20260223200320-56541017be04
+	github.com/rancher/tfp-automation v0.0.0-20260421175526-4dfd0e02e9ac
 )
 
 require (

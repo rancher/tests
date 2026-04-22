@@ -26,3 +26,36 @@ func UpdateAgentEnvVar(config map[string]any, name, value string) {
 
 	}
 }
+
+// UpdateRegistryVars is a helper function to update the registry configs in the cattle config.
+func UpdateRegistryVars(config map[string]any, url string) {
+	clusterConfig, ok := config["clusterConfig"].(map[string]any)
+	if !ok {
+		logrus.Fatalf("clusterConfig not found or not a map")
+	}
+
+	registries, ok := clusterConfig["registries"].(map[string]any)
+	if !ok {
+		logrus.Fatalf("registries not found or not a map")
+	}
+
+	rke2Registries, ok := registries["rke2Registries"].(map[string]any)
+	if !ok {
+		logrus.Fatalf("rke2Registries not found or not a map")
+	}
+
+	configs, ok := rke2Registries["configs"].(map[string]any)
+	if !ok {
+		logrus.Fatalf("configs not found or not a map")
+	}
+
+	for k := range configs {
+		delete(configs, k)
+	}
+
+	rke2Registries["configs"] = map[string]any{
+		url: map[string]any{
+			"insecureSkipVerify": true,
+		},
+	}
+}

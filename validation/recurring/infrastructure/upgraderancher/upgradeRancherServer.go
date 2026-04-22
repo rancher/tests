@@ -29,10 +29,24 @@ func main() {
 
 	switch {
 	case terraformConfig.AWSConfig.AWSVpcIP != "":
-		client, err = upgradeAirgapRancher(t, testSession)
+		var registry, bastion string
+
+		client, registry, bastion, err = upgradeAirgapRancher(t, testSession)
 		if err != nil {
 			logrus.Fatalf("Failed to setup Airgap Rancher: %v", err)
 		}
+
+		_, err = operations.ReplaceValue([]string{"terraform", "airgapBastion"}, bastion, cattleConfig)
+		if err != nil {
+			logrus.Fatalf("Failed to replace airgap bastion: %v", err)
+		}
+
+		_, err = operations.ReplaceValue([]string{"terraform", "privateRegistries", "systemDefaultRegistry"}, registry, cattleConfig)
+		if err != nil {
+			logrus.Fatalf("Failed to replace system default registry: %v", err)
+		}
+
+		infraConfig.UpdateRegistryVars(cattleConfig, registry)
 	case !terraformConfig.AWSConfig.EnablePrimaryIPv6 && terraformConfig.AWSConfig.ClusterCIDR != "":
 		client, err = upgradeDualStackRancher(t, testSession)
 		if err != nil {
@@ -73,11 +87,11 @@ func main() {
 	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
 }
 
-func upgradeAirgapRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
-	client, registry, bastion, _, _, cattleConfig, _ := ranchers.SetupAirgapRancher(t, testSession, keypath.AirgapKeyPath)
-	client, _, _, _ = ranchers.UpgradeAirgapRancher(t, client, bastion, registry, testSession, cattleConfig, nil)
+func upgradeAirgapRancher(t *testing.T, testSession *session.Session) (*rancher.Client, string, string, error) {
+	client, registry, bastion, _, _, cattleConfig, tunnel := ranchers.SetupAirgapRancher(t, testSession, keypath.AirgapKeyPath)
+	client, _, _, _ = ranchers.UpgradeAirgapRancher(t, client, bastion, registry, testSession, cattleConfig, tunnel)
 
-	return client, nil
+	return client, registry, bastion, nil
 }
 
 func upgradeDualStackRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {

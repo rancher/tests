@@ -218,7 +218,7 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
 
           prime:
-            brand: "${{ secrets.PRIME_BRAND }}"
+            brand: "${{ vars.PRIME_BRAND }}"
             isPrime: true
             registry: "${{ secrets.PRIME_REGISTRY }}"
             rancherVersion: "${{ env.RANCHER_VERSION }}"
@@ -471,7 +471,7 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
 
           prime:
-            brand: "${{ secrets.PRIME_BRAND }}"
+            brand: "${{ vars.PRIME_BRAND }}"
             isPrime: true
             registry: "${{ secrets.PRIME_REGISTRY }}"
             rancherVersion: "${{ env.RANCHER_VERSION }}"
