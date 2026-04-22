@@ -218,7 +218,7 @@ aws_vpc = "vpc-bfccf4d7"
 user_id = "ubuntu"
 ssh_key = "/workspace/.ssh/${AWS_SSH_PEM_KEY_NAME}.pem"
 ssh_key_name = "${AWS_SSH_PEM_KEY_NAME}"
-public_ssh_key = "/workspace/.ssh/${AWS_SSH_PEM_KEY_NAME}.pub"
+public_ssh_key = "ssh_public_key.pub"
 nodes = [
     {
         count = 3
@@ -442,6 +442,10 @@ rancher_use_bundled_system_charts: true'''
                                 keyName:    env.AWS_SSH_PEM_KEY_NAME,
                                 dir:        '.ssh'
                             )
+                            // Copy public key into the tofu module directory so
+                            // that tofu's file() function can read it (file() is
+                            // restricted to the module directory tree only).
+                            sh "cp .ssh/*.pub ${tofuModulePath}/ssh_public_key.pub"
                         }
 
                         // ── Tofu: configure variables ───────────────────
