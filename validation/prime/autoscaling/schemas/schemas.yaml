@@ -227,3 +227,85 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
+  - description: Verifies the autoscaler with KDM versions for RKE2
+    title: RKE2_Auto_Scaler_KDM
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Get all RKE2 versions from KDM
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Create an autoscaler cluster for each version
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify that each cluster is ready
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster deployments
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    - action: Verify cluster pods
+      expectedresult: ""
+      data: ""
+      position: 5
+      attachments: []
+    - action: Verify the autoscaler is setup properly
+      expectedresult: ""
+      data: ""
+      position: 6
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Verifies the autoscaler with KDM versions for K3S
+    title: K3S_Auto_Scaler_KDM
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Get all K3S versions from KDM
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Create an autoscaler cluster for each version
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify that each cluster is ready
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster deployments
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    - action: Verify cluster pods
+      expectedresult: ""
+      data: ""
+      position: 5
+      attachments: []
+    - action: Verify the autoscaler is setup properly
+      expectedresult: ""
+      data: ""
+      position: 6
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
