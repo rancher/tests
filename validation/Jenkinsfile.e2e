@@ -371,7 +371,7 @@ rancher_use_bundled_system_charts: true'''
 
         stage('Build Docker Images') {
             steps {
-                sh "docker build --no-cache --platform linux/amd64 -t rancher-go-test:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.airgap-go-tests ."
+                sh "docker build --no-cache --platform linux/amd64 -t rancher-go-test:latest -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.airgap-go-tests ."
             }
         }
 
@@ -712,7 +712,7 @@ rancher_use_bundled_system_charts: true'''
                 }
 
                 // Docker cleanup
-                sh 'docker rmi -f rancher-go-test:latest || true'
+                sh 'docker rmi -f rancher-go-test:latest rancher-infra-tools:latest || true'
 
                 // Sensitive artifact cleanup — shred or remove credentials from workspace
                 sh '''
