@@ -288,5 +288,3 @@ require (
 	sigs.k8s.io/kustomize/api v0.20.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.20.1 // indirect
 )
-
-replace github.com/rancher/qa-infra-automation => github.com/slickwarren/rancher-qa-infra-automation v0.0.0-20260421221922-acba702d92bc
