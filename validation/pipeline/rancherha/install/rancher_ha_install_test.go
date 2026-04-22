@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any) && !stress && !extended
+//go:build rancherinstall
 
 package install
 
@@ -112,11 +112,7 @@ func (s *RancherHAInstallTestSuite) TestInstallRancherHA() {
 	)
 
 	logrus.Infof("[rancherha] Rancher installed at https://%s", result.FQDN)
-	tokenPreview := result.AdminToken
-	if len(tokenPreview) > 15 {
-		tokenPreview = tokenPreview[:15] + "..."
-	}
-	logrus.Infof("[rancherha] Admin token: %s (truncated)", tokenPreview)
+	logrus.Infof("[rancherha] Admin token: %s", result.AdminToken)
 
 	s.T().Log("Validating Rancher API access")
 	insecure := true
