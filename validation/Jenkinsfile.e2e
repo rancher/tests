@@ -749,7 +749,7 @@ rancher_use_bundled_system_charts: true'''
                     cleanup_file "workspace_name.txt"
 
                     if [ -n "${INFRA_DIR}" ] && [ -d "${INFRA_DIR}" ]; then
-                        find "${INFRA_DIR}" -type f \( -name 'terraform.tfvars' -o -name '*.pem' -o -name 'id_rsa' -o -name 'id_ed25519' \) -exec sh -c '
+                        find "${INFRA_DIR}" -type f \\( -name 'terraform.tfvars' -o -name '*.pem' -o -name 'id_rsa' -o -name 'id_ed25519' \\) -exec sh -c '
                             for file do
                                 if command -v shred >/dev/null 2>&1; then
                                     shred -u "$file" || rm -f "$file"
