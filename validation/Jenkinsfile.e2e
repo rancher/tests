@@ -235,74 +235,23 @@ provision_registry = false'''
         )
         text(
             name: 'ANSIBLE_VARIABLES',
-            description: 'Ansible config values for the RKE2 airgap deployment',
+            description: 'Ansible variables for the RKE2 default deployment (written to vars.yaml) and Rancher (written to group_vars/all.yml)',
             defaultValue: '''---
-# Global variables for RKE2 airgap deployment with tarball installation
+# RKE2 version and installation settings
+kubernetes_version: '${RKE2_VERSION}'
 
-# RKE2 Configuration
-rke2_version: ${RKE2_VERSION}
-rke2_server_options: |
-  cluster-cidr: {{ cluster_cidr }}
-  service-cidr: {{ service_cidr }}
-  cluster-dns: {{ cluster_dns }}
-  disable:
-    - rke2-snapshot-controller
-    - rke2-snapshot-controller-crd
-    - rke2-snapshot-validation-webhook
-rke2_agent_options: ""
-installation_method: "tarball"
+# kubeconfig file
+kubeconfig_file: './kubeconfig.yaml'
 
-# Network Configuration
-cluster_cidr: "10.42.0.0/16"
-service_cidr: "10.43.0.0/16"
-cluster_dns: "10.43.0.10"
-
-# CNI Configuration
+# CNI configuration
 cni: "calico"
 
-# Logging and Monitoring
-enable_audit_log: false
-audit_log_path: "/var/lib/rancher/rke2/server/logs/audit.log"
-audit_log_maxage: 30
-audit_log_maxbackup: 10
-audit_log_maxsize: 100
+# node token file for cluster communication
+node_token_file: "/tmp/node_token.txt"
 
-# Registry mirrors configuration
-private_registry_mirrors:
-  - registry: "docker.io"
-    endpoints:
-      - "${PRIVATE_REGISTRY_URL}"
-    rewrite:
-      - pattern: "^(.*)"
-        replacement: "proxycache/$1"
-  - registry: "quay.io"
-    endpoints:
-      - "${PRIVATE_REGISTRY_URL}"
-    rewrite:
-      - pattern: "^(.*)"
-        replacement: "quaycache/$1"
-
-# Registry authentication and TLS configuration
-private_registry_configs:
-  - registry: ${PRIVATE_REGISTRY_URL}
-    auth:
-      username: ${PRIVATE_REGISTRY_USERNAME}
-      password: ${PRIVATE_REGISTRY_PASSWORD}
-    tls:
-      insecure_skip_verify: true
-
-# Whether to enable private registry configuration
-enable_private_registry: ${ENABLE_PRIVATE_REGISTRY}
-
-# Deploy Rancher
-deploy_rancher: ${DEPLOY_RANCHER_ANSIBLE}
-install_helm: true
-
-rancher_hostname: "${HOSTNAME_PREFIX}.qa.rancher.space"
-rancher_bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
-rancher_admin_password: "${RANCHER_ADMIN_PASSWORD}"
-rancher_image_tag: ${RANCHER_VERSION}
-rancher_use_bundled_system_charts: true'''
+# Server configuration flags (written to /etc/rancher/rke2/config.yaml)
+server_flags: |
+  ingress-controller: traefik'''
         )
 
         // ── Test parameters ────────────────────────────────────
@@ -501,23 +450,38 @@ rancher_use_bundled_system_charts: true'''
                                 ],
                                 inventoryVars: [
                                     content: params.ANSIBLE_VARIABLES,
-                                    path:    "${ansiblePath}/inventory/group_vars/all.yml",
+                                    path:    "${ansiblePath}/vars.yaml",
                                     envVars: [
-                                        'RKE2_VERSION':              params.RKE2_VERSION,
-                                        'RANCHER_VERSION':           params.RANCHER_VERSION,
-                                        'HOSTNAME_PREFIX':           params.HOSTNAME_PREFIX,
-                                        'PRIVATE_REGISTRY_URL':      params.PRIVATE_REGISTRY_URL ?: '',
-                                        'PRIVATE_REGISTRY_USERNAME':  params.PRIVATE_REGISTRY_USERNAME ?: '',
-                                        'PRIVATE_REGISTRY_PASSWORD':  params.PRIVATE_REGISTRY_PASSWORD ?: '',
-                                        'RANCHER_BOOTSTRAP_PASSWORD': params.RANCHER_BOOTSTRAP_PASSWORD ?: '',
-                                        'RANCHER_ADMIN_PASSWORD':     params.RANCHER_ADMIN_PASSWORD ?: '',
-                                         'ENABLE_PRIVATE_REGISTRY':    params.ENABLE_PRIVATE_REGISTRY ? 'true' : (params.PRIVATE_REGISTRY_URL ? 'true' : 'false'),
-                                        'DEPLOY_RANCHER_ANSIBLE':     params.DEPLOY_RANCHER ? 'true' : 'false'
+                                        'RKE2_VERSION': params.RKE2_VERSION
                                     ]
                                 ],
                                 ansibleDir:    ansiblePath,
                                 inventoryFile: 'inventory/inventory.yml',
                                 validate:      false
+                            )
+
+                            // Write Rancher variables to group_vars/all.yml
+                            def rancherVars = infrastructure.parseAndSubstituteVars(
+                                content: '''---
+deploy_rancher: ${DEPLOY_RANCHER_ANSIBLE}
+install_helm: true
+rancher_hostname: "${HOSTNAME_PREFIX}.qa.rancher.space"
+rancher_bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
+rancher_admin_password: "${RANCHER_ADMIN_PASSWORD}"
+rancher_image_tag: ${RANCHER_VERSION}
+rancher_use_bundled_system_charts: true
+''',
+                                envVars: [
+                                    'DEPLOY_RANCHER_ANSIBLE':     params.DEPLOY_RANCHER ? 'true' : 'false',
+                                    'HOSTNAME_PREFIX':           params.HOSTNAME_PREFIX,
+                                    'RANCHER_BOOTSTRAP_PASSWORD': params.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks',
+                                    'RANCHER_ADMIN_PASSWORD':     params.RANCHER_ADMIN_PASSWORD ?: 'rancherrocks',
+                                    'RANCHER_VERSION':           params.RANCHER_VERSION
+                                ]
+                            )
+                            infrastructure.writeConfig(
+                                path:    "${ansiblePath}/inventory/group_vars/all.yml",
+                                content: rancherVars
                             )
                         }
 
