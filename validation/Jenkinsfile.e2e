@@ -405,7 +405,7 @@ rancher_use_bundled_system_charts: true'''
                                 bucket:            params.S3_BUCKET_NAME,
                                 key:               params.S3_KEY_PREFIX,
                                 region:            params.S3_BUCKET_REGION,
-                                backendInitScript: './scripts/init-backend.sh'
+                                backendInitScript: '../airgap/scripts/init-backend.sh'
                             )
                         }
 
