@@ -526,7 +526,7 @@ rancher_use_bundled_system_charts: true'''
                             ansible.runPlaybook(
                                 dir:       ansiblePath,
                                 inventory: 'inventory/inventory.yml',
-                                playbook:  'playbooks/setup/setup-ssh-keys.yml'
+                                playbook:  '../airgap/playbooks/setup/setup-ssh-keys.yml'
                             )
                         }
 
