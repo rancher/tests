@@ -209,14 +209,28 @@ instance_type = "t3a.xlarge"
 aws_security_group = ["sg-08e8243a8cfbea8a0"]
 aws_subnet = "subnet-ee8cac86"
 aws_volume_size = 100
+aws_volume_type = "gp3"
 aws_hostname_prefix = "${HOSTNAME_PREFIX}"
 aws_region = "us-east-2"
 aws_route53_zone = "qa.rancher.space"
 aws_ssh_user = "ubuntu"
 aws_vpc = "vpc-bfccf4d7"
 user_id = "ubuntu"
-ssh_key = "/root/.ssh/${AWS_SSH_PEM_KEY_NAME}.pem"
+ssh_key = "/workspace/.ssh/${AWS_SSH_PEM_KEY_NAME}.pem"
 ssh_key_name = "${AWS_SSH_PEM_KEY_NAME}"
+public_ssh_key = "/workspace/.ssh/${AWS_SSH_PEM_KEY_NAME}.pub"
+nodes = [
+    {
+        count = 3
+        role  = ["etcd", "cp", "worker"]
+    },
+    {
+        count = 1
+        role  = ["worker"]
+    }
+]
+airgap_setup = false
+proxy_setup = false
 provision_registry = false'''
         )
         text(
