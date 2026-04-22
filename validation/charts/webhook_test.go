@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type WebhookTestSuite struct {
+type webhookSuiteBase struct {
 	suite.Suite
 	client       *rancher.Client
 	session      *session.Session
@@ -29,11 +29,15 @@ type WebhookTestSuite struct {
 	chartVersion string
 }
 
-func (w *WebhookTestSuite) TearDownSuite() {
+type WebhookTestSuite struct {
+	webhookSuiteBase
+}
+
+func (w *webhookSuiteBase) TearDownSuite() {
 	w.session.Cleanup()
 }
 
-func (w *WebhookTestSuite) SetupSuite() {
+func (w *webhookSuiteBase) SetupSuite() {
 	testSession := session.NewSession()
 	w.session = testSession
 
@@ -83,14 +87,6 @@ func (w *WebhookTestSuite) TestWebhookChart() {
 			require.NoError(w.T(), err)
 			webhookLogs := validateWebhookPodLogs(podLogs)
 			require.Nil(w.T(), webhookLogs)
-		})
-
-		w.Run("Verify webhook securityContext on "+tt.cluster, func() {
-			podSpec, _, err := getWebhookPodSpec(w.client, clusterID)
-			require.NoError(w.T(), err)
-
-			err = validateWebhookPodSecurityContext(podSpec)
-			require.NoError(w.T(), err)
 		})
 
 		w.Run("Verify the count of webhook is greater than zero and list webhooks on "+tt.cluster, func() {
