@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 
@@ -1203,7 +1204,8 @@ func downloadFile(url, destPath string) error {
 		return fmt.Errorf("mkdir for %s: %w", destPath, err)
 	}
 
-	resp, err := http.Get(url)
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Get(url)
 	if err != nil {
 		return fmt.Errorf("GET %s: %w", url, err)
 	}
@@ -1213,12 +1215,17 @@ func downloadFile(url, destPath string) error {
 		return fmt.Errorf("GET %s: HTTP %d", url, resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	f, err := os.Create(destPath)
 	if err != nil {
-		return fmt.Errorf("read response body from %s: %w", url, err)
+		return fmt.Errorf("create %s: %w", destPath, err)
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		return fmt.Errorf("write %s: %w", destPath, err)
 	}
 
-	return os.WriteFile(destPath, data, 0644)
+	return nil
 }
 
 // resolveAnsibleConfig returns the ANSIBLE_CONFIG path for a playbook.
