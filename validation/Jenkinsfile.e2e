@@ -102,29 +102,29 @@ pipeline {
         )
         string(
             name: 'TESTS_REPO_URL',
-            defaultValue: 'https://github.com/rancher/tests',
+            defaultValue: 'https://github.com/floatingman/rancher-tests',
             description: 'URL of rancher/tests repository'
         )
         string(
             name: 'TESTS_BRANCH',
-            defaultValue: 'main',
+            defaultValue: 'feature/issue-592-refactor-e2e-pipeline',
             description: 'Branch of rancher/tests repository'
         )
         string(
             name: 'QA_INFRA_REPO_URL',
-            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            defaultValue: 'https://github.com/floatingman/qa-infra-automation',
             description: 'URL of qa-infra-automation repository'
         )
         string(
             name: 'QA_INFRA_BRANCH',
-            defaultValue: 'main',
+            defaultValue: 'feature/decouple-tofu',
             description: 'Branch of qa-infra-automation repository'
         )
 
         // ── Infrastructure parameters ──────────────────────────
         string(
             name: 'HOSTNAME_PREFIX',
-            defaultValue: '',
+            defaultValue: 'pitdaily',
             description: 'Hostname prefix for *.qa.rancher.space and other AWS resources'
         )
         string(
@@ -201,23 +201,22 @@ pipeline {
         )
         text(
             name: 'TERRAFORM_CONFIG',
-            description: 'Terraform config values for the VM instances',
+            description: 'Terraform tfvars for the cluster_nodes module (non-airgap)',
             defaultValue: '''aws_access_key = "${AWS_ACCESS_KEY_ID}"
 aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
-aws_ami = "ami-09457fad1d2c34c31"
-instance_type = "t3a.xlarge"
-aws_security_group = ["sg-08e8243a8cfbea8a0"]
-aws_subnet = "subnet-ee8cac86"
-aws_volume_size = 100
+aws_ami = "ami-0e01311d1f112d4d0"
+instance_type = "t3a.2xlarge"
+aws_security_group = ["sg-07a98dc3474d4eb9f"]
+aws_subnet = "subnet-0377a1ca391d51cae"
+airgap_setup = false
+proxy_setup = false
+aws_volume_size = 500
 aws_volume_type = "gp3"
 aws_hostname_prefix = "${HOSTNAME_PREFIX}"
-aws_region = "us-east-2"
+aws_region = "us-west-1"
 aws_route53_zone = "qa.rancher.space"
-aws_ssh_user = "ubuntu"
-aws_vpc = "vpc-bfccf4d7"
-user_id = "ubuntu"
-ssh_key = "/workspace/.ssh/${AWS_SSH_PEM_KEY_NAME}.pem"
-ssh_key_name = "${AWS_SSH_PEM_KEY_NAME}"
+aws_ssh_user = "ec2-user"
+aws_vpc = "vpc-081cec85dbe35e9bd"
 public_ssh_key = "ssh_public_key.pub"
 nodes = [
     {
@@ -228,30 +227,30 @@ nodes = [
         count = 1
         role  = ["worker"]
     }
-]
-airgap_setup = false
-proxy_setup = false
-provision_registry = false'''
+]'''
         )
         text(
             name: 'ANSIBLE_VARIABLES',
-            description: 'Ansible variables for the RKE2 default deployment (written to vars.yaml) and Rancher (written to group_vars/all.yml)',
+            description: 'Ansible group_vars for RKE2 install + Rancher Helm deploy (non-airgap)',
             defaultValue: '''---
-# RKE2 version and installation settings
-kubernetes_version: '${RKE2_VERSION}'
-
-# kubeconfig file
-kubeconfig_file: './kubeconfig.yaml'
-
-# CNI configuration
-cni: "calico"
-
-# node token file for cluster communication
-node_token_file: "/tmp/node_token.txt"
-
-# Server configuration flags (written to /etc/rancher/rke2/config.yaml)
+kubernetes_version: ${RKE2_VERSION}
+cni: calico
+kubeconfig_file: "/root/go/src/github.com/rancher/qa-infra-automation/ansible/rke2/kubeconfig.yaml"
+cert_manager_version: "1.17.4"
+bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
+password: "${RANCHER_ADMIN_PASSWORD}"
+rancher_version: ${RANCHER_VERSION}
+rancher_image_tag: "latest"
+rancher_chart_repo_url: "https://releases.rancher.com/server-charts/alpha"
+upgrade_mode: false
+rancher_version_upgrade: ">=0.0.0-0"
+rancher_image_tag_upgrade: "latest"
+rancher_chart_repo_upgrade: "rancher-upgrade"
+rancher_chart_upgrade_repo_url: "https://releases.rancher.com/server-charts/alpha"
+k8s_upgrade_mode: false
+kubernetes_version_upgrade: v1.35.2+rke2r1
 server_flags: |
-  ingress-controller: traefik'''
+    ingress-controller: traefik'''
         )
 
         // ── Test parameters ────────────────────────────────────
@@ -269,7 +268,7 @@ server_flags: |
         // ── Downstream job parameters ─────────────────────────
         string(
             name: 'INDIVIDUAL_JOB',
-            defaultValue: 'go-recurring-daily-individual-job',
+            defaultValue: 'go-pit-daily-individual-updated-job',
             description: 'Name of the downstream Jenkins job that runs individual Go test suites'
         )
         string(
@@ -294,7 +293,7 @@ server_flags: |
         )
         string(
             name: 'VALIDATION_TEST_TAGS',
-            defaultValue: '',
+            defaultValue: 'pit.daily',
             description: 'Go build tags for validation tests. Triggers test-validation downstream job when set.'
         )
         string(
