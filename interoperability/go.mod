@@ -209,5 +209,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
-
-replace github.com/rancher/qa-infra-automation => github.com/slickwarren/rancher-qa-infra-automation v0.0.0-20260422235057-2f66cd99ecb6
