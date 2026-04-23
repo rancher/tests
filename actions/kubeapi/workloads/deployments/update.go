@@ -3,7 +3,7 @@ package deployments
 import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	appv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

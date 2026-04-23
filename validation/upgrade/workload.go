@@ -1,12 +1,10 @@
 package upgrade
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/rancher/rancher/pkg/api/scheme"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
@@ -15,12 +13,12 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/ingresses"
+	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extensionsworkloads "github.com/rancher/shepherd/extensions/workloads"
 	wloads "github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/rancher/tests/actions/charts"
-	kubeingress "github.com/rancher/tests/actions/kubeapi/ingresses"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/secrets"
@@ -34,7 +32,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	kubewait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -519,13 +516,12 @@ func waitUntilIngressHostnameUpdates(client *rancher.Client, clusterID, namespac
 	if err != nil {
 		return err
 	}
-	adminDynamicClient, err := adminClient.GetDownStreamClusterClient(clusterID)
+	adminWranglerCtx, err := clusterapi.GetClusterWranglerContext(adminClient, clusterID)
 	if err != nil {
 		return err
 	}
-	adminIngressResource := adminDynamicClient.Resource(kubeingress.IngressesGroupVersionResource).Namespace(namespace)
 
-	watchAppInterface, err := adminIngressResource.Watch(context.TODO(), metav1.ListOptions{
+	watchAppInterface, err := adminWranglerCtx.Networking.Ingress().Watch(namespace, metav1.ListOptions{
 		FieldSelector:  "metadata.name=" + ingressName,
 		TimeoutSeconds: &timeout,
 	})
@@ -534,12 +530,9 @@ func waitUntilIngressHostnameUpdates(client *rancher.Client, clusterID, namespac
 	}
 
 	return wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
-		ingressUnstructured := event.Object.(*unstructured.Unstructured)
-		ingress := &networkingv1.Ingress{}
-
-		err = scheme.Scheme.Convert(ingressUnstructured, ingress, ingressUnstructured.GroupVersionKind())
-		if err != nil {
-			return false, err
+		ingress, ok := event.Object.(*networkingv1.Ingress)
+		if !ok {
+			return false, nil
 		}
 
 		if ingress.Spec.Rules[0].Host != ingressHostName {

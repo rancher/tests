@@ -2,8 +2,8 @@ package configmaps
 
 import (
 	"github.com/rancher/shepherd/clients/rancher"
+	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	coreV1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

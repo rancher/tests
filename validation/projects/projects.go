@@ -12,7 +12,7 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	quotaapi "github.com/rancher/tests/actions/kubeapi/resourcequotas"

@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/rancher/shepherd/clients/rancher"
+	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/api/scheme"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

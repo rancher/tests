@@ -6,8 +6,8 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
+	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"

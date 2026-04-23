@@ -6,11 +6,11 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
+	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/unstructured"
 	"github.com/rancher/shepherd/pkg/api/scheme"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wait"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

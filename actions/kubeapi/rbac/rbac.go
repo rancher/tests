@@ -10,7 +10,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

@@ -9,7 +9,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	quotas "github.com/rancher/tests/actions/kubeapi/resourcequotas"
 	"github.com/rancher/tests/actions/workloads/pods"
 	corev1 "k8s.io/api/core/v1"

@@ -7,9 +7,9 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
+	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/api/scheme"
 	"github.com/rancher/shepherd/pkg/wait"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	appv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

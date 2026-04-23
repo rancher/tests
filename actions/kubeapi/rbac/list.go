@@ -5,8 +5,8 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
+	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/api/scheme"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
