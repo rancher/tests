@@ -17,21 +17,27 @@ prereq() {
         . /etc/os-release
 
         # Ubuntu 20.10 or higher are needed for skopeo.
-        [[ "${ID}" == "ubuntu" || "${ID}" == "debian" ]] && sudo apt update && sudo apt -y install skopeo
-        [[ "${ID}" == "rhel" || "${ID}" == "fedora" ]] && sudo yum install skopeo -y
-        [[ "${ID}" == "opensuse-leap" || "${ID}" == "sles" ]] && sudo zypper install  -y skopeo
+        [[ "${ID}" == "ubuntu" || "${ID}" == "debian" ]] && sudo apt update && sudo apt -y install skopeo=v1.22.0
+        [[ "${ID}" == "rhel" || "${ID}" == "fedora" ]] && sudo yum install skopeo-v1.22.0 -y
+        [[ "${ID}" == "opensuse-leap" || "${ID}" == "sles" ]] && sudo zypper install  -y skopeo=v1.22.0
     fi
 }
 
 scanRegistries() {
     echo -e "\nPulling rancher-images.txt file..."
     wget https://github.com/rancher/rancher/releases/download/"${RANCHER_VERSION}"/rancher-images.txt
+    wget https://github.com/rancher/rancher/releases/download/"${RANCHER_VERSION}"/sha256sum.txt
+
+    echo -e "\nVerifying rancher-images.txt checksum..."
+    grep " rancher-images.txt$" sha256sum.txt > /tmp/rancher-verify.sha256 && test -s /tmp/rancher-verify.sha256 && sha256sum -c /tmp/rancher-verify.sha256 && rm /tmp/rancher-verify.sha256
 
     echo -e "\nRunning scan-registry.sh against Docker Hub..."
     "${SCAN_REGISTRY_PATH}" -l "$(pwd)/rancher-images.txt" -r "${DOCKER_REGISTRY}" >> "${DOCKER_IMAGES_PATH}"
 
     echo -e "\nRunning scan-registry.sh against specified registry..."
     "${SCAN_REGISTRY_PATH}" -l "$(pwd)/rancher-images.txt" -r "${USER_REGISTRY}" >> "${USER_REGISTRY_IMAGES_PATH}"
+
+    rm -f sha256sum.txt
 }
 
 compareResults() {

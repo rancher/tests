@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:84e77dee7d1bc93fb029a45e3c6cb9d8aa4831ccfcc7103d36e876938d28895b
 WORKDIR /usr/app/src
 
 ARG AWS_ACCESS_KEY_ID
@@ -44,16 +44,26 @@ ARG GOOGLE_CLOUD_PROJECT
 ENV GOOGLE_CLOUD_PROJECT=$GOOGLE_CLOUD_PROJECT
 ENV CLOUDSDK_CORE_PROJECT=$GOOGLE_CLOUD_PROJECT
 
+ARG GOOGLE_CLOUD_CLI_VERSION=563.0.0-0
+ARG AZURE_CLI_VERSION=2.84.0-1~noble
+ARG C7N_VERSION=0.9.50
+ARG C7N_AZURE_VERSION=0.7.49
+ARG C7N_GCP_VERSION=0.4.49
+ARG C7N_MAILER_VERSION=0.6.49
+
 ADD ./* ./
 SHELL ["/bin/bash", "-c"] 
 
 RUN apt-get update && apt-get install -y python3 python3-pip python3-venv apt-transport-https ca-certificates gnupg curl
-RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg  add - && apt-get update -y && apt-get install google-cloud-cli -y
-RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+RUN mkdir -p /etc/apt/keyrings && curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /etc/apt/keyrings/cloud.google.gpg && echo "deb [signed-by=/etc/apt/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list && apt-get update -y && apt-get install google-cloud-cli=${GOOGLE_CLOUD_CLI_VERSION} -y
+RUN curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /etc/apt/keyrings/microsoft.gpg && \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ noble main" | tee /etc/apt/sources.list.d/azure-cli.list && \
+    apt-get update -y && \
+    apt-get install azure-cli=${AZURE_CLI_VERSION} -y
 
-RUN python3 -m venv custodian-venv
-RUN . custodian-venv/bin/activate
-RUN pip3 install c7n c7n_azure c7n_gcp c7n_mailer --break-system-packages
+RUN python3 -m venv custodian-venv && \
+    ./custodian-venv/bin/pip install c7n==${C7N_VERSION} c7n_azure==${C7N_AZURE_VERSION} c7n_gcp==${C7N_GCP_VERSION} c7n_mailer==${C7N_MAILER_VERSION}
+ENV PATH="/usr/app/src/custodian-venv/bin:${PATH}"
 
 RUN az login -u ${AZURE_CLIENT_ID} --service-principal -p ${AZURE_CLIENT_SECRET} --tenant ${AZURE_TENANT_ID} > /dev/null
 RUN gcloud auth activate-service-account --key-file $GOOGLE_APPLICATION_CREDENTIALS > /dev/null

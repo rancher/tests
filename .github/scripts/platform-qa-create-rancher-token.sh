@@ -6,7 +6,7 @@ set -e
 
 if ! command -v jq &> /dev/null; then
   sudo apt-get update
-  sudo apt-get install -y jq
+  sudo apt-get install -y jq=1.6-2.1
 fi
 
 response=$(curl -sfk "https://$RANCHER_HOST/v3-public/localProviders/local?action=login" \

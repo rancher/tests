@@ -6,7 +6,7 @@ ARG GOTESTSUM_VERSION=v1.13.0
 ARG ANSIBLE_VERSION=13.3.0
 ARG AWSCLI_VERSION=1.44.44
 
-FROM --platform=linux/amd64 golang:1.25-alpine3.22
+FROM --platform=linux/amd64 golang:1.25-alpine3.22@sha256:6b356567057624f59ee828f150cd01e5e889e0bdd46e780e90c4dacf62faa6af
 
 ARG TOFU_VERSION
 ARG GOTESTSUM_VERSION
@@ -31,7 +31,10 @@ RUN pip3 install --no-cache-dir --break-system-packages \
 # Install OpenTofu with checksum verification
 RUN curl -Lo /tmp/tofu_${TOFU_VERSION}_linux_amd64.tar.gz "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.tar.gz" \
     && curl -Lo /tmp/tofu_SHA256SUMS "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" \
-    && cd /tmp && grep "tofu_${TOFU_VERSION}_linux_amd64.tar.gz$" tofu_SHA256SUMS | sha256sum -c - \
+    && cd /tmp && grep "tofu_${TOFU_VERSION}_linux_amd64.tar.gz$" tofu_SHA256SUMS > /tmp/tofu.sha256 \
+    && test -s /tmp/tofu.sha256 \
+    && sha256sum -c /tmp/tofu.sha256 \
+    && rm /tmp/tofu.sha256 \
     && tar -xzf /tmp/tofu_${TOFU_VERSION}_linux_amd64.tar.gz -C /usr/local/bin/ \
     && rm /tmp/tofu_${TOFU_VERSION}_linux_amd64.tar.gz /tmp/tofu_SHA256SUMS \
     && chmod +x /usr/local/bin/tofu

@@ -10,8 +10,9 @@ WORKDIR $WORKSPACE/validation
 
 COPY [".", "$WORKSPACE"]
 
+ARG GOTESTSUM_VERSION=v1.13.0
 RUN go mod download && \
-    go install gotest.tools/gotestsum@latest
+    go install gotest.tools/gotestsum@${GOTESTSUM_VERSION}
 
 RUN mkdir /root/.ssh && chmod 600 .ssh/jenkins-*
 RUN zypper install -y openssh
@@ -29,18 +30,27 @@ RUN CGO_ENABLED=0
 SHELL ["/bin/bash", "-c"] 
 
 
-ARG RKE_VERSION
-RUN if [[ -n "$RKE_VERSION" ]] ; then echo installing latest version RKE && \
-    curl -0Ls https://github.com/rancher/rke/releases/latest/download/rke_linux-amd64 > rke ; else echo installing ${RKE_VERSION} version RKE && \
-    curl -0Ls https://github.com/rancher/rke/releases/download/$RKE_VERSION/rke_linux-amd64 > rke; fi;
-RUN mv rke /bin/rke && \
-    chmod +x /bin/rke
+ARG RKE_VERSION=v1.7.3
+RUN echo "installing ${RKE_VERSION} version RKE" && \
+    curl -fSL "https://github.com/rancher/rke/releases/download/${RKE_VERSION}/rke_linux-amd64" -o rke_linux-amd64 && \
+    curl -fSL "https://github.com/rancher/rke/releases/download/${RKE_VERSION}/rke_linux-amd64.sha256" -o rke_linux-amd64.sha256 && \
+    sha256sum -c rke_linux-amd64.sha256 && \
+    mv rke_linux-amd64 /bin/rke && \
+    chmod +x /bin/rke && \
+    rm -f rke_linux-amd64.sha256
 
 
 ARG CLI_VERSION
 RUN if [[ -n "$CLI_VERSION" ]] ; then  \
         echo installing CLI version $CLI_VERSION ; \
-        curl -LO https://github.com/rancher/cli/releases/download/$CLI_VERSION/rancher-linux-amd64-$CLI_VERSION.tar.gz ; \
-        tar -xf rancher-linux-amd64-$CLI_VERSION.tar.gz && \
+    CLI_TAR="rancher-linux-amd64-$CLI_VERSION.tar.gz" ; \
+    curl -fLO https://github.com/rancher/cli/releases/download/$CLI_VERSION/$CLI_TAR ; \
+    curl -fLO https://github.com/rancher/cli/releases/download/$CLI_VERSION/sha256sum.txt ; \
+    grep " $CLI_TAR$" sha256sum.txt > /tmp/cli.sha256 && \
+    test -s /tmp/cli.sha256 && \
+    sha256sum -c /tmp/cli.sha256 && \
+    rm /tmp/cli.sha256 ; \
+    tar -xf $CLI_TAR && \
         mv rancher-$CLI_VERSION/rancher /bin/rancher && \
-        chmod +x /bin/rancher; fi;
+    chmod +x /bin/rancher && \
+    rm -f $CLI_TAR sha256sum.txt ; fi;

@@ -26,6 +26,22 @@ createECRRepo() {
     echo -e "\nDownloading "${RANCHER_VERSION}" image list and scripts..."
     wget https://github.com/rancher/rancher/releases/download/"${RANCHER_VERSION}"/rancher-images.txt
     wget https://github.com/rancher/rancher/releases/download/"${RANCHER_VERSION}"/rancher-save-images.sh
+    wget https://github.com/rancher/rancher/releases/download/"${RANCHER_VERSION}"/sha256sum.txt
+
+    echo -e "\nVerifying downloaded release assets..."
+    if ! grep " rancher-images.txt$" sha256sum.txt > /tmp/rancher-verify.sha256 || ! test -s /tmp/rancher-verify.sha256 || ! sha256sum -c /tmp/rancher-verify.sha256; then
+        rm -f /tmp/rancher-verify.sha256
+        echo "Checksum verification failed for rancher-images.txt"
+        return 1
+    fi
+    rm -f /tmp/rancher-verify.sha256
+
+    if ! grep " rancher-save-images.sh$" sha256sum.txt > /tmp/rancher-verify.sha256 || ! test -s /tmp/rancher-verify.sha256 || ! sha256sum -c /tmp/rancher-verify.sha256; then
+        rm -f /tmp/rancher-verify.sha256
+        echo "Checksum verification failed for rancher-save-images.sh"
+        return 1
+    fi
+    rm -f /tmp/rancher-verify.sha256
     chmod +x rancher-save-images.sh
 
     echo -e "\nCutting the tags from the image names..."
@@ -37,6 +53,8 @@ createECRRepo() {
     for IMAGE in $(cat rancher-images-no-tags.txt); do
         aws ecr create-repository --repository-name ${IMAGE}
     done
+
+    rm -f sha256sum.txt
 }
 
 saveAndLoadImages() {
