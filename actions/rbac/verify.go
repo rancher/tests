@@ -18,7 +18,7 @@ import (
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/namespaces"
-	hpaapi "github.com/rancher/tests/actions/workloads/horizontalpodautoscalers"
+	hpaapi "github.com/rancher/tests/actions/workloads/hpa"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

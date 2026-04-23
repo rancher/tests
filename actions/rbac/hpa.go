@@ -8,7 +8,7 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	workloadsapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	deploymentapi "github.com/rancher/tests/actions/workloads/deployment"
-	hpaapi "github.com/rancher/tests/actions/workloads/horizontalpodautoscalers"
+	hpaapi "github.com/rancher/tests/actions/workloads/hpa"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
