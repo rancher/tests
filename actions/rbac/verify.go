@@ -22,7 +22,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	coreV1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -259,6 +261,7 @@ func VerifyUserCanCreateHPA(t *testing.T, client, standardClient *rancher.Client
 		assert.NoError(t, err)
 	case ClusterMember:
 		require.Error(t, err)
+		assert.True(t, apierrors.IsForbidden(err))
 	}
 }
 
@@ -275,7 +278,7 @@ func VerifyUserCanEditHPA(t *testing.T, client, standardClient *rancher.Client, 
 		err = hpaapi.DeleteHPA(client, clusterID, namespaceName, updatedHPA.Name)
 		assert.NoError(t, err)
 	case ClusterMember:
-		err := VerifyEditForbidden(standardClient, client, clusterID, namespaceName)
+		err := VerifyUpdateHPAForbidden(standardClient, client, clusterID, namespaceName)
 		assert.NoError(t, err)
 	}
 }
@@ -296,6 +299,7 @@ func VerifyUserCanDeleteHPA(t *testing.T, client, standardClient *rancher.Client
 		assert.Error(t, err)
 		deleteErr := hpaapi.DeleteHPA(client, clusterID, namespaceName, hpa.Name)
 		assert.NoError(t, deleteErr)
+		assert.True(t, apierrors.IsForbidden(err))
 	}
 }
 
@@ -315,8 +319,46 @@ func VerifyUserCanListHPA(t *testing.T, client, standardClient *rancher.Client, 
 		assert.Equal(t, hpa.Name, hpaList[0].Name)
 	case ClusterMember:
 		assert.Empty(t, hpaList)
+		assert.True(t, apierrors.IsForbidden(err))
 	}
 
 	err = hpaapi.DeleteHPA(client, clusterID, namespaceName, hpa.Name)
 	assert.NoError(t, err)
+}
+
+// VerifyHPAFields validates the fields of an HPA object.
+func VerifyHPAFields(hpa *autoscalingv2.HorizontalPodAutoscaler, expectedName string, expectedMin, expectedMax int32) error {
+	if hpa.Name != expectedName {
+		return fmt.Errorf("expected HPA name %s, got %s", expectedName, hpa.Name)
+	}
+
+	if hpa.Spec.MinReplicas != nil && *hpa.Spec.MinReplicas != expectedMin {
+		return fmt.Errorf("expected minReplicas %d, got %d", expectedMin, *hpa.Spec.MinReplicas)
+	}
+
+	if hpa.Spec.MaxReplicas != expectedMax {
+		return fmt.Errorf("expected maxReplicas %d, got %d", expectedMax, hpa.Spec.MaxReplicas)
+	}
+
+	return nil
+}
+
+// VerifyUpdateHPAForbidden creates an HPA as the cluster owner, then verifies that the user client cannot update it.
+func VerifyUpdateHPAForbidden(userClient, ownerClient *rancher.Client, clusterID, namespaceName string) error {
+	hpaResp, workload, err := CreateHPA(ownerClient, clusterID, namespaceName, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create HPA as owner: %w", err)
+	}
+
+	updatedMin := int32(3)
+	updatedMax := int32(10)
+	metrics := []autoscalingv2.MetricSpec{hpaapi.BuildCPUUtilizationMetric(hpaCPUUtilizationValue)}
+	updateObj := hpaapi.NewHPAObject(hpaResp.Name, namespaceName, workload.Name, updatedMin, updatedMax, metrics)
+
+	_, err = hpaapi.UpdateHPA(userClient, clusterID, namespaceName, hpaResp, updateObj)
+	if !errors.IsForbidden(err) {
+		return fmt.Errorf("expected forbidden error when editing HPA, got: %w", err)
+	}
+
+	return nil
 }

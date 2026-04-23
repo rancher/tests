@@ -1,14 +1,12 @@
 package rbac
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	workloadsapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	deploymentapi "github.com/rancher/tests/actions/workloads/deployment"
 	hpaapi "github.com/rancher/tests/actions/workloads/horizontalpodautoscalers"
 	"github.com/sirupsen/logrus"
@@ -17,7 +15,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -119,7 +116,7 @@ func EditHPA(client *rancher.Client, clusterID, namespaceName string) (*autoscal
 		return nil, nil, err
 	}
 
-	err = WaitForDeploymentReplicas(client, clusterID, namespaceName, workload.Name, initialMin)
+	err = workloadsapi.WaitForDeploymentActive(client, clusterID, namespaceName, workload.Name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("workload did not scale to initial minReplicas: %w", err)
 	}
@@ -140,61 +137,6 @@ func EditHPA(client *rancher.Client, clusterID, namespaceName string) (*autoscal
 	}
 
 	return resultHPA, workload, nil
-}
-
-// WaitForDeploymentReplicas polls until the deployment has the expected number of available replicas.
-func WaitForDeploymentReplicas(client *rancher.Client, clusterID, namespaceName, deploymentName string, expectedReplicas int32) error {
-	logrus.Infof("Waiting for deployment %s to scale to %d replicas", deploymentName, expectedReplicas)
-	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		wranglerCtx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
-		if err != nil {
-			return false, err
-		}
-
-		dep, err := wranglerCtx.Apps.Deployment().Get(namespaceName, deploymentName, metav1.GetOptions{})
-		if err != nil {
-			return false, nil
-		}
-
-		return dep.Status.AvailableReplicas >= expectedReplicas, nil
-	})
-}
-
-// VerifyHPAFields validates the fields of an HPA object.
-func VerifyHPAFields(hpa *autoscalingv2.HorizontalPodAutoscaler, expectedName string, expectedMin, expectedMax int32) error {
-	if hpa.Name != expectedName {
-		return fmt.Errorf("expected HPA name %s, got %s", expectedName, hpa.Name)
-	}
-
-	if hpa.Spec.MinReplicas != nil && *hpa.Spec.MinReplicas != expectedMin {
-		return fmt.Errorf("expected minReplicas %d, got %d", expectedMin, *hpa.Spec.MinReplicas)
-	}
-
-	if hpa.Spec.MaxReplicas != expectedMax {
-		return fmt.Errorf("expected maxReplicas %d, got %d", expectedMax, hpa.Spec.MaxReplicas)
-	}
-
-	return nil
-}
-
-// VerifyEditForbidden creates an HPA as the cluster owner, then verifies that the user client cannot edit it.
-func VerifyEditForbidden(userClient, ownerClient *rancher.Client, clusterID, namespaceName string) error {
-	hpaResp, workload, err := CreateHPA(ownerClient, clusterID, namespaceName, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create HPA as owner: %w", err)
-	}
-
-	updatedMin := int32(3)
-	updatedMax := int32(10)
-	metrics := []autoscalingv2.MetricSpec{hpaapi.BuildCPUUtilizationMetric(hpaCPUUtilizationValue)}
-	updateObj := hpaapi.NewHPAObject(hpaResp.Name, namespaceName, workload.Name, updatedMin, updatedMax, metrics)
-
-	_, err = hpaapi.UpdateHPA(userClient, clusterID, namespaceName, hpaResp, updateObj)
-	if err == nil {
-		return fmt.Errorf("expected forbidden error when editing HPA, but edit succeeded")
-	}
-
-	return nil
 }
 
 // ListHPAsByName lists HPAs in a namespace filtered by name.

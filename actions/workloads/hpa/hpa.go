@@ -1,4 +1,4 @@
-package horizontalpodautoscalers
+package hpa
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -65,18 +66,12 @@ func DeleteHPA(client *rancher.Client, clusterID, namespace, hpaName string) err
 	}
 
 	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, false, func(ctx context.Context) (done bool, err error) {
-		hpaList, err := ListHPAs(client, clusterID, namespace, metav1.ListOptions{
-			FieldSelector: "metadata.name=" + hpaName,
-		})
-		if err != nil {
-			return false, err
-		}
-
-		if len(hpaList) == 0 {
+		_, err = wranglerContext.Autoscaling.HorizontalPodAutoscaler().Get(namespace, hpaName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
 			return true, nil
 		}
 
-		return false, nil
+		return false, err
 	})
 	if err != nil {
 		return fmt.Errorf("HPA %s was not deleted within timeout: %w", hpaName, err)
@@ -166,56 +161,17 @@ func BuildMemoryAverageValueMetric(avgValue string) autoscalingv2.MetricSpec {
 	}
 }
 
-// WatchAndWaitHPAs is a helper function that watches the HPAs
-// sequentially in a specific namespace and waits until they reach a desired conditions state.
-func WatchAndWaitHPAs(client *rancher.Client, clusterID, namespace string, listOptions metav1.ListOptions) error {
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	if err != nil {
-		return err
-	}
-
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(adminClient, clusterID)
-	if err != nil {
-		return err
-	}
-
-	hpas, err := wranglerContext.Autoscaling.HorizontalPodAutoscaler().List(namespace, listOptions)
-	if err != nil {
-		return err
-	}
-
-	for _, hpa := range hpas.Items {
-		err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-			currentHPA, err := wranglerContext.Autoscaling.HorizontalPodAutoscaler().Get(namespace, hpa.Name, metav1.GetOptions{})
-			if err != nil {
-				return false, nil
-			}
-
-			for _, condition := range currentHPA.Status.Conditions {
-				if condition.Type == autoscalingv2.ScalingActive && condition.Status == corev1.ConditionTrue {
-					return true, nil
-				}
-			}
-			return false, nil
-		})
-		if err != nil {
-			return fmt.Errorf("HPA %s did not reach active state: %w", hpa.Name, err)
-		}
-	}
-
-	return nil
-}
-
 // WaitForHPAActive polls the wrangler client until the HPA reaches active state.
 func WaitForHPAActive(client *rancher.Client, clusterID, namespace, hpaName string) (*autoscalingv2.HorizontalPodAutoscaler, error) {
 	var hpaObj *autoscalingv2.HorizontalPodAutoscaler
 
+	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, err
+	}
+
 	logrus.Infof("Waiting for HPA %s to become active", hpaName)
-	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
-		if err != nil {
-			return false, nil
-		}
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 
 		currentHPA, err := wranglerContext.Autoscaling.HorizontalPodAutoscaler().Get(namespace, hpaName, metav1.GetOptions{})
 		if err != nil {
