@@ -9,9 +9,10 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
+	ingressapi "github.com/rancher/shepherd/extensions/kubeapi/ingresses"
 	"github.com/rancher/shepherd/pkg/session"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
-	"github.com/rancher/tests/actions/kubeapi/ingresses"
+	ingress "github.com/rancher/tests/actions/kubeapi/ingresses"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/secrets"
@@ -97,7 +98,7 @@ func (c *CertificateTestSuite) setupIngressWithCert(namespace *corev1.Namespace,
 	deploymentForIngress, err := deployment.CreateDeployment(c.client, c.cluster.ID, namespace.Name, 1, tlsSecret.Name, "", false, false, false, true)
 	require.NoError(c.T(), err)
 
-	ingressTemplate, err := ingresses.CreateServiceAndIngressTemplateForDeployment(c.client, c.cluster.ID, namespace.Name, deploymentForIngress)
+	ingressTemplate, err := ingress.CreateServiceAndIngressTemplateForDeployment(c.client, c.cluster.ID, namespace.Name, deploymentForIngress)
 	require.NoError(c.T(), err, "Error creating ingress template")
 
 	ingressTemplate.Spec.TLS = []netv1.IngressTLS{
@@ -107,7 +108,7 @@ func (c *CertificateTestSuite) setupIngressWithCert(namespace *corev1.Namespace,
 		},
 	}
 
-	return ingresses.CreateIngress(c.client, c.cluster.ID, ingressTemplate.Name, namespace.Name, &ingressTemplate.Spec)
+	return ingressapi.CreateIngress(c.client, c.cluster.ID, ingressTemplate.Name, namespace.Name, &ingressTemplate.Spec)
 }
 
 func (c *CertificateTestSuite) TestCertificateScopes() {
@@ -288,7 +289,7 @@ func (c *CertificateTestSuite) TestUpdateCertificateWithIngress() {
 	_, err = adminContext.Core.Secret().Update(updatedSecret)
 	require.NoError(c.T(), err)
 
-	updatedIngress, err := ingresses.GetIngressByName(c.client, c.cluster.ID, namespace.Name, ingress.Name)
+	updatedIngress, err := adminContext.Networking.Ingress().Get(namespace.Name, ingress.Name, metav1.GetOptions{})
 	require.NoError(c.T(), err)
 	require.Len(c.T(), updatedIngress.Spec.TLS, 1)
 	require.Equal(c.T(), tlsSecret.Name, updatedIngress.Spec.TLS[0].SecretName)
@@ -340,7 +341,7 @@ func (c *CertificateTestSuite) TestDeleteCertificateUsedByIngress() {
 	_, err = adminContext.Core.Secret().Get(namespace.Name, tlsSecret.Name, metav1.GetOptions{})
 	require.True(c.T(), errors.IsNotFound(err), "tls secret should be deleted")
 
-	updatedIngress, err := ingresses.GetIngressByName(c.client, c.cluster.ID, namespace.Name, ingress.Name)
+	updatedIngress, err := adminContext.Networking.Ingress().Get(namespace.Name, ingress.Name, metav1.GetOptions{})
 	require.NoError(c.T(), err)
 	require.Len(c.T(), updatedIngress.Spec.TLS, 1)
 	require.Equal(c.T(), tlsSecret.Name, updatedIngress.Spec.TLS[0].SecretName)
@@ -426,7 +427,7 @@ func (c *CertificateTestSuite) TestCertificateRotation() {
 	require.NoError(c.T(), err)
 
 	log.Info("Deleting old ingress")
-	err = ingresses.DeleteIngress(c.client, c.cluster.ID, namespace.Name, ingress.Name)
+	err = ingressapi.DeleteIngress(c.client, c.cluster.ID, namespace.Name, ingress.Name)
 	require.NoError(c.T(), err)
 
 	log.Info("Creating new ingress with rotated certificate")
