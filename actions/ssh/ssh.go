@@ -4,9 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/extensions/sshkeys"
@@ -123,4 +126,43 @@ func downloadRKESSHKey(client *rancher.Client, clusterID string, v3Node *v3.Node
 
 	execCmd := []string{"bash", "-c", bashCommand}
 	return kubectl.Command(client, nil, clusterID, execCmd, "")
+}
+
+// RunLocalCommand is a helper to run a local command and return the output
+func RunLocalCommand(cmd string) (string, error) {
+	c := exec.Command("sh", "-c", cmd)
+	output, err := c.CombinedOutput()
+
+	return string(output), err
+}
+
+// GetNodeSSHKeyPath is a helper to get the SSH key path for a node based on the pool role and the EC2 configs
+func GetNodeSSHKeyPath(poolRole string, ec2Configs *ec2.AWSEC2Configs) string {
+	sshPath := nodes.GetSSHPath().SSHPath
+
+	if strings.Contains(poolRole, "windows") {
+		for _, cfg := range ec2Configs.AWSEC2Config {
+			for _, role := range cfg.Roles {
+				if strings.Contains(role, "windows") && cfg.AWSSSHKeyName != "" {
+					return filepath.Join(sshPath, cfg.AWSSSHKeyName)
+				}
+			}
+		}
+	} else {
+		for _, cfg := range ec2Configs.AWSEC2Config {
+			isWindows := false
+			for _, role := range cfg.Roles {
+				if strings.Contains(role, "windows") {
+					isWindows = true
+					break
+				}
+			}
+
+			if !isWindows && cfg.AWSSSHKeyName != "" {
+				return filepath.Join(sshPath, cfg.AWSSSHKeyName)
+			}
+		}
+	}
+
+	return ""
 }

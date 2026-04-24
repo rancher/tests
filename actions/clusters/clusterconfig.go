@@ -39,6 +39,8 @@ type ClusterConfig struct {
 	PathToRepo                     string                                            `json:"pathToRepo" yaml:"pathToRepo"`
 	IPv6Cluster                    bool                                              `json:"ipv6Cluster" yaml:"ipv6Cluster" default:"false"`
 	ResourcePrefix                 string                                            `json:"resourcePrefix" yaml:"resourcePrefix" default:""`
+	BastionUser                    string                                            `json:"bastionUser" yaml:"bastionUser" default:""`
+	BastionWindowsUser             string                                            `json:"bastionWindowsUser" yaml:"bastionWindowsUser" default:""`
 }
 
 // ConvertConfigToClusterConfig converts the config from (user) provisioning input to a cluster config
@@ -71,6 +73,8 @@ func ConvertConfigToClusterConfig(provisioningConfig *provisioningInput.Config) 
 	newConfig.RKE1CustomClusterDockerInstall = provisioningConfig.RKE1CustomClusterDockerInstall
 	newConfig.PathToRepo = provisioningConfig.PathToRepo
 	newConfig.IPv6Cluster = provisioningConfig.IPv6Cluster
+	newConfig.BastionUser = provisioningConfig.BastionUser
+	newConfig.BastionWindowsUser = provisioningConfig.BastionWindowsUser
 
 	return &newConfig
 }

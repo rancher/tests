@@ -46,6 +46,7 @@ import (
 	nodepools "github.com/rancher/tests/actions/rke1/nodepools"
 	"github.com/rancher/tests/actions/rke1/nodetemplates"
 	"github.com/rancher/tests/actions/secrets"
+	"github.com/rancher/tests/actions/ssh"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,7 +60,6 @@ const (
 	internalIP     = "alpha.kubernetes.io/provided-node-ip"
 	rke1ExternalIP = "rke.cattle.io/external-ip"
 
-	rke2k3sAirgapCustomCluster           = "rke2k3sairgapcustomcluster"
 	rke2k3sNodeCorralName                = "rke2k3sregisterNode"
 	corralPackageAirgapCustomClusterName = "airgapCustomCluster"
 	rke1AirgapCustomCluster              = "rke1airgapcustomcluster"
@@ -563,11 +563,13 @@ func CreateProvisioningRKE1CustomCluster(client *rancher.Client, externalNodePro
 	return createdCluster, nodes, err
 }
 
-// CreateProvisioningAirgapCustomCluster provisions a non-rke1 cluster using corral to gather its nodes, then runs verify checks
-func CreateProvisioningAirgapCustomCluster(client *rancher.Client, clustersConfig *clusters.ClusterConfig, corralPackages *corral.Packages) (*v1.SteveAPIObject, error) {
+// CreateProvisioningAirgapCustomCluster provisions a rke2/k3s cluster, then runs verify checks
+func CreateProvisioningAirgapCustomCluster(client *rancher.Client, clustersConfig *clusters.ClusterConfig, externalNodeProvider *ExternalNodeProvider, ec2Configs *ec2.AWSEC2Configs, airgapBastion string) (*v1.SteveAPIObject, error) {
 	var clusterName string
+	rolesPerNode := []string{}
 	quantityPerPool := []int32{}
 	rolesPerPool := []string{}
+
 	for _, pool := range clustersConfig.MachinePools {
 		var finalRoleCommand string
 		if pool.MachinePoolConfig.ControlPlane {
@@ -589,6 +591,9 @@ func CreateProvisioningAirgapCustomCluster(client *rancher.Client, clustersConfi
 		quantityPerPool = append(quantityPerPool, pool.MachinePoolConfig.Quantity)
 		rolesPerPool = append(rolesPerPool, finalRoleCommand)
 
+		for i := int32(0); i < pool.MachinePoolConfig.Quantity; i++ {
+			rolesPerNode = append(rolesPerNode, finalRoleCommand)
+		}
 	}
 
 	if clustersConfig.PSACT == string(provisioninginput.RancherBaseline) {
@@ -601,7 +606,13 @@ func CreateProvisioningAirgapCustomCluster(client *rancher.Client, clustersConfi
 	if clustersConfig.ResourcePrefix != "" {
 		clusterName = namegen.AppendRandomString(clustersConfig.ResourcePrefix)
 	} else {
-		clusterName = namegen.AppendRandomString(rke2k3sAirgapCustomCluster)
+		clusterName = namegen.AppendRandomString(externalNodeProvider.Name)
+	}
+
+	logrus.Debug("Creating custom cluster nodes")
+	nodes, err := externalNodeProvider.AirgapNodeCreationFunc(client, rolesPerPool, quantityPerPool, ec2Configs)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster := clusters.NewK3SRKE2ClusterConfig(clusterName, namespaces.FleetDefault, clustersConfig, nil, "")
@@ -632,29 +643,136 @@ func CreateProvisioningAirgapCustomCluster(client *rancher.Client, clustersConfi
 		return nil, err
 	}
 
-	logrus.Infof("Register Custom Cluster Through Corral")
-	corralsArgs := []corral.Args{}
+	logrus.Debugf("Registering linux nodes via bastion: %s", airgapBastion)
+
+	var command string
+	totalNodesObserved := 0
 
 	for poolIndex, poolRole := range rolesPerPool {
+		if strings.Contains(poolRole, "windows") {
+			totalNodesObserved += int(quantityPerPool[poolIndex])
+			continue
+		}
 
-		regCmd := fmt.Sprintf("%s %s", token.InsecureNodeCommand, poolRole)
+		for nodeIndex := 0; nodeIndex < int(quantityPerPool[poolIndex]); nodeIndex++ {
+			node := nodes[totalNodesObserved+nodeIndex]
+			logrus.Tracef("Execute Registration Command for node %s", node.NodeID)
+			command = fmt.Sprintf("%s %s", token.InsecureNodeCommand, poolRole)
 
-		// environment variables must be escaped inside original registration command
-		regCmd = strings.Replace(regCmd, "\"", "\\\"", -1)
+			if clustersConfig.MachinePools[poolIndex].IsSecure {
+				command = fmt.Sprintf("%s %s", token.NodeCommand, poolRole)
+			}
 
-		corralsArgs = append(corralsArgs, corral.Args{
-			Name:        namegen.AppendRandomString(rke2k3sNodeCorralName),
-			PackageName: corralPackages.CorralPackageImages[corralPackageAirgapCustomClusterName],
-			Updates:     map[string]string{"registration_command": regCmd, "node_count": fmt.Sprint(quantityPerPool[poolIndex])},
-		})
+			command = createRegistrationCommand(command, node.PrivateIPAddress, node.PrivateIPAddress, clustersConfig.MachinePools[poolIndex])
+
+			logrus.Tracef("Command: %s", command)
+
+			sshKeyPath := ssh.GetNodeSSHKeyPath(rolesPerPool[poolIndex], ec2Configs)
+			pemOnBastion := "/home/" + clustersConfig.BastionUser + "/" + ec2Configs.AWSEC2Config[0].AWSSSHKeyName
+
+			scpCmd := fmt.Sprintf("scp -o StrictHostKeyChecking=no -i %s %s %s@%s:%s",
+				sshKeyPath,
+				sshKeyPath,
+				clustersConfig.BastionUser,
+				airgapBastion,
+				pemOnBastion,
+			)
+
+			_, scpErr := ssh.RunLocalCommand(scpCmd)
+			if scpErr != nil {
+				return nil, fmt.Errorf("failed to copy pem to bastion: %w", scpErr)
+			}
+
+			sshCmd := fmt.Sprintf(
+				"ssh -o StrictHostKeyChecking=no -i %s %s@%s 'ssh -o StrictHostKeyChecking=no -i %s %s@%s \"%s\"'",
+				sshKeyPath,
+				clustersConfig.BastionUser,
+				airgapBastion,
+				pemOnBastion,
+				node.SSHUser,
+				node.PrivateIPAddress,
+				command,
+			)
+
+			output, err := ssh.RunLocalCommand(sshCmd)
+			if err != nil {
+				return nil, fmt.Errorf("failed to register node %s via bastion: %w", node.NodeID, err)
+			}
+
+			logrus.Trace(output)
+		}
+
+		totalNodesObserved += int(quantityPerPool[poolIndex])
 	}
 
-	_, err = corral.CreateMultipleCorrals(client.Session, corralsArgs, corralPackages.HasDebug, corralPackages.HasCleanup)
+	err = VerifyClusterReady(client, customCluster)
 	if err != nil {
 		return nil, err
 	}
 
+	totalNodesObserved = 0
+	for poolIndex := 0; poolIndex < len(rolesPerPool); poolIndex++ {
+		if strings.Contains(rolesPerPool[poolIndex], "windows") {
+			logrus.Debug("Registering Windows Nodes via bastion")
+
+			linuxSSHKeyPath := ssh.GetNodeSSHKeyPath("linux", ec2Configs)
+			windowsSSHKeyPath := ssh.GetNodeSSHKeyPath("windows", ec2Configs)
+
+			for nodeIndex := 0; nodeIndex < int(quantityPerPool[poolIndex]); nodeIndex++ {
+				node := nodes[totalNodesObserved+nodeIndex]
+				logrus.Tracef("Execute Registration Command for node %s", node.NodeID)
+				logrus.Tracef("Windows pool detected, using powershell.exe via bastion...")
+
+				escCommand := strings.ReplaceAll(token.InsecureWindowsNodeCommand, `"`, `\\\"`)
+				command = fmt.Sprintf(`powershell.exe -Command \"%s\"`, escCommand)
+
+				if clustersConfig.MachinePools[poolIndex].IsSecure {
+					escCommand := strings.ReplaceAll(token.WindowsNodeCommand, `"`, `\\\"`)
+					command = fmt.Sprintf(`powershell.exe -Command \"%s\"`, escCommand)
+				}
+
+				command = createWindowsRegistrationCommand(command, node.PublicIPAddress, node.PrivateIPAddress, clustersConfig.MachinePools[poolIndex])
+				logrus.Tracef("Command: %s", command)
+
+				pemOnBastion := "/home/" + clustersConfig.BastionUser + "/" + ec2Configs.AWSEC2Config[0].AWSSSHKeyName
+				scpCmd := fmt.Sprintf("scp -o StrictHostKeyChecking=no -i %s %s %s@%s:%s",
+					linuxSSHKeyPath,
+					windowsSSHKeyPath,
+					clustersConfig.BastionUser,
+					airgapBastion,
+					pemOnBastion,
+				)
+
+				_, scpErr := ssh.RunLocalCommand(scpCmd)
+				if scpErr != nil {
+					return nil, fmt.Errorf("failed to copy Windows pem to bastion: %w", scpErr)
+				}
+
+				sshCmd := fmt.Sprintf(
+					"ssh -A -o StrictHostKeyChecking=no -i %s %s@%s 'ssh -o StrictHostKeyChecking=no -i %s %s@%s \"%s\"'",
+					linuxSSHKeyPath,
+					clustersConfig.BastionUser,
+					airgapBastion,
+					pemOnBastion,
+					clustersConfig.BastionWindowsUser,
+					node.PrivateIPAddress,
+					command,
+				)
+
+				output, err := ssh.RunLocalCommand(sshCmd)
+				if err != nil {
+					return nil, fmt.Errorf("failed to register Windows node %s via bastion: %w", node.NodeID, err)
+				}
+
+				logrus.Trace(output)
+			}
+		}
+
+		totalNodesObserved += int(quantityPerPool[poolIndex])
+	}
+
 	createdCluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + clusterName)
+
 	return createdCluster, err
 }
 
