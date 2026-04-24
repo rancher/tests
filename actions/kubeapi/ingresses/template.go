@@ -53,7 +53,8 @@ func CreateServiceAndIngressTemplateForDeployment(client *rancher.Client, cluste
 	}
 
 	ingressNameForDeployment := namegen.AppendRandomString("test-ingress")
-	ingressTemplateForDeployment := ingresses.NewIngressTemplate(ingressNameForDeployment, namespaceName, IngressHostName, paths)
+	ingressHostName := namegen.AppendRandomString("test-host-") + "." + IngressHostName
+	ingressTemplateForDeployment := ingresses.NewIngressTemplate(ingressNameForDeployment, namespaceName, ingressHostName, paths)
 
 	return &ingressTemplateForDeployment, nil
 }
