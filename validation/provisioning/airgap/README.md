@@ -15,6 +15,24 @@ The above command will connect your client node to the same network that your ai
 ## Test Cases
 All of the test cases in this package are listed below, keep in mind that all configuration for these tests have built in defaults [Configuration Defaults](#defaults)
 
+### ACE Test
+
+#### Description: 
+ACE(Authorized Cluster Endpoint) test verifies that a custom cluster can be provisioned with ACE enabled
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Custom Cluster Config](#custom-cluster)
+
+#### Table Tests
+1. `K3S_Airgap_ACE`
+2. `RKE2_Airgap_ACE`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/airgap --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestAirgapK3SACE -timeout=1h -v`
+2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/airgap --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestAirgapRKE2ACE -timeout=1h -v`
+
 ### Custom Test
 
 #### Description: 
@@ -33,6 +51,24 @@ Custom test verfies that various custom cluster configurations provision properl
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/airgap --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCustomRKE2Airgap -timeout=1h -v`
 2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/airgap --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCustomK3SAirgap -timeout=1h -v`
+
+### UI Offline Preferred Setting Test
+
+#### Description: 
+UI Offline Preferred Setting test that tests accessbility to v1 and v3 endpoints with various UI offline preferred settings.
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Custom Cluster Config](#custom-cluster)
+
+#### Table Tests
+1. `UI_Offline_Preferred_Dynamic`
+2. `UI_Offline_Preferred_Local`
+3. `UI_Offline_Preferred_Remote`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/airgap --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestUIOfflinePreferred -timeout=1h -v`
 
 ## Configurations
 
