@@ -7,6 +7,8 @@ FROM --platform=linux/amd64 alpine:3.22
 
 ARG TOFU_VERSION
 
+ARG KUBECTL_VERSION=1.32.3
+
 # Install runtime dependencies
 RUN apk add --no-cache \
     bash \
@@ -30,6 +32,10 @@ RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/dow
 # Install AWS CLI
 RUN pip3 install --no-cache-dir --break-system-packages awscli
 
+# Install kubectl
+RUN curl -Lo /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+    && chmod +x /usr/local/bin/kubectl
+
 # Create working directory
 WORKDIR /workspace
 
@@ -37,7 +43,8 @@ WORKDIR /workspace
 RUN tofu version && \
     make --version && \
     ansible --version && \
-    aws --version
+    aws --version && \
+    kubectl version --client
 
 # Default to sh shell (compatible with alpine and docker run sh -c)
 CMD ["/bin/sh"]
