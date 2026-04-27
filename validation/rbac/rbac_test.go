@@ -55,7 +55,7 @@ func (rb *RBTestSuite) sequentialTestRBAC(role rbac.Role, member string, user *m
 	standardClient, err := rb.client.AsUser(user)
 	require.NoError(rb.T(), err)
 
-	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(rb.client, rb.cluster.ID)
+	adminProject, adminNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rb.client, rb.cluster.ID)
 	require.NoError(rb.T(), err)
 
 	if member == rbac.StandardUser.String() {
@@ -96,6 +96,18 @@ func (rb *RBTestSuite) sequentialTestRBAC(role rbac.Role, member string, user *m
 	})
 	rb.Run("Validating if "+role.String()+" can delete a namespace from a project they own.", func() {
 		rbac.VerifyUserCanDeleteNamespace(rb.T(), rb.client, standardClient, adminProject, rb.cluster.ID, role)
+	})
+	rb.Run("Validating if "+role.String()+" can create HPA", func() {
+		rbac.VerifyUserCanCreateHPA(rb.T(), rb.client, standardClient, rb.cluster.ID, adminNamespace.Name, role)
+	})
+	rb.Run("Validating if "+role.String()+" can edit HPA", func() {
+		rbac.VerifyUserCanEditHPA(rb.T(), rb.client, standardClient, rb.cluster.ID, adminNamespace.Name, role)
+	})
+	rb.Run("Validating if "+role.String()+" can delete HPA", func() {
+		rbac.VerifyUserCanDeleteHPA(rb.T(), rb.client, standardClient, rb.cluster.ID, adminNamespace.Name, role)
+	})
+	rb.Run("Validating if "+role.String()+" can list HPA", func() {
+		rbac.VerifyUserCanListHPA(rb.T(), rb.client, standardClient, rb.cluster.ID, adminNamespace.Name, role)
 	})
 	rb.Run("Validating if member with role "+role.String()+" can add members to the cluster", func() {
 		rbac.VerifyUserCanAddClusterRoles(rb.T(), rb.client, standardClient, rb.cluster, role)
