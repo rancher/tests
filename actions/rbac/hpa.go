@@ -25,6 +25,12 @@ const (
 
 // CreateHPAWorkload creates a deployment with resource requests and limits required for HPA metrics.
 func CreateHPAWorkload(client *rancher.Client, clusterID, namespaceName string) (*appv1.Deployment, error) {
+	replicas := 1
+	createdDeployment, err := deploymentapi.CreateDeployment(client, clusterID, namespaceName, replicas, "", "", false, false, false, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create deployment: %w", err)
+	}
+
 	container := workloads.NewContainer(
 		hpaContainerName,
 		ImageName,
@@ -44,19 +50,12 @@ func CreateHPAWorkload(client *rancher.Client, clusterID, namespaceName string) 
 		},
 	}
 
-	replicas := 1
-	createdDeployment, err := deploymentapi.CreateDeployment(client, clusterID, namespaceName, replicas, "", "", false, false, false, false)
+	createdDeployment.Spec.Template.Spec.Containers = []corev1.Container{container}
+	updatedDeployment, err := deploymentapi.UpdateDeployment(client, clusterID, namespaceName, createdDeployment, true)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create workload: %w", err)
+		return nil, fmt.Errorf("failed to update deployment with container spec: %w", err)
 	}
-
-	logrus.Infof("Waiting for deployment %s to become active", createdDeployment.Name)
-	err = deploymentapi.WaitForDeploymentUpdate(client, clusterID, namespaceName, createdDeployment.Name)
-	if err != nil {
-		return nil, fmt.Errorf("failed waiting for deployment to be active: %w", err)
-	}
-
-	return createdDeployment, nil
+	return updatedDeployment, nil
 }
 
 // CreateHPA creates a workload (if nil) and an HPA targeting it, then waits for the HPA to become active.

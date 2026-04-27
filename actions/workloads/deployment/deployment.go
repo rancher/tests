@@ -122,6 +122,38 @@ func DeleteDeployment(client *rancher.Client, clusterID string, deployment *appv
 	return nil
 }
 
+// UpdateDeployment is a helper to update a deployment using wrangler context
+func UpdateDeployment(client *rancher.Client, clusterID, namespaceName string, deployment *appv1.Deployment, watchDeployment bool) (*appv1.Deployment, error) {
+	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	latestDeployment, err := wranglerContext.Apps.Deployment().Get(namespaceName, deployment.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	deployment.ResourceVersion = latestDeployment.ResourceVersion
+
+	updatedDeployment, err := wranglerContext.Apps.Deployment().Update(deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	if watchDeployment {
+		logrus.Infof("Waiting for deployment %s to become active", updatedDeployment.Name)
+		err = charts.WatchAndWaitDeployments(client, clusterID, namespaceName, metav1.ListOptions{
+			FieldSelector: "metadata.name=" + updatedDeployment.Name,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return updatedDeployment, nil
+}
+
 func RollbackDeployment(client *rancher.Client, clusterID, namespaceName string, deploymentName string, revision int) (string, error) {
 	steveclient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
