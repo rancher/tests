@@ -29,8 +29,8 @@ RUN curl -Lo /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/dow
     && rm /tmp/tofu.tar.gz \
     && chmod +x /usr/local/bin/tofu
 
-# Install AWS CLI
-RUN pip3 install --no-cache-dir --break-system-packages awscli
+# Install AWS CLI + Kubernetes Python library (required by ansible kubernetes.core collection)
+RUN pip3 install --no-cache-dir --break-system-packages awscli kubernetes
 
 # Install kubectl
 RUN curl -Lo /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
