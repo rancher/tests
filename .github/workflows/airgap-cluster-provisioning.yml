@@ -223,6 +223,9 @@ jobs:
               rke2Registries:
                 configs: {}
 
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
+
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
             awsSecretAccessKey: "$AWS_SECRET_KEY"
@@ -524,7 +527,10 @@ jobs:
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             registries:
               rke2Registries:
-                 configs: {}
+                configs: {}
+
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
@@ -828,7 +834,10 @@ jobs:
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             registries:
               rke2Registries:
-                 configs: {}
+                configs: {}
+
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
 
           awsEC2Configs:
             region: "${{ secrets.AWS_REGION }}"
