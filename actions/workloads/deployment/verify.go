@@ -33,6 +33,7 @@ const (
 	SUC                = "system-upgrade-controller"
 	Fleet              = "fleet-agent"
 	ClusterAgent       = "cattle-cluster-agent"
+	Rancher            = "rancher"
 	revisionAnnotation = "deployment.kubernetes.io/revision"
 	v3IDRegex          = "^c-[a-z0-9]{5}$"
 )
@@ -529,9 +530,12 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 
 	var downstreamClient *v1.Client
 	requiredDeployments := []string{ClusterAgent, Webhook, Fleet, SUC}
+	if cluster.Name == "local" {
+		requiredDeployments = []string{Rancher, Webhook, Fleet, SUC}
+	}
 	logrus.Debugf("Verifying all required deployments exist: %v", requiredDeployments)
 	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		if slices.Contains(requiredDeployments, ClusterAgent) {
+		if slices.Contains(requiredDeployments, ClusterAgent) || slices.Contains(requiredDeployments, Rancher) {
 			downstreamClient, err = client.Steve.ProxyDownstream(clusterID)
 			if err != nil {
 				return false, nil
