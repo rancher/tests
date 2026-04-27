@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/ingresses"
+	ingress "github.com/rancher/shepherd/extensions/ingresses"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	serviceapi "github.com/rancher/tests/actions/kubeapi/services"
 	"github.com/rancher/tests/actions/services"
@@ -54,7 +54,7 @@ func CreateServiceAndIngressTemplateForDeployment(client *rancher.Client, cluste
 
 	ingressNameForDeployment := namegen.AppendRandomString("test-ingress")
 	ingressHostName := namegen.AppendRandomString("test-host-") + "." + IngressHostName
-	ingressTemplateForDeployment := ingresses.NewIngressTemplate(ingressNameForDeployment, namespaceName, ingressHostName, paths)
+	ingressTemplateForDeployment := ingress.NewIngressTemplate(ingressNameForDeployment, namespaceName, ingressHostName, paths)
 
 	return &ingressTemplateForDeployment, nil
 }
