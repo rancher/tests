@@ -61,7 +61,7 @@ func CreateHPAWorkload(client *rancher.Client, clusterID, namespaceName string) 
 	}
 
 	freshDeployment.Spec.Template.Spec.Containers = []corev1.Container{container}
-	updatedDeployment, err := deploymentapi.UpdateDeployment(client, clusterID, namespaceName, freshDeployment, true)
+	updatedDeployment, err := workloadsapi.UpdateDeployment(client, clusterID, namespaceName, freshDeployment, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update deployment with container spec: %w", err)
 	}

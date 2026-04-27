@@ -290,12 +290,11 @@ func VerifyUserCanDeleteHPA(t *testing.T, client, standardClient *rancher.Client
 	hpa, _, err := CreateHPA(client, clusterID, namespaceName, nil)
 	require.NoError(t, err)
 
+	err = hpaapi.DeleteHPA(standardClient, clusterID, namespaceName, hpa.Name)
 	switch role {
 	case ClusterOwner, ProjectOwner, ProjectMember:
-		err = hpaapi.DeleteHPA(standardClient, clusterID, namespaceName, hpa.Name)
 		assert.NoError(t, err)
 	case ClusterMember:
-		err = hpaapi.DeleteHPA(standardClient, clusterID, namespaceName, hpa.Name)
 		assert.Error(t, err)
 		deleteErr := hpaapi.DeleteHPA(client, clusterID, namespaceName, hpa.Name)
 		assert.NoError(t, deleteErr)
@@ -311,10 +310,10 @@ func VerifyUserCanListHPA(t *testing.T, client, standardClient *rancher.Client, 
 	require.NoError(t, err)
 
 	hpaList, err := ListHPAsByName(standardClient, clusterID, namespaceName, hpa.Name)
-	require.NoError(t, err)
 
 	switch role {
 	case ClusterOwner, ProjectOwner, ProjectMember:
+		require.NoError(t, err)
 		assert.Len(t, hpaList, 1)
 		assert.Equal(t, hpa.Name, hpaList[0].Name)
 	case ClusterMember:
