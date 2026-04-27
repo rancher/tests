@@ -12,11 +12,13 @@ RUN apk add --no-cache \
     bash \
     curl \
     git \
+    make \
     openssh-client \
     python3 \
     py3-pip \
     ca-certificates \
     ansible \
+    && ln -sf /bin/bash /usr/bin/bash \
     && rm -rf /var/cache/apk/*
 
 # Install OpenTofu
@@ -33,6 +35,7 @@ WORKDIR /workspace
 
 # Verify installations
 RUN tofu version && \
+    make --version && \
     ansible --version && \
     aws --version
 
