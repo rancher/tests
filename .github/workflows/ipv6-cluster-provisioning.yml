@@ -246,6 +246,9 @@ jobs:
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
 
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
+          
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
@@ -592,6 +595,9 @@ jobs:
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
 
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
+          
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
@@ -938,6 +944,9 @@ jobs:
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
 
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
+          
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"

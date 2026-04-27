@@ -229,6 +229,9 @@ jobs:
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
 
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
+          
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
@@ -528,6 +531,9 @@ jobs:
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
 
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
+          
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"

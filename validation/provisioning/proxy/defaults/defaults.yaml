@@ -86,9 +86,6 @@ awsEC2Configs:
       volumeSize: 100
       roles: ["windows"]
 
-logging:
-   level: "info"
-
 terraform:
   proxy:
     proxyBastion: "<required>"
