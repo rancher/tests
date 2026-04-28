@@ -532,7 +532,7 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 	requiredDeployments := []string{ClusterAgent, Webhook, Fleet, SUC}
 	if cluster.Name == "local" {
 		clusterID = "local"
-		requiredDeployments = []string{Rancher, Webhook, Fleet, SUC}
+		requiredDeployments = []string{Rancher, Webhook, Fleet}
 	}
 	logrus.Debugf("Verifying all required deployments exist: %v", requiredDeployments)
 	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
