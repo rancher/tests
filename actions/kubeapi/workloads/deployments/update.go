@@ -1,9 +1,8 @@
 package deployments
 
 import (
-	"time"
-
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/defaults"
 	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	appv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -19,7 +18,7 @@ func UpdateDeployment(client *rancher.Client, clusterID, namespaceName string, d
 	}
 
 	backoff := kwait.Backoff{
-		Duration: 5 * time.Second,
+		Duration: defaults.FiveSecondTimeout,
 		Factor:   1,
 		Jitter:   0,
 		Steps:    10,
