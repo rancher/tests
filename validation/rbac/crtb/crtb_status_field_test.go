@@ -15,8 +15,8 @@ import (
 	"github.com/rancher/shepherd/extensions/kubectl"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
@@ -59,7 +59,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldCreateAndVerify() {
 	defer subSession.Cleanup()
 
 	log.Info("Create a project and a namespace in the project")
-	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(crtbs.client, crtbs.cluster.ID)
+	adminProject, _, err := projectapi.CreateProjectAndNamespace(crtbs.client, crtbs.cluster.ID)
 	require.NoError(crtbs.T(), err)
 
 	log.Infof("Create and add a standard user to downstream cluster with role Cluster Owner")
@@ -79,7 +79,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldVerifyReconciliation()
 	defer subSession.Cleanup()
 
 	log.Info("Create a project and a namespace in the project")
-	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(crtbs.client, crtbs.cluster.ID)
+	adminProject, _, err := projectapi.CreateProjectAndNamespace(crtbs.client, crtbs.cluster.ID)
 	require.NoError(crtbs.T(), err)
 
 	log.Infof("Create and add a standard user to downstream cluster with role Cluster Owner")
@@ -155,7 +155,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldUpdateAndVerify() {
 	require.NoError(crtbs.T(), err)
 
 	log.Info("Create a project and a namespace in the project")
-	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(crtbs.client, crtbs.cluster.ID)
+	adminProject, _, err := projectapi.CreateProjectAndNamespace(crtbs.client, crtbs.cluster.ID)
 	require.NoError(crtbs.T(), err)
 
 	log.Infof("Create and add a standard user to downstream cluster with custom cluster role template")
@@ -216,7 +216,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldKubectlDescribe() {
 	defer subSession.Cleanup()
 
 	log.Info("Create a project and a namespace in the project")
-	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(crtbs.client, crtbs.cluster.ID)
+	adminProject, _, err := projectapi.CreateProjectAndNamespace(crtbs.client, crtbs.cluster.ID)
 	require.NoError(crtbs.T(), err)
 
 	log.Infof("Create and add a standard user to downstream cluster with role Cluster Owner")

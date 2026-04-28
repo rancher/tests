@@ -15,13 +15,12 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/kubeapi"
 	"github.com/rancher/shepherd/extensions/vai"
 	"github.com/rancher/shepherd/pkg/environmentflag"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wait"
-	"github.com/rancher/tests/actions/kubeapi/secrets"
+	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	corev1 "k8s.io/api/core/v1"
@@ -155,19 +154,18 @@ func createSecretsForCluster(t *testing.T, client *rancher.Client, steveID strin
 
 	clusterID, err := clusters.GetClusterIDByName(client, clusterName)
 	require.NoError(t, err)
-	secretResource, err := kubeapi.ResourceForClient(client, clusterID, "default", secrets.SecretGroupVersionResource)
-	require.NoError(t, err)
 
 	for i := 0; i < scale; i++ {
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: fmt.Sprintf("encryption-key-rotation-test-%d-", i),
+				Namespace:    "default",
 			},
 			Data: map[string][]byte{
 				"key": []byte(namegen.RandStringLower(5)),
 			},
 		}
-		_, err = secrets.CreateSecret(secretResource, secret)
+		_, err = secretapi.CreateSecretWithTemplate(client, clusterID, secret)
 		require.NoError(t, err)
 	}
 }

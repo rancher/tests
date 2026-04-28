@@ -8,13 +8,13 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	configmapapi "github.com/rancher/tests/actions/kubeapi/configmaps"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
@@ -56,7 +56,7 @@ func (cm *ConfigMapRBACTestSuite) SetupSuite() {
 	cm.cluster, err = cm.client.Management.Cluster.ByID(clusterID)
 	require.NoError(cm.T(), err)
 
-	cm.ctxAsAdmin, err = clusterapi.GetClusterWranglerContext(cm.client, clusterID)
+	cm.ctxAsAdmin, err = extclusterapi.GetClusterWranglerContext(cm.client, clusterID)
 	require.NoError(cm.T(), err)
 }
 
@@ -77,7 +77,7 @@ func (cm *ConfigMapRBACTestSuite) TestCreateConfigmapAsVolume() {
 
 	for _, tt := range tests {
 		cm.Run("Validate config map creation for user with role "+tt.role.String(), func() {
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(cm.client, cm.cluster.ID)
 			assert.NoError(cm.T(), err)
 
 			_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
@@ -116,7 +116,7 @@ func (cm *ConfigMapRBACTestSuite) TestCreateConfigmapAsEnvVar() {
 	}
 	for _, tt := range tests {
 		cm.Run("Validate config map creation of config map and verify adding it as a an env variable for user with role "+tt.role.String(), func() {
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(cm.client, cm.cluster.ID)
 			assert.NoError(cm.T(), err)
 
 			_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
@@ -156,7 +156,7 @@ func (cm *ConfigMapRBACTestSuite) TestUpdateConfigmap() {
 
 	for _, tt := range tests {
 		cm.Run("Validate updating config map for user with role "+tt.role.String(), func() {
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(cm.client, cm.cluster.ID)
 			assert.NoError(cm.T(), err)
 
 			_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
@@ -166,7 +166,7 @@ func (cm *ConfigMapRBACTestSuite) TestUpdateConfigmap() {
 			assert.NoError(cm.T(), err)
 
 			configmapCreate.Data["foo1"] = "bar1"
-			userDownstreamWranglerContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
+			userDownstreamWranglerContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
 			assert.NoError(cm.T(), err)
 			configMapUpdatedByUser, userErr := userDownstreamWranglerContext.Core.ConfigMap().Update(configmapCreate)
 
@@ -202,7 +202,7 @@ func (cm *ConfigMapRBACTestSuite) TestListConfigmaps() {
 	}
 	for _, tt := range tests {
 		cm.Run("Validate listing config maps for user with role "+tt.role.String(), func() {
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(cm.client, cm.cluster.ID)
 			assert.NoError(cm.T(), err)
 
 			_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
@@ -211,7 +211,7 @@ func (cm *ConfigMapRBACTestSuite) TestListConfigmaps() {
 			configMapCreatedByAdmin, err := configmapapi.CreateConfigMap(cm.client, cm.cluster.ID, namespace.Name, nil, nil, data)
 			assert.NoError(cm.T(), err)
 
-			downstreamWranglerContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
+			downstreamWranglerContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
 			assert.NoError(cm.T(), err)
 			configMapListAsUser, err := downstreamWranglerContext.Core.ConfigMap().List(namespace.Name, metaV1.ListOptions{
 				FieldSelector: "metadata.name=" + configMapCreatedByAdmin.Name,
@@ -246,7 +246,7 @@ func (cm *ConfigMapRBACTestSuite) TestDeleteConfigmap() {
 
 	for _, tt := range tests {
 		cm.Run("Validate deletion of config map for user with role "+tt.role.String(), func() {
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cm.client, cm.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(cm.client, cm.cluster.ID)
 			assert.NoError(cm.T(), err)
 
 			_, standardUserClient, err := rbac.AddUserWithRoleToCluster(cm.client, tt.member, tt.role.String(), cm.cluster, adminProject)
@@ -255,7 +255,7 @@ func (cm *ConfigMapRBACTestSuite) TestDeleteConfigmap() {
 			configMapCreatedByAdmin, err := configmapapi.CreateConfigMap(cm.client, cm.cluster.ID, namespace.Name, nil, nil, data)
 			assert.NoError(cm.T(), err)
 
-			userDownstreamWranglerContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
+			userDownstreamWranglerContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
 			assert.NoError(cm.T(), err)
 			err = userDownstreamWranglerContext.Core.ConfigMap().Delete(namespace.Name, configMapCreatedByAdmin.Name, &metaV1.DeleteOptions{})
 			configMapListAsAdmin, listErr := cm.ctxAsAdmin.Core.ConfigMap().List(namespace.Name, metaV1.ListOptions{
@@ -294,7 +294,7 @@ func (cm *ConfigMapRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
 	err = projectapi.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(cm.T(), err)
 
-	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, cm.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespace(standardUserClient, cm.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns-"), "", nil, nil)
 	require.NoError(cm.T(), err)
 
 	configMapCreatedByAdmin, err := configmapapi.CreateConfigMap(cm.client, cm.cluster.ID, namespace.Name, nil, nil, data)
@@ -306,7 +306,7 @@ func (cm *ConfigMapRBACTestSuite) TestCRUDConfigmapAsClusterMember() {
 	_, err = deployment.CreateDeployment(standardUserClient, cm.cluster.ID, namespace.Name, 1, "", configMapCreatedByClusterMember.Name, true, false, false, true)
 	require.NoError(cm.T(), err)
 
-	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
+	standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, cm.cluster.ID)
 	require.NoError(cm.T(), err)
 	configMapListAsClusterMember, err := standardUserContext.Core.ConfigMap().List(namespace.Name, metaV1.ListOptions{})
 	require.NoError(cm.T(), err)

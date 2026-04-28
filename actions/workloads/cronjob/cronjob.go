@@ -7,7 +7,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/wait"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -18,7 +18,7 @@ import (
 
 // CreateCronJob is a helper to create a cronjob in a namespace using wrangler context
 func CreateCronJob(client *rancher.Client, clusterID, namespaceName, schedule string, podTemplate corev1.PodTemplateSpec, watchCronJob bool) (*batchv1.CronJob, error) {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	ctx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func CreateCronJobFromConfig(client *v1.Client, clusterID string, cronjob *batch
 
 // WatchAndWaitCronJobWrangler is a helper to watch and wait for cronjob to be active using wrangler context
 func WatchAndWaitCronJobWrangler(client *rancher.Client, clusterID, namespaceName string, cronJob *batchv1.CronJob) error {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	ctx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func WatchAndWaitCronJobWrangler(client *rancher.Client, clusterID, namespaceNam
 
 // DeleteCronJob is a helper to delete a cronjob in a namespace using wrangler context
 func DeleteCronJob(client *rancher.Client, clusterID string, cronjob *batchv1.CronJob, waitForDelete bool) error {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func DeleteCronJob(client *rancher.Client, clusterID string, cronjob *batchv1.Cr
 
 // WaitForDeleteCronJob is a helper to wait for cronjob to delete
 func WaitForDeleteCronJob(client *rancher.Client, clusterID string, cronjob *batchv1.CronJob) error {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}

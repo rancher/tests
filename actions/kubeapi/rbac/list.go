@@ -5,7 +5,7 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/api/scheme"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -63,7 +63,7 @@ func ListClusterRoleBindings(client *rancher.Client, clusterName string, listOpt
 
 // ListGlobalRoleBindings is a helper function that uses the dynamic client to list globalrolebindings from local cluster.
 func ListGlobalRoleBindings(client *rancher.Client, listOpt metav1.ListOptions) (*v3.GlobalRoleBindingList, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
+	dynamicClient, err := client.GetDownStreamClusterClient(extclusterapi.LocalCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func ListGlobalRoleBindings(client *rancher.Client, listOpt metav1.ListOptions) 
 
 // ListClusterRoleTemplateBindings is a helper function that uses the dynamic client to list clusterroletemplatebindings from local cluster.
 func ListClusterRoleTemplateBindings(client *rancher.Client, listOpt metav1.ListOptions) (*v3.ClusterRoleTemplateBindingList, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
+	dynamicClient, err := client.GetDownStreamClusterClient(extclusterapi.LocalCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func ListClusterRoleTemplateBindings(client *rancher.Client, listOpt metav1.List
 
 // ListGlobalRoles is a helper function that uses the dynamic client to list globalroles from local cluster.
 func ListGlobalRoles(client *rancher.Client, listOpt metav1.ListOptions) (*v3.GlobalRoleList, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
+	dynamicClient, err := client.GetDownStreamClusterClient(extclusterapi.LocalCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func ListGlobalRoles(client *rancher.Client, listOpt metav1.ListOptions) (*v3.Gl
 
 // ListRoleTemplates is a helper function that uses the dynamic client to list role templates from local cluster.
 func ListRoleTemplates(client *rancher.Client, listOpt metav1.ListOptions) (*v3.RoleTemplateList, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
+	dynamicClient, err := client.GetDownStreamClusterClient(extclusterapi.LocalCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func ListRoleTemplates(client *rancher.Client, listOpt metav1.ListOptions) (*v3.
 
 // ListProjectRoleTemplateBindings is a helper function that uses the dynamic client to list projectroletemplatebindings from local cluster.
 func ListProjectRoleTemplateBindings(client *rancher.Client, listOpt metav1.ListOptions) (*v3.ProjectRoleTemplateBindingList, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
+	dynamicClient, err := client.GetDownStreamClusterClient(extclusterapi.LocalCluster)
 	if err != nil {
 		return nil, err
 	}

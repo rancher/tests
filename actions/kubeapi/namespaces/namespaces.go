@@ -7,11 +7,9 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
-	"github.com/rancher/shepherd/pkg/api/scheme"
+	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -23,43 +21,45 @@ const (
 	InitialUsedResourceQuotaValue           = "0"
 )
 
-// NamespaceGroupVersionResource is the required Group Version Resource for accessing namespaces in a cluster,
-// using the dynamic client.
-var NamespaceGroupVersionResource = schema.GroupVersionResource{
-	Group:    "",
-	Version:  "v1",
-	Resource: "namespaces",
+// GetNamespacesInProject retrieves all namespaces in a specific project within a cluster
+func GetNamespacesInProject(client *rancher.Client, clusterID, projectName string) ([]*corev1.Namespace, error) {
+	nsList, err := extnamespaceapi.ListNamespaces(client, clusterID, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", ProjectIDAnnotation, projectName),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list namespaces for project %s: %w", projectName, err)
+	}
+
+	namespaces := make([]*corev1.Namespace, 0, len(nsList.Items))
+	for i := range nsList.Items {
+		namespaces = append(namespaces, &nsList.Items[i])
+	}
+
+	return namespaces, nil
 }
 
-// ContainerDefaultResourceLimit sets the container default resource limit in a string
-// limitsCPU and requestsCPU in form of "3m"
-// limitsMemory and requestsMemory in the form of "3Mi"
-func ContainerDefaultResourceLimit(limitsCPU, limitsMemory, requestsCPU, requestsMemory string) string {
-	containerDefaultResourceLimit := fmt.Sprintf("{\"limitsCpu\": \"%s\", \"limitsMemory\":\"%s\",\"requestsCpu\":\"%s\",\"requestsMemory\":\"%s\"}",
-		limitsCPU, limitsMemory, requestsCPU, requestsMemory)
-	return containerDefaultResourceLimit
-}
-
-// GetNamespaceByName is a helper function that returns the namespace by name in a specific cluster, uses ListNamespaces to get the namespace.
-func GetNamespaceByName(client *rancher.Client, clusterID, namespaceName string) (*corev1.Namespace, error) {
-	namespace := new(corev1.Namespace)
-
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
+// GetNamespaceAnnotation is a helper to retrieve and parse a namespace annotation value as a map
+func GetNamespaceAnnotation(client *rancher.Client, clusterID string, namespaceName, annotationKey string) (map[string]interface{}, error) {
+	namespace, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 	if err != nil {
 		return nil, err
 	}
 
-	namespaceResource := dynamicClient.Resource(NamespaceGroupVersionResource).Namespace("")
-	unstructuredNamespace, err := namespaceResource.Get(context.TODO(), namespaceName, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
+	if namespace.Annotations == nil {
+		return nil, fmt.Errorf("namespace %q has no annotations", namespaceName)
 	}
 
-	if err = scheme.Scheme.Convert(unstructuredNamespace, namespace, unstructuredNamespace.GroupVersionKind()); err != nil {
-		return nil, err
+	nsAnnotation, exists := namespace.Annotations[annotationKey]
+	if !exists || nsAnnotation == "" {
+		return nil, fmt.Errorf("annotation %q not found on namespace %q", annotationKey, namespaceName)
 	}
 
-	return namespace, nil
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(nsAnnotation), &data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal annotation %q: %w", annotationKey, err)
+	}
+
+	return data, nil
 }
 
 // WaitForProjectIDUpdate is a helper that waits for the project-id annotation and label to be updated in a specified namespace
@@ -73,8 +73,7 @@ func WaitForProjectIDUpdate(client *rancher.Client, clusterID, projectName, name
 	}
 
 	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
-
-		namespace, pollErr := GetNamespaceByName(client, clusterID, namespaceName)
+		namespace, pollErr := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 		if pollErr != nil {
 			return false, pollErr
 		}
@@ -101,97 +100,35 @@ func WaitForProjectIDUpdate(client *rancher.Client, clusterID, projectName, name
 	return nil
 }
 
-// UpdateNamespaceResourceQuotaAnnotation updates the resource quota annotation on a namespace
-func UpdateNamespaceResourceQuotaAnnotation(client *rancher.Client, clusterID string, namespaceName string, existingLimits map[string]string, extendedLimits map[string]string) error {
-	wranglerCtx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
-	if err != nil {
-		return err
-	}
-
-	limit := make(map[string]interface{}, len(existingLimits)+1)
-	for k, v := range existingLimits {
-		limit[k] = v
-	}
-	if len(extendedLimits) > 0 {
-		limit["extended"] = extendedLimits
-	}
-
-	quota := map[string]interface{}{"limit": limit}
-	quotaJSON, err := json.Marshal(quota)
-	if err != nil {
-		return fmt.Errorf("marshal resource quota annotation: %w", err)
-	}
-
-	quotaStr := string(quotaJSON)
-
-	ns, err := wranglerCtx.Core.Namespace().Get(namespaceName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-
-	if ns.Annotations == nil {
-		ns.Annotations = make(map[string]string)
-	}
-
-	ns.Annotations[ResourceQuotaAnnotation] = quotaStr
-
-	_, err = UpdateNamespace(client, clusterID, ns)
-	if err != nil {
-		return fmt.Errorf("failed to update namespace %s with resource quota annotation: %w", namespaceName, err)
-	}
-
-	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
-		updatedNS, err := wranglerCtx.Core.Namespace().Get(namespaceName, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-		if updatedNS.Annotations[ResourceQuotaAnnotation] == quotaStr {
-			return true, nil
-		}
-		return false, nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to verify namespace %s annotation update: %w", namespaceName, err)
-	}
-
-	return nil
+// ContainerDefaultResourceLimit sets the container default resource limit in a string
+// limitsCPU and requestsCPU in form of "3m"
+// limitsMemory and requestsMemory in the form of "3Mi"
+func ContainerDefaultResourceLimit(limitsCPU, limitsMemory, requestsCPU, requestsMemory string) string {
+	containerDefaultResourceLimit := fmt.Sprintf("{\"limitsCpu\": \"%s\", \"limitsMemory\":\"%s\",\"requestsCpu\":\"%s\",\"requestsMemory\":\"%s\"}",
+		limitsCPU, limitsMemory, requestsCPU, requestsMemory)
+	return containerDefaultResourceLimit
 }
 
-// MoveNamespaceToProject updates the project annotation/label to move the namespace into a different project
-func MoveNamespaceToProject(client *rancher.Client, clusterID, namespaceName, newProjectName string) error {
-	ns, err := GetNamespaceByName(client, clusterID, namespaceName)
-	if err != nil {
-		return fmt.Errorf("failed to get namespace %s: %w", namespaceName, err)
+// GetConditionStatusAndMessageFromAnnotation is a helper to parse the annotation value for a specific condition type and return the status and message.
+func GetConditionStatusAndMessageFromAnnotation(annotation string, conditionType string) (string, string, error) {
+	var annotationData map[string][]map[string]string
+	if err := json.Unmarshal([]byte(annotation), &annotationData); err != nil {
+		return "", "", fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	if ns.Annotations == nil {
-		ns.Annotations = make(map[string]string)
-	}
-	if ns.Labels == nil {
-		ns.Labels = make(map[string]string)
+	conditions, ok := annotationData["Conditions"]
+	if !ok {
+		return "", "", fmt.Errorf("no 'Conditions' found in annotation")
 	}
 
-	ns.Annotations[ProjectIDAnnotation] = fmt.Sprintf("%s:%s", clusterID, newProjectName)
-	ns.Labels[ProjectIDAnnotation] = newProjectName
+	for _, condition := range conditions {
+		if condition["Type"] == conditionType {
+			status := condition["Status"]
+			message := condition["Message"]
 
-	clusterContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
-	if err != nil {
-		return fmt.Errorf("failed to get wrangler context for cluster %s: %w", clusterID, err)
-	}
-	latestNS, err := GetNamespaceByName(client, clusterID, namespaceName)
-	if err != nil {
-		return fmt.Errorf("failed to fetch namespace %s: %w", namespaceName, err)
-	}
-	ns.ResourceVersion = latestNS.ResourceVersion
-
-	if _, err := clusterContext.Core.Namespace().Update(ns); err != nil {
-		return fmt.Errorf("failed to update namespace %s with new project annotation: %w", namespaceName, err)
+			return status, message, nil
+		}
 	}
 
-	if err := WaitForProjectIDUpdate(client, clusterID, newProjectName, namespaceName); err != nil {
-		return fmt.Errorf("project ID annotation/label not updated for namespace %s: %w", namespaceName, err)
-	}
-
-	return nil
+	return "", "", fmt.Errorf("no condition of type '%s' found", conditionType)
 }

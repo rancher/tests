@@ -1,10 +1,10 @@
 package secrets
 
 import (
-	"context"
+	"fmt"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/pkg/api/scheme"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -14,33 +14,19 @@ type SecretList struct {
 	Items []corev1.Secret
 }
 
-// ListSecrets is a helper function that uses the dynamic client to list secrets in a cluster with its list options.
+// ListSecrets is a helper function that uses the wrangler context to list secrets in a cluster
 func ListSecrets(client *rancher.Client, clusterID, namespace string, listOpts metav1.ListOptions) (*SecretList, error) {
-	secretList := new(SecretList)
-
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get cluster context: %w", err)
 	}
 
-	secretResource := dynamicClient.Resource(SecretGroupVersionResource).Namespace(namespace)
-	secrets, err := secretResource.List(context.TODO(), listOpts)
+	secrets, err := clusterContext.Core.Secret().List(namespace, listOpts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list secrets: %w", err)
 	}
 
-	for _, unstructuredSecret := range secrets.Items {
-		newSecret := &corev1.Secret{}
-
-		err := scheme.Scheme.Convert(&unstructuredSecret, newSecret, unstructuredSecret.GroupVersionKind())
-		if err != nil {
-			return nil, err
-		}
-
-		secretList.Items = append(secretList.Items, *newSecret)
-	}
-
-	return secretList, nil
+	return &SecretList{Items: secrets.Items}, nil
 }
 
 // Names is a method that accepts SecretList as a receiver,

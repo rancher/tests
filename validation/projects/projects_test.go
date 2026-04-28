@@ -9,11 +9,12 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
-	"github.com/rancher/tests/actions/projects"
+	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
@@ -55,7 +56,7 @@ func (pr *ProjectsTestSuite) TestProjectsCrudLocalCluster() {
 	defer subSession.Cleanup()
 
 	log.Info("Create a project in the local cluster and verify that the project can be listed.")
-	createdProject, err := projectapi.CreateProject(pr.client, clusterapi.LocalCluster)
+	createdProject, err := projectapi.CreateProject(pr.client, extclusterapi.LocalCluster)
 	require.NoError(pr.T(), err)
 
 	projectList, err := pr.client.WranglerContext.Mgmt.Project().List(createdProject.Namespace, metav1.ListOptions{
@@ -70,7 +71,7 @@ func (pr *ProjectsTestSuite) TestProjectsCrudLocalCluster() {
 		currentProject.Labels = make(map[string]string)
 	}
 	currentProject.Labels["hello"] = "world"
-	_, err = pr.client.WranglerContext.Mgmt.Project().Update(&currentProject)
+	_, err = projectapi.UpdateProject(pr.client, &currentProject)
 	require.NoError(pr.T(), err, "Failed to update project.")
 
 	updatedProjectList, err := pr.client.WranglerContext.Mgmt.Project().List(createdProject.Namespace, metav1.ListOptions{
@@ -104,7 +105,7 @@ func (pr *ProjectsTestSuite) TestProjectsCrudDownstreamCluster() {
 		currentProject.Labels = make(map[string]string)
 	}
 	currentProject.Labels["hello"] = "world"
-	_, err = standardUserClient.WranglerContext.Mgmt.Project().Update(currentProject)
+	_, err = projectapi.UpdateProject(standardUserClient, currentProject)
 	require.NoError(pr.T(), err, "Failed to update project.")
 
 	updatedProjectList, err := standardUserClient.WranglerContext.Mgmt.Project().List(createdProject.Namespace, metav1.ListOptions{
@@ -123,14 +124,14 @@ func (pr *ProjectsTestSuite) TestDeleteSystemProject() {
 	defer subSession.Cleanup()
 
 	log.Info("Delete the System Project in the local cluster.")
-	projectList, err := pr.client.WranglerContext.Mgmt.Project().List(clusterapi.LocalCluster, metav1.ListOptions{
+	projectList, err := pr.client.WranglerContext.Mgmt.Project().List(extclusterapi.LocalCluster, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", projectapi.SystemProjectLabel, "true"),
 	})
 	require.NoError(pr.T(), err)
 	require.Equal(pr.T(), 1, len(projectList.Items), "Expected one project in the list")
 
 	systemProjectName := projectList.Items[0].ObjectMeta.Name
-	err = projectapi.DeleteProject(pr.client, clusterapi.LocalCluster, systemProjectName, false)
+	err = projectapi.DeleteProject(pr.client, extclusterapi.LocalCluster, systemProjectName, false)
 	require.Error(pr.T(), err, "Failed to delete project")
 	expectedErrorMessage := "admission webhook \"rancher.cattle.io.projects.management.cattle.io\" denied the request: System Project cannot be deleted"
 	require.Equal(pr.T(), expectedErrorMessage, err.Error())
@@ -158,26 +159,21 @@ func (pr *ProjectsTestSuite) TestMoveNamespaceOutOfProject() {
 	require.NoError(pr.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Create a project in the downstream cluster and a namespace in the project.")
-	createdProject, createdNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(pr.client, pr.cluster.ID)
+	createdProject, createdNamespace, err := projectapi.CreateProjectAndNamespace(pr.client, pr.cluster.ID)
 	require.NoError(pr.T(), err)
-
-	log.Info("Verify that the namespace has the label and annotation referencing the project.")
 	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, pr.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(pr.T(), err)
 
 	log.Info("Move the namespace out of the project.")
-	updatedNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, pr.cluster.ID, createdNamespace.Name)
+	updatedNamespace, err := extnamespaceapi.GetNamespaceByName(standardUserClient, pr.cluster.ID, createdNamespace.Name)
 	require.NoError(pr.T(), err)
 	delete(updatedNamespace.Labels, namespaceapi.ProjectIDAnnotation)
 	delete(updatedNamespace.Annotations, namespaceapi.ProjectIDAnnotation)
 
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(pr.client, pr.cluster.ID)
-	require.NoError(pr.T(), err)
-
-	currentNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, pr.cluster.ID, updatedNamespace.Name)
+	currentNamespace, err := extnamespaceapi.GetNamespaceByName(standardUserClient, pr.cluster.ID, updatedNamespace.Name)
 	require.NoError(pr.T(), err)
 	updatedNamespace.ResourceVersion = currentNamespace.ResourceVersion
-	_, err = downstreamContext.Core.Namespace().Update(updatedNamespace)
+	_, err = extnamespaceapi.UpdateNamespace(standardUserClient, pr.cluster.ID, updatedNamespace)
 	require.NoError(pr.T(), err, "Failed to move the namespace out of the project")
 
 	log.Info("Verify that the namespace does not have the label and annotation referencing the project.")
@@ -207,10 +203,9 @@ func (pr *ProjectsTestSuite) TestProjectWithResourceQuotaAndContainerDefaultReso
 	projectTemplate.Spec.ContainerDefaultResourceLimit.RequestsMemory = memoryReservation
 	projectTemplate.Spec.NamespaceDefaultResourceQuota.Limit.Pods = namespacePodLimit
 	projectTemplate.Spec.ResourceQuota.Limit.Pods = projectPodLimit
-	createdProject, createdNamespace, err := createProjectAndNamespace(standardUserClient, pr.cluster.ID, projectTemplate)
+	createdProject, createdNamespace, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, pr.cluster.ID, projectTemplate)
 	require.NoError(pr.T(), err)
 
-	log.Info("Verify that the namespace has the label and annotation referencing the project.")
 	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, pr.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(pr.T(), err)
 
@@ -224,19 +219,19 @@ func (pr *ProjectsTestSuite) TestProjectWithResourceQuotaAndContainerDefaultReso
 	require.Equal(pr.T(), memoryReservation, projectSpec.ContainerDefaultResourceLimit.RequestsMemory, "Memory reservation mismatch")
 
 	log.Info("Verify that the namespace has the annotation: field.cattle.io/resourceQuota.")
-	err = checkAnnotationExistsInNamespace(standardUserClient, pr.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, pr.cluster.ID, createdNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(pr.T(), err, "'field.cattle.io/resourceQuota' annotation should exist")
 
 	log.Info("Verify that the resource quota validation for the namespace is successful.")
-	err = checkNamespaceResourceQuotaValidationStatus(standardUserClient, pr.cluster.ID, createdNamespace.Name, namespacePodLimit, true, "")
+	err = namespaceapi.VerifyNamespacePodQuotaValidationStatus(standardUserClient, pr.cluster.ID, createdNamespace.Name, namespacePodLimit, true, "")
 	require.NoError(pr.T(), err)
 
 	log.Info("Verify that the resource quota object is created for the namespace and the pod limit in the resource quota is set to 2.")
-	err = checkNamespaceResourceQuota(standardUserClient, pr.cluster.ID, createdNamespace.Name, 2)
+	err = namespaceapi.VerifyNamespacePodResourceQuota(standardUserClient, pr.cluster.ID, createdNamespace.Name, 2)
 	require.NoError(pr.T(), err)
 
 	log.Info("Verify that the limit range object is created for the namespace and the resource limit in the limit range is accurate.")
-	err = checkLimitRange(standardUserClient, pr.cluster.ID, createdNamespace.Name, cpuLimit, cpuReservation, memoryLimit, memoryReservation)
+	err = namespaceapi.VerifyLimitRange(standardUserClient, pr.cluster.ID, createdNamespace.Name, cpuLimit, cpuReservation, memoryLimit, memoryReservation)
 	require.NoError(pr.T(), err)
 
 	log.Info("Create a deployment in the namespace with two replicas and verify that the pods are created.")
@@ -244,7 +239,7 @@ func (pr *ProjectsTestSuite) TestProjectWithResourceQuotaAndContainerDefaultReso
 	require.NoError(pr.T(), err, "Failed to create deployment in the namespace")
 
 	log.Info("Verify that the resource limits and requests for the container in the pod spec is accurate.")
-	err = checkContainerResources(standardUserClient, pr.cluster.ID, createdNamespace.Name, createdDeployment.Name, cpuLimit, cpuReservation, memoryLimit, memoryReservation)
+	err = podapi.VerifyPodContainerResources(standardUserClient, pr.cluster.ID, createdNamespace.Name, createdDeployment.Name, cpuLimit, cpuReservation, memoryLimit, memoryReservation)
 	require.NoError(pr.T(), err)
 }
 

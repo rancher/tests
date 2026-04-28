@@ -8,11 +8,11 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/cronjob"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -69,7 +69,7 @@ func (rcj *RbacCronJobTestSuite) TestCreateCronJob() {
 	for _, tt := range tests {
 		rcj.Run("Validate cronjob creation as user with role "+tt.role.String(), func() {
 			log.Info("Creating a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rcj.client, rcj.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rcj.client, rcj.cluster.ID)
 			assert.NoError(rcj.T(), err)
 
 			log.Infof("Creating a standard user and add the user to a cluster/project with role %s", tt.role)
@@ -108,7 +108,7 @@ func (rcj *RbacCronJobTestSuite) TestListCronJob() {
 	for _, tt := range tests {
 		rcj.Run("Validate listing cronjob as user with role "+tt.role.String(), func() {
 			log.Info("Creating a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rcj.client, rcj.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rcj.client, rcj.cluster.ID)
 			assert.NoError(rcj.T(), err)
 
 			log.Infof("Creating a standard user and add the user to a cluster/project with role %s", tt.role)
@@ -121,7 +121,7 @@ func (rcj *RbacCronJobTestSuite) TestListCronJob() {
 			assert.NoError(rcj.T(), err, "failed to create cronjob")
 
 			log.Infof("As a %v, listing the cronjob", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rcj.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rcj.cluster.ID)
 			assert.NoError(rcj.T(), err)
 			cronJobList, err := standardUserContext.Batch.CronJob().List(namespace.Name, metav1.ListOptions{})
 			switch tt.role.String() {
@@ -155,7 +155,7 @@ func (rcj *RbacCronJobTestSuite) TestUpdateCronJob() {
 	for _, tt := range tests {
 		rcj.Run("Validate updating cronjob as user with role "+tt.role.String(), func() {
 			log.Info("Creating a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rcj.client, rcj.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rcj.client, rcj.cluster.ID)
 			assert.NoError(rcj.T(), err)
 
 			log.Infof("Creating a standard user and add the user to a cluster/project with role %s", tt.role)
@@ -168,9 +168,9 @@ func (rcj *RbacCronJobTestSuite) TestUpdateCronJob() {
 			assert.NoError(rcj.T(), err, "failed to create cronjob")
 
 			log.Infof("As a %v, updating the cronjob %s with a new label.", tt.role.String(), createdCronJob.Name)
-			adminContext, err := clusterapi.GetClusterWranglerContext(rcj.client, rcj.cluster.ID)
+			adminContext, err := extclusterapi.GetClusterWranglerContext(rcj.client, rcj.cluster.ID)
 			assert.NoError(rcj.T(), err)
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rcj.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rcj.cluster.ID)
 			assert.NoError(rcj.T(), err)
 
 			latestCronJob, err := adminContext.Batch.CronJob().Get(namespace.Name, createdCronJob.Name, metav1.GetOptions{})
@@ -214,7 +214,7 @@ func (rcj *RbacCronJobTestSuite) TestDeleteCronJob() {
 	for _, tt := range tests {
 		rcj.Run("Validate deleting cronjob as user with role "+tt.role.String(), func() {
 			log.Info("Creating a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rcj.client, rcj.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rcj.client, rcj.cluster.ID)
 			assert.NoError(rcj.T(), err)
 
 			log.Infof("Creating a standard user and add the user to a cluster/project with role %s", tt.role)
@@ -260,7 +260,7 @@ func (rcj *RbacCronJobTestSuite) TestCrudCronJobAsClusterMember() {
 	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rcj.T(), err)
 
-	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, rcj.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespace(userClient, rcj.cluster.ID, createdProject.Name, namegen.AppendRandomString("ns-"), "", nil, nil)
 	require.NoError(rcj.T(), err)
 
 	log.Infof("As a %v, creating a cronjob in the namespace %v", role, namespace.Name)
@@ -269,7 +269,7 @@ func (rcj *RbacCronJobTestSuite) TestCrudCronJobAsClusterMember() {
 	require.NoError(rcj.T(), err, "failed to create cronjob")
 
 	log.Infof("As a %v, listing the cronjob", role)
-	standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rcj.cluster.ID)
+	standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rcj.cluster.ID)
 	assert.NoError(rcj.T(), err)
 	cronJobList, err := standardUserContext.Batch.CronJob().List(namespace.Name, metav1.ListOptions{})
 	require.NoError(rcj.T(), err, "failed to list cronjobs")

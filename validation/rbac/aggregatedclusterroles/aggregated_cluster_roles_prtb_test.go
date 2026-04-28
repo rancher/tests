@@ -9,14 +9,15 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/users"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
+	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/secrets"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -75,7 +76,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) acrCreateTestResourcesForPrtb(c
 	createdProject, err := projectapi.CreateProject(client, cluster.ID)
 	require.NoError(acrp.T(), err, "Failed to create project")
 
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(client, cluster.ID)
+	downstreamContext, err := extclusterapi.GetClusterWranglerContext(client, cluster.ID)
 	require.NoError(acrp.T(), err, "Failed to get downstream cluster context")
 
 	var createdNamespaces []*corev1.Namespace
@@ -85,7 +86,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) acrCreateTestResourcesForPrtb(c
 
 	numNamespaces := 2
 	for i := 0; i < numNamespaces; i++ {
-		namespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, cluster.ID, createdProject.Name, nil)
+		namespace, err := namespaceapi.CreateNamespace(client, cluster.ID, createdProject.Name, namegen.AppendRandomString("testns-"), "", nil, nil)
 		require.NoError(acrp.T(), err, "Failed to create namespace")
 		createdNamespaces = append(createdNamespaces, namespace)
 
@@ -101,7 +102,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) acrCreateTestResourcesForPrtb(c
 		secretData := map[string][]byte{
 			"hello": []byte("world"),
 		}
-		createdSecret, err := secrets.CreateSecret(client, cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
+		createdSecret, err := secretapi.CreateSecret(client, cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 		require.NoError(acrp.T(), err, "Failed to create secret in namespace %s", namespace.Name)
 		createdSecrets = append(createdSecrets, createdSecret)
 	}
@@ -132,7 +133,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithProjectM
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 8, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, childRTName, mainRTName)
@@ -140,9 +141,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithProjectM
 	require.Equal(acrp.T(), 4, len(downstreamCRs.Items))
 
 	log.Info("Verifying that the aggregated cluster role in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, mainRTName, []string{childRTName})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, mainRTName, []string{childRTName})
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for project-mgmt resources")
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
@@ -159,7 +160,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithProjectM
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -192,7 +193,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithRegularR
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 4, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, childRTName, mainRTName)
@@ -200,7 +201,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithRegularR
 	require.Equal(acrp.T(), 4, len(downstreamCRs.Items))
 
 	log.Info("Verifying that the aggregated cluster role in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, mainRTName, []string{childRTName})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR")
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
@@ -217,7 +218,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithRegularR
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -254,7 +255,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithMgmtAndR
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, childRTName, mainRTName)
@@ -262,9 +263,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithMgmtAndR
 	require.Equal(acrp.T(), 4, len(downstreamCRs.Items))
 
 	log.Info("Verifying that the aggregated cluster role in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, mainRTName, []string{childRTName})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, childRTName, nil)
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, childRTName, nil)
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for project-mgmt resources")
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
@@ -281,7 +282,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithMgmtAndR
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -340,7 +341,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithMultiple
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 8, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, childRTName, mainRTName)
@@ -348,9 +349,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithMultiple
 	require.Equal(acrp.T(), 4, len(downstreamCRs.Items))
 
 	log.Info("Verifying that the aggregated cluster role in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, mainRTName, []string{childRTName})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, mainRTName, []string{childRTName})
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for project-mgmt resources")
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
@@ -367,7 +368,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithMultiple
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -405,7 +406,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbWithNoInheritance() {
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, mainRTName)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 4, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, mainRTName)
@@ -413,9 +414,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbWithNoInheritance() {
 	require.Equal(acrp.T(), 2, len(downstreamCRs.Items))
 
 	log.Info("Verifying that the aggregated cluster role in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, mainRTName, nil)
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, mainRTName, nil)
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, mainRTName, nil)
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, mainRTName, nil)
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for project-mgmt resources")
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, mainRTName, nil)
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
@@ -432,7 +433,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbWithNoInheritance() {
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -466,7 +467,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritedRulesOnly() {
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, childRTName, mainRTName)
@@ -474,9 +475,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritedRulesOnly() {
 	require.Equal(acrp.T(), 4, len(downstreamCRs.Items))
 
 	log.Info("Verifying that the aggregated cluster role in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, mainRTName, []string{childRTName})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, childRTName, nil)
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, childRTName, nil)
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for project-mgmt resources")
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
@@ -493,7 +494,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritedRulesOnly() {
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -539,7 +540,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithTwoPrtbs
 	mainRTName2 := createdMainRT2.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, childRTName1, mainRTName1, childRTName2, mainRTName2)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, childRTName1, mainRTName1, childRTName2, mainRTName2)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 12, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, childRTName1, mainRTName1, childRTName2, mainRTName2)
@@ -547,13 +548,13 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithTwoPrtbs
 	require.Equal(acrp.T(), 8, len(downstreamCRs.Items))
 
 	log.Info("Verifying that the aggregated cluster role in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, mainRTName1, []string{childRTName1})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, mainRTName1, []string{childRTName1})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, mainRTName2, []string{childRTName2})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, mainRTName2, []string{childRTName2})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, mainRTName1, nil)
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, mainRTName1, nil)
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for project-mgmt resources")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, mainRTName2, nil)
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, mainRTName2, nil)
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for project-mgmt resources")
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, mainRTName1, []string{childRTName1})
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
@@ -578,7 +579,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithTwoPrtbs
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtb1Namespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtb1Namespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 
 	prtb2Namespace := &corev1.Namespace{
@@ -586,7 +587,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithTwoPrtbs
 			Name: prtbs[1].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[1], []*corev1.Namespace{prtb2Namespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[1], []*corev1.Namespace{prtb2Namespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -647,7 +648,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbNestedInheritance() {
 	mainRTName1 := createdMainRT1.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, childRTName1, childRTName2, childRTName3, mainRTName1)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, childRTName1, childRTName2, childRTName3, mainRTName1)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 13, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, childRTName1, childRTName2, childRTName3, mainRTName1)
@@ -655,13 +656,13 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbNestedInheritance() {
 	require.Equal(acrp.T(), 8, len(downstreamCRs.Items))
 
 	log.Info("Verifying that the aggregated cluster roles in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, childRTName3, []string{childRTName2})
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, childRTName3, []string{childRTName2})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for project-mgmt resources")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, mainRTName1, []string{childRTName1, childRTName2, childRTName3})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, mainRTName1, []string{childRTName1, childRTName2, childRTName3})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for main role")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, childRTName3, []string{childRTName1, childRTName2})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, childRTName3, []string{childRTName1, childRTName2})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for child role 3")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, childRTName2, []string{childRTName1})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, childRTName2, []string{childRTName1})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for child role 2")
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, mainRTName1, []string{childRTName1, childRTName2, childRTName3})
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR for main role")
@@ -682,7 +683,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbNestedInheritance() {
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -746,7 +747,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbMultipleLevelsOfInherit
 	mainRTName1 := createdMainRT1.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, childRTName11, childRTName12, parentRTName1, childRTName21, parentRTName2, mainRTName1)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, childRTName11, childRTName12, parentRTName1, childRTName21, parentRTName2, mainRTName1)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 19, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, childRTName11, childRTName12, parentRTName1, childRTName21, parentRTName2, mainRTName1)
@@ -754,9 +755,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbMultipleLevelsOfInherit
 	require.Equal(acrp.T(), 12, len(downstreamCRs.Items))
 
 	log.Info("Verifying that the aggregated cluster role in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, mainRTName1, []string{parentRTName2, childRTName12})
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, mainRTName1, []string{parentRTName2, childRTName12})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for project-mgmt resources")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, mainRTName1, []string{childRTName11, childRTName12, parentRTName1, childRTName21, parentRTName2})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, mainRTName1, []string{childRTName11, childRTName12, parentRTName1, childRTName21, parentRTName2})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for main role")
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, mainRTName1, []string{childRTName11, childRTName12, parentRTName1, childRTName21, parentRTName2})
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR for main role")
@@ -773,7 +774,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbMultipleLevelsOfInherit
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -811,7 +812,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToAdd
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, mainRTName)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 4, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, mainRTName)
@@ -819,9 +820,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToAdd
 	require.Equal(acrp.T(), 2, len(downstreamCRs.Items))
 
 	log.Info("Verifying that the aggregated cluster role in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, mainRTName, nil)
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, mainRTName, nil)
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, mainRTName, nil)
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, mainRTName, nil)
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for project-mgmt resources")
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, mainRTName, nil)
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
@@ -838,7 +839,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToAdd
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -859,7 +860,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToAdd
 	childRTName := createdChildRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, childRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, childRTName)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 2, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, childRTName)
@@ -871,15 +872,15 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToAdd
 	require.NoError(acrp.T(), err, "Failed to update role template inheritance")
 
 	log.Info("Verifying that the aggregated cluster role in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, updatedMainRT.Name, []string{childRTName})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, updatedMainRT.Name, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, mainRTName, nil)
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, mainRTName, nil)
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for project-mgmt resources")
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, updatedMainRT.Name, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -912,7 +913,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToRem
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 6, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, childRTName, mainRTName)
@@ -920,9 +921,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToRem
 	require.Equal(acrp.T(), 4, len(downstreamCRs.Items))
 
 	log.Info("Verifying that the aggregated cluster role in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, mainRTName, []string{childRTName})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, mainRTName, nil)
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, mainRTName, nil)
 	require.NoError(acrp.T(), err, "Failed to fetch local ACR for project-mgmt resources")
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, mainRTName, []string{childRTName})
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
@@ -939,7 +940,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToRem
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -958,15 +959,15 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToRem
 	require.NoError(acrp.T(), err, "Failed to update role template inheritance")
 
 	log.Info("Verifying that the aggregated cluster role in the local and downstream clusters includes the correct rules.")
-	err = rbacapi.VerifyProjectMgmtACR(acrp.client, clusterapi.LocalCluster, updatedMainRT.Name, []string{})
+	err = rbacapi.VerifyProjectMgmtACR(acrp.client, extclusterapi.LocalCluster, updatedMainRT.Name, []string{})
 	require.NoError(acrp.T(), err)
-	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, clusterapi.LocalCluster, updatedMainRT.Name, []string{})
+	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, extclusterapi.LocalCluster, updatedMainRT.Name, []string{})
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyMainACRContainsAllRules(acrp.client, acrp.cluster.ID, updatedMainRT.Name, []string{})
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -989,15 +990,15 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbVerifyCrossClusterAndPr
 
 	createdProject2, err := projectapi.CreateProject(acrp.client, acrp.cluster.ID)
 	require.NoError(acrp.T(), err, "Failed to create project")
-	createdNamespace2, err := namespaceapi.CreateNamespaceUsingWrangler(acrp.client, acrp.cluster.ID, createdProject2.Name, nil)
+	createdNamespace2, err := namespaceapi.CreateNamespace(acrp.client, acrp.cluster.ID, createdProject2.Name, namegen.AppendRandomString("ns2"), "", nil, nil)
 	require.NoError(acrp.T(), err, "Failed to create namespace")
 	secretData := map[string][]byte{
 		"hello": []byte("world"),
 	}
-	createdSecret2, err := secrets.CreateSecret(acrp.client, acrp.cluster.ID, createdNamespace2.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
+	createdSecret2, err := secretapi.CreateSecret(acrp.client, acrp.cluster.ID, createdNamespace2.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.NoError(acrp.T(), err, "Failed to create secret in namespace %s", createdNamespace2.Name)
 
-	createdProject3, err := projectapi.CreateProject(acrp.client, clusterapi.LocalCluster)
+	createdProject3, err := projectapi.CreateProject(acrp.client, extclusterapi.LocalCluster)
 	require.NoError(acrp.T(), err, "Failed to create project")
 
 	log.Info("Creating project role templates with project management plane resources.")
@@ -1030,7 +1031,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbVerifyCrossClusterAndPr
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrp.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrp.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrp.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrp.client, acrp.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrp.T(), err)
@@ -1048,10 +1049,10 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbVerifyCrossClusterAndPr
 	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, false, true))
 	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, false, true))
 	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "secrets", createdNamespace2.Name, createdSecret2.Name, true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, clusterapi.LocalCluster, createdUser, "get", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, clusterapi.LocalCluster, createdUser, "list", "projectroletemplatebindings", createdPrtb3.Namespace, "", false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, clusterapi.LocalCluster, createdUser, "update", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, clusterapi.LocalCluster, createdUser, "patch", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, extclusterapi.LocalCluster, createdUser, "get", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, extclusterapi.LocalCluster, createdUser, "list", "projectroletemplatebindings", createdPrtb3.Namespace, "", false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, extclusterapi.LocalCluster, createdUser, "update", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, extclusterapi.LocalCluster, createdUser, "patch", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestProjectRoleTemplateInheritingProjectOwner() {
@@ -1074,7 +1075,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestProjectRoleTemplateInheriti
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrp.T(), err)
 	require.Equal(acrp.T(), 10, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrp.client, acrp.cluster.ID, childRTName, mainRTName)

@@ -1,27 +1,15 @@
 package services
 
 import (
-	"context"
-
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/unstructured"
-	"github.com/rancher/shepherd/pkg/api/scheme"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// ServiceGroupVersionResource is the required Group Version Resource for accessing services in a cluster,
-// using the dynamic client.
-var ServiceGroupVersionResource = schema.GroupVersionResource{
-	Group:    "",
-	Version:  "v1",
-	Resource: "services",
-}
-
-// CreateService is a helper function that uses the dynamic client to create a service in a namespace for a specific cluster.
-func CreateService(client *rancher.Client, clusterName, serviceName, namespace string, spec corev1.ServiceSpec) (*corev1.Service, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterName)
+// CreateService is a helper function that uses wrangler context to create a service in a namespace for a specific cluster.
+func CreateService(client *rancher.Client, clusterID, serviceName, namespace string, spec corev1.ServiceSpec) (*corev1.Service, error) {
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -34,18 +22,25 @@ func CreateService(client *rancher.Client, clusterName, serviceName, namespace s
 		Spec: spec,
 	}
 
-	serviceResource := dynamicClient.Resource(ServiceGroupVersionResource).Namespace(namespace)
-
-	unstructuredResp, err := serviceResource.Create(context.TODO(), unstructured.MustToUnstructured(service), metav1.CreateOptions{})
+	createdService, err := clusterContext.Core.Service().Create(service)
 	if err != nil {
 		return nil, err
 	}
 
-	newService := &corev1.Service{}
-	err = scheme.Scheme.Convert(unstructuredResp, newService, unstructuredResp.GroupVersionKind())
+	return createdService, nil
+}
+
+// CreateServiceWithTemplate creates a service using the provided template, respecting its name and metadata.
+func CreateServiceWithTemplate(client *rancher.Client, clusterID string, serviceTemplate *corev1.Service) (*corev1.Service, error) {
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	return newService, nil
+	service, err := clusterContext.Core.Service().Create(serviceTemplate)
+	if err != nil {
+		return nil, err
+	}
+
+	return service, nil
 }

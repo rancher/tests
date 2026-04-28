@@ -4,7 +4,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/charts"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/storage"
 	appv1 "k8s.io/api/apps/v1"
@@ -17,7 +17,7 @@ import (
 // If storageClass is provided, a volume template with the indicated storage class and 1Gi of storage will
 // be included in the StetefulSet spec.
 func CreateStatefulSet(client *rancher.Client, clusterID, namespaceName string, podTemplate corev1.PodTemplateSpec, replicas int32, watchStatefulset bool, storageClassName string) (*appv1.StatefulSet, error) {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func CreateStatefulSetFromConfig(client *v1.Client, clusterID string, statefulSe
 
 // UpdateStatefulSet is a helper to update statefulset using wrangler context
 func UpdateStatefulSet(client *rancher.Client, clusterID, namespaceName string, statefulset *appv1.StatefulSet, watchStatefulset bool) (*appv1.StatefulSet, error) {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func UpdateStatefulSet(client *rancher.Client, clusterID, namespaceName string, 
 
 // DeleteStatefulSet is a helper to delete a statefulset using wrangler context
 func DeleteStatefulSet(client *rancher.Client, clusterID string, statefulset *appv1.StatefulSet) error {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}

@@ -6,7 +6,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,7 +26,7 @@ func CreatePodWithResources(client *rancher.Client, clusterID, namespace, imageN
 		imageName = DefaultImageName
 	}
 
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func CreatePodWithResources(client *rancher.Client, clusterID, namespace, imageN
 		},
 	}
 
-	createdPod, err := ctx.Core.Pod().Create(pod)
+	createdPod, err := clusterContext.Core.Pod().Create(pod)
 	if err != nil {
 		return nil, err
 	}
@@ -87,13 +87,13 @@ func CreatePodWithResources(client *rancher.Client, clusterID, namespace, imageN
 
 // WaitForPodRunning waits until the specified pod reaches the Running state
 func WaitForPodRunning(client *rancher.Client, clusterID, namespace, podName string) error {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
 
-	return kwait.PollUntilContextTimeout(context.Background(), defaults.FiveHundredMillisecondTimeout, defaults.OneMinuteTimeout, true, func(context.Context) (bool, error) {
-		pod, err := ctx.Core.Pod().Get(namespace, podName, metav1.GetOptions{})
+	return kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(context.Context) (bool, error) {
+		pod, err := clusterContext.Core.Pod().Get(namespace, podName, metav1.GetOptions{})
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
 				return false, nil
@@ -115,15 +115,39 @@ func WaitForPodRunning(client *rancher.Client, clusterID, namespace, podName str
 
 // DeletePod deletes the specified pod from the given namespace using wrangler context
 func DeletePod(client *rancher.Client, clusterID, namespace, podName string) error {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
 
-	err = ctx.Core.Pod().Delete(namespace, podName, &metav1.DeleteOptions{})
+	err = clusterContext.Core.Pod().Delete(namespace, podName, &metav1.DeleteOptions{})
 	if err != nil {
 		return err
+	}
+
+	err = WaitForPodDeleted(client, clusterID, namespace, podName)
+	if err != nil {
+		return fmt.Errorf("error waiting for pod deletion: %w", err)
 	}
 
 	return nil
+}
+
+// WaitForPodDeleted waits until the specified pod is deleted (not found)
+func WaitForPodDeleted(client *rancher.Client, clusterID, namespace, podName string) error {
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	return kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(context.Context) (bool, error) {
+		_, err := clusterContext.Core.Pod().Get(namespace, podName, metav1.GetOptions{})
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, err
+		}
+		return false, nil
+	})
 }

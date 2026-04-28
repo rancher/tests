@@ -10,7 +10,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -216,7 +216,7 @@ func GetRoleTemplateContext(client *rancher.Client, roleTemplateName string) (st
 
 // GetClusterRolesForRoleTemplates gets ClusterRoles associated with the provided role templates
 func GetClusterRolesForRoleTemplates(client *rancher.Client, clusterID string, rtNames ...string) (*rbacv1.ClusterRoleList, error) {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	ctx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +244,7 @@ func GetClusterRolesForRoleTemplates(client *rancher.Client, clusterID string, r
 
 // GetClusterRoleRules is a helper function to fetch rules for a cluster role
 func GetClusterRoleRules(client *rancher.Client, clusterID string, clusterRoleName string) ([]rbacv1.PolicyRule, error) {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	ctx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +339,7 @@ func GetRoleBindingsForUsers(client *rancher.Client, userName string, namespaces
 	var userRBs []rbacv1.RoleBinding
 
 	for _, namespace := range namespaces {
-		rbs, err := ListRoleBindings(client, clusterapi.LocalCluster, namespace, metav1.ListOptions{})
+		rbs, err := ListRoleBindings(client, extclusterapi.LocalCluster, namespace, metav1.ListOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to list RoleBindings in namespace %s: %w", namespace, err)
 		}
@@ -390,13 +390,13 @@ func GetRoleBindings(rancherClient *rancher.Client, clusterID string, userID str
 func GetBindings(rancherClient *rancher.Client, userID string) (map[string]interface{}, error) {
 	bindings := make(map[string]interface{})
 
-	roleBindings, err := GetRoleBindings(rancherClient, clusterapi.LocalCluster, userID)
+	roleBindings, err := GetRoleBindings(rancherClient, extclusterapi.LocalCluster, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get role bindings: %w", err)
 	}
 	bindings["RoleBindings"] = roleBindings
 
-	clusterRoleBindings, err := ListClusterRoleBindings(rancherClient, clusterapi.LocalCluster, metav1.ListOptions{})
+	clusterRoleBindings, err := ListClusterRoleBindings(rancherClient, extclusterapi.LocalCluster, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cluster role bindings: %w", err)
 	}
@@ -535,7 +535,7 @@ func GetRoleBindingsForCRTBs(client *rancher.Client, crtbs *v3.ClusterRoleTempla
 		nameSelector := fmt.Sprintf("metadata.name=%s-%s", crtb.Name, roleTemplateName)
 		namespaceSelector := fmt.Sprintf("metadata.namespace=%s", crtb.ClusterName)
 		combinedSelector := fmt.Sprintf("%s,%s", nameSelector, namespaceSelector)
-		downstreamRBsForCRTB, err := ListRoleBindings(client, clusterapi.LocalCluster, "", metav1.ListOptions{
+		downstreamRBsForCRTB, err := ListRoleBindings(client, extclusterapi.LocalCluster, "", metav1.ListOptions{
 			FieldSelector: combinedSelector,
 		})
 		if err != nil {
@@ -560,7 +560,7 @@ func GetClusterRoleBindingsForCRTBs(client *rancher.Client, crtbs *v3.ClusterRol
 		}
 
 		selector := labels.NewSelector().Add(*req)
-		downstreamCRBsForCRTB, err := ListClusterRoleBindings(client, clusterapi.LocalCluster, metav1.ListOptions{
+		downstreamCRBsForCRTB, err := ListClusterRoleBindings(client, extclusterapi.LocalCluster, metav1.ListOptions{
 			LabelSelector: selector.String(),
 		})
 		if err != nil {
@@ -578,7 +578,7 @@ func GetClusterRoleBindingsForUsers(client *rancher.Client, crtbs *v3.ClusterRol
 	var userCRBs []rbacv1.ClusterRoleBinding
 
 	for _, crtb := range crtbs.Items {
-		crbs, err := ListClusterRoleBindings(client, clusterapi.LocalCluster, metav1.ListOptions{})
+		crbs, err := ListClusterRoleBindings(client, extclusterapi.LocalCluster, metav1.ListOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -635,7 +635,7 @@ func IsFeatureEnabled(client *rancher.Client, featureName string) (bool, error) 
 
 // WaitForClusterRoleExistence polls until the ClusterRole exists or does not exist, based on shouldExist.
 func WaitForClusterRoleExistence(client *rancher.Client, clusterID, clusterRoleName string, shouldExist bool) error {
-	wranglerCtx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerCtx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -654,7 +654,7 @@ func WaitForClusterRoleExistence(client *rancher.Client, clusterID, clusterRoleN
 
 // WaitForRoleExistence polls until the Role exists or does not exist, based on shouldExist.
 func WaitForRoleExistence(client *rancher.Client, clusterID, namespaceName, roleName string, shouldExist bool) error {
-	wranglerCtx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerCtx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -669,4 +669,17 @@ func WaitForRoleExistence(client *rancher.Client, clusterID, namespaceName, role
 		}
 		return shouldExist, nil
 	})
+}
+
+// NewProjectRoleTemplateBindingTemplate returns a new instance of ProjectRoleTemplateBinding with default values
+func NewProjectRoleTemplateBindingTemplate() v3.ProjectRoleTemplateBinding {
+	return v3.ProjectRoleTemplateBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "",
+			Namespace: "",
+		},
+		ProjectName:       "",
+		RoleTemplateName:  "",
+		UserPrincipalName: "",
+	}
 }

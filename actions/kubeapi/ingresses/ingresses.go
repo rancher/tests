@@ -31,7 +31,7 @@ func CreateServiceAndIngressTemplateForDeployment(client *rancher.Client, cluste
 		},
 	}
 	serviceTemplateForDeployment := services.NewServiceTemplate(serviceNameForDeployment, namespaceName, serviceType, ports, deploymentForIngress.Spec.Template.Labels)
-	_, err := serviceapi.CreateService(client, clusterID, serviceNameForDeployment, namespaceName, serviceTemplateForDeployment.Spec)
+	_, err := serviceapi.CreateServiceWithTemplate(client, clusterID, &serviceTemplateForDeployment)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create service: %v", err)
 	}

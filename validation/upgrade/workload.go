@@ -13,7 +13,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/ingresses"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extensionsworkloads "github.com/rancher/shepherd/extensions/workloads"
 	wloads "github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/pkg/namegenerator"
@@ -516,7 +516,7 @@ func waitUntilIngressHostnameUpdates(client *rancher.Client, clusterID, namespac
 	if err != nil {
 		return err
 	}
-	adminWranglerCtx, err := clusterapi.GetClusterWranglerContext(adminClient, clusterID)
+	adminWranglerCtx, err := extclusterapi.GetClusterWranglerContext(adminClient, clusterID)
 	if err != nil {
 		return err
 	}

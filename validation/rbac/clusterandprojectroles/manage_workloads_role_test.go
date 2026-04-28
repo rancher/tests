@@ -11,13 +11,13 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/daemonset"
 	"github.com/rancher/tests/actions/workloads/deployment"
@@ -63,7 +63,7 @@ func (mw *ManageWorkloadsRoleTestSuite) testSetupUserAndProject() (*rancher.Clie
 	require.NoError(mw.T(), err)
 
 	log.Info("Create a project and a namespace")
-	createdProject, createdNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(mw.client, mw.cluster.ID)
+	createdProject, createdNamespace, err := projectapi.CreateProjectAndNamespace(mw.client, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 
 	log.Infof("Add the user %s as Project Owner to the project %s", newUser.Name, createdProject.Name)
@@ -186,7 +186,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForPods() {
 		Spec: podTemplate.Spec,
 	}
 
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
+	downstreamContext, err := extclusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 	createdPod, err := downstreamContext.Core.Pod().Create(pod)
 	require.NoError(mw.T(), err, "Failed to create the pod.")
@@ -232,7 +232,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForDeployments() 
 	require.NoError(mw.T(), err, "Failed to create the deployment.")
 
 	log.Infof("As user %s, list the deployment %s.", workloadUser.Username, createdDeployment.Name)
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
+	downstreamContext, err := extclusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 	listDeployment, err := downstreamContext.Apps.Deployment().List(adminNamespace.Name, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdDeployment.Name,
@@ -272,7 +272,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForDaemonSets() {
 	require.NoError(mw.T(), err, "Failed to create the DaemonSet.")
 
 	log.Infof("As user %s, list the DaemonSet %s.", workloadUser.Username, createdDaemonSet.Name)
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
+	downstreamContext, err := extclusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 	listDaemonSet, err := downstreamContext.Apps.DaemonSet().List(adminNamespace.Name, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdDaemonSet.Name,
@@ -358,7 +358,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForStatefulSets()
 		},
 	}
 
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
+	downstreamContext, err := extclusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 	createdStatefulset, err := downstreamContext.Apps.StatefulSet().Create(statefulset)
 	require.NoError(mw.T(), err, "Failed to create the StatefulSet.")

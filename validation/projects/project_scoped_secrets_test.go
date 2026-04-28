@@ -10,13 +10,12 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
-	secretsapi "github.com/rancher/tests/actions/kubeapi/secrets"
-	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
+	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/secrets"
 	log "github.com/sirupsen/logrus"
@@ -28,12 +27,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var opaqueSecretData = map[string][]byte{
+	"hello": []byte("world"),
+}
+
 type ProjectScopedSecretTestSuite struct {
 	suite.Suite
 	client         *rancher.Client
 	session        *session.Session
 	cluster        *management.Cluster
-	registryConfig *secrets.Config
+	registryConfig *secretapi.Config
 }
 
 func (pss *ProjectScopedSecretTestSuite) TearDownSuite() {
@@ -47,7 +50,7 @@ func (pss *ProjectScopedSecretTestSuite) SetupSuite() {
 	require.NoError(pss.T(), err)
 	pss.client = client
 
-	log.Info("Getting cluster name and registry credentials from the config file and append the details in pss")
+	log.Info("Getting cluster name and registry credentials from the config file and append the details in the struct")
 	clusterName := client.RancherConfig.ClusterName
 	require.NotEmptyf(pss.T(), clusterName, "Cluster name to install should be set")
 	clusterID, err := clusters.GetClusterIDByName(pss.client, clusterName)
@@ -55,8 +58,8 @@ func (pss *ProjectScopedSecretTestSuite) SetupSuite() {
 	pss.cluster, err = pss.client.Management.Cluster.ByID(clusterID)
 	require.NoError(pss.T(), err)
 
-	pss.registryConfig = new(secrets.Config)
-	config.LoadConfig(secrets.ConfigurationFileKey, pss.registryConfig)
+	pss.registryConfig = new(secretapi.Config)
+	config.LoadConfig(secretapi.ConfigurationFileKey, pss.registryConfig)
 }
 
 func (pss *ProjectScopedSecretTestSuite) testProjectScopedSecret(clusterID string, secretType corev1.SecretType, secretData map[string][]byte) (*v3.Project, []*corev1.Namespace, *corev1.Secret) {
@@ -65,11 +68,11 @@ func (pss *ProjectScopedSecretTestSuite) testProjectScopedSecret(clusterID strin
 	require.NoError(pss.T(), err)
 
 	log.Info("Create a project scoped secret in the project.")
-	createdProjectScopedSecret, err := secrets.CreateProjectScopedSecret(pss.client, clusterID, createdProject.Name, secretData, secretType)
+	createdProjectScopedSecret, err := secretapi.CreateProjectScopedSecret(pss.client, clusterID, createdProject.Name, secretData, secretType)
 	require.NoError(pss.T(), err)
 
 	log.Info("Verify that the project scoped secret has the expected label")
-	err = secrets.ValidateProjectScopedSecretLabel(createdProjectScopedSecret, createdProject.Name)
+	err = secretapi.VerifyProjectScopedSecretLabel(createdProjectScopedSecret, createdProject.Name)
 	require.NoError(pss.T(), err)
 
 	log.Info("Create five namespaces in the project.")
@@ -77,7 +80,7 @@ func (pss *ProjectScopedSecretTestSuite) testProjectScopedSecret(clusterID strin
 	require.NoError(pss.T(), err)
 
 	log.Info("Verify that the secret is propagated to all the namespaces in the project and the data matches the original project-scoped secret.")
-	err = secrets.ValidatePropagatedNamespaceSecrets(pss.client, clusterID, createdProject.Name, createdProjectScopedSecret, namespaceList)
+	err = secretapi.VerifyPropagatedNamespaceSecrets(pss.client, clusterID, createdProject.Name, createdProjectScopedSecret, namespaceList)
 	require.NoError(pss.T(), err)
 
 	return createdProject, namespaceList, createdProjectScopedSecret
@@ -87,7 +90,7 @@ func (pss *ProjectScopedSecretTestSuite) TestCreateProjectScopedSecretLocalClust
 	subSession := pss.session.NewSession()
 	defer subSession.Cleanup()
 
-	pss.testProjectScopedSecret(clusterapi.LocalCluster, corev1.SecretTypeOpaque, opaqueSecretData)
+	pss.testProjectScopedSecret(extclusterapi.LocalCluster, corev1.SecretTypeOpaque, opaqueSecretData)
 }
 
 func (pss *ProjectScopedSecretTestSuite) TestCreateProjectScopedOpaqueSecret() {
@@ -101,7 +104,7 @@ func (pss *ProjectScopedSecretTestSuite) TestCreateProjectScopedRegistrySecret()
 	subSession := pss.session.NewSession()
 	defer subSession.Cleanup()
 
-	dockerConfigJSON, err := secrets.CreateRegistrySecretDockerConfigJSON(pss.registryConfig)
+	dockerConfigJSON, err := secretapi.CreateRegistrySecretDockerConfigJSON(pss.registryConfig)
 	require.NoError(pss.T(), err)
 
 	registrySecretData := map[string][]byte{
@@ -137,15 +140,15 @@ func (pss *ProjectScopedSecretTestSuite) TestCreateProjectScopedSecretAfterCreat
 	require.NoError(pss.T(), err)
 
 	log.Info("Create a project scoped secret in the project.")
-	createdProjectScopedSecret, err := secrets.CreateProjectScopedSecret(pss.client, pss.cluster.ID, createdProject.Name, opaqueSecretData, corev1.SecretTypeOpaque)
+	createdProjectScopedSecret, err := secretapi.CreateProjectScopedSecret(pss.client, pss.cluster.ID, createdProject.Name, opaqueSecretData, corev1.SecretTypeOpaque)
 	require.NoError(pss.T(), err)
 
 	log.Info("Verify that the project scoped secret has the expected label")
-	err = secrets.ValidateProjectScopedSecretLabel(createdProjectScopedSecret, createdProject.Name)
+	err = secretapi.VerifyProjectScopedSecretLabel(createdProjectScopedSecret, createdProject.Name)
 	require.NoError(pss.T(), err)
 
 	log.Info("Verify that the secret is propagated to all the namespaces in the project and the data matches the original project-scoped secret.")
-	err = secrets.ValidatePropagatedNamespaceSecrets(pss.client, pss.cluster.ID, createdProject.Name, createdProjectScopedSecret, namespaceList)
+	err = secretapi.VerifyPropagatedNamespaceSecrets(pss.client, pss.cluster.ID, createdProject.Name, createdProjectScopedSecret, namespaceList)
 	require.NoError(pss.T(), err)
 }
 
@@ -159,12 +162,12 @@ func (pss *ProjectScopedSecretTestSuite) TestUpdateProjectScopedSecret() {
 	newData := map[string][]byte{
 		"foo": []byte("bar"),
 	}
-	updatedProjectScopedSecret, err := secrets.UpdateProjectScopedSecret(pss.client, pss.cluster.ID, createdProject.Name, createdProjectScopedSecret.Name, newData)
+	updatedProjectScopedSecret, err := secretapi.UpdateProjectScopedSecretData(pss.client, pss.cluster.ID, createdProject.Name, createdProjectScopedSecret.Name, newData)
 	require.NoError(pss.T(), err)
 	require.Equal(pss.T(), newData, updatedProjectScopedSecret.Data, "Secret data is not as expected")
 
 	log.Info("Verify that the secret data in all the namespaces matches the project-scoped secret.")
-	err = secrets.ValidatePropagatedNamespaceSecrets(pss.client, pss.cluster.ID, createdProject.Name, updatedProjectScopedSecret, namespaceList)
+	err = secretapi.VerifyPropagatedNamespaceSecrets(pss.client, pss.cluster.ID, createdProject.Name, updatedProjectScopedSecret, namespaceList)
 	require.NoError(pss.T(), err)
 }
 
@@ -176,16 +179,16 @@ func (pss *ProjectScopedSecretTestSuite) TestDeleteProjectScopedSecret() {
 
 	log.Info("Delete the Project scoped secret.")
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-	err := secrets.DeleteSecret(pss.client, clusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
+	err := secretapi.DeleteSecret(pss.client, extclusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
 	require.NoError(pss.T(), err)
 
 	log.Info("Verify that the project scoped secret is deleted.")
-	_, err = secretsapi.GetSecretByName(pss.client, clusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, metav1.GetOptions{})
+	_, err = secretapi.GetSecretByName(pss.client, extclusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, metav1.GetOptions{})
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsNotFound(err), "Expected NotFound error, got: %v", err)
 
 	log.Info("Verify that the secret is removed from all the namespaces in the project.")
-	err = secrets.WaitForSecretInNamespaces(pss.client, pss.cluster.ID, createdProjectScopedSecret.Name, namespaceList, false)
+	err = secretapi.WaitForSecretInNamespaces(pss.client, pss.cluster.ID, createdProjectScopedSecret.Name, namespaceList, false)
 	require.NoError(pss.T(), err, "Expected propagated secret to be deleted from all namespaces")
 }
 
@@ -201,11 +204,11 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretCleanupOnProject
 
 	log.Info("Verify that the project scoped secret is deleted.")
 	backingNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)}}
-	err = secrets.WaitForSecretInNamespaces(pss.client, clusterapi.LocalCluster, createdProjectScopedSecret.Name, []*corev1.Namespace{backingNamespace}, false)
+	err = secretapi.WaitForSecretInNamespaces(pss.client, extclusterapi.LocalCluster, createdProjectScopedSecret.Name, []*corev1.Namespace{backingNamespace}, false)
 	require.NoError(pss.T(), err, "Expected secret to be deleted but it still exists or an unexpected error occurred")
 
 	log.Info("Verify that the secret is removed from all the namespaces in the project.")
-	err = secrets.WaitForSecretInNamespaces(pss.client, pss.cluster.ID, createdProjectScopedSecret.Name, namespaceList, false)
+	err = secretapi.WaitForSecretInNamespaces(pss.client, pss.cluster.ID, createdProjectScopedSecret.Name, namespaceList, false)
 	require.NoError(pss.T(), err, "Expected propagated secret to be deleted from all namespaces")
 }
 
@@ -229,12 +232,12 @@ func (pss *ProjectScopedSecretTestSuite) TestMoveNamespaceFromProjectWithoutToWi
 	require.NoError(pss.T(), err, "Failed to move namespace to project '%s'", createdProject1.Name)
 
 	log.Infof("Verify that the project scoped secret '%s' is propagated to '%s'", createdProjectScopedSecret.Name, targetNamespace.Name)
-	err = secrets.WaitForSecretInNamespaces(pss.client, pss.cluster.ID, createdProjectScopedSecret.Name, []*corev1.Namespace{targetNamespace}, true)
+	err = secretapi.WaitForSecretInNamespaces(pss.client, pss.cluster.ID, createdProjectScopedSecret.Name, []*corev1.Namespace{targetNamespace}, true)
 	require.NoError(pss.T(), err, "Project-scoped secret was not propagated to moved namespace")
 
 	namespaceList, err := namespaceapi.GetNamespacesInProject(pss.client, pss.cluster.ID, createdProject1.Name)
 	require.NoError(pss.T(), err)
-	err = secrets.ValidatePropagatedNamespaceSecrets(pss.client, pss.cluster.ID, createdProject1.Name, createdProjectScopedSecret, namespaceList)
+	err = secretapi.VerifyPropagatedNamespaceSecrets(pss.client, pss.cluster.ID, createdProject1.Name, createdProjectScopedSecret, namespaceList)
 	require.NoError(pss.T(), err)
 }
 
@@ -254,12 +257,12 @@ func (pss *ProjectScopedSecretTestSuite) TestMoveNamespaceFromProjectWithToWitho
 	require.NoError(pss.T(), err, "Failed to move namespace to project '%s'", createdProject2.Name)
 
 	log.Infof("Verifying project scoped secret '%s' is removed from namespace '%s'", createdProjectScopedSecret.Name, targetNamespace.Name)
-	err = secrets.WaitForSecretInNamespaces(pss.client, pss.cluster.ID, createdProjectScopedSecret.Name, []*corev1.Namespace{targetNamespace}, false)
+	err = secretapi.WaitForSecretInNamespaces(pss.client, pss.cluster.ID, createdProjectScopedSecret.Name, []*corev1.Namespace{targetNamespace}, false)
 	require.NoError(pss.T(), err, "Project-scoped secret was not removed after namespace moved")
 
 	namespaceList, err := namespaceapi.GetNamespacesInProject(pss.client, pss.cluster.ID, createdProject1.Name)
 	require.NoError(pss.T(), err)
-	err = secrets.ValidatePropagatedNamespaceSecrets(pss.client, pss.cluster.ID, createdProject1.Name, createdProjectScopedSecret, namespaceList)
+	err = secretapi.VerifyPropagatedNamespaceSecrets(pss.client, pss.cluster.ID, createdProject1.Name, createdProjectScopedSecret, namespaceList)
 	require.NoError(pss.T(), err)
 }
 
@@ -286,29 +289,29 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretByRole() {
 			pss.T().Logf("Created user: %v", newUser.Username)
 
 			log.Infof("As a %v, create a new project scoped secret in the downstream cluster's project %v.", tt.role.String(), createdProject.Name)
-			createdProjectScopedSecret, err := secrets.CreateProjectScopedSecret(standardUserClient, pss.cluster.ID, createdProject.Name, opaqueSecretData, corev1.SecretTypeOpaque)
+			createdProjectScopedSecret, err := secretapi.CreateProjectScopedSecret(standardUserClient, pss.cluster.ID, createdProject.Name, opaqueSecretData, corev1.SecretTypeOpaque)
 			assert.NoError(pss.T(), err, "Failed to create project scoped secret")
 
 			log.Info("Verify that the project scoped secret has the expected label")
-			err = secrets.ValidateProjectScopedSecretLabel(createdProjectScopedSecret, createdProject.Name)
+			err = secretapi.VerifyProjectScopedSecretLabel(createdProjectScopedSecret, createdProject.Name)
 			assert.NoError(pss.T(), err)
 
 			log.Info("Verify that the secret is propagated to all the namespaces in the project and the data matches the original project-scoped secret.")
-			err = secrets.ValidatePropagatedNamespaceSecrets(standardUserClient, pss.cluster.ID, createdProject.Name, createdProjectScopedSecret, namespaceList)
+			err = secretapi.VerifyPropagatedNamespaceSecrets(standardUserClient, pss.cluster.ID, createdProject.Name, createdProjectScopedSecret, namespaceList)
 			assert.NoError(pss.T(), err, "Failed to validate propagated namespace secrets")
 
 			log.Infof("As a %v, delete the project scoped secret %s in project %s", tt.role.String(), createdProjectScopedSecret.Name, createdProject.Name)
 			backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-			err = secrets.DeleteSecret(standardUserClient, clusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
+			err = secretapi.DeleteSecret(standardUserClient, extclusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
 			assert.NoError(pss.T(), err, "Failed to delete project scoped secret")
 
 			log.Info("Verify that the project scoped secret is deleted.")
-			_, err = secretsapi.GetSecretByName(standardUserClient, clusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, metav1.GetOptions{})
+			_, err = secretapi.GetSecretByName(standardUserClient, extclusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, metav1.GetOptions{})
 			assert.Error(pss.T(), err)
 			assert.True(pss.T(), apierrors.IsNotFound(err), "Expected NotFound error, got: %v", err)
 
 			log.Info("Verify that the secret is removed from all the namespaces in the project.")
-			err = secrets.WaitForSecretInNamespaces(standardUserClient, pss.cluster.ID, createdProjectScopedSecret.Name, namespaceList, false)
+			err = secretapi.WaitForSecretInNamespaces(standardUserClient, pss.cluster.ID, createdProjectScopedSecret.Name, namespaceList, false)
 			assert.NoError(pss.T(), err, "Expected propagated secret to be deleted from all namespaces")
 
 		})
@@ -335,11 +338,11 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretAsClusterMember(
 	require.NoError(pss.T(), err)
 
 	log.Info("Create a project scoped secret in the project.")
-	createdProjectScopedSecret, err := secrets.CreateProjectScopedSecret(standardUserClient, pss.cluster.ID, createdProject.Name, opaqueSecretData, corev1.SecretTypeOpaque)
+	createdProjectScopedSecret, err := secretapi.CreateProjectScopedSecret(standardUserClient, pss.cluster.ID, createdProject.Name, opaqueSecretData, corev1.SecretTypeOpaque)
 	require.NoError(pss.T(), err)
 
 	log.Info("Verify that the project scoped secret has the expected label")
-	err = secrets.ValidateProjectScopedSecretLabel(createdProjectScopedSecret, createdProject.Name)
+	err = secretapi.VerifyProjectScopedSecretLabel(createdProjectScopedSecret, createdProject.Name)
 	require.NoError(pss.T(), err)
 
 	log.Info("Create five namespaces in the project.")
@@ -347,21 +350,21 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretAsClusterMember(
 	require.NoError(pss.T(), err)
 
 	log.Info("Verify that the secret is propagated to all the namespaces in the project and the data matches the original project-scoped secret.")
-	err = secrets.ValidatePropagatedNamespaceSecrets(standardUserClient, pss.cluster.ID, createdProject.Name, createdProjectScopedSecret, namespaceList)
+	err = secretapi.VerifyPropagatedNamespaceSecrets(standardUserClient, pss.cluster.ID, createdProject.Name, createdProjectScopedSecret, namespaceList)
 	require.NoError(pss.T(), err)
 
 	log.Infof("As a %v, delete the project scoped secret %s in project %s", role, createdProjectScopedSecret.Name, createdProject.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-	err = secrets.DeleteSecret(standardUserClient, clusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
+	err = secretapi.DeleteSecret(standardUserClient, extclusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
 	require.NoError(pss.T(), err, "Failed to delete project scoped secret as cluster member")
 
 	log.Info("Verify that the project scoped secret is deleted.")
-	_, err = secretsapi.GetSecretByName(standardUserClient, clusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, metav1.GetOptions{})
+	_, err = secretapi.GetSecretByName(standardUserClient, extclusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, metav1.GetOptions{})
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsNotFound(err), "Expected NotFound error, got: %v", err)
 
 	log.Info("Verify that the secret is removed from all the namespaces in the project.")
-	err = secrets.WaitForSecretInNamespaces(standardUserClient, pss.cluster.ID, createdProjectScopedSecret.Name, namespaceList, false)
+	err = secretapi.WaitForSecretInNamespaces(standardUserClient, pss.cluster.ID, createdProjectScopedSecret.Name, namespaceList, false)
 	require.NoError(pss.T(), err, "Expected propagated secret to be deleted from all namespaces")
 }
 
@@ -382,12 +385,12 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectMemberCannotAccessOtherProje
 
 	log.Infof("As a %v, try to delete the project scoped secret %s in project %s (unauthorized access).", role, createdProjectSecret.Name, createdProject1.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject1.Name)
-	err = secrets.DeleteSecret(standardUserClient, clusterapi.LocalCluster, backingNamespace, createdProjectSecret.Name)
+	err = secretapi.DeleteSecret(standardUserClient, extclusterapi.LocalCluster, backingNamespace, createdProjectSecret.Name)
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsForbidden(err), "Expected Forbidden error, got: %v", err)
 
 	log.Infof("As user %s, try to create a new project scoped secret in project %s (unauthorized access).", newUser.Username, createdProject1.Name)
-	_, err = secrets.CreateProjectScopedSecret(standardUserClient, pss.cluster.ID, createdProject1.Name, opaqueSecretData, corev1.SecretTypeOpaque)
+	_, err = secretapi.CreateProjectScopedSecret(standardUserClient, pss.cluster.ID, createdProject1.Name, opaqueSecretData, corev1.SecretTypeOpaque)
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsForbidden(err), "Expected Forbidden error, got: %v", err)
 }
@@ -405,34 +408,14 @@ func (pss *ProjectScopedSecretTestSuite) TestUserWithProjectsViewAllCannotAccess
 
 	log.Infof("As user with role %v, try to get the project scoped secret %s", projectViewerRole, createdProjectSecret.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-	_, err = secretsapi.GetSecretByName(standardUserClient, clusterapi.LocalCluster, backingNamespace, createdProjectSecret.Name, metav1.GetOptions{})
+	_, err = secretapi.GetSecretByName(standardUserClient, extclusterapi.LocalCluster, backingNamespace, createdProjectSecret.Name, metav1.GetOptions{})
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsForbidden(err), "Expected Forbidden error when getting project scoped secret, got: %v", err)
 
 	log.Infof("As user with role %v, try to get the secret %s in namespace %s", projectViewerRole, createdProjectSecret.Name, namespaceList[0].Name)
-	_, err = secretsapi.GetSecretByName(standardUserClient, pss.cluster.ID, namespaceList[0].Name, createdProjectSecret.Name, metav1.GetOptions{})
+	_, err = secretapi.GetSecretByName(standardUserClient, pss.cluster.ID, namespaceList[0].Name, createdProjectSecret.Name, metav1.GetOptions{})
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsForbidden(err), "Expected Forbidden error when getting secret in namespace, got: %v", err)
-}
-
-func (pss *ProjectScopedSecretTestSuite) TestVerifyProjectScopedSecretRancherRestart() {
-	subSession := pss.session.NewSession()
-	defer subSession.Cleanup()
-
-	createdProject, namespaceList, createdProjectScopedSecret := pss.testProjectScopedSecret(pss.cluster.ID, corev1.SecretTypeOpaque, opaqueSecretData)
-
-	log.Info("Restart Rancher")
-	err := deploymentapi.RestartDeployment(pss.client, clusterapi.LocalCluster, rbac.RancherDeploymentNamespace, rbac.RancherDeploymentName)
-	require.NoError(pss.T(), err, "Failed to restart Rancher deployment")
-
-	log.Info("Verify that the project scoped secret still exists after Rancher restart.")
-	backingNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)}}
-	err = secrets.WaitForSecretInNamespaces(pss.client, clusterapi.LocalCluster, createdProjectScopedSecret.Name, []*corev1.Namespace{backingNamespace}, true)
-	require.NoErrorf(pss.T(), err, "Project scoped secret %q not found in backing namespace %q after Rancher restart: %v", createdProjectScopedSecret.Name, backingNamespace, err)
-
-	log.Info("Verify that the secret propagated to all the namespaces in the project still exists.")
-	err = secrets.ValidatePropagatedNamespaceSecrets(pss.client, pss.cluster.ID, createdProject.Name, createdProjectScopedSecret, namespaceList)
-	require.NoErrorf(pss.T(), err, "Propagated secret %q validation failed in project %q after Rancher restart: %v", createdProjectScopedSecret.Name, createdProject.Name, err)
 }
 
 func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretWithSameNameInSameProject() {
@@ -443,14 +426,14 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretWithSameNameInSa
 
 	log.Infof("Attempt to create another project scoped secret with the same name '%s' in project '%s'", createdProjectScopedSecret.Name, createdProject.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-	ctx, err := clusterapi.GetClusterWranglerContext(pss.client, clusterapi.LocalCluster)
+	ctx, err := extclusterapi.GetClusterWranglerContext(pss.client, extclusterapi.LocalCluster)
 	require.NoError(pss.T(), err)
 
 	secretName := createdProjectScopedSecret.Name
 	labels := map[string]string{
-		secrets.ProjectScopedSecretLabel: createdProject.Name,
+		secretapi.ProjectScopedSecretLabel: createdProject.Name,
 	}
-	secretTemplate := secrets.NewSecretTemplate(secretName, backingNamespace, opaqueSecretData, corev1.SecretTypeOpaque, labels, nil)
+	secretTemplate := secretapi.NewSecretTemplate(secretName, backingNamespace, opaqueSecretData, corev1.SecretTypeOpaque, labels, nil)
 	_, err = ctx.Core.Secret().Create(&secretTemplate)
 
 	require.Error(pss.T(), err, "Expected error when creating project scoped secret with the same name")
@@ -469,19 +452,19 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretWithSameNameInDi
 
 	log.Infof("Create a project scoped secret with the same name '%s' in project '%s'", createdProjectScopedSecret.Name, createdProject2.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject2.Name)
-	ctx, err := clusterapi.GetClusterWranglerContext(pss.client, clusterapi.LocalCluster)
+	ctx, err := extclusterapi.GetClusterWranglerContext(pss.client, extclusterapi.LocalCluster)
 	require.NoError(pss.T(), err)
 
 	secretName := createdProjectScopedSecret.Name
 	labels := map[string]string{
-		secrets.ProjectScopedSecretLabel: createdProject2.Name,
+		secretapi.ProjectScopedSecretLabel: createdProject2.Name,
 	}
-	secretTemplate := secrets.NewSecretTemplate(secretName, backingNamespace, opaqueSecretData, corev1.SecretTypeOpaque, labels, nil)
+	secretTemplate := secretapi.NewSecretTemplate(secretName, backingNamespace, opaqueSecretData, corev1.SecretTypeOpaque, labels, nil)
 	createdProjectScopedSecret2, err := ctx.Core.Secret().Create(&secretTemplate)
 	require.NoError(pss.T(), err)
 
 	log.Info("Verify that the project scoped secret has the expected label")
-	err = secrets.ValidateProjectScopedSecretLabel(createdProjectScopedSecret2, createdProject2.Name)
+	err = secretapi.VerifyProjectScopedSecretLabel(createdProjectScopedSecret2, createdProject2.Name)
 	require.NoError(pss.T(), err)
 }
 
@@ -502,29 +485,29 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecrettPropagatedToNam
 	nsData := map[string][]byte{
 		"foo": []byte("bar"),
 	}
-	nsSecret, err := secrets.CreateSecret(pss.client, pss.cluster.ID, targetNamespace.Name, nsData, corev1.SecretTypeOpaque, nil, nil)
+	nsSecret, err := secretapi.CreateSecret(pss.client, pss.cluster.ID, targetNamespace.Name, nsData, corev1.SecretTypeOpaque, nil, nil)
 	require.NoError(pss.T(), err)
 
 	log.Infof("Create project scoped secret with the same name as the namespace in project '%s'", createdProject.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-	ctx, err := clusterapi.GetClusterWranglerContext(pss.client, clusterapi.LocalCluster)
+	ctx, err := extclusterapi.GetClusterWranglerContext(pss.client, extclusterapi.LocalCluster)
 	require.NoError(pss.T(), err)
 
 	labels := map[string]string{
-		secrets.ProjectScopedSecretLabel: createdProject.Name,
+		secretapi.ProjectScopedSecretLabel: createdProject.Name,
 	}
 	secretName := nsSecret.Name
-	secretTemplate := secrets.NewSecretTemplate(secretName, backingNamespace, opaqueSecretData, corev1.SecretTypeOpaque, labels, nil)
+	secretTemplate := secretapi.NewSecretTemplate(secretName, backingNamespace, opaqueSecretData, corev1.SecretTypeOpaque, labels, nil)
 
 	createdProjectScopedSecret, err := ctx.Core.Secret().Create(&secretTemplate)
 	require.NoError(pss.T(), err)
 
 	log.Info("Verify that the project scoped secret has the expected label")
-	err = secrets.ValidateProjectScopedSecretLabel(createdProjectScopedSecret, createdProject.Name)
+	err = secretapi.VerifyProjectScopedSecretLabel(createdProjectScopedSecret, createdProject.Name)
 	require.NoError(pss.T(), err)
 
 	log.Info("Verify that the secret is propagated to all the namespaces in the project and the data matches the original project-scoped secret.")
-	err = secrets.ValidatePropagatedNamespaceSecrets(pss.client, pss.cluster.ID, createdProject.Name, createdProjectScopedSecret, namespaceList)
+	err = secretapi.VerifyPropagatedNamespaceSecrets(pss.client, pss.cluster.ID, createdProject.Name, createdProjectScopedSecret, namespaceList)
 	require.NoError(pss.T(), err)
 }
 

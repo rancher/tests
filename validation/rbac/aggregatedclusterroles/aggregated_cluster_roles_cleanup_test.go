@@ -9,14 +9,15 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/users"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
+	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/secrets"
 	userapi "github.com/rancher/tests/actions/users"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
@@ -75,7 +76,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) acrCreateTestResourcesForCle
 	createdProject, err := projectapi.CreateProject(client, cluster.ID)
 	require.NoError(acrd.T(), err, "Failed to create project")
 
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(client, cluster.ID)
+	downstreamContext, err := extclusterapi.GetClusterWranglerContext(client, cluster.ID)
 	require.NoError(acrd.T(), err, "Failed to get downstream cluster context")
 
 	var createdNamespaces []*corev1.Namespace
@@ -85,7 +86,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) acrCreateTestResourcesForCle
 
 	numNamespaces := 2
 	for i := 0; i < numNamespaces; i++ {
-		namespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, cluster.ID, createdProject.Name, nil)
+		namespace, err := namespaceapi.CreateNamespace(client, cluster.ID, createdProject.Name, namegen.AppendRandomString("testns-"), "", nil, nil)
 		require.NoError(acrd.T(), err, "Failed to create namespace")
 		createdNamespaces = append(createdNamespaces, namespace)
 
@@ -101,7 +102,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) acrCreateTestResourcesForCle
 		secretData := map[string][]byte{
 			"hello": []byte("world"),
 		}
-		createdSecret, err := secrets.CreateSecret(client, cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
+		createdSecret, err := secretapi.CreateSecret(client, cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 		require.NoError(acrd.T(), err, "Failed to create secret in namespace %s", namespace.Name)
 		createdSecrets = append(createdSecrets, createdSecret)
 	}
@@ -124,7 +125,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestDeleteRoleTemplateRemove
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 4, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, mainRTName)
@@ -136,7 +137,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestDeleteRoleTemplateRemove
 	require.NoError(acrd.T(), err, "Failed to delete role template")
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 0, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, mainRTName)
@@ -164,7 +165,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbDeleteRoleTemplateWi
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -178,7 +179,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbDeleteRoleTemplateWi
 	require.NoError(acrd.T(), err, "CRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 1, 0)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 1)
 	require.NoError(acrd.T(), err)
@@ -198,7 +199,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbDeleteRoleTemplateWi
 	require.NoError(acrd.T(), err, "Failed to delete role template")
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 4, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -219,7 +220,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbDeleteRoleTemplateWi
 	require.NoError(acrd.T(), err, "Failed to delete role template")
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 0, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -247,7 +248,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbDeleteRoleTemplateWi
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -266,7 +267,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbDeleteRoleTemplateWi
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrd.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrd.T(), err)
@@ -286,7 +287,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbDeleteRoleTemplateWi
 	require.NoError(acrd.T(), err, "Failed to delete role template")
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 4, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -307,7 +308,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbDeleteRoleTemplateWi
 	require.NoError(acrd.T(), err, "Failed to delete role template")
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 0, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -341,7 +342,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbRemoveUserFromCluste
 	require.NoError(acrd.T(), err, "CRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 1, 0)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 1)
 	require.NoError(acrd.T(), err)
@@ -363,13 +364,13 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbRemoveUserFromCluste
 	require.NoError(acrd.T(), err, "CRTB still exists for the user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 0, 0)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 0, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 0)
 	require.NoError(acrd.T(), err)
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -417,7 +418,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbRemoveUserFromProjec
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrd.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrd.T(), err)
@@ -439,13 +440,13 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbRemoveUserFromProjec
 	require.NoError(acrd.T(), err, "PRTB still exists for the user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForPrtb(acrd.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 0, 0)
 	require.NoError(acrd.T(), err)
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -481,7 +482,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbUserDeletionCleansUp
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -495,7 +496,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbUserDeletionCleansUp
 	require.NoError(acrd.T(), err, "CRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 1, 0)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 1)
 	require.NoError(acrd.T(), err)
@@ -509,11 +510,11 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbUserDeletionCleansUp
 	require.NoError(acrd.T(), err, "CRTB still exists for the deleted user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 0, 0))
+	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 0, 0))
 	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 0))
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -541,7 +542,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbUserDeletionCleansUp
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -560,7 +561,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbUserDeletionCleansUp
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrd.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrd.T(), err)
@@ -574,13 +575,13 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbUserDeletionCleansUp
 	require.NoError(acrd.T(), err, "PRTB still exists for the deleted user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForPrtb(acrd.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 0, 0)
 	require.NoError(acrd.T(), err)
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -602,7 +603,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbClusterOwnerUserDele
 	require.NoError(acrd.T(), err, "CRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 1, 0)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 1)
 	require.NoError(acrd.T(), err)
@@ -616,7 +617,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbClusterOwnerUserDele
 	require.NoError(acrd.T(), err, "CRTB still exists for the deleted user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 0, 0))
+	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 0, 0))
 	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 0))
 }
 
@@ -647,7 +648,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbProjectOwnerUserDele
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrd.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 0, 0)
 	require.NoError(acrd.T(), err)

@@ -58,7 +58,7 @@ replace (
 require (
 	github.com/qase-tms/qase-go/qase-api-client v1.2.1
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20260427181519-3a8ec0abcf3c
+	github.com/rancher/shepherd v0.0.0-20260430211500-1f50d155268e
 	github.com/rancher/tfp-automation v0.0.0-20260428144157-a2d4a5a258c7
 )
 

@@ -11,7 +11,7 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
@@ -42,7 +42,7 @@ func verifyRAGlobalRoleBindingsForUser(t *testing.T, user *management.User, admi
 
 // verifyRARoleBindingsForUser validates that the corresponding role bindings are created for the user
 func verifyRARoleBindingsForUser(t *testing.T, user *management.User, adminClient *rancher.Client, clusterID string) {
-	rblist, err := rbacapi.ListRoleBindings(adminClient, clusterapi.LocalCluster, clusterID, metav1.ListOptions{})
+	rblist, err := rbacapi.ListRoleBindings(adminClient, extclusterapi.LocalCluster, clusterID, metav1.ListOptions{})
 	require.NoError(t, err)
 	userID := user.Resource.ID
 	userRoleBindings := []string{}

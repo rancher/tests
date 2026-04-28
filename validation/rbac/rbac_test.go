@@ -12,8 +12,8 @@ import (
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -55,7 +55,7 @@ func (rb *RBTestSuite) sequentialTestRBAC(role rbac.Role, member string, user *m
 	standardClient, err := rb.client.AsUser(user)
 	require.NoError(rb.T(), err)
 
-	adminProject, adminNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rb.client, rb.cluster.ID)
+	adminProject, adminNamespace, err := projectapi.CreateProjectAndNamespace(rb.client, rb.cluster.ID)
 	require.NoError(rb.T(), err)
 
 	if member == rbac.StandardUser.String() {

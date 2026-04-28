@@ -7,7 +7,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/api/scheme"
 	"github.com/rancher/shepherd/pkg/wait"
 	appv1 "k8s.io/api/apps/v1"
@@ -91,7 +91,7 @@ func WatchAndWaitDeployments(client *rancher.Client, clusterID, namespace string
 
 // RestartDeployment triggers a rollout restart of a deployment by updating an annotation
 func RestartDeployment(client *rancher.Client, clusterID, namespaceName, deploymentName string) error {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func RestartDeployment(client *rancher.Client, clusterID, namespaceName, deploym
 
 // WaitForDeploymentActive uses wrangler context to wait for a deployment to become active
 func WaitForDeploymentActive(client *rancher.Client, clusterID, namespaceName, deploymentName string) error {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -137,4 +137,23 @@ func WaitForDeploymentActive(client *rancher.Client, clusterID, namespaceName, d
 		return true, nil
 	},
 	)
+}
+
+// GetLatestStatusMessageFromDeployment retrieves the latest status message and reason from a deployment for a given status type.
+func GetLatestStatusMessageFromDeployment(deployment *appv1.Deployment, messageType string) (string, string, error) {
+	latestTime := time.Time{}
+	latestMessage := ""
+	latestReason := ""
+
+	targetMessageType := appv1.DeploymentConditionType(messageType)
+
+	for _, condition := range deployment.Status.Conditions {
+		if condition.Type == targetMessageType && condition.LastUpdateTime.After(latestTime) {
+			latestMessage = condition.Message
+			latestReason = condition.Reason
+			latestTime = condition.LastUpdateTime.Time
+		}
+	}
+
+	return latestMessage, latestReason, nil
 }

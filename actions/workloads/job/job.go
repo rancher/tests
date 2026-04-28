@@ -7,7 +7,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/wait"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -18,7 +18,7 @@ import (
 
 // CreateJob is a helper to create a job in a namespace using wrangler context
 func CreateJob(client *rancher.Client, clusterID, namespaceName string, podTemplate corev1.PodTemplateSpec, watchJob bool) (*batchv1.Job, error) {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func CreateJobFromConfig(client *v1.Client, clusterID string, job *batchv1.Job) 
 
 // WatchAndWaitJobWrangler is a helper to watch and wait for job to be active using wrangler context
 func WatchAndWaitJobWrangler(client *rancher.Client, clusterID, namespaceName string, job *batchv1.Job) error {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func WatchAndWaitJobWrangler(client *rancher.Client, clusterID, namespaceName st
 
 // DeleteJob is a helper to delete a job in a namespace using wrangler context
 func DeleteJob(client *rancher.Client, clusterID string, job *batchv1.Job, waitForDelete bool) error {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func DeleteJob(client *rancher.Client, clusterID string, job *batchv1.Job, waitF
 
 // WaitForDeleteJob is a helper to wait for job to delete
 func WaitForDeleteJob(client *rancher.Client, clusterID string, job *batchv1.Job) error {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}

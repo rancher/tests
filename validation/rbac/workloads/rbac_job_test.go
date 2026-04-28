@@ -8,11 +8,11 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/job"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -69,7 +69,7 @@ func (rj *RbacJobTestSuite) TestCreateJob() {
 	for _, tt := range tests {
 		rj.Run("Validate job creation as user with role "+tt.role.String(), func() {
 			log.Info("Creating a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rj.client, rj.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rj.client, rj.cluster.ID)
 			assert.NoError(rj.T(), err)
 
 			log.Infof("Creating a standard user and add the user to a cluster/project with role %s", tt.role)
@@ -108,7 +108,7 @@ func (rj *RbacJobTestSuite) TestListJob() {
 	for _, tt := range tests {
 		rj.Run("Validate listing job as user with role "+tt.role.String(), func() {
 			log.Info("Creating a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rj.client, rj.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rj.client, rj.cluster.ID)
 			assert.NoError(rj.T(), err)
 
 			log.Infof("Creating a standard user and add the user to a cluster/project with role %s", tt.role)
@@ -121,7 +121,7 @@ func (rj *RbacJobTestSuite) TestListJob() {
 			assert.NoError(rj.T(), err, "failed to create job")
 
 			log.Infof("As a %v, listing the job", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rj.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rj.cluster.ID)
 			assert.NoError(rj.T(), err)
 			jobList, err := standardUserContext.Batch.Job().List(namespace.Name, metav1.ListOptions{})
 			switch tt.role.String() {
@@ -155,7 +155,7 @@ func (rj *RbacJobTestSuite) TestUpdateJob() {
 	for _, tt := range tests {
 		rj.Run("Validate updating job as user with role "+tt.role.String(), func() {
 			log.Info("Creating a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rj.client, rj.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rj.client, rj.cluster.ID)
 			assert.NoError(rj.T(), err)
 
 			log.Infof("Creating a standard user and add the user to a cluster/project with role %s", tt.role)
@@ -168,9 +168,9 @@ func (rj *RbacJobTestSuite) TestUpdateJob() {
 			assert.NoError(rj.T(), err, "failed to create job")
 
 			log.Infof("As a %v, updating the job %s with a new label.", tt.role.String(), createdJob.Name)
-			adminContext, err := clusterapi.GetClusterWranglerContext(rj.client, rj.cluster.ID)
+			adminContext, err := extclusterapi.GetClusterWranglerContext(rj.client, rj.cluster.ID)
 			assert.NoError(rj.T(), err)
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rj.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rj.cluster.ID)
 			assert.NoError(rj.T(), err)
 
 			latestJob, err := adminContext.Batch.Job().Get(namespace.Name, createdJob.Name, metav1.GetOptions{})
@@ -214,7 +214,7 @@ func (rj *RbacJobTestSuite) TestDeleteJob() {
 	for _, tt := range tests {
 		rj.Run("Validate deleting job as user with role "+tt.role.String(), func() {
 			log.Info("Creating a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rj.client, rj.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rj.client, rj.cluster.ID)
 			assert.NoError(rj.T(), err)
 
 			log.Infof("Creating a standard user and add the user to a cluster/project with role %s", tt.role)
@@ -260,7 +260,7 @@ func (rj *RbacJobTestSuite) TestCrudJobAsClusterMember() {
 	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rj.T(), err)
 
-	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, rj.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespace(userClient, rj.cluster.ID, createdProject.Name, namegen.AppendRandomString("ns-"), "", nil, nil)
 	require.NoError(rj.T(), err)
 
 	log.Infof("As a %v, creating a job in the namespace %v", role, namespace.Name)
@@ -269,7 +269,7 @@ func (rj *RbacJobTestSuite) TestCrudJobAsClusterMember() {
 	require.NoError(rj.T(), err, "failed to create job")
 
 	log.Infof("As a %v, list the job", role)
-	standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rj.cluster.ID)
+	standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rj.cluster.ID)
 	assert.NoError(rj.T(), err)
 	jobList, err := standardUserContext.Batch.Job().List(namespace.Name, metav1.ListOptions{})
 	require.NoError(rj.T(), err, "failed to list jobs")

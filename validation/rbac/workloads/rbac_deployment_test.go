@@ -8,12 +8,12 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
@@ -69,7 +69,7 @@ func (rd *RbacDeploymentTestSuite) TestCreateDeployment() {
 	for _, tt := range tests {
 		rd.Run("Validate deployment creation as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rd.client, rd.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rd.client, rd.cluster.ID)
 			assert.NoError(rd.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -107,7 +107,7 @@ func (rd *RbacDeploymentTestSuite) TestListDeployment() {
 	for _, tt := range tests {
 		rd.Run("Validate listing deployment as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rd.client, rd.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rd.client, rd.cluster.ID)
 			assert.NoError(rd.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -119,7 +119,7 @@ func (rd *RbacDeploymentTestSuite) TestListDeployment() {
 			assert.NoError(rd.T(), err, "failed to create deployment")
 
 			log.Infof("As a %v, list the deployment", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rd.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rd.cluster.ID)
 			assert.NoError(rd.T(), err)
 			deploymentList, err := standardUserContext.Apps.Deployment().List(namespace.Name, metav1.ListOptions{})
 			switch tt.role.String() {
@@ -153,7 +153,7 @@ func (rd *RbacDeploymentTestSuite) TestUpdateDeployment() {
 	for _, tt := range tests {
 		rd.Run("Validate updating deployment as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rd.client, rd.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rd.client, rd.cluster.ID)
 			assert.NoError(rd.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -173,7 +173,7 @@ func (rd *RbacDeploymentTestSuite) TestUpdateDeployment() {
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rd.T(), err, "failed to update deployment")
-				standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rd.cluster.ID)
+				standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rd.cluster.ID)
 				assert.NoError(rd.T(), err)
 				updatedDeployment, err = standardUserContext.Apps.Deployment().Get(namespace.Name, updatedDeployment.Name, metav1.GetOptions{})
 				assert.NoError(rd.T(), err, "Failed to get the updated deployment after updating labels.")
@@ -204,7 +204,7 @@ func (rd *RbacDeploymentTestSuite) TestDeleteDeployment() {
 	for _, tt := range tests {
 		rd.Run("Validate deleting deployment as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rd.client, rd.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rd.client, rd.cluster.ID)
 			assert.NoError(rd.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -216,7 +216,7 @@ func (rd *RbacDeploymentTestSuite) TestDeleteDeployment() {
 			assert.NoError(rd.T(), err, "failed to create deployment")
 
 			log.Infof("As a %v, delete the deployment", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rd.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rd.cluster.ID)
 			assert.NoError(rd.T(), err)
 			err = standardUserContext.Apps.Deployment().Delete(namespace.Name, createdDeployment.Name, &metav1.DeleteOptions{})
 			switch tt.role.String() {
@@ -252,7 +252,7 @@ func (rd *RbacDeploymentTestSuite) TestCrudDeploymentAsClusterMember() {
 	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rd.T(), err)
 
-	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, rd.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespace(userClient, rd.cluster.ID, createdProject.Name, namegen.AppendRandomString("ns-"), "", nil, nil)
 	require.NoError(rd.T(), err)
 
 	log.Infof("As a %v, create a deployment in the namespace %v", role, namespace.Name)
@@ -260,7 +260,7 @@ func (rd *RbacDeploymentTestSuite) TestCrudDeploymentAsClusterMember() {
 	require.NoError(rd.T(), err, "failed to create deployment")
 
 	log.Infof("As a %v, list the deployment", role)
-	standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rd.cluster.ID)
+	standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rd.cluster.ID)
 	require.NoError(rd.T(), err)
 	deploymentList, err := standardUserContext.Apps.Deployment().List(namespace.Name, metav1.ListOptions{})
 	require.NoError(rd.T(), err, "failed to list deployment")
