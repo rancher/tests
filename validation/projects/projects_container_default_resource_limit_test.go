@@ -3,6 +3,7 @@
 package projects
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -10,9 +11,10 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/rbac"
@@ -57,7 +59,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) setupUserForProject() (*ran
 	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(pcrl.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), pcrl.cluster, nil)
 	require.NoError(pcrl.T(), err, "failed to add the user as a cluster owner to the downstream cluster")
 
-	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, pcrl.cluster.ID)
+	standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, pcrl.cluster.ID)
 	require.NoError(pcrl.T(), err)
 
 	return standardUserClient, standardUserContext
@@ -365,10 +367,10 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestLimitDeletionPropagatio
 	require.Equal(pcrl.T(), memoryReservation, projectSpec.RequestsMemory, "Memory reservation mismatch")
 
 	log.Info("Verify that the limit range in the existing namespace is deleted.")
-	ctx, err := clusterapi.GetClusterWranglerContext(standardUserClient, pcrl.cluster.ID)
+	wranglerCtx, err := extclusterapi.GetClusterWranglerContext(standardUserClient, pcrl.cluster.ID)
 	require.NoError(pcrl.T(), err)
-	err = kwait.Poll(defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, func() (done bool, pollErr error) {
-		limitRanges, err := ctx.Core.LimitRange().List(createdNamespace.Name, metav1.ListOptions{})
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveHundredMillisecondTimeout, defaults.TenSecondTimeout, true, func(ctx context.Context) (bool, error) {
+		limitRanges, err := wranglerCtx.Core.LimitRange().List(createdNamespace.Name, metav1.ListOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -434,13 +436,13 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestOverrideDefaultLimitInN
 	memoryLimit = "128Mi"
 	memoryReservation = "64Mi"
 
-	updatedNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, pcrl.cluster.ID, createdNamespace.Name)
+	updatedNamespace, err := extnamespaceapi.GetNamespaceByName(standardUserClient, pcrl.cluster.ID, createdNamespace.Name)
 	require.NoError(pcrl.T(), err)
 	if _, exists := updatedNamespace.Annotations[projectapi.ContainerDefaultLimitAnnotation]; !exists {
 		updatedNamespace.Annotations[projectapi.ContainerDefaultLimitAnnotation] = fmt.Sprintf(`{"limitsCpu":"%s","limitsMemory":"%s","requestsCpu":"%s","requestsMemory":"%s"}`, cpuLimit, memoryLimit, cpuReservation, memoryReservation)
 	}
 
-	currentNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, pcrl.cluster.ID, updatedNamespace.Name)
+	currentNamespace, err := extnamespaceapi.GetNamespaceByName(standardUserClient, pcrl.cluster.ID, updatedNamespace.Name)
 	require.NoError(pcrl.T(), err)
 	updatedNamespace.ResourceVersion = currentNamespace.ResourceVersion
 	namespace, err := standardUserContext.Core.Namespace().Update(updatedNamespace)

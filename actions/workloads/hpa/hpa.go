@@ -6,7 +6,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/sirupsen/logrus"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -18,7 +18,7 @@ import (
 
 // CreateHPA is a helper function that uses the wrangler client to create a horizontal pod autoscaler on a namespace for a specific cluster.
 func CreateHPA(client *rancher.Client, clusterID, namespace string, hpa *autoscalingv2.HorizontalPodAutoscaler) (*autoscalingv2.HorizontalPodAutoscaler, error) {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +33,7 @@ func CreateHPA(client *rancher.Client, clusterID, namespace string, hpa *autosca
 
 // UpdateHPA is a helper function that uses the wrangler client to update a horizontal pod autoscaler in a namespace for a specific cluster.
 func UpdateHPA(client *rancher.Client, clusterID, namespace string, existingHPA *autoscalingv2.HorizontalPodAutoscaler, updatedHPA *autoscalingv2.HorizontalPodAutoscaler) (*autoscalingv2.HorizontalPodAutoscaler, error) {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func UpdateHPA(client *rancher.Client, clusterID, namespace string, existingHPA 
 
 // DeleteHPA is a helper function that uses the wrangler client to delete a horizontal pod autoscaler from a cluster.
 func DeleteHPA(client *rancher.Client, clusterID, namespace, hpaName string) error {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ type HPAList struct {
 
 // ListHPAs is a helper function that uses the wrangler client to list horizontal pod autoscalers on a namespace for a specific cluster with its list options.
 func ListHPAs(client *rancher.Client, clusterID, namespace string, listOpts metav1.ListOptions) ([]autoscalingv2.HorizontalPodAutoscaler, error) {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func BuildMemoryAverageValueMetric(avgValue string) autoscalingv2.MetricSpec {
 func WaitForHPAActive(client *rancher.Client, clusterID, namespace, hpaName string) (*autoscalingv2.HorizontalPodAutoscaler, error) {
 	var hpaObj *autoscalingv2.HorizontalPodAutoscaler
 
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}

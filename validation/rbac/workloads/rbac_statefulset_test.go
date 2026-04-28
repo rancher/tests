@@ -8,11 +8,11 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/actions/workloads/statefulset"
@@ -69,7 +69,7 @@ func (rs *RbacStatefulsetTestSuite) TestCreateStatefulSet() {
 	for _, tt := range tests {
 		rs.Run("Validate statefulset creation as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rs.client, rs.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rs.client, rs.cluster.ID)
 			assert.NoError(rs.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -108,7 +108,7 @@ func (rs *RbacStatefulsetTestSuite) TestListStatefulset() {
 	for _, tt := range tests {
 		rs.Run("Validate listing statefulset as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rs.client, rs.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rs.client, rs.cluster.ID)
 			assert.NoError(rs.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -121,7 +121,7 @@ func (rs *RbacStatefulsetTestSuite) TestListStatefulset() {
 			assert.NoError(rs.T(), err, "failed to create statefulset")
 
 			log.Infof("As a %v, list the statefulset", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rs.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rs.cluster.ID)
 			assert.NoError(rs.T(), err)
 			statefulsetList, err := standardUserContext.Apps.StatefulSet().List(namespace.Name, metav1.ListOptions{})
 			switch tt.role.String() {
@@ -155,7 +155,7 @@ func (rs *RbacStatefulsetTestSuite) TestUpdateStatefulset() {
 	for _, tt := range tests {
 		rs.Run("Validate updating statefulset as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rs.client, rs.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rs.client, rs.cluster.ID)
 			assert.NoError(rs.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -176,7 +176,7 @@ func (rs *RbacStatefulsetTestSuite) TestUpdateStatefulset() {
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rs.T(), err, "failed to update statefulset")
-				standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rs.cluster.ID)
+				standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rs.cluster.ID)
 				assert.NoError(rs.T(), err)
 				updatedStatefulset, err = standardUserContext.Apps.StatefulSet().Get(namespace.Name, updatedStatefulset.Name, metav1.GetOptions{})
 				assert.NoError(rs.T(), err, "Failed to get the updated statefulset after updating labels.")
@@ -207,7 +207,7 @@ func (rs *RbacStatefulsetTestSuite) TestDeleteStatefulset() {
 	for _, tt := range tests {
 		rs.Run("Validate deleting statefulset as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rs.client, rs.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rs.client, rs.cluster.ID)
 			assert.NoError(rs.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -220,7 +220,7 @@ func (rs *RbacStatefulsetTestSuite) TestDeleteStatefulset() {
 			assert.NoError(rs.T(), err, "failed to create statefulset")
 
 			log.Infof("As a %v, delete the statefulset", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rs.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rs.cluster.ID)
 			assert.NoError(rs.T(), err)
 			err = statefulset.DeleteStatefulSet(userClient, rs.cluster.ID, createdStatefulset)
 			standardUserContext.Apps.StatefulSet().Delete(namespace.Name, createdStatefulset.Name, &metav1.DeleteOptions{})
@@ -257,7 +257,7 @@ func (rs *RbacStatefulsetTestSuite) TestCrudStatefulsetAsClusterMember() {
 	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rs.T(), err)
 
-	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, rs.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespace(userClient, rs.cluster.ID, createdProject.Name, namegen.AppendRandomString("ns-"), "", nil, nil)
 	require.NoError(rs.T(), err)
 
 	log.Infof("As a %v, create a statefulset in the namespace %v", role, namespace.Name)
@@ -266,7 +266,7 @@ func (rs *RbacStatefulsetTestSuite) TestCrudStatefulsetAsClusterMember() {
 	assert.NoError(rs.T(), err, "failed to create statefulset")
 
 	log.Infof("As a %v, list the statefulset", role)
-	standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rs.cluster.ID)
+	standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rs.cluster.ID)
 	require.NoError(rs.T(), err)
 	statefulsetList, err := standardUserContext.Apps.StatefulSet().List(namespace.Name, metav1.ListOptions{})
 	require.NoError(rs.T(), err, "failed to list statefulset")

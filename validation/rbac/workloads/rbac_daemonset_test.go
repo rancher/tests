@@ -8,11 +8,12 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
-	"github.com/rancher/tests/actions/projects"
+
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/daemonset"
 	log "github.com/sirupsen/logrus"
@@ -68,7 +69,7 @@ func (rds *RbacDaemonsetTestSuite) TestCreateDaemonset() {
 	for _, tt := range tests {
 		rds.Run("Validate daemonset creation as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rds.client, rds.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rds.client, rds.cluster.ID)
 			assert.NoError(rds.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -106,7 +107,7 @@ func (rds *RbacDaemonsetTestSuite) TestListDaemonset() {
 	for _, tt := range tests {
 		rds.Run("Validate listing daemonset as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rds.client, rds.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rds.client, rds.cluster.ID)
 			assert.NoError(rds.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -118,7 +119,7 @@ func (rds *RbacDaemonsetTestSuite) TestListDaemonset() {
 			assert.NoError(rds.T(), err, "failed to create daemonset")
 
 			log.Infof("As a %v, list the daemonset", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rds.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rds.cluster.ID)
 			assert.NoError(rds.T(), err)
 			daemonsetList, err := standardUserContext.Apps.DaemonSet().List(namespace.Name, metav1.ListOptions{})
 			switch tt.role.String() {
@@ -152,7 +153,7 @@ func (rds *RbacDaemonsetTestSuite) TestUpdateDaemonset() {
 	for _, tt := range tests {
 		rds.Run("Validate updating daemonset as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rds.client, rds.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rds.client, rds.cluster.ID)
 			assert.NoError(rds.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -172,7 +173,7 @@ func (rds *RbacDaemonsetTestSuite) TestUpdateDaemonset() {
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rds.T(), err, "failed to update daemonset")
-				standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rds.cluster.ID)
+				standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rds.cluster.ID)
 				assert.NoError(rds.T(), err)
 				updatedDaemonSet, err = standardUserContext.Apps.DaemonSet().Get(namespace.Name, updatedDaemonSet.Name, metav1.GetOptions{})
 				assert.NoError(rds.T(), err, "Failed to get the updated daemonSet after updating labels.")
@@ -203,7 +204,7 @@ func (rds *RbacDaemonsetTestSuite) TestDeleteDaemonset() {
 	for _, tt := range tests {
 		rds.Run("Validate deleting daemonset as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rds.client, rds.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rds.client, rds.cluster.ID)
 			assert.NoError(rds.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -215,7 +216,7 @@ func (rds *RbacDaemonsetTestSuite) TestDeleteDaemonset() {
 			assert.NoError(rds.T(), err, "failed to create daemonset")
 
 			log.Infof("As a %v, delete the daemonset", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rds.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rds.cluster.ID)
 			assert.NoError(rds.T(), err)
 			err = standardUserContext.Apps.DaemonSet().Delete(namespace.Name, createdDaemonset.Name, &metav1.DeleteOptions{})
 			switch tt.role.String() {
@@ -251,7 +252,7 @@ func (rds *RbacDaemonsetTestSuite) TestCrudDaemonsetAsClusterMember() {
 	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rds.T(), err)
 
-	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(userClient, rds.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespace(userClient, rds.cluster.ID, createdProject.Name, namegen.AppendRandomString("ns-"), "", nil, nil)
 	require.NoError(rds.T(), err)
 
 	log.Infof("As a %v, create a daemonset in the namespace %v", role, namespace.Name)
@@ -259,7 +260,7 @@ func (rds *RbacDaemonsetTestSuite) TestCrudDaemonsetAsClusterMember() {
 	require.NoError(rds.T(), err, "failed to create daemonset")
 
 	log.Infof("As a %v, list the daemonset", role)
-	standardUserContext, err := clusterapi.GetClusterWranglerContext(userClient, rds.cluster.ID)
+	standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rds.cluster.ID)
 	require.NoError(rds.T(), err)
 	daemonsetList, err := standardUserContext.Apps.DaemonSet().List(namespace.Name, metav1.ListOptions{})
 	require.NoError(rds.T(), err, "failed to list daemonset")

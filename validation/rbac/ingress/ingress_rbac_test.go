@@ -13,7 +13,7 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	ingress "github.com/rancher/tests/actions/kubeapi/ingresses"
-	"github.com/rancher/tests/actions/projects"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
@@ -71,7 +71,7 @@ func (i *IngressRBACTestSuite) TestCreateIngress() {
 	for _, tt := range tests {
 		i.Run("Validate creating ingress as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(i.client, i.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(i.client, i.cluster.ID)
 			assert.NoError(i.T(), err)
 
 			log.Infof("Create a standard user and add the user as %s", tt.role)
@@ -120,7 +120,7 @@ func (i *IngressRBACTestSuite) TestListIngress() {
 	for _, tt := range tests {
 		i.Run("Validate listing ingress as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(i.client, i.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(i.client, i.cluster.ID)
 			assert.NoError(i.T(), err)
 
 			log.Infof("Create a standard user and add the user as %s", tt.role)
@@ -173,7 +173,7 @@ func (i *IngressRBACTestSuite) TestUpdateIngress() {
 	for _, tt := range tests {
 		i.Run("Validate updating ingress as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(i.client, i.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(i.client, i.cluster.ID)
 			assert.NoError(i.T(), err)
 
 			log.Infof("Create a standard user and add the user as %s", tt.role)
@@ -231,7 +231,7 @@ func (i *IngressRBACTestSuite) TestDeleteIngress() {
 	for _, tt := range tests {
 		i.Run("Validate deleting ingress as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(i.client, i.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(i.client, i.cluster.ID)
 			assert.NoError(i.T(), err)
 
 			log.Infof("Create a standard user and add the user as %s", tt.role)

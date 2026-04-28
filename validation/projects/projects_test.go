@@ -9,11 +9,11 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
@@ -55,7 +55,7 @@ func (pr *ProjectsTestSuite) TestProjectsCrudLocalCluster() {
 	defer subSession.Cleanup()
 
 	log.Info("Create a project in the local cluster and verify that the project can be listed.")
-	createdProject, err := projectapi.CreateProject(pr.client, clusterapi.LocalCluster)
+	createdProject, err := projectapi.CreateProject(pr.client, extclusterapi.LocalCluster)
 	require.NoError(pr.T(), err)
 
 	projectList, err := pr.client.WranglerContext.Mgmt.Project().List(createdProject.Namespace, metav1.ListOptions{
@@ -123,14 +123,14 @@ func (pr *ProjectsTestSuite) TestDeleteSystemProject() {
 	defer subSession.Cleanup()
 
 	log.Info("Delete the System Project in the local cluster.")
-	projectList, err := pr.client.WranglerContext.Mgmt.Project().List(clusterapi.LocalCluster, metav1.ListOptions{
+	projectList, err := pr.client.WranglerContext.Mgmt.Project().List(extclusterapi.LocalCluster, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", projectapi.SystemProjectLabel, "true"),
 	})
 	require.NoError(pr.T(), err)
 	require.Equal(pr.T(), 1, len(projectList.Items), "Expected one project in the list")
 
 	systemProjectName := projectList.Items[0].ObjectMeta.Name
-	err = projectapi.DeleteProject(pr.client, clusterapi.LocalCluster, systemProjectName, false)
+	err = projectapi.DeleteProject(pr.client, extclusterapi.LocalCluster, systemProjectName, false)
 	require.Error(pr.T(), err, "Failed to delete project")
 	expectedErrorMessage := "admission webhook \"rancher.cattle.io.projects.management.cattle.io\" denied the request: System Project cannot be deleted"
 	require.Equal(pr.T(), expectedErrorMessage, err.Error())
@@ -158,7 +158,7 @@ func (pr *ProjectsTestSuite) TestMoveNamespaceOutOfProject() {
 	require.NoError(pr.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Create a project in the downstream cluster and a namespace in the project.")
-	createdProject, createdNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(pr.client, pr.cluster.ID)
+	createdProject, createdNamespace, err := projectapi.CreateProjectAndNamespace(pr.client, pr.cluster.ID)
 	require.NoError(pr.T(), err)
 
 	log.Info("Verify that the namespace has the label and annotation referencing the project.")
@@ -166,15 +166,15 @@ func (pr *ProjectsTestSuite) TestMoveNamespaceOutOfProject() {
 	require.NoError(pr.T(), err)
 
 	log.Info("Move the namespace out of the project.")
-	updatedNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, pr.cluster.ID, createdNamespace.Name)
+	updatedNamespace, err := extnamespaceapi.GetNamespaceByName(standardUserClient, pr.cluster.ID, createdNamespace.Name)
 	require.NoError(pr.T(), err)
 	delete(updatedNamespace.Labels, namespaceapi.ProjectIDAnnotation)
 	delete(updatedNamespace.Annotations, namespaceapi.ProjectIDAnnotation)
 
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(pr.client, pr.cluster.ID)
+	downstreamContext, err := extclusterapi.GetClusterWranglerContext(pr.client, pr.cluster.ID)
 	require.NoError(pr.T(), err)
 
-	currentNamespace, err := namespaceapi.GetNamespaceByName(standardUserClient, pr.cluster.ID, updatedNamespace.Name)
+	currentNamespace, err := extnamespaceapi.GetNamespaceByName(standardUserClient, pr.cluster.ID, updatedNamespace.Name)
 	require.NoError(pr.T(), err)
 	updatedNamespace.ResourceVersion = currentNamespace.ResourceVersion
 	_, err = downstreamContext.Core.Namespace().Update(updatedNamespace)

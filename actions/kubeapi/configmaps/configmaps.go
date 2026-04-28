@@ -2,7 +2,7 @@ package configmaps
 
 import (
 	"github.com/rancher/shepherd/clients/rancher"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	coreV1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,7 +35,7 @@ func NewConfigmapTemplate(configMapName, namespace string, annotations, labels, 
 func CreateConfigMap(client *rancher.Client, clusterID, namespace string, annotations, labels, data map[string]string) (*coreV1.ConfigMap, error) {
 	configMapName := namegen.AppendRandomString("testcm")
 
-	wranglerCtx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerCtx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}

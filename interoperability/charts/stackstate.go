@@ -12,7 +12,7 @@ import (
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/rancher/tests/actions/charts"
-	kubenamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
+	kubenamespaces "github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/interoperability/observability"
 	log "github.com/sirupsen/logrus"

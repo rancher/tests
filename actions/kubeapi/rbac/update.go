@@ -7,7 +7,7 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/unstructured"
 	"github.com/rancher/shepherd/pkg/api/scheme"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -88,7 +88,7 @@ func UpdateRoleTemplate(client *rancher.Client, updatedRoleTemplate *v3.RoleTemp
 
 // UpdateClusterRoleTemplateBindings is a helper function that uses the dynamic client to update an existing cluster role template binding
 func UpdateClusterRoleTemplateBindings(client *rancher.Client, existingCRTB *v3.ClusterRoleTemplateBinding, updatedCRTB *v3.ClusterRoleTemplateBinding) (*v3.ClusterRoleTemplateBinding, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterapi.LocalCluster)
+	dynamicClient, err := client.GetDownStreamClusterClient(extclusterapi.LocalCluster)
 	if err != nil {
 		return nil, err
 	}

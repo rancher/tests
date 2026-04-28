@@ -8,9 +8,9 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/projects"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/secrets"
 	log "github.com/sirupsen/logrus"
@@ -76,7 +76,7 @@ func (cert *CertificateRBACTestSuite) TestCreateCertificateSecret() {
 	for _, tt := range tests {
 		cert.Run("Validate certificate creation for user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			project, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cert.client, cert.cluster.ID)
+			project, namespace, err := projectapi.CreateProjectAndNamespace(cert.client, cert.cluster.ID)
 			assert.NoError(cert.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -125,7 +125,7 @@ func (cert *CertificateRBACTestSuite) TestListCertificateSecret() {
 	for _, tt := range tests {
 		cert.Run("Validate listing TLS secret for user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			project, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cert.client, cert.cluster.ID)
+			project, namespace, err := projectapi.CreateProjectAndNamespace(cert.client, cert.cluster.ID)
 			assert.NoError(cert.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -143,7 +143,7 @@ func (cert *CertificateRBACTestSuite) TestListCertificateSecret() {
 			assert.NoError(cert.T(), err, "failed to create a TLS secret")
 
 			log.Infof("As a %v, list the TLS secrets.", tt.role.String())
-			userContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cert.cluster.ID)
+			userContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, cert.cluster.ID)
 			assert.NoError(cert.T(), err)
 
 			secretList, err := userContext.Core.Secret().List(namespace.Name, metav1.ListOptions{})
@@ -181,7 +181,7 @@ func (cert *CertificateRBACTestSuite) TestUpdateCertificateSecret() {
 	for _, tt := range tests {
 		cert.Run("Validate updating TLS secret as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			project, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cert.client, cert.cluster.ID)
+			project, namespace, err := projectapi.CreateProjectAndNamespace(cert.client, cert.cluster.ID)
 			assert.NoError(cert.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -199,7 +199,7 @@ func (cert *CertificateRBACTestSuite) TestUpdateCertificateSecret() {
 			assert.NoError(cert.T(), err, "failed to create a TLS secret")
 
 			log.Infof("As a %v, update the TLS secret.", tt.role.String())
-			userContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cert.cluster.ID)
+			userContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, cert.cluster.ID)
 			assert.NoError(cert.T(), err)
 
 			newSecretData := map[string][]byte{
@@ -245,7 +245,7 @@ func (cert *CertificateRBACTestSuite) TestDeleteCertificateSecret() {
 	for _, tt := range tests {
 		cert.Run("Validate deleting TLS secret as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			project, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(cert.client, cert.cluster.ID)
+			project, namespace, err := projectapi.CreateProjectAndNamespace(cert.client, cert.cluster.ID)
 			assert.NoError(cert.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -263,7 +263,7 @@ func (cert *CertificateRBACTestSuite) TestDeleteCertificateSecret() {
 			assert.NoError(cert.T(), err, "failed to create a TLS secret")
 
 			log.Infof("As a %v, delete the TLS secret.", tt.role.String())
-			userContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, cert.cluster.ID)
+			userContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, cert.cluster.ID)
 			assert.NoError(cert.T(), err)
 
 			err = userContext.Core.Secret().Delete(namespace.Name, createdCert.Name, &metav1.DeleteOptions{})

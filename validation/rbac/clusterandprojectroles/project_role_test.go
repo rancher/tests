@@ -11,7 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/projects"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbac "github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -52,7 +52,7 @@ func (pr *ProjectRolesTestSuite) testSetupUserAndProject() (*rancher.Client, *v3
 	newUser, standardUserClient, err := rbac.SetupUser(pr.client, rbac.StandardUser.String())
 	require.NoError(pr.T(), err)
 
-	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(pr.client, pr.cluster.ID)
+	adminProject, _, err := projectapi.CreateProjectAndNamespace(pr.client, pr.cluster.ID)
 	require.NoError(pr.T(), err)
 
 	log.Info("Adding a standard user as project owner in the admin project")

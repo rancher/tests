@@ -9,10 +9,10 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/session"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/secrets"
 	log "github.com/sirupsen/logrus"
@@ -70,7 +70,7 @@ func (rb *ClusterRoleTestSuite) testSetupUserAndProject(role string) (*managemen
 	} else {
 		userClient = standardUserClient
 	}
-	createdProject, createdNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(userClient, rb.cluster.ID)
+	createdProject, createdNamespace, err := projectapi.CreateProjectAndNamespace(userClient, rb.cluster.ID)
 	require.NoError(rb.T(), err)
 
 	_, errProjectOwnerRole := rbacapi.CreateProjectRoleTemplateBinding(rb.client, standardUser, createdProject, rbac.CustomManageProjectMember.String())
@@ -193,7 +193,7 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithPrtbAccess() {
 	prtb, err := rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, adminProject, rbac.PrtbView.String())
 	require.NoError(rb.T(), err)
 
-	userContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, clusterapi.LocalCluster)
+	userContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, extclusterapi.LocalCluster)
 	require.NoError(rb.T(), err)
 	prtb, err = userContext.Mgmt.ProjectRoleTemplateBinding().Get(prtb.Namespace, prtb.Name, metav1.GetOptions{})
 	require.NoError(rb.T(), err)
@@ -237,7 +237,7 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithSecretAccess() {
 	createdSecret, err := secrets.CreateSecret(standardUserClient, rb.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.NoError(rb.T(), err, "failed to create secret")
 
-	userContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rb.cluster.ID)
+	userContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, rb.cluster.ID)
 	require.NoError(rb.T(), err)
 	_, err = userContext.Core.Secret().Get(createdSecret.Namespace, createdSecret.Name, metav1.GetOptions{})
 	require.NoError(rb.T(), err)

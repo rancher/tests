@@ -12,8 +12,9 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/users"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
@@ -39,7 +40,7 @@ func VerifyGlobalRoleBindingsForUser(t *testing.T, user *management.User, adminC
 
 // VerifyRoleBindingsForUser validates that the corresponding role bindings are created for the user
 func VerifyRoleBindingsForUser(t *testing.T, user *management.User, adminClient *rancher.Client, clusterID string, role Role, expectedCount int) {
-	rblist, err := rbacapi.ListRoleBindings(adminClient, clusterapi.LocalCluster, clusterID, metav1.ListOptions{})
+	rblist, err := rbacapi.ListRoleBindings(adminClient, extclusterapi.LocalCluster, clusterID, metav1.ListOptions{})
 	require.NoError(t, err)
 	userID := user.Resource.ID
 	userRoleBindings := []string{}
@@ -124,7 +125,7 @@ func VerifyUserCanCreateNamespace(t *testing.T, client, standardClient *rancher.
 	standardClient, err := standardClient.ReLogin()
 	require.NoError(t, err)
 
-	createdNamespace, checkErr := namespaceapi.CreateNamespaceUsingWrangler(standardClient, clusterID, project.Name, nil)
+	createdNamespace, checkErr := namespaceapi.CreateNamespace(standardClient, clusterID, project.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 
 	switch role {
 	case ClusterOwner, ProjectOwner, ProjectMember:
@@ -185,7 +186,7 @@ func VerifyUserCanDeleteNamespace(t *testing.T, client, standardClient *rancher.
 	steveStandardClient, err := standardClient.Steve.ProxyDownstream(clusterID)
 	require.NoError(t, err)
 
-	adminNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, clusterID, project.Name, nil)
+	adminNamespace, err := namespaceapi.CreateNamespace(client, clusterID, project.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(t, err)
 
 	namespaceID, err := steveAdminClient.SteveType(namespaces.NamespaceSteveType).ByID(adminNamespace.Name)

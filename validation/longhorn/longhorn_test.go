@@ -16,9 +16,9 @@ import (
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/kubeapi/volumes/persistentvolumeclaims"
 	namespaceActions "github.com/rancher/tests/actions/namespaces"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/storage"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -92,7 +92,7 @@ func (l *LonghornTestSuite) TestRBACIntegration() {
 	cluster, err := l.client.Management.Cluster.ByID(l.cluster.ID)
 	require.NoError(l.T(), err)
 
-	project, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(l.client, l.cluster.ID)
+	project, namespace, err := projectapi.CreateProjectAndNamespace(l.client, l.cluster.ID)
 	require.NoError(l.T(), err)
 	l.T().Logf("Created project: %v", project.Name)
 

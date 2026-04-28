@@ -7,11 +7,10 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
-	"github.com/rancher/shepherd/pkg/api/scheme"
+	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -23,14 +22,6 @@ const (
 	InitialUsedResourceQuotaValue           = "0"
 )
 
-// NamespaceGroupVersionResource is the required Group Version Resource for accessing namespaces in a cluster,
-// using the dynamic client.
-var NamespaceGroupVersionResource = schema.GroupVersionResource{
-	Group:    "",
-	Version:  "v1",
-	Resource: "namespaces",
-}
-
 // ContainerDefaultResourceLimit sets the container default resource limit in a string
 // limitsCPU and requestsCPU in form of "3m"
 // limitsMemory and requestsMemory in the form of "3Mi"
@@ -40,26 +31,75 @@ func ContainerDefaultResourceLimit(limitsCPU, limitsMemory, requestsCPU, request
 	return containerDefaultResourceLimit
 }
 
-// GetNamespaceByName is a helper function that returns the namespace by name in a specific cluster, uses ListNamespaces to get the namespace.
-func GetNamespaceByName(client *rancher.Client, clusterID, namespaceName string) (*corev1.Namespace, error) {
-	namespace := new(corev1.Namespace)
+// CreateNamespace creates a namespace using wrangler context in a project in a specific cluster and waits for project ID propagation.
+func CreateNamespace(client *rancher.Client, clusterID, projectName, namespaceName, containerDefaultResourceLimit string, labels, annotations map[string]string) (*corev1.Namespace, error) {
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
 
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
+	if containerDefaultResourceLimit != "" {
+		annotations[ContainerDefaultResourceLimitAnnotation] = containerDefaultResourceLimit
+	}
+
+	if projectName != "" {
+		annotationValue := clusterID + ":" + projectName
+		annotations[ProjectIDAnnotation] = annotationValue
+	}
+
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        namespaceName,
+			Annotations: annotations,
+			Labels:      labels,
+		},
+	}
+
+	createdNamespace, err := extnamespaceapi.CreateNamespace(client, clusterID, namespace)
 	if err != nil {
 		return nil, err
 	}
 
-	namespaceResource := dynamicClient.Resource(NamespaceGroupVersionResource).Namespace("")
-	unstructuredNamespace, err := namespaceResource.Get(context.TODO(), namespaceName, metav1.GetOptions{})
+	if projectName != "" {
+		err = WaitForProjectIDUpdate(client, clusterID, projectName, namespaceName)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return createdNamespace, nil
+}
+
+// CreateMultipleNamespacesInProject creates multiple namespaces in the specified project using wrangler context
+func CreateMultipleNamespacesInProject(client *rancher.Client, clusterID, projectID string, count int) ([]*corev1.Namespace, error) {
+	var createdNamespaces []*corev1.Namespace
+
+	for i := 0; i < count; i++ {
+		ns, err := CreateNamespace(client, clusterID, projectID, namegen.AppendRandomString("testns"), "", nil, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create namespace %d/%d: %w", i+1, count, err)
+		}
+
+		createdNamespaces = append(createdNamespaces, ns)
+	}
+
+	return createdNamespaces, nil
+}
+
+// GetNamespacesInProject retrieves all namespaces in a specific project within a cluster
+func GetNamespacesInProject(client *rancher.Client, clusterID, projectName string) ([]*corev1.Namespace, error) {
+	nsList, err := extnamespaceapi.ListNamespaces(client, clusterID, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", ProjectIDAnnotation, projectName),
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list namespaces for project %s: %w", projectName, err)
 	}
 
-	if err = scheme.Scheme.Convert(unstructuredNamespace, namespace, unstructuredNamespace.GroupVersionKind()); err != nil {
-		return nil, err
+	namespaces := make([]*corev1.Namespace, 0, len(nsList.Items))
+	for i := range nsList.Items {
+		namespaces = append(namespaces, &nsList.Items[i])
 	}
 
-	return namespace, nil
+	return namespaces, nil
 }
 
 // WaitForProjectIDUpdate is a helper that waits for the project-id annotation and label to be updated in a specified namespace
@@ -74,7 +114,7 @@ func WaitForProjectIDUpdate(client *rancher.Client, clusterID, projectName, name
 
 	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
 
-		namespace, pollErr := GetNamespaceByName(client, clusterID, namespaceName)
+		namespace, pollErr := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 		if pollErr != nil {
 			return false, pollErr
 		}
@@ -103,11 +143,6 @@ func WaitForProjectIDUpdate(client *rancher.Client, clusterID, projectName, name
 
 // UpdateNamespaceResourceQuotaAnnotation updates the resource quota annotation on a namespace
 func UpdateNamespaceResourceQuotaAnnotation(client *rancher.Client, clusterID string, namespaceName string, existingLimits map[string]string, extendedLimits map[string]string) error {
-	wranglerCtx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
-	if err != nil {
-		return err
-	}
-
 	limit := make(map[string]interface{}, len(existingLimits)+1)
 	for k, v := range existingLimits {
 		limit[k] = v
@@ -124,7 +159,7 @@ func UpdateNamespaceResourceQuotaAnnotation(client *rancher.Client, clusterID st
 
 	quotaStr := string(quotaJSON)
 
-	ns, err := wranglerCtx.Core.Namespace().Get(namespaceName, metav1.GetOptions{})
+	ns, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 	if err != nil {
 		return err
 	}
@@ -135,13 +170,13 @@ func UpdateNamespaceResourceQuotaAnnotation(client *rancher.Client, clusterID st
 
 	ns.Annotations[ResourceQuotaAnnotation] = quotaStr
 
-	_, err = UpdateNamespace(client, clusterID, ns)
+	_, err = extnamespaceapi.UpdateNamespace(client, clusterID, ns)
 	if err != nil {
 		return fmt.Errorf("failed to update namespace %s with resource quota annotation: %w", namespaceName, err)
 	}
 
 	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
-		updatedNS, err := wranglerCtx.Core.Namespace().Get(namespaceName, metav1.GetOptions{})
+		updatedNS, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 		if err != nil {
 			return false, err
 		}
@@ -160,7 +195,7 @@ func UpdateNamespaceResourceQuotaAnnotation(client *rancher.Client, clusterID st
 
 // MoveNamespaceToProject updates the project annotation/label to move the namespace into a different project
 func MoveNamespaceToProject(client *rancher.Client, clusterID, namespaceName, newProjectName string) error {
-	ns, err := GetNamespaceByName(client, clusterID, namespaceName)
+	ns, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 	if err != nil {
 		return fmt.Errorf("failed to get namespace %s: %w", namespaceName, err)
 	}
@@ -175,17 +210,7 @@ func MoveNamespaceToProject(client *rancher.Client, clusterID, namespaceName, ne
 	ns.Annotations[ProjectIDAnnotation] = fmt.Sprintf("%s:%s", clusterID, newProjectName)
 	ns.Labels[ProjectIDAnnotation] = newProjectName
 
-	clusterContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
-	if err != nil {
-		return fmt.Errorf("failed to get wrangler context for cluster %s: %w", clusterID, err)
-	}
-	latestNS, err := GetNamespaceByName(client, clusterID, namespaceName)
-	if err != nil {
-		return fmt.Errorf("failed to fetch namespace %s: %w", namespaceName, err)
-	}
-	ns.ResourceVersion = latestNS.ResourceVersion
-
-	if _, err := clusterContext.Core.Namespace().Update(ns); err != nil {
+	if _, err := extnamespaceapi.UpdateNamespace(client, clusterID, ns); err != nil {
 		return fmt.Errorf("failed to update namespace %s with new project annotation: %w", namespaceName, err)
 	}
 

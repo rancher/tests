@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/settings"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,7 +25,7 @@ func GetGlobalSettingNames(client *rancher.Client, clusterID string) ([]string, 
 	var ctx *wrangler.Context
 	var err error
 
-	if clusterID != clusterapi.LocalCluster {
+	if clusterID != extclusterapi.LocalCluster {
 		ctx, err = client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get downstream context: %w", err)

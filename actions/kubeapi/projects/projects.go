@@ -63,24 +63,16 @@ func NewProjectTemplate(clusterID string) *v3.Project {
 }
 
 // WaitForProjectFinalizerToUpdate is a helper to wait for project finalizer to update to match the expected finalizer count
-func WaitForProjectFinalizerToUpdate(client *rancher.Client, projectName string, projectNamespace string, finalizerCount int) error {
-	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
-		project, pollErr := client.WranglerContext.Mgmt.Project().Get(projectNamespace, projectName, metav1.GetOptions{})
-		if pollErr != nil {
-			return false, pollErr
+func WaitForProjectFinalizerToUpdate(client *rancher.Client, projectName, projectNamespace string, finalizerCount int) error {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, false, func(ctx context.Context) (bool, error) {
+		project, err := client.WranglerContext.Mgmt.Project().Get(projectNamespace, projectName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
 		}
-
-		if len(project.Finalizers) == finalizerCount {
-			return true, nil
-		}
-		return false, pollErr
+		return len(project.Finalizers) == finalizerCount, nil
 	})
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // ApplyProjectAndNamespaceResourceQuotas applies quotas for project and namespace

@@ -4,7 +4,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/charts"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	appv1 "k8s.io/api/apps/v1"
@@ -13,7 +13,7 @@ import (
 
 // CreateDaemonset is a helper to create a daemonset using wrangler context
 func CreateDaemonset(client *rancher.Client, clusterID, namespaceName string, replicaCount int, secretName, configMapName string, useEnvVars, useVolumes, watchDaemonset bool) (*appv1.DaemonSet, error) {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func CreateDaemonSetFromConfig(client *v1.Client, clusterID string, daemonset *a
 
 // UpdateDaemonset is a helper to update daemonsets using wrangler context
 func UpdateDaemonset(client *rancher.Client, clusterID, namespaceName string, daemonset *appv1.DaemonSet, watchDaemonset bool) (*appv1.DaemonSet, error) {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func UpdateDaemonset(client *rancher.Client, clusterID, namespaceName string, da
 
 // DeleteDaemonset is a helper to delete a daemonset using wrangler context
 func DeleteDaemonset(client *rancher.Client, clusterID string, daemonset *appv1.DaemonSet) error {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}

@@ -12,7 +12,9 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	quotaapi "github.com/rancher/tests/actions/kubeapi/resourcequotas"
@@ -44,7 +46,7 @@ func createProjectAndNamespace(client *rancher.Client, clusterID string, project
 		return nil, nil, err
 	}
 
-	createdNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, clusterID, createdProject.Name, nil)
+	createdNamespace, err := namespaceapi.CreateNamespace(client, clusterID, createdProject.Name, namegen.AppendRandomString("testns-"), "", nil, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -80,7 +82,7 @@ func createProjectAndNamespaceWithLimits(client *rancher.Client, clusterID strin
 }
 
 func checkAnnotationExistsInNamespace(client *rancher.Client, clusterID string, namespaceName string, annotationKey string, expectedExistence bool) error {
-	namespace, err := namespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
+	namespace, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 	if err != nil {
 		return err
 	}
@@ -170,7 +172,7 @@ func getStatusAndMessageFromAnnotation(annotation string, conditionType string) 
 }
 
 func getNamespaceLimit(client *rancher.Client, clusterID string, namespaceName, annotation string) (map[string]interface{}, error) {
-	namespace, err := namespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
+	namespace, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +214,7 @@ func checkNamespaceResourceQuota(client *rancher.Client, clusterID, namespaceNam
 }
 
 func checkNamespaceResourceQuotaValidationStatus(client *rancher.Client, clusterID, namespaceName, namespacePodLimit string, expectedStatus bool, expectedErrorMessage string) error {
-	namespace, err := namespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
+	namespace, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 	if err != nil {
 		return err
 	}
@@ -250,7 +252,7 @@ func updateProjectContainerResourceLimit(client *rancher.Client, existingProject
 	updatedProject.Spec.ContainerDefaultResourceLimit.LimitsMemory = memoryLimit
 	updatedProject.Spec.ContainerDefaultResourceLimit.RequestsMemory = memoryReservation
 
-	updatedProject, err := projectapi.UpdateProject(client, updatedProject.Namespace, updatedProject)
+	updatedProject, err := projectapi.UpdateProject(client, updatedProject)
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +318,7 @@ func checkContainerResources(client *rancher.Client, clusterID, namespaceName, d
 }
 
 func checkLimitRange(client *rancher.Client, clusterID, namespaceName string, expectedCPULimit, expectedCPURequest, expectedMemoryLimit, expectedMemoryRequest string) error {
-	clusterContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}

@@ -8,10 +8,10 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/projects"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/secrets"
 	"github.com/rancher/tests/actions/workloads/deployment"
@@ -79,7 +79,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestCreateRegistrySecret() {
 
 		rbrs.Run("Validate registry secret creation for user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the projects.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbrs.client, rbrs.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rbrs.client, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -127,7 +127,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestListRegistrySecret() {
 
 		rbrs.Run("Validate listing registry secret for user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the projects.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbrs.client, rbrs.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rbrs.client, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -140,7 +140,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestListRegistrySecret() {
 			assert.NoError(rbrs.T(), err, "failed to create a registry secret")
 
 			log.Infof("As a %v, list the registry secrets.", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbrs.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 			secretList, err := standardUserContext.Core.Secret().List(namespace.Name, metav1.ListOptions{})
 			switch tt.role.String() {
@@ -180,7 +180,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestUpdateRegistrySecret() {
 
 		rbrs.Run("Validate updating registry secret as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the projects.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbrs.client, rbrs.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rbrs.client, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -193,7 +193,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestUpdateRegistrySecret() {
 			assert.NoError(rbrs.T(), err, "failed to create a registry secret")
 
 			log.Infof("As a %v, update the registry secret with a new label.", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbrs.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 
 			if createdRegistrySecret.Labels == nil {
@@ -238,7 +238,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestDeleteRegistrySecret() {
 
 		rbrs.Run("Validate deleting registry secret as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the projects.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbrs.client, rbrs.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rbrs.client, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -251,7 +251,7 @@ func (rbrs *RbacRegistrySecretTestSuite) TestDeleteRegistrySecret() {
 			assert.NoError(rbrs.T(), err, "failed to create a registry secret")
 
 			log.Infof("As a %v, delete the registry secrets.", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbrs.cluster.ID)
+			standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, rbrs.cluster.ID)
 			assert.NoError(rbrs.T(), err)
 
 			err = standardUserContext.Core.Secret().Delete(namespace.Name, createdRegistrySecret.Name, &metav1.DeleteOptions{})

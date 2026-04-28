@@ -13,7 +13,7 @@ import (
 )
 
 // UpdateProject is a helper function that uses wrangler context to update an existing project in a cluster
-func UpdateProject(client *rancher.Client, clusterID string, updatedProject *v3.Project) (*v3.Project, error) {
+func UpdateProject(client *rancher.Client, updatedProject *v3.Project) (*v3.Project, error) {
 	var updated *v3.Project
 	var lastErr error
 	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
@@ -41,4 +41,17 @@ func UpdateProject(client *rancher.Client, clusterID string, updatedProject *v3.
 	}
 
 	return updated, nil
+}
+
+// UpdateProjectNamespaceFinalizer is a helper to update the finalizer in a project
+func UpdateProjectNamespaceFinalizer(client *rancher.Client, existingProject *v3.Project, finalizer []string) (*v3.Project, error) {
+	updatedProject := existingProject.DeepCopy()
+	updatedProject.ObjectMeta.Finalizers = finalizer
+
+	updatedProject, err := UpdateProject(client, updatedProject)
+	if err != nil {
+		return nil, err
+	}
+
+	return updatedProject, nil
 }

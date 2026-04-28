@@ -6,7 +6,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,7 +26,7 @@ func CreatePodWithResources(client *rancher.Client, clusterID, namespace, imageN
 		imageName = DefaultImageName
 	}
 
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	ctx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func CreatePodWithResources(client *rancher.Client, clusterID, namespace, imageN
 
 // WaitForPodRunning waits until the specified pod reaches the Running state
 func WaitForPodRunning(client *rancher.Client, clusterID, namespace, podName string) error {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	ctx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func WaitForPodRunning(client *rancher.Client, clusterID, namespace, podName str
 
 // DeletePod deletes the specified pod from the given namespace using wrangler context
 func DeletePod(client *rancher.Client, clusterID, namespace, podName string) error {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	ctx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}

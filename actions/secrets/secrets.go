@@ -9,7 +9,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	secretsapi "github.com/rancher/tests/actions/kubeapi/secrets"
 	corev1 "k8s.io/api/core/v1"
@@ -26,7 +26,7 @@ const (
 
 // CreateSecret is a helper to create a secret using wrangler client
 func CreateSecret(client *rancher.Client, clusterID, namespaceName string, data map[string][]byte, secretType corev1.SecretType, labels, annotations map[string]string) (*corev1.Secret, error) {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	ctx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster context: %w", err)
 	}
@@ -101,7 +101,7 @@ func CreateProjectScopedSecret(client *rancher.Client, clusterID, projectID stri
 		ProjectScopedSecretLabel: projectID,
 	}
 
-	createdProjectScopedSecret, err := CreateSecret(client, clusterapi.LocalCluster, backingNamespace, data, secretType, labels, nil)
+	createdProjectScopedSecret, err := CreateSecret(client, extclusterapi.LocalCluster, backingNamespace, data, secretType, labels, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create project scoped secret: %w", err)
 	}
@@ -145,7 +145,7 @@ func ValidateProjectScopedSecretLabel(projectScopedSecret *corev1.Secret, expect
 
 // UpdateSecretData updates the data of a secret in the specified namespace using the wrangler client
 func UpdateSecretData(client *rancher.Client, clusterID, namespace, secretName string, newData map[string][]byte) (*corev1.Secret, error) {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	ctx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster context: %w", err)
 	}
@@ -168,7 +168,7 @@ func UpdateSecretData(client *rancher.Client, clusterID, namespace, secretName s
 func UpdateProjectScopedSecret(client *rancher.Client, clusterID, projectID, secretName string, newData map[string][]byte) (*corev1.Secret, error) {
 	backingNamespace := fmt.Sprintf("%s-%s", clusterID, projectID)
 
-	updatedProjectScopedSecret, err := UpdateSecretData(client, clusterapi.LocalCluster, backingNamespace, secretName, newData)
+	updatedProjectScopedSecret, err := UpdateSecretData(client, extclusterapi.LocalCluster, backingNamespace, secretName, newData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update secret %s: %w", secretName, err)
 	}
@@ -178,7 +178,7 @@ func UpdateProjectScopedSecret(client *rancher.Client, clusterID, projectID, sec
 
 // DeleteSecret deletes a secret from a specific namespace in the given cluster using the wrangler client
 func DeleteSecret(client *rancher.Client, clusterID, namespaceName, secretName string) error {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	ctx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster context: %w", err)
 	}

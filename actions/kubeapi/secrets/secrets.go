@@ -4,7 +4,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	coreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -19,7 +19,7 @@ var SecretGroupVersionResource = schema.GroupVersionResource{
 
 // GetSecretByName is a helper function that uses the wrangler context to get a specific secret in a namespace of a specific cluster.
 func GetSecretByName(client *rancher.Client, clusterID, namespace, secretName string, getOpts metav1.GetOptions) (*coreV1.Secret, error) {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}

@@ -9,9 +9,11 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wrangler"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
@@ -54,7 +56,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) setupUserForTest() (*rancher
 	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
 	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
-	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, perq.cluster.ID)
+	standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, perq.cluster.ID)
 	require.NoError(perq.T(), err)
 
 	return standardUserClient, standardUserContext
@@ -113,7 +115,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExtendedReso
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating a second namespace in the same project.")
-	secondNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	secondNamespace, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Verifying that the resource quota validation for the second namespace %s fails.", secondNamespace.Name)
@@ -173,7 +175,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExtendedPodC
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating a second namespace in the same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Attempting to create a pod in the second namespace %s, exceeding the project-level extended pod count quota", ns2.Name)
@@ -210,7 +212,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExistingReso
 
 	log.Info("Creating a second namespace in the same project.")
 	existingLimits := map[string]string{"pods": namespacePodLimit}
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 	err = namespaceapi.VerifyNamespaceResourceQuotaValidationStatus(standardUserClient, perq.cluster.ID, ns2.Name, existingLimits, nil, false, "exceeds project limit")
 	require.NoError(perq.T(), err)
@@ -263,7 +265,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectMixedQuotaExceedE
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating a second namespace in same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Attempting to create a pod in the second namespace %s, exceeding the project-level extended ephemeral storage quota", ns2.Name)
@@ -315,7 +317,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectMixedQuotaExceedE
 	require.NoError(perq.T(), err)
 
 	log.Infof("Creating a second namespace in the same project")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Attempting to create a pod in the second namespace %s, exceeding existing project pod count limit.", ns2.Name)
@@ -385,7 +387,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExistingOver
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating a second namespace in same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Creating a pod in the first namespace %s within existing project pod count limit.", ns1.Name)
@@ -473,7 +475,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExtendedRe
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating another namespace in the same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying that the resource quota usage in the project is accurate.")
@@ -553,7 +555,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExtendedPo
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating another namespace in the same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying that the resource quota usage in the project is accurate.")
@@ -636,7 +638,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelShorthandE
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating another namespace in the same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying that the resource quota usage in the project is accurate.")
@@ -719,7 +721,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExistingRe
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating another namespace in the same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying that the resource quota usage in the project is accurate.")
@@ -1074,7 +1076,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectResourceQuotaUsed
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating a second namespace in the same project and verifying project used quota increases.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying project UsedLimit is updated after namespace creation.")
@@ -1092,7 +1094,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectResourceQuotaUsed
 	require.NoError(perq.T(), err)
 
 	log.Infof("Deleting namespace %s and verifying project used quota decreases.", ns2.Name)
-	err = namespaceapi.DeleteNamespace(standardUserClient, perq.cluster.ID, ns2.Name)
+	err = extnamespaceapi.DeleteNamespace(standardUserClient, perq.cluster.ID, ns2.Name)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying project UsedLimit is updated after namespace deletion.")

@@ -14,9 +14,9 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/kubeapi/secrets"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	actionssecrets "github.com/rancher/tests/actions/secrets"
 	log "github.com/sirupsen/logrus"
@@ -76,7 +76,7 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithNamespacedRules() {
 	defer subSession.Cleanup()
 
 	log.Info("Validate creating a global role with namespacedRules and assign it to a user.")
-	_, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(ns.client, localcluster)
+	_, namespace, err := projectapi.CreateProjectAndNamespace(ns.client, localcluster)
 	require.NoError(ns.T(), err)
 
 	log.Info("Create a global role with namespacedRules.")

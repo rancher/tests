@@ -3,7 +3,7 @@ package deployments
 import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
-	clusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	appv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,7 +12,7 @@ import (
 
 // UpdateDeployment is a helper function to update a deployment in a cluster. If waitForDeployment is true, the function will wait for the deployment to be active
 func UpdateDeployment(client *rancher.Client, clusterID, namespaceName string, deployment *appv1.Deployment, waitForDeployment bool) (*appv1.Deployment, error) {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return nil, err
 	}
