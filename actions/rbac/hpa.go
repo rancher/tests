@@ -6,7 +6,6 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	workloadsapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	deploymentapi "github.com/rancher/tests/actions/workloads/deployment"
 	hpaapi "github.com/rancher/tests/actions/workloads/hpa"
@@ -51,17 +50,8 @@ func CreateHPAWorkload(client *rancher.Client, clusterID, namespaceName string) 
 		},
 	}
 
-	wranglerCtx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get wrangler context: %w", err)
-	}
-	freshDeployment, err := wranglerCtx.Apps.Deployment().Get(namespaceName, createdDeployment.Name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get deployment for update: %w", err)
-	}
-
-	freshDeployment.Spec.Template.Spec.Containers = []corev1.Container{container}
-	updatedDeployment, err := workloadsapi.UpdateDeployment(client, clusterID, namespaceName, freshDeployment, true)
+	createdDeployment.Spec.Template.Spec.Containers = []corev1.Container{container}
+	updatedDeployment, err := workloadsapi.UpdateDeployment(client, clusterID, namespaceName, createdDeployment, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update deployment with container spec: %w", err)
 	}
