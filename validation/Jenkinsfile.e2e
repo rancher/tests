@@ -121,13 +121,23 @@ pipeline {
         )
         string(
             name: 'RKE2_VERSION',
-            defaultValue: 'v1.33.6+rke2r1',
+            defaultValue: 'v1.35.1+rke2r1',
             description: 'RKE2 version to deploy'
         )
         string(
             name: 'RANCHER_VERSION',
-            defaultValue: 'v2.13.0',
+            defaultValue: 'latest',
             description: 'Rancher version to deploy'
+        )
+        string(
+            name: 'RANCHER_IMAGE_TAG',
+            defaultValue: 'head',
+            description: 'Rancher container image tag (head for dev builds, version tag for stable)'
+        )
+        string(
+            name: 'RANCHER_CHART_REPO_URL',
+            defaultValue: 'https://releases.rancher.com/server-charts/alpha',
+            description: 'Rancher Helm chart repository URL'
         )
         string(
             name: 'PRIVATE_REGISTRY_URL',
@@ -398,7 +408,9 @@ server_flags: |
                                     'RKE2_VERSION':              params.RKE2_VERSION,
                                     'RANCHER_BOOTSTRAP_PASSWORD': params.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks',
                                     'RANCHER_ADMIN_PASSWORD':     params.RANCHER_ADMIN_PASSWORD ?: 'rancherrocks',
-                                    'RANCHER_VERSION':           params.RANCHER_VERSION
+                                    'RANCHER_VERSION':           params.RANCHER_VERSION,
+                                    'RANCHER_IMAGE_TAG':         params.RANCHER_IMAGE_TAG ?: 'head',
+                                    'RANCHER_CHART_REPO_URL':    params.RANCHER_CHART_REPO_URL ?: 'https://releases.rancher.com/server-charts/alpha'
                                 ]
                             )
 
@@ -408,7 +420,7 @@ install_helm: true
 rancher_hostname: "${HOSTNAME_PREFIX}.qa.rancher.space"
 rancher_bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
 rancher_admin_password: "${RANCHER_ADMIN_PASSWORD}"
-rancher_image_tag: ${RANCHER_VERSION}
+rancher_image_tag: ${RANCHER_IMAGE_TAG}
 rancher_use_bundled_system_charts: true
 ''',
                                 envVars: [
@@ -416,7 +428,7 @@ rancher_use_bundled_system_charts: true
                                     'HOSTNAME_PREFIX':            params.HOSTNAME_PREFIX,
                                     'RANCHER_BOOTSTRAP_PASSWORD':  params.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks',
                                     'RANCHER_ADMIN_PASSWORD':      params.RANCHER_ADMIN_PASSWORD ?: 'rancherrocks',
-                                    'RANCHER_VERSION':            params.RANCHER_VERSION
+                                    'RANCHER_IMAGE_TAG':           params.RANCHER_IMAGE_TAG ?: 'head'
                                 ]
                             )
 
