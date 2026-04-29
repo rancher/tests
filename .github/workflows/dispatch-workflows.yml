@@ -26,6 +26,7 @@ jobs:
           - rancher-upgrade-airgap-cluster-provisioning.yml
           - rancher-upgrade-proxy-cluster-provisioning.yml
           - recurring-tests.yml
+          - registries-cluster-provisioning.yml
 
     steps:
       - name: Trigger test workflow ${{ matrix.workflow }}

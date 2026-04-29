@@ -72,6 +72,28 @@ func main() {
 
 		infraConfig.UpdateAgentEnvVar(cattleConfig, "HTTP_PROXY", "http://"+proxyBastion+":3228")
 		infraConfig.UpdateAgentEnvVar(cattleConfig, "HTTPS_PROXY", "http://"+proxyBastion+":3228")
+	case terraformConfig.StandaloneRegistry.ECRURI != "":
+		var authRegistry, nonAuthRegistry, globalRegistry string
+
+		client, authRegistry, nonAuthRegistry, globalRegistry, err = setupRegistryRancher(t, testSession)
+		if err != nil {
+			logrus.Fatalf("Failed to setup Registry Rancher: %v", err)
+		}
+
+		_, err = operations.ReplaceValue([]string{"terraform", "standaloneRegistry", "authRegistryFQDN"}, authRegistry, cattleConfig)
+		if err != nil {
+			logrus.Fatalf("Failed to replace auth registry: %v", err)
+		}
+
+		_, err = operations.ReplaceValue([]string{"terraform", "standaloneRegistry", "nonAuthRegistryFQDN"}, nonAuthRegistry, cattleConfig)
+		if err != nil {
+			logrus.Fatalf("Failed to replace non-auth registry: %v", err)
+		}
+
+		_, err = operations.ReplaceValue([]string{"terraform", "standaloneRegistry", "globalRegistryFQDN"}, globalRegistry, cattleConfig)
+		if err != nil {
+			logrus.Fatalf("Failed to replace global registry: %v", err)
+		}
 	default:
 		client, err = setupRancher(t, testSession)
 		if err != nil {
@@ -114,4 +136,10 @@ func setupRancher(t *testing.T, testSession *session.Session) (*rancher.Client, 
 	client, _, _, _, _ := ranchers.SetupRancher(t, testSession, keypath.SanityKeyPath)
 
 	return client, nil
+}
+
+func setupRegistryRancher(t *testing.T, testSession *session.Session) (*rancher.Client, string, string, string, error) {
+	client, authRegistry, nonAuthRegistry, globalRegistry, _, _, _ := ranchers.SetupRegistryRancher(t, testSession, keypath.RegistryKeyPath)
+
+	return client, authRegistry, nonAuthRegistry, globalRegistry, nil
 }
