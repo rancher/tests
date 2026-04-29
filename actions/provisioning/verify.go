@@ -9,9 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rancher/norman/types"
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	managementv3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	shepherdclusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/bundledclusters"
@@ -167,6 +169,7 @@ func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject)
 	return nil
 }
 
+// dumpProvisioningClusterState is a helper function, called by VerifyClusterReady, that log dumps the state of a provisioning cluster
 func dumpProvisioningClusterState(ctx context.Context, client *rancher.Client, clusterName string, lastPollingErr error) {
 	adminClient, err := client.ReLogin()
 	if err != nil {
@@ -870,4 +873,203 @@ func VerifyDataDirectories(t *testing.T, client *rancher.Client, cluster *steveV
 		assert.Error(t, err)
 		logrus.Debugf("Verified that the default data directory(%s) on node(%s) does not exist", clusterSpec.RKEConfig.DataDirectories.SystemAgent, clusterNode.NodeID)
 	}
+}
+
+// VerifyClusterReadyV3 validates that a non-rke1 cluster and its resources are in a good state, matching a given config, using Norman.
+func VerifyClusterReadyV3(client *rancher.Client, clusterID string) error {
+	var lastErr error
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaults.ThirtyMinuteTimeout)
+	defer cancel()
+
+	var clusterObj *managementv3.Cluster
+
+	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.ThirtyMinuteTimeout, false,
+		func(ctx context.Context) (bool, error) {
+			var err error
+
+			client, err = client.ReLogin()
+			if err != nil {
+				return false, nil
+			}
+
+			clusterObj, err = client.Management.Cluster.ByID(clusterID)
+			if err != nil {
+				return false, nil
+			}
+
+			if clusterObj.State != "active" {
+				lastErr = fmt.Errorf("cluster state is not active: %s", clusterObj.State)
+				return false, nil
+			}
+
+			if clusterObj.Transitioning == "yes" {
+				lastErr = fmt.Errorf("cluster still transitioning: %s", clusterObj.TransitioningMessage)
+				return false, nil
+			}
+
+			if clusterObj.Transitioning == "error" {
+				lastErr = fmt.Errorf("cluster entered error state: %s", clusterObj.TransitioningMessage)
+				return false, nil
+			}
+
+			for _, cond := range clusterObj.Conditions {
+				if cond.Type == "Ready" && cond.Status != "True" {
+					lastErr = fmt.Errorf("cluster Ready condition is not True: %s - %s", cond.Reason, cond.Message)
+					return false, nil
+				}
+
+				if cond.Type == "Connected" && cond.Status != "True" {
+					lastErr = fmt.Errorf("cluster not connected: %s - %s", cond.Reason, cond.Message)
+					return false, nil
+				}
+			}
+
+			return true, nil
+		})
+
+	if err != nil {
+		return err
+	}
+
+	err = allNodesReadyV3(client, clusterID, defaults.FiveMinuteTimeout)
+	if err != nil {
+		logrus.Errorf("Cluster (%s) nodes failed readiness: %v", clusterID, err)
+		dumpClusterStateV3(ctx, client, clusterID, lastErr)
+		return err
+	}
+
+	return nil
+}
+
+func allNodesReadyV3(client *rancher.Client, clusterID string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	return kwait.PollUntilContextTimeout(ctx, 5*time.Second, timeout, false,
+		func(ctx context.Context) (bool, error) {
+
+			nodes, err := client.Management.Node.List(&types.ListOpts{
+				Filters: map[string]interface{}{
+					"clusterId": clusterID,
+				},
+			})
+			if err != nil {
+				return false, err
+			}
+
+			if len(nodes.Data) == 0 {
+				return false, nil
+			}
+
+			readyNodes := 0
+
+			for _, n := range nodes.Data {
+				isReady := false
+
+				for _, cond := range n.Conditions {
+					if cond.Type == "Ready" && cond.Status == "True" {
+						isReady = true
+						break
+					}
+				}
+
+				if isReady {
+					readyNodes++
+				}
+			}
+
+			if readyNodes != len(nodes.Data) {
+				return false, nil
+			}
+
+			return true, nil
+		})
+}
+
+// dumpClusterStateV3 is a helper function, called by VerifyClusterReadyV3, that log dumps the state of a provisioning cluster
+func dumpClusterStateV3(ctx context.Context, client *rancher.Client, clusterID string, lastErr error) {
+	adminClient, err := client.ReLogin()
+	if err != nil {
+		logrus.Errorf("Log dump: unable to relogin: %v", err)
+		return
+	}
+
+	clusterObj, err := adminClient.Management.Cluster.ByID(clusterID)
+	if err != nil {
+		logrus.Errorf("Log dump: unable to fetch cluster: %v", err)
+		return
+	}
+
+	logrus.Errorf("\n")
+	logrus.Errorf("==================================================")
+	logrus.Errorf("CLUSTER FAILED: %s", clusterObj.Name)
+	logrus.Errorf("==================================================\n")
+
+	if lastErr != nil {
+		logrus.Errorf("Final Error: %v\n", lastErr)
+	}
+
+	logrus.Errorf("Cluster State:")
+	logrus.Errorf("  State:              %s", clusterObj.State)
+	logrus.Errorf("  Transitioning:      %s", clusterObj.Transitioning)
+	logrus.Errorf("  Transition Message: %s\n", clusterObj.TransitioningMessage)
+
+	logrus.Errorf("Cluster Conditions:")
+	for _, cond := range clusterObj.Conditions {
+		logrus.Errorf("  - Type:       %s", cond.Type)
+		logrus.Errorf("    Status:     %s", cond.Status)
+		logrus.Errorf("    Reason:     %v", populateValue(cond.Reason))
+		logrus.Errorf("    Message:    %v\n", populateValue(cond.Message))
+	}
+
+	nodes, err := adminClient.Management.Node.List(&types.ListOpts{
+		Filters: map[string]interface{}{
+			"clusterId": clusterID,
+		},
+	})
+	if err != nil {
+		logrus.Errorf("Log dump: unable to list nodes: %v", err)
+		return
+	}
+
+	total := len(nodes.Data)
+	ready := 0
+
+	logrus.Errorf("Node Details:")
+
+	for _, n := range nodes.Data {
+		isReady := "False"
+		var readyMsg, readyReason any = "<unknown>", "<unknown>"
+
+		for _, cond := range n.Conditions {
+			if cond.Type == "Ready" {
+				isReady = cond.Status
+				readyMsg = populateValue(cond.Message)
+				readyReason = populateValue(cond.Reason)
+				break
+			}
+		}
+
+		nodeName := n.NodeName
+		if nodeName == "" {
+			nodeName = n.Name
+		}
+
+		if isReady == "True" {
+			ready++
+			continue
+		}
+
+		logrus.Errorf("  • %s (resource: %s)", nodeName, n.Name)
+		logrus.Errorf("      State:   %s", n.State)
+		logrus.Errorf("      Ready:   %s", isReady)
+		logrus.Errorf("      Reason:  %v", readyReason)
+		logrus.Errorf("      Message: %v\n", readyMsg)
+	}
+
+	logrus.Errorf("\nNode Summary:")
+	logrus.Errorf("  Total: %d", total)
+	logrus.Errorf("  Ready: %d", ready)
+	logrus.Errorf("  NotReady: %d\n", total-ready)
 }
