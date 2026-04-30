@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -15,11 +14,13 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	tfpConfig "github.com/rancher/tfp-automation/config"
+	"github.com/rancher/tfp-automation/framework/cleanup"
+	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -64,27 +65,23 @@ func customSetup(t *testing.T) customTest {
 func TestCustom(t *testing.T) {
 	t.Parallel()
 	r := customSetup(t)
-	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
-	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	nodeRolesDedicatedWindows := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool, provisioninginput.WindowsMachinePool}
-	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
+	nodeRolesAll := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true, Controlplane: true, Worker: true}}
+	nodeRolesShared := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true, Controlplane: true}, {Quantity: 1, Worker: true}}
+	nodeRolesDedicated := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true}, {Quantity: 1, Controlplane: true}, {Quantity: 1, Worker: true}}
+	nodeRolesDedicatedWindows := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true}, {Quantity: 1, Controlplane: true}, {Quantity: 1, Worker: true}, {Quantity: 1, Windows: true}}
+	nodeRolesStandard := []tfpConfig.Nodepool{{Quantity: 3, Etcd: true}, {Quantity: 2, Controlplane: true}, {Quantity: 3, Worker: true}}
 
 	tests := []struct {
-		name         string
-		client       *rancher.Client
-		machinePools []provisioninginput.MachinePools
-		isWindows    bool
+		name        string
+		client      *rancher.Client
+		clusterType string
+		nodePools   []tfpConfig.Nodepool
 	}{
-		{"RKE2_Custom|etcd_cp_worker", r.standardUserClient, nodeRolesAll, false},
-		{"RKE2_Custom|etcd_cp|worker", r.standardUserClient, nodeRolesShared, false},
-		{"RKE2_Custom|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated, false},
-		{"RKE2_Custom|etcd|cp|worker|windows", r.standardUserClient, nodeRolesDedicatedWindows, true},
-		{"RKE2_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard, false},
+		{"RKE2_Custom|etcd_cp_worker", r.standardUserClient, defaults.RKE2, nodeRolesAll},
+		{"RKE2_Custom|etcd_cp|worker", r.standardUserClient, defaults.RKE2, nodeRolesShared},
+		{"RKE2_Custom|etcd|cp|worker", r.standardUserClient, defaults.RKE2, nodeRolesDedicated},
+		{"RKE2_Custom|etcd|cp|worker|windows", r.standardUserClient, "rke2_windows_2022", nodeRolesDedicatedWindows},
+		{"RKE2_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, defaults.RKE2, nodeRolesStandard},
 	}
 	for _, tt := range tests {
 		t.Cleanup(func() {
@@ -92,35 +89,24 @@ func TestCustom(t *testing.T) {
 			r.session.Cleanup()
 		})
 
-		clusterConfig := new(clusters.ClusterConfig)
-		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
-
-		clusterConfig.MachinePools = tt.machinePools
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			var err error
 
-			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
+			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(r.cattleConfig)
+			terratestConfig.Nodepools = tt.nodePools
 
-			awsEC2Configs := new(ec2.AWSEC2Configs)
-			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, r.cattleConfig, awsEC2Configs)
-			if tt.isWindows {
-				windowsMachineConfigs := externalNodeProvider.GetWindowsPoolsFunc(tt.client, *awsEC2Configs)
-				if len(windowsMachineConfigs) == 0 {
-					t.Skip("Windows test requires a windows machine pool")
-				}
-			}
-
-			logrus.Info("Provisioning cluster")
-			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
-			require.NoError(t, err)
+			logrus.Info("Provisioning custom cluster")
+			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, tt.clusterType, "validation/provisioning/rke2")
+			defer os.RemoveAll(nestedRancherModuleDir)
+			defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			err = provisioning.VerifyClusterReady(r.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(tt.client, cluster)
+			err = deployment.VerifyClusterDeployments(r.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)

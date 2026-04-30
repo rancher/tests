@@ -2196,8 +2196,6 @@ github.com/rancher/shepherd v0.0.0-20260430211500-1f50d155268e h1:bJxwvGCA6t8sy3
 github.com/rancher/shepherd v0.0.0-20260430211500-1f50d155268e/go.mod h1:SJtW8Jqv0rphZzsGnvB965YdyR2FqFtB+TbbzVLt8F4=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078 h1:1MJSgYkgXhr/Zc5idJkKa10SiBQd0HVtbxVOBoghlzY=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078/go.mod h1:CV2Soy/Skw8/SA9dDJVgpeHxoEdtjYkNpNy6xvvC5kA=
-github.com/rancher/tfp-automation v0.0.0-20260511161348-eba5b5f6722e h1:vuZ5ixzRXANPjdMVaHs1yYukrhFRjM+AhJ8hkw29ifY=
-github.com/rancher/tfp-automation v0.0.0-20260511161348-eba5b5f6722e/go.mod h1:79uoBsfL1qRhdhfaE2q2dwGcMlBzdLDQxoJx87WYz0Q=
 github.com/rancher/wrangler v0.6.2-0.20200515155908-1923f3f8ec3f/go.mod h1:NmtmlLkchboIksYJuBemwcP4RBfv8FpeyhVoWXB9Wdc=
 github.com/rancher/wrangler v0.6.2-0.20200622171942-7224e49a2407/go.mod h1:NmtmlLkchboIksYJuBemwcP4RBfv8FpeyhVoWXB9Wdc=
 github.com/rancher/wrangler v1.1.2 h1:oXbXo9k7y/H4drUpb4RM1c++vT9O3rpoNEfyusGykiU=
@@ -2276,6 +2274,8 @@ github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/substrait-io/substrait-go v0.4.2/go.mod h1:qhpnLmrcvAnlZsUyPXZRqldiHapPTXC3t7xFgDi3aQg=
+github.com/susesgartner/tfp-automation v0.0.0-20260518204656-470bacb75650 h1:iAvzYNYtQYWRlnHcokAFyPNiR6Ua+f5ECkcGtFQP7r0=
+github.com/susesgartner/tfp-automation v0.0.0-20260518204656-470bacb75650/go.mod h1:79uoBsfL1qRhdhfaE2q2dwGcMlBzdLDQxoJx87WYz0Q=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75/go.mod h1:KO6IkyS8Y3j8OdNO85qEYBsRPuteD+YciPomcXdrMnk=
 github.com/tmccombs/hcl2json v0.6.4 h1:/FWnzS9JCuyZ4MNwrG4vMrFrzRgsWEOVi+1AyYUVLGw=

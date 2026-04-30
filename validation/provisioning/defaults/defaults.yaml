@@ -60,7 +60,46 @@ awsMachineConfigs:
     retries: "5"
     rootSize: "100" 
 
-#Required for tests that utilize custom clusters
+
+#terraform and terratest variables required for custom cluster provisioning
+terraform:
+  provider: "aws"
+  cni: "calico"
+  downstreamClusterProvider: "aws"
+  defaultClusterRoleForProjectMembers: "true"
+  enableNetworkPolicy: false
+  resourcePrefix: "auto-prov"
+  module: ""
+  privateKeyPath: "<required>"
+
+  awsCredentials:
+    awsAccessKey: "<required>"
+    awsSecretKey: "<required>"
+
+  awsConfig:
+    ami: "<required>"
+    awsKeyName: "<required>"
+    awsVolumeType: "gp3"
+    region: "us-east-2"
+    awsSecurityGroups: ["<required>", "<required>"]
+    awsSecurityGroupNames: ["<required>", "<required>"]
+    awsSubnetID: "<required>"
+    awsVpcID: "<required>"
+    awsInstanceType: "t3a.medium"
+    awsZoneLetter: "a"
+    awsRootSize: 100
+    awsRoute53Zone: "<required>"
+    awsUser: "ubuntu"
+    ipAddressType: "ipv4"
+    loadBalancerType: "ipv4"
+    targetType: "instance"
+    sshConnectionType: "ssh"
+    timeout: "5m"
+
+terratest:
+  kubernetesVersion: ""
+
+#Required for hardened
 awsEC2Configs:
   region: "us-east-2"
   awsSecretAccessKey: "<required>"

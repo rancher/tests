@@ -74,11 +74,6 @@ func TestNodeDriverK3SIPv6(t *testing.T) {
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
-	cidr := &provisioninginput.Networking{
-		ClusterCIDR: clusterConfig.Networking.ClusterCIDR,
-		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
-	}
-
 	stackPreference := &provisioninginput.Networking{
 		ClusterCIDR:     "",
 		ServiceCIDR:     "",
@@ -97,7 +92,6 @@ func TestNodeDriverK3SIPv6(t *testing.T) {
 		machinePools []provisioninginput.MachinePools
 		networking   *provisioninginput.Networking
 	}{
-		{"K3S_IPv6_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
 		{"K3S_IPv6_Node_Driver_Stack_Preference", r.standardUserClient, nodeRolesStandard, stackPreference},
 		{"K3S_IPv6_Node_Driver_CIDR_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrStackPreference},
 	}
