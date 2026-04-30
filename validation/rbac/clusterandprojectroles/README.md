@@ -52,9 +52,3 @@ awsMachineConfigs:
    rootSize: "80"                            
    securityGroup: ["<securityGroup>"]
 ```
-
-For more info, please use the following links to continue adding to your config for provisioning tests:
- [Define your test](../provisioning/rke1/README.md#provisioning-input)
-(#Provisioning-Input)
-
-
