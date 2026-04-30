@@ -72,7 +72,7 @@ func main() {
 
 		infraConfig.UpdateAgentEnvVar(cattleConfig, "HTTP_PROXY", "http://"+proxyBastion+":3228")
 		infraConfig.UpdateAgentEnvVar(cattleConfig, "HTTPS_PROXY", "http://"+proxyBastion+":3228")
-	case terraformConfig.StandaloneRegistry.ECRURI != "":
+	case terraformConfig.StandaloneRegistry != nil && terraformConfig.StandaloneRegistry.ECRURI != "":
 		var authRegistry, nonAuthRegistry, globalRegistry string
 
 		client, authRegistry, nonAuthRegistry, globalRegistry, err = setupRegistryRancher(t, testSession)
