@@ -37,6 +37,7 @@ permissions:
 
 env:
   CLOUD_PROVIDER_VERSION: "6.34.0"
+  LOCALS_PROVIDER_VERSION: "${{ vars.LOCALS_PROVIDER_VERSION }}"
 
 jobs:
   v2-15:
@@ -48,6 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: head
     env:
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_15 }}"
       HOSTNAME_PREFIX: "gha-ds-215"
       REPORTING_ENABLED: >-
         ${{
@@ -68,6 +70,10 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
+
+      - name: Set up local rancher2 Terraform provider
+        if: contains(env.RANCHER2_PROVIDER_VERSION, '-rc')
+        run: chmod +x ./tfp-automation/scripts/setup-provider.sh && ./tfp-automation/scripts/setup-provider.sh rancher2 v${{ env.RANCHER2_PROVIDER_VERSION }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
@@ -172,6 +178,7 @@ jobs:
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             provider: "${{ vars.PROVIDER_AMAZON }}"
+            downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsCredentials:
@@ -226,8 +233,6 @@ jobs:
             networking:
               clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
               serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
-              ipv6FirstClusterCIDR: "${{ vars.IPV6_FIRST_DUALSTACK_CLUSTER_CIDR }}"
-              ipv6FirstServiceCIDR: "${{ vars.IPV6_FIRST_DUALSTACK_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
             advanced:
               machineGlobalConfig:
@@ -398,6 +403,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: head
     env:
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_14 }}"
       HOSTNAME_PREFIX: "gha-ds-214"
       REPORTING_ENABLED: >-
         ${{
@@ -418,6 +424,10 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
+
+      - name: Set up local rancher2 Terraform provider
+        if: contains(env.RANCHER2_PROVIDER_VERSION, '-rc')
+        run: chmod +x ./tfp-automation/scripts/setup-provider.sh && ./tfp-automation/scripts/setup-provider.sh rancher2 v${{ env.RANCHER2_PROVIDER_VERSION }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
@@ -522,6 +532,7 @@ jobs:
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             provider: "${{ vars.PROVIDER_AMAZON }}"
+            downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsCredentials:
@@ -576,8 +587,6 @@ jobs:
             networking:
               clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
               serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
-              ipv6FirstClusterCIDR: "${{ vars.IPV6_FIRST_DUALSTACK_CLUSTER_CIDR }}"
-              ipv6FirstServiceCIDR: "${{ vars.IPV6_FIRST_DUALSTACK_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
             advanced:
               machineGlobalConfig:
@@ -747,6 +756,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging-latest
     env:
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_13 }}"
       HOSTNAME_PREFIX: "gha-ds-213"
       REPORTING_ENABLED: >-
         ${{
@@ -767,6 +777,10 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
+
+      - name: Set up local rancher2 Terraform provider
+        if: contains(env.RANCHER2_PROVIDER_VERSION, '-rc')
+        run: chmod +x ./tfp-automation/scripts/setup-provider.sh && ./tfp-automation/scripts/setup-provider.sh rancher2 v${{ env.RANCHER2_PROVIDER_VERSION }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
@@ -871,6 +885,7 @@ jobs:
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             provider: "${{ vars.PROVIDER_AMAZON }}"
+            downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsCredentials:
@@ -926,8 +941,6 @@ jobs:
             networking:
               clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
               serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
-              ipv6FirstClusterCIDR: "${{ vars.IPV6_FIRST_DUALSTACK_CLUSTER_CIDR }}"
-              ipv6FirstServiceCIDR: "${{ vars.IPV6_FIRST_DUALSTACK_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
             advanced:
               machineGlobalConfig:

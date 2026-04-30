@@ -15,14 +15,17 @@ import (
 	"github.com/rancher/tfp-automation/defaults/keypath"
 	"github.com/rancher/tfp-automation/framework"
 	"github.com/rancher/tfp-automation/framework/set/resources/rancher2"
+	"github.com/rancher/tfp-automation/tests/extensions/provisioning"
 	"github.com/stretchr/testify/require"
 )
 
 func TfpSetupSuite(t *testing.T) (map[string]any, *rancher.Config, *terraform.Options, *config.TerraformConfig, *config.TerratestConfig) {
 	testSession := session.NewSession()
 	cattleConfig := shepherdConfig.LoadConfigFromFile(os.Getenv(shepherdConfig.ConfigEnvironmentKey))
+	configMap := cattleConfig
 
-	rancherConfig, terraformConfig, terratestConfig, _ := config.LoadTFPConfigs(cattleConfig)
+	rancherConfig, terraformConfig, terratestConfig, _ := config.LoadTFPConfigs(configMap)
+	terraformConfig = provisioning.UniquifyTerraform(terraformConfig)
 
 	adminUser := &management.User{
 		Username: "admin",
