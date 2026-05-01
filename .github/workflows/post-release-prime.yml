@@ -221,7 +221,8 @@ jobs:
             brand: "${{ vars.PRIME_BRAND }}"
             isPrime: true
             registry: "${{ secrets.PRIME_REGISTRY }}"
-            rancherVersion: "${{ env.RANCHER_VERSION }}"
+            sccRegistrationCode: "${{ secrets.PRIME_SCC_REGISTRATION_CODE }}"
+            sccRegistrationType: "${{ secrets.PRIME_SCC_REGISTRATION_TYPE }}"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -474,7 +475,8 @@ jobs:
             brand: "${{ vars.PRIME_BRAND }}"
             isPrime: true
             registry: "${{ secrets.PRIME_REGISTRY }}"
-            rancherVersion: "${{ env.RANCHER_VERSION }}"
+            sccRegistrationCode: "${{ secrets.PRIME_SCC_REGISTRATION_CODE }}"
+            sccRegistrationType: "${{ secrets.PRIME_SCC_REGISTRATION_TYPE }}"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
