@@ -25,11 +25,42 @@ runs:
         gotestsum --format standard-verbose \
           --packages=github.com/rancher/tests/validation/provisioning/... \
           --junitfile results.xml \
-          --jsonfile results.json \
+          --jsonfile results_provisioning.json \
           -- -timeout=3h -tags=${{ inputs.tags }} -v
 
         provisioning_exit=$?
         echo "provisioning_exit=$provisioning_exit" >> "$GITHUB_ENV"
+        cp results_provisioning.json results.json
+  
+        if [[ "${{ inputs.reporting }}" == "true" ]]; then
+          ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+          ./validation/reporter
+        fi
+
+        gotestsum --format standard-verbose \
+          --packages=github.com/rancher/tests/validation/provisioning/k3s \
+          --junitfile results.xml \
+          --jsonfile results_k3s_ace.json \
+          -- -timeout=3h -tags=ace -v
+
+        k3s_ace_exit=$?
+        echo "k3s_ace_exit=$k3s_ace_exit" >> "$GITHUB_ENV"
+        cp results_k3s_ace.json results.json
+  
+        if [[ "${{ inputs.reporting }}" == "true" ]]; then
+          ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+          ./validation/reporter
+        fi
+
+        gotestsum --format standard-verbose \
+          --packages=github.com/rancher/tests/validation/provisioning/rke2 \
+          --junitfile results.xml \
+          --jsonfile results_rke2_ace.json \
+          -- -timeout=3h -tags=ace -v
+
+        rke2_ace_exit=$?
+        echo "rke2_ace_exit=$rke2_ace_exit" >> "$GITHUB_ENV"
+        cp results_rke2_ace.json results.json
   
         if [[ "${{ inputs.reporting }}" == "true" ]]; then
           ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -38,14 +69,25 @@ runs:
 
     - name: Show failed tests
       run: |
+        declare -A suites=(
+          [provisioning_exit]="Provisioning:results_provisioning.json"
+          [k3s_ace_exit]="K3S ACE:results_k3s_ace.json"
+          [rke2_ace_exit]="RKE2 ACE:results_rke2_ace.json"
+        )
+
         failed=0
-        if [ "$provisioning_exit" -ne 0 ]; then
-          echo "Failed Provisioning tests:"
-          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
-          failed=1
-        fi
+
+        for exit_code in "${!suites[@]}"; do
+          IFS=: read suite_name results_file <<< "${suites[$exit_code]}"
+          exit_val="${!exit_code}"
+
+          if [ "$exit_val" != "" ] && [ "$exit_val" -ne 0 ]; then
+            echo "Failed $suite_name tests:"
+            jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' "$results_file"
+            failed=1
+          fi
+        done
 
         if [ "$failed" -eq 1 ]; then
           exit 1
         fi
-      shell: bash
