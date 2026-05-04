@@ -329,6 +329,7 @@ jobs:
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
@@ -693,6 +694,7 @@ jobs:
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
@@ -1057,6 +1059,7 @@ jobs:
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
