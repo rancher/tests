@@ -7,40 +7,36 @@ import (
 )
 
 type ClusterConfig struct {
-	KubernetesVersion              string                                            `json:"kubernetesVersion" yaml:"kubernetesVersion"`
-	CNI                            string                                            `json:"cni" yaml:"cni"`
-	PSACT                          string                                            `json:"psact" yaml:"psact"`
-	PNI                            bool                                              `json:"pni" yaml:"pni"`
-	NodePools                      []provisioningInput.NodePools                     `json:"nodepools" yaml:"nodepools"`
-	MachinePools                   []provisioningInput.MachinePools                  `json:"machinepools" yaml:"machinepools"`
-	CloudProvider                  string                                            `json:"cloudProvider" yaml:"cloudProvider"`
-	EnableNetworkPolicy            bool                                              `json:"enableNetworkPolicy" yaml:"enableNetworkPolicy" default:"false"`
-	Providers                      *[]string                                         `json:"providers" yaml:"providers"`
-	Provider                       string                                            `json:"provider" yaml:"provider"`
-	NodeProviders                  *[]string                                         `json:"nodeProviders" yaml:"nodeProviders"`
-	NodeProvider                   string                                            `json:"nodeProvider" yaml:"nodeProvider"`
-	Hardened                       bool                                              `json:"hardened" yaml:"hardened"`
-	Compliance                     bool                                              `json:"compliance" yaml:"compliance"`
-	AddOnConfig                    *provisioningInput.AddOnConfig                    `json:"addonConfig" yaml:"addonConfig"`
-	AgentEnvVars                   []rkev1.EnvVar                                    `json:"agentEnvVars" yaml:"agentEnvVars"`
-	AgentEnvVarsRKE1               []management.EnvVar                               `json:"agentEnvVarsRKE1" yaml:"agentEnvVarsRKE1"`
-	ClusterAgent                   *management.AgentDeploymentCustomization          `json:"clusterAgent" yaml:"clusterAgent"`
-	FleetAgent                     *management.AgentDeploymentCustomization          `json:"fleetAgent" yaml:"fleetAgent"`
-	ETCD                           *rkev1.ETCD                                       `json:"etcd" yaml:"etcd"`
-	ETCDRKE1                       *management.ETCDService                           `json:"etcdRKE1" yaml:"etcdRKE1"`
-	LabelsAndAnnotations           *provisioningInput.LabelsAndAnnotations           `json:"labelsAndAnnotations" yaml:"labelsAndAnnotations"`
-	Networking                     *provisioningInput.Networking                     `json:"networking" yaml:"networking"`
-	Registries                     *provisioningInput.Registries                     `json:"registries" yaml:"registries"`
-	UpgradeStrategy                *rkev1.ClusterUpgradeStrategy                     `json:"upgradeStrategy" yaml:"upgradeStrategy"`
-	Advanced                       *provisioningInput.Advanced                       `json:"advanced" yaml:"advanced"`
-	ClusterSSHTests                []provisioningInput.SSHTestCase                   `json:"clusterSSHTests" yaml:"clusterSSHTests"`
-	CRIDockerd                     bool                                              `json:"criDockerd" yaml:"criDockerd"`
-	RKE1CustomClusterDockerInstall *provisioningInput.RKE1CustomClusterDockerInstall `json:"rke1CustomClusterDockerInstall" yaml:"rke1CustomClusterDockerInstall"`
-	PathToRepo                     string                                            `json:"pathToRepo" yaml:"pathToRepo"`
-	IPv6Cluster                    bool                                              `json:"ipv6Cluster" yaml:"ipv6Cluster" default:"false"`
-	ResourcePrefix                 string                                            `json:"resourcePrefix" yaml:"resourcePrefix" default:""`
-	BastionUser                    string                                            `json:"bastionUser" yaml:"bastionUser" default:""`
-	BastionWindowsUser             string                                            `json:"bastionWindowsUser" yaml:"bastionWindowsUser" default:""`
+	KubernetesVersion    string                                   `json:"kubernetesVersion" yaml:"kubernetesVersion"`
+	CNI                  string                                   `json:"cni" yaml:"cni"`
+	PSACT                string                                   `json:"psact" yaml:"psact"`
+	PNI                  bool                                     `json:"pni" yaml:"pni"`
+	MachinePools         []provisioningInput.MachinePools         `json:"machinepools" yaml:"machinepools"`
+	CloudProvider        string                                   `json:"cloudProvider" yaml:"cloudProvider"`
+	EnableNetworkPolicy  bool                                     `json:"enableNetworkPolicy" yaml:"enableNetworkPolicy" default:"false"`
+	Providers            *[]string                                `json:"providers" yaml:"providers"`
+	Provider             string                                   `json:"provider" yaml:"provider"`
+	NodeProviders        *[]string                                `json:"nodeProviders" yaml:"nodeProviders"`
+	NodeProvider         string                                   `json:"nodeProvider" yaml:"nodeProvider"`
+	Hardened             bool                                     `json:"hardened" yaml:"hardened"`
+	Compliance           bool                                     `json:"compliance" yaml:"compliance"`
+	AddOnConfig          *provisioningInput.AddOnConfig           `json:"addonConfig" yaml:"addonConfig"`
+	AgentEnvVars         []rkev1.EnvVar                           `json:"agentEnvVars" yaml:"agentEnvVars"`
+	ClusterAgent         *management.AgentDeploymentCustomization `json:"clusterAgent" yaml:"clusterAgent"`
+	FleetAgent           *management.AgentDeploymentCustomization `json:"fleetAgent" yaml:"fleetAgent"`
+	ETCD                 *rkev1.ETCD                              `json:"etcd" yaml:"etcd"`
+	LabelsAndAnnotations *provisioningInput.LabelsAndAnnotations  `json:"labelsAndAnnotations" yaml:"labelsAndAnnotations"`
+	Networking           *provisioningInput.Networking            `json:"networking" yaml:"networking"`
+	Registries           *provisioningInput.Registries            `json:"registries" yaml:"registries"`
+	UpgradeStrategy      *rkev1.ClusterUpgradeStrategy            `json:"upgradeStrategy" yaml:"upgradeStrategy"`
+	Advanced             *provisioningInput.Advanced              `json:"advanced" yaml:"advanced"`
+	ClusterSSHTests      []provisioningInput.SSHTestCase          `json:"clusterSSHTests" yaml:"clusterSSHTests"`
+	CRIDockerd           bool                                     `json:"criDockerd" yaml:"criDockerd"`
+	PathToRepo           string                                   `json:"pathToRepo" yaml:"pathToRepo"`
+	IPv6Cluster          bool                                     `json:"ipv6Cluster" yaml:"ipv6Cluster" default:"false"`
+	ResourcePrefix       string                                   `json:"resourcePrefix" yaml:"resourcePrefix" default:""`
+	BastionUser          string                                   `json:"bastionUser" yaml:"bastionUser" default:""`
+	BastionWindowsUser   string                                   `json:"bastionWindowsUser" yaml:"bastionWindowsUser" default:""`
 }
 
 // ConvertConfigToClusterConfig converts the config from (user) provisioning input to a cluster config
@@ -48,9 +44,7 @@ func ConvertConfigToClusterConfig(provisioningConfig *provisioningInput.Config) 
 	var newConfig ClusterConfig
 	newConfig.AddOnConfig = provisioningConfig.AddOnConfig
 	newConfig.MachinePools = provisioningConfig.MachinePools
-	newConfig.NodePools = provisioningConfig.NodePools
 	newConfig.AgentEnvVars = provisioningConfig.AgentEnvVars
-	newConfig.AgentEnvVarsRKE1 = provisioningConfig.AgentEnvVarsRKE1
 	newConfig.Networking = provisioningConfig.Networking
 	newConfig.Advanced = provisioningConfig.Advanced
 	newConfig.Providers = &provisioningConfig.Providers
@@ -58,7 +52,6 @@ func ConvertConfigToClusterConfig(provisioningConfig *provisioningInput.Config) 
 	newConfig.ClusterAgent = provisioningConfig.ClusterAgent
 	newConfig.FleetAgent = provisioningConfig.FleetAgent
 	newConfig.ETCD = provisioningConfig.ETCD
-	newConfig.ETCDRKE1 = provisioningConfig.ETCDRKE1
 	newConfig.LabelsAndAnnotations = provisioningConfig.LabelsAndAnnotations
 	newConfig.Registries = provisioningConfig.Registries
 	newConfig.UpgradeStrategy = provisioningConfig.UpgradeStrategy
@@ -70,7 +63,6 @@ func ConvertConfigToClusterConfig(provisioningConfig *provisioningInput.Config) 
 	newConfig.PSACT = provisioningConfig.PSACT
 	newConfig.PNI = provisioningConfig.PNI
 	newConfig.ClusterSSHTests = provisioningConfig.ClusterSSHTests
-	newConfig.RKE1CustomClusterDockerInstall = provisioningConfig.RKE1CustomClusterDockerInstall
 	newConfig.PathToRepo = provisioningConfig.PathToRepo
 	newConfig.IPv6Cluster = provisioningConfig.IPv6Cluster
 	newConfig.BastionUser = provisioningConfig.BastionUser

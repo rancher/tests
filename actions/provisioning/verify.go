@@ -39,7 +39,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -60,66 +59,6 @@ const (
 	oneSecondInterval           = time.Duration(1 * time.Second)
 	notFound                    = "404 Not Found"
 )
-
-// VerifyRKE1Cluster validates that the RKE1 cluster and its resources are in a good state, matching a given config.
-func VerifyRKE1Cluster(t *testing.T, client *rancher.Client, clustersConfig *clusters.ClusterConfig, cluster *management.Cluster) {
-	client, err := client.ReLogin()
-	require.NoError(t, err)
-
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	require.NoError(t, err)
-
-	watchInterface, err := adminClient.GetManagementWatchInterface(management.ClusterType, metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + cluster.ID,
-		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-	})
-	require.NoError(t, err)
-
-	checkFunc := shepherdclusters.IsHostedProvisioningClusterReady
-	err = wait.WatchWait(watchInterface, checkFunc)
-	require.NoError(t, err)
-
-	require.Equal(t, clustersConfig.KubernetesVersion, cluster.RancherKubernetesEngineConfig.Version)
-
-	err = clusters.VerifyServiceAccountTokenSecret(client, cluster.Name)
-	reports.TimeoutRKEReport(cluster, err)
-	require.NoError(t, err)
-
-	err = nodestat.AllManagementNodeReady(client, cluster.ID, defaults.ThirtyMinuteTimeout)
-	reports.TimeoutRKEReport(cluster, err)
-	require.NoError(t, err)
-
-	if clustersConfig.PSACT == string(provisioninginput.RancherPrivileged) || clustersConfig.PSACT == string(provisioninginput.RancherRestricted) || clustersConfig.PSACT == string(provisioninginput.RancherBaseline) {
-		require.NotEmpty(t, cluster.DefaultPodSecurityAdmissionConfigurationTemplateName)
-
-		err := psadeploy.CreateNginxDeployment(client, cluster.ID, clustersConfig.PSACT)
-		reports.TimeoutRKEReport(cluster, err)
-		require.NoError(t, err)
-	}
-	if clustersConfig.Registries != nil {
-		if clustersConfig.Registries.RKE1Registries != nil {
-			for _, registry := range clustersConfig.Registries.RKE1Registries {
-				havePrefix, err := registries.CheckAllClusterPodsForRegistryPrefix(client, cluster.ID, registry.URL)
-				reports.TimeoutRKEReport(cluster, err)
-				require.NoError(t, err)
-				require.True(t, havePrefix)
-			}
-		}
-	}
-	if clustersConfig.Networking != nil {
-		if clustersConfig.Networking.LocalClusterAuthEndpoint != nil {
-			cluster, err := adminClient.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + cluster.Name)
-			require.NoError(t, err)
-
-			VerifyACE(t, adminClient, cluster)
-		}
-	}
-
-	if clustersConfig.CloudProvider == "" {
-		podErrors := pods.StatusPods(client, cluster.ID)
-		require.Empty(t, podErrors)
-	}
-}
 
 // VerifyClusterReady validates that a non-rke1 cluster and its resources are in a good state, matching a given config.
 func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject) error {
@@ -403,35 +342,6 @@ func VerifyHostedCluster(t *testing.T, client *rancher.Client, cluster *manageme
 
 	podErrors := pods.StatusPods(client, cluster.ID)
 	require.Empty(t, podErrors)
-}
-
-// VerifyDeleteRKE1Cluster validates that a rke1 cluster and its resources are deleted.
-func VerifyDeleteRKE1Cluster(t *testing.T, client *rancher.Client, clusterID string) {
-	cluster, err := client.Management.Cluster.ByID(clusterID)
-	require.NoError(t, err)
-
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	require.NoError(t, err)
-
-	watchInterface, err := adminClient.GetManagementWatchInterface(management.ClusterType, metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + clusterID,
-		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-	})
-	require.NoError(t, err)
-
-	err = wait.WatchWait(watchInterface, func(event watch.Event) (ready bool, err error) {
-		if event.Type == watch.Error {
-			return false, fmt.Errorf("error: unable to delete cluster %s", cluster.Name)
-		} else if event.Type == watch.Deleted {
-			logrus.Infof("Cluster %s deleted!", cluster.Name)
-			return true, nil
-		}
-		return false, nil
-	})
-	require.NoError(t, err)
-
-	err = nodestat.AllNodeDeleted(client, clusterID)
-	require.NoError(t, err)
 }
 
 // VerifyDeleteRKE2K3SCluster validates that a non-rke1 cluster and its resources are deleted.

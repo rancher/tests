@@ -1,4 +1,4 @@
-//go:build (validation || infra.gke || extended) && !infra.any && !infra.aks && !infra.eks && !infra.rke2k3s && !infra.rke1 && !cluster.any && !cluster.custom && !cluster.nodedriver && !sanity && !stress
+//go:build (validation || infra.gke || extended) && !infra.any && !infra.aks && !infra.eks && !infra.rke2k3s && !cluster.any && !cluster.custom && !cluster.nodedriver && !sanity && !stress
 
 package hosted
 

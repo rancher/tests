@@ -88,7 +88,6 @@ At the time of introduction, 2.5 and 2.6 had limited support. Therefore any new 
 All tests for a new feature should have dedicated file(s) for each area they are being tested in. i.e. for clusterAgent and fleetAgent, there would be the following files added:
 validaiton/provisioning/k3s/agent_test.go
 validaiton/provisioning/rke2/agent_test.go
-validaiton/provisioning/rke1/agent_test.go
 validaiton/fleet/agent_test.go
 
 all of which would have the _not_ tags added.

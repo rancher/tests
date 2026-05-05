@@ -100,9 +100,6 @@ These tests utilize Go build tags. Due to this, see the below examples on how to
 
 ### Delete cluster
 
-#### RKE1
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestDeleteRKE1ClusterTestSuite/TestDeletingRKE1Cluster"`
-
 #### RKE2/K3S
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestDeleteClusterTestSuite/TestDeletingCluster"`
 

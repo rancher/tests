@@ -5,7 +5,6 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters/eks"
 	"github.com/rancher/shepherd/extensions/clusters/gke"
 	"github.com/rancher/tests/actions/machinepools"
-	nodepools "github.com/rancher/tests/actions/rke1/nodepools"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -27,13 +26,7 @@ type MachinePools struct {
 	IsSecure  bool                    `json:"isSecure" yaml:"isSecure" default:"false"`
 }
 
-type NodePools struct {
-	Pools
-	NodeRoles *nodepools.NodeRoles `json:"nodeRoles" yaml:"nodeRoles"`
-}
-
 type Config struct {
-	NodePools    *NodePools           `json:"nodePools" yaml:"nodePools"`
 	MachinePools *MachinePools        `json:"machinePools" yaml:"machinePools"`
 	AKSNodePool  *aks.NodePool        `json:"aksNodePool" yaml:"aksNodePool"`
 	EKSNodePool  *eks.NodeGroupConfig `json:"eksNodePool" yaml:"eksNodePool"`

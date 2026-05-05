@@ -121,21 +121,6 @@ node {
                     sshUser = 'ec2-user'
                     }
 
-                  // RKE1 Node Driver: awsNodeTemplate
-
-                  def awsNodeTemplateFilename = "awsNodeTemplate.yaml"
-                  def awsNodeTemplate = env.RANCHER_RKE1_NODE_CONFIG
-
-                  writeFile file: awsNodeTemplateFilename, text: awsNodeTemplate
-
-                  sh "./yq e '.awsNodeTemplate.ami = \"$ami\"' -i awsNodeTemplate.yaml"
-
-                  sh "./yq e '.awsNodeTemplate.sshUser = \"$sshUser\"' -i awsNodeTemplate.yaml"
-
-                  def awsNodeTemplateParam = readFile(file: './awsNodeTemplate.yaml')
-
-                  echo awsNodeTemplateParam
-
                   // RKE2 Node Driver: awsMachineConfig
 
                   def awsMachineConfigFilename = "awsMachineConfig.yaml"
@@ -166,27 +151,11 @@ node {
 
                   echo awsEC2ConfigParam
 
-                  rke1NodeParams = [
-                    string(name: 'TIMEOUT', value: "${env.TIMEOUT}"),
-                    text(name: 'CONFIG', value: awsNodeTemplateParam),
-                    string(name: 'TEST_PACKAGE', value: "${env.RANCHER_RKE1_TEST_PACKAGE}"),
-                    string(name: 'GOTEST_TESTCASE', value: "${env.RANCHER_RKE1_NODE_GOTEST_TESTCASE}"),
-                    string(name: 'REPO', value: "${rancherRepo}"),
-                    string(name: 'BRANCH', value: "${branch}"),
-                  ]
                   rke2NodeParams = [
                     string(name: 'TIMEOUT', value: "${env.TIMEOUT}"),
                     text(name: 'CONFIG', value: awsMachineConfigParam),
                     string(name: 'TEST_PACKAGE', value: "${env.RANCHER_RKE2_TEST_PACKAGE}"),
                     string(name: 'GOTEST_TESTCASE', value: "${env.RANCHER_RKE2_NODE_GOTEST_TESTCASE}"),
-                    string(name: 'REPO', value: "${rancherRepo}"),
-                    string(name: 'BRANCH', value: "${branch}"),
-                  ]
-                  rke1CustomParams = [
-                    string(name: 'TIMEOUT', value: "${env.TIMEOUT}"),
-                    text(name: 'CONFIG', value: awsEC2ConfigParam),
-                    string(name: 'TEST_PACKAGE', value: "${env.RANCHER_RKE1_TEST_PACKAGE}"),
-                    string(name: 'GOTEST_TESTCASE', value: "${env.RANCHER_RKE1_CUSTOM_GOTEST_TESTCASE}"),
                     string(name: 'REPO', value: "${rancherRepo}"),
                     string(name: 'BRANCH', value: "${branch}"),
                   ]
@@ -204,22 +173,8 @@ node {
                   failBuild = false
                   failJobs =[]
 
-                  jobs["rke1node"] = { 
-                    try {build job: 'go-validation-provisioning', parameters: rke1NodeParams}
-                    catch (err) {
-                      echo err.toString()
-                      failBuild = true
-                    } 
-                  }
                   jobs["rke2node"] = { 
                     try {build job: 'go-validation-provisioning', parameters: rke2NodeParams}
-                    catch (err) {
-                      echo err.toString()
-                      failBuild = true
-                    } 
-                  }
-                  jobs["rke1custom"] = { 
-                    try {build job: 'go-validation-provisioning', parameters: rke1CustomParams}
                     catch (err) {
                       echo err.toString()
                       failBuild = true

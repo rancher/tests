@@ -116,44 +116,6 @@ func ReplaceNodes(client *rancher.Client, clusterName string, nodeRoles machinep
 	return nil
 }
 
-// ReplaceRKE1Nodes replaces the last node with the specified role(s) in a rke1 cluster
-func ReplaceRKE1Nodes(client *rancher.Client, clusterName string, isEtcd bool, isControlPlane bool, isWorker bool) error {
-	clusterID, err := clusters.GetClusterIDByName(client, clusterName)
-	if err != nil {
-		return err
-	}
-
-	var pool machinepools.NodeRoles
-	pool.Etcd = isEtcd
-	pool.ControlPlane = isControlPlane
-	pool.Worker = isWorker
-
-	nodesToDelete, err := MatchNodeToRole(client, clusterID, &pool)
-	if err != nil {
-		return err
-	}
-
-	for i := range nodesToDelete {
-		logrus.Info("Deleting node: " + nodesToDelete[i].NodeName)
-		err = client.Management.Node.Delete(&nodesToDelete[i])
-		if err != nil {
-			return err
-		}
-
-		err = nodestat.IsNodeDeleted(client, nodesToDelete[i].NodeName, clusterID)
-		if err != nil {
-			return err
-		}
-
-		err = nodestat.AllManagementNodeReady(client, clusterID, defaults.ThirtyMinuteTimeout)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // shutdownFirstNodeWithRole uses ssh to shutdown the first node matching the specified role in a given cluster.
 func shutdownFirstNodeWithRole(client *rancher.Client, clusterID, nodeRole string) (*steveV1.SteveAPIObject, error) {
 	steveclient, err := client.Steve.ProxyDownstream(clusterID)

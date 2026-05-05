@@ -29,17 +29,6 @@ Below an example test configuration with 1 Node Provider, 1 Custom; RKE1, K3s, a
 
 ```yaml
 clusters:
-  rke1:
-    nodeProvider:
-      - provider: "" # Name of the provider
-        kubernetesVersion: "vMYVERSION" # String with prefix v, as UI shows
-        kubernetesVersionToUpgrade: "vMYVERSION" # String with prefix v, as UI shows
-        image: "" # String
-        sshUser: "" # String
-        cni: ["calico"] # Slice of strings, options can be found in provisioning configuration
-        enabledFeatures:
-          chart: false # Boolean, pre/post upgrade checks, default is false
-          ingress: false # Boolean, pre/post upgrade checks, default is false
     # This is a slice of structs, elements are expandable
     custom:
       - provider: "" # Name of the provider
@@ -143,10 +132,9 @@ clusters:
 
 Depending on the cluster types you want to test, the following configurations are required:
 
-1. [RKE1 Provisioning](../../../provisioning/rke1/README.md)
-2. [RKE2 Provisioning](../../../provisioning/rke2/README.md)
-3. [K3s Provisioning](../../../provisioning/k3s/README.md)
-4. [Hosted Provider Provisioning](../../../provisioning/hosted/README.md)
+1. [RKE2 Provisioning](../../../provisioning/rke2/README.md)
+2. [K3s Provisioning](../../../provisioning/k3s/README.md)
+3. [Hosted Provider Provisioning](../../../provisioning/hosted/README.md)
 
 *The fields that are declared in the [clusters](#clusters-configuration) input above, are going to overwrite the values that are given as provisioning configuration.*
 

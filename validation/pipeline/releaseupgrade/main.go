@@ -28,7 +28,6 @@ const (
 	nodeProviderFileName = "node"
 	customFileName       = "custom"
 
-	rke1FileName = "rke1"
 	rke2FileName = "rke2"
 	k3sFileName  = "k3s"
 
@@ -115,50 +114,15 @@ func main() {
 		}
 	}
 
-	for i, v := range clusters.RKE1.Custom {
-		const isCustom = true
-		const isRKE1 = true
-		const isRKE2 = false
-
-		for _, cni := range v.CNIs {
-			testPackage := "provisioning/rke1"
-			runCommand := pipeline.WrapWithAdminRunCommand("TestCustomClusterRKE1ProvisioningTestSuite/TestProvisioningRKE1CustomClusterDynamicInput")
-			newConfigName := config.NewConfigFileName(dirName, rke1FileName, customFileName, v.Provider, cni, fmt.Sprint(i))
-			err := NewRancherClusterConfiguration(v, newConfigName, isCustom, isRKE1, isRKE2, copiedConfig, cni, testPackage, runCommand, v.Tags, v.RunFlag)
-			if err != nil {
-				logrus.Info("error while generating a rancher cluster config", err)
-				continue
-			}
-		}
-	}
-
-	for i, v := range clusters.RKE1.NodeProvider {
-		const isCustom = false
-		const isRKE1 = true
-		const isRKE2 = false
-
-		for _, cni := range v.CNIs {
-			testPackage := "provisioning/rke1"
-			runCommand := pipeline.WrapWithAdminRunCommand("TestRKE1ProvisioningTestSuite/TestProvisioningRKE1ClusterDynamicInput")
-			newConfigName := config.NewConfigFileName(dirName, rke1FileName, nodeProviderFileName, v.Provider, cni, fmt.Sprint(i))
-			err := NewRancherClusterConfiguration(v, newConfigName, isCustom, isRKE1, isRKE2, copiedConfig, cni, testPackage, runCommand, v.Tags, v.RunFlag)
-			if err != nil {
-				logrus.Info("error while generating a rancher cluster config", err)
-				continue
-			}
-		}
-	}
-
 	for i, v := range clusters.RKE2.Custom {
 		const isCustom = true
-		const isRKE1 = false
 		const isRKE2 = true
 
 		for _, cni := range v.CNIs {
 			testPackage := "provisioning/rke2"
 			runCommand := pipeline.WrapWithAdminRunCommand("TestCustomClusterRKE2ProvisioningTestSuite/TestProvisioningRKE2CustomClusterDynamicInput")
 			newConfigName := config.NewConfigFileName(dirName, rke2FileName, customFileName, v.Provider, cni, fmt.Sprint(i))
-			err := NewRancherClusterConfiguration(v, newConfigName, isCustom, isRKE1, isRKE2, copiedConfig, cni, testPackage, runCommand, v.Tags, v.RunFlag)
+			err := NewRancherClusterConfiguration(v, newConfigName, isCustom, isRKE2, copiedConfig, cni, testPackage, runCommand, v.Tags, v.RunFlag)
 			if err != nil {
 				logrus.Info("error while generating a rancher cluster config", err)
 				continue
@@ -168,14 +132,13 @@ func main() {
 
 	for i, v := range clusters.RKE2.NodeProvider {
 		const isCustom = false
-		const isRKE1 = false
 		const isRKE2 = true
 
 		for _, cni := range v.CNIs {
 			testPackage := "provisioning/rke2"
 			runCommand := pipeline.WrapWithAdminRunCommand("TestRKE2ProvisioningTestSuite/TestProvisioningRKE2ClusterDynamicInput")
 			newConfigName := config.NewConfigFileName(dirName, rke2FileName, nodeProviderFileName, v.Provider, cni, fmt.Sprint(i))
-			err := NewRancherClusterConfiguration(v, newConfigName, isCustom, isRKE1, isRKE2, copiedConfig, cni, testPackage, runCommand, v.Tags, v.RunFlag)
+			err := NewRancherClusterConfiguration(v, newConfigName, isCustom, isRKE2, copiedConfig, cni, testPackage, runCommand, v.Tags, v.RunFlag)
 			if err != nil {
 				logrus.Info("error while generating a rancher cluster config", err)
 				continue
@@ -185,14 +148,13 @@ func main() {
 
 	for i, v := range clusters.K3s.Custom {
 		const isCustom = true
-		const isRKE1 = false
 		const isRKE2 = false
 
 		for _, cni := range v.CNIs {
 			testPackage := "provisioning/k3s"
 			runCommand := pipeline.WrapWithAdminRunCommand("TestCustomClusterK3SProvisioningTestSuite/TestProvisioningK3SCustomClusterDynamicInput")
 			newConfigName := config.NewConfigFileName(dirName, k3sFileName, customFileName, v.Provider, cni, fmt.Sprint(i))
-			err := NewRancherClusterConfiguration(v, newConfigName, isCustom, isRKE1, isRKE2, copiedConfig, cni, testPackage, runCommand, v.Tags, v.RunFlag)
+			err := NewRancherClusterConfiguration(v, newConfigName, isCustom, isRKE2, copiedConfig, cni, testPackage, runCommand, v.Tags, v.RunFlag)
 			if err != nil {
 				logrus.Info("error while generating a rancher cluster config", err)
 				continue
@@ -202,14 +164,13 @@ func main() {
 
 	for i, v := range clusters.K3s.NodeProvider {
 		const isCustom = false
-		const isRKE1 = false
 		const isRKE2 = false
 
 		for _, cni := range v.CNIs {
 			testPackage := "provisioning/k3s"
 			runCommand := pipeline.WrapWithAdminRunCommand("TestK3SProvisioningTestSuite/TestProvisioningK3SClusterDynamicInput")
 			newConfigName := config.NewConfigFileName(dirName, k3sFileName, nodeProviderFileName, v.Provider, cni, fmt.Sprint(i))
-			err := NewRancherClusterConfiguration(v, newConfigName, isCustom, isRKE1, isRKE2, copiedConfig, cni, testPackage, runCommand, v.Tags, v.RunFlag)
+			err := NewRancherClusterConfiguration(v, newConfigName, isCustom, isRKE2, copiedConfig, cni, testPackage, runCommand, v.Tags, v.RunFlag)
 			if err != nil {
 				logrus.Info("error while generating a rancher cluster config", err)
 				continue
@@ -278,7 +239,7 @@ func main() {
 //	NewRancherClusterConfiguration is a function that accepts single cluster from the cluster matrix.
 //
 // Writes a new configuration file with the original configuration's content and updates the new file's content with the given cluster values.
-func NewRancherClusterConfiguration(cluster pipeline.RancherCluster, newConfigName file.Name, isCustom, isRKE1, isRKE2 bool, copiedConfig []byte, cni, provTestPackage, runCommand, tags, runFlag string) (err error) {
+func NewRancherClusterConfiguration(cluster pipeline.RancherCluster, newConfigName file.Name, isCustom, isRKE2 bool, copiedConfig []byte, cni, provTestPackage, runCommand, tags, runFlag string) (err error) {
 	_, err = newConfigName.NewFile(copiedConfig)
 	if err != nil {
 		logrus.Info("error while writing populated config", err)
@@ -294,9 +255,7 @@ func NewRancherClusterConfiguration(cluster pipeline.RancherCluster, newConfigNa
 	provisioningConfig := new(provisioninginput.Config)
 	config.LoadAndUpdateConfig(provisioninginput.ConfigurationFileKey, provisioningConfig, func() {
 		provisioningConfig.CNIs = []string{cni}
-		if isRKE1 {
-			provisioningConfig.RKE1KubernetesVersions = []string{cluster.KubernetesVersion}
-		} else if isRKE2 {
+		if isRKE2 {
 			provisioningConfig.RKE2KubernetesVersions = []string{cluster.KubernetesVersion}
 		} else {
 			provisioningConfig.K3SKubernetesVersions = []string{cluster.KubernetesVersion}
@@ -311,7 +270,7 @@ func NewRancherClusterConfiguration(cluster pipeline.RancherCluster, newConfigNa
 		testCases.RunFlag = runFlag
 	})
 
-	pipeline.UpdateRancherDownstreamClusterFields(&cluster, isCustom, isRKE1)
+	pipeline.UpdateRancherDownstreamClusterFields(&cluster, isCustom)
 
 	upgradeConfig := new(upgradeinput.Config)
 	config.LoadAndUpdateConfig(upgradeinput.ConfigurationFileKey, upgradeConfig, func() {

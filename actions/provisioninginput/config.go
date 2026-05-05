@@ -5,7 +5,6 @@ import (
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/tests/actions/machinepools"
-	nodepools "github.com/rancher/tests/actions/rke1/nodepools"
 )
 
 type Version string
@@ -93,44 +92,6 @@ var WindowsMachinePool = MachinePools{
 	},
 }
 
-var AllRolesNodePool = NodePools{
-	NodeRoles: nodepools.NodeRoles{
-		Etcd:         true,
-		ControlPlane: true,
-		Worker:       true,
-		Quantity:     1,
-	},
-}
-
-var EtcdControlPlaneNodePool = NodePools{
-	NodeRoles: nodepools.NodeRoles{
-		Etcd:         true,
-		ControlPlane: true,
-		Quantity:     1,
-	},
-}
-
-var EtcdNodePool = NodePools{
-	NodeRoles: nodepools.NodeRoles{
-		Etcd:     true,
-		Quantity: 1,
-	},
-}
-
-var ControlPlaneNodePool = NodePools{
-	NodeRoles: nodepools.NodeRoles{
-		ControlPlane: true,
-		Quantity:     1,
-	},
-}
-
-var WorkerNodePool = NodePools{
-	NodeRoles: nodepools.NodeRoles{
-		Worker:   true,
-		Quantity: 1,
-	},
-}
-
 // String stringer for the ProviderName
 func (p ProviderName) String() string {
 	return string(p)
@@ -181,10 +142,9 @@ type Advanced struct {
 }
 
 type Registries struct {
-	RKE1Registries []management.PrivateRegistry `json:"rke1Registries,omitempty" yaml:"rke1Registries,omitempty"`
-	RKE2Registries *rkev1.Registry              `json:"rke2Registries,omitempty" yaml:"rke2Registries,omitempty"`
-	RKE2Password   string                       `json:"rke2Password,omitempty" yaml:"rke2Password,omitempty"`
-	RKE2Username   string                       `json:"rke2Username,omitempty" yaml:"rke2Username,omitempty"`
+	RKE2Registries *rkev1.Registry `json:"rke2Registries,omitempty" yaml:"rke2Registries,omitempty"`
+	RKE2Password   string          `json:"rke2Password,omitempty" yaml:"rke2Password,omitempty"`
+	RKE2Username   string          `json:"rke2Username,omitempty" yaml:"rke2Username,omitempty"`
 }
 
 type MachinePools struct {
@@ -193,49 +153,35 @@ type MachinePools struct {
 	IsSecure          bool                           `json:"isSecure,omitempty" yaml:"isSecure,omitempty" default:"false"`
 }
 
-type NodePools struct {
-	machinepools.Pools
-	NodeRoles nodepools.NodeRoles `json:"nodeRoles,omitempty" yaml:"nodeRoles,omitempty" default:"[]"`
-}
-
-type RKE1CustomClusterDockerInstall struct {
-	InstallDockerURL string `json:"installDockerURL" yaml:"installDockerURL"`
-}
-
 type Config struct {
-	NodePools                      []NodePools                              `json:"nodePools,omitempty" yaml:"nodePools,omitempty"`
-	MachinePools                   []MachinePools                           `json:"machinePools,omitempty" yaml:"machinePools,omitempty"`
-	CloudProvider                  string                                   `json:"cloudProvider,omitempty" yaml:"cloudProvider,omitempty"`
-	EnableNetworkPolicy            bool                                     `json:"enableNetworkPolicy,omitempty" yaml:"enableNetworkPolicy,omitempty"`
-	Providers                      []string                                 `json:"providers,omitempty" yaml:"providers,omitempty"`
-	NodeProviders                  []string                                 `json:"nodeProviders,omitempty" yaml:"nodeProviders,omitempty"`
-	Hardened                       bool                                     `json:"hardened,omitempty" yaml:"hardened,omitempty"`
-	Compliance                     bool                                     `json:"compliance,omitempty" yaml:"compliance,omitempty"`
-	AddOnConfig                    *AddOnConfig                             `json:"addonConfig,omitempty" yaml:"addonConfig,omitempty"`
-	K3SKubernetesVersions          []string                                 `json:"k3sKubernetesVersion,omitempty" yaml:"k3sKubernetesVersion,omitempty"`
-	RKE1KubernetesVersions         []string                                 `json:"rke1KubernetesVersion,omitempty" yaml:"rke1KubernetesVersion,omitempty"`
-	RKE2KubernetesVersions         []string                                 `json:"rke2KubernetesVersion,omitempty" yaml:"rke2KubernetesVersion,omitempty"`
-	CNIs                           []string                                 `json:"cni,omitempty" yaml:"cni,omitempty"`
-	PSACT                          string                                   `json:"psact,omitempty" yaml:"psact,omitempty"`
-	PNI                            bool                                     `json:"pni,omitempty" yaml:"pni,omitempty"`
-	AgentEnvVars                   []rkev1.EnvVar                           `json:"agentEnvVars,omitempty" yaml:"agentEnvVars,omitempty"`
-	AgentEnvVarsRKE1               []management.EnvVar                      `json:"agentEnvVarsRKE1,omitempty" yaml:"agentEnvVarsRKE1,omitempty"`
-	ClusterAgent                   *management.AgentDeploymentCustomization `json:"clusterAgent,omitempty" yaml:"clusterAgent,omitempty"`
-	FleetAgent                     *management.AgentDeploymentCustomization `json:"fleetAgent,omitempty" yaml:"fleetAgent,omitempty"`
-	ETCD                           *rkev1.ETCD                              `json:"etcd,omitempty" yaml:"etcd,omitempty"`
-	ETCDRKE1                       *management.ETCDService                  `json:"etcdRKE1,omitempty" yaml:"etcdRKE1,omitempty"`
-	LabelsAndAnnotations           *LabelsAndAnnotations                    `json:"labelsAndAnnotations,omitempty" yaml:"labelsAndAnnotations,omitempty"`
-	Networking                     *Networking                              `json:"networking,omitempty" yaml:"networking,omitempty"`
-	Registries                     *Registries                              `json:"registries,omitempty" yaml:"registries,omitempty"`
-	UpgradeStrategy                *rkev1.ClusterUpgradeStrategy            `json:"upgradeStrategy,omitempty" yaml:"upgradeStrategy,omitempty"`
-	Advanced                       *Advanced                                `json:"advanced,omitempty" yaml:"advanced,omitempty"`
-	ClusterSSHTests                []SSHTestCase                            `json:"clusterSSHTests,omitempty" yaml:"clusterSSHTests,omitempty"`
-	CRIDockerd                     bool                                     `json:"criDockerd,omitempty" yaml:"criDockerd,omitempty"`
-	RKE1CustomClusterDockerInstall *RKE1CustomClusterDockerInstall          `json:"rke1CustomClusterDockerInstall,omitempty" yaml:"rke1CustomClusterDockerInstall,omitempty"`
-	PathToRepo                     string                                   `json:"pathToRepo" yaml:"pathToRepo"`
-	IPv6Cluster                    bool                                     `json:"ipv6Cluster,omitempty" yaml:"ipv6Cluster,omitempty" default:"false"`
-	BastionUser                    string                                   `json:"bastionUser,omitempty" yaml:"bastionUser,omitempty" default:""`
-	BastionWindowsUser             string                                   `json:"bastionWindowsUser,omitempty" yaml:"bastionWindowsUser,omitempty" default:""`
+	MachinePools           []MachinePools                           `json:"machinePools,omitempty" yaml:"machinePools,omitempty"`
+	CloudProvider          string                                   `json:"cloudProvider,omitempty" yaml:"cloudProvider,omitempty"`
+	EnableNetworkPolicy    bool                                     `json:"enableNetworkPolicy,omitempty" yaml:"enableNetworkPolicy,omitempty"`
+	Providers              []string                                 `json:"providers,omitempty" yaml:"providers,omitempty"`
+	NodeProviders          []string                                 `json:"nodeProviders,omitempty" yaml:"nodeProviders,omitempty"`
+	Hardened               bool                                     `json:"hardened,omitempty" yaml:"hardened,omitempty"`
+	Compliance             bool                                     `json:"compliance,omitempty" yaml:"compliance,omitempty"`
+	AddOnConfig            *AddOnConfig                             `json:"addonConfig,omitempty" yaml:"addonConfig,omitempty"`
+	K3SKubernetesVersions  []string                                 `json:"k3sKubernetesVersion,omitempty" yaml:"k3sKubernetesVersion,omitempty"`
+	RKE2KubernetesVersions []string                                 `json:"rke2KubernetesVersion,omitempty" yaml:"rke2KubernetesVersion,omitempty"`
+	CNIs                   []string                                 `json:"cni,omitempty" yaml:"cni,omitempty"`
+	PSACT                  string                                   `json:"psact,omitempty" yaml:"psact,omitempty"`
+	PNI                    bool                                     `json:"pni,omitempty" yaml:"pni,omitempty"`
+	AgentEnvVars           []rkev1.EnvVar                           `json:"agentEnvVars,omitempty" yaml:"agentEnvVars,omitempty"`
+	ClusterAgent           *management.AgentDeploymentCustomization `json:"clusterAgent,omitempty" yaml:"clusterAgent,omitempty"`
+	FleetAgent             *management.AgentDeploymentCustomization `json:"fleetAgent,omitempty" yaml:"fleetAgent,omitempty"`
+	ETCD                   *rkev1.ETCD                              `json:"etcd,omitempty" yaml:"etcd,omitempty"`
+	LabelsAndAnnotations   *LabelsAndAnnotations                    `json:"labelsAndAnnotations,omitempty" yaml:"labelsAndAnnotations,omitempty"`
+	Networking             *Networking                              `json:"networking,omitempty" yaml:"networking,omitempty"`
+	Registries             *Registries                              `json:"registries,omitempty" yaml:"registries,omitempty"`
+	UpgradeStrategy        *rkev1.ClusterUpgradeStrategy            `json:"upgradeStrategy,omitempty" yaml:"upgradeStrategy,omitempty"`
+	Advanced               *Advanced                                `json:"advanced,omitempty" yaml:"advanced,omitempty"`
+	ClusterSSHTests        []SSHTestCase                            `json:"clusterSSHTests,omitempty" yaml:"clusterSSHTests,omitempty"`
+	CRIDockerd             bool                                     `json:"criDockerd,omitempty" yaml:"criDockerd,omitempty"`
+	PathToRepo             string                                   `json:"pathToRepo" yaml:"pathToRepo"`
+	IPv6Cluster            bool                                     `json:"ipv6Cluster,omitempty" yaml:"ipv6Cluster,omitempty" default:"false"`
+	BastionUser            string                                   `json:"bastionUser,omitempty" yaml:"bastionUser,omitempty" default:""`
+	BastionWindowsUser     string                                   `json:"bastionWindowsUser,omitempty" yaml:"bastionWindowsUser,omitempty" default:""`
 }
 
 type TemplateConfig struct {
