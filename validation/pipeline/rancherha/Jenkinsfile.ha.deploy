@@ -228,6 +228,7 @@ def injectKubernetesVersion(String configFile) {
     }
     if (version != "") {
         sh "yq e '.qaInfraAutomation.standaloneCluster.kubernetesVersion = \"${version}\"' -i ${configFile}"
+        sh "yq e '.qaInfraAutomation.customCluster.kubernetesVersion = \"${version}\"' -i ${configFile}"
     }
     if (nodeCount != "") {
         sh "yq e '.qaInfraAutomation.standaloneCluster.nodes[0].count = ${nodeCount}' -i ${configFile}"
