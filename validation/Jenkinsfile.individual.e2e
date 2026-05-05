@@ -58,12 +58,12 @@ pipeline {
         // ── Repository parameters ────────────────────────────────
         string(
             name: 'REPO',
-            defaultValue: 'https://github.com/floatingman/rancher-tests',
+            defaultValue: 'https://github.com/rancher/tests',
             description: 'Test repository URL'
         )
         string(
             name: 'BRANCH',
-            defaultValue: 'feature/issue-592-refactor-e2e-pipeline',
+            defaultValue: 'main',
             description: 'Test repository branch'
         )
 
@@ -82,7 +82,7 @@ pipeline {
         // ── Library parameter ────────────────────────────────────
         string(
             name: 'QA_JENKINS_LIBRARY_BRANCH',
-            defaultValue: 'feature/issue-589-shared-pipeline-functions',
+            defaultValue: 'main',
             description: 'Branch of qa-jenkins-library to use'
         )
     }

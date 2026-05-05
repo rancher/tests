@@ -10,7 +10,6 @@
  *   5. Triggers downstream test jobs in parallel
  *   6. Tears down infrastructure after tests (or on failure)
  *
- * Targets DISTRO=rke2 ENV=default PROVIDER=aws (Makefile defaults on feature/decouple-tofu).
  *
  * Consumes shared functions from qa-jenkins-library:
  *   infra.backendS3, infra.workspaceNew, infra.up, infra.cluster, infra.rancher, infra.down
@@ -89,27 +88,27 @@ pipeline {
         // ── Repository parameters ──────────────────────────────
         string(
             name: 'QA_JENKINS_LIBRARY_BRANCH',
-            defaultValue: 'feature/issue-589-shared-pipeline-functions',
+            defaultValue: 'main',
             description: 'Branch of qa-jenkins-library to use'
         )
         string(
             name: 'TESTS_REPO_URL',
-            defaultValue: 'https://github.com/floatingman/rancher-tests',
+            defaultValue: 'https://github.com/rancher/tests',
             description: 'URL of rancher/tests repository'
         )
         string(
             name: 'TESTS_BRANCH',
-            defaultValue: 'feature/issue-592-refactor-e2e-pipeline',
+            defaultValue: 'main',
             description: 'Branch of rancher/tests repository'
         )
         string(
             name: 'QA_INFRA_REPO_URL',
-            defaultValue: 'https://github.com/floatingman/qa-infra-automation',
+            defaultValue: 'https://github.com/rancher/qa-infra-automation',
             description: 'URL of qa-infra-automation repository'
         )
         string(
             name: 'QA_INFRA_BRANCH',
-            defaultValue: 'feature/decouple-tofu',
+            defaultValue: 'main',
             description: 'Branch of qa-infra-automation repository'
         )
 
