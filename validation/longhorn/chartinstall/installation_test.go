@@ -19,6 +19,7 @@ import (
 	shepherdPods "github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
+	actionNamespaces "github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/storage"
 	"github.com/rancher/tests/interoperability/longhorn"
 	"github.com/stretchr/testify/require"
@@ -76,6 +77,10 @@ func (l *LonghornChartTestSuite) SetupSuite() {
 
 	// Get latest versions of longhorn
 	latestLonghornVersion, err := l.client.Catalog.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
+	require.NoError(l.T(), err)
+
+	l.T().Logf("Creating %s namespace", charts.LonghornNamespace)
+	_, err = actionNamespaces.CreateNamespace(client, charts.LonghornNamespace, "{}", map[string]string{}, map[string]string{}, l.project)
 	require.NoError(l.T(), err)
 
 	l.payloadOpts = charts.PayloadOpts{
