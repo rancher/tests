@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any) && !stress && !extended
+//go:build rancherinstall
 
 package install
 
