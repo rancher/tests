@@ -44,11 +44,11 @@ type LonghornChartTestSuite struct {
 	payloadOpts        charts.PayloadOpts
 }
 
-func (l *LonghornChartTestSuite) TearDownSuite() {
+func (l *LonghornChartTestSuite) TearDownTest() {
 	l.session.Cleanup()
 }
 
-func (l *LonghornChartTestSuite) SetupSuite() {
+func (l *LonghornChartTestSuite) SetupTest() {
 	l.session = session.NewSession()
 
 	client, err := rancher.NewClient("", l.session)
@@ -124,16 +124,6 @@ func (l *LonghornChartTestSuite) TestChartInstall() {
 }
 
 func (l *LonghornChartTestSuite) TestChartInstallStaticCustomConfig() {
-	chart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
-	require.NoError(l.T(), err)
-
-	// If Longhorn was installed by a previous test on this same session, uninstall it to install it again with custom configuration.
-	if chart.IsAlreadyInstalled {
-		l.T().Log("Uninstalling Longhorn as it was installed on a previous test.")
-		err = charts.UninstallLonghornChart(l.client, charts.LonghornNamespace, l.cluster.ID, l.payloadOpts.Host)
-		require.NoError(l.T(), err)
-	}
-
 	nodeCollection, err := l.client.Management.Node.List(&types.ListOpts{Filters: map[string]interface{}{
 		"clusterId": l.cluster.ID,
 	}})
