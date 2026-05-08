@@ -89,7 +89,7 @@ func connectAndMonitor(client *rancher.Client, sigChan chan struct{}, clusterID 
 			matches := pulledRegex.FindStringSubmatch(k8sEvent.Message)
 
 			if len(matches) > 1 {
-				file.WriteString(fmt.Sprintf("%s (pulled during test)\n", matches[1]))
+				file.WriteString(fmt.Sprintf("%s \n", matches[1]))
 				continue
 			}
 
