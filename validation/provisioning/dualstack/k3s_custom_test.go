@@ -4,6 +4,7 @@ package dualstack
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/ec2"
@@ -98,6 +99,12 @@ func TestCustomK3SDualstack(t *testing.T) {
 		StackPreference: "dual",
 	}
 
+	ipv6FirstDualStackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     clusterConfig.Networking.IPV6FirstClusterCIDR,
+		ServiceCIDR:     clusterConfig.Networking.IPV6FirstServiceCIDR,
+		StackPreference: "dual",
+	}
+
 	tests := []struct {
 		name         string
 		client       *rancher.Client
@@ -108,6 +115,7 @@ func TestCustomK3SDualstack(t *testing.T) {
 		{"K3S_Dual_Stack_Custom_IPv4_Stack_Preference", k.standardUserClient, nodeRolesStandard, ipv4StackPreference},
 		{"K3S_Dual_Stack_Custom_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, dualStackPreference},
 		{"K3S_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
+		{"K3S_Dual_Stack_Custom_CIDR_IPv6_First_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, ipv6FirstDualStackPreference},
 	}
 
 	for _, tt := range tests {
@@ -124,6 +132,10 @@ func TestCustomK3SDualstack(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
+			if strings.Contains(tt.name, "IPv6_First") {
+				t.Skip("Skipping test due to issue with AWS ipv6 address only provisioning; see GH issue: https://github.com/rancher/rancher/issues/54944")
+			}
 
 			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 

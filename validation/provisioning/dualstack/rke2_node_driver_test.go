@@ -4,6 +4,7 @@ package dualstack
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -84,6 +85,12 @@ func TestNodeDriverRKE2(t *testing.T) {
 		StackPreference: "dual",
 	}
 
+	ipv6FirstDualStackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     clusterConfig.Networking.IPV6FirstClusterCIDR,
+		ServiceCIDR:     clusterConfig.Networking.IPV6FirstServiceCIDR,
+		StackPreference: "dual",
+	}
+
 	tests := []struct {
 		name         string
 		client       *rancher.Client
@@ -92,6 +99,9 @@ func TestNodeDriverRKE2(t *testing.T) {
 	}{
 		{"RKE2_Dual_Stack_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
 		{"RKE2_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
+		{"RKE2_Dual_Stack_Node_Driver_CIDR_IPv6_First_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv6FirstDualStackPreference},
+		{"RKE2_Dual_Stack_Node_Driver_CIDR_IPv6_Address_Only", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
+		{"RKE2_Dual_Stack_Node_Driver_CIDR_IPv6_Address_Only_IPv6_First", r.standardUserClient, nodeRolesStandard, ipv6FirstDualStackPreference},
 	}
 
 	for _, tt := range tests {
@@ -113,6 +123,12 @@ func TestNodeDriverRKE2(t *testing.T) {
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
+
+			// Needed to ensure we are testing use-case with IPv6 address only set and without it set in the other test cases.
+			if strings.Contains(tt.name, "IPv6_Address_Only") || strings.Contains(tt.name, "IPv6_First") {
+				machineConfigSpec.AmazonEC2MachineConfigs.AWSMachineConfig[0].Ipv6AddressOnly = true
+				t.Skip("Skipping test due to issue with AWS ipv6 address only provisioning; see GH issue: https://github.com/rancher/rancher/issues/54944")
+			}
 
 			logrus.Info("Provisioning cluster")
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)

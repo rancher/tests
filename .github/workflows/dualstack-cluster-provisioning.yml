@@ -191,8 +191,8 @@ jobs:
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
               awsUser: "${{ secrets.DUAL_STACK_AWS_USER }}"
-              clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
               timeout: "${{ vars.TIMEOUT }}"
               ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
@@ -224,8 +224,10 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             networking:
-              clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
+              ipv6FirstClusterCIDR: "${{ vars.IPV6_FIRST_DUALSTACK_CLUSTER_CIDR }}"
+              ipv6FirstServiceCIDR: "${{ vars.IPV6_FIRST_DUALSTACK_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
             advanced:
               machineGlobalConfig:
@@ -540,8 +542,8 @@ jobs:
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
               awsUser: "${{ secrets.DUAL_STACK_AWS_USER }}"
-              clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
               timeout: "${{ vars.TIMEOUT }}"
               ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
@@ -573,8 +575,10 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             networking:
-              clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
+              ipv6FirstClusterCIDR: "${{ vars.IPV6_FIRST_DUALSTACK_CLUSTER_CIDR }}"
+              ipv6FirstServiceCIDR: "${{ vars.IPV6_FIRST_DUALSTACK_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
             advanced:
               machineGlobalConfig:
@@ -888,8 +892,8 @@ jobs:
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
               awsUser: "${{ secrets.DUAL_STACK_AWS_USER }}"
-              clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
               timeout: "${{ vars.TIMEOUT }}"
               ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
@@ -922,8 +926,10 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             networking:
-              clusterCIDR: "${{ secrets.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.DUALSTACK_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
+              ipv6FirstClusterCIDR: "${{ vars.IPV6_FIRST_DUALSTACK_CLUSTER_CIDR }}"
+              ipv6FirstServiceCIDR: "${{ vars.IPV6_FIRST_DUALSTACK_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
             advanced:
               machineGlobalConfig:

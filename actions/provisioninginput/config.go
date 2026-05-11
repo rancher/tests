@@ -129,6 +129,8 @@ type Networking struct {
 	TLSSan                   []string                        `json:"tlsSan,omitempty" yaml:"tlsSan,omitempty"`
 	LocalClusterAuthEndpoint *rkev1.LocalClusterAuthEndpoint `json:"localClusterAuthEndpoint,omitempty" yaml:"localClusterAuthEndpoint,omitempty"`
 	StackPreference          string                          `json:"stackPreference,omitempty" yaml:"stackPreference,omitempty"`
+	IPV6FirstClusterCIDR     string                          `json:"ipv6FirstClusterCIDR,omitempty" yaml:"ipv6FirstClusterCIDR,omitempty"`
+	IPV6FirstServiceCIDR     string                          `json:"ipv6FirstServiceCIDR,omitempty" yaml:"ipv6FirstServiceCIDR,omitempty"`
 }
 
 type Advanced struct {
