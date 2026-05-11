@@ -3,7 +3,9 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"regexp"
@@ -40,6 +42,28 @@ var (
 	qaseToken       = os.Getenv(qaseactions.QaseTokenEnvVar)
 	runIDEnvVar     = os.Getenv(qaseactions.TestRunEnvVar)
 )
+
+type qaseCaseLookup struct {
+	ID    int64
+	Title string
+}
+
+type rawCaseListResponse struct {
+	Result struct {
+		Entities []rawCase `json:"entities"`
+	} `json:"result"`
+}
+
+type rawCase struct {
+	ID           *int64                `json:"id"`
+	Title        *string               `json:"title"`
+	CustomFields []rawCustomFieldValue `json:"custom_fields"`
+}
+
+type rawCustomFieldValue struct {
+	ID    *int64  `json:"id"`
+	Value *string `json:"value"`
+}
 
 func main() {
 	if runIDEnvVar != "" {
@@ -83,35 +107,76 @@ func main() {
 	}
 }
 
-func getAllAutomationTestCases(client *clients.V1Client) (map[string]api_v1_client.TestCase, error) {
-	testCases := []api_v1_client.TestCase{}
-	testCaseNameMap := map[string]api_v1_client.TestCase{}
-	authCtx := context.WithValue(context.TODO(), api_v1_client.ContextAPIKeys, map[string]api_v1_client.APIKey{
-		"TokenAuth": {Key: qaseToken},
-	})
-	var numOfTestsCases int32 = 1
-	offSetCount := 0
-	for numOfTestsCases > 0 {
-		offset := int32(offSetCount)
-		tempResult, _, err := client.GetAPIClient().CasesAPI.GetCases(authCtx, qaseactions.RancherManagerProjectID).Offset(offset).Execute()
-		if err != nil {
-			logrus.Warnf("Error fetching existing test cases (may have deprecated params): %v", err)
-			return testCaseNameMap, nil
-		}
-
-		testCases = append(testCases, tempResult.Result.Entities...)
-		numOfTestsCases = *tempResult.Result.Count
-		offSetCount += 10
+func getAllAutomationTestCases(client *clients.V1Client) (map[string]qaseCaseLookup, error) {
+	testCaseNameMap := map[string]qaseCaseLookup{}
+	baseURL, err := client.GetAPIClient().GetConfig().ServerURLWithContext(context.Background(), "CasesAPIService.GetCases")
+	if err != nil {
+		return nil, fmt.Errorf("resolve Qase cases base URL: %w", err)
 	}
 
-	for _, testCase := range testCases {
-		automationTestNameCustomField := getAutomationTestName(testCase.CustomFields)
-		if automationTestNameCustomField != "" {
-			testCaseNameMap[automationTestNameCustomField] = testCase
-		} else {
-			testCaseNameMap[*testCase.Title] = testCase
+	httpClient := client.GetAPIClient().GetConfig().HTTPClient
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+
+	offset := 0
+	limit := 100
+
+	for {
+		requestURL := fmt.Sprintf("%s/case/%s?offset=%d&limit=%d", baseURL, qaseactions.RancherManagerProjectID, offset, limit)
+
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, requestURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("build Qase cases request: %w", err)
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Token", qaseToken)
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("fetch Qase cases page at offset %d: %w", offset, err)
 		}
 
+		body, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("read Qase cases response at offset %d: %w", offset, readErr)
+		}
+		if resp.StatusCode >= http.StatusBadRequest {
+			return nil, fmt.Errorf("Qase cases request failed at offset %d: %s: %s", offset, resp.Status, strings.TrimSpace(string(body)))
+		}
+
+		var page rawCaseListResponse
+		if err := json.Unmarshal(body, &page); err != nil {
+			return nil, fmt.Errorf("decode Qase cases page at offset %d: %w", offset, err)
+		}
+
+		entities := page.Result.Entities
+		if len(entities) == 0 {
+			break
+		}
+
+		for _, testCase := range entities {
+			if testCase.ID == nil || testCase.Title == nil {
+				continue
+			}
+
+			lookup := qaseCaseLookup{
+				ID:    *testCase.ID,
+				Title: *testCase.Title,
+			}
+			automationTestNameCustomField := getAutomationTestName(testCase.CustomFields)
+			if automationTestNameCustomField != "" {
+				testCaseNameMap[automationTestNameCustomField] = lookup
+				continue
+			}
+			testCaseNameMap[*testCase.Title] = lookup
+		}
+
+		offset += len(entities)
+		if len(entities) < limit {
+			break
+		}
 	}
 
 	return testCaseNameMap, nil
@@ -200,7 +265,7 @@ func reportTestQases(client *clients.V1Client, testRunID int64) (int, error) {
 	for _, goTestResult := range goTestResults {
 		if testQase, ok := qaseTestCases[goTestResult.Name]; ok {
 			// update test status
-			httpCode, err := updateTestInRun(client, *goTestResult, *testQase.Id, testRunID)
+			httpCode, err := updateTestInRun(client, *goTestResult, testQase.ID, testRunID)
 			if err != nil {
 				return httpCode, err
 			}
@@ -209,12 +274,14 @@ func reportTestQases(client *clients.V1Client, testRunID int64) (int, error) {
 				resultTestMap = append(resultTestMap, goTestResult)
 			}
 		} else {
-			// write test case
+			// create test case
+			logrus.Infof("Creating new test case: %s", goTestResult.Name)
 			caseID, err := writeTestCaseToQase(client, *goTestResult)
 			if err != nil {
 				return 0, err
 			}
 
+			// update test status
 			httpCode, err := updateTestInRun(client, *goTestResult, *caseID.Result.Id, testRunID)
 			if err != nil {
 				return httpCode, err
@@ -286,21 +353,29 @@ func writeTestCaseToQase(client *clients.V1Client, testResult testresult.GoTestR
 	}
 	var zero int32 = 0
 	var two int32 = 2
+	customFields := map[string]string{
+		fmt.Sprintf("%d", testSourceID):         testSource,
+		fmt.Sprintf("%d", automationTestNameID): testResult.Name,
+	}
+
 	testQaseBody := api_v1_client.TestCaseCreate{
-		Title:      testResult.Name,
-		SuiteId:    testSuiteID,
-		IsFlaky:    &zero,
-		Automation: &two,
-		CustomField: &map[string]string{
-			fmt.Sprintf("%d", testSourceID): testSource,
-		},
+		Title:       testResult.Name,
+		SuiteId:     testSuiteID,
+		IsFlaky:     &zero,
+		Automation:  &two,
+		CustomField: &customFields,
 	}
 	authCtx := context.WithValue(context.TODO(), api_v1_client.ContextAPIKeys, map[string]api_v1_client.APIKey{"TokenAuth": {Key: qaseToken}})
-	caseID, _, err := client.GetAPIClient().CasesAPI.CreateCase(authCtx, qaseactions.RancherManagerProjectID).TestCaseCreate(testQaseBody).Execute()
+	caseID, resp, err := client.GetAPIClient().CasesAPI.CreateCase(authCtx, qaseactions.RancherManagerProjectID).TestCaseCreate(testQaseBody).Execute()
 	if err != nil {
+		if resp != nil {
+			logrus.Errorf("Qase API error response: %v", resp.Status)
+		}
+		logrus.Errorf("Failed to create test case: %v", err)
 		return nil, err
 	}
-	return caseID, err
+
+	return caseID, nil
 }
 
 func updateTestInRun(client *clients.V1Client, testResult testresult.GoTestResult, qaseTestCaseID, testRunID int64) (int, error) {
@@ -333,9 +408,9 @@ func updateTestInRun(client *clients.V1Client, testResult testresult.GoTestResul
 	return http.StatusOK, nil
 }
 
-func getAutomationTestName(customFields []api_v1_client.CustomFieldValue) string {
+func getAutomationTestName(customFields []rawCustomFieldValue) string {
 	for _, field := range customFields {
-		if *field.Id == automationTestNameID {
+		if field.ID != nil && *field.ID == automationTestNameID && field.Value != nil {
 			return *field.Value
 		}
 	}
