@@ -112,11 +112,11 @@ RUN echo "installing ${RKE_VERSION} version RKE" && \
     RKE_BASE_URL="https://github.com/rancher/rke/releases/download/${RKE_VERSION}" && \
     RKE_BIN="rke_linux-amd64" && \
     curl -fsSL "${RKE_BASE_URL}/${RKE_BIN}" -o "${RKE_BIN}" && \
-    curl -fsSL "${RKE_BASE_URL}/${RKE_BIN}.sha256" -o "${RKE_BIN}.sha256" && \
-    sha256sum -c "${RKE_BIN}.sha256" && \
+    curl -fsSL "${RKE_BASE_URL}/sha256sum.txt" -o "rke_sha256sum.txt" && \
+    grep "${RKE_BIN}" rke_sha256sum.txt | awk '{print $1 "  " $2}' | sha256sum -c && \
     mv "${RKE_BIN}" /bin/rke && \
     chmod +x /bin/rke && \
-    rm "${RKE_BIN}.sha256"
+    rm "rke_sha256sum.txt"
 
 ARG CLI_VERSION
 RUN if [[ -n "$CLI_VERSION" ]] ; then  \
