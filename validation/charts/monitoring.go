@@ -137,9 +137,9 @@ func waitUnknownPrometheusTargets(client *rancher.Client) error {
 // that checks if all active prometheus targets are healthy by using prometheus API.
 func checkPrometheusTargets(client *rancher.Client) (bool, error) {
 	backoff := kubewait.Backoff{
-		Duration: 1 * time.Minute,
-		Factor:   1.1,
-		Jitter:   0,
+		Duration: 30 * time.Second,
+		Factor:   1.5,
+		Jitter:   0.1,
 		Steps:    10,
 	}
 
@@ -149,13 +149,13 @@ func checkPrometheusTargets(client *rancher.Client) (bool, error) {
 		err := waitUnknownPrometheusTargets(client)
 		if err != nil {
 			logrus.Infof("Waiting for unknown prometheus targets to resolve, retrying: %v", err)
-			return false, nil
+			return false, err
 		}
 
 		bodyString, err := ingresses.GetExternalIngressResponse(client, client.RancherConfig.Host, prometheusTargetsPathAPI, true)
 		if err != nil {
 			logrus.Infof("Failed to get prometheus targets response, retrying: %v", err)
-			return false, nil
+			return false, err
 		}
 
 		var mapResponse map[string]interface{}
@@ -164,13 +164,13 @@ func checkPrometheusTargets(client *rancher.Client) (bool, error) {
 		}
 
 		if mapResponse["status"] != "success" {
-			logrus.Info("Prometheus targets API did not return success status, retrying")
+			logrus.Infof("Prometheus targets API did not return success status, status: %s ", mapResponse["status"])
 			return false, nil
 		}
 
-		activeTargets := mapResponse["data"].(map[string]interface{})["activeTargets"].([]interface{})
+		activeTargets := mapResponse["data"].(map[string]any)["activeTargets"].([]any)
 		if len(activeTargets) < 1 {
-			logrus.Info("No active prometheus targets found, retrying")
+			logrus.Infof("No active prometheus targets found, data: [%v]", mapResponse["data"])
 			return false, nil
 		}
 
@@ -185,7 +185,6 @@ func checkPrometheusTargets(client *rancher.Client) (bool, error) {
 		statusInit = len(downTargets) == 0
 		if !statusInit {
 			logrus.Infof("Prometheus targets not yet healthy, retrying. Down targets: %v", downTargets)
-			return statusInit, nil
 		}
 
 		return statusInit, nil
