@@ -1341,6 +1341,7 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.26.0
 github.com/JohnCGriffin/overflow v0.0.0-20211019200055-46fa312c352c/go.mod h1:X0CRv0ky0k6m906ixxpzmDRLvX58TFUKS2eePweuyxk=
 github.com/MakeNowJust/heredoc v1.0.0 h1:cXCdzVdstXyiTqTvfqk9SDHpKNjxuom+DOlyEeQ4pzQ=
 github.com/MakeNowJust/heredoc v1.0.0/go.mod h1:mG5amYoWBHf8vpLOuehzbGGw0EHxpZZ6lCpQ4fNJ8LE=
+github.com/Masterminds/semver v1.5.0 h1:H65muMkzWKEuNDnfl9d70GUjFniHKHRbFPGBuZ3QEww=
 github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1Xbatp0=
 github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
@@ -2087,8 +2088,8 @@ github.com/rancher/shepherd v0.0.0-20260430211500-1f50d155268e h1:bJxwvGCA6t8sy3
 github.com/rancher/shepherd v0.0.0-20260430211500-1f50d155268e/go.mod h1:SJtW8Jqv0rphZzsGnvB965YdyR2FqFtB+TbbzVLt8F4=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078 h1:1MJSgYkgXhr/Zc5idJkKa10SiBQd0HVtbxVOBoghlzY=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20250930163923-f2c9e60b1078/go.mod h1:CV2Soy/Skw8/SA9dDJVgpeHxoEdtjYkNpNy6xvvC5kA=
-github.com/rancher/tfp-automation v0.0.0-20260428144157-a2d4a5a258c7 h1:DZ9EFKlH2II3wEDGm1Xxvujf49ggj1xjh/UQ5rX/fyk=
-github.com/rancher/tfp-automation v0.0.0-20260428144157-a2d4a5a258c7/go.mod h1:9ij9CpAwyGUSskTl0hW/OWUbiDPgLm53aGbZaZoB/hM=
+github.com/rancher/tfp-automation v0.0.0-20260511161348-eba5b5f6722e h1:vuZ5ixzRXANPjdMVaHs1yYukrhFRjM+AhJ8hkw29ifY=
+github.com/rancher/tfp-automation v0.0.0-20260511161348-eba5b5f6722e/go.mod h1:79uoBsfL1qRhdhfaE2q2dwGcMlBzdLDQxoJx87WYz0Q=
 github.com/rancher/wrangler v0.6.2-0.20200515155908-1923f3f8ec3f/go.mod h1:NmtmlLkchboIksYJuBemwcP4RBfv8FpeyhVoWXB9Wdc=
 github.com/rancher/wrangler v0.6.2-0.20200622171942-7224e49a2407/go.mod h1:NmtmlLkchboIksYJuBemwcP4RBfv8FpeyhVoWXB9Wdc=
 github.com/rancher/wrangler v1.1.2 h1:oXbXo9k7y/H4drUpb4RM1c++vT9O3rpoNEfyusGykiU=

@@ -67,8 +67,8 @@ require (
 	github.com/rancher/qa-infra-automation v0.0.0-20260507233117-6c698fa52007
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20260430211500-1f50d155268e
-	github.com/rancher/tests/actions v0.0.0-20260427222935-93821bd449b4
-	github.com/rancher/tfp-automation v0.0.0-20260428144157-a2d4a5a258c7
+	github.com/rancher/tests/actions v0.0.0-20260429161627-c59ac182d972
+	github.com/rancher/tfp-automation v0.0.0-20260511161348-eba5b5f6722e
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.45.0
@@ -81,7 +81,6 @@ require (
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
-	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/aws/aws-sdk-go v1.55.8 // indirect
