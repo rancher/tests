@@ -87,8 +87,8 @@ RUN KUBECTL_BIN_URL="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd6
     YQ_BIN_URL="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" && \
     curl -fsSL -o /tmp/yq "${YQ_BIN_URL}" && \
     curl -fsSL -o /tmp/yq_checksums "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/checksums" && \
-    grep -q ' yq_linux_amd64$' /tmp/yq_checksums && \
-    awk '/ yq_linux_amd64$/ {print $1 "  /tmp/yq"}' /tmp/yq_checksums > /tmp/yq.sha256.check && \
+    grep -q '^yq_linux_amd64 ' /tmp/yq_checksums && \
+    awk '/^yq_linux_amd64 / {print $19 "  /tmp/yq"}' /tmp/yq_checksums > /tmp/yq.sha256.check && \
     test -s /tmp/yq.sha256.check && \
     sha256sum -c /tmp/yq.sha256.check | grep -q ': OK$' && \
     install -m 0755 /tmp/yq /usr/local/bin/yq && \
