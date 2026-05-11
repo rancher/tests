@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"context"
+	"os/exec"
+
 	"golang.org/x/crypto/ssh"
 
 	infraAnsible "github.com/rancher/qa-infra-automation/ansible"
@@ -1094,6 +1097,9 @@ func InstallRancher(
 	}
 
 	logrus.Info("[qainfraautomation] running Rancher HA install playbook")
+
+	waitForAPIServer(t, absKubeconfig, 5*time.Minute, 15*time.Second)
+
 	if err := ansibleClient.RunPlaybook(rancherInstallPlaybook, "localhost,", playbookEnv); err != nil {
 		t.Fatalf("ansible-playbook (rancher install): %v", err)
 	}
@@ -1384,4 +1390,32 @@ func derivePublicKeyContents(privKeyPath string) (string, error) {
 	}
 
 	return string(ssh.MarshalAuthorizedKey(signer.PublicKey())), nil
+}
+
+// waitForAPIServer polls the Kubernetes API server's /readyz endpoint via
+// kubectl until it reports healthy or the timeout is reached.
+func waitForAPIServer(t *testing.T, kubeconfigPath string, timeout, interval time.Duration) {
+	t.Helper()
+
+	logrus.Infof("[qainfraautomation] waiting up to %s for API server to be ready", timeout)
+
+	deadline := time.Now().Add(timeout)
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cmd := exec.CommandContext(ctx, "kubectl", "--kubeconfig", kubeconfigPath, "get", "--raw", "/readyz")
+		out, err := cmd.CombinedOutput()
+		cancel()
+
+		if err == nil && strings.TrimSpace(string(out)) == "ok" {
+			logrus.Info("[qainfraautomation] API server is ready")
+			return
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("API server not ready after %s: %v: %s", timeout, err, string(out))
+		}
+
+		logrus.Infof("[qainfraautomation] API server not ready yet, retrying in %s", interval)
+		time.Sleep(interval)
+	}
 }
