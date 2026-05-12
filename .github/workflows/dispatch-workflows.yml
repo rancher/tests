@@ -17,10 +17,16 @@ jobs:
     strategy:
       matrix:
         workflow:
-          - rancher-upgrade-cluster-provisioning.yml
+          - airgap-cluster-provisioning.yml
+          - cluster-provisioning.yml
           - post-release-prime.yml
           - prime-recurring-tests.yml
+          - proxy-cluster-provisioning.yml
+          - rancher-upgrade-cluster-provisioning.yml
+          - rancher-upgrade-airgap-cluster-provisioning.yml
+          - rancher-upgrade-proxy-cluster-provisioning.yml
           - recurring-tests.yml
+          - registries-cluster-provisioning.yml
 
     steps:
       - name: Trigger test workflow ${{ matrix.workflow }}

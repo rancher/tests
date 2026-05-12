@@ -16,6 +16,16 @@ COPY ["./qa-infra-automation", "$WORKSPACE2"]
 ARG TOFU_VERSION=1.10.3
 ARG RANCHER2_PROVIDER_VERSION=7.0.0
 ARG HARVESTER_PROVIDER_VERSION=0.6.7
+ARG GOTESTSUM_VERSION=v1.13.0
+ARG KUBECTL_VERSION=v1.33.1
+ARG HELM_VERSION=v3.18.6
+ARG YQ_VERSION=v4.47.2
+ARG ANSIBLE_VERSION=13.3.0
+ARG KUBERNETES_PY_VERSION=31.0.0
+ARG JMESPATH_VERSION=1.0.1
+ARG BOTO3_VERSION=1.35.99
+ARG BOTOCORE_VERSION=1.35.99
+ARG RKE_VERSION=v1.7.3
 
 ENV TOFU_VERSION=${TOFU_VERSION}
 ENV RANCHER2_PROVIDER_VERSION=${RANCHER2_PROVIDER_VERSION}
@@ -29,7 +39,7 @@ RUN zypper -n install python311-pip python311-base python311 python311-devel pyt
 
 # Upgrade pip and install Python packages
 RUN python3.11 -m pip install --upgrade pip setuptools && \
-    python3.11 -m pip install ansible kubernetes jmespath boto3 botocore
+    python3.11 -m pip install ansible==${ANSIBLE_VERSION} kubernetes==${KUBERNETES_PY_VERSION} jmespath==${JMESPATH_VERSION} boto3==${BOTO3_VERSION} botocore==${BOTOCORE_VERSION}
 
 ENV PATH="/root/.local/bin:${PATH}"
 
@@ -37,7 +47,7 @@ ENV PATH="/root/.local/bin:${PATH}"
 RUN ansible-galaxy collection install cloud.terraform
     
 RUN go mod download && \
-    go install gotest.tools/gotestsum@latest 
+    go install gotest.tools/gotestsum@${GOTESTSUM_VERSION}
 
 RUN zypper install -y openssh && \
     mkdir -p /root/.ssh && chmod 600 .ssh/jenkins-* && \
@@ -47,27 +57,45 @@ RUN for pem_file in /root/.ssh/jenkins-*; do \
         ssh-keygen -f "$pem_file" -y > "/root/.ssh/$(basename "$pem_file").pub"; \
     done
 
-# Install OpenTofu (with verbose wget for network diagnostics)
+# Install OpenTofu (with checksum verification)
 RUN TOFU_ZIP="tofu_${TOFU_VERSION}_linux_amd64.zip" && \
     wget --verbose "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/${TOFU_ZIP}" && \
+    wget --verbose "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" && \
+    grep "${TOFU_ZIP}$" "tofu_${TOFU_VERSION}_SHA256SUMS" > /tmp/tofu.sha256 && \
+    test -s /tmp/tofu.sha256 && \
+    sha256sum -c /tmp/tofu.sha256 && \
+    rm /tmp/tofu.sha256 && \
     unzip "${TOFU_ZIP}" -d /usr/local/bin/ && \
     chmod +x /usr/local/bin/tofu && \
-    rm "${TOFU_ZIP}"
+    rm "${TOFU_ZIP}" "tofu_${TOFU_VERSION}_SHA256SUMS"
 # Create a link for terraform to point to opentofu
 RUN ln -s /usr/local/bin/tofu /usr/local/bin/terraform
 
-# Install kubectl
-RUN curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl" & \
-    curl -fsSL -o get_helm.sh "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3" & \
-    wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq & \
-
-    wait && \
-    chmod +x get_helm.sh && \
-    ./get_helm.sh && \
-    rm get_helm.sh && \
-    chmod +x kubectl && \
-    chmod +x /usr/local/bin/yq && \
-    mv ./kubectl /usr/local/bin/kubectl
+# Install kubectl, helm, and yq with checksum verification
+RUN KUBECTL_BIN_URL="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+    curl -fsSL -o /tmp/kubectl "${KUBECTL_BIN_URL}" && \
+    curl -fsSL -o /tmp/kubectl.sha256 "${KUBECTL_BIN_URL}.sha256" && \
+    awk '{print $1 "  /tmp/kubectl"}' /tmp/kubectl.sha256 > /tmp/kubectl.sha256.check && \
+    test -s /tmp/kubectl.sha256.check && \
+    sha256sum -c /tmp/kubectl.sha256.check | grep -q ': OK$' && \
+    install -m 0755 /tmp/kubectl /usr/local/bin/kubectl && \
+    HELM_TAR="helm-${HELM_VERSION}-linux-amd64.tar.gz" && \
+    curl -fsSL -o "/tmp/${HELM_TAR}" "https://get.helm.sh/${HELM_TAR}" && \
+    curl -fsSL -o "/tmp/${HELM_TAR}.sha256sum" "https://get.helm.sh/${HELM_TAR}.sha256sum" && \
+    awk '{print $1 "  /tmp/'"${HELM_TAR}"'"}' "/tmp/${HELM_TAR}.sha256sum" > /tmp/helm.sha256.check && \
+    test -s /tmp/helm.sha256.check && \
+    sha256sum -c /tmp/helm.sha256.check | grep -q ': OK$' && \
+    tar -xzf "/tmp/${HELM_TAR}" -C /tmp && \
+    install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm && \
+    YQ_BIN_URL="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" && \
+    curl -fsSL -o /tmp/yq "${YQ_BIN_URL}" && \
+    curl -fsSL -o /tmp/yq_checksums "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/checksums" && \
+    grep -q ' yq_linux_amd64$' /tmp/yq_checksums && \
+    awk '/ yq_linux_amd64$/ {print $1 "  /tmp/yq"}' /tmp/yq_checksums > /tmp/yq.sha256.check && \
+    test -s /tmp/yq.sha256.check && \
+    sha256sum -c /tmp/yq.sha256.check | grep -q ': OK$' && \
+    install -m 0755 /tmp/yq /usr/local/bin/yq && \
+    rm -rf /tmp/kubectl /tmp/kubectl.sha256 /tmp/kubectl.sha256.check /tmp/${HELM_TAR} /tmp/${HELM_TAR}.sha256sum /tmp/helm.sha256.check /tmp/linux-amd64 /tmp/yq /tmp/yq_checksums /tmp/yq.sha256.check
 
 # necessary to run if statements using [[ ]]
 SHELL ["/bin/bash", "-c"] 
@@ -80,17 +108,27 @@ RUN if [[ "$RANCHER2_PROVIDER_VERSION" == *"-dev"* ]]; then \
     fi; \
     wait
 
-ARG RKE_VERSION
-RUN if [[ -n "$RKE_VERSION" ]] ; then echo installing latest version RKE && \
-    curl -0Ls https://github.com/rancher/rke/releases/latest/download/rke_linux-amd64 > rke ; else echo installing ${RKE_VERSION} version RKE && \
-    curl -0Ls https://github.com/rancher/rke/releases/download/$RKE_VERSION/rke_linux-amd64 > rke; fi;
-RUN mv rke /bin/rke && \
-    chmod +x /bin/rke
+RUN echo "installing ${RKE_VERSION} version RKE" && \
+    RKE_BASE_URL="https://github.com/rancher/rke/releases/download/${RKE_VERSION}" && \
+    RKE_BIN="rke_linux-amd64" && \
+    curl -fsSL "${RKE_BASE_URL}/${RKE_BIN}" -o "${RKE_BIN}" && \
+    curl -fsSL "${RKE_BASE_URL}/${RKE_BIN}.sha256" -o "${RKE_BIN}.sha256" && \
+    sha256sum -c "${RKE_BIN}.sha256" && \
+    mv "${RKE_BIN}" /bin/rke && \
+    chmod +x /bin/rke && \
+    rm "${RKE_BIN}.sha256"
 
 ARG CLI_VERSION
 RUN if [[ -n "$CLI_VERSION" ]] ; then  \
         echo installing CLI version $CLI_VERSION ; \
-        curl -LO https://github.com/rancher/cli/releases/download/$CLI_VERSION/rancher-linux-amd64-$CLI_VERSION.tar.gz ; \
-        tar -xf rancher-linux-amd64-$CLI_VERSION.tar.gz && \
+    CLI_TAR="rancher-linux-amd64-$CLI_VERSION.tar.gz" ; \
+    curl -fLO https://github.com/rancher/cli/releases/download/$CLI_VERSION/$CLI_TAR ; \
+    curl -fLO https://github.com/rancher/cli/releases/download/$CLI_VERSION/sha256sum.txt ; \
+    grep " $CLI_TAR$" sha256sum.txt > /tmp/cli.sha256 && \
+    test -s /tmp/cli.sha256 && \
+    sha256sum -c /tmp/cli.sha256 && \
+    rm /tmp/cli.sha256 ; \
+    tar -xf $CLI_TAR && \
         mv rancher-$CLI_VERSION/rancher /bin/rancher && \
-        chmod +x /bin/rancher; fi;
+    chmod +x /bin/rancher && \
+    rm -f $CLI_TAR sha256sum.txt ; fi;

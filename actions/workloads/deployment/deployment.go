@@ -15,10 +15,10 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/stevestates"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -212,7 +212,7 @@ func UpdateOrRemoveEnvVarForDeployment(client *rancher.Client, namespaceName, de
 		}
 	}
 
-	_, err = deploymentapi.UpdateDeployment(client, clusterapi.LocalCluster, namespaceName, modifiedDeployment, true)
+	_, err = deploymentapi.UpdateDeployment(client, extclusterapi.LocalCluster, namespaceName, modifiedDeployment, true)
 	if err != nil {
 		return fmt.Errorf("error updating deployment %s in namespace %s: %w", deploymentName, namespaceName, err)
 	}

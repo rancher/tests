@@ -9,8 +9,8 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -71,7 +71,7 @@ func (rgr *RbacGlobalRolesTestSuite) TestCreateGlobalRole() {
 				assert.NoError(rgr.T(), err)
 			case rbac.ClusterOwner.String(), rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
 				log.Info("Create a project and a namespace in the project.")
-				adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(rgr.client, rgr.cluster.ID)
+				adminProject, _, err := projectapi.CreateProjectAndNamespace(rgr.client, rgr.cluster.ID)
 				assert.NoError(rgr.T(), err)
 
 				log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -117,7 +117,7 @@ func (rgr *RbacGlobalRolesTestSuite) TestGetGlobalRole() {
 				assert.Equal(rgr.T(), grole.Name, createdGlobalRole.Name)
 			case rbac.ClusterOwner.String(), rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
 				log.Info("Create a project and a namespace in the project.")
-				adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(rgr.client, rgr.cluster.ID)
+				adminProject, _, err := projectapi.CreateProjectAndNamespace(rgr.client, rgr.cluster.ID)
 				assert.NoError(rgr.T(), err)
 
 				log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -174,7 +174,7 @@ func (rgr *RbacGlobalRolesTestSuite) TestUpdateGlobalRole() {
 				assert.Equal(rgr.T(), "true", updatedGlobalRole.Labels["test-label"], "Label not updated as expected")
 			case rbac.ClusterOwner.String(), rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
 				log.Info("Create a project and a namespace in the project.")
-				adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(rgr.client, rgr.cluster.ID)
+				adminProject, _, err := projectapi.CreateProjectAndNamespace(rgr.client, rgr.cluster.ID)
 				assert.NoError(rgr.T(), err)
 
 				log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -219,7 +219,7 @@ func (rgr *RbacGlobalRolesTestSuite) TestDeleteGlobalRole() {
 				assert.NoError(rgr.T(), err)
 			case rbac.ClusterOwner.String(), rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
 				log.Info("Create a project and a namespace in the project.")
-				adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(rgr.client, rgr.cluster.ID)
+				adminProject, _, err := projectapi.CreateProjectAndNamespace(rgr.client, rgr.cluster.ID)
 				assert.NoError(rgr.T(), err)
 
 				log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)

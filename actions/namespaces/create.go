@@ -12,12 +12,12 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/api/scheme"
 	"github.com/rancher/shepherd/pkg/wait"
-	"github.com/rancher/tests/actions/kubeapi/namespaces"
 	coreV1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeUnstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -25,6 +25,14 @@ import (
 const (
 	NamespaceSteveType = "namespace"
 )
+
+// NamespaceGroupVersionResource is the required Group Version Resource for accessing namespaces in a cluster,
+// using the dynamic client.
+var NamespaceGroupVersionResource = schema.GroupVersionResource{
+	Group:    "",
+	Version:  "v1",
+	Resource: "namespaces",
+}
 
 // CreateNamespace is a helper function that uses the dynamic client to create a namespace on a project.
 // It registers a delete function with a wait.WatchWait to ensure the namspace is deleted cleanly.
@@ -117,7 +125,7 @@ func CreateNamespace(client *rancher.Client, namespaceName, containerDefaultReso
 			return err
 		}
 
-		adminNamespaceResource := adminDynamicClient.Resource(namespaces.NamespaceGroupVersionResource).Namespace("")
+		adminNamespaceResource := adminDynamicClient.Resource(NamespaceGroupVersionResource).Namespace("")
 		watchInterface, err := adminNamespaceResource.Watch(context.TODO(), metav1.ListOptions{
 			FieldSelector:  "metadata.name=" + resp.Name,
 			TimeoutSeconds: &defaults.WatchTimeoutSeconds,

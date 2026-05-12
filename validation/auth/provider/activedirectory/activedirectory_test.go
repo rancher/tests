@@ -15,8 +15,8 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -237,7 +237,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryNestedGroupProject
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
-	projectResp, _, err := projects.CreateProjectAndNamespaceUsingWrangler(authAdmin, a.cluster.ID)
+	projectResp, _, err := projectapi.CreateProjectAndNamespace(authAdmin, a.cluster.ID)
 	require.NoError(a.T(), err, "Failed to create project and namespace")
 
 	nestedGroupPrincipalID := authactions.GetGroupPrincipalID(authactions.ActiveDirectory, a.authConfig.NestedGroup, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
@@ -278,7 +278,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryRestrictedModeBind
 	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, groupPrincipalID, rbac.ClusterMember.String())
 	require.NoError(a.T(), err, "Failed to create cluster role template binding")
 
-	projectResp, _, err := projects.CreateProjectAndNamespaceUsingWrangler(authAdmin, a.cluster.ID)
+	projectResp, _, err := projectapi.CreateProjectAndNamespace(authAdmin, a.cluster.ID)
 	require.NoError(a.T(), err, "Failed to create project")
 
 	prtbNamespace := projectResp.Name
@@ -319,7 +319,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryAllowClusterAndPro
 	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, a.cluster.ID, doubleNestedGroupPrincipalID, rbac.ClusterMember.String())
 	require.NoError(a.T(), err, "Failed to create group cluster role template binding")
 
-	projectResp, _, err := projects.CreateProjectAndNamespaceUsingWrangler(authAdmin, a.cluster.ID)
+	projectResp, _, err := projectapi.CreateProjectAndNamespace(authAdmin, a.cluster.ID)
 	require.NoError(a.T(), err, "Failed to create project")
 
 	prtbNamespace := projectResp.Name

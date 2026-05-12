@@ -20,6 +20,7 @@ node {
   def adminToken = ""
   def privateRegistry = ""
   def validationVolume = "ValidationSharedVolume-${job_name}${env.BUILD_NUMBER}"
+  def terraformImage = "hashicorp/terraform:1.11.4"
 
   def infraBranch = "${env.INFRA_BRANCH}"
   if ("${env.INFRA_BRANCH}" != "null" && "${env.INFRA_BRANCH}" != "") {
@@ -165,7 +166,7 @@ node {
                                       sh """
                                       docker run --rm -v \$(pwd)/aws:/terraform-files \
                                           -v \$(pwd)/validation/.ssh:/root/go/src/github.com/rancher/tfp-automation/.ssh \
-                                          -w /terraform-files hashicorp/terraform:latest \
+                                          -w /terraform-files ${terraformImage} \
                                           destroy --auto-approve
                                       """
                                       sh "docker stop ${testContainer}"

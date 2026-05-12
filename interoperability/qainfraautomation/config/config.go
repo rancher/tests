@@ -11,6 +11,7 @@ type Config struct {
 	CustomCluster     *CustomClusterConfig     `json:"customCluster,omitempty" yaml:"customCluster,omitempty"`
 	StandaloneCluster *StandaloneClusterConfig `json:"standaloneCluster,omitempty" yaml:"standaloneCluster,omitempty"`
 	RancherCluster    *RancherClusterConfig    `json:"rancherCluster,omitempty" yaml:"rancherCluster,omitempty"`
+	RancherInstall    *RancherInstallConfig    `json:"rancherInstall,omitempty" yaml:"rancherInstall,omitempty"`
 	Ansible           *AnsibleConfig           `json:"ansible,omitempty" yaml:"ansible,omitempty"`
 }
 
@@ -71,12 +72,20 @@ type CustomClusterConfig struct {
 	Nodes             []CustomClusterNodeGroup `json:"nodes" yaml:"nodes"`
 }
 
+// OptionalFile describes an optional file to be made available during cluster provisioning.
+type OptionalFile struct {
+	Path string `json:"path" yaml:"path"`
+	URL  string `json:"url,omitempty" yaml:"url,omitempty"`
+}
+
 // StandaloneClusterConfig describes a standalone (non-Rancher-managed) cluster to provision.
 type StandaloneClusterConfig struct {
 	KubernetesVersion    string                   `json:"kubernetesVersion" yaml:"kubernetesVersion"`
 	CNI                  string                   `json:"cni,omitempty" yaml:"cni,omitempty"`
 	Channel              string                   `json:"channel,omitempty" yaml:"channel,omitempty"`
 	KubeconfigOutputPath string                   `json:"kubeconfigOutputPath" yaml:"kubeconfigOutputPath"`
+	ServerFlags          string                   `json:"serverFlags,omitempty" yaml:"serverFlags,omitempty"`
+	OptionalFiles        []OptionalFile           `json:"optionalFiles,omitempty" yaml:"optionalFiles,omitempty"`
 	Nodes                []CustomClusterNodeGroup `json:"nodes" yaml:"nodes"`
 }
 
@@ -102,4 +111,23 @@ type RancherMachinePool struct {
 // AnsibleConfig holds optional Ansible configuration for playbook execution.
 type AnsibleConfig struct {
 	ConfigPath string `json:"configPath,omitempty" yaml:"configPath,omitempty"`
+}
+
+// RancherInstallConfig holds configuration for installing Rancher via the default-ha Ansible playbook.
+type RancherInstallConfig struct {
+	ExistingKubeconfig string                 `json:"existingKubeconfig,omitempty" yaml:"existingKubeconfig,omitempty"`
+	ChartVersion       string                 `json:"chartVersion,omitempty" yaml:"chartVersion,omitempty"`
+	ImageTag           string                 `json:"imageTag,omitempty" yaml:"imageTag,omitempty"`
+	HelmRepo           string                 `json:"helmRepo,omitempty" yaml:"helmRepo,omitempty"`
+	HelmRepoURL        string                 `json:"helmRepoURL,omitempty" yaml:"helmRepoURL,omitempty"`
+	CertManagerVersion string                 `json:"certManagerVersion,omitempty" yaml:"certManagerVersion,omitempty"`
+	TLSSource          string                 `json:"tlsSource,omitempty" yaml:"tlsSource,omitempty"`
+	TLSCertPath        string                 `json:"tlsCertPath,omitempty" yaml:"tlsCertPath,omitempty"`
+	TLSKeyPath         string                 `json:"tlsKeyPath,omitempty" yaml:"tlsKeyPath,omitempty"`
+	TLSCACertPath      string                 `json:"tlsCACertPath,omitempty" yaml:"tlsCACertPath,omitempty"`
+	LetsEncryptEmail   string                 `json:"letsEncryptEmail,omitempty" yaml:"letsEncryptEmail,omitempty"`
+	BootstrapPassword  string                 `json:"bootstrapPassword,omitempty" yaml:"bootstrapPassword,omitempty"`
+	Password           string                 `json:"password,omitempty" yaml:"password,omitempty"`
+	ExtraHelmValues    map[string]interface{} `json:"extraHelmValues,omitempty" yaml:"extraHelmValues,omitempty"`
+	Cleanup            *bool                  `json:"cleanup,omitempty" yaml:"cleanup,omitempty"`
 }

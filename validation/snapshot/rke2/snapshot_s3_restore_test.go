@@ -1,17 +1,22 @@
-//go:build (validation || extended || infra.any || cluster.any) && !sanity && !stress
+//go:build validation || recurring
 
 package rke2
 
 import (
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
+	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
+	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
@@ -23,16 +28,30 @@ import (
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
 type S3SnapshotRestoreTestSuite struct {
 	suite.Suite
-	session      *session.Session
-	client       *rancher.Client
-	cattleConfig map[string]any
-	cluster      *v1.SteveAPIObject
+	session           *session.Session
+	client            *rancher.Client
+	cattleConfig      map[string]any
+	cluster           *v1.SteveAPIObject
+	s3BucketName      string
+	s3Region          string
+	s3Endpoint        string
+	s3CloudCredName   string
+	createdTestBucket bool
+	awsAccessKey      string
+	awsSecretKey      string
+}
+
+type awsCredentialsConfig struct {
+	SecretKey     string `json:"secretKey" yaml:"secretKey"`
+	AccessKey     string `json:"accessKey" yaml:"accessKey"`
+	DefaultRegion string `json:"defaultRegion" yaml:"defaultRegion"`
 }
 
 func (s *S3SnapshotRestoreTestSuite) TearDownSuite() {
@@ -68,11 +87,41 @@ func (s *S3SnapshotRestoreTestSuite) SetupSuite() {
 	rancherConfig := new(rancher.Config)
 	operations.LoadObjectFromMap(defaults.RancherConfigKey, s.cattleConfig, rancherConfig)
 
+	awsCredsConfig := new(awsCredentialsConfig)
+	operations.LoadObjectFromMap("awsCredentials", s.cattleConfig, awsCredsConfig)
+
+	s.awsAccessKey = awsCredsConfig.AccessKey
+	s.awsSecretKey = awsCredsConfig.SecretKey
+
 	if rancherConfig.ClusterName == "" {
 		provider := provisioning.CreateProvider(clusterConfig.Provider)
 		machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
 
-		logrus.Info("Provisioning RKE2 cluster")
+		credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+		cloudCredential, err := provider.CloudCredFunc(standardUserClient, credentialSpec)
+		require.NoError(s.T(), err)
+
+		s.s3CloudCredName = cloudCredential.Namespace + ":" + cloudCredential.Name
+		s.s3Region = awsCredsConfig.DefaultRegion
+		s.s3Endpoint = fmt.Sprintf("s3.%s.amazonaws.com", s.s3Region)
+		s.s3BucketName = fmt.Sprintf("snapshot-restore-s3-%d-%s", time.Now().Unix(), namegenerator.RandStringLower(5))
+
+		err = etcdsnapshot.CreateS3Bucket(s.s3BucketName, s.s3Region, awsCredsConfig.AccessKey, awsCredsConfig.SecretKey)
+		require.NoError(s.T(), err)
+		s.createdTestBucket = true
+
+		clusterConfig.ETCD = &rkev1.ETCD{
+			SnapshotRetention:    5,
+			SnapshotScheduleCron: "0 */5 * * *",
+			S3: &rkev1.ETCDSnapshotS3{
+				Bucket:              s.s3BucketName,
+				CloudCredentialName: s.s3CloudCredName,
+				Endpoint:            s.s3Endpoint,
+				Region:              s.s3Region,
+				SkipSSLVerify:       true,
+			},
+		}
+
 		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.RKE2ClusterType.String(), provider, *clusterConfig, machineConfigSpec, nil, false, false)
 		require.NoError(s.T(), err)
 
@@ -108,6 +157,11 @@ func (s *S3SnapshotRestoreTestSuite) TestS3SnapshotRestore() {
 
 			err = etcdsnapshot.CreateAndValidateSnapshotRestore(s.client, cluster.Name, tt.etcdSnapshot, containerImage)
 			require.NoError(s.T(), err)
+
+			if s.createdTestBucket && s.s3BucketName != "" {
+				err := etcdsnapshot.DeleteS3Bucket(s.s3BucketName, s.s3Region, s.awsAccessKey, s.awsSecretKey)
+				assert.NoError(s.T(), err)
+			}
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(s.client, s.cattleConfig)

@@ -11,8 +11,8 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/etcdsnapshot"
 	"github.com/rancher/shepherd/pkg/session"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/projects"
 	rbac "github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -81,7 +81,7 @@ func (etcd *SnapshotRBACTestSuite) TestRKE2K3SSnapshotRBAC() {
 			clusterUser, clusterClient, err := rbac.SetupUser(etcd.client, tt.member)
 			require.NoError(etcd.T(), err)
 
-			adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(etcd.client, etcd.cluster.ID)
+			adminProject, _, err := projectapi.CreateProjectAndNamespace(etcd.client, etcd.cluster.ID)
 			require.NoError(etcd.T(), err)
 
 			if tt.member == rbac.StandardUser.String() {

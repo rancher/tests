@@ -1,9 +1,10 @@
 package clusters
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"strings"
+	"time"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -15,6 +16,7 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/steve"
 	"github.com/rancher/tests/actions/machinepools"
@@ -22,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -29,8 +32,6 @@ const (
 	externalAws           = "external-aws"
 	protectKernelDefaults = "protect-kernel-defaults"
 	rancherRestricted     = "rancher-restricted"
-	rke1HardenedGID       = 52034
-	rke1HardenedUID       = 52034
 )
 
 // CreateRancherBaselinePSACT creates custom PSACT called rancher-baseline which sets each PSS to baseline.
@@ -90,161 +91,6 @@ func CreateRancherBaselinePSACT(client *rancher.Client, psact string) error {
 	return nil
 }
 
-// NewRKE1ClusterConfig is a constructor for a v3.Cluster object, to be used by the rancher.Client.Provisioning client.
-func NewRKE1ClusterConfig(clusterName string, client *rancher.Client, clustersConfig *ClusterConfig) *management.Cluster {
-	backupConfigEnabled := true
-	criDockerBool := false
-	if clustersConfig.CRIDockerd {
-		criDockerBool = true
-	}
-	newConfig := &management.Cluster{
-		DockerRootDir: "/var/lib/docker",
-		LocalClusterAuthEndpoint: &management.LocalClusterAuthEndpoint{
-			Enabled: true,
-		},
-		Name: clusterName,
-		RancherKubernetesEngineConfig: &management.RancherKubernetesEngineConfig{
-			DNS: &management.DNSConfig{
-				Provider: "coredns",
-				Options: map[string]string{
-					"stubDomains": "cluster.local",
-				},
-			},
-			EnableCRIDockerd: &criDockerBool,
-			Ingress: &management.IngressConfig{
-				Provider: "nginx",
-			},
-			Monitoring: &management.MonitoringConfig{
-				Provider: "metrics-server",
-			},
-			Network: &management.NetworkConfig{
-				Plugin:  clustersConfig.CNI,
-				MTU:     0,
-				Options: map[string]string{},
-			},
-			Services: &management.RKEConfigServices{
-				Etcd: &management.ETCDService{
-					BackupConfig: &management.BackupConfig{
-						Enabled:       &backupConfigEnabled,
-						IntervalHours: 12,
-						Retention:     6,
-						SafeTimestamp: true,
-						Timeout:       120,
-					},
-				},
-			},
-			Version: clustersConfig.KubernetesVersion,
-		},
-	}
-	newConfig.ClusterAgentDeploymentCustomization = clustersConfig.ClusterAgent
-	newConfig.FleetAgentDeploymentCustomization = clustersConfig.FleetAgent
-	newConfig.AgentEnvVars = clustersConfig.AgentEnvVarsRKE1
-
-	if clustersConfig.Registries != nil {
-		if clustersConfig.Registries.RKE1Registries != nil {
-			newConfig.RancherKubernetesEngineConfig.PrivateRegistries = clustersConfig.Registries.RKE1Registries
-			for _, registry := range clustersConfig.Registries.RKE1Registries {
-				if registry.ECRCredentialPlugin != nil {
-					awsAccessKeyID := fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", registry.ECRCredentialPlugin.AwsAccessKeyID)
-					awsSecretAccessKey := fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", registry.ECRCredentialPlugin.AwsSecretAccessKey)
-					extraEnv := []string{awsAccessKeyID, awsSecretAccessKey}
-					newConfig.RancherKubernetesEngineConfig.Services = &management.RKEConfigServices{
-						Kubelet: &management.KubeletService{
-							ExtraEnv: extraEnv,
-						},
-					}
-					break
-				}
-			}
-		}
-	}
-
-	if clustersConfig.CloudProvider != "" {
-		newConfig.RancherKubernetesEngineConfig.CloudProvider = &management.CloudProvider{
-			Name: clustersConfig.CloudProvider,
-		}
-		if clustersConfig.CloudProvider == externalAws {
-			trueBoolean := true
-			newConfig.RancherKubernetesEngineConfig.CloudProvider.UseInstanceMetadataHostname = &trueBoolean
-		}
-	}
-
-	if clustersConfig.ETCDRKE1 != nil {
-		newConfig.RancherKubernetesEngineConfig.Services.Etcd = clustersConfig.ETCDRKE1
-	}
-
-	if clustersConfig.PSACT != "" {
-		newConfig.DefaultPodSecurityAdmissionConfigurationTemplateName = clustersConfig.PSACT
-	}
-
-	if clustersConfig.AgentEnvVars != nil {
-		newConfig.AgentEnvVars = clustersConfig.AgentEnvVarsRKE1
-	}
-
-	return newConfig
-}
-
-// UpdateRKE1ClusterConfig is a constructor for a v3.Cluster object, to be used by the rancher.Client.Provisioning client.
-func UpdateRKE1ClusterConfig(clusterName string, client *rancher.Client, clustersConfig *ClusterConfig) *management.Cluster {
-	newConfig := &management.Cluster{
-		Name: clusterName,
-		RancherKubernetesEngineConfig: &management.RancherKubernetesEngineConfig{
-			Network: &management.NetworkConfig{
-				Plugin: clustersConfig.CNI,
-			},
-			Version: clustersConfig.KubernetesVersion,
-		},
-	}
-
-	newConfig.ClusterAgentDeploymentCustomization = clustersConfig.ClusterAgent
-	newConfig.FleetAgentDeploymentCustomization = clustersConfig.FleetAgent
-	newConfig.AgentEnvVars = clustersConfig.AgentEnvVarsRKE1
-
-	if clustersConfig.Registries != nil {
-		if clustersConfig.Registries.RKE1Registries != nil {
-			newConfig.RancherKubernetesEngineConfig.PrivateRegistries = clustersConfig.Registries.RKE1Registries
-			for _, registry := range clustersConfig.Registries.RKE1Registries {
-				if registry.ECRCredentialPlugin != nil {
-					awsAccessKeyID := fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", registry.ECRCredentialPlugin.AwsAccessKeyID)
-					awsSecretAccessKey := fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", registry.ECRCredentialPlugin.AwsSecretAccessKey)
-					extraEnv := []string{awsAccessKeyID, awsSecretAccessKey}
-					newConfig.RancherKubernetesEngineConfig.Services = &management.RKEConfigServices{
-						Kubelet: &management.KubeletService{
-							ExtraEnv: extraEnv,
-						},
-					}
-
-					break
-				}
-			}
-		}
-	}
-
-	if clustersConfig.CloudProvider != "" {
-		newConfig.RancherKubernetesEngineConfig.CloudProvider = &management.CloudProvider{
-			Name: clustersConfig.CloudProvider,
-		}
-		if clustersConfig.CloudProvider == externalAws {
-			trueBoolean := true
-			newConfig.RancherKubernetesEngineConfig.CloudProvider.UseInstanceMetadataHostname = &trueBoolean
-		}
-	}
-
-	if clustersConfig.ETCDRKE1 != nil {
-		newConfig.RancherKubernetesEngineConfig.Services.Etcd = clustersConfig.ETCDRKE1
-	}
-
-	if clustersConfig.AgentEnvVars != nil {
-		newConfig.AgentEnvVars = clustersConfig.AgentEnvVarsRKE1
-	}
-
-	if clustersConfig.PSACT != "" {
-		newConfig.DefaultPodSecurityAdmissionConfigurationTemplateName = clustersConfig.PSACT
-	}
-
-	return newConfig
-}
-
 // NewK3SRKE2ClusterConfig is a constructor for a apisV1.Cluster object, to be used by the rancher.Client.Provisioning client.
 func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *ClusterConfig, machinePools []apisV1.RKEMachinePool, cloudCredentialSecretName string) *apisV1.Cluster {
 	typeMeta := metav1.TypeMeta{
@@ -286,6 +132,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 				"cni":                 clustersConfig.CNI,
 				"disable-kube-proxy":  false,
 				"etcd-expose-metrics": false,
+				"ingress-controller":  "traefik",
 				"profile":             nil,
 				"service-cidr":        clustersConfig.Networking.ServiceCIDR,
 			},
@@ -296,6 +143,7 @@ func NewK3SRKE2ClusterConfig(clusterName, namespace string, clustersConfig *Clus
 				"cni":                 clustersConfig.CNI,
 				"disable-kube-proxy":  false,
 				"etcd-expose-metrics": false,
+				"ingress-controller":  "traefik",
 				"profile":             nil,
 			},
 		}
@@ -854,17 +702,6 @@ func HardenK3SClusterConfig(clusterName, namespace string, clustersConfig *Clust
 	return v1Cluster
 }
 
-// HardenRKE1ClusterConfig is a function that modifies the cluster configuration to be hardened according to the CIS benchmark.
-func HardenRKE1ClusterConfig(client *rancher.Client, clusterName string, clustersConfig *ClusterConfig) *management.Cluster {
-	cluster := NewRKE1ClusterConfig(clusterName, client, clustersConfig)
-
-	cluster.DefaultPodSecurityAdmissionConfigurationTemplateName = rancherRestricted
-	cluster.RancherKubernetesEngineConfig.Services.Etcd.GID = rke1HardenedGID
-	cluster.RancherKubernetesEngineConfig.Services.Etcd.UID = rke1HardenedUID
-
-	return cluster
-}
-
 // HardenRKE2ClusterConfig is a function that modifies the cluster configuration to be hardened according to the CIS benchmark.
 func HardenRKE2ClusterConfig(clusterName, namespace string, clustersConfig *ClusterConfig, machinePools []apisV1.RKEMachinePool, cloudCredentialSecretName string) *apisV1.Cluster {
 	v1Cluster := NewK3SRKE2ClusterConfig(clusterName, namespace, clustersConfig, machinePools, cloudCredentialSecretName)
@@ -926,9 +763,7 @@ func GetClusterType(client *rancher.Client, clusterName string) (string, error) 
 	}
 
 	var clusterType string
-	if strings.Contains(spec.KubernetesVersion, "-rancher") || len(spec.KubernetesVersion) == 0 {
-		clusterType = "rke1"
-	} else if strings.Contains(spec.KubernetesVersion, "rke2") {
+	if strings.Contains(spec.KubernetesVersion, "rke2") {
 		clusterType = "rke2"
 	} else if strings.Contains(spec.KubernetesVersion, "k3s") {
 		clusterType = "k3s"
@@ -980,4 +815,44 @@ func DeleteInitMachine(client *rancher.Client, clusterID string) error {
 	}
 
 	return nil
+}
+
+func GetClusterByName(client *rancher.Client, clusterName string) (*v1.SteveAPIObject, error) {
+	var cluster *v1.SteveAPIObject
+	var clientErr error
+
+	err := kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+		adminClient, adminClientErr := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
+		if adminClientErr != nil {
+			logrus.Warningf("Unable to get admin cluster client (%s) retrying", clusterName)
+			clientErr = adminClientErr
+			return false, nil
+		}
+
+		v3Name, err := clusters.GetClusterIDByName(adminClient, clusterName)
+		if err != nil {
+			return false, nil
+		}
+
+		clientErr = nil
+		cluster, err = adminClient.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + clusterName)
+		if err != nil {
+			cluster, err = adminClient.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + v3Name)
+			if err != nil {
+				return false, nil
+			}
+		}
+
+		return true, nil
+	})
+	if cluster != nil {
+		return cluster, nil
+	}
+
+	if err != nil {
+		logrus.Warning(clientErr)
+		return nil, err
+	}
+
+	return cluster, nil
 }

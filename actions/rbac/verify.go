@@ -12,16 +12,20 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/users"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/namespaces"
+	hpaapi "github.com/rancher/tests/actions/workloads/hpa"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	coreV1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -36,7 +40,7 @@ func VerifyGlobalRoleBindingsForUser(t *testing.T, user *management.User, adminC
 
 // VerifyRoleBindingsForUser validates that the corresponding role bindings are created for the user
 func VerifyRoleBindingsForUser(t *testing.T, user *management.User, adminClient *rancher.Client, clusterID string, role Role, expectedCount int) {
-	rblist, err := rbacapi.ListRoleBindings(adminClient, clusterapi.LocalCluster, clusterID, metav1.ListOptions{})
+	rblist, err := rbacapi.ListRoleBindings(adminClient, extclusterapi.LocalCluster, clusterID, metav1.ListOptions{})
 	require.NoError(t, err)
 	userID := user.Resource.ID
 	userRoleBindings := []string{}
@@ -99,21 +103,21 @@ func VerifyUserCanGetProject(t *testing.T, client, standardClient *rancher.Clien
 
 // VerifyUserCanCreateProjects validates a user with the required cluster permissions are able/not able to create projects in the downstream cluster
 func VerifyUserCanCreateProjects(t *testing.T, client, standardClient *rancher.Client, standardUser *management.User, clusterID string, role Role) {
-    projectTemplate := projectapi.NewProjectTemplate(clusterID)
-    if role.String() == ClusterMember.String() {
-        projectTemplate.Annotations = map[string]string{
-            "field.cattle.io/creatorId": standardUser.ID,
-        }
-    }
-    memberProject, err := standardClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
-    switch role {
-    case ClusterOwner, ClusterMember:
-        require.NoError(t, err)
-        log.Info("Created project as a ", role, " is ", memberProject.Name)
-    case ProjectOwner, ProjectMember:
-        require.Error(t, err)
-        assert.True(t, apierrors.IsForbidden(err))
-    }
+	projectTemplate := projectapi.NewProjectTemplate(clusterID)
+	if role.String() == ClusterMember.String() {
+		projectTemplate.Annotations = map[string]string{
+			"field.cattle.io/creatorId": standardUser.ID,
+		}
+	}
+	memberProject, err := standardClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
+	switch role {
+	case ClusterOwner, ClusterMember:
+		require.NoError(t, err)
+		log.Info("Created project as a ", role, " is ", memberProject.Name)
+	case ProjectOwner, ProjectMember:
+		require.Error(t, err)
+		assert.True(t, apierrors.IsForbidden(err))
+	}
 }
 
 // VerifyUserCanCreateNamespace validates a user with the required cluster permissions are able/not able to create namespaces in the project they do not own
@@ -121,7 +125,7 @@ func VerifyUserCanCreateNamespace(t *testing.T, client, standardClient *rancher.
 	standardClient, err := standardClient.ReLogin()
 	require.NoError(t, err)
 
-	createdNamespace, checkErr := namespaceapi.CreateNamespaceUsingWrangler(standardClient, clusterID, project.Name, nil)
+	createdNamespace, checkErr := namespaceapi.CreateNamespace(standardClient, clusterID, project.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 
 	switch role {
 	case ClusterOwner, ProjectOwner, ProjectMember:
@@ -136,8 +140,8 @@ func VerifyUserCanCreateNamespace(t *testing.T, client, standardClient *rancher.
 	case ClusterMember:
 		require.Error(t, checkErr)
 		statusErr, ok := checkErr.(*apierrors.StatusError)
-        require.True(t, ok, "expected error to be a StatusError")
-        assert.Equal(t, int32(403), statusErr.ErrStatus.Code)
+		require.True(t, ok, "expected error to be a StatusError")
+		assert.Equal(t, int32(403), statusErr.ErrStatus.Code)
 	}
 }
 
@@ -182,7 +186,7 @@ func VerifyUserCanDeleteNamespace(t *testing.T, client, standardClient *rancher.
 	steveStandardClient, err := standardClient.Steve.ProxyDownstream(clusterID)
 	require.NoError(t, err)
 
-	adminNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, clusterID, project.Name, nil)
+	adminNamespace, err := namespaceapi.CreateNamespace(client, clusterID, project.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(t, err)
 
 	namespaceID, err := steveAdminClient.SteveType(namespaces.NamespaceSteveType).ByID(adminNamespace.Name)
@@ -241,4 +245,120 @@ func VerifyUserCanDeleteProject(t *testing.T, client *rancher.Client, project *v
 func VerifyUserCanRemoveClusterRoles(t *testing.T, client *rancher.Client, user *management.User) {
 	err := users.RemoveClusterRoleFromUser(client, user)
 	require.NoError(t, err)
+}
+
+// VerifyUserCanCreateHPA validates that a user with the given role can or cannot create an HPA in the project namespace
+func VerifyUserCanCreateHPA(t *testing.T, client, standardClient *rancher.Client, clusterID, namespaceName string, role Role) {
+	log.Info("Validating if ", role, " can create HPA in the project namespace.")
+
+	workload, err := CreateHPAWorkload(client, clusterID, namespaceName)
+	require.NoError(t, err)
+
+	hpa, _, err := CreateHPA(standardClient, clusterID, namespaceName, workload)
+	switch role {
+	case ClusterOwner, ProjectOwner, ProjectMember:
+		require.NoError(t, err)
+		err = hpaapi.DeleteHPA(client, clusterID, namespaceName, hpa.Name)
+		assert.NoError(t, err)
+	case ClusterMember:
+		require.Error(t, err)
+		assert.True(t, apierrors.IsForbidden(err))
+	}
+}
+
+// VerifyUserCanEditHPA validates that a user with the given role can or cannot edit an HPA in the project namespace
+func VerifyUserCanEditHPA(t *testing.T, client, standardClient *rancher.Client, clusterID, namespaceName string, role Role) {
+	log.Info("Validating if ", role, " can edit HPA in the project namespace.")
+
+	switch role {
+	case ClusterOwner, ProjectOwner, ProjectMember:
+		updatedHPA, _, err := EditHPA(standardClient, clusterID, namespaceName)
+		require.NoError(t, err)
+		err = VerifyHPAFields(updatedHPA, updatedHPA.Name, 3, 6)
+		assert.NoError(t, err)
+		err = hpaapi.DeleteHPA(client, clusterID, namespaceName, updatedHPA.Name)
+		assert.NoError(t, err)
+	case ClusterMember:
+		err := VerifyUpdateHPAForbidden(standardClient, client, clusterID, namespaceName)
+		assert.NoError(t, err)
+	}
+}
+
+// VerifyUserCanDeleteHPA validates that a user with the given role can or cannot delete an HPA in the project namespace
+func VerifyUserCanDeleteHPA(t *testing.T, client, standardClient *rancher.Client, clusterID, namespaceName string, role Role) {
+	log.Info("Validating if ", role, " can delete HPA in the project namespace.")
+
+	hpa, _, err := CreateHPA(client, clusterID, namespaceName, nil)
+	require.NoError(t, err)
+
+	err = hpaapi.DeleteHPA(standardClient, clusterID, namespaceName, hpa.Name)
+	switch role {
+	case ClusterOwner, ProjectOwner, ProjectMember:
+		assert.NoError(t, err)
+	case ClusterMember:
+		assert.Error(t, err)
+		deleteErr := hpaapi.DeleteHPA(client, clusterID, namespaceName, hpa.Name)
+		assert.NoError(t, deleteErr)
+		assert.True(t, apierrors.IsForbidden(err))
+	}
+}
+
+// VerifyUserCanListHPA validates that a user with the given role can or cannot list HPAs in the project namespace
+func VerifyUserCanListHPA(t *testing.T, client, standardClient *rancher.Client, clusterID, namespaceName string, role Role) {
+	log.Info("Validating if ", role, " can list HPAs in the project namespace.")
+
+	hpa, _, err := CreateHPA(client, clusterID, namespaceName, nil)
+	require.NoError(t, err)
+
+	hpaList, err := ListHPAsByName(standardClient, clusterID, namespaceName, hpa.Name)
+
+	switch role {
+	case ClusterOwner, ProjectOwner, ProjectMember:
+		require.NoError(t, err)
+		assert.Len(t, hpaList, 1)
+		assert.Equal(t, hpa.Name, hpaList[0].Name)
+	case ClusterMember:
+		assert.Empty(t, hpaList)
+		assert.True(t, apierrors.IsForbidden(err))
+	}
+
+	err = hpaapi.DeleteHPA(client, clusterID, namespaceName, hpa.Name)
+	assert.NoError(t, err)
+}
+
+// VerifyHPAFields validates the fields of an HPA object.
+func VerifyHPAFields(hpa *autoscalingv2.HorizontalPodAutoscaler, expectedName string, expectedMin, expectedMax int32) error {
+	if hpa.Name != expectedName {
+		return fmt.Errorf("expected HPA name %s, got %s", expectedName, hpa.Name)
+	}
+
+	if hpa.Spec.MinReplicas != nil && *hpa.Spec.MinReplicas != expectedMin {
+		return fmt.Errorf("expected minReplicas %d, got %d", expectedMin, *hpa.Spec.MinReplicas)
+	}
+
+	if hpa.Spec.MaxReplicas != expectedMax {
+		return fmt.Errorf("expected maxReplicas %d, got %d", expectedMax, hpa.Spec.MaxReplicas)
+	}
+
+	return nil
+}
+
+// VerifyUpdateHPAForbidden creates an HPA as the cluster owner, then verifies that the user client cannot update it.
+func VerifyUpdateHPAForbidden(userClient, ownerClient *rancher.Client, clusterID, namespaceName string) error {
+	hpaResp, workload, err := CreateHPA(ownerClient, clusterID, namespaceName, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create HPA as owner: %w", err)
+	}
+
+	updatedMin := int32(3)
+	updatedMax := int32(10)
+	metrics := []autoscalingv2.MetricSpec{hpaapi.BuildCPUUtilizationMetric(hpaCPUUtilizationValue)}
+	updateObj := hpaapi.NewHPAObject(hpaResp.Name, namespaceName, workload.Name, updatedMin, updatedMax, metrics)
+
+	_, err = hpaapi.UpdateHPA(userClient, clusterID, namespaceName, hpaResp, updateObj)
+	if !errors.IsForbidden(err) {
+		return fmt.Errorf("expected forbidden error when editing HPA, got: %w", err)
+	}
+
+	return nil
 }

@@ -25,6 +25,7 @@ import (
 	extencharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
+	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
@@ -76,7 +77,7 @@ func (sss *StackStateServerTestSuite) SetupSuite() {
 	require.NoError(sss.T(), err)
 	sss.projectID = project.ID
 
-	ssNamespaceExists, err := namespaces.GetNamespaceByName(client, cluster.ID, interoperablecharts.StackStateServerNamespace)
+	ssNamespaceExists, err := extnamespaceapi.GetNamespaceByName(client, cluster.ID, interoperablecharts.StackStateServerNamespace)
 	if ssNamespaceExists == nil && k8sErrors.IsNotFound(err) {
 		_, err = namespaces.CreateNamespace(client, cluster.ID, project.Name, interoperablecharts.StackStateServerNamespace, "", map[string]string{}, map[string]string{})
 	}

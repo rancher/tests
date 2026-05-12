@@ -45,7 +45,7 @@
     custom_field:
       "15": "TestAlertingInstallation"
   - title: "Rancher Logging Chart Installation"
-    description: "Verify Rancher Logging chart installs successfully"
+    description: "Verify Rancher Logging chart installs successfully with Longhorn as a prerequisite, and that FluentBit, Fluentd, and the logging receiver are all operational"
     automation: 2
     steps:
     - action: "Config a downstream cluster running in rancher"
@@ -56,14 +56,30 @@
       data: "Project name: System"
       expectedresult: "The 'System' project is successfully created"
       position: 2
-    - action: "Install Rancher Logging chart"
-      data: "helm install --generate-name --wait oci://ghcr.io/kube-logging/helm-charts/logging-operator"
-      expectedresult: "Logging chart installs successfully"
+    - action: "Install Longhorn chart if not already installed"
+      data: "Namespace: longhorn-system, Version: latest"
+      expectedresult: "Longhorn chart is installed and ready"
       position: 3
-    - action: "Wait for Logging deployments"
-      data: ""
-      expectedresult: "All logging deployments reach Ready state"
+    - action: "Install Rancher Logging chart if not already installed"
+      data: "Namespace: cattle-logging-system, additionalLoggingSources: true, loggingEnabledSources: true"
+      expectedresult: "Logging chart installs successfully"
       position: 4
+    - action: "Wait for FluentBit DaemonSets to become ready"
+      data: "Namespace: cattle-logging-system"
+      expectedresult: "All FluentBit DaemonSets reach Ready state"
+      position: 5
+    - action: "Wait for Logging Deployments to become ready"
+      data: "Namespace: cattle-logging-system"
+      expectedresult: "All logging Deployments reach Ready state"
+      position: 6
+    - action: "Wait for Fluentd StatefulSets to become ready"
+      data: "Namespace: cattle-logging-system"
+      expectedresult: "All Fluentd StatefulSets reach Ready state"
+      position: 7
+    - action: "Verify logging receiver receives logs"
+      data: ""
+      expectedresult: "Logging receiver returns non-empty logs confirming the pipeline is active"
+      position: 8
     custom_field:
       "15": "TestLoggingInstallation"
   - title: "Test NeuVector chart installation"

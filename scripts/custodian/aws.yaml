@@ -70,11 +70,13 @@ policies:
     - type: remove-tag
       tags: ['ec2_unknown_user', 'ec2_known_user']
 
+
 - name: ec2-terminate-instances
   resource: aws.ec2
   description: |
     Delete any marked instances which have been 
     marked for deletion for more than 1 day.
+    Skips instances with termination protection enabled.
   filters:
     - or:
       - type: marked-for-op
@@ -83,8 +85,11 @@ policies:
       - type: marked-for-op
         tag: ec2_known_user
         op: terminate
+    - not:
+      - type: termination-protected
   actions:
     - type: terminate
+
 
 # EKS Policies Disclaimer
 # Note: cannot manage EKS nodegroups at this time, but the
@@ -428,14 +433,9 @@ policies:
 - name: schedule-release-elasticip
   resource: network-addr
   filters:
-    - type: value
-      key: "length(Tags[?Key=='DoNotDelete'])"
-      value: 0
-      op: eq
-    - type: value
-      key: "length(Tags[?Key=='ec2_known_user'])"
-      value: 0
-      op: eq
+    - 'tag:DoNotDelete': absent
+    - 'tag:doNotDelete': absent
+    - 'tag:ec2_known_user': absent
   actions:
     - type: mark-for-op
       tag: ec2_known_user
@@ -459,14 +459,9 @@ policies:
 - name: schedule-delete-targetgroup
   resource: app-elb-target-group
   filters:
-    - type: value
-      key: "length(Tags[?Key=='DoNotDelete'])"
-      value: 0
-      op: eq
-    - type: value
-      key: "length(Tags[?Key=='ec2_known_user'])"
-      value: 0
-      op: eq
+    - 'tag:DoNotDelete': absent
+    - 'tag:doNotDelete': absent
+    - 'tag:ec2_known_user': absent
   actions:
     - type: mark-for-op
       tag: ec2_known_user

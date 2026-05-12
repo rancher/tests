@@ -7,9 +7,9 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/api/scheme"
 	"github.com/rancher/shepherd/pkg/wait"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	appv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -91,7 +91,7 @@ func WatchAndWaitDeployments(client *rancher.Client, clusterID, namespace string
 
 // RestartDeployment triggers a rollout restart of a deployment by updating an annotation
 func RestartDeployment(client *rancher.Client, clusterID, namespaceName, deploymentName string) error {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -115,32 +115,45 @@ func RestartDeployment(client *rancher.Client, clusterID, namespaceName, deploym
 	return nil
 }
 
-// WaitForDeploymentActive waits for a deployment to become active by polling until replicas match available replicas
+// WaitForDeploymentActive uses wrangler context to wait for a deployment to become active
 func WaitForDeploymentActive(client *rancher.Client, clusterID, namespaceName, deploymentName string) error {
-	wranglerContext, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	wranglerContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
-		return fmt.Errorf("error getting wrangler context for cluster %s: %w", clusterID, err)
+		return err
 	}
 
-	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+	return kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (bool, error) {
 		deployment, err := wranglerContext.Apps.Deployment().Get(namespaceName, deploymentName, metav1.GetOptions{})
 		if err != nil {
-			return false, fmt.Errorf("error fetching deployment %s in namespace %s: %w", deploymentName, namespaceName, err)
+			return false, nil
 		}
 
-		if deployment.Spec.Replicas != nil &&
-			*deployment.Spec.Replicas == deployment.Status.UpdatedReplicas &&
-			*deployment.Spec.Replicas == deployment.Status.ReadyReplicas &&
-			*deployment.Spec.Replicas == deployment.Status.AvailableReplicas {
-			return true, nil
+		desired := *deployment.Spec.Replicas
+
+		if deployment.Status.ReadyReplicas != desired {
+			return false, nil
 		}
 
-		return false, nil
-	})
+		return true, nil
+	},
+	)
+}
 
-	if err != nil {
-		return fmt.Errorf("deployment %s in namespace %s did not become active: %w", deploymentName, namespaceName, err)
+// GetLatestStatusMessageFromDeployment retrieves the latest status message and reason from a deployment for a given status type.
+func GetLatestStatusMessageFromDeployment(deployment *appv1.Deployment, messageType string) (string, string, error) {
+	latestTime := time.Time{}
+	latestMessage := ""
+	latestReason := ""
+
+	targetMessageType := appv1.DeploymentConditionType(messageType)
+
+	for _, condition := range deployment.Status.Conditions {
+		if condition.Type == targetMessageType && condition.LastUpdateTime.After(latestTime) {
+			latestMessage = condition.Message
+			latestReason = condition.Reason
+			latestTime = condition.LastUpdateTime.Time
+		}
 	}
 
-	return nil
+	return latestMessage, latestReason, nil
 }

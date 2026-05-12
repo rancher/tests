@@ -11,7 +11,6 @@ import (
 	extencharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
-	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/tests/actions/charts"
 
 	"github.com/rancher/shepherd/pkg/session"
@@ -22,7 +21,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type WebhookTestSuite struct {
+type webhookSuiteBase struct {
 	suite.Suite
 	client       *rancher.Client
 	session      *session.Session
@@ -30,11 +29,15 @@ type WebhookTestSuite struct {
 	chartVersion string
 }
 
-func (w *WebhookTestSuite) TearDownSuite() {
+type WebhookTestSuite struct {
+	webhookSuiteBase
+}
+
+func (w *webhookSuiteBase) TearDownSuite() {
 	w.session.Cleanup()
 }
 
-func (w *WebhookTestSuite) SetupSuite() {
+func (w *webhookSuiteBase) SetupSuite() {
 	testSession := session.NewSession()
 	w.session = testSession
 
@@ -76,19 +79,9 @@ func (w *WebhookTestSuite) TestWebhookChart() {
 			assert.Equal(w.T(), w.chartVersion, chartVersion)
 		})
 
-		w.Run("Verify webhook pod logs", func() {
-			steveClient, err := w.client.Steve.ProxyDownstream(clusterID)
+		w.Run("Verify webhook pod logs on "+tt.cluster, func() {
+			_, podName, err := getWebhookPodSpec(w.client, clusterID)
 			require.NoError(w.T(), err)
-
-			pods, err := steveClient.SteveType(pods.PodResourceSteveType).NamespacedSteveClient(charts.RancherWebhookNamespace).List(nil)
-			require.NoError(w.T(), err)
-
-			var podName string
-			for _, pod := range pods.Data {
-				if strings.Contains(pod.Name, charts.RancherWebhookName) {
-					podName = pod.Name
-				}
-			}
 
 			podLogs, err := kubeconfig.GetPodLogs(w.client, clusterID, podName, charts.RancherWebhookNamespace, "")
 			require.NoError(w.T(), err)
@@ -96,7 +89,7 @@ func (w *WebhookTestSuite) TestWebhookChart() {
 			require.Nil(w.T(), webhookLogs)
 		})
 
-		w.Run("Verify the count of webhook is greater than zero and list webhooks", func() {
+		w.Run("Verify the count of webhook is greater than zero and list webhooks on "+tt.cluster, func() {
 			webhookList, err := getWebhookNames(w.client, clusterID, resourceName)
 			require.NoError(w.T(), err)
 

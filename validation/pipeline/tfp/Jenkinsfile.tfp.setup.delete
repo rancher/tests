@@ -48,7 +48,7 @@ node {
           sh "docker build . -f Dockerfile --build-arg PEM_FILE=key.pem  --build-arg TERRAFORM_VERSION=${env.TERRAFORM_VERSION} -t ${imageName}"
         }
         stage('Setup'){
-            sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
+            sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/download/v4.47.2/yq_linux_amd64 && wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/v4.47.2/checksums && awk "/ yq_linux_amd64$/ {print \$1 \"  ./yq\"}" ./yq_checksums | sha256sum -c - && rm -f ./yq_checksums'
             sh returnStdout:true, script: 'chmod a+x ./yq'
 
             AWS_ACCESS_KEY_ID = sh (

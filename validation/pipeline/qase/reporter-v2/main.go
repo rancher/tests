@@ -25,6 +25,7 @@ var (
 	projectIDEnvVar         = os.Getenv(qase.ProjectIDEnvVar)
 	testRunName             = os.Getenv(qase.TestRunNameEnvVar)
 	testRunComplete         = os.Getenv(qase.TestRunCompleteEnvVar)
+	customFieldFilterEnvVar = os.Getenv("QASE_CUSTOM_FIELD_FILTER")
 	buildUrl                = os.Getenv(qase.BuildUrl)
 	_, callerFilePath, _, _ = runtime.Caller(0)
 	basepath                = filepath.Join(filepath.Dir(callerFilePath), "..", "..", "..", "..")
@@ -107,6 +108,10 @@ func getAllAutomationTestCases(qaseService *qase.Service) (map[string]upstream.T
 	}
 
 	for _, testCase := range testCases {
+		if customFieldFilterEnvVar != "" && !hasCustomFieldValue(testCase.CustomFields, customFieldFilterEnvVar) {
+			continue
+		}
+
 		automationTestNameCustomField := getAutomationTestName(testCase.CustomFields)
 		if automationTestNameCustomField != "" {
 			testCaseNameMap[automationTestNameCustomField] = testCase
@@ -190,7 +195,7 @@ func parseTestResults(outputs []testresult.GoTestOutput) map[string]*testresult.
 func reportTestQases(qaseService *qase.Service, testRunID int32) error {
 	resultsOutputs, err := readTestResults()
 	if err != nil {
-		return nil
+		return err
 	}
 
 	goTestResults := parseTestResults(resultsOutputs)
@@ -301,6 +306,16 @@ func getAutomationTestName(customFields []upstream.CustomFieldValue) string {
 		}
 	}
 	return ""
+}
+
+func hasCustomFieldValue(customFields []upstream.CustomFieldValue, expectedValue string) bool {
+	for _, field := range customFields {
+		if field.Value != nil && *field.Value == expectedValue {
+			return true
+		}
+	}
+
+	return false
 }
 
 // createRunDescription build the Qase test run description

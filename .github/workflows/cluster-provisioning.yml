@@ -3,7 +3,7 @@ name: Cluster Provisioning
 
 on:
   schedule:
-    - cron: "0 10 * * 3,4,5"
+    - cron: "0 10 * * 3,5"
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -68,6 +68,11 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5
+        with:
+          version: "latest"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
@@ -148,6 +153,7 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
+          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_15 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_15 }}
 
       - name: Set Rancher chart url
@@ -241,6 +247,9 @@ jobs:
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
 
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
+          
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
@@ -326,6 +335,7 @@ jobs:
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
@@ -385,12 +395,26 @@ jobs:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-  
+
+      - name: Save test result as artifact for weekly summary
+        if: always() && github.event_name == 'schedule'
+        run: |
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"cluster-provisioning\", \"job\": \"v2-15\" }" > test-result-cluster-provisioning-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
+        shell: bash
+
+      - name: Upload test result weekly summary
+        if: always() && github.event_name == 'schedule'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
+        with:
+          name: test-result-cluster-provisioning-v2-15-${{ github.run_id }}
+          path: test-result-cluster-provisioning-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
+
   v2-14:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14'))
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && contains(github.event.inputs.rancher_version, '-alpha') ||
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: head
@@ -415,6 +439,11 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5
+        with:
+          version: "latest"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
@@ -495,6 +524,7 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
+          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_14 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_14 }}
 
       - name: Set Rancher chart url
@@ -588,6 +618,9 @@ jobs:
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
 
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
+          
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
@@ -673,6 +706,7 @@ jobs:
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
@@ -733,11 +767,25 @@ jobs:
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
+      - name: Save test result as artifact for weekly summary
+        if: always() && github.event_name == 'schedule'
+        run: |
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"cluster-provisioning\", \"job\": \"v2-14\" }" > test-result-cluster-provisioning-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
+        shell: bash
+
+      - name: Upload test result weekly summary
+        if: always() && github.event_name == 'schedule'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
+        with:
+          name: test-result-cluster-provisioning-v2-14-${{ github.run_id }}
+          path: test-result-cluster-provisioning-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
+
   v2-13:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13'))
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && contains(github.event.inputs.rancher_version, '-alpha') ||
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: staging-latest
@@ -762,6 +810,11 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5
+        with:
+          version: "latest"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
@@ -842,6 +895,7 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
+          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_13 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
 
       - name: Set Rancher chart url
@@ -936,6 +990,9 @@ jobs:
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
 
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
+          
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
@@ -1021,6 +1078,7 @@ jobs:
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
@@ -1080,3 +1138,16 @@ jobs:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Save test result as artifact for weekly summary
+        if: always() && github.event_name == 'schedule'
+        run: |
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"cluster-provisioning\", \"job\": \"v2-13\" }" > test-result-cluster-provisioning-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
+        shell: bash
+
+      - name: Upload test result weekly summary
+        if: always() && github.event_name == 'schedule'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
+        with:
+          name: test-result-cluster-provisioning-v2-13-${{ github.run_id }}
+          path: test-result-cluster-provisioning-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json

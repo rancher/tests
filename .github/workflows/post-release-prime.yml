@@ -8,11 +8,6 @@ on:
         description: "Rancher version"
       rancher_chart_version:
         description: "Rancher chart version"
-      run_all_versions:
-        description: "Run all supported versions if manually triggered"
-        required: false
-        default: false
-        type: boolean
       reporting:
         description: "Enable reporting to Qase and Slack"
         required: false
@@ -37,9 +32,34 @@ env:
   CLOUD_PROVIDER_VERSION: "6.34.0"
 
 jobs:
-  v2-14:
+  create-qase-run:
     if: |
-      github.event.inputs.run_all_versions == 'true' ||
+      ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
+      (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
+      (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
+      ((github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-alpha') &&
+      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-rc') &&
+      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-head'))
+    runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.create-qase-run.outputs.id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
+        with:
+          submodules: recursive
+      
+      - name: Create Qase test run
+        id: create-qase-run
+        uses: ./.github/actions/create-qase-test-run
+        with:
+          test_run_name: "[${{ github.event.inputs.rancher_version || inputs.rancher_version }}] Post Rancher Prime Release UI Validations"
+          qase_project_id: ${{ secrets.HB_QASE_PROJECT_ID }}
+          qase_token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+  
+  v2-14:
+    needs: [create-qase-run]
+    if: |
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-head') ||
@@ -119,8 +139,7 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
-              (github.event.inputs.run_all_versions == 'true' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
             }}
 
       - name: Set Rancher chart version
@@ -130,8 +149,7 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
-              (github.event.inputs.run_all_versions == 'true' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
       - name: Set Rancher repo
@@ -139,13 +157,6 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           fallback-repo: ${{ secrets.RANCHER_REPO }}
-
-      - name: Get Qase ID
-        id: get-qase-id
-        uses: ./.github/actions/get-qase-id
-        with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_14 }}
 
       - name: Create config.yaml
         run: |
@@ -207,10 +218,11 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
 
           prime:
-            brand: "${{ secrets.PRIME_BRAND }}"
+            brand: "${{ vars.PRIME_BRAND }}"
             isPrime: true
             registry: "${{ secrets.PRIME_REGISTRY }}"
-            rancherVersion: "${{ env.RANCHER_VERSION }}"
+            sccRegistrationCode: "${{ secrets.PRIME_SCC_REGISTRATION_CODE }}"
+            sccRegistrationType: "${{ secrets.PRIME_SCC_REGISTRATION_TYPE }}"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -239,8 +251,9 @@ jobs:
 
       - name: Run Prime UI Checks
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-prime-ui-checks
         with:
@@ -285,10 +298,23 @@ jobs:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Save test result as artifact for weekly summary
+        if: always() && github.event_name == 'schedule'
+        run: |
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"post-release-prime-test\", \"job\": \"v2-14\" }" > test-result-post-release-prime-test-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
+        shell: bash
+
+      - name: Upload test result weekly summary
+        if: always() && github.event_name == 'schedule'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
+        with:
+          name: test-result-post-release-prime-test-v2-14-${{ github.run_id }}
+          path: test-result-post-release-prime-test-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
   
   v2-13:
+    needs: [create-qase-run]
     if: |
-      github.event.inputs.run_all_versions == 'true' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-head') ||
@@ -368,8 +394,7 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
-              (github.event.inputs.run_all_versions == 'true' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
             }}
 
       - name: Set Rancher chart version
@@ -379,8 +404,7 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
-              (github.event.inputs.run_all_versions == 'true' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
       - name: Set Rancher repo
@@ -388,13 +412,6 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           fallback-repo: ${{ secrets.RANCHER_REPO }}
-
-      - name: Get Qase ID
-        id: get-qase-id
-        uses: ./.github/actions/get-qase-id
-        with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
 
       - name: Create config.yaml
         run: |
@@ -456,10 +473,11 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
 
           prime:
-            brand: "${{ secrets.PRIME_BRAND }}"
+            brand: "${{ vars.PRIME_BRAND }}"
             isPrime: true
             registry: "${{ secrets.PRIME_REGISTRY }}"
-            rancherVersion: "${{ env.RANCHER_VERSION }}"
+            sccRegistrationCode: "${{ secrets.PRIME_SCC_REGISTRATION_CODE }}"
+            sccRegistrationType: "${{ secrets.PRIME_SCC_REGISTRATION_TYPE }}"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -488,8 +506,9 @@ jobs:
 
       - name: Run Prime UI Checks
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-prime-ui-checks
         with:
@@ -534,3 +553,40 @@ jobs:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Save test result as artifact for weekly summary
+        if: always() && github.event_name == 'schedule'
+        run: |
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"post-release-prime-test\", \"job\": \"v2-13\" }" > test-result-post-release-prime-test-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
+        shell: bash
+
+      - name: Upload test result weekly summary
+        if: always() && github.event_name == 'schedule'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
+        with:
+          name: test-result-post-release-prime-test-v2-13-${{ github.run_id }}
+          path: test-result-post-release-prime-test-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
+
+  close-qase-run:
+    needs: [create-qase-run, v2-14, v2-13]
+    if: always() && (
+        ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
+        (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
+        (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
+        ((github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-alpha') &&
+        (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-rc') &&
+        (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-head'))
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
+        with:
+          submodules: recursive
+
+      - name: Close Qase test run
+        uses: ./.github/actions/close-qase-test-run
+        with:
+          qase_run_id: ${{ needs.create-qase-run.outputs.run_id }}
+          qase_project_id: ${{ secrets.HB_QASE_PROJECT_ID }}
+          qase_token: ${{ secrets.QASE_AUTOMATION_TOKEN }}

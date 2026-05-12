@@ -124,7 +124,7 @@ func TestDynamicCustom(t *testing.T) {
 				require.NoError(t, err)
 
 				logrus.Infof("Verifying cloud provider on cluster (%s)", cluster.Name)
-				cloudprovider.VerifyCloudProvider(t, tt.client, defaults.RKE2, clusterConfig, cluster, nil)
+				cloudprovider.VerifyCloudProvider(t, tt.client, defaults.RKE2, clusterConfig, cluster)
 
 				logrus.Infof("Verifying cluster features (%s)", cluster.Name)
 				provisioning.VerifyDynamicCluster(t, r.client, cluster)

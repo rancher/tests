@@ -9,18 +9,14 @@ import (
 	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
-	extdefault "github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	shepherdsnapshot "github.com/rancher/shepherd/extensions/etcdsnapshot"
 	extensionsingress "github.com/rancher/shepherd/extensions/ingresses"
-	nodestat "github.com/rancher/shepherd/extensions/nodes"
 	"github.com/rancher/shepherd/extensions/workloads"
-	"github.com/rancher/shepherd/extensions/workloads/pods"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/provisioning"
@@ -46,7 +42,6 @@ const (
 	kubernetesVersion = "kubernetesVersion"
 	port              = "port"
 	postWorkload      = "wload-after-backup"
-	RKE1              = "rke1"
 	serviceAppendName = "service-"
 )
 
@@ -62,16 +57,12 @@ func CreateAndValidateSnapshotRestore(client *rancher.Client, clusterName string
 		return err
 	}
 
-	var isRKE1 = false
-
 	clusterObject, _, _ := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
 	if clusterObject == nil {
 		_, err := client.Management.Cluster.ByID(clusterID)
 		if err != nil {
 			return err
 		}
-
-		isRKE1 = true
 	}
 
 	podTemplate, deploymentTemplate, deploymentResp, serviceResp, ingressResp, err := createAndVerifyResources(client, clusterID, containerImage)
@@ -79,48 +70,25 @@ func CreateAndValidateSnapshotRestore(client *rancher.Client, clusterName string
 		return err
 	}
 
-	if isRKE1 {
-		cluster, snapshotName, postDeploymentResp, postServiceResp, err := CreateAndValidateSnapshotRKE1(client, podTemplate, deploymentTemplate, clusterName, clusterID, etcdRestore, isRKE1)
-		if err != nil {
-			return err
-		}
+	logrus.Debugf("Creating snapshot on cluster %s", clusterName)
+	cluster, snapshotName, postDeploymentResp, postServiceResp, err := CreateAndValidateSnapshotV2Prov(client, podTemplate, deploymentTemplate, clusterName, clusterID, etcdRestore)
+	if err != nil {
+		return err
+	}
 
-		err = RestoreAndValidateSnapshotRKE1(client, snapshotName, etcdRestore, cluster, clusterID)
-		if err != nil {
-			return err
-		}
+	err = RestoreAndValidateSnapshotV2Prov(client, snapshotName, etcdRestore, cluster, clusterID)
+	if err != nil {
+		return err
+	}
 
-		_, err = steveclient.SteveType(stevetypes.Deployment).ByID(postDeploymentResp.ID)
-		if err == nil {
-			return errors.New("expecting cluster restore to remove resource")
-		}
+	_, err = steveclient.SteveType(stevetypes.Deployment).ByID(postDeploymentResp.ID)
+	if err == nil {
+		return errors.New("expecting cluster restore to remove resource")
+	}
 
-		_, err = steveclient.SteveType(stevetypes.Service).ByID(postServiceResp.ID)
-		if err == nil {
-			return errors.New("expecting cluster restore to remove resource")
-		}
-
-	} else {
-		logrus.Debugf("Creating snapshot on cluster %s", clusterName)
-		cluster, snapshotName, postDeploymentResp, postServiceResp, err := CreateAndValidateSnapshotV2Prov(client, podTemplate, deploymentTemplate, clusterName, clusterID, etcdRestore, isRKE1)
-		if err != nil {
-			return err
-		}
-
-		err = RestoreAndValidateSnapshotV2Prov(client, snapshotName, etcdRestore, cluster, clusterID)
-		if err != nil {
-			return err
-		}
-
-		_, err = steveclient.SteveType(stevetypes.Deployment).ByID(postDeploymentResp.ID)
-		if err == nil {
-			return errors.New("expecting cluster restore to remove resource")
-		}
-
-		_, err = steveclient.SteveType(stevetypes.Service).ByID(postServiceResp.ID)
-		if err == nil {
-			return errors.New("expecting cluster restore to remove resource")
-		}
+	_, err = steveclient.SteveType(stevetypes.Service).ByID(postServiceResp.ID)
+	if err == nil {
+		return errors.New("expecting cluster restore to remove resource")
 	}
 
 	logrus.Infof("Deleting created workloads...")
@@ -142,175 +110,9 @@ func CreateAndValidateSnapshotRestore(client *rancher.Client, clusterName string
 	return err
 }
 
-// CreateAndValidateSnapshotRKE1 is a helper that takes a snapshot of a given rke1 cluster and validates is resources after the snapshot
-func CreateAndValidateSnapshotRKE1(client *rancher.Client, podTemplate *corev1.PodTemplateSpec, deployment *v1.Deployment, clusterName, clusterID string,
-	etcdRestore *Config, isRKE1 bool) (*management.Cluster, string, *steveV1.SteveAPIObject, *steveV1.SteveAPIObject, error) {
-
-	createdSnapshots, err := shepherdsnapshot.CreateRKE1Snapshot(client, clusterName)
-	if err != nil {
-		return nil, "", nil, nil, err
-	}
-
-	cluster, err := client.Management.Cluster.ByID(clusterID)
-	if err != nil {
-		return nil, "", nil, nil, err
-	}
-
-	snapshotToRestore := createdSnapshots[0].ID
-	createdSnapshotIDs := []string{}
-	isSnapshotS3 := false
-
-	// prioritize s3 snapshots over local.
-	for _, snapshot := range createdSnapshots {
-		if snapshot.BackupConfig.S3BackupConfig != nil {
-			snapshotToRestore = snapshot.ID
-			isSnapshotS3 = true
-		}
-		createdSnapshotIDs = append(createdSnapshotIDs, snapshot.ID)
-	}
-
-	if cluster.RancherKubernetesEngineConfig.Services.Etcd.BackupConfig.S3BackupConfig != nil && !isSnapshotS3 {
-		return nil, "", nil, nil, fmt.Errorf("s3 is enabled for the cluster, but selected snapshot is not from s3")
-	}
-
-	postDeploymentResp, postServiceResp, err := createPostBackupWorkloads(client, clusterID, *podTemplate, deployment)
-	if err != nil {
-		return nil, "", nil, nil, err
-	}
-
-	err = VerifyRKE1Snapshots(client, clusterName, createdSnapshotIDs)
-	if err != nil {
-		return nil, "", nil, nil, err
-	}
-
-	if etcdRestore.SnapshotRestore == kubernetesVersion || etcdRestore.SnapshotRestore == all {
-		clusterID, err := clusters.GetClusterIDByName(client, clusterName)
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
-
-		clusterResp, err := client.Management.Cluster.ByID(clusterID)
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
-
-		if etcdRestore.UpgradeKubernetesVersion == "" {
-			defaultVersion, err := kubernetesversions.Default(client, clusters.RKE1ClusterType.String(), nil)
-			etcdRestore.UpgradeKubernetesVersion = defaultVersion[0]
-			if err != nil {
-				return nil, "", nil, nil, err
-			}
-		}
-
-		clusterResp.RancherKubernetesEngineConfig.Version = etcdRestore.UpgradeKubernetesVersion
-
-		if etcdRestore.SnapshotRestore == all && etcdRestore.ControlPlaneUnavailableValue != "" && etcdRestore.WorkerUnavailableValue != "" {
-			clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableControlplane = etcdRestore.ControlPlaneUnavailableValue
-			clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableWorker = etcdRestore.WorkerUnavailableValue
-		}
-
-		_, err = client.Management.Cluster.Update(clusterResp, &clusterResp)
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
-
-		err = clusters.WaitClusterToBeUpgraded(client, clusterID)
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
-
-		logrus.Infof("Cluster version is upgraded to: %s", clusterResp.RancherKubernetesEngineConfig.Version)
-
-		nodestat.AllManagementNodeReady(client, clusterResp.ID, extdefault.ThirtyMinuteTimeout)
-
-		// getting a false positive when restoring rke1. fixing by re-checking the upgrade
-		err = clusters.WaitClusterToBeUpgraded(client, clusterID)
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
-		nodestat.AllManagementNodeReady(client, clusterResp.ID, extdefault.ThirtyMinuteTimeout)
-
-		podErrors := pods.StatusPods(client, clusterID)
-		if len(podErrors) != 0 {
-			return nil, "", nil, nil, errors.New("cluster's pods not in good health post upgrade")
-		}
-
-		if etcdRestore.UpgradeKubernetesVersion != clusterResp.RancherKubernetesEngineConfig.Version {
-			return nil, "", nil, nil, fmt.Errorf("K8s Version after upgrade %s does not match expected version %s", clusterResp.RancherKubernetesEngineConfig.Version, etcdRestore.UpgradeKubernetesVersion)
-		}
-
-		if etcdRestore.SnapshotRestore == all && etcdRestore.ControlPlaneUnavailableValue != "" && etcdRestore.WorkerUnavailableValue != "" {
-			logrus.Infof("Control plane unavailable value is set to: %s", clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableControlplane)
-			logrus.Infof("Worker unavailable value is set to: %s", clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableWorker)
-
-			if etcdRestore.ControlPlaneUnavailableValue != clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableControlplane {
-				return nil, "", nil, nil, fmt.Errorf("cpUnavailable after upgrade %s does not match expected version %s", clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableControlplane, etcdRestore.ControlPlaneUnavailableValue)
-			}
-
-			if etcdRestore.WorkerUnavailableValue != clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableWorker {
-				return nil, "", nil, nil, fmt.Errorf("cpUnavailable after upgrade %s does not match expected version %s", clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableWorker, etcdRestore.WorkerUnavailableValue)
-			}
-		}
-	}
-
-	return cluster, snapshotToRestore, postDeploymentResp, postServiceResp, nil
-}
-
-// RestoreAndValidateSnapshotRKE1 restores a given snapshot for an rke1 cluster and validates its resources after the restore against the original cluster object
-func RestoreAndValidateSnapshotRKE1(client *rancher.Client, snapshotName string, etcdRestore *Config, oldCluster *management.Cluster, clusterID string) error {
-	// Give the option to restore the same snapshot multiple times. By default, it is set to 1.
-	for i := 0; i < etcdRestore.RecurringRestores; i++ {
-		snapshotRKE1Restore := &management.RestoreFromEtcdBackupInput{
-			EtcdBackupID:     snapshotName,
-			RestoreRkeConfig: etcdRestore.SnapshotRestore,
-		}
-
-		err := shepherdsnapshot.RestoreRKE1Snapshot(client, oldCluster.Name, snapshotRKE1Restore)
-		if err != nil {
-			return err
-		}
-
-		nodestat.AllManagementNodeReady(client, oldCluster.ID, extdefault.ThirtyMinuteTimeout)
-
-		clusterResp, err := client.Management.Cluster.ByID(clusterID)
-		if err != nil {
-			return err
-		}
-
-		if oldCluster.RancherKubernetesEngineConfig.Version != clusterResp.RancherKubernetesEngineConfig.Version {
-			return fmt.Errorf("K8s version after restore %s does not match expected version %s", clusterResp.RancherKubernetesEngineConfig.Version, oldCluster.RancherKubernetesEngineConfig.Version)
-		}
-
-		logrus.Infof("Cluster version is restored to: %s", clusterResp.RancherKubernetesEngineConfig.Version)
-
-		client, err = client.ReLogin()
-		if err != nil {
-			return err
-		}
-
-		podErrors := pods.StatusPods(client, clusterID)
-		if len(podErrors) != 0 {
-			return errors.New("cluster's pods not in good health post restore")
-		}
-
-		if etcdRestore.SnapshotRestore == all && etcdRestore.ControlPlaneUnavailableValue != "" && etcdRestore.WorkerUnavailableValue != "" {
-			logrus.Infof("Control plane unavailable value is restored to: %s", clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableControlplane)
-			logrus.Infof("Worker unavailable value is restored to: %s", clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableWorker)
-
-			if oldCluster.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableControlplane != clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableControlplane {
-				return fmt.Errorf("cpUnavailable after restore %s does not match expected version %s", clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableControlplane, oldCluster.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableControlplane)
-			}
-			if oldCluster.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableWorker != clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableWorker {
-				return fmt.Errorf("workerUnavailable after restore %s does not match expected version %s", clusterResp.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableWorker, oldCluster.RancherKubernetesEngineConfig.UpgradeStrategy.MaxUnavailableWorker)
-			}
-		}
-	}
-	return nil
-}
-
 // CreateAndValidateSnapshotV2Prov is a helper that takes a snapshot of a given v2prov cluster and validates is resources after the snapshot
 func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1.PodTemplateSpec, deployment *v1.Deployment, clusterName, clusterID string,
-	etcdRestore *Config, isRKE1 bool) (*apisV1.Cluster, string, *steveV1.SteveAPIObject, *steveV1.SteveAPIObject, error) {
+	etcdRestore *Config) (*apisV1.Cluster, string, *steveV1.SteveAPIObject, *steveV1.SteveAPIObject, error) {
 	createdSnapshots, err := shepherdsnapshot.CreateRKE2K3SSnapshot(client, clusterName)
 	if err != nil {
 		return nil, "", nil, nil, err
@@ -554,17 +356,7 @@ func CreateSnapshotsUntilRetentionLimit(client *rancher.Client, clusterName stri
 	}
 
 	provider := fleetCluster.ObjectMeta.Labels["provider.cattle.io"]
-	if provider == "rke" {
-		sleepNum := (retentionLimit + 1) * timeBetweenSnapshots
-		logrus.Infof("Waiting %v hours for %v automatic snapshots to be taken", sleepNum, (retentionLimit + 1))
-		time.Sleep(time.Duration(sleepNum)*time.Hour + time.Minute*5)
-
-		err := RKE1RetentionLimitCheck(client, clusterName)
-		if err != nil {
-			return err
-		}
-
-	} else {
+	if provider != "rke" {
 		sleepNum := (retentionLimit + 1) * timeBetweenSnapshots
 		logrus.Infof("Waiting %v minutes for %v automatic snapshots to be taken", sleepNum, (retentionLimit + 1))
 		time.Sleep(time.Duration(sleepNum)*time.Minute + time.Minute*5)

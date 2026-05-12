@@ -191,3 +191,33 @@ func AuthenticateWithExtToken(baseURL, tokenName, tokenValue, apiPath string) er
 	}
 	return nil
 }
+
+// DeleteLegacyTokenWithExtToken sends a raw HTTP DELETE request to the /v3/tokens endpoint using an ext token for Bearer authentication.
+func DeleteLegacyTokenWithExtToken(client *rancher.Client, legacyTokenID string, extTokenValue string) error {
+	deleteURL := fmt.Sprintf("https://%s/v3/tokens/%s", client.RancherConfig.Host, legacyTokenID)
+
+	req, err := http.NewRequest(http.MethodDelete, deleteURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", extTokenValue))
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("expected status code 200 or 204, got %d", resp.StatusCode)
+	}
+
+	return nil
+}

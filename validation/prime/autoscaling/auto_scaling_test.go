@@ -1,19 +1,16 @@
 //go:build validation || prime
 
 //nolint:forbidigo
-package rke2k3s
+package autoscaling
 
 import (
-	"os"
 	"testing"
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	shepherdClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
-	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
-	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/projects"
@@ -24,37 +21,9 @@ import (
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
-	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
-
-type autoScalingTest struct {
-	client             *rancher.Client
-	session            *session.Session
-	standardUserClient *rancher.Client
-	cattleConfig       map[string]any
-}
-
-func autoScalingSetup(t *testing.T) autoScalingTest {
-	var s autoScalingTest
-	testSession := session.NewSession()
-	s.session = testSession
-
-	client, err := rancher.NewClient("", testSession)
-	require.NoError(t, err)
-	s.client = client
-
-	s.standardUserClient, _, _, err = standard.CreateStandardUser(s.client)
-	require.NoError(t, err)
-
-	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
-
-	s.cattleConfig, err = defaults.LoadPackageDefaults(s.cattleConfig, "")
-	require.NoError(t, err)
-
-	return s
-}
 
 func TestAutoScalingUp(t *testing.T) {
 	s := autoScalingSetup(t)
@@ -352,5 +321,4 @@ func TestAutoScalingPause(t *testing.T) {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
 		}
 	}
-
 }

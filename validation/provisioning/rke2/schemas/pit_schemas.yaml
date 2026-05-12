@@ -1,0 +1,259 @@
+- projects: [RANCHERINT]
+  suite: RKE2 Provisioning
+  cases:
+  - title: "RKE2 Node Driver - All Roles Single Node"
+    description: "Provision an RKE2 node driver cluster with a single node holding all roles (etcd, controlplane, worker)"
+    automation: 2
+    steps:
+    - action: "Create standard user and initialize Rancher client"
+      data: ""
+      expectedresult: "Standard user and Rancher client are created successfully"
+      position: 1
+    - action: "Load cluster configuration and cloud provider settings"
+      data: "Machine pool: 1 node with etcd, controlplane, and worker roles"
+      expectedresult: "Cluster configuration loaded with all-roles machine pool"
+      position: 2
+    - action: "Create cloud provider credentials"
+      data: ""
+      expectedresult: "Cloud credentials are created successfully"
+      position: 3
+    - action: "Create machine configuration for the cloud provider"
+      data: ""
+      expectedresult: "Machine configuration is created successfully"
+      position: 4
+    - action: "Provision RKE2 node driver cluster"
+      data: ""
+      expectedresult: "Cluster provisioning request is accepted"
+      position: 5
+    - action: "Verify cluster is active and ready"
+      data: ""
+      expectedresult: "Cluster reaches active state with all nodes ready"
+      position: 6
+    - action: "Verify cluster deployments"
+      data: ""
+      expectedresult: "All cluster deployments are running and healthy"
+      position: 7
+    - action: "Verify cluster pods"
+      data: ""
+      expectedresult: "All cluster pods are running"
+      position: 8
+    - action: "Verify service account token secret"
+      data: ""
+      expectedresult: "Service account token secret exists on the cluster"
+      position: 9
+    custom_field:
+      "15": "RKE2_Node_Driver|etcd_cp_worker"
+  - title: "RKE2 Node Driver - Shared Etcd+ControlPlane and Worker"
+    description: "Provision an RKE2 node driver cluster with two machine pools: one sharing etcd and controlplane roles, one for worker"
+    automation: 2
+    steps:
+    - action: "Create standard user and initialize Rancher client"
+      data: ""
+      expectedresult: "Standard user and Rancher client are created successfully"
+      position: 1
+    - action: "Load cluster configuration and cloud provider settings"
+      data: "Machine pools: etcd+controlplane pool and worker pool"
+      expectedresult: "Cluster configuration loaded with stacked roles machine pools"
+      position: 2
+    - action: "Create cloud provider credentials"
+      data: ""
+      expectedresult: "Cloud credentials are created successfully"
+      position: 3
+    - action: "Create machine configuration for the cloud provider"
+      data: ""
+      expectedresult: "Machine configuration is created successfully"
+      position: 4
+    - action: "Provision RKE2 node driver cluster"
+      data: ""
+      expectedresult: "Cluster provisioning request is accepted"
+      position: 5
+    - action: "Verify cluster is active and ready"
+      data: ""
+      expectedresult: "Cluster reaches active state with all nodes ready"
+      position: 6
+    - action: "Verify cluster deployments"
+      data: ""
+      expectedresult: "All cluster deployments are running and healthy"
+      position: 7
+    - action: "Verify cluster pods"
+      data: ""
+      expectedresult: "All cluster pods are running"
+      position: 8
+    - action: "Verify service account token secret"
+      data: ""
+      expectedresult: "Service account token secret exists on the cluster"
+      position: 9
+    custom_field:
+      "15": "RKE2_Node_Driver|etcd_cp|worker"
+  - title: "RKE2 Node Driver - Dedicated Etcd, ControlPlane, and Worker"
+    description: "Provision an RKE2 node driver cluster with three dedicated machine pools: etcd, controlplane, and worker"
+    automation: 2
+    steps:
+    - action: "Create standard user and initialize Rancher client"
+      data: ""
+      expectedresult: "Standard user and Rancher client are created successfully"
+      position: 1
+    - action: "Load cluster configuration and cloud provider settings"
+      data: "Machine pools: dedicated etcd pool, dedicated controlplane pool, dedicated worker pool"
+      expectedresult: "Cluster configuration loaded with dedicated role machine pools"
+      position: 2
+    - action: "Create cloud provider credentials"
+      data: ""
+      expectedresult: "Cloud credentials are created successfully"
+      position: 3
+    - action: "Create machine configuration for the cloud provider"
+      data: ""
+      expectedresult: "Machine configuration is created successfully"
+      position: 4
+    - action: "Provision RKE2 node driver cluster"
+      data: ""
+      expectedresult: "Cluster provisioning request is accepted"
+      position: 5
+    - action: "Verify cluster is active and ready"
+      data: ""
+      expectedresult: "Cluster reaches active state with all nodes ready"
+      position: 6
+    - action: "Verify cluster deployments"
+      data: ""
+      expectedresult: "All cluster deployments are running and healthy"
+      position: 7
+    - action: "Verify cluster pods"
+      data: ""
+      expectedresult: "All cluster pods are running"
+      position: 8
+    - action: "Verify service account token secret"
+      data: ""
+      expectedresult: "Service account token secret exists on the cluster"
+      position: 9
+    custom_field:
+      "15": "RKE2_Node_Driver|etcd|cp|worker"
+  - title: "RKE2 Node Driver - Dedicated Roles with Windows Worker"
+    description: "Provision an RKE2 node driver cluster with dedicated etcd, controlplane, and worker pools plus a Windows worker pool (vSphere only)"
+    automation: 2
+    steps:
+    - action: "Create standard user and initialize Rancher client"
+      data: ""
+      expectedresult: "Standard user and Rancher client are created successfully"
+      position: 1
+    - action: "Load cluster configuration and verify vSphere provider with Windows image"
+      data: "Machine pools: dedicated etcd pool, dedicated controlplane pool, dedicated worker pool, Windows worker pool"
+      expectedresult: "Cluster configuration loaded and Windows machine image confirmed available in vSphere"
+      position: 2
+    - action: "Create cloud provider credentials"
+      data: ""
+      expectedresult: "Cloud credentials are created successfully"
+      position: 3
+    - action: "Create machine configuration for the cloud provider including Windows machine config"
+      data: ""
+      expectedresult: "Machine configurations are created successfully"
+      position: 4
+    - action: "Provision RKE2 node driver cluster"
+      data: ""
+      expectedresult: "Cluster provisioning request is accepted"
+      position: 5
+    - action: "Verify cluster is active and ready"
+      data: ""
+      expectedresult: "Cluster reaches active state with all Linux and Windows nodes ready"
+      position: 6
+    - action: "Verify cluster deployments"
+      data: ""
+      expectedresult: "All cluster deployments are running and healthy"
+      position: 7
+    - action: "Verify cluster pods"
+      data: ""
+      expectedresult: "All cluster pods are running"
+      position: 8
+    - action: "Verify service account token secret"
+      data: ""
+      expectedresult: "Service account token secret exists on the cluster"
+      position: 9
+    custom_field:
+      "15": "RKE2_Node_Driver|etcd|cp|worker|windows"
+  - title: "RKE2 Node Driver - High Availability (3 Etcd, 2 ControlPlane, 3 Worker)"
+    description: "Provision a highly available RKE2 node driver cluster with 3 etcd nodes, 2 controlplane nodes, and 3 worker nodes"
+    automation: 2
+    steps:
+    - action: "Create standard user and initialize Rancher client"
+      data: ""
+      expectedresult: "Standard user and Rancher client are created successfully"
+      position: 1
+    - action: "Load cluster configuration and cloud provider settings"
+      data: "Machine pools: 3 etcd nodes, 2 controlplane nodes, 3 worker nodes"
+      expectedresult: "Cluster configuration loaded with HA machine pool quantities"
+      position: 2
+    - action: "Create cloud provider credentials"
+      data: ""
+      expectedresult: "Cloud credentials are created successfully"
+      position: 3
+    - action: "Create machine configuration for the cloud provider"
+      data: ""
+      expectedresult: "Machine configuration is created successfully"
+      position: 4
+    - action: "Provision RKE2 HA node driver cluster"
+      data: ""
+      expectedresult: "Cluster provisioning request is accepted"
+      position: 5
+    - action: "Verify cluster is active and ready"
+      data: ""
+      expectedresult: "Cluster reaches active state with all 8 nodes ready"
+      position: 6
+    - action: "Verify cluster deployments"
+      data: ""
+      expectedresult: "All cluster deployments are running and healthy"
+      position: 7
+    - action: "Verify cluster pods"
+      data: ""
+      expectedresult: "All cluster pods are running"
+      position: 8
+    - action: "Verify service account token secret"
+      data: ""
+      expectedresult: "Service account token secret exists on the cluster"
+      position: 9
+    custom_field:
+      "15": "RKE2_Node_Driver|3_etcd|2_cp|3_worker"
+  - title: "RKE2 AWS Out-of-Tree Cloud Provider"
+    description: "Provision an RKE2 node driver cluster on AWS with the out-of-tree cloud provider enabled and verify cloud provider integration"
+    automation: 2
+    steps:
+    - action: "Create standard user and initialize Rancher client"
+      data: ""
+      expectedresult: "Standard user and Rancher client are created successfully"
+      position: 1
+    - action: "Load cluster configuration and verify AWS provider"
+      data: "Machine pools: 3 etcd nodes, 2 controlplane nodes, 2 worker nodes; CloudProvider: aws"
+      expectedresult: "Cluster configuration loaded and AWS provider confirmed"
+      position: 2
+    - action: "Create AWS cloud provider credentials"
+      data: ""
+      expectedresult: "AWS cloud credentials are created successfully"
+      position: 3
+    - action: "Create machine configuration for AWS"
+      data: ""
+      expectedresult: "AWS machine configuration is created successfully"
+      position: 4
+    - action: "Provision RKE2 cluster with AWS out-of-tree cloud provider"
+      data: ""
+      expectedresult: "Cluster provisioning request is accepted"
+      position: 5
+    - action: "Verify cluster is active and ready"
+      data: ""
+      expectedresult: "Cluster reaches active state with all nodes ready"
+      position: 6
+    - action: "Verify cluster deployments"
+      data: ""
+      expectedresult: "All cluster deployments are running and healthy"
+      position: 7
+    - action: "Verify cluster pods"
+      data: ""
+      expectedresult: "All cluster pods are running"
+      position: 8
+    - action: "Verify service account token secret"
+      data: ""
+      expectedresult: "Service account token secret exists on the cluster"
+      position: 9
+    - action: "Verify AWS cloud provider integration"
+      data: ""
+      expectedresult: "AWS cloud provider is functional and correctly integrated with the cluster"
+      position: 10
+    custom_field:
+      "15": "AWS_OutOfTree"

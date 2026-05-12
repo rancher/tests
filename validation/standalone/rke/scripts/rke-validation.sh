@@ -8,6 +8,7 @@ REGISTRY_USER="$4"
 REGISTRY_PASSWORD="$5"
 PUBLIC_IP="$6"
 PRIVATE_IP="$7"
+KUBECTL_VERSION="${8:-v1.33.1}"
 RESULTS=()
 
 SSH_USER="ubuntu"
@@ -35,8 +36,8 @@ echo
 echo "Preparing node..."
 echo
 
-ssh $SSH_OPTS $SSH_USER@$PUBLIC_IP bash -s <<'REMOTE'
-set -e
+ssh $SSH_OPTS $SSH_USER@$PUBLIC_IP env KUBECTL_VERSION="$KUBECTL_VERSION" bash -s <<'REMOTE'
+set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 export APT_LISTCHANGES_FRONTEND=none
@@ -106,12 +107,14 @@ echo
 
 echo "Installing kubectl..."
 
-curl -fsSL https://dl.k8s.io/release/stable.txt -o stable.txt
-K8S=$(cat stable.txt)
-
-curl -fsSL https://dl.k8s.io/release/$K8S/bin/linux/amd64/kubectl -o kubectl
+curl -fsSL https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl -o kubectl
+curl -fsSL https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl.sha256 -o kubectl.sha256
+awk '{print $1 "  kubectl"}' kubectl.sha256 > kubectl.sha256.check
+test -s kubectl.sha256.check
+sha256sum -c kubectl.sha256.check | grep -q ': OK$'
 chmod +x kubectl
 sudo mv kubectl /usr/local/bin/
+rm -f kubectl.sha256 kubectl.sha256.check
 
 echo "Successfully installed kubectl."
 echo
@@ -123,7 +126,7 @@ REMOTE
 echo "Installing RKE $RKE_VERSION..."
 
 ssh $SSH_OPTS $SSH_USER@$PUBLIC_IP bash -s <<REMOTE
-set -e
+set -euo pipefail
 cd ~/rke-test
 
 curl -fsSL https://github.com/rancher/rke/releases/download/${RKE_VERSION}/rke_linux-amd64 -o rke
@@ -159,7 +162,7 @@ do
   echo "======================================="
 
   ssh $SSH_OPTS $SSH_USER@$PUBLIC_IP bash -s <<'REMOTE'
-set -e
+set -euo pipefail
 rm -rf ~/rke-test/kube_config_cluster.yml ~/rke-test/cluster.rkestate
 REMOTE
 
@@ -171,7 +174,7 @@ REMOTE
   PUBLIC_IP="$PUBLIC_IP" \
   PRIVATE_IP="$PRIVATE_IP" \
   bash -s <<'REMOTE'
-set -e
+set -euo pipefail
 cd ~/rke-test
 
 rm -f cluster.yml cluster.rkestate kube_config_cluster.yml
@@ -219,7 +222,7 @@ REMOTE
   echo "Waiting for node ready..."
 
   NODE_INFO=$(ssh $SSH_OPTS $SSH_USER@$PUBLIC_IP bash -s <<'REMOTE'
-set -e
+set -euo pipefail
 export KUBECONFIG=~/rke-test/kube_config_cluster.yml
 
 for i in {1..180}; do
@@ -259,7 +262,7 @@ REMOTE
   echo "PASSED: $VERSION"
 
   ssh $SSH_OPTS $SSH_USER@$PUBLIC_IP bash -s <<'REMOTE'
-set -e
+set -euo pipefail
 cd ~/rke-test
 rke remove --config cluster.yml --force >/dev/null || true
 
