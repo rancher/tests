@@ -127,7 +127,6 @@ func TestNodeDriverK3S(t *testing.T) {
 			// Needed to ensure we are testing use-case with IPv6 address only set and without it set in the other test cases.
 			if strings.Contains(tt.name, "IPv6_Address_Only") || strings.Contains(tt.name, "IPv6_First") {
 				machineConfigSpec.AmazonEC2MachineConfigs.AWSMachineConfig[0].Ipv6AddressOnly = true
-				t.Skip("Skipping test due to issue with AWS ipv6 address only provisioning; see GH issue: https://github.com/rancher/rancher/issues/54944")
 			}
 
 			logrus.Info("Provisioning cluster")
