@@ -757,7 +757,7 @@ rancher_use_bundled_system_charts: true
                             --name generate-token \
                             -e RANCHER_ADMIN_PASSWORD \
                             -e RANCHER_URL=https://${params.HOSTNAME_PREFIX}.qa.rancher.space \
-                            -e ANSIBLE_CONFIG=/workspace/${env.TESTS_DIR}/ansible/ansible.cfg \
+                            -e ANSIBLE_CONFIG=/workspace/${env.INFRA_DIR}/ansible/ansible.cfg \
                             -v ${workspace}:/workspace \
                             -w /workspace/${env.INFRA_DIR}/ansible/rke2/default \
                             rancher-go-test:latest \
