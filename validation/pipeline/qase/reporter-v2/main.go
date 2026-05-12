@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -37,7 +36,8 @@ const (
 	requestLimit = 100
 	// Doc: https://developers.qase.io/reference/create-run
 	descriptionLimit = 10000
-	imagesPath       = "/app/images/"
+	imageReportPath  = "/app/image-report/image-report.txt"
+	testResultsJSON  = "/app/results/results.json"
 )
 
 func main() {
@@ -126,7 +126,7 @@ func getAllAutomationTestCases(qaseService *qase.Service) (map[string]upstream.T
 
 // readTestResults converts the results.json file into an output object
 func readTestResults() ([]testresult.GoTestOutput, error) {
-	file, err := os.Open(qase.TestResultsJSON)
+	file, err := os.Open(testResultsJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -347,36 +347,11 @@ func createRunDescription(buildUrl string) string {
 
 // getVersionInformation gets versions and commits id from cluster
 func getVersionInformation() string {
-
-	files, err := os.ReadDir(imagesPath)
+	// Prepare the command: docker logs imageCapturer
+	data, err := os.ReadFile(imageReportPath)
 	if err != nil {
-		logrus.Warning(fmt.Errorf("Failed to get files: %v", err))
-		return ""
+		logrus.Warning(fmt.Errorf("Failed to read file: %v", err))
 	}
 
-	var b strings.Builder
-
-	for _, file := range files {
-		path := filepath.Join(imagesPath, file.Name())
-
-		data, err := os.ReadFile(path)
-		if err != nil {
-			logrus.Warning(fmt.Errorf("Failed to read file: %v", err))
-			continue
-		}
-
-		s := string(data)
-		lines := strings.Split(s, "\n")
-		slices.Sort(lines)
-		compactLines := slices.Compact(lines)
-		s = strings.Join(compactLines, "\n")
-
-		b.WriteString(fmt.Sprintf("Images used within %s", file.Name()))
-		b.WriteString("\n")
-		b.WriteString(s)
-		b.WriteString("\n")
-		b.WriteString("\n")
-	}
-
-	return b.String()
+	return string(data)
 }
