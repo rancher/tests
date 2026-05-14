@@ -97,6 +97,8 @@ node {
                       extensions: scm.extensions + [[$class: 'CleanCheckout']],
                       userRemoteConfigs: repo
                     ])
+            env.RANCHER_TEST_COMMIT_ID = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+            echo "rancher/tests commit ID: ${env.RANCHER_TEST_COMMIT_ID}"
           }
           dir ("./") {
             try {

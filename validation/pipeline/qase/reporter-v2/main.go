@@ -56,16 +56,16 @@ func main() {
 
 		if runIDEnvVar != "" {
 			runID, err = strconv.ParseInt(runIDEnvVar, 10, 64)
-		} else {
-			runDescription := createRunDescription(buildUrl, rancherTestCommitID)
+		}
 
-			if testRunName != "" {
-				resp, err := qaseService.CreateTestRun(testRunName, projectIDEnvVar, runDescription)
-				if err != nil {
-					logrus.Error("error creating test run: ", err)
-				} else {
-					runID = *resp.Result.Id
-				}
+		runDescription := createRunDescription(buildUrl, rancherTestCommitID)
+
+		if testRunName != "" {
+			resp, err := qaseService.CreateTestRun(testRunName, projectIDEnvVar, runDescription)
+			if err != nil {
+				logrus.Error("error creating test run: ", err)
+			} else {
+				runID = *resp.Result.Id
 			}
 		}
 
@@ -327,18 +327,19 @@ func createRunDescription(buildUrl string, commitId string) string {
 		description.WriteString("Jenkins Job")
 		description.WriteString("\n")
 		description.WriteString(buildUrl)
+		description.WriteString("\n")
 	}
 
 	if commitId != "" {
 		description.WriteString("Rancher Test Commit ID")
 		description.WriteString("\n")
 		description.WriteString(commitId)
+		description.WriteString("\n")
 	}
 
 	versions := getVersionInformation()
 	if versions != "" {
 		if description.Len() > 0 {
-			description.WriteString("\n")
 			description.WriteString("\n")
 		}
 		description.WriteString(versions)
