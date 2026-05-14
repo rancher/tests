@@ -30,11 +30,11 @@ RUN CGO_ENABLED=0
 SHELL ["/bin/bash", "-c"] 
 
 
-ARG RKE_VERSION=v1.7.3
+ARG RKE_VERSION=v1.8.13
 RUN echo "installing ${RKE_VERSION} version RKE" && \
     curl -fSL "https://github.com/rancher/rke/releases/download/${RKE_VERSION}/rke_linux-amd64" -o rke_linux-amd64 && \
-    curl -fSL "https://github.com/rancher/rke/releases/download/${RKE_VERSION}/rke_linux-amd64.sha256" -o rke_linux-amd64.sha256 && \
-    sha256sum -c rke_linux-amd64.sha256 && \
+    curl -fSL "https://github.com/rancher/rke/releases/download/${RKE_VERSION}/sha256sum.txt" -o rke_linux-amd64.sha256 && \
+    grep "rke_linux-amd64$" rke_linux-amd64.sha256 | sha256sum -c && \
     mv rke_linux-amd64 /bin/rke && \
     chmod +x /bin/rke && \
     rm -f rke_linux-amd64.sha256

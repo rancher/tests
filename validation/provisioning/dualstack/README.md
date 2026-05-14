@@ -50,9 +50,15 @@ Node driver test verfies that various node driver cluster configurations provisi
 1. `RKE2_Dual_Stack_Node_Driver_CIDR`
 2. `RKE2_Dual_Stack_Node_Driver_Dual_Stack_Preference`
 3. `RKE2_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference`
-4. `K3S_Dual_Stack_Node_Driver_CIDR`
-5. `K3S_Dual_Stack_Node_Driver_Dual_Stack_Preference`
-6. `K3S_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference`
+4. `RKE2_Dual_Stack_Node_Driver_CIDR_IPv6_First_Dual_Stack_Preference`
+5. `RKE2_Dual_Stack_Node_Driver_CIDR_IPv6_Address_Only`
+6. `RKE2_Dual_Stack_Node_Driver_CIDR_IPv6_Address_Only_IPv6_First`
+7. `K3S_Dual_Stack_Node_Driver_CIDR`
+8. `K3S_Dual_Stack_Node_Driver_Dual_Stack_Preference`
+9. `K3S_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference`
+10. `K3S_Dual_Stack_Node_Driver_CIDR_IPv6_First_Dual_Stack_Preference`
+11. `K3S_Dual_Stack_Node_Driver_CIDR_IPv6_Address_Only`
+12. `K3S_Dual_Stack_Node_Driver_CIDR_IPv6_Address_Only_IPv6_First`
 
 #### Run Commands:
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/dualstack --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestNodeDriverRKE2 -timeout=1h -v` \

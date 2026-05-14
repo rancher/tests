@@ -61,7 +61,10 @@ func (l *LonghornTestSuite) SetupSuite() {
 	}
 
 	l.project, err = client.Management.Project.Create(projectConfig)
+	require.NoError(l.T(), err)
 
+	l.T().Logf("Creating %s namespace", charts.LonghornNamespace)
+	_, err = namespaceActions.CreateNamespace(client, charts.LonghornNamespace, "{}", map[string]string{}, map[string]string{}, l.project)
 	require.NoError(l.T(), err)
 
 	chart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)

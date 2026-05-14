@@ -70,9 +70,9 @@ require (
 	github.com/qase-tms/qase-go/qase-api-client v1.2.1
 	github.com/rancher/rancher v0.0.0-20251223145833-24cecce3325e
 	github.com/rancher/shepherd v0.0.0-20260430211500-1f50d155268e
-	github.com/rancher/tests/actions v0.0.0-20260428161326-24be08863f41
+	github.com/rancher/tests/actions v0.0.0-20260429161627-c59ac182d972
 	github.com/rancher/tests/interoperability v0.0.0
-	github.com/rancher/tfp-automation v0.0.0-20260428221133-c497d6f81a7e
+	github.com/rancher/tfp-automation v0.0.0-20260511161348-eba5b5f6722e
 )
 
 require (
@@ -182,7 +182,7 @@ require (
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/qase-tms/qase-go/qase-api-v2-client v1.1.4 // indirect
 	github.com/rancher/ali-operator v1.13.0-rc.2 // indirect
-	github.com/rancher/qa-infra-automation v0.0.0-20260319191229-cfc3fdaefc20 // indirect
+	github.com/rancher/qa-infra-automation v0.0.0-20260507233117-6c698fa52007 // indirect
 	github.com/tmccombs/hcl2json v0.6.4 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect

@@ -98,6 +98,12 @@ func TestCustomK3SDualstack(t *testing.T) {
 		StackPreference: "dual",
 	}
 
+	ipv6FirstDualStackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     clusterConfig.Networking.IPV6FirstClusterCIDR,
+		ServiceCIDR:     clusterConfig.Networking.IPV6FirstServiceCIDR,
+		StackPreference: "dual",
+	}
+
 	tests := []struct {
 		name         string
 		client       *rancher.Client
@@ -108,6 +114,7 @@ func TestCustomK3SDualstack(t *testing.T) {
 		{"K3S_Dual_Stack_Custom_IPv4_Stack_Preference", k.standardUserClient, nodeRolesStandard, ipv4StackPreference},
 		{"K3S_Dual_Stack_Custom_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, dualStackPreference},
 		{"K3S_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
+		{"K3S_Dual_Stack_Custom_CIDR_IPv6_First_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, ipv6FirstDualStackPreference},
 	}
 
 	for _, tt := range tests {

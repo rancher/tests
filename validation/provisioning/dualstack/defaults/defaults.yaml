@@ -12,5 +12,4 @@ awsMachineConfigs:
   awsMachineConfig:
   - enablePrimaryIPv6: true
     httpProtocolIpv6: "enabled"
-    ipv6AddressOnly: true
     ipv6AddressCount: "1"

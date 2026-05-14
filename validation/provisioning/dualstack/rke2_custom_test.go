@@ -98,6 +98,12 @@ func TestCustomRKE2Dualstack(t *testing.T) {
 		StackPreference: "dual",
 	}
 
+	ipv6FirstDualStackPreference := &provisioninginput.Networking{
+		ClusterCIDR:     clusterConfig.Networking.IPV6FirstClusterCIDR,
+		ServiceCIDR:     clusterConfig.Networking.IPV6FirstServiceCIDR,
+		StackPreference: "dual",
+	}
+
 	tests := []struct {
 		name         string
 		client       *rancher.Client
@@ -108,6 +114,7 @@ func TestCustomRKE2Dualstack(t *testing.T) {
 		{"RKE2_Dual_Stack_Custom_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv4StackPreference},
 		{"RKE2_Dual_Stack_Custom_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, dualStackPreference},
 		{"RKE2_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
+		{"RKE2_Dual_Stack_Custom_CIDR_IPv6_First_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv6FirstDualStackPreference},
 	}
 
 	for _, tt := range tests {
