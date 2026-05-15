@@ -1,0 +1,64 @@
+name: Weekly PR Summary
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * 3'
+
+permissions:
+  id-token: write
+  contents: read
+  models: read
+
+jobs:
+  create_weekly_pr_summary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
+        with:
+          persist-credentials: true
+
+      - name: Get PRs from the past week
+        run: |
+          LAST_WEEK=$(date -u -d "7 days ago" +"%Y-%m-%d")
+          gh pr list --state all --search "updated:>=$LAST_WEEK" --json title,url,state,author --repo ${{ github.repository }} > prs.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+
+      - name: Set up Go environment
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 #v6
+        with:
+          go-version-file: "./go.mod"
+
+      - name: Prepare PR input
+        run: |
+          {
+            echo "<!subteam^${{ secrets.SLACK_GROUP_ID }}|${{ secrets.SLACK_GROUP_HANDLE }}>"
+            echo ""
+            jq -r '
+              .[] | select(.author.login == "markusewalker" or .author.login == "susesgartner" or .author.login == "navsalehi") |
+              "- <" + .url + "|" + .title + "> (" + .state + ")"
+            ' prs.json
+          } > prs_input.txt
+
+      - name: Run GitHub Model prompt
+        id: run-prompt
+        uses: ./.github/actions/gh-model-prompt
+        with:
+          prompt_file: ./.github/models/weekly-pr-summary.prompt.yml
+          input_file: prs_input.txt
+          output_file: summary.txt
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Report to Slack
+        uses: slackapi/slack-github-action@af78098f536edbc4de71162a307590698245be95 #v3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ${{ toJson(steps.run-prompt.outputs.summary) }}
+            }
