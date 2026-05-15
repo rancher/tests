@@ -182,7 +182,7 @@ require (
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/qase-tms/qase-go/qase-api-v2-client v1.1.4 // indirect
 	github.com/rancher/ali-operator v1.13.0-rc.2 // indirect
-	github.com/rancher/qa-infra-automation v0.0.0-20260507233117-6c698fa52007 // indirect
+	github.com/rancher/qa-infra-automation v0.0.0-20260514152023-976143409dc3 // indirect
 	github.com/tmccombs/hcl2json v0.6.4 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
