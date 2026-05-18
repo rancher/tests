@@ -18,10 +18,10 @@ import (
 )
 
 const (
-	headerPath   = "validation/weeklyReports/assets/workflow_header.html"
-	templatePath = "validation/weeklyReports/assets/template.html"
+	headerPath   = "validation/weeklyTestsReports/assets/workflow_header.html"
+	templatePath = "validation/weeklyTestsReports/assets/template.html"
 
-	assetsSrcDir = "validation/weeklyReports/assets"
+	assetsSrcDir = "validation/weeklyTestsReports/assets"
 	assetsDstDir = "results/assets"
 	resultsDir   = "results"
 
