@@ -6,20 +6,20 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	tfpConfig "github.com/rancher/tfp-automation/config"
+	"github.com/rancher/tfp-automation/framework/cleanup"
+	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -53,9 +53,6 @@ func customRKE2DualstackSetup(t *testing.T) customRKE2DualstackTest {
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(t, err)
 
-	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.RKE2, r.cattleConfig)
-	require.NoError(t, err)
-
 	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
 	require.NoError(t, err)
 
@@ -66,55 +63,25 @@ func TestCustomRKE2Dualstack(t *testing.T) {
 	t.Parallel()
 	r := customRKE2DualstackSetup(t)
 
-	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
+	nodeRolesStandard := []tfpConfig.Nodepool{{Quantity: 3, Etcd: true}, {Quantity: 2, Controlplane: true}, {Quantity: 3, Worker: true}}
 
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-
-	clusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
-
-	cidr := &provisioninginput.Networking{
-		ClusterCIDR: clusterConfig.Networking.ClusterCIDR,
-		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
-	}
-
-	ipv4StackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     "",
-		ServiceCIDR:     "",
-		StackPreference: "ipv4",
-	}
-
-	dualStackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     "",
-		ServiceCIDR:     "",
-		StackPreference: "dual",
-	}
-
-	cidrDualStackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
-		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
-		StackPreference: "dual",
-	}
-
-	ipv6FirstDualStackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     clusterConfig.Networking.IPV6FirstClusterCIDR,
-		ServiceCIDR:     clusterConfig.Networking.IPV6FirstServiceCIDR,
-		StackPreference: "dual",
-	}
+	_, terraform, _, _ := tfpConfig.LoadTFPConfigs(r.cattleConfig)
+	cidrCluster := terraform.AWSConfig.ClusterCIDR
+	cidrService := terraform.AWSConfig.ServiceCIDR
 
 	tests := []struct {
-		name         string
-		client       *rancher.Client
-		machinePools []provisioninginput.MachinePools
-		networking   *provisioninginput.Networking
+		name            string
+		client          *rancher.Client
+		nodePools       []tfpConfig.Nodepool
+		clusterCIDR     string
+		serviceCIDR     string
+		stackPreference string
 	}{
-		{"RKE2_Dual_Stack_Custom_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
-		{"RKE2_Dual_Stack_Custom_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv4StackPreference},
-		{"RKE2_Dual_Stack_Custom_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, dualStackPreference},
-		{"RKE2_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
-		{"RKE2_Dual_Stack_Custom_CIDR_IPv6_First_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, ipv6FirstDualStackPreference},
+		{"RKE2_Dual_Stack_Custom_CIDR", r.standardUserClient, nodeRolesStandard, cidrCluster, cidrService, ""},
+		{"RKE2_Dual_Stack_Custom_IPv4_Stack_Preference", r.standardUserClient, nodeRolesStandard, "", "", "ipv4"},
+		{"RKE2_Dual_Stack_Custom_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, "", "", "dual"},
+		{"RKE2_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrCluster, cidrService, "dual"},
+		{"RKE2_Dual_Stack_Custom_CIDR_IPv6_First_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, SetCIDROrder(cidrCluster, true), SetCIDROrder(cidrService, true), "dual"},
 	}
 
 	for _, tt := range tests {
@@ -123,33 +90,33 @@ func TestCustomRKE2Dualstack(t *testing.T) {
 			r.session.Cleanup()
 		})
 
-		clusterConfig := new(clusters.ClusterConfig)
-		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
-
-		clusterConfig.MachinePools = tt.machinePools
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
+			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(r.cattleConfig)
+			terratestConfig.Nodepools = tt.nodePools
+			terraformConfig.AWSConfig.EnablePrimaryIPv6 = true
+			terraformConfig.AWSConfig.ClusterCIDR = tt.clusterCIDR
+			terraformConfig.AWSConfig.ServiceCIDR = tt.serviceCIDR
+			if terraformConfig.AWSConfig.Networking != nil {
+				terraformConfig.AWSConfig.Networking.StackPreference = tt.stackPreference
+			}
 
-			awsEC2Configs := new(ec2.AWSEC2Configs)
-			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, r.cattleConfig, awsEC2Configs)
-
-			logrus.Info("Provisioning cluster")
-			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
-			require.NoError(t, err)
+			logrus.Info("Provisioning custom cluster")
+			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.RKE2, "validation/provisioning/dualstack")
+			defer os.RemoveAll(nestedRancherModuleDir)
+			defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			err = provisioning.VerifyClusterReady(tt.client, cluster)
+			err := provisioning.VerifyClusterReady(r.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(tt.client, cluster)
+			err = deployment.VerifyClusterDeployments(r.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(tt.client, cluster)
+			err = pods.VerifyClusterPods(r.client, cluster)
 			require.NoError(t, err)
 		})
 

@@ -14,3 +14,14 @@ awsMachineConfigs:
     httpProtocolIpv6: "enabled"
     ipv6AddressOnly: true
     ipv6AddressCount: "1"
+
+terraform:
+  awsConfig:
+    clusterCIDR: "<required>"
+    serviceCIDR: "<required>"
+    enablePrimaryIPv6: true
+    httpProtocolIpv6: "enabled"
+    ipv6AddressOnly: true
+    ipv6AddressCount: "1"    
+    networking:
+      stackPreference: "<required>"
