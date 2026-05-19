@@ -388,7 +388,6 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Save test result as artifact for weekly summary
@@ -753,7 +752,6 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Save test result as artifact for weekly summary
@@ -1118,7 +1116,6 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Save test result as artifact for weekly summary

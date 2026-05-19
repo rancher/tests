@@ -357,7 +357,6 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   v2-14:
@@ -680,7 +679,6 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   v2-13:
@@ -1004,5 +1002,4 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
