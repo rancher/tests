@@ -1,0 +1,201 @@
+#!groovy
+/**
+ * Airgap RKE2 infrastructure destroy pipeline.
+ *
+ * Tears down AWS infrastructure provisioned by the setup pipeline.
+ * Uses the Jenkins library directly (NOT the Makefile) because:
+ *   - The Makefile's infra-down target has an interactive confirmation prompt
+ *   - The Makefile has no workspace management (select/delete)
+ *   - The Jenkins library's tofu.teardownInfrastructure handles the full
+ *     sequence: selectWorkspace → destroy → deleteWorkspace
+ *
+ * Consumes shared functions from qa-jenkins-library:
+ *   airgap.standardCheckout, airgap.teardownInfrastructure,
+ *   tofu.initBackend, infrastructure.parseAndSubstituteVars,
+ *   infrastructure.writeConfig, infrastructure.cleanupArtifacts
+ */
+
+def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+library "qa-jenkins-library@${libraryBranch}"
+
+pipeline {
+    agent any
+
+    options {
+        ansiColor('xterm')
+        timeout(time: 120, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+
+    parameters {
+        string(
+            name: 'TARGET_WORKSPACE',
+            defaultValue: '',
+            description: 'Terraform workspace to destroy (e.g. jenkins_airgap_ansible_workspace_42_hostname)'
+        )
+        string(
+            name: 'QA_JENKINS_LIBRARY_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-jenkins-library to use'
+        )
+        string(
+            name: 'TESTS_REPO_URL',
+            defaultValue: 'https://github.com/rancher/tests',
+            description: 'URL of rancher/tests repository'
+        )
+        string(
+            name: 'TESTS_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of rancher/tests repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_URL',
+            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            description: 'URL of qa-infra-automation repository'
+        )
+        string(
+            name: 'QA_INFRA_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-infra-automation repository'
+        )
+        string(
+            name: 'HOSTNAME_PREFIX',
+            defaultValue: '',
+            description: 'Hostname prefix used during setup (for tfvars substitution)'
+        )
+        string(
+            name: 'S3_BUCKET_NAME',
+            defaultValue: 'jenkins-terraform-state-storage',
+            description: 'S3 bucket name where Terraform state is stored'
+        )
+        string(
+            name: 'S3_BUCKET_REGION',
+            defaultValue: 'us-east-2',
+            description: 'AWS region where the S3 bucket is located'
+        )
+        string(
+            name: 'S3_KEY_PREFIX',
+            defaultValue: 'terraform.tfstate',
+            description: 'S3 key prefix for the Terraform state files'
+        )
+        text(
+            name: 'TERRAFORM_CONFIG',
+            description: 'Terraform config values (same as used during setup)',
+            defaultValue: '''aws_access_key = "${AWS_ACCESS_KEY_ID}"
+aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
+aws_ami = "ami-09457fad1d2c34c31"
+instance_type = "t3a.xlarge"
+aws_security_group = ["sg-08e8243a8cfbea8a0"]
+aws_subnet = "subnet-ee8cac86"
+aws_volume_size = 100
+aws_hostname_prefix = "${HOSTNAME_PREFIX}"
+aws_region = "us-east-2"
+aws_route53_zone = "qa.rancher.space"
+aws_ssh_user = "ubuntu"
+aws_vpc = "vpc-bfccf4d7"
+user_id = "ubuntu"
+ssh_key = "/root/.ssh/jenkins-elliptic-validation.pem"
+ssh_key_name = "jenkins-elliptic-validation"
+provision_registry = false'''
+        )
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    def dirs = airgap.standardCheckout(
+                        testsRepo: [url: params.TESTS_REPO_URL, branch: params.TESTS_BRANCH],
+                        infraRepo: [url: params.QA_INFRA_REPO_URL, branch: params.QA_INFRA_BRANCH]
+                    )
+                    env.TESTS_DIR = dirs.testsDir
+                    env.INFRA_DIR = dirs.infraDir
+                }
+            }
+        }
+
+        stage('Build Infrastructure Tools Image') {
+            steps {
+                sh "docker build --platform linux/amd64 -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.infra ."
+            }
+        }
+
+        stage('Destroy Infrastructure') {
+            steps {
+                script {
+                    property.useWithProperties([
+                        'AWS_ACCESS_KEY_ID',
+                        'AWS_SECRET_ACCESS_KEY'
+                    ]) {
+                        def tofuModulePath = "${env.INFRA_DIR}/tofu/aws/modules/airgap"
+
+                        // ── Validate parameters ────────────────────────────
+                        stage('Validate Parameters') {
+                            if (!params.TARGET_WORKSPACE?.trim()) {
+                                error 'TARGET_WORKSPACE parameter is required for destroy action'
+                            }
+                            echo "Target workspace for destruction: ${params.TARGET_WORKSPACE}"
+                        }
+
+                        // ── Initialize Tofu backend ────────────────────────
+                        stage('Initialize Tofu Backend') {
+                            tofu.initBackend(
+                                dir:               tofuModulePath,
+                                bucket:            env.S3_BUCKET_NAME,
+                                key:               env.S3_KEY_PREFIX,
+                                region:            env.S3_BUCKET_REGION,
+                                backendInitScript: './scripts/init-backend.sh'
+                            )
+                        }
+
+                        // ── Configure Tofu variables ───────────────────────
+                        stage('Configure Tofu Variables') {
+                            def terraformConfig = infrastructure.parseAndSubstituteVars(
+                                content: env.TERRAFORM_CONFIG,
+                                envVars: [
+                                    'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
+                                    'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+                                    'HOSTNAME_PREFIX':       env.HOSTNAME_PREFIX
+                                ]
+                            )
+
+                            infrastructure.writeConfig(
+                                path:    "${tofuModulePath}/terraform.tfvars",
+                                content: terraformConfig
+                            )
+                        }
+
+                        // ── Teardown infrastructure ────────────────────────
+                        stage('Teardown Infrastructure') {
+                            airgap.teardownInfrastructure(
+                                dir:     tofuModulePath,
+                                name:    params.TARGET_WORKSPACE,
+                                varFile: 'terraform.tfvars'
+                            )
+                        }
+
+                        // ── Cleanup local artifacts ────────────────────────
+                        stage('Cleanup Local Artifacts') {
+                            infrastructure.cleanupArtifacts(
+                                paths: [
+                                    "${tofuModulePath}/.terraform",
+                                    "${tofuModulePath}/terraform.tfstate*",
+                                    "${tofuModulePath}/*.tfvars"
+                                ],
+                                force: true
+                            )
+                        }
+
+                        // ── Summary ────────────────────────────────────────
+                        stage('Summary') {
+                            echo '=== Infrastructure Destruction Complete ==='
+                            echo "Workspace: ${params.TARGET_WORKSPACE}"
+                            echo 'All resources have been destroyed and cleaned up'
+                            echo '==========================================='
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
