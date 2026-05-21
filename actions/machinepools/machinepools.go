@@ -114,8 +114,12 @@ func LoadMachineConfigs(provider string) MachineConfigs {
 }
 
 // MatchNodeRolesToMachinePool matches the role of machinePools to the nodeRoles.
+// It first tries an exact role match. If no exact match is found, it falls back to a
+// subset match: the pool must have all requested true roles, but may also have additional roles.
 func MatchNodeRolesToMachinePool(nodeRoles NodeRoles, machinePools []apisV1.RKEMachinePool) (int, int32) {
 	count := int32(0)
+
+	// First pass: exact match on all three roles.
 	for index, machinePoolConfig := range machinePools {
 		if nodeRoles.ControlPlane != machinePoolConfig.ControlPlaneRole {
 			continue
@@ -126,6 +130,25 @@ func MatchNodeRolesToMachinePool(nodeRoles NodeRoles, machinePools []apisV1.RKEM
 		}
 
 		if nodeRoles.Worker != machinePoolConfig.WorkerRole {
+			continue
+		}
+
+		count += *machinePoolConfig.Quantity
+
+		return index, count
+	}
+
+	// Second pass: subset match — pool must include all requested roles (combined-role pools).
+	for index, machinePoolConfig := range machinePools {
+		if nodeRoles.ControlPlane && !machinePoolConfig.ControlPlaneRole {
+			continue
+		}
+
+		if nodeRoles.Etcd && !machinePoolConfig.EtcdRole {
+			continue
+		}
+
+		if nodeRoles.Worker && !machinePoolConfig.WorkerRole {
 			continue
 		}
 
@@ -163,6 +186,9 @@ func ScaleMachinePool(client *rancher.Client, cluster *v1.SteveAPIObject, nodeRo
 
 	updatedCluster.ObjectMeta.ResourceVersion = updateCluster.ObjectMeta.ResourceVersion
 	poolIndex, quantity := MatchNodeRolesToMachinePool(nodeRoles, updatedCluster.Spec.RKEConfig.MachinePools)
+	if poolIndex < 0 {
+		return nil, fmt.Errorf("no machine pool found matching the requested node roles: %+v", nodeRoles)
+	}
 
 	quantity += nodeRoles.Quantity
 	updatedCluster.Spec.RKEConfig.MachinePools[poolIndex].Quantity = &quantity
