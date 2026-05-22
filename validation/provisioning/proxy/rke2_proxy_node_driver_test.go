@@ -1,127 +1,157 @@
-//go:build validation
+//go:build validation || (recurring && proxy) || proxy
 
 package proxy
 
 import (
+	"os"
 	"testing"
 
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
-	"github.com/rancher/shepherd/clients/corral"
 	"github.com/rancher/shepherd/clients/rancher"
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
-	"github.com/rancher/shepherd/extensions/users"
-	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config"
-	"github.com/rancher/shepherd/pkg/environmentflag"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/provisioning/permutations"
+	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/logging"
+	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
-	"github.com/rancher/tests/validation/pipeline/rancherha/corralha"
+	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/deployment"
+	"github.com/rancher/tests/actions/workloads/pods"
+	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	tfpConfig "github.com/rancher/tfp-automation/config"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
-type ProxyRKE2ProvisioningTestSuite struct {
-	suite.Suite
+type nodeDriverRKE2ProxyTest struct {
 	client             *rancher.Client
 	session            *session.Session
-	clustersConfig     *provisioninginput.Config
 	standardUserClient *rancher.Client
-	EnvVar             rkev1.EnvVar
+	cattleConfig       map[string]any
+	terraformConfig    *tfpConfig.TerraformConfig
 }
 
-func (r *ProxyRKE2ProvisioningTestSuite) TearDownSuite() {
-	r.session.Cleanup()
-}
+func nodeDriverRKE2ProxySetup(t *testing.T) nodeDriverRKE2ProxyTest {
+	var r nodeDriverRKE2ProxyTest
 
-func (r *ProxyRKE2ProvisioningTestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	r.session = testSession
 
-	corralRancherHA := new(corralha.CorralRancherHA)
-	config.LoadConfig(corralha.CorralRancherHAConfigConfigurationFileKey, corralRancherHA)
-
-	r.clustersConfig = new(provisioninginput.Config)
-	config.LoadConfig(provisioninginput.ConfigurationFileKey, r.clustersConfig)
-
 	client, err := rancher.NewClient("", testSession)
-	require.NoError(r.T(), err)
-
+	require.NoError(t, err)
 	r.client = client
 
-	r.clustersConfig.RKE2KubernetesVersions, err = kubernetesversions.Default(
-		r.client, clusters.RKE2ClusterType.String(), r.clustersConfig.RKE2KubernetesVersions)
-	require.NoError(r.T(), err)
+	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	listOfCorrals, err := corral.ListCorral()
-	require.NoError(r.T(), err)
+	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	require.NoError(t, err)
 
-	enabled := true
-	var testuser = namegen.AppendRandomString("testuser-")
-	var testpassword = password.GenerateUserPassword("testpass-")
-	user := &management.User{
-		Username: testuser,
-		Password: testpassword,
-		Name:     testuser,
-		Enabled:  &enabled,
-	}
+	loggingConfig := new(logging.Logging)
+	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
 
-	newUser, err := users.CreateUserWithRole(client, user, "user")
-	require.NoError(r.T(), err)
+	err = logging.SetLogger(loggingConfig)
+	require.NoError(t, err)
 
-	newUser.Password = user.Password
+	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.RKE2, r.cattleConfig)
+	require.NoError(t, err)
 
-	standardUserClient, err := client.AsUser(newUser)
-	require.NoError(r.T(), err)
+	r.terraformConfig = new(tfpConfig.TerraformConfig)
+	operations.LoadObjectFromMap(tfpConfig.TerraformConfigurationFileKey, r.cattleConfig, r.terraformConfig)
 
-	r.standardUserClient = standardUserClient
+	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
+	require.NoError(t, err)
 
-	_, corralExist := listOfCorrals[corralRancherHA.Name]
-	if corralExist {
-		bastionIP, err := corral.GetCorralEnvVar(corralRancherHA.Name, corralRegistryPrivateIP)
-		require.NoError(r.T(), err)
-
-		r.EnvVar.Name = "HTTP_PROXY"
-		r.EnvVar.Value = bastionIP + ":3219"
-		r.clustersConfig.AgentEnvVars = append(r.clustersConfig.AgentEnvVars, r.EnvVar)
-
-		r.EnvVar.Name = "HTTPS_PROXY"
-		r.EnvVar.Value = bastionIP + ":3219"
-		r.clustersConfig.AgentEnvVars = append(r.clustersConfig.AgentEnvVars, r.EnvVar)
-
-		r.EnvVar.Name = "NO_PROXY"
-		r.EnvVar.Value = "localhost,127.0.0.1,0.0.0.0,10.0.0.0/8,cattle-system.svc"
-		r.clustersConfig.AgentEnvVars = append(r.clustersConfig.AgentEnvVars, r.EnvVar)
-	} else {
-		r.T().Logf("Using AgentEnvVars from config: %v", r.clustersConfig.AgentEnvVars)
-	}
+	return r
 }
 
-func (r *ProxyRKE2ProvisioningTestSuite) TestProxyRKE2ClusterProvisioning() {
-	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
+func TestNodeDriverRKE2Proxy(t *testing.T) {
+	t.Parallel()
+	r := nodeDriverRKE2ProxySetup(t)
+
+	nodeRolesStandard := []provisioninginput.MachinePools{
+		provisioninginput.EtcdMachinePool,
+		provisioninginput.ControlPlaneMachinePool,
+		provisioninginput.WorkerMachinePool,
+	}
+
+	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
+	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
+	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
+
+	clusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
+	httpProxy := rkev1.EnvVar{
+		Name:  "HTTP_PROXY",
+		Value: "http://" + r.terraformConfig.Proxy.ProxyBastion + ":3228",
+	}
+
+	httpsProxy := rkev1.EnvVar{
+		Name:  "HTTPS_PROXY",
+		Value: "http://" + r.terraformConfig.Proxy.ProxyBastion + ":3228",
+	}
+
+	noProxy := rkev1.EnvVar{
+		Name:  "NO_PROXY",
+		Value: "localhost,127.0.0.0/8,10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,.svc,.cluster.local,cattle-system.svc,169.254.169.254",
+	}
+
+	clusterConfig.AgentEnvVars = append(clusterConfig.AgentEnvVars, httpProxy, httpsProxy, noProxy)
+
 	tests := []struct {
 		name         string
-		machinePools []provisioninginput.MachinePools
 		client       *rancher.Client
-		runFlag      bool
+		machinePools []provisioninginput.MachinePools
+		proxyVars    []rkev1.EnvVar
 	}{
-		{"1 Node all roles " + provisioninginput.StandardClientName.String(), nodeRolesAll, r.standardUserClient, r.standardUserClient.Flags.GetValue(environmentflag.Short)},
+		{"RKE2_Proxy_Node_Driver", r.standardUserClient, nodeRolesStandard, []rkev1.EnvVar{httpProxy, httpsProxy, noProxy}},
 	}
-	for _, tt := range tests {
-		if !tt.runFlag {
-			r.T().Logf("SKIPPED")
-			continue
-		}
-		provisioningConfig := *r.clustersConfig
-		provisioningConfig.MachinePools = tt.machinePools
-		permutations.RunTestPermutations(&r.Suite, tt.name, tt.client, &provisioningConfig, permutations.RKE2ProvisionCluster, nil, nil)
-	}
-}
 
-func TestProxyRKE2ProvisioningTestSuite(t *testing.T) {
-	t.Skip("This test has been deprecated; check https://github.com/rancher/tfp-automation for updated tests")
-	suite.Run(t, new(ProxyRKE2ProvisioningTestSuite))
+	for _, tt := range tests {
+		var err error
+		t.Cleanup(func() {
+			logrus.Infof("Running cleanup (%s)", tt.name)
+			r.session.Cleanup()
+		})
+
+		clusterConfig := new(clusters.ClusterConfig)
+		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
+		clusterConfig.MachinePools = tt.machinePools
+		clusterConfig.AgentEnvVars = tt.proxyVars
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			provider := provisioning.CreateProvider(clusterConfig.Provider)
+			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+			machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
+
+			logrus.Info("Provisioning cluster")
+			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			err = provisioning.VerifyClusterReady(tt.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(tt.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			err = pods.VerifyClusterPods(tt.client, cluster)
+			require.NoError(t, err)
+
+		})
+
+		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
+		err = qase.UpdateSchemaParameters(tt.name, params)
+		if err != nil {
+			logrus.Warningf("Failed to upload schema parameters %s", err)
+		}
+	}
 }

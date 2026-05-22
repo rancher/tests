@@ -6,8 +6,6 @@ import (
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/clients/rancher/catalog"
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extensionscharts "github.com/rancher/shepherd/extensions/charts"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
@@ -16,14 +14,12 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	wloads "github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
-	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioninginput"
-	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/actions/services"
 	"github.com/rancher/tests/actions/storage"
 	"github.com/sirupsen/logrus"
@@ -47,53 +43,8 @@ const (
 
 // VerifyCloudProvider verifies the cloud provider is working correctly by creating additional workload(s) or
 // service(s) that use the upstream provider to create resources on the cluster's behalf, Namely storage and LBs
-func VerifyCloudProvider(t *testing.T, client *rancher.Client, clusterType string, testClusterConfig *clusters.ClusterConfig, clusterObject *steveV1.SteveAPIObject, rke1ClusterObject *management.Cluster) {
-	if strings.Contains(clusterType, extensionscluster.RKE1ClusterType.String()) {
-		adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-		require.NoError(t, err)
-
-		if strings.Contains(testClusterConfig.CloudProvider, provisioninginput.AWSProviderName.String()) {
-			if strings.Contains(testClusterConfig.CloudProvider, externalProviderString) {
-				clusterMeta, err := extensionscluster.NewClusterMeta(client, rke1ClusterObject.Name)
-				require.NoError(t, err)
-
-				err = CreateAndInstallAWSExternalCharts(client, clusterMeta, false)
-				require.NoError(t, err)
-
-				podErrors := pods.StatusPods(client, rke1ClusterObject.ID)
-				require.Empty(t, podErrors)
-			}
-
-			clusterObject, err = adminClient.Steve.SteveType(extensionscluster.ProvisioningSteveResourceType).ByID(provisioninginput.Namespace + "/" + rke1ClusterObject.ID)
-			require.NoError(t, err)
-
-			lbServiceResp := CreateAWSCloudProviderWorkloadAndServicesLB(t, client, clusterObject)
-
-			status := &provv1.ClusterStatus{}
-			err = steveV1.ConvertToK8sType(clusterObject.Status, status)
-			require.NoError(t, err)
-
-			services.VerifyAWSLoadBalancer(t, client, lbServiceResp, status.ClusterName)
-
-		} else if strings.Contains(testClusterConfig.CloudProvider, "external") {
-			rke1ClusterObject, err := adminClient.Management.Cluster.ByID(rke1ClusterObject.ID)
-			require.NoError(t, err)
-
-			if strings.Contains(rke1ClusterObject.AppliedSpec.DisplayName, provisioninginput.VsphereProviderName.String()) {
-				chartConfig := new(charts.Config)
-				config.LoadConfig(charts.ConfigurationFileKey, chartConfig)
-
-				err := charts.InstallVsphereOutOfTreeCharts(client, catalog.RancherChartRepo, rke1ClusterObject.Name, !chartConfig.IsUpgradable)
-				reports.TimeoutRKEReport(rke1ClusterObject, err)
-				require.NoError(t, err)
-
-				podErrors := pods.StatusPods(client, rke1ClusterObject.ID)
-				require.Empty(t, podErrors)
-
-				storage.CreatePVCWorkload(t, client, rke1ClusterObject.ID, "")
-			}
-		}
-	} else if strings.Contains(clusterType, extensionscluster.RKE2ClusterType.String()) {
+func VerifyCloudProvider(t *testing.T, client *rancher.Client, clusterType string, testClusterConfig *clusters.ClusterConfig, clusterObject *steveV1.SteveAPIObject) {
+	if strings.Contains(clusterType, extensionscluster.RKE2ClusterType.String()) {
 		if testClusterConfig.CloudProvider == provisioninginput.AWSProviderName.String() {
 			VerifyAWSCloudProvider(t, client, clusterObject)
 		} else if testClusterConfig.CloudProvider == provisioninginput.HarvesterProviderName.String() {

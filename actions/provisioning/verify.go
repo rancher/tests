@@ -9,9 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rancher/norman/types"
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	managementv3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	shepherdclusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/bundledclusters"
@@ -37,7 +39,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -59,74 +60,14 @@ const (
 	notFound                    = "404 Not Found"
 )
 
-// VerifyRKE1Cluster validates that the RKE1 cluster and its resources are in a good state, matching a given config.
-func VerifyRKE1Cluster(t *testing.T, client *rancher.Client, clustersConfig *clusters.ClusterConfig, cluster *management.Cluster) {
-	client, err := client.ReLogin()
-	require.NoError(t, err)
-
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	require.NoError(t, err)
-
-	watchInterface, err := adminClient.GetManagementWatchInterface(management.ClusterType, metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + cluster.ID,
-		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-	})
-	require.NoError(t, err)
-
-	checkFunc := shepherdclusters.IsHostedProvisioningClusterReady
-	err = wait.WatchWait(watchInterface, checkFunc)
-	require.NoError(t, err)
-
-	require.Equal(t, clustersConfig.KubernetesVersion, cluster.RancherKubernetesEngineConfig.Version)
-
-	err = clusters.VerifyServiceAccountTokenSecret(client, cluster.Name)
-	reports.TimeoutRKEReport(cluster, err)
-	require.NoError(t, err)
-
-	err = nodestat.AllManagementNodeReady(client, cluster.ID, defaults.ThirtyMinuteTimeout)
-	reports.TimeoutRKEReport(cluster, err)
-	require.NoError(t, err)
-
-	if clustersConfig.PSACT == string(provisioninginput.RancherPrivileged) || clustersConfig.PSACT == string(provisioninginput.RancherRestricted) || clustersConfig.PSACT == string(provisioninginput.RancherBaseline) {
-		require.NotEmpty(t, cluster.DefaultPodSecurityAdmissionConfigurationTemplateName)
-
-		err := psadeploy.CreateNginxDeployment(client, cluster.ID, clustersConfig.PSACT)
-		reports.TimeoutRKEReport(cluster, err)
-		require.NoError(t, err)
-	}
-	if clustersConfig.Registries != nil {
-		if clustersConfig.Registries.RKE1Registries != nil {
-			for _, registry := range clustersConfig.Registries.RKE1Registries {
-				havePrefix, err := registries.CheckAllClusterPodsForRegistryPrefix(client, cluster.ID, registry.URL)
-				reports.TimeoutRKEReport(cluster, err)
-				require.NoError(t, err)
-				require.True(t, havePrefix)
-			}
-		}
-	}
-	if clustersConfig.Networking != nil {
-		if clustersConfig.Networking.LocalClusterAuthEndpoint != nil {
-			cluster, err := adminClient.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetDefault + "/" + cluster.Name)
-			require.NoError(t, err)
-
-			VerifyACE(t, adminClient, cluster)
-		}
-	}
-
-	if clustersConfig.CloudProvider == "" {
-		podErrors := pods.StatusPods(client, cluster.ID)
-		require.Empty(t, podErrors)
-	}
-}
-
 // VerifyClusterReady validates that a non-rke1 cluster and its resources are in a good state, matching a given config.
 func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject) error {
 	var lastErr error
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaults.FifteenMinuteTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaults.ThirtyMinuteTimeout)
 	defer cancel()
 
-	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.FifteenMinuteTimeout, false, func(context.Context) (done bool, err error) {
+	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.ThirtyMinuteTimeout, false, func(context.Context) (done bool, err error) {
 		client, err = client.ReLogin()
 		if err != nil {
 			logrus.Debugf("Unable to fetch cluster client (%s), retrying", cluster.Name)
@@ -167,6 +108,7 @@ func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject)
 	return nil
 }
 
+// dumpProvisioningClusterState is a helper function, called by VerifyClusterReady, that log dumps the state of a provisioning cluster
 func dumpProvisioningClusterState(ctx context.Context, client *rancher.Client, clusterName string, lastPollingErr error) {
 	adminClient, err := client.ReLogin()
 	if err != nil {
@@ -402,35 +344,6 @@ func VerifyHostedCluster(t *testing.T, client *rancher.Client, cluster *manageme
 	require.Empty(t, podErrors)
 }
 
-// VerifyDeleteRKE1Cluster validates that a rke1 cluster and its resources are deleted.
-func VerifyDeleteRKE1Cluster(t *testing.T, client *rancher.Client, clusterID string) {
-	cluster, err := client.Management.Cluster.ByID(clusterID)
-	require.NoError(t, err)
-
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	require.NoError(t, err)
-
-	watchInterface, err := adminClient.GetManagementWatchInterface(management.ClusterType, metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + clusterID,
-		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-	})
-	require.NoError(t, err)
-
-	err = wait.WatchWait(watchInterface, func(event watch.Event) (ready bool, err error) {
-		if event.Type == watch.Error {
-			return false, fmt.Errorf("error: unable to delete cluster %s", cluster.Name)
-		} else if event.Type == watch.Deleted {
-			logrus.Infof("Cluster %s deleted!", cluster.Name)
-			return true, nil
-		}
-		return false, nil
-	})
-	require.NoError(t, err)
-
-	err = nodestat.AllNodeDeleted(client, clusterID)
-	require.NoError(t, err)
-}
-
 // VerifyDeleteRKE2K3SCluster validates that a non-rke1 cluster and its resources are deleted.
 func VerifyDeleteRKE2K3SCluster(t *testing.T, client *rancher.Client, clusterID string) {
 	logrus.Debugf("Waiting for cluster (%s) to be deleted", clusterID)
@@ -525,6 +438,47 @@ func VerifyACE(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIOb
 
 		logrus.Infof("Switched Context to %v", contextName)
 		for _, pod := range resp.Items {
+			logrus.Debugf("Pod %v", pod.GetName())
+		}
+	}
+}
+
+// VerifyACEAirgap validates that the ACE resources are healthy in a given airgap cluster
+func VerifyACEAirgap(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
+	status := &provv1.ClusterStatus{}
+	err := steveV1.ConvertToK8sType(cluster.Status, status)
+	require.NoError(t, err)
+
+	clusterObject, err := client.Management.Cluster.ByID(status.ClusterName)
+	require.NoError(t, err)
+
+	kubeConfig, err := kubeconfig.GetKubeconfig(client, clusterObject.ID)
+	require.NoError(t, err)
+
+	clientConfig := *kubeConfig
+
+	rawConfig, err := clientConfig.RawConfig()
+	require.NoError(t, err)
+
+	var contextNames []string
+	for name := range rawConfig.Contexts {
+		if strings.Contains(name, "pool") {
+			contextNames = append(contextNames, name)
+		}
+	}
+
+	for _, contextName := range contextNames {
+		restConfig, err := clientcmd.NewNonInteractiveClientConfig(rawConfig, contextName, &clientcmd.ConfigOverrides{}, nil).ClientConfig()
+		require.NoError(t, err)
+
+		k8sClient, err := kubernetes.NewForConfig(restConfig)
+		require.NoError(t, err)
+
+		pods, err := k8sClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
+		require.NoError(t, err)
+
+		logrus.Infof("Switched context to %v", contextName)
+		for _, pod := range pods.Items {
 			logrus.Debugf("Pod %v", pod.GetName())
 		}
 	}
@@ -829,4 +783,203 @@ func VerifyDataDirectories(t *testing.T, client *rancher.Client, cluster *steveV
 		assert.Error(t, err)
 		logrus.Debugf("Verified that the default data directory(%s) on node(%s) does not exist", clusterSpec.RKEConfig.DataDirectories.SystemAgent, clusterNode.NodeID)
 	}
+}
+
+// VerifyClusterReadyV3 validates that a non-rke1 cluster and its resources are in a good state, matching a given config, using Norman.
+func VerifyClusterReadyV3(client *rancher.Client, clusterID string) error {
+	var lastErr error
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaults.ThirtyMinuteTimeout)
+	defer cancel()
+
+	var clusterObj *managementv3.Cluster
+
+	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.ThirtyMinuteTimeout, false,
+		func(ctx context.Context) (bool, error) {
+			var err error
+
+			client, err = client.ReLogin()
+			if err != nil {
+				return false, nil
+			}
+
+			clusterObj, err = client.Management.Cluster.ByID(clusterID)
+			if err != nil {
+				return false, nil
+			}
+
+			if clusterObj.State != "active" {
+				lastErr = fmt.Errorf("cluster state is not active: %s", clusterObj.State)
+				return false, nil
+			}
+
+			if clusterObj.Transitioning == "yes" {
+				lastErr = fmt.Errorf("cluster still transitioning: %s", clusterObj.TransitioningMessage)
+				return false, nil
+			}
+
+			if clusterObj.Transitioning == "error" {
+				lastErr = fmt.Errorf("cluster entered error state: %s", clusterObj.TransitioningMessage)
+				return false, nil
+			}
+
+			for _, cond := range clusterObj.Conditions {
+				if cond.Type == "Ready" && cond.Status != "True" {
+					lastErr = fmt.Errorf("cluster Ready condition is not True: %s - %s", cond.Reason, cond.Message)
+					return false, nil
+				}
+
+				if cond.Type == "Connected" && cond.Status != "True" {
+					lastErr = fmt.Errorf("cluster not connected: %s - %s", cond.Reason, cond.Message)
+					return false, nil
+				}
+			}
+
+			return true, nil
+		})
+
+	if err != nil {
+		return err
+	}
+
+	err = allNodesReadyV3(client, clusterID, defaults.FiveMinuteTimeout)
+	if err != nil {
+		logrus.Errorf("Cluster (%s) nodes failed readiness: %v", clusterID, err)
+		dumpClusterStateV3(ctx, client, clusterID, lastErr)
+		return err
+	}
+
+	return nil
+}
+
+func allNodesReadyV3(client *rancher.Client, clusterID string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	return kwait.PollUntilContextTimeout(ctx, 5*time.Second, timeout, false,
+		func(ctx context.Context) (bool, error) {
+
+			nodes, err := client.Management.Node.List(&types.ListOpts{
+				Filters: map[string]interface{}{
+					"clusterId": clusterID,
+				},
+			})
+			if err != nil {
+				return false, err
+			}
+
+			if len(nodes.Data) == 0 {
+				return false, nil
+			}
+
+			readyNodes := 0
+
+			for _, n := range nodes.Data {
+				isReady := false
+
+				for _, cond := range n.Conditions {
+					if cond.Type == "Ready" && cond.Status == "True" {
+						isReady = true
+						break
+					}
+				}
+
+				if isReady {
+					readyNodes++
+				}
+			}
+
+			if readyNodes != len(nodes.Data) {
+				return false, nil
+			}
+
+			return true, nil
+		})
+}
+
+// dumpClusterStateV3 is a helper function, called by VerifyClusterReadyV3, that log dumps the state of a provisioning cluster
+func dumpClusterStateV3(ctx context.Context, client *rancher.Client, clusterID string, lastErr error) {
+	adminClient, err := client.ReLogin()
+	if err != nil {
+		logrus.Errorf("Log dump: unable to relogin: %v", err)
+		return
+	}
+
+	clusterObj, err := adminClient.Management.Cluster.ByID(clusterID)
+	if err != nil {
+		logrus.Errorf("Log dump: unable to fetch cluster: %v", err)
+		return
+	}
+
+	logrus.Errorf("\n")
+	logrus.Errorf("==================================================")
+	logrus.Errorf("CLUSTER FAILED: %s", clusterObj.Name)
+	logrus.Errorf("==================================================\n")
+
+	if lastErr != nil {
+		logrus.Errorf("Final Error: %v\n", lastErr)
+	}
+
+	logrus.Errorf("Cluster State:")
+	logrus.Errorf("  State:              %s", clusterObj.State)
+	logrus.Errorf("  Transitioning:      %s", clusterObj.Transitioning)
+	logrus.Errorf("  Transition Message: %s\n", clusterObj.TransitioningMessage)
+
+	logrus.Errorf("Cluster Conditions:")
+	for _, cond := range clusterObj.Conditions {
+		logrus.Errorf("  - Type:       %s", cond.Type)
+		logrus.Errorf("    Status:     %s", cond.Status)
+		logrus.Errorf("    Reason:     %v", populateValue(cond.Reason))
+		logrus.Errorf("    Message:    %v\n", populateValue(cond.Message))
+	}
+
+	nodes, err := adminClient.Management.Node.List(&types.ListOpts{
+		Filters: map[string]interface{}{
+			"clusterId": clusterID,
+		},
+	})
+	if err != nil {
+		logrus.Errorf("Log dump: unable to list nodes: %v", err)
+		return
+	}
+
+	total := len(nodes.Data)
+	ready := 0
+
+	logrus.Errorf("Node Details:")
+
+	for _, n := range nodes.Data {
+		isReady := "False"
+		var readyMsg, readyReason any = "<unknown>", "<unknown>"
+
+		for _, cond := range n.Conditions {
+			if cond.Type == "Ready" {
+				isReady = cond.Status
+				readyMsg = populateValue(cond.Message)
+				readyReason = populateValue(cond.Reason)
+				break
+			}
+		}
+
+		nodeName := n.NodeName
+		if nodeName == "" {
+			nodeName = n.Name
+		}
+
+		if isReady == "True" {
+			ready++
+			continue
+		}
+
+		logrus.Errorf("  • %s (resource: %s)", nodeName, n.Name)
+		logrus.Errorf("      State:   %s", n.State)
+		logrus.Errorf("      Ready:   %s", isReady)
+		logrus.Errorf("      Reason:  %v", readyReason)
+		logrus.Errorf("      Message: %v\n", readyMsg)
+	}
+
+	logrus.Errorf("\nNode Summary:")
+	logrus.Errorf("  Total: %d", total)
+	logrus.Errorf("  Ready: %d", ready)
+	logrus.Errorf("  NotReady: %d\n", total-ready)
 }

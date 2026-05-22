@@ -10,8 +10,8 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/wrangler"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -125,9 +125,9 @@ func CheckUserAccess(client *rancher.Client, clusterID string, user *management.
 
 	var userContext *wrangler.Context
 	if isCRDInLocalCluster {
-		userContext, err = clusterapi.GetClusterWranglerContext(userClient, clusterapi.LocalCluster)
+		userContext, err = extclusterapi.GetClusterWranglerContext(userClient, extclusterapi.LocalCluster)
 	} else {
-		userContext, err = clusterapi.GetClusterWranglerContext(userClient, clusterID)
+		userContext, err = extclusterapi.GetClusterWranglerContext(userClient, clusterID)
 	}
 
 	if err != nil {
@@ -474,7 +474,7 @@ func isMgmtRule(rule rbacv1.PolicyRule, resourceContext string) bool {
 }
 
 func verifyBindings(client *rancher.Client, clusterID, userName, roleTemplateName, roleTemplateBindingName string, namespaces []string, expectedRBCount, expectedCRBCount int) error {
-	ctx, err := clusterapi.GetClusterWranglerContext(client, clusterID)
+	ctx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -537,7 +537,7 @@ func verifyBindings(client *rancher.Client, clusterID, userName, roleTemplateNam
 }
 
 func expectedRoleNames(clusterID, bindingName, rtName string, count int) []string {
-	if clusterID != clusterapi.LocalCluster {
+	if clusterID != extclusterapi.LocalCluster {
 		return []string{rtName + ResourceAggregator}
 	}
 

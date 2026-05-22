@@ -85,6 +85,3 @@ awsEC2Configs:
       awsUser: "<required>"
       volumeSize: 100
       roles: ["windows"]
-      
-logging:
-   level: "info"

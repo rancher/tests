@@ -85,11 +85,8 @@ See below how to run the test:
 
 ### Kubernetes Upgrade
 
-#### RKE1
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeRKE1KubernetesTestSuite/TestUpgradeRKE1Kubernetes"`
-
 #### RKE2/K3S
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke1 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeKubernetesTestSuite/TestUpgradeKubernetes"`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeKubernetesTestSuite/TestUpgradeKubernetes"`
 
 #### Windows
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes"`
@@ -99,7 +96,6 @@ Migrates a cluster's cloud provider from in-tree to out-of-tree
 
 ### Current Support:
 * AWS
-  * RKE1
   * RKE2
 
 ### Pre-Requisites in the provided cluster

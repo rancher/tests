@@ -1,38 +1,62 @@
 package secrets
 
 import (
-	"context"
+	"fmt"
+
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/unstructured"
-	"github.com/rancher/shepherd/pkg/api/scheme"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/dynamic"
 )
 
-// CreateSecretForCluster is a helper function that uses the rancher client to create a secret in a namespace for a specific cluster.
-func CreateSecretForCluster(client *rancher.Client, secret *corev1.Secret, clusterID, namespace string) (*corev1.Secret, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
+// CreateSecret is a helper to create a secret using wrangler client
+func CreateSecret(client *rancher.Client, clusterID, namespaceName string, data map[string][]byte, secretType corev1.SecretType, labels, annotations map[string]string) (*corev1.Secret, error) {
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get cluster context: %w", err)
 	}
-	secretResource := dynamicClient.Resource(SecretGroupVersionResource).Namespace(namespace)
 
-	return CreateSecret(secretResource, secret)
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	secretName := namegen.AppendRandomString("testsecret")
+	secretTemplate := NewSecretTemplate(secretName, namespaceName, data, secretType, labels, annotations)
+
+	createdSecret, err := clusterContext.Core.Secret().Create(&secretTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create secret: %w", err)
+	}
+
+	return createdSecret, nil
 }
 
-// CreateSecret is a helper function that uses the dynamic client to create a secret in a namespace for a specific cluster.
-func CreateSecret(secretResource dynamic.ResourceInterface, secret *corev1.Secret) (*corev1.Secret, error) {
-	unstructuredResp, err := secretResource.Create(context.TODO(), unstructured.MustToUnstructured(secret), metav1.CreateOptions{})
+// CreateSecretWithTemplate creates a secret using the provided template, respecting its name and metadata.
+func CreateSecretWithTemplate(client *rancher.Client, clusterID string, secretTemplate *corev1.Secret) (*corev1.Secret, error) {
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get cluster context: %w", err)
 	}
 
-	newSecret := &corev1.Secret{}
-	err = scheme.Scheme.Convert(unstructuredResp, newSecret, unstructuredResp.GroupVersionKind())
+	createdSecret, err := clusterContext.Core.Secret().Create(secretTemplate)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create secret: %w", err)
 	}
-	return newSecret, nil
+
+	return createdSecret, nil
+}
+
+// CreateProjectScopedSecret creates a project-scoped secret in the project's backing namespace in the local cluster
+func CreateProjectScopedSecret(client *rancher.Client, clusterID, projectID string, data map[string][]byte, secretType corev1.SecretType) (*corev1.Secret, error) {
+	backingNamespace := fmt.Sprintf("%s-%s", clusterID, projectID)
+
+	labels := map[string]string{
+		ProjectScopedSecretLabel: projectID,
+	}
+
+	return CreateSecret(client, extclusterapi.LocalCluster, backingNamespace, data, secretType, labels, nil)
 }

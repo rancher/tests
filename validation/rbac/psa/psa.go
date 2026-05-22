@@ -94,69 +94,27 @@ func deletePSALabels(labels map[string]string) {
 	}
 }
 
-func editPsactCluster(client *rancher.Client, clustername string, namespace string, psact string) (clusterType string, err error) {
-	clusterID, err := clusters.GetClusterIDByName(client, clustername)
+func editPsactCluster(client *rancher.Client, clustername string, namespace string, psact string) error {
+	clusterObj, existingSteveAPIObj, err := clusters.GetProvisioningClusterByName(client, clustername, namespace)
 	if err != nil {
-		return "", err
+		return err
 	}
-	//Check if the downstream cluster is RKE2/K3S or RKE1
-	if strings.Contains(clusterID, "c-m-") {
-		clusterType = "RKE2K3S"
-		clusterObj, existingSteveAPIObj, err := clusters.GetProvisioningClusterByName(client, clustername, namespace)
-		if err != nil {
-			return "", err
-		}
 
-		clusterObj.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName = psact
-		_, err = clusters.UpdateK3SRKE2Cluster(client, existingSteveAPIObj, clusterObj)
-		if err != nil {
-			return clusterType, err
-		}
-		updatedClusterObj, _, err := clusters.GetProvisioningClusterByName(client, clustername, namespace)
-		if err != nil {
-			return "", err
-		}
-		if updatedClusterObj.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName != psact {
-			errorMsg := "psact value was not changed, Expected: " + psact + ", Actual: " + updatedClusterObj.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
-			return clusterType, errors.New(errorMsg)
-		}
-	} else {
-		clusterType = "RKE"
-		if psact == "" {
-			psact = " "
-		}
-		existingCluster, err := client.Management.Cluster.ByID(clusterID)
-		if err != nil {
-			return "", err
-		}
-
-		updatedCluster := &management.Cluster{
-			Name: existingCluster.Name,
-			DefaultPodSecurityAdmissionConfigurationTemplateName: psact,
-		}
-		_, err = client.Management.Cluster.Update(existingCluster, updatedCluster)
-		if err != nil {
-			return clusterType, err
-		}
-
-		err = clusters.WaitForActiveRKE1Cluster(client, clusterID)
-		if err != nil {
-			return "", err
-		}
-
-		modifiedCluster, err := client.Management.Cluster.ByID(clusterID)
-		if err != nil {
-			return "", err
-		}
-		if psact == " " {
-			psact = ""
-		}
-		if modifiedCluster.DefaultPodSecurityAdmissionConfigurationTemplateName != psact {
-			errorMsg := "psact value was not changed, Expected: " + psact + ", Actual: " + modifiedCluster.DefaultPodSecurityAdmissionConfigurationTemplateName
-			return clusterType, errors.New(errorMsg)
-		}
+	clusterObj.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName = psact
+	_, err = clusters.UpdateK3SRKE2Cluster(client, existingSteveAPIObj, clusterObj)
+	if err != nil {
+		return err
 	}
-	return clusterType, nil
+
+	updatedClusterObj, _, err := clusters.GetProvisioningClusterByName(client, clustername, namespace)
+	if err != nil {
+		return err
+	}
+	if updatedClusterObj.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName != psact {
+		return fmt.Errorf("psact value was not changed, Expected: %s, Actual: %s", psact, updatedClusterObj.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName)
+	}
+
+	return nil
 }
 
 func getAndConvertNamespace(namespace *v1.SteveAPIObject, steveAdminClient *v1.Client) (*coreV1.Namespace, error) {

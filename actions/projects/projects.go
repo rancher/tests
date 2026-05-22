@@ -5,11 +5,10 @@ import (
 	"strings"
 
 	"github.com/rancher/norman/types"
-	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
-	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -82,38 +81,10 @@ func CreateProjectAndNamespace(client *rancher.Client, clusterID string) (*manag
 
 	projectName := strings.Split(createdProject.ID, ":")[1]
 
-	createdNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, clusterID, projectName, nil)
+	createdNamespace, err := namespaceapi.CreateNamespace(client, clusterID, projectName, namegen.AppendRandomString("testns"), "", nil, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return createdProject, createdNamespace, nil
-}
-
-// CreateProjectAndNamespaceUsingWrangler is a helper to create a project (wrangler context) and a namespace in the project
-func CreateProjectAndNamespaceUsingWrangler(client *rancher.Client, clusterID string) (*v3.Project, *corev1.Namespace, error) {
-	createdProject, err := projectapi.CreateProject(client, clusterID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	createdNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, clusterID, createdProject.Name, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return createdProject, createdNamespace, nil
-}
-
-// UpdateProjectNamespaceFinalizer is a helper to update the finalizer in a project
-func UpdateProjectNamespaceFinalizer(client *rancher.Client, existingProject *v3.Project, finalizer []string) (*v3.Project, error) {
-	updatedProject := existingProject.DeepCopy()
-	updatedProject.ObjectMeta.Finalizers = finalizer
-
-	updatedProject, err := projectapi.UpdateProject(client, updatedProject.Namespace, updatedProject)
-	if err != nil {
-		return nil, err
-	}
-
-	return updatedProject, nil
 }

@@ -120,6 +120,7 @@ jobs:
           PUBLIC_IP: ${{ env.PUBLIC_IP }}
           PRIVATE_IP: ${{ env.PRIVATE_IP }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           qase-id: ${{ steps.qase.outputs.run_id }}
@@ -137,6 +138,7 @@ jobs:
           PUBLIC_IP: ${{ env.PUBLIC_IP }}
           PRIVATE_IP: ${{ env.PRIVATE_IP }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           qase-id: ${{ steps.qase.outputs.run_id }}

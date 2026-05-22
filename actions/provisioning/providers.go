@@ -19,13 +19,6 @@ import (
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-
-	"github.com/rancher/tests/actions/rke1/nodetemplates"
-	r1aws "github.com/rancher/tests/actions/rke1/nodetemplates/aws"
-	r1azure "github.com/rancher/tests/actions/rke1/nodetemplates/azure"
-	r1harvester "github.com/rancher/tests/actions/rke1/nodetemplates/harvester"
-	r1linode "github.com/rancher/tests/actions/rke1/nodetemplates/linode"
-	r1vsphere "github.com/rancher/tests/actions/rke1/nodetemplates/vsphere"
 )
 
 type ProviderName string
@@ -132,51 +125,4 @@ func CreateProvider(name string) Provider {
 	}
 
 	return provider
-}
-
-type NodeTemplateFunc func(rancherClient *rancher.Client) (*nodetemplates.NodeTemplate, error)
-
-type RKE1Provider struct {
-	Name             provisioninginput.ProviderName
-	NodeTemplateFunc NodeTemplateFunc
-}
-
-// CreateProvider returns all node template
-// configs in the form of a RKE1Provider struct. Accepts a
-// string of the name of the provider.
-func CreateRKE1Provider(name string) RKE1Provider {
-	switch {
-	case name == AWSProvider:
-		provider := RKE1Provider{
-			Name:             AWSProvider,
-			NodeTemplateFunc: r1aws.CreateAWSNodeTemplate,
-		}
-		return provider
-	case name == provisioninginput.AzureProviderName.String():
-		provider := RKE1Provider{
-			Name:             provisioninginput.AzureProviderName,
-			NodeTemplateFunc: r1azure.CreateAzureNodeTemplate,
-		}
-		return provider
-	case name == provisioninginput.HarvesterProviderName.String():
-		provider := RKE1Provider{
-			Name:             provisioninginput.HarvesterProviderName,
-			NodeTemplateFunc: r1harvester.CreateHarvesterNodeTemplate,
-		}
-		return provider
-	case name == provisioninginput.LinodeProviderName.String():
-		provider := RKE1Provider{
-			Name:             provisioninginput.LinodeProviderName,
-			NodeTemplateFunc: r1linode.CreateLinodeNodeTemplate,
-		}
-		return provider
-	case name == provisioninginput.VsphereProviderName.String():
-		provider := RKE1Provider{
-			Name:             provisioninginput.VsphereProviderName,
-			NodeTemplateFunc: r1vsphere.CreateVSphereNodeTemplate,
-		}
-		return provider
-	default:
-		panic(fmt.Sprintf("RKE1Provider:%v not found", name))
-	}
 }

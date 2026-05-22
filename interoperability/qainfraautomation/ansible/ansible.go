@@ -2,6 +2,7 @@ package ansible
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -83,6 +84,259 @@ func (c *Client) GenerateInventory(templatePath string, env map[string]string) (
 
 	logrus.Infof("[ansible] wrote inventory to %s", f.Name())
 	return f.Name(), nil
+}
+
+// clusterNodesInput mirrors the JSON structure emitted by the Tofu cluster_nodes output.
+type clusterNodesInput struct {
+	Type     string              `json:"type"`
+	Metadata clusterNodeMetadata `json:"metadata"`
+	Nodes    []clusterNode       `json:"nodes"`
+}
+
+type clusterNodeMetadata struct {
+	KubeAPIHost   string `json:"kube_api_host"`
+	FQDN          string `json:"fqdn"`
+	SSHUser       string `json:"ssh_user"`
+	SSHPrivateKey string `json:"ssh_private_key,omitempty"`
+}
+
+type clusterNode struct {
+	Name      string   `json:"name"`
+	Roles     []string `json:"roles"`
+	PublicIP  string   `json:"public_ip"`
+	PrivateIP string   `json:"private_ip"`
+}
+
+// inventorySchemas hardcodes the group mappings from qa-infra-automation's
+// _inventory-schema.yaml. This avoids depending on the file being present in
+// the embed FS (the embed directive does not include it).
+var inventorySchemas = map[string]map[string]distroEnvSchema{
+	"rke2": {
+		"default": {
+			ipField: "public_ip",
+			groups: []namedGroup{
+				{name: "master", def: groupSchemaDef{roles: []string{"etcd"}, firstOnly: true}},
+				{name: "servers", def: groupSchemaDef{roles: []string{"cp"}}},
+				{name: "workers", def: groupSchemaDef{roles: []string{"worker"}}},
+			},
+		},
+	},
+	"k3s": {
+		"default": {
+			ipField: "public_ip",
+			groups: []namedGroup{
+				{name: "master", def: groupSchemaDef{roles: []string{"cp"}, firstOnly: true}},
+				{name: "servers", def: groupSchemaDef{roles: []string{"cp"}}},
+				{name: "workers", def: groupSchemaDef{roles: []string{"worker"}}},
+			},
+		},
+	},
+}
+
+type distroEnvSchema struct {
+	ipField string
+	groups  []namedGroup
+}
+
+type namedGroup struct {
+	name string
+	def  groupSchemaDef
+}
+
+type groupSchemaDef struct {
+	roles     []string
+	firstOnly bool
+}
+
+// GenerateInventoryFromNodes builds an Ansible inventory file from the Tofu
+// cluster_nodes_json output, using hardcoded group mappings that mirror the
+// _inventory-schema.yaml from qa-infra-automation. Returns the path to the
+// generated inventory file.
+func (c *Client) GenerateInventoryFromNodes(clusterNodesJSON, distro, env string) (string, error) {
+	var input clusterNodesInput
+	if err := json.Unmarshal([]byte(clusterNodesJSON), &input); err != nil {
+		return "", fmt.Errorf("parse cluster_nodes_json: %w", err)
+	}
+
+	if input.Type != "cluster_nodes" {
+		return "", fmt.Errorf("unexpected input type %q, expected cluster_nodes", input.Type)
+	}
+
+	distroMap, ok := inventorySchemas[distro]
+	if !ok {
+		return "", fmt.Errorf("no schema entry for distro %q", distro)
+	}
+	schema, ok := distroMap[env]
+	if !ok {
+		return "", fmt.Errorf("no schema entry for distro=%q env=%q", distro, env)
+	}
+
+	ipField := schema.ipField
+	if ipField == "" {
+		ipField = "public_ip"
+	}
+
+	inventoryYAML, err := buildClusterNodesInventory(input, schema, ipField)
+	if err != nil {
+		return "", fmt.Errorf("build inventory: %w", err)
+	}
+
+	f, err := os.CreateTemp("", "ansible-inventory-*.yml")
+	if err != nil {
+		return "", fmt.Errorf("create temp inventory file: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := f.Write(inventoryYAML); err != nil {
+		return "", fmt.Errorf("write inventory to %s: %w", f.Name(), err)
+	}
+
+	logrus.Infof("[ansible] wrote inventory to %s (distro=%s env=%s, %d nodes)", f.Name(), distro, env, len(input.Nodes))
+	return f.Name(), nil
+}
+
+func nodeIP(n clusterNode, ipField string) string {
+	if ipField == "private_ip" {
+		return n.PrivateIP
+	}
+	return n.PublicIP
+}
+
+func buildClusterNodesInventory(input clusterNodesInput, schema distroEnvSchema, ipField string) ([]byte, error) {
+	meta := input.Metadata
+	nodes := input.Nodes
+
+	groups := make(map[string][]clusterNode, len(schema.groups))
+	for _, g := range schema.groups {
+		groups[g.name] = nil
+	}
+
+	for _, node := range nodes {
+		nodeRoles := make(map[string]bool, len(node.Roles))
+		for _, r := range node.Roles {
+			nodeRoles[r] = true
+		}
+		for _, g := range schema.groups {
+			for _, reqRole := range g.def.roles {
+				if nodeRoles[reqRole] {
+					groups[g.name] = append(groups[g.name], node)
+					break
+				}
+			}
+		}
+	}
+
+	// Apply first_only constraint
+	for _, g := range schema.groups {
+		if g.def.firstOnly && len(groups[g.name]) > 0 {
+			groups[g.name] = groups[g.name][:1]
+		}
+	}
+
+	// Enforce mutual exclusivity: each node belongs to only the first matching group
+	nodeToGroup := make(map[string]string)
+	for _, g := range schema.groups {
+		for _, n := range groups[g.name] {
+			if _, exists := nodeToGroup[n.Name]; !exists {
+				nodeToGroup[n.Name] = g.name
+			}
+		}
+	}
+
+	exclusiveGroups := make(map[string][]clusterNode, len(schema.groups))
+	for _, g := range schema.groups {
+		exclusiveGroups[g.name] = nil
+	}
+	for nodeName, gname := range nodeToGroup {
+		for _, n := range nodes {
+			if n.Name == nodeName {
+				exclusiveGroups[gname] = append(exclusiveGroups[gname], n)
+				break
+			}
+		}
+	}
+
+	// Determine rke2_node_role per node
+	type hostEntry struct {
+		AnsibleHost           string   `yaml:"ansible_host"`
+		NodeRoles             []string `yaml:"node_roles"`
+		RKE2NodeRole          string   `yaml:"rke2_node_role"`
+		AnsibleSSHPrivateKey  string   `yaml:"ansible_ssh_private_key_file,omitempty"`
+	}
+
+	allHosts := make(map[string]hostEntry, len(nodes))
+	for _, node := range nodes {
+		group := nodeToGroup[node.Name]
+		var rke2Role string
+		if group == "master" {
+			rke2Role = "master"
+		} else {
+			hasCP := false
+			hasEtcd := false
+			for _, r := range node.Roles {
+				if r == "cp" {
+					hasCP = true
+				}
+				if r == "etcd" {
+					hasEtcd = true
+				}
+			}
+			if hasCP || hasEtcd {
+				rke2Role = "server"
+			} else {
+				rke2Role = "agent"
+			}
+		}
+
+		entry := hostEntry{
+			AnsibleHost:  nodeIP(node, ipField),
+			NodeRoles:    node.Roles,
+			RKE2NodeRole: rke2Role,
+		}
+		if meta.SSHPrivateKey != "" {
+			entry.AnsibleSSHPrivateKey = meta.SSHPrivateKey
+		}
+		allHosts[node.Name] = entry
+	}
+
+	// Build children groups
+	type groupHostEntry struct {
+		AnsibleHost string `yaml:"ansible_host"`
+	}
+	children := make(map[string]map[string]map[string]groupHostEntry)
+	for _, g := range schema.groups {
+		gnodes := exclusiveGroups[g.name]
+		if len(gnodes) == 0 {
+			continue
+		}
+		hosts := make(map[string]groupHostEntry, len(gnodes))
+		for _, n := range gnodes {
+			hosts[n.Name] = groupHostEntry{AnsibleHost: nodeIP(n, ipField)}
+		}
+		children[g.name] = map[string]map[string]groupHostEntry{"hosts": hosts}
+	}
+
+	// Build the final inventory map
+	allVars := map[string]string{
+		"ansible_ssh_common_args": "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
+		"ansible_user":            meta.SSHUser,
+		"kube_api_host":           meta.KubeAPIHost,
+		"fqdn":                    meta.FQDN,
+	}
+
+	inventory := map[string]interface{}{
+		"all": map[string]interface{}{
+			"vars":     allVars,
+			"hosts":    allHosts,
+			"children": children,
+		},
+	}
+
+	if meta.SSHPrivateKey != "" {
+		allVars["ansible_ssh_private_key_file"] = meta.SSHPrivateKey
+	}
+
+	return yaml.Marshal(inventory)
 }
 
 // WriteVarsYAML marshals vars to YAML and writes the file at relPath inside the repository.

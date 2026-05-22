@@ -7,7 +7,6 @@ import (
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	v1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/kubectl"
@@ -102,109 +101,6 @@ func enableLeaderMigrationInMachineSelector(existingMachineSelectorConfig []v1.R
 	}
 
 	return existingMachineSelectorConfig
-}
-
-// enableLeaderMigrationRKE1 adds the kubeControllerService to the cluster with settings to enable leader migration
-// returns the updated management.Cluster
-func enableLeaderMigrationRKE1(rke1Cluster *management.Cluster) *management.Cluster {
-	rke1ClusterUpdates := rke1Cluster
-	rke1ClusterUpdates.RancherKubernetesEngineConfig.Services.KubeController = &management.KubeControllerService{
-		ExtraArgs: map[string]string{
-			enableLeaderMigration: "true",
-		},
-	}
-	return rke1Cluster
-}
-
-// RKE1AWSCloudProviderMigration is a helper function to migrate from aws in-tree to out-of-tree on rke1 clusters
-func RKE1AWSCloudProviderMigration(t *testing.T, client *rancher.Client, clusterName string) {
-	clusterID, err := extensionscluster.GetClusterIDByName(client, clusterName)
-	require.NoError(t, err)
-
-	rke1Cluster, err := client.Management.Cluster.ByID(clusterID)
-	require.NoError(t, err)
-
-	clusterName = rke1Cluster.ID
-
-	_, steveClusterObject, err := extensionscluster.GetProvisioningClusterByName(client, clusterName, fleetNamespace)
-	require.NoError(t, err)
-
-	lbServiceResponse := cloudprovider.CreateAWSCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
-
-	status := &provv1.ClusterStatus{}
-	require.NotNil(t, steveClusterObject)
-	err = steveV1.ConvertToK8sType(steveClusterObject.Status, status)
-	require.NoError(t, err)
-
-	services.VerifyAWSLoadBalancer(t, client, lbServiceResponse, status.ClusterName)
-
-	spec := &provv1.ClusterSpec{}
-	require.NotNil(t, steveClusterObject)
-	err = steveV1.ConvertToK8sType(steveClusterObject.Spec, spec)
-	require.NoError(t, err)
-
-	newRKE1Cluster := rke1Cluster
-
-	logrus.Info("Enabling leader migration on the cluster.")
-
-	newRKE1Cluster = enableLeaderMigrationRKE1(newRKE1Cluster)
-	rke1Cluster, err = client.Management.Cluster.Update(rke1Cluster, newRKE1Cluster)
-	require.NoError(t, err)
-
-	err = extensionscluster.WaitClusterToBeUpgraded(client, status.ClusterName)
-	require.NoError(t, err)
-
-	podErrors := pods.StatusPods(client, status.ClusterName)
-	require.Empty(t, podErrors)
-
-	logrus.Info("Cordoning all control plane nodes in the cluster.")
-
-	err = runKubectlCommand(
-		client, "kubectl cordon -l \"node-role.kubernetes.io/controlplane=true\"", status.ClusterName)
-	require.NoError(t, err)
-
-	logrus.Info("Upgrading the cluster to preform in-tree to out-of-tree migration.")
-
-	clusterMeta, err := extensionscluster.NewClusterMeta(client, status.ClusterName)
-	require.NoError(t, err)
-
-	err = cloudprovider.CreateAndInstallAWSExternalCharts(client, clusterMeta, true)
-	require.NoError(t, err)
-
-	newRKE1Cluster = rke1Cluster
-	trueBool := true
-	newCloudProvider := management.CloudProvider{
-		UseInstanceMetadataHostname: &trueBool,
-		Name:                        "external-aws",
-	}
-
-	newRKE1Cluster.RancherKubernetesEngineConfig.CloudProvider = &newCloudProvider
-
-	_, err = client.Management.Cluster.Update(rke1Cluster, newRKE1Cluster)
-	require.NoError(t, err)
-
-	podErrors = pods.StatusPods(client, status.ClusterName)
-	require.Empty(t, podErrors)
-
-	err = extensionscluster.WaitClusterToBeUpgraded(client, status.ClusterName)
-	require.NoError(t, err)
-
-	podErrors = pods.StatusPods(client, status.ClusterName)
-	require.Empty(t, podErrors)
-
-	// rke1 clusters go have a false positive during the upgrade, running it 2x adresses this issue
-	err = extensionscluster.WaitClusterToBeUpgraded(client, status.ClusterName)
-	require.NoError(t, err)
-	_, steveClusterObject, err = extensionscluster.GetProvisioningClusterByName(client, clusterName, fleetNamespace)
-	require.NoError(t, err)
-
-	logrus.Info("Verifying in-tree LB persists.")
-
-	services.VerifyAWSLoadBalancer(t, client, lbServiceResponse, status.ClusterName)
-
-	lbServiceResponseOOT := cloudprovider.CreateAWSCloudProviderWorkloadAndServicesLB(t, client, steveClusterObject)
-
-	services.VerifyAWSLoadBalancer(t, client, lbServiceResponseOOT, status.ClusterName)
 }
 
 // RKE2AWSCloudProviderMigration is a helper function to migrate from aws in-tree to out-of-tree on rke2 clusters

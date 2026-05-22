@@ -53,6 +53,3 @@ awsMachineConfigs:
     zone: "a"
     retries: "5"
     rootSize: "100"
-
-logging:
-   level: "info"

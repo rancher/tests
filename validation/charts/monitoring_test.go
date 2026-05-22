@@ -148,8 +148,8 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 
 	m.T().Log("Validating all Prometheus active targets are up")
 	prometheusTargetsResult, err := checkPrometheusTargets(client)
-	assert.NoError(m.T(), err)
-	assert.True(m.T(), prometheusTargetsResult)
+	require.NoError(m.T(), err)
+	require.True(m.T(), prometheusTargetsResult)
 
 	m.T().Log("Creating webhook receiver's namespace")
 	webhookReceiverNamespace, err := namespaces.CreateNamespace(client, webhookReceiverNamespaceName, "{}", map[string]string{}, map[string]string{}, m.project)

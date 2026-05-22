@@ -2,26 +2,19 @@ package certificates
 
 import (
 	"context"
-	"errors"
-	"io"
-	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/rancher/norman/types"
 	apiv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
-	"github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/sirupsen/logrus"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -177,154 +170,4 @@ func getCertificatesFromMachine(client *rancher.Client, machineNode *v1.SteveAPI
 	}
 
 	return certificates, nil
-}
-
-// RotateRKE1Certs rotates the certificates in a RKE1 downstream cluster.
-func RotateRKE1Certs(client *rancher.Client, clusterName string) error {
-	clusterID, err := clusters.GetClusterIDByName(client, clusterName)
-	if err != nil {
-		return err
-	}
-
-	nodeList, err := client.Management.Node.List(&types.ListOpts{Filters: map[string]interface{}{
-		"clusterId": clusterID,
-	}})
-	if err != nil {
-		return err
-	}
-
-	nodeCertificates := map[string]map[string]string{}
-
-	for _, node := range nodeList.Data {
-		newCertificate, err := getCertificatesFromV3Node(client, &node)
-		if err != nil {
-			return err
-		}
-
-		nodeCertificates[node.ID] = newCertificate
-	}
-
-	cluster, err := client.Management.Cluster.ByID(clusterID)
-	if err != nil {
-		return err
-	}
-
-	logrus.Infof("Rotating certs...")
-	_, err = client.Management.Cluster.ActionRotateCertificates(cluster, &management.RotateCertificateInput{CACertificates: false, Services: ""})
-	if err != nil {
-		return err
-	}
-
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	if err != nil {
-		return err
-	}
-
-	err = clusters.WaitClusterToBeUpgraded(adminClient, clusterID)
-	if err != nil {
-		return err
-	}
-
-	postRotatedCertificates := map[string]map[string]string{}
-
-	for _, node := range nodeList.Data {
-		newCertificate, err := getCertificatesFromV3Node(client, &node)
-		if err != nil {
-			return err
-		}
-
-		postRotatedCertificates[node.ID] = newCertificate
-	}
-
-	isAllCertRotated := VerifyCertificateRotation(nodeCertificates, postRotatedCertificates)
-	if !isAllCertRotated {
-		return errors.New("Certificates weren't properly rotated")
-	}
-
-	return nil
-}
-
-// getCertificatesFromV3Node retrieves the certificates from a given RKE1 v3 node.
-func getCertificatesFromV3Node(client *rancher.Client, v3Node *management.Node) (map[string]string, error) {
-	certificates := map[string]string{}
-
-	sshNode, err := getSSHNodeFromV3Node(client, v3Node)
-	if err != nil {
-		return nil, err
-	}
-
-	logrus.Infof("Getting certificates from machine: %s", v3Node.ID)
-
-	certsPath := "/etc/kubernetes/ssl/"
-
-	certsList := []string{
-		"kube-apiserver",
-		"kube-apiserver-proxy-client",
-		"$(find /etc/kubernetes/ssl -name 'kube-etcd-*' | grep -v \"key\")",
-		"kube-controller-manager",
-		// Due to GH issue https://github.com/rancher/rancher/issues/44993, kube-node and kube-proxy are commented out.
-		//"kube-node",
-		//"kube-proxy",
-		"kube-scheduler",
-	}
-
-	for _, filename := range certsList {
-		fullAbsolutePath := certsPath + filename + pemFileExtension
-		if strings.Contains(filename, "etcd") {
-			fullAbsolutePath = filename
-		}
-
-		certString, _ := sshNode.ExecuteCommand("openssl x509 -enddate -noout -in " + fullAbsolutePath)
-
-		if certString != "" {
-			certificates[filename] = certString
-		}
-	}
-
-	return certificates, nil
-}
-
-// downloadRKE1SSHKeys downloads the SSH keys for a given RKE1 v3 node.
-func downloadRKE1SSHKeys(client *rancher.Client, v3Node *management.Node) ([]byte, error) {
-	sshKeyLink := v3Node.Links["nodeConfig"]
-
-	req, err := http.NewRequest("GET", sshKeyLink, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Authorization", "Bearer "+client.RancherConfig.AdminToken)
-
-	resp, err := client.Management.APIBaseClient.Ops.Client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	privateSSHKeyRegEx := regexp.MustCompile(privateKeySSHKeyRegExPattern)
-	privateSSHKey := privateSSHKeyRegEx.FindString(string(bodyBytes))
-
-	return []byte(privateSSHKey), err
-}
-
-// getSSHNodeFromV3Node retrieves the SSH node information from a given RKE1 v3 node.
-func getSSHNodeFromV3Node(client *rancher.Client, v3Node *management.Node) (*nodes.Node, error) {
-	sshkey, err := downloadRKE1SSHKeys(client, v3Node)
-	if err != nil {
-		return nil, err
-	}
-
-	clusterNode := &nodes.Node{
-		NodeID:          v3Node.ID,
-		PublicIPAddress: v3Node.ExternalIPAddress,
-		SSHUser:         v3Node.SshUser,
-		SSHKey:          sshkey,
-	}
-
-	return clusterNode, nil
 }

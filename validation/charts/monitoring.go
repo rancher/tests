@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rancher/tests/validation/charts/resources"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
 	"github.com/pkg/errors"
@@ -135,46 +136,61 @@ func waitUnknownPrometheusTargets(client *rancher.Client) error {
 // checkPrometheusTargets is a private helper function
 // that checks if all active prometheus targets are healthy by using prometheus API.
 func checkPrometheusTargets(client *rancher.Client) (bool, error) {
+	backoff := kubewait.Backoff{
+		Duration: 30 * time.Second,
+		Factor:   1.5,
+		Jitter:   0.1,
+		Steps:    10,
+	}
+
 	var statusInit bool
-	var downTargets []string
 
-	err := waitUnknownPrometheusTargets(client)
-	if err != nil {
-		return statusInit, err
-	}
-
-	bodyString, err := ingresses.GetExternalIngressResponse(client, client.RancherConfig.Host, prometheusTargetsPathAPI, true)
-	if err != nil {
-		return statusInit, err
-	}
-
-	var mapResponse map[string]interface{}
-	if err = json.Unmarshal([]byte(bodyString), &mapResponse); err != nil {
-		return statusInit, err
-	}
-
-	if mapResponse["status"] != "success" {
-		return statusInit, errors.New("failed to get targets from prometheus")
-	}
-
-	activeTargets := mapResponse["data"].(map[string]interface{})["activeTargets"].([]interface{})
-	if len(activeTargets) < 1 {
-		return false, errors.New("failed to find any active targets")
-	}
-
-	for _, target := range activeTargets {
-		targetMap := target.(map[string]interface{})
-		if targetMap["health"].(string) == "down" {
-			downTargets = append(downTargets, targetMap["labels"].(map[string]interface{})["instance"].(string))
+	err := kubewait.ExponentialBackoff(backoff, func() (bool, error) {
+		err := waitUnknownPrometheusTargets(client)
+		if err != nil {
+			logrus.Infof("Waiting for unknown prometheus targets to resolve, retrying: %v", err)
+			return false, err
 		}
-	}
-	statusInit = len(downTargets) == 0
 
-	if !statusInit {
-		return statusInit, errors.Wrapf(err, "All active target(s) are not healthy: %v", downTargets)
-	}
+		bodyString, err := ingresses.GetExternalIngressResponse(client, client.RancherConfig.Host, prometheusTargetsPathAPI, true)
+		if err != nil {
+			logrus.Infof("Failed to get prometheus targets response, retrying: %v", err)
+			return false, err
+		}
 
-	return statusInit, nil
+		var mapResponse map[string]interface{}
+		if err = json.Unmarshal([]byte(bodyString), &mapResponse); err != nil {
+			return false, err
+		}
+
+		if mapResponse["status"] != "success" {
+			logrus.Infof("Prometheus targets API did not return success status, status: %s ", mapResponse["status"])
+			return false, nil
+		}
+
+		activeTargets := mapResponse["data"].(map[string]any)["activeTargets"].([]any)
+		if len(activeTargets) < 1 {
+			logrus.Infof("No active prometheus targets found, data: [%v]", mapResponse["data"])
+			return false, nil
+		}
+
+		var downTargets []string
+		for _, target := range activeTargets {
+			targetMap := target.(map[string]interface{})
+			if targetMap["health"].(string) == "down" {
+				downTargets = append(downTargets, targetMap["labels"].(map[string]interface{})["instance"].(string))
+			}
+		}
+
+		statusInit = len(downTargets) == 0
+		if !statusInit {
+			logrus.Infof("Prometheus targets not yet healthy, retrying. Down targets: %v", downTargets)
+		}
+
+		return statusInit, nil
+	})
+
+	return statusInit, err
 }
 
 // editAlertReceiver is a private helper function

@@ -19,8 +19,8 @@ import (
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/tests/actions/clusters"
+	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
 	"github.com/rancher/tests/actions/provisioninginput"
-	"github.com/rancher/tests/actions/secrets"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -175,7 +175,7 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 			"v2prov-authorized-secret-deletes-on-cluster-removal": "true",
 		}
 
-		kubeSecret, err := secrets.CreateSecret(client, "local", "fleet-default", data, "secret", nil, annotations)
+		kubeSecret, err := secretapi.CreateSecret(client, "local", "fleet-default", data, "secret", nil, annotations)
 		if err != nil {
 			return clustersConfig, err
 		}

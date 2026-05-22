@@ -1,6 +1,6 @@
 module github.com/rancher/tests/actions
 
-go 1.25.0
+go 1.25.5
 
 replace (
 	github.com/containerd/containerd => github.com/containerd/containerd v1.6.27 // for compatibilty with docker 20.10.x
@@ -10,6 +10,7 @@ replace (
 
 	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260105201356-c4811cb9f2af
 	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260105201356-c4811cb9f2af
+	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260521181000-a79c35802dc9
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
 	go.opentelemetry.io/otel => go.opentelemetry.io/otel v1.28.0
@@ -58,8 +59,8 @@ replace (
 require (
 	github.com/qase-tms/qase-go/qase-api-client v1.2.1
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20260407221419-05978184aa1e
-	github.com/rancher/tfp-automation v0.0.0-20260223200320-56541017be04
+	github.com/rancher/shepherd v0.0.0-20260430211500-1f50d155268e
+	github.com/rancher/tfp-automation v0.0.0-20260521181000-a79c35802dc9
 )
 
 require (
@@ -79,7 +80,6 @@ require (
 	k8s.io/api v0.34.3
 	k8s.io/apimachinery v0.34.3
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/cluster-api v1.10.6
 )
 
@@ -241,6 +241,7 @@ require (
 	k8s.io/kubectl v0.34.1 // indirect
 	k8s.io/kubernetes v1.34.2 // indirect
 	k8s.io/pod-security-admission v0.34.1 // indirect
+	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // indirect
 	sigs.k8s.io/cli-utils v0.37.2 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/api v0.20.1 // indirect

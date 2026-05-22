@@ -1,39 +1,60 @@
 package ingresses
 
 import (
+	"fmt"
+
 	"github.com/rancher/shepherd/clients/rancher"
+	ingress "github.com/rancher/shepherd/extensions/ingresses"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	serviceapi "github.com/rancher/tests/actions/kubeapi/services"
+	"github.com/rancher/tests/actions/services"
+	appv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// IngressesGroupVersionResource is the required Group Version Resource for accessing ingresses in a cluster,
-// using the dynamic client.
-var IngressesGroupVersionResource = schema.GroupVersionResource{
-	Group:    "networking.k8s.io",
-	Version:  "v1",
-	Resource: "ingresses",
-}
+const (
+	ServicePortName   = "port"
+	ServicePortNumber = 80
+	IngressHostName   = "sslip.io"
+	IngressPath       = "/api"
+)
 
-// GetIngressByName is a helper function that returns the ingress by name in a specific cluster, uses ListIngresses to get the ingress.
-func GetIngressByName(client *rancher.Client, clusterID, namespaceName, ingressName string) (*networkingv1.Ingress, error) {
-	var ingress *networkingv1.Ingress
-
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
+// CreateServiceAndIngressTemplateForDeployment creates a service and an ingress template for a deployment
+func CreateServiceAndIngressTemplateForDeployment(client *rancher.Client, clusterID, namespaceName string, deploymentForIngress *appv1.Deployment) (*networkingv1.Ingress, error) {
+	serviceNameForDeployment := namegen.AppendRandomString("deploymentservice")
+	serviceType := corev1.ServiceTypeNodePort
+	ports := []corev1.ServicePort{
+		{
+			Name: ServicePortName,
+			Port: ServicePortNumber,
+		},
+	}
+	serviceTemplateForDeployment := services.NewServiceTemplate(serviceNameForDeployment, namespaceName, serviceType, ports, deploymentForIngress.Spec.Template.Labels)
+	_, err := serviceapi.CreateServiceWithTemplate(client, clusterID, &serviceTemplateForDeployment)
 	if err != nil {
-		return ingress, err
+		return nil, fmt.Errorf("failed to create service: %v", err)
 	}
 
-	ingressesList, err := ListIngresses(adminClient, clusterID, namespaceName, metav1.ListOptions{})
-	if err != nil {
-		return ingress, err
+	pathTypePrefix := networkingv1.PathTypeImplementationSpecific
+	paths := []networkingv1.HTTPIngressPath{
+		{
+			Path:     IngressPath,
+			PathType: &pathTypePrefix,
+			Backend: networkingv1.IngressBackend{
+				Service: &networkingv1.IngressServiceBackend{
+					Name: serviceNameForDeployment,
+					Port: networkingv1.ServiceBackendPort{
+						Number: ServicePortNumber,
+					},
+				},
+			},
+		},
 	}
 
-	for i, ingress := range ingressesList.Items {
-		if ingress.Name == ingressName {
-			return &ingressesList.Items[i], nil
-		}
-	}
+	ingressNameForDeployment := namegen.AppendRandomString("test-ingress")
+	ingressHostName := namegen.AppendRandomString("test-host-") + "." + IngressHostName
+	ingressTemplateForDeployment := ingress.NewIngressTemplate(ingressNameForDeployment, namespaceName, ingressHostName, paths)
 
-	return ingress, nil
+	return &ingressTemplateForDeployment, nil
 }

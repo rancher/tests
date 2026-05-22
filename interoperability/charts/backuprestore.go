@@ -14,7 +14,6 @@ import (
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/rancher/tests/actions/charts"
-	kubenamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -105,7 +104,7 @@ func InstallRancherBackupChart(client *rancher.Client, installOptions *charts.In
 		if err != nil {
 			return err
 		}
-		adminNamespaceResource := adminDynamicClient.Resource(kubenamespaces.NamespaceGroupVersionResource).Namespace("")
+		adminNamespaceResource := adminDynamicClient.Resource(namespaces.NamespaceGroupVersionResource).Namespace("")
 
 		watchNamespaceInterface, err := adminNamespaceResource.Watch(context.TODO(), metav1.ListOptions{
 			FieldSelector:  metadataName + backupChartNamespace,

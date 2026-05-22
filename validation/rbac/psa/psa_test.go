@@ -48,7 +48,7 @@ type PSATestSuite struct {
 
 func (rb *PSATestSuite) TearDownSuite() {
 	// reset the PSACT
-	_, err := editPsactCluster(rb.client, rb.clusterName, rbac.DefaultNamespace, "")
+	err := editPsactCluster(rb.client, rb.clusterName, rbac.DefaultNamespace, "")
 	require.NoError(rb.T(), err)
 	rb.session.Cleanup()
 }
@@ -261,7 +261,7 @@ func (rb *PSATestSuite) ValidateAdditionalPSA(role string) {
 }
 
 func (rb *PSATestSuite) ValidateEditPsactCluster(role string, psact string) {
-	clusterType, err := editPsactCluster(rb.nonAdminUserClient, rb.clusterName, rbac.DefaultNamespace, psact)
+	err := editPsactCluster(rb.nonAdminUserClient, rb.clusterName, rbac.DefaultNamespace, psact)
 	switch role {
 	case rbac.ClusterOwner.String():
 		require.NoError(rb.T(), err)
@@ -269,14 +269,7 @@ func (rb *PSATestSuite) ValidateEditPsactCluster(role string, psact string) {
 		require.NoError(rb.T(), err)
 	case rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
 		require.Error(rb.T(), err)
-		if clusterType == "RKE2K3S" {
-			assert.Equal(rb.T(), "Resource type [provisioning.cattle.io.cluster] is not updatable", err.Error())
-		} else {
-			errStatus := strings.Split(err.Error(), ".")[1]
-			rgx := regexp.MustCompile(`\[(.*?)\]`)
-			errorMsg := rgx.FindStringSubmatch(errStatus)
-			assert.Equal(rb.T(), "403 Forbidden", errorMsg[1])
-		}
+		assert.Equal(rb.T(), "Resource type [provisioning.cattle.io.cluster] is not updatable", err.Error())
 	}
 }
 

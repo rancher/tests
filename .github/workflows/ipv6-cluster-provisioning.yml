@@ -37,6 +37,7 @@ permissions:
 
 env:
   CLOUD_PROVIDER_VERSION: "6.34.0"
+  LOCALS_PROVIDER_VERSION: "${{ vars.LOCALS_PROVIDER_VERSION }}"
 
 jobs:
   v2-15:
@@ -48,6 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: head
     env:
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_15 }}"
       HOSTNAME_PREFIX: "gha6-prov-215"
       REPORTING_ENABLED: >-
         ${{
@@ -68,6 +70,10 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
+
+      - name: Set up local rancher2 Terraform provider
+        if: contains(env.RANCHER2_PROVIDER_VERSION, '-rc')
+        run: chmod +x ./tfp-automation/scripts/setup-provider.sh && ./tfp-automation/scripts/setup-provider.sh rancher2 v${{ env.RANCHER2_PROVIDER_VERSION }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
@@ -172,6 +178,7 @@ jobs:
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             provider: "${{ vars.PROVIDER_AMAZON }}"
+            downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsCredentials:
@@ -191,8 +198,8 @@ jobs:
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
               awsUser: "${{ secrets.IPV6_AWS_USER }}"
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
               enablePrimaryIPv6: true
               httpProtocolIPv6: "enabled"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
@@ -226,8 +233,8 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             networking:
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_IPV6 }}"
             advanced:
               machineGlobalConfig:
@@ -246,6 +253,9 @@ jobs:
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
 
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
+          
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
@@ -312,11 +322,13 @@ jobs:
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: ipv6
+          run_ace: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -369,7 +381,6 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Save test result as artifact for weekly summary
@@ -394,6 +405,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: head
     env:
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_14 }}"
       HOSTNAME_PREFIX: "gha6-prov-214"
       REPORTING_ENABLED: >-
         ${{
@@ -414,6 +426,10 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
+
+      - name: Set up local rancher2 Terraform provider
+        if: contains(env.RANCHER2_PROVIDER_VERSION, '-rc')
+        run: chmod +x ./tfp-automation/scripts/setup-provider.sh && ./tfp-automation/scripts/setup-provider.sh rancher2 v${{ env.RANCHER2_PROVIDER_VERSION }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
@@ -518,6 +534,7 @@ jobs:
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             provider: "${{ vars.PROVIDER_AMAZON }}"
+            downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsCredentials:
@@ -537,8 +554,8 @@ jobs:
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
               awsUser: "${{ secrets.IPV6_AWS_USER }}"
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
               enablePrimaryIPv6: true
               httpProtocolIPv6: "enabled"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
@@ -572,8 +589,8 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             networking:
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_IPV6 }}"
             advanced:
               machineGlobalConfig:
@@ -592,6 +609,9 @@ jobs:
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
 
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
+          
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
@@ -658,11 +678,13 @@ jobs:
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: ipv6
+          run_ace: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -715,7 +737,6 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Save test result as artifact for weekly summary
@@ -739,6 +760,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging-latest
     env:
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_13 }}"
       HOSTNAME_PREFIX: "gha6-prov-213"
       REPORTING_ENABLED: >-
         ${{
@@ -759,6 +781,10 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
+
+      - name: Set up local rancher2 Terraform provider
+        if: contains(env.RANCHER2_PROVIDER_VERSION, '-rc')
+        run: chmod +x ./tfp-automation/scripts/setup-provider.sh && ./tfp-automation/scripts/setup-provider.sh rancher2 v${{ env.RANCHER2_PROVIDER_VERSION }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
@@ -863,6 +889,7 @@ jobs:
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             provider: "${{ vars.PROVIDER_AMAZON }}"
+            downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsCredentials:
@@ -882,8 +909,8 @@ jobs:
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
               awsUser: "${{ secrets.IPV6_AWS_USER }}"
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
               enablePrimaryIPv6: true
               httpProtocolIPv6: "enabled"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
@@ -918,8 +945,8 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             networking:
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_IPV6 }}"
             advanced:
               machineGlobalConfig:
@@ -938,6 +965,9 @@ jobs:
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
 
+          logging:
+            level: "${{ vars.LOGGING_LEVEL }}"
+          
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
@@ -1004,11 +1034,13 @@ jobs:
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: ipv6
+          run_ace: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1061,7 +1093,6 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Save test result as artifact for weekly summary

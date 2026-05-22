@@ -21,4 +21,5 @@ const (
 	FailStatus              = "fail"
 	SkipStatus              = "skip"
 	TestRunCompleteEnvVar   = "QASE_TEST_RUN_COMPLETE"
+	RancherTestCommitID     = "RANCHER_TEST_COMMIT_ID"
 )

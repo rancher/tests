@@ -28,8 +28,8 @@ func DeleteProject(client *rancher.Client, clusterID string, projectName string,
 // WaitForProjectDeletion is a helper function that waits for a Project to be deleted from a cluster.
 func WaitForProjectDeletion(client *rancher.Client, clusterID string, projectName string) error {
 	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
-		_, err = client.WranglerContext.Mgmt.Project().Get(clusterID, projectName, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
+		_, err = GetProjectByName(client, clusterID, projectName)
+		if apierrors.IsNotFound(err) || apierrors.IsForbidden(err) {
 			return true, nil
 		}
 

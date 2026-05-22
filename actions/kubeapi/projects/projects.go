@@ -62,25 +62,22 @@ func NewProjectTemplate(clusterID string) *v3.Project {
 	return project
 }
 
-// WaitForProjectFinalizerToUpdate is a helper to wait for project finalizer to update to match the expected finalizer count
-func WaitForProjectFinalizerToUpdate(client *rancher.Client, projectName string, projectNamespace string, finalizerCount int) error {
-	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
-		project, pollErr := client.WranglerContext.Mgmt.Project().Get(projectNamespace, projectName, metav1.GetOptions{})
-		if pollErr != nil {
-			return false, pollErr
-		}
+// GetProjectByName is a helper function that retrieves a Project from a cluster by name.
+func GetProjectByName(client *rancher.Client, clusterID, projectName string) (*v3.Project, error) {
+	return client.WranglerContext.Mgmt.Project().Get(clusterID, projectName, metav1.GetOptions{})
+}
 
-		if len(project.Finalizers) == finalizerCount {
-			return true, nil
+// WaitForProjectFinalizerToUpdate is a helper to wait for project finalizer to update to match the expected finalizer count
+func WaitForProjectFinalizerToUpdate(client *rancher.Client, projectName, projectNamespace string, finalizerCount int) error {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, false, func(ctx context.Context) (bool, error) {
+		project, err := GetProjectByName(client, projectNamespace, projectName)
+		if err != nil {
+			return false, err
 		}
-		return false, pollErr
+		return len(project.Finalizers) == finalizerCount, nil
 	})
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // ApplyProjectAndNamespaceResourceQuotas applies quotas for project and namespace

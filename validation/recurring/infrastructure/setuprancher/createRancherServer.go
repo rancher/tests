@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/config"
 	shepherdConfig "github.com/rancher/shepherd/pkg/config"
@@ -26,24 +25,81 @@ func main() {
 	cattleConfig := shepherdConfig.LoadConfigFromFile(os.Getenv(shepherdConfig.ConfigEnvironmentKey))
 	_, terraformConfig, _, _ := tfpConfig.LoadTFPConfigs(cattleConfig)
 
+	testSession := session.NewSession()
+
 	switch {
-	case terraformConfig.AWSConfig.EnablePrimaryIPv6:
-		client, _, _, _, _, err = setupIPv6Rancher(t)
+	case terraformConfig.AWSConfig.AWSVpcIP != "":
+		var registry, bastion string
+
+		client, registry, bastion, err = setupAirgapRancher(t, testSession)
 		if err != nil {
-			logrus.Fatalf("Failed to setup Rancher: %v", err)
+			logrus.Fatalf("Failed to setup Airgap Rancher: %v", err)
 		}
-	case !terraformConfig.AWSConfig.EnablePrimaryIPv6 && terraformConfig.AWSConfig.ClusterCIDR != "":
-		client, _, _, _, _, err = setupDualStackRancher(t)
+
+		_, err = operations.ReplaceValue([]string{"terraform", "airgapBastion"}, bastion, cattleConfig)
 		if err != nil {
-			logrus.Fatalf("Failed to setup Rancher: %v", err)
+			logrus.Fatalf("Failed to replace airgap bastion: %v", err)
+		}
+
+		_, err = operations.ReplaceValue([]string{"terraform", "privateRegistries", "systemDefaultRegistry"}, registry, cattleConfig)
+		if err != nil {
+			logrus.Fatalf("Failed to replace system default registry: %v", err)
+		}
+
+		infraConfig.UpdateRegistryVars(cattleConfig, registry)
+	case !terraformConfig.AWSConfig.EnablePrimaryIPv6 && terraformConfig.AWSConfig.ClusterCIDR != "":
+		client, err = setupDualStackRancher(t, testSession)
+		if err != nil {
+			logrus.Fatalf("Failed to setup Dual Stack Rancher: %v", err)
+		}
+	case terraformConfig.AWSConfig.EnablePrimaryIPv6:
+		client, err = setupIPv6Rancher(t, testSession)
+		if err != nil {
+			logrus.Fatalf("Failed to setup IPv6 Rancher: %v", err)
+		}
+	case terraformConfig.Proxy != nil:
+		var proxyBastion string
+
+		client, proxyBastion, err = setupProxyRancher(t, testSession)
+		if err != nil {
+			logrus.Fatalf("Failed to setup Proxy Rancher: %v", err)
+		}
+
+		_, err = operations.ReplaceValue([]string{"terraform", "proxy", "proxyBastion"}, proxyBastion, cattleConfig)
+		if err != nil {
+			logrus.Fatalf("Failed to replace proxy bastion: %v", err)
+		}
+
+		infraConfig.UpdateAgentEnvVar(cattleConfig, "HTTP_PROXY", "http://"+proxyBastion+":3228")
+		infraConfig.UpdateAgentEnvVar(cattleConfig, "HTTPS_PROXY", "http://"+proxyBastion+":3228")
+	case terraformConfig.StandaloneRegistry != nil && terraformConfig.StandaloneRegistry.ECRURI != "":
+		var authRegistry, nonAuthRegistry, globalRegistry string
+
+		client, authRegistry, nonAuthRegistry, globalRegistry, err = setupRegistryRancher(t, testSession)
+		if err != nil {
+			logrus.Fatalf("Failed to setup Registry Rancher: %v", err)
+		}
+
+		_, err = operations.ReplaceValue([]string{"terraform", "standaloneRegistry", "authRegistryFQDN"}, authRegistry, cattleConfig)
+		if err != nil {
+			logrus.Fatalf("Failed to replace auth registry: %v", err)
+		}
+
+		_, err = operations.ReplaceValue([]string{"terraform", "standaloneRegistry", "nonAuthRegistryFQDN"}, nonAuthRegistry, cattleConfig)
+		if err != nil {
+			logrus.Fatalf("Failed to replace non-auth registry: %v", err)
+		}
+
+		_, err = operations.ReplaceValue([]string{"terraform", "standaloneRegistry", "globalRegistryFQDN"}, globalRegistry, cattleConfig)
+		if err != nil {
+			logrus.Fatalf("Failed to replace global registry: %v", err)
 		}
 	default:
-		client, _, _, _, _, err = setupRancher(t)
+		client, err = setupRancher(t, testSession)
 		if err != nil {
 			logrus.Fatalf("Failed to setup Rancher: %v", err)
 		}
 	}
-
 	_, err = operations.ReplaceValue([]string{"rancher", "adminToken"}, client.RancherConfig.AdminToken, cattleConfig)
 	if err != nil {
 		logrus.Fatalf("Failed to replace admin token: %v", err)
@@ -52,23 +108,38 @@ func main() {
 	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
 }
 
-func setupRancher(t *testing.T) (*rancher.Client, string, *terraform.Options, *terraform.Options, map[string]any, error) {
-	testSession := session.NewSession()
-	client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig := ranchers.SetupRancher(t, testSession, keypath.SanityKeyPath)
+func setupAirgapRancher(t *testing.T, testSession *session.Session) (*rancher.Client, string, string, error) {
+	client, registry, bastion, _, _, _, _ := ranchers.SetupAirgapRancher(t, testSession, keypath.AirgapKeyPath)
 
-	return client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig, nil
+	return client, registry, bastion, nil
 }
 
-func setupIPv6Rancher(t *testing.T) (*rancher.Client, string, *terraform.Options, *terraform.Options, map[string]any, error) {
-	testSession := session.NewSession()
-	client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig := ranchers.SetupIPv6Rancher(t, testSession, keypath.IPv6KeyPath)
+func setupDualStackRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
+	client, _, _, _, _ := ranchers.SetupDualStackRancher(t, testSession, keypath.DualStackKeyPath)
 
-	return client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig, nil
+	return client, nil
 }
 
-func setupDualStackRancher(t *testing.T) (*rancher.Client, string, *terraform.Options, *terraform.Options, map[string]any, error) {
-	testSession := session.NewSession()
-	client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig := ranchers.SetupDualStackRancher(t, testSession, keypath.DualStackKeyPath)
+func setupIPv6Rancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
+	client, _, _, _, _ := ranchers.SetupIPv6Rancher(t, testSession, keypath.IPv6KeyPath)
 
-	return client, serverNodeOne, standaloneTerraformOptions, terraformOptions, cattleConfig, nil
+	return client, nil
+}
+
+func setupProxyRancher(t *testing.T, testSession *session.Session) (*rancher.Client, string, error) {
+	client, proxyBastion, _, _, _, _ := ranchers.SetupProxyRancher(t, testSession, keypath.ProxyKeyPath)
+
+	return client, proxyBastion, nil
+}
+
+func setupRancher(t *testing.T, testSession *session.Session) (*rancher.Client, error) {
+	client, _, _, _, _ := ranchers.SetupRancher(t, testSession, keypath.SanityKeyPath)
+
+	return client, nil
+}
+
+func setupRegistryRancher(t *testing.T, testSession *session.Session) (*rancher.Client, string, string, string, error) {
+	client, authRegistry, nonAuthRegistry, globalRegistry, _, _, _ := ranchers.SetupRegistryRancher(t, testSession, keypath.RegistryKeyPath)
+
+	return client, authRegistry, nonAuthRegistry, globalRegistry, nil
 }

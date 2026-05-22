@@ -218,10 +218,11 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
 
           prime:
-            brand: "${{ secrets.PRIME_BRAND }}"
+            brand: "${{ vars.PRIME_BRAND }}"
             isPrime: true
             registry: "${{ secrets.PRIME_REGISTRY }}"
-            rancherVersion: "${{ env.RANCHER_VERSION }}"
+            sccRegistrationCode: "${{ secrets.PRIME_SCC_REGISTRATION_CODE }}"
+            sccRegistrationType: "${{ secrets.PRIME_SCC_REGISTRATION_TYPE }}"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -252,6 +253,7 @@ jobs:
         env:
           QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-prime-ui-checks
         with:
@@ -294,7 +296,6 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Save test result as artifact for weekly summary
@@ -471,10 +472,11 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
 
           prime:
-            brand: "${{ secrets.PRIME_BRAND }}"
+            brand: "${{ vars.PRIME_BRAND }}"
             isPrime: true
             registry: "${{ secrets.PRIME_REGISTRY }}"
-            rancherVersion: "${{ env.RANCHER_VERSION }}"
+            sccRegistrationCode: "${{ secrets.PRIME_SCC_REGISTRATION_CODE }}"
+            sccRegistrationType: "${{ secrets.PRIME_SCC_REGISTRATION_TYPE }}"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -505,6 +507,7 @@ jobs:
         env:
           QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-prime-ui-checks
         with:
@@ -547,7 +550,6 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-channel: ${{ secrets.SLACK_CHANNEL }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Save test result as artifact for weekly summary

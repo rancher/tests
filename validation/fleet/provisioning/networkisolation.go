@@ -12,11 +12,13 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
 	"github.com/rancher/shepherd/extensions/unstructured"
 	"github.com/rancher/shepherd/pkg/namegenerator"
-	"github.com/rancher/tests/actions/kubeapi/namespaces"
+	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
+	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/workloads/pods"
 	corev1 "k8s.io/api/core/v1"
@@ -203,7 +205,7 @@ func areContainersReady(pod *steveV1.SteveAPIObject) (bool, error) {
 // updateNamespaceWithNewProject is a helper which moves a fleet repo's deployment in a downstream cluster to a project
 func updateNamespaceWithNewProject(client *rancher.Client, clusterName string, repoStatus *v1alpha1.GitRepoStatus) error {
 
-	hardenedNS, err := namespaces.GetNamespaceByName(client, clusterName, repoStatus.Resources[0].Namespace)
+	hardenedNS, err := extnamespaceapi.GetNamespaceByName(client, clusterName, repoStatus.Resources[0].Namespace)
 	if err != nil {
 		return err
 	}
@@ -229,5 +231,5 @@ func updateNamespaceWithNewProject(client *rancher.Client, clusterName string, r
 		return err
 	}
 
-	return namespaces.WaitForProjectIDUpdate(client, clusterName, hardenedProjectName, hardenedNS.Name)
+	return namespaceapi.WaitForProjectIDUpdate(client, clusterName, hardenedProjectName, hardenedNS.Name)
 }

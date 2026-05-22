@@ -1,4 +1,11 @@
 #!groovy
+/**
+ * DEPRECATED: This pipeline is superseded by validation/Jenkinsfile.e2e.
+ * The new pipeline uses the qa-jenkins-library shared library for modular
+ * infrastructure provisioning (tofu + ansible) and supports the same
+ * downstream job triggering pattern. Reconfigure Jenkins jobs to use
+ * validation/Jenkinsfile.e2e instead.
+ */
 node {
     def rootPath = "/root/go/src/github.com/rancher/tests/"
     def workPath = "/root/go/src/github.com/rancher/tests/validation/"
@@ -35,6 +42,7 @@ node {
     def terraformVarsfilename = "cluster.tfvars"
     def downstreamTerraformVarsfilename = "downstream-cluster.tfvars"
     // def individualJob = (jobName =~ /(go-recurring-[a-z]+)/)[0][1]
+    def yqVersion = "v4.47.2"
     def individualJob = "go-recurring-daily"
     individualJob = "${individualJob}-individual-job"
     if ("${env.INDIVIDUAL_JOB}" != "null" && "${env.INDIVIDUAL_JOB}" != "") {
@@ -161,7 +169,7 @@ node {
               }
             }
             stage('Setup') {
-                sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
+                sh returnStdout: true, script: "wget -qO ./yq https://github.com/mikefarah/yq/releases/download/${yqVersion}/yq_linux_amd64 && wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/${yqVersion}/checksums && grep -q '^yq_linux_amd64 ' ./yq_checksums && awk '/^yq_linux_amd64 / {print \$19 \"  ./yq\"}' ./yq_checksums | sha256sum -c - && rm -f ./yq_checksums"
                 sh returnStdout:true, script: 'chmod a+x ./yq'
             }
             stage("Build Environment") {

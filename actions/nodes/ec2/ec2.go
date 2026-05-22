@@ -45,6 +45,7 @@ func CreateNodes(client *rancher.Client, rolesPerPool []string, quantityPerPool 
 		if nodeBaseName == "" {
 			nodeBaseName = "rancher-qa-automation"
 		}
+
 		sshName := getSSHKeyName(config.AWSSSHKeyName)
 		runInstancesInput := &ec2.RunInstancesInput{
 			ImageId:      aws.String(config.AWSAMI),
@@ -163,6 +164,139 @@ func CreateNodes(client *rancher.Client, rolesPerPool []string, quantityPerPool 
 				// re-reverse the list so that the order is corrected
 				ec2Nodes = append([]*nodes.Node{ec2Node}, ec2Nodes...)
 			}
+		}
+	}
+
+	client.Session.RegisterCleanupFunc(func() error {
+		return DeleteNodes(client, ec2Nodes)
+	})
+
+	return ec2Nodes, nil
+}
+
+// CreateNodes creates `quantityPerPool[n]` number of ec2 instances
+func CreateAirgappedNodes(client *rancher.Client, rolesPerPool []string, quantityPerPool []int32, ec2Configs *rancherEc2.AWSEC2Configs) (ec2Nodes []*nodes.Node, err error) {
+	ec2Client, err := client.GetEC2Client()
+	if err != nil {
+		return nil, err
+	}
+
+	runningReservations := []*ec2.Reservation{}
+	reservationConfigs := []*rancherEc2.AWSEC2Config{}
+	// provisioning instances in reverse order to allow windows instances time to become ready
+	for i := len(quantityPerPool) - 1; i >= 0; i-- {
+		config := MatchRoleToConfig(rolesPerPool[i], ec2Configs.AWSEC2Config)
+		if config == nil {
+			return nil, errors.New("No matching nodesAndRole for AWSEC2Config with role:" + rolesPerPool[i])
+		}
+
+		nodeBaseName := config.AWSCICDInstanceTag
+		if nodeBaseName == "" {
+			nodeBaseName = "rancher-qa-automation"
+		}
+
+		sshName := getSSHKeyName(config.AWSSSHKeyName)
+		runInstancesInput := &ec2.RunInstancesInput{
+			ImageId:      aws.String(config.AWSAMI),
+			InstanceType: aws.String(config.InstanceType),
+			MinCount:     aws.Int64(int64(quantityPerPool[i])),
+			MaxCount:     aws.Int64(int64(quantityPerPool[i])),
+			KeyName:      aws.String(sshName),
+			BlockDeviceMappings: []*ec2.BlockDeviceMapping{
+				{
+					DeviceName: aws.String("/dev/sda1"),
+					Ebs: &ec2.EbsBlockDevice{
+						VolumeSize: aws.Int64(int64(config.VolumeSize)),
+					},
+				},
+			},
+			IamInstanceProfile: &ec2.IamInstanceProfileSpecification{
+				Name: aws.String(config.AWSIAMProfile),
+			},
+			Placement: &ec2.Placement{
+				AvailabilityZone: aws.String(config.AWSRegionAZ),
+			},
+			NetworkInterfaces: []*ec2.InstanceNetworkInterfaceSpecification{
+				{
+					DeviceIndex:              aws.Int64(0),
+					AssociatePublicIpAddress: aws.Bool(false),
+					Groups:                   aws.StringSlice(config.AWSSecurityGroups),
+					SubnetId:                 aws.String(config.AWSSubnetID),
+				},
+			},
+			TagSpecifications: []*ec2.TagSpecification{
+				{
+					ResourceType: aws.String("instance"),
+					Tags: []*ec2.Tag{
+						{
+							Key:   aws.String("Name"),
+							Value: aws.String(nodeBaseName + namegenerator.RandStringLower(5)),
+						},
+						{
+							Key:   aws.String("CICD"),
+							Value: aws.String(config.AWSCICDInstanceTag),
+						},
+					},
+				},
+			},
+		}
+
+		reservation, err := ec2Client.SVC.RunInstances(runInstancesInput)
+		if err != nil {
+			return nil, err
+		}
+		// instead of waiting on each node pool to complete provisioning, add to a queue and check run status later
+		runningReservations = append(runningReservations, reservation)
+		reservationConfigs = append(reservationConfigs, config)
+	}
+
+	for i := 0; i < len(quantityPerPool); i++ {
+		var listOfInstanceIds []*string
+
+		for _, instance := range runningReservations[i].Instances {
+			listOfInstanceIds = append(listOfInstanceIds, instance.InstanceId)
+		}
+
+		//wait until instance is running
+		err = ec2Client.SVC.WaitUntilInstanceRunning(&ec2.DescribeInstancesInput{
+			InstanceIds: listOfInstanceIds,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		//wait until instance status is ok
+		err = ec2Client.SVC.WaitUntilInstanceStatusOk(&ec2.DescribeInstanceStatusInput{
+			InstanceIds: listOfInstanceIds,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// describe instance to get attributes
+		describe, err := ec2Client.SVC.DescribeInstances(&ec2.DescribeInstancesInput{
+			InstanceIds: listOfInstanceIds,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		readyInstances := describe.Reservations[0].Instances
+
+		sshKey, err := nodes.GetSSHKey(reservationConfigs[i].AWSSSHKeyName)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, readyInstance := range readyInstances {
+			ec2Node := &nodes.Node{
+				NodeID:           *readyInstance.InstanceId,
+				PrivateIPAddress: *readyInstance.PrivateIpAddress,
+				SSHUser:          reservationConfigs[i].AWSUser,
+				SSHKey:           sshKey,
+			}
+			// re-reverse the list so that the order is corrected
+			ec2Nodes = append([]*nodes.Node{ec2Node}, ec2Nodes...)
 		}
 	}
 

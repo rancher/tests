@@ -151,18 +151,6 @@ func (f *FleetWithSnapshotTestSuite) TestSnapshotThenFleetRestore() {
 		require.NoError(f.T(), err)
 
 		f.Run(fleet.FleetName+" "+fleetVersion+tt.name, func() {
-			var isRKE1 = false
-
-			clusterObject, _, _ := extensionscluster.GetProvisioningClusterByName(client, client.RancherConfig.ClusterName, fleet.Namespace)
-			if clusterObject == nil {
-				_, err := client.Management.Cluster.ByID(f.clusterID)
-				require.NoError(f.T(), err)
-
-				isRKE1 = true
-			}
-
-			require.False(f.T(), isRKE1, "rke1 is not supported at this time. ")
-
 			containerTemplate := workloads.NewContainer(containerImage, image, corev1.PullAlways, []corev1.VolumeMount{}, []corev1.EnvFromSource{}, nil, nil, nil)
 
 			podTemplate := workloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{}, []corev1.LocalObjectReference{}, nil, map[string]string{})
@@ -172,7 +160,7 @@ func (f *FleetWithSnapshotTestSuite) TestSnapshotThenFleetRestore() {
 
 			logrus.Info("deploying fleet post-snapshot to test persistence after restore is complete")
 
-			cluster, snapshotName, postDeploymentResp, postServiceResp, err := etcdsnapshot.CreateAndValidateSnapshotV2Prov(client, &podTemplate, deploymentTemplate, client.RancherConfig.ClusterName, f.clusterID, tt.etcdSnapshot, isRKE1)
+			cluster, snapshotName, postDeploymentResp, postServiceResp, err := etcdsnapshot.CreateAndValidateSnapshotV2Prov(client, &podTemplate, deploymentTemplate, client.RancherConfig.ClusterName, f.clusterID, tt.etcdSnapshot)
 			require.NoError(f.T(), err)
 
 			logrus.Info("Deploying public fleet gitRepo")

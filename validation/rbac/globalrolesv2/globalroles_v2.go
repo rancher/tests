@@ -7,13 +7,13 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 
 	"github.com/rancher/shepherd/pkg/config"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 
 	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/kubeapi/projects"
@@ -178,6 +178,6 @@ func createProjectAndAddANamespace(client *rancher.Client, nsPrefix string) (str
 	if err != nil {
 		return "", err
 	}
-	customNS1, err := namespaces.CreateNamespaceUsingWrangler(client, localcluster, customProject.Name, nil)
+	customNS1, err := namespaces.CreateNamespace(client, localcluster, customProject.Name, namegen.AppendRandomString(nsPrefix), "", nil, nil)
 	return customNS1.Name, err
 }
