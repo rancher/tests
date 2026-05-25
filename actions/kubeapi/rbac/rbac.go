@@ -71,17 +71,19 @@ var (
 	}
 
 	PolicyRules = map[string][]rbacv1.PolicyRule{
-		"readProjects":    definePolicyRules([]string{"get", "list"}, []string{"projects"}, []string{ManagementAPIGroup}),
-		"createProjects":  definePolicyRules([]string{"create"}, []string{"projects"}, []string{ManagementAPIGroup}),
-		"updateProjects":  definePolicyRules([]string{"update", "patch"}, []string{"projects"}, []string{ManagementAPIGroup}),
-		"deleteProjects":  definePolicyRules([]string{"delete"}, []string{"projects"}, []string{ManagementAPIGroup}),
-		"manageProjects":  definePolicyRules([]string{"create", "update", "patch", "delete"}, []string{"projects"}, []string{ManagementAPIGroup}),
-		"readPrtbs":       definePolicyRules([]string{"get", "list"}, []string{"projectroletemplatebindings"}, []string{ManagementAPIGroup}),
-		"updatePrtbs":     definePolicyRules([]string{"update", "patch"}, []string{"projectroletemplatebindings"}, []string{ManagementAPIGroup}),
-		"readDeployments": definePolicyRules([]string{"get", "list"}, []string{"deployments"}, []string{AppsAPIGroup}),
-		"readPods":        definePolicyRules([]string{"get", "list"}, []string{"pods"}, []string{""}),
-		"readNamespaces":  definePolicyRules([]string{"get", "list"}, []string{"namespaces"}, []string{""}),
-		"readSecrets":     definePolicyRules([]string{"get", "list"}, []string{"secrets"}, []string{""}),
+		"readProjects":      definePolicyRules([]string{"get", "list"}, []string{"projects"}, []string{ManagementAPIGroup}),
+		"createProjects":    definePolicyRules([]string{"create"}, []string{"projects"}, []string{ManagementAPIGroup}),
+		"updateProjects":    definePolicyRules([]string{"update", "patch"}, []string{"projects"}, []string{ManagementAPIGroup}),
+		"deleteProjects":    definePolicyRules([]string{"delete"}, []string{"projects"}, []string{ManagementAPIGroup}),
+		"manageProjects":    definePolicyRules([]string{"create", "update", "patch", "delete"}, []string{"projects"}, []string{ManagementAPIGroup}),
+		"readPrtbs":         definePolicyRules([]string{"get", "list"}, []string{"projectroletemplatebindings"}, []string{ManagementAPIGroup}),
+		"updatePrtbs":       definePolicyRules([]string{"update", "patch"}, []string{"projectroletemplatebindings"}, []string{ManagementAPIGroup}),
+		"readDeployments":   definePolicyRules([]string{"get", "list"}, []string{"deployments"}, []string{AppsAPIGroup}),
+		"readPods":          definePolicyRules([]string{"get", "list"}, []string{"pods"}, []string{""}),
+		"readNamespaces":    definePolicyRules([]string{"get", "list"}, []string{"namespaces"}, []string{""}),
+		"readSecrets":       definePolicyRules([]string{"get", "list"}, []string{"secrets"}, []string{""}),
+		"readStatefulSets":  definePolicyRules([]string{"get", "list"}, []string{"statefulsets"}, []string{AppsAPIGroup}),
+		"deleteDeployments": definePolicyRules([]string{"delete"}, []string{"deployments"}, []string{AppsAPIGroup}),
 	}
 )
 

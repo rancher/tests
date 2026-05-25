@@ -7,7 +7,9 @@ Global Roles v2 introduces enhanced capabilities, allowing users to define permi
 
 ## Test Setup
 * For [globalroles_v2 checks](globalroles_v2_test.go), your GO suite should be set to `-run ^TestGlobalRolesV2TestSuite$`. You can find specific tests by checking the test file you plan to run.
-* For [globalroles_v2 webhook checks](globalroles_v2_webhook_test.go), your GO suite should be set to `-run ^TestGlobalRolesV2WebhookTestSuite$`. You can find specific tests by checking the test file you plan to run.
+* For [globalroles_v2 webhook checks](globalroles_v2_webhook_test.go), your GO suite should be set to `-run ^TestGlobalRolesV2WebhookTestSuite$`. 
+* For [inherited namespaced rules checks](inheritednamespacedrules_test.go), your GO suite should be set to `-run ^TestInheritedNamespacedRulesTestSuite$`. 
+* For [inherited namespaced rules across multiple clusters checks](inheritednamespacedrules_multiple_clusters_test.go), your GO suite should be set to `-run ^TestInheritedNamespacedRulesMultipleClustersTestSuite$`. You can find specific tests by checking the test file you plan to run.
 
 In your config file, set the following:
 ```yaml
