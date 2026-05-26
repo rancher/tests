@@ -4,15 +4,16 @@ package rke2
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	v1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
+	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -25,6 +26,7 @@ import (
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	tfpConfig "github.com/rancher/tfp-automation/config"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -46,7 +48,14 @@ func aceSetup(t *testing.T) aceTest {
 	r.client = client
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+
 	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	require.NoError(t, err)
+
+	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
+	require.NoError(t, err)
+
+	err = defaults.VerifyCattleConfig(r.cattleConfig)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
@@ -112,19 +121,26 @@ func TestACE(t *testing.T) {
 	r.client, err = r.client.ReLogin()
 	require.NoError(t, err)
 
-	provClusterObj, err := r.client.Steve.SteveType("provisioning.cattle.io.cluster").ByID(cluster.ID)
+	provClusterObj, err := r.client.Steve.SteveType(stevetypes.Provisioning).ByID(cluster.ID)
 	require.NoError(t, err)
+	require.NotNil(t, provClusterObj)
 
 	clusterStatus := &provv1.ClusterStatus{}
 	err = steveV1.ConvertToK8sType(provClusterObj.Status, clusterStatus)
 	require.NoError(t, err)
 
-	pemFilePath := filepath.Join(
-		r.cattleConfig["sshPath"].(map[string]any)["sshPath"].(string),
-		r.cattleConfig["awsEC2Configs"].(map[string]any)["awsEC2Config"].([]map[string]any)[0]["awsSSHKeyName"].(string),
-	)
+	awsEC2Configs := new(ec2.AWSEC2Configs)
+	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, r.cattleConfig, awsEC2Configs)
+	require.NotEmpty(t, awsEC2Configs.AWSEC2Config)
 
-	sshUser := r.cattleConfig["awsEC2Configs"].(map[string]any)["awsEC2Config"].([]map[string]any)[0]["awsUser"].(string)
+	terraformConfig := new(tfpConfig.TerraformConfig)
+	operations.LoadObjectFromMap(tfpConfig.TerraformConfigurationFileKey, r.cattleConfig, terraformConfig)
+	require.NotEmpty(t, terraformConfig.PrivateKeyPath)
+	require.NotEmpty(t, terraformConfig.AWSConfig.AWSUser)
+	pemFilePath := terraformConfig.PrivateKeyPath
+	logrus.Infof("PATH: %s", pemFilePath)
+
+	sshUser := terraformConfig.AWSConfig.AWSUser
 
 	t.Cleanup(func() {
 		logrus.Infof("Running cleanup")

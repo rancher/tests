@@ -45,6 +45,14 @@ func hostnameTruncationSetup(t *testing.T) hostnameTruncationTest {
 
 	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
 	require.NoError(t, err)
+	
+	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
+	require.NoError(t, err)
+
+	err = defaults.VerifyCattleConfig(r.cattleConfig)
+	require.NoError(t, err)
+
+	
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
 

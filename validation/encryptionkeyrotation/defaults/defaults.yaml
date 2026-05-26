@@ -43,12 +43,14 @@ awsMachineConfigs:
     instanceType: "t3.xlarge"
     sshUser: "<required>"
     vpcId: "<required>"
+    securityGroup: <HB_AWS_SECURITY_GROUP_NAMES>
     retries: "5"
   - roles: ["windows"]
     ami: "<required>"
-    instanceType: "t2.2xlarge"
+    instanceType: "t3.xlarge"
     sshUser: "<required>"
     vpcId: "<required>"
+    securityGroup: <HB_AWS_SECURITY_GROUP_NAMES>
     volumeType: "<required>"
     zone: "a"
     retries: "5"
