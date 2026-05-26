@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
 	"github.com/rancher/shepherd/extensions/workloads"
-	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
@@ -88,8 +87,8 @@ func (f *FleetWithSnapshotTestSuite) SetupSuite() {
 		require.NoError(f.T(), err)
 	}
 
-	podErrors := pods.StatusPods(f.client, f.clusterID)
-	require.Empty(f.T(), podErrors)
+	// NOTE: Skipped cluster-wide StatusPods check. See public_gitrepo_test.go for rationale.
+	// See: https://github.com/rancher/shepherd/issues/574
 
 }
 

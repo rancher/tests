@@ -11,7 +11,6 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
-	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
@@ -57,8 +56,11 @@ func (f *FleetPublicRepoTestSuite) SetupSuite() {
 		require.NoError(f.T(), err)
 	}
 
-	podErrors := pods.StatusPods(f.client, f.clusterID)
-	require.Empty(f.T(), podErrors)
+	// NOTE: Skipped cluster-wide StatusPods check here. When running the full pit.daily
+	// suite, chart tests (monitoring, istio, longhorn) leave Error-state helm job pods
+	// that cause false failures. Individual test methods verify fleet deployment health
+	// via fleet.VerifyGitRepo() which checks fleet status directly.
+	// See: https://github.com/rancher/shepherd/issues/574
 }
 
 func (f *FleetPublicRepoTestSuite) TestGitRepoDeployment() {
