@@ -48,6 +48,13 @@ func importK3SProxySetup(t *testing.T) importK3SProxyTest {
 	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
 	require.NoError(t, err)
 
+	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)
+	require.NoError(t, err)
+
+	err = defaults.VerifyCattleConfig(k.cattleConfig, nil)
+	require.NoError(t, err)
+
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
 

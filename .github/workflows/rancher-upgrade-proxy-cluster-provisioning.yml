@@ -475,6 +475,14 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
+            HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
+            HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
+            HB_PRIVATE_FULL_CHAIN, HB_PRIVATE_FULL_CHAIN
+            HB_PRIVATE_FULL_CHAIN_NAME, HB_PRIVATE_FULL_CHAIN_NAME
+            HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
+            HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
 
       - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -497,19 +505,19 @@ jobs:
       - name: Set up SSH Keys
         uses: ./.github/actions/setup-ssh-keys
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
-          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
-          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+          ssh-private-key: ${{ env.HB_SSH_PRIVATE_KEY }}
+          ssh-private-key-name: ${{ env.HB_SSH_PRIVATE_KEY_NAME }}
+          windows-ssh-private-key: ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
+          windows-ssh-private-key-name: ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME }}
 
       - name: Set up certificates
         id: setup-certs
         uses: ./.github/actions/setup-certs
         with:
-          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
-          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+          private-full-chain: ${{ env.HB_PRIVATE_FULL_CHAIN }}
+          private-full-chain-name: ${{ env.HB_PRIVATE_FULL_CHAIN_NAME }}
+          private-cert-key: ${{ env.HB_PRIVATE_CERT_KEY }}
+          private-cert-key-name: ${{ env.HB_PRIVATE_CERT_KEY_NAME }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -845,6 +853,14 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
+            HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
+            HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
+            HB_PRIVATE_FULL_CHAIN, HB_PRIVATE_FULL_CHAIN
+            HB_PRIVATE_FULL_CHAIN_NAME, HB_PRIVATE_FULL_CHAIN_NAME
+            HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
+            HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
 
       - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -867,19 +883,19 @@ jobs:
       - name: Set up SSH Keys
         uses: ./.github/actions/setup-ssh-keys
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
-          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
-          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+          ssh-private-key: ${{ env.HB_SSH_PRIVATE_KEY }}
+          ssh-private-key-name: ${{ env.HB_SSH_PRIVATE_KEY_NAME }}
+          windows-ssh-private-key: ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
+          windows-ssh-private-key-name: ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME }}
 
       - name: Set up certificates
         id: setup-certs
         uses: ./.github/actions/setup-certs
         with:
-          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
-          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+          private-full-chain: ${{ env.HB_PRIVATE_FULL_CHAIN }}
+          private-full-chain-name: ${{ env.HB_PRIVATE_FULL_CHAIN_NAME }}
+          private-cert-key: ${{ env.HB_PRIVATE_CERT_KEY }}
+          private-cert-key-name: ${{ env.HB_PRIVATE_CERT_KEY_NAME }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -1215,6 +1231,14 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
+            HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
+            HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
+            HB_PRIVATE_FULL_CHAIN, HB_PRIVATE_FULL_CHAIN
+            HB_PRIVATE_FULL_CHAIN_NAME, HB_PRIVATE_FULL_CHAIN_NAME
+            HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
+            HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
 
       - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -1237,19 +1261,19 @@ jobs:
       - name: Set up SSH Keys
         uses: ./.github/actions/setup-ssh-keys
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
-          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
-          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+          ssh-private-key: ${{ env.HB_SSH_PRIVATE_KEY }}
+          ssh-private-key-name: ${{ env.HB_SSH_PRIVATE_KEY_NAME }}
+          windows-ssh-private-key: ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
+          windows-ssh-private-key-name: ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME }}
 
       - name: Set up certificates
         id: setup-certs
         uses: ./.github/actions/setup-certs
         with:
-          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
-          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+          private-full-chain: ${{ env.HB_PRIVATE_FULL_CHAIN }}
+          private-full-chain-name: ${{ env.HB_PRIVATE_FULL_CHAIN_NAME }}
+          private-cert-key: ${{ env.HB_PRIVATE_CERT_KEY }}
+          private-cert-key-name: ${{ env.HB_PRIVATE_CERT_KEY_NAME }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname

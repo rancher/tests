@@ -38,6 +38,12 @@ func autoScalingSetup(t *testing.T) autoScalingTest {
 	s.cattleConfig, err = defaults.LoadPackageDefaults(s.cattleConfig, "")
 	require.NoError(t, err)
 
+	s.cattleConfig, err = defaults.LoadSecretsManagerDefaults(s.cattleConfig)
+	require.NoError(t, err)
+
+	err = defaults.VerifyCattleConfig(s.cattleConfig, []string{"prime"})
+	require.NoError(t, err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, s.cattleConfig, loggingConfig)
 
