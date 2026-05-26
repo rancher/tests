@@ -1,26 +1,28 @@
 rancher:
-  host: "<required>"
-  adminPassword: "<required>"
+  host: "<required>.<HB_AWS_ROUTE_53_ZONE>"
+  adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
   insecure: true
   cleanup: true
 
 awsCredentials:
-  awsAccessKey: "<required>"
-  awsSecretKey: "<required>"
+  accessKey: "<required>"
+  secretKey: "<required>"
+  defaultRegion: "<required>"
 
 terraform:
   awsCredentials:
-    awsAccessKey: "<required>"
-    awsSecretKey: "<required>"
+    awsAccessKey: "<AWS_ACCESS_KEY_ID>"
+    awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
   cni: "<HB_CNI>"
-  defaultClusterRoleForProjectMembers: "true"
-  enableNetworkPolicy: false
-  provider: "<HB_PROVIDER_AMAZON>"
-  downstreamClusterProvider: "<HB_PROVIDER_AMAZON>"
+  localCluster: "rke2"
+  generateV3Token: false
+  defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
+  provider: "<HB_PROVIDER>"
+  downstreamClusterProvider: "<HB_PROVIDER>"
   privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
   awsConfig:
-    ami: "<HB_AWS_AMI>"
+    ami: "<HB_DEFAULT_AMI>"
     awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
     awsInstanceType: "<HB_AWS_INSTANCE_TYPE>"
     awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
@@ -32,9 +34,9 @@ terraform:
     awsZoneLetter: "<HB_AWS_ZONE_LETTER>"
     awsRootSize: "<HB_AWS_ROOT_SIZE>"
     awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
-    awsUser: "<HB_AWS_USER>"
+    awsUser: "<HB_AWS_OS_USER>"
     sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
-    timeout: "<HB_TIMEOUT>"
+    timeout: "<HB_SSH_TIMEOUT>"
     windowsAWSUser: "<HB_AWS_WINDOWS_USER>"
     windows2019AMI: "<HB_WINDOWS_2019_AMI>"
     windows2022AMI: "<HB_WINDOWS_2022_AMI>"
@@ -48,14 +50,20 @@ terraform:
     bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
     certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
     certType: "<HB_CERT_TYPE>"
-    chartVersion: "<HB_RANCHER_CHART_VERSION>"
-    osUser: "<HB_OS_USER>"
-    osGroup: "<HB_OS_GROUP>"
-    rancherChartRepository: "<HB_RANCHER_HELM_CHART_URL>"
-    rancherHostname: "<HB_RANCHER_HOSTNAME>"
+    chartVersion: "<required>"
+    osUser: "<HB_AWS_OS_USER>"
+    osGroup: "<HB_AWS_OS_GROUP>"
+    rancherChartRepository: "<required>"
+    rancherHostname: "<required>"
     rancherImage: "<HB_RANCHER_IMAGE>"
-    rancherTagVersion: "<HB_RANCHER_VERSION>"
+    rancherTagVersion: "<required>"
     registryPassword: "<HB_DOCKERHUB_PASSWORD>"
     registryUsername: "<HB_DOCKERHUB_USERNAME>"
-    repo: "<HB_RANCHER_REPO>"
+    repo: "<required>"
     rke2Version: "<HB_RKE2_VERSION>"
+terratest:
+  pathToRepo: "<HB_PATH_TO_TFP_REPO>"
+  standaloneLogging: false
+  tfLogging: false
+logging:
+  level: "<HB_LOGGING_LEVEL>"

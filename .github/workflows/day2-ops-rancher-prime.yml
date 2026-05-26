@@ -234,7 +234,7 @@ jobs:
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_14 }}"
           terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
+            pathToRepo: "${{ secrets.HB_PATH_TO_TFP_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:
@@ -549,7 +549,7 @@ jobs:
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
           terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
+            pathToRepo: "${{ secrets.HB_PATH_TO_TFP_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:

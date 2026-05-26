@@ -105,6 +105,8 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_AWS_REGION, HB_AWS_REGION
+            HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
 
       - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -197,146 +199,43 @@ jobs:
         run: |
           cat > config.yaml <<EOF
           rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-            adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-            insecure: true
-            cleanup: true
+            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+
+          awsCredentials:
+            accessKey: "$AWS_ACCESS_KEY"
+            secretKey: "$AWS_SECRET_KEY"
+            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+
           terraform:
-            cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
-            privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            awsCredentials:
-              awsAccessKey: "$AWS_ACCESS_KEY"
-              awsSecretKey: "$AWS_SECRET_KEY"
-            awsConfig:
-              ami: "${{ secrets.AWS_AMI }}"
-              awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
-              awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              region: "${{ secrets.AWS_REGION }}"
-              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
-              awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-              awsVpcID: "${{ secrets.AWS_VPC_ID }}"
-              awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
-              awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
-              awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ secrets.AWS_USER }}"
-              sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
-              timeout: "${{ vars.TIMEOUT }}"
-              windowsAWSUser: "${{ secrets.AWS_WINDOWS_USER }}" 
-              windows2019AMI: "${{ secrets.WINDOWS_2019_AMI }}"
-              windows2022AMI: "${{ secrets.WINDOWS_2022_AMI }}"
-              windows2019Password: "${{ secrets.AWS_WINDOWS_2019_PASSWORD }}"
-              windows2022Password: "${{ secrets.AWS_WINDOWS_2022_PASSWORD }}"
-              windowsInstanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
-              loadBalancerType: "${{ vars.LOAD_BALANCER_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+            
             standalone:
-              bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-              certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
-              chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              k3sVersion: "${{ vars.K3S_VERSION_2_15 }}${{ vars.K3S_VERSION_SUFFIX }}"
-              osUser: "${{ secrets.OS_USER }}"
-              osGroup: "${{ secrets.OS_GROUP }}"
-              rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-              rancherImage: "${{ secrets.RANCHER_IMAGE }}"
-              rancherTagVersion: "${{ env.RANCHER_VERSION }}"
+              chartVersion: "2.15.0-alpha20"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
-              rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
-          terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
+              rancherChartRepository: "https://releases.rancher.com/server-charts/"
+              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+              rancherTagVersion: "v2.15.0-alpha20"
+              repo: "alpha"
+              rke2Version: "v1.35.4"
 
           clusterConfig:
-            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            cni: "${{ vars.CNI }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
-                    endpoint: ["https://${{ secrets.QA_PRIVATE_REGISTRY_NAME }}"]
+                    endpoint: ["https://${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}"]
                 configs:
-                  "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
+                  "${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}":
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
-
-          logging:
-            level: "${{ vars.LOGGING_LEVEL }}"
-          
-          awsCredentials:
-            secretKey: "$AWS_SECRET_KEY"
-            accessKey: "$AWS_ACCESS_KEY"
-            defaultRegion: "${{ secrets.AWS_REGION }}"
-
-          awsMachineConfigs:
-            region: "${{ secrets.AWS_REGION }}"
-            awsMachineConfig:
-            - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_AMI }}"
-              sshUser: "${{ secrets.AWS_USER }}"
-              vpcId: "${{ secrets.AWS_VPC_ID }}"
-              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-              volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.AWS_ZONE_LETTER }}"
-              retries: "5"
-              rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-
-          awsEC2Configs:
-            region: "${{ secrets.AWS_REGION }}"
-            awsSecretAccessKey: "$AWS_SECRET_KEY"
-            awsAccessKeyID: "$AWS_ACCESS_KEY"
-            awsEC2Config:
-              - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_AMI }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-                awsUser: "${{ secrets.AWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["etcd", "controlplane", "worker"]
-              - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-                awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["windows"]
-          sshPath: 
-            sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
-
-          templateTest:
-            repo:
-              spec:
-                gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
-                gitBranch: main
-                insecureSkipTLSVerify: true
-            templateProvider: "aws"
-            templateName: "cluster-template1"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -492,6 +391,8 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_AWS_REGION, HB_AWS_REGION
+            HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
 
       - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -583,11 +484,11 @@ jobs:
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
-          rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-            adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-            insecure: true
-            cleanup: true
+          awsCredentials:
+            accessKey: "<AWS_ACCESS_KEY_ID>"
+            secretKey: "<AWS_SECRET_ACCESS_KEY>"
+            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+
           terraform:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
@@ -600,33 +501,8 @@ jobs:
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsCredentials:
-              awsAccessKey: "$AWS_ACCESS_KEY"
-              awsSecretKey: "$AWS_SECRET_KEY"
-            awsConfig:
-              ami: "${{ secrets.AWS_AMI }}"
-              awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
-              awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              region: "${{ secrets.AWS_REGION }}"
-              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
-              awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-              awsVpcID: "${{ secrets.AWS_VPC_ID }}"
-              awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
-              awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
-              awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ secrets.AWS_USER }}"
-              sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
-              timeout: "${{ vars.TIMEOUT }}"
-              windowsAWSUser: "${{ secrets.AWS_WINDOWS_USER }}" 
-              windows2019AMI: "${{ secrets.WINDOWS_2019_AMI }}"
-              windows2022AMI: "${{ secrets.WINDOWS_2022_AMI }}"
-              windows2019Password: "${{ secrets.AWS_WINDOWS_2019_PASSWORD }}"
-              windows2022Password: "${{ secrets.AWS_WINDOWS_2022_PASSWORD }}"
-              windowsInstanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
-              loadBalancerType: "${{ vars.LOAD_BALANCER_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+              awsAccessKey: "<AWS_ACCESS_KEY_ID>"
+              awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
@@ -635,95 +511,27 @@ jobs:
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
               rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-              rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_14 }}"
-          terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            cni: "${{ vars.CNI }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
-                    endpoint: ["https://${{ secrets.QA_PRIVATE_REGISTRY_NAME }}"]
+                    endpoint: ["https://${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}"]
                 configs:
-                  "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
+                  "${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}":
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
-
-          logging:
-            level: "${{ vars.LOGGING_LEVEL }}"
-          
-          awsCredentials:
-            secretKey: "$AWS_SECRET_KEY"
-            accessKey: "$AWS_ACCESS_KEY"
-            defaultRegion: "${{ secrets.AWS_REGION }}"
-
-          awsMachineConfigs:
-            region: "${{ secrets.AWS_REGION }}"
-            awsMachineConfig:
-            - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_AMI }}"
-              sshUser: "${{ secrets.AWS_USER }}"
-              vpcId: "${{ secrets.AWS_VPC_ID }}"
-              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-              volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.AWS_ZONE_LETTER }}"
-              retries: "5"
-              rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-
-          awsEC2Configs:
-            region: "${{ secrets.AWS_REGION }}"
-            awsSecretAccessKey: "$AWS_SECRET_KEY"
-            awsAccessKeyID: "$AWS_ACCESS_KEY"
-            awsEC2Config:
-              - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_AMI }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-                awsUser: "${{ secrets.AWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["etcd", "controlplane", "worker"]
-              - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-                awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["windows"]
-          sshPath: 
-            sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
-
-          templateTest:
-            repo:
-              spec:
-                gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
-                gitBranch: main
-                insecureSkipTLSVerify: true
-            templateProvider: "aws"
-            templateName: "cluster-template1"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -1271,6 +1079,8 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_AWS_REGION, HB_AWS_REGION
+            HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
 
       - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -1362,11 +1172,11 @@ jobs:
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
-          rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-            adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-            insecure: true
-            cleanup: true
+          awsCredentials:
+            accessKey: "<AWS_ACCESS_KEY_ID>"
+            secretKey: "<AWS_SECRET_ACCESS_KEY>"
+            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+
           terraform:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
@@ -1379,33 +1189,8 @@ jobs:
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsCredentials:
-              awsAccessKey: "$AWS_ACCESS_KEY"
-              awsSecretKey: "$AWS_SECRET_KEY"
-            awsConfig:
-              ami: "${{ secrets.AWS_AMI }}"
-              awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
-              awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              region: "${{ secrets.AWS_REGION }}"
-              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
-              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES_PRIME }}]
-              awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-              awsVpcID: "${{ secrets.AWS_VPC_ID }}"
-              awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
-              awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
-              awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ secrets.AWS_USER }}"
-              sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
-              timeout: "${{ vars.TIMEOUT }}"
-              windowsAWSUser: "${{ secrets.AWS_WINDOWS_USER }}" 
-              windows2019AMI: "${{ secrets.WINDOWS_2019_AMI }}"
-              windows2022AMI: "${{ secrets.WINDOWS_2022_AMI }}"
-              windows2019Password: "${{ secrets.AWS_WINDOWS_2019_PASSWORD }}"
-              windows2022Password: "${{ secrets.AWS_WINDOWS_2022_PASSWORD }}"
-              windowsInstanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
-              loadBalancerType: "${{ vars.LOAD_BALANCER_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+              awsAccessKey: "<AWS_ACCESS_KEY_ID>"
+              awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
@@ -1415,95 +1200,27 @@ jobs:
               osGroup: "${{ secrets.OS_GROUP }}"
               rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
               rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-              rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
-          terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            cni: "${{ vars.CNI }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
-                    endpoint: ["https://${{ secrets.QA_PRIVATE_REGISTRY_NAME }}"]
+                    endpoint: ["https://${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}"]
                 configs:
-                  "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
+                  "${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}":
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
-
-          logging:
-            level: "${{ vars.LOGGING_LEVEL }}"
-          
-          awsCredentials:
-            secretKey: "$AWS_SECRET_KEY"
-            accessKey: "$AWS_ACCESS_KEY"
-            defaultRegion: "${{ secrets.AWS_REGION }}"
-
-          awsMachineConfigs:
-            region: "${{ secrets.AWS_REGION }}"
-            awsMachineConfig:
-            - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_AMI }}"
-              sshUser: "${{ secrets.AWS_USER }}"
-              vpcId: "${{ secrets.AWS_VPC_ID }}"
-              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-              volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.AWS_ZONE_LETTER }}"
-              retries: "5"
-              rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-
-          awsEC2Configs:
-            region: "${{ secrets.AWS_REGION }}"
-            awsSecretAccessKey: "$AWS_SECRET_KEY"
-            awsAccessKeyID: "$AWS_ACCESS_KEY"
-            awsEC2Config:
-              - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_AMI }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-                awsUser: "${{ secrets.AWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["etcd", "controlplane", "worker"]
-              - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-                awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsUser: "${{ secrets.AWS_WINDOWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["windows"]
-          sshPath: 
-            sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
-
-          templateTest:
-            repo:
-              spec:
-                gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
-                gitBranch: main
-                insecureSkipTLSVerify: true
-            templateProvider: "aws"
-            templateName: "cluster-template1"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG

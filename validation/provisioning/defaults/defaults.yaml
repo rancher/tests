@@ -24,114 +24,112 @@ clusterConfig:
       worker: true
       quantity: 1
   kubernetesVersion: ""
-  cni: "calico"
-  provider: "aws"
-  nodeProvider: "ec2"
-  hardened: false
-  compliance: false
-  psact: ""
+  cni: "<HB_CNI>"
+  provider: "<HB_PROVIDER>"
+  nodeProvider: "<HB_NODE_PROVIDER>"
 
 #Required for all tests except template
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "<required>"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
-  region: "us-east-2"
+  region: "<HB_AWS_REGION>"
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
-    ami: "<required>"
+    iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+    ami: "<HB_DEFAULT_AMI>"
     instanceType: "t3a.medium"
-    volumeType: "<required>"
-    rootSize: "<required>"
-    sshUser: "<required>"
-    vpcId: "<required>"
-    zone: "a"
+    volumeType: "<HB_AWS_VOLUME_TYPE>"
+    rootSize: "<HB_AWS_ROOT_SIZE>"
+    sshUser: "<HB_AWS_OS_USER>"
+    subnetId: "<HB_AWS_SUBNET_ID>"
+    vpcId: "<HB_AWS_VPC_ID>"
+    zone: "<HB_AWS_ZONE_LETTER>"
     retries: "5"
   - roles: ["windows"]
-    ami: "<required>"
+    iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+    ami: "<HB_DEFAULT_AMI>"
     instanceType: "t2.2xlarge"
-    sshUser: "<required>"
-    vpcId: "<required>"
-    volumeType: "<required>"
-    zone: "a"
+    sshUser: "<HB_AWS_OS_USER>"
+    subnetId: "<HB_AWS_SUBNET_ID>"
+    vpcId: "<HB_AWS_VPC_ID>"
+    volumeType: "<HB_AWS_VOLUME_TYPE>"
+    zone: "<HB_AWS_ZONE_LETTER>"
     retries: "5"
-    rootSize: "100" 
+    rootSize: "<HB_AWS_ROOT_SIZE>" 
 
 
 #terraform and terratest variables required for custom cluster provisioning
 terraform:
-  provider: "aws"
-  cni: "calico"
+  provider: "<HB_PROVIDER>"
+  cni: "<HB_CNI>"
   downstreamClusterProvider: "aws"
-  defaultClusterRoleForProjectMembers: "true"
-  enableNetworkPolicy: false
-  resourcePrefix: "auto-prov"
+  defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
+  resourcePrefix: "<HB_RESOURCE_PREFIX>"
   module: ""
-  privateKeyPath: "<required>"
+  privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
 
   awsCredentials:
-    awsAccessKey: "<required>"
-    awsSecretKey: "<required>"
+    awsAccessKey: "<AWS_ACCESS_KEY_ID>"
+    awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
 
   awsConfig:
-    ami: "<required>"
-    awsKeyName: "<required>"
+    ami: "<HB_DEFAULT_AMI>"
+    awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
     awsVolumeType: "gp3"
-    region: "us-east-2"
-    awsSecurityGroups: ["<required>", "<required>"]
-    awsSecurityGroupNames: ["<required>", "<required>"]
-    awsSubnetID: "<required>"
-    awsVpcID: "<required>"
+    region: "<HB_AWS_REGION>"
+    awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS>"]
+    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES>"]
+    awsSubnetID: "<HB_AWS_SUBNET_ID>"
+    awsVpcID: "<HB_AWS_VPC_ID>"
     awsInstanceType: "t3a.medium"
     awsZoneLetter: "a"
     awsRootSize: 100
-    awsRoute53Zone: "<required>"
-    awsUser: "ubuntu"
-    ipAddressType: "ipv4"
-    loadBalancerType: "ipv4"
-    targetType: "instance"
-    sshConnectionType: "ssh"
-    timeout: "5m"
+    awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
+    awsUser: "<HB_AWS_OS_USER>"
+    ipAddressType: "<HB_IP_ADDRESS_TYPE>"
+    loadBalancerType: "<HB_LOAD_BALANCER_TYPE>"
+    targetType: "<HB_TARGET_TYPE>"
+    sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
+    timeout: "<HB_SSH_TIMEOUT>"
 
 terratest:
   kubernetesVersion: ""
 
-#Required for hardened
+#Required for custom cluster provisioning
 awsEC2Configs:
-  region: "us-east-2"
-  awsSecretAccessKey: "<required>"
-  awsAccessKeyID: "<required>"
+  region: "<HB_AWS_REGION>"
+  awsSecretAccessKey: "<AWS_SECRET_ACCESS_KEY>"
+  awsAccessKeyID: "<AWS_ACCESS_KEY_ID>"
   awsEC2Config:
     - instanceType: "t3a.medium"
-      awsRegionAZ: ""
-      awsAMI: "<required>"
-      awsSecurityGroups: ["<required>"]
-      awsSSHKeyName: "<required>"
-      awsCICDInstanceTag: "<required>"
-      awsIAMProfile: ""
-      awsUser: "<required>"
-      volumeSize: 100
+      awsAMI: "<HB_DEFAULT_AMI>"
+      awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS>"]
+      awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+      awsCICDInstanceTag: "<HB_AWS_CICD_INSTANCE_TAG>"
+      awsIAMProfile: "<HB_AWS_IAM_PROFILE>"
+      awsUser: "<HB_AWS_OS_USER>"
+      volumeSize: "<HB_AWS_ROOT_SIZE>"
       roles: ["etcd", "controlplane", "worker"]
     - instanceType: "t2.2xlarge"
-      awsRegionAZ: ""
-      awsAMI: "<required>"
-      awsSecurityGroups: ["<required>"]
-      awsSSHKeyName: "<required>"
-      awsCICDInstanceTag: "<required>"
-      awsIAMProfile: ""
-      awsUser: "<required>"
-      volumeSize: 100
+      awsAMI: "<HB_DEFAULT_AMI>"
+      awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS>"]
+      awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+      awsCICDInstanceTag: "<HB_AWS_CICD_INSTANCE_TAG>"
+      awsIAMProfile: "<HB_AWS_IAM_PROFILE>"
+      awsUser: "<HB_AWS_OS_USER>"
+      volumeSize: "<HB_AWS_ROOT_SIZE>"
       roles: ["windows"]
 
 #Required for tests that utilize custom clusters
 sshPath:
-   sshPath: "<required>" 
+   sshPath: "<HB_TESTS_SSH_DIR_PATH>"
 
 logging:
-   level: "info"
+  level: "<HB_LOGGING_LEVEL>"
 
 workloadConfigs:
   deployment:
