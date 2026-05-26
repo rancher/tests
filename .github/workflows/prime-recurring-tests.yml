@@ -165,8 +165,7 @@ jobs:
             cleanup: true
           terraform:
             cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
+            defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
@@ -209,7 +208,7 @@ jobs:
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_14 }}"
           terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
+            pathToRepo: "${{ secrets.HB_PATH_TO_TFP_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:
@@ -467,8 +466,7 @@ jobs:
             cleanup: true
           terraform:
             cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
+            defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
@@ -511,7 +509,7 @@ jobs:
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
           terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
+            pathToRepo: "${{ secrets.HB_PATH_TO_TFP_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:

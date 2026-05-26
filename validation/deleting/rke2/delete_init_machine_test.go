@@ -55,6 +55,9 @@ func (d *DeleteInitMachineTestSuite) SetupSuite() {
 
 	d.cattleConfig, err = defaults.LoadPackageDefaults(d.cattleConfig, "")
 	require.NoError(d.T(), err)
+	
+	d.cattleConfig, err = defaults.LoadSecretsManagerDefaults(d.cattleConfig)
+	require.NoError(d.T(), err)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, d.cattleConfig, loggingConfig)

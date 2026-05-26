@@ -59,6 +59,9 @@ func (u *UpgradeWindowsKubernetesTestSuite) SetupSuite() {
 	u.cattleConfig, err = defaults.LoadPackageDefaults(u.cattleConfig, "")
 	require.NoError(u.T(), err)
 
+	u.cattleConfig, err = defaults.LoadSecretsManagerDefaults(u.cattleConfig)
+	require.NoError(u.T(), err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, u.cattleConfig, loggingConfig)
 

@@ -4,8 +4,8 @@ templateTest:
     metadata:
       name: "test"
     spec:
-      gitRepo: "<required>"
-      gitBranch: "<required>"
+      gitRepo: "<HB_TEMPLATE_GIT_REPO>"
+      gitBranch: "main"
       insecureSkipTLSVerify: true
-  templateProvider: "aws"
-  templateName: "<required>"
+  templateProvider: "<HB_PROVIDER>"
+  templateName: "rke2-clusterTemplate1"

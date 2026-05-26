@@ -54,6 +54,9 @@ func (s *SnapshotRecurringTestSuite) SetupSuite() {
 
 	s.cattleConfig, err = defaults.LoadPackageDefaults(s.cattleConfig, "")
 	require.NoError(s.T(), err)
+	
+	s.cattleConfig, err = defaults.LoadSecretsManagerDefaults(s.cattleConfig)
+	require.NoError(s.T(), err)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, s.cattleConfig, loggingConfig)

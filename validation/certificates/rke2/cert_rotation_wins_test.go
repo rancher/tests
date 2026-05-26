@@ -58,6 +58,9 @@ func (c *CertRotationWindowsTestSuite) SetupSuite() {
 
 	c.cattleConfig, err = defaults.LoadPackageDefaults(c.cattleConfig, "")
 	require.NoError(c.T(), err)
+	
+	c.cattleConfig, err = defaults.LoadSecretsManagerDefaults(c.cattleConfig)
+	require.NoError(c.T(), err)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, c.cattleConfig, loggingConfig)
