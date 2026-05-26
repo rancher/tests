@@ -86,6 +86,17 @@ func getChartCaseEndpointUntilBodyHas(client *rancher.Client, host, path, bodyPa
 // listIstioDeployments is a private helper function
 // that returns the deployment specs if deployments have "operator.istio.io/version" label
 func listIstioDeployments(steveclient *v1.Client) (deploymentSpecList []*appv1.DeploymentSpec, err error) {
+	err = kubewait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 5*time.Minute, true, func(context.Context) (bool, error) {
+		deploymentSpecList, err = listIstioDeploymentsOnce(steveclient)
+		if err != nil {
+			return false, err
+		}
+		return len(deploymentSpecList) >= 2, nil
+	})
+	return
+}
+
+func listIstioDeploymentsOnce(steveclient *v1.Client) (deploymentSpecList []*appv1.DeploymentSpec, err error) {
 	deploymentList, err := steveclient.SteveType(stevetypes.Deployment).List(nil)
 	if err != nil {
 		return
