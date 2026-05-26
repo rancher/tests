@@ -21,6 +21,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/ingresses"
 	kubeapinodes "github.com/rancher/shepherd/extensions/kubeapi/nodes"
+	"github.com/rancher/shepherd/extensions/kubectl"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
@@ -70,6 +71,13 @@ func (i *IstioTestSuite) SetupSuite() {
 	require.NoError(i.T(), err)
 
 	i.cluster = cluster
+
+	// Preemptively clean up any leftover istio resources from other test suites
+	// (e.g., appco/istio tests may leave istio-system namespace behind)
+	i.T().Log("Preemptively cleaning up istio resources")
+	charts.DeleteIstioResources(client, cluster.ID)
+	// DeleteIstioResources doesn't remove the namespace itself, so delete it via kubectl
+	kubectl.Command(client, nil, cluster.ID, []string{"sh", "-c", "kubectl delete namespace istio-system --ignore-not-found=true"}, "1MB")
 
 	// Change kiali and jaeger paths if it's not local cluster
 	if !cluster.IsLocal {

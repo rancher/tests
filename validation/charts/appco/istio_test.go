@@ -33,6 +33,21 @@ type IstioTestSuite struct {
 }
 
 func (i *IstioTestSuite) TearDownSuite() {
+	i.T().Log("Deleting Istio resources")
+	// Create a fresh session and client for cleanup since the test sessions
+	// were already closed by TearDownTest. Without this, kubectl.Command
+	// fails with "attempted to register cleanup function to closed test session".
+	cleanupSession := session.NewSession()
+	cleanupClient, err := rancher.NewClient("", cleanupSession)
+	if err != nil {
+		i.T().Logf("Failed to create cleanup client: %v", err)
+	} else {
+		_, err := charts.DeleteIstioResources(cleanupClient, i.cluster.ID)
+		if err != nil {
+			i.T().Logf("Failed to delete Istio resources: %v", err)
+		}
+	}
+	cleanupSession.Cleanup()
 	i.session.Cleanup()
 }
 
