@@ -24,43 +24,44 @@ clusterConfig:
       worker: true
       quantity: 3
   kubernetesVersion: ""
-  cni: "calico"
-  provider: "aws"
-  nodeProvider: "ec2"
+  cni: "<HB_CNI>"
+  provider: "<HB_PROVIDER>"
+  nodeProvider: "<HB_NODE_PROVIDER>"
 
 #Required for all tests
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "<required>"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
-  region: "us-east-2"
+  region: "<HB_AWS_REGION>"
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
-    ami: "<required>"
+    ami: "<HB_DEFAULT_AMI>"
     instanceType: "t3a.xlarge"
-    volumeType: "<required>"
-    rootSize: "<required>"
-    sshUser: "<required>"
-    vpcId: "<required>"
+    volumeType: "<HB_AWS_VOLUME_TYPE>"
+    rootSize: "<HB_AWS_ROOT_SIZE>"
+    sshUser: "<HB_AWS_OS_USER>"
+    vpcId: "<HB_AWS_VPC_ID>"
     retries: "5"
-    zone: "a"
+    zone: "<HB_AWS_ZONE_LETTER>"
 
 awsEC2Configs:
-  region: "us-east-2"
-  awsSecretAccessKey: "<required>"
-  awsAccessKeyID: "<required>"
+  region: "<HB_AWS_REGION>"
+  awsSecretAccessKey: "<AWS_SECRET_ACCESS_KEY>"
+  awsAccessKeyID: "<AWS_ACCESS_KEY_ID>"
   awsEC2Config:
     - instanceType: "t3a.xlarge"
-      awsRegionAZ: ""
-      awsSSHKeyName: "<required>"
-      awsAMI: "<required>"
-      awsSecurityGroups: ["<required>"]
-      awsSSHKeyName: "<required>"
-      awsCICDInstanceTag: "<required>"
-      awsIAMProfile: ""
-      awsUser: "<required>"
-      volumeSize: 100
+      awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+      awsAMI: "<HB_DEFAULT_AMI>"
+      awsSecurityGroups: <HB_AWS_SECURITY_GROUPS>
+      awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+      awsCICDInstanceTag: "rancher-validation"
+      awsIAMProfile: "<HB_AWS_IAM_PROFILE>"
+      awsUser: "<HB_AWS_OS_USER>"
+      volumeSize: "<HB_AWS_ROOT_SIZE>"
       roles: ["etcd", "controlplane", "worker"]
+logging:
+  level: "<HB_LOGGING_LEVEL>"

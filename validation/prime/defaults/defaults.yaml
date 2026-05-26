@@ -10,3 +10,5 @@ prime:
   isPrime: true 
   rancherVersion: "<required>"
   registry: "<required>"
+logging:
+  level: "<HB_LOGGING_LEVEL>"

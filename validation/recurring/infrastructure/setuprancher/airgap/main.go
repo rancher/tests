@@ -33,6 +33,11 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("Failed to load package defaults: %v", err)
 	}
+
+	cattleConfig, err = defaults.LoadSecretsManagerDefaults(cattleConfig)
+	if err != nil {
+		logrus.Fatalf("Failed to load Secrets Manager defaults: %v", err)
+	}
 	testSession := session.NewSession()
 
 	client, registry, bastion, _, _, _, _ := setupairgap.SetupAirgapRancher(t, testSession, keypath.AirgapKeyPath, cattleConfig)

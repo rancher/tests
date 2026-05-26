@@ -5,18 +5,18 @@ rancher:
   cleanup: true
 
 awsCredentials:
-  awsAccessKey: "<required>"
-  awsSecretKey: "<required>"
+  accessKey: "<required>"
+  secretKey: "<required>"
+  defaultRegion: "<required>"
 
 terraform:
   awsCredentials:
-    awsAccessKey: "<required>"
-    awsSecretKey: "<required>"
+    awsAccessKey: "<AWS_ACCESS_KEY_ID>"
+    awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
   cni: "<HB_CNI>"
-  defaultClusterRoleForProjectMembers: "true"
-  enableNetworkPolicy: false
-  provider: "<HB_PROVIDER_AMAZON>"
-  downstreamClusterProvider: "<HB_PROVIDER_AMAZON>"
+  defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
+  provider: "<HB_PROVIDER>"
+  downstreamClusterProvider: "<HB_PROVIDER>"
   privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
   awsConfig:
@@ -25,12 +25,12 @@ terraform:
     awsInstanceType: "<HB_AWS_INSTANCE_TYPE>"
     awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
     region: "<HB_AWS_REGION>"
-    awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS>"]
-    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES>"]
+    awsSecurityGroups: <HB_AWS_SECURITY_GROUPS>
+    awsSecurityGroupNames: <HB_AWS_SECURITY_GROUP_NAMES>
     awsSubnetID: "<HB_AWS_IPV6_SUBNET_ID>"
     awsVpcID: "<HB_AWS_VPC_ID>"
     awsZoneLetter: "<HB_IPV6_AWS_ZONE_LETTER>"
-    awsRootSize: "<HB_AWS_ROOT_SIZE>"
+    awsRootSize: <HB_AWS_ROOT_SIZE>
     awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
     awsUser: "<HB_IPV6_AWS_USER>"
     clusterCIDR: "<HB_IPV6_CLUSTER_CIDR>"
@@ -38,7 +38,7 @@ terraform:
     enablePrimaryIPv6: true
     httpProtocolIPv6: "enabled"
     sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
-    timeout: "<HB_TIMEOUT>"
+    timeout: "<HB_SSH_TIMEOUT>"
     ipAddressType: "<HB_IPV6_ADDRESS_TYPE>"
     loadBalancerType: "<HB_LOAD_BALANCER_DUALSTACK_TYPE>"
     targetType: "<HB_TARGET_IPV6_TYPE>"
@@ -62,3 +62,5 @@ terraform:
     upgradedRancherImage: "<HB_UPGRADED_RANCHER_IMAGE>"
     upgradedRancherRepo: "<HB_UPGRADED_RANCHER_REPO>"
     upgradedRancherTagVersion: "<HB_UPGRADED_RANCHER_VERSION>"
+logging:
+  level: "<HB_LOGGING_LEVEL>"

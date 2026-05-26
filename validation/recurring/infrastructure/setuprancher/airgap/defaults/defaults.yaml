@@ -5,17 +5,17 @@ rancher:
   cleanup: true
 
 awsCredentials:
-  awsAccessKey: "<required>"
-  awsSecretKey: "<required>"
+  accessKey: "<required>"
+  secretKey: "<required>"
+  defaultRegion: "<required>"
 
 terraform:
   awsCredentials:
-    awsAccessKey: "<required>"
-    awsSecretKey: "<required>"
+    awsAccessKey: "<AWS_ACCESS_KEY_ID>"
+    awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
   cni: "<HB_CNI>"
-  defaultClusterRoleForProjectMembers: "true"
-  enableNetworkPolicy: false
-  provider: "<HB_PROVIDER_AMAZON>"
+  defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
+  provider: "<HB_PROVIDER>"
   privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
   privateRegistries:
@@ -26,18 +26,18 @@ terraform:
     awsInstanceType: "<HB_AWS_INSTANCE_TYPE>"
     awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
     region: "<HB_AWS_REGION>"
-    awsSecurityGroups: ["<HB_AIRGAP_AWS_SECURITY_GROUPS>"]
-    awsSecurityGroupNames: ["<HB_AIRGAP_AWS_SECURITY_GROUP_NAMES>"]
+    awsSecurityGroups: <HB_AIRGAP_AWS_SECURITY_GROUPS>
+    awsSecurityGroupNames: <HB_AIRGAP_AWS_SECURITY_GROUP_NAMES>
     awsSubnetID: "<HB_AIRGAP_AWS_SUBNET_ID>"
     awsVpcID: "<HB_AIRGAP_AWS_VPC_ID>"
     awsVpcIP: "<HB_AIRGAP_AWS_VPC_IP>"
     awsZoneLetter: "<HB_AWS_ZONE_LETTER>"
-    awsRootSize: "<HB_AWS_ROOT_SIZE>"
+    awsRootSize: <HB_AWS_ROOT_SIZE>
     registryRootSize: "<HB_AWS_ROOT_SIZE_REGISTRY>"
     awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
-    awsUser: "<HB_AWS_USER>"
+    awsUser: "<HB_AWS_OS_USER>"
     sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
-    timeout: "<HB_TIMEOUT>"
+    timeout: "<HB_SSH_TIMEOUT>"
     ipAddressType: "<HB_IP_ADDRESS_TYPE>"
     loadBalancerType: "<HB_LOAD_BALANCER_TYPE>"
     targetType: "<HB_TARGET_TYPE>"
@@ -46,8 +46,8 @@ terraform:
     certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
     certType: "<HB_CERT_TYPE>"
     chartVersion: "<HB_RANCHER_CHART_VERSION>"
-    osUser: "<HB_OS_USER>"
-    osGroup: "<HB_OS_GROUP>"
+    osUser: "<HB_AWS_OS_USER>"
+    osGroup: "<HB_AWS_OS_GROUP>"
     rancherChartRepository: "<HB_RANCHER_HELM_CHART_URL>"
     rancherHostname: "<HB_RANCHER_HOSTNAME>"
     rancherImage: "<HB_RANCHER_IMAGE>"
@@ -59,3 +59,5 @@ terraform:
   standaloneRegistry:
     assetsPath: "<HB_ASSETS_PATH>"
     registryName: "<HB_HOSTNAME_PREFIX>"
+logging:
+  level: "<HB_LOGGING_LEVEL>"
