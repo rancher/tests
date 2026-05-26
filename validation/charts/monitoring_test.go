@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/url"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
@@ -20,6 +18,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/ingresses"
 	kubeapinodes "github.com/rancher/shepherd/extensions/kubeapi/nodes"
+	"github.com/sirupsen/logrus"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
 	actionsClusters "github.com/rancher/tests/actions/clusters"
@@ -27,7 +26,6 @@ import (
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/secrets"
 	"github.com/rancher/tests/actions/services"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -36,23 +34,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// retryWatchAndWait retries WatchAndWait operations that commonly fail with
-// "error with watch connection" due to transient API proxy issues.
-func retryWatchAndWait(maxRetries int, fn func() error) error {
-	var lastErr error
-	for i := 0; i < maxRetries; i++ {
-		lastErr = fn()
-		if lastErr == nil {
-			return nil
-		}
-		if !strings.Contains(lastErr.Error(), "error with watch connection") {
-			return lastErr
-		}
-		logrus.Warnf("Watch connection error (attempt %d/%d): %v", i+1, maxRetries, lastErr)
-		time.Sleep(5 * time.Second)
-	}
-	return lastErr
-}
 
 type MonitoringTestSuite struct {
 	suite.Suite
@@ -146,19 +127,19 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart deployments to have expected number of available replicas")
-		err = retryWatchAndWait(3, func() error {
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
 			return extencharts.WatchAndWaitDeployments(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
 		})
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart DaemonSets to have expected number of available nodes")
-		err = retryWatchAndWait(3, func() error {
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
 			return extencharts.WatchAndWaitDaemonSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
 		})
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart StatefulSets to have expected number of ready replicas")
-		err = retryWatchAndWait(3, func() error {
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
 			return extencharts.WatchAndWaitStatefulSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
 		})
 		require.NoError(m.T(), err)
@@ -331,19 +312,19 @@ func (m *MonitoringTestSuite) TestUpgradeMonitoringChart() {
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart deployments to have expected number of available replicas")
-		err = retryWatchAndWait(3, func() error {
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
 			return extencharts.WatchAndWaitDeployments(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
 		})
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart DaemonSets to have expected number of available nodes")
-		err = retryWatchAndWait(3, func() error {
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
 			return extencharts.WatchAndWaitDaemonSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
 		})
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart StatefulSets to have expected number of ready replicas")
-		err = retryWatchAndWait(3, func() error {
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
 			return extencharts.WatchAndWaitStatefulSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
 		})
 		require.NoError(m.T(), err)
