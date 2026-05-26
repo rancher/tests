@@ -45,4 +45,4 @@
       expectedresult: "Cluster is healthy and workloads are restored correctly"
       position: 3
     custom_field:
-      "15": "RKE2K3S_Restore_Upgrade_Strategy"
+      "15": "RKE2_Restore_Upgrade_Strategy"
