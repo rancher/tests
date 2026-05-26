@@ -15,6 +15,10 @@ inputs:
     description: "Whether to run ACE tests"
     required: false
     default: "true"
+  run_template:
+    description: "Whether to run template tests"
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -39,6 +43,38 @@ runs:
         if [[ "${{ inputs.reporting }}" == "true" ]]; then
           ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
           ./validation/reporter
+        fi
+
+        if [[ "${{ inputs.run_template }}" == "true" ]]; then
+          gotestsum --format standard-verbose \
+            --packages=github.com/rancher/tests/validation/provisioning/k3s \
+            --junitfile results.xml \
+            --jsonfile results_k3s_template.json \
+            -- -timeout=3h -tags=template -v
+
+          k3s_template_exit=$?
+          echo "k3s_template_exit=$k3s_template_exit" >> "$GITHUB_ENV"
+          cp results_k3s_template.json results.json
+    
+          if [[ "${{ inputs.reporting }}" == "true" ]]; then
+            ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+            ./validation/reporter
+          fi
+
+          gotestsum --format standard-verbose \
+            --packages=github.com/rancher/tests/validation/provisioning/rke2 \
+            --junitfile results.xml \
+            --jsonfile results_rke2_template.json \
+            -- -timeout=3h -tags=template -v
+
+          rke2_template_exit=$?
+          echo "rke2_template_exit=$rke2_template_exit" >> "$GITHUB_ENV"
+          cp results_rke2_template.json results.json
+    
+          if [[ "${{ inputs.reporting }}" == "true" ]]; then
+            ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+            ./validation/reporter
+          fi
         fi
 
         if [[ "${{ inputs.run_ace }}" == "true" ]]; then
@@ -82,6 +118,19 @@ runs:
           echo "Failed Provisioning tests:"
           jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results_provisioning.json
           failed=1
+        fi
+
+        if [[ "${{ inputs.run_template }}" == "true" ]]; then
+          if [ "${k3s_template_exit:-}" != "" ] && [ "$k3s_template_exit" -ne 0 ]; then
+            echo "Failed K3S Template tests:"
+            jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results_k3s_template.json
+            failed=1
+          fi
+          if [ "${rke2_template_exit:-}" != "" ] && [ "$rke2_template_exit" -ne 0 ]; then
+            echo "Failed RKE2 Template tests:"
+            jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results_rke2_template.json
+            failed=1
+          fi
         fi
 
         if [[ "${{ inputs.run_ace }}" == "true" ]]; then

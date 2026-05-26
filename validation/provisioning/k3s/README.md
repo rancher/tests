@@ -207,9 +207,7 @@ Template Test verfies that an K3S template can be used to provision a cluster.
 All table tests listed above except the dynamic tests
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s --junitfile results.xml --jsonfile results.json -- -tags=recurring -timeout=3h -v`
-
-
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestTemplate -timeout=1h -v`
 
 ## Configurations
 
