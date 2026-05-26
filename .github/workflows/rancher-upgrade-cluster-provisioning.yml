@@ -182,7 +182,7 @@ jobs:
             insecure: true
             cleanup: true
           terraform:
-            cni: "${{ secrets.CNI }}"
+            cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             provider: "${{ vars.PROVIDER_AMAZON }}"
@@ -243,7 +243,7 @@ jobs:
 
           clusterConfig:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            cni: "${{ secrets.CNI }}"
+            cni: "${{ vars.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
@@ -563,7 +563,7 @@ jobs:
             insecure: true
             cleanup: true
           terraform:
-            cni: "${{ secrets.CNI }}"
+            cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             provider: "${{ vars.PROVIDER_AMAZON }}"
@@ -624,7 +624,7 @@ jobs:
 
           clusterConfig:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            cni: "${{ secrets.CNI }}"
+            cni: "${{ vars.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
@@ -944,7 +944,7 @@ jobs:
             insecure: true
             cleanup: true
           terraform:
-            cni: "${{ secrets.CNI }}"
+            cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             provider: "${{ vars.PROVIDER_AMAZON }}"
@@ -1006,7 +1006,7 @@ jobs:
 
           clusterConfig:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            cni: "${{ secrets.CNI }}"
+            cni: "${{ vars.CNI }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
