@@ -123,7 +123,14 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 
 	if !initialMonitoringChart.IsAlreadyInstalled {
 		m.T().Log("Installing monitoring chart")
-		err = charts.InstallRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			// Check if chart was already installed by a previous retry attempt
+			status, statusErr := extencharts.GetChartStatus(client, m.project.ClusterID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
+			if statusErr == nil && status.IsAlreadyInstalled {
+				return nil
+			}
+			return charts.InstallRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
+		})
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart deployments to have expected number of available replicas")
@@ -308,7 +315,13 @@ func (m *MonitoringTestSuite) TestUpgradeMonitoringChart() {
 
 	if !initialMonitoringChart.IsAlreadyInstalled {
 		m.T().Log("Installing monitoring chart with the last but one version")
-		err = charts.InstallRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			status, statusErr := extencharts.GetChartStatus(client, m.project.ClusterID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
+			if statusErr == nil && status.IsAlreadyInstalled {
+				return nil
+			}
+			return charts.InstallRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
+		})
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart deployments to have expected number of available replicas")

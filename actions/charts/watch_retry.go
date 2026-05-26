@@ -11,7 +11,7 @@ import (
 const (
 	// DefaultWatchRetries is the number of times to retry watch operations that fail
 	// with transient connection errors.
-	DefaultWatchRetries = 3
+	DefaultWatchRetries = 5
 	watchRetryDelay     = 5 * time.Second
 )
 

@@ -154,7 +154,13 @@ func (i *IstioTestSuite) TestIstioChart() {
 
 	if !monitoringChart.IsAlreadyInstalled {
 		i.T().Log("Installing monitoring chart")
-		err = charts.InstallRancherMonitoringChart(client, i.chartInstallOptions.monitoring, i.chartFeatureOptions.monitoring)
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			status, statusErr := extencharts.GetChartStatus(client, i.project.ClusterID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
+			if statusErr == nil && status.IsAlreadyInstalled {
+				return nil
+			}
+			return charts.InstallRancherMonitoringChart(client, i.chartInstallOptions.monitoring, i.chartFeatureOptions.monitoring)
+		})
 		require.NoError(i.T(), err)
 
 		i.T().Log("Waiting monitoring chart deployments to have expected number of available replicas")
@@ -182,7 +188,13 @@ func (i *IstioTestSuite) TestIstioChart() {
 
 	if !istioChart.IsAlreadyInstalled {
 		i.T().Log("Installing istio chart with the latest version")
-		err = charts.InstallRancherIstioChart(client, i.chartInstallOptions.istio, i.chartFeatureOptions.istio)
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			status, statusErr := extencharts.GetChartStatus(client, i.project.ClusterID, charts.RancherIstioNamespace, charts.RancherIstioName)
+			if statusErr == nil && status.IsAlreadyInstalled {
+				return nil
+			}
+			return charts.InstallRancherIstioChart(client, i.chartInstallOptions.istio, i.chartFeatureOptions.istio)
+		})
 		require.NoError(i.T(), err)
 
 		i.T().Log("Waiting istio chart deployments to have expected number of available replicas")
@@ -292,7 +304,13 @@ func (i *IstioTestSuite) TestUpgradeIstioChart() {
 
 	if !monitoringChart.IsAlreadyInstalled {
 		i.T().Log("Installing monitoring chart with the latest version")
-		err = charts.InstallRancherMonitoringChart(client, i.chartInstallOptions.monitoring, i.chartFeatureOptions.monitoring)
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			status, statusErr := extencharts.GetChartStatus(client, i.project.ClusterID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
+			if statusErr == nil && status.IsAlreadyInstalled {
+				return nil
+			}
+			return charts.InstallRancherMonitoringChart(client, i.chartInstallOptions.monitoring, i.chartFeatureOptions.monitoring)
+		})
 		require.NoError(i.T(), err)
 
 		i.T().Log("Waiting monitoring chart deployments to have expected number of available replicas")
@@ -332,7 +350,13 @@ func (i *IstioTestSuite) TestUpgradeIstioChart() {
 
 	if !initialIstioChart.IsAlreadyInstalled {
 		i.T().Log("Installing istio chart with the last but one version")
-		err = charts.InstallRancherIstioChart(client, i.chartInstallOptions.istio, i.chartFeatureOptions.istio)
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			status, statusErr := extencharts.GetChartStatus(client, i.project.ClusterID, charts.RancherIstioNamespace, charts.RancherIstioName)
+			if statusErr == nil && status.IsAlreadyInstalled {
+				return nil
+			}
+			return charts.InstallRancherIstioChart(client, i.chartInstallOptions.istio, i.chartFeatureOptions.istio)
+		})
 		require.NoError(i.T(), err)
 
 		i.T().Log("Waiting istio chart deployments to have expected number of available replicas")
@@ -371,7 +395,9 @@ func (i *IstioTestSuite) TestUpgradeIstioChart() {
 	require.NoError(i.T(), err)
 
 	i.T().Log("Upgrading istio chart with the latest version")
-	err = charts.UpgradeRancherIstioChart(client, i.chartInstallOptions.istio, i.chartFeatureOptions.istio)
+	err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+		return charts.UpgradeRancherIstioChart(client, i.chartInstallOptions.istio, i.chartFeatureOptions.istio)
+	})
 	require.NoError(i.T(), err)
 
 	i.T().Log("Waiting istio chart deployments to have expected number of available replicas after upgrade")
