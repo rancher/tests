@@ -14,19 +14,96 @@ inputs:
   windows-ssh-private-key-name:
     description: "Windows SSH Private Key Name"
     required: true
+outputs:
+  ssh-private-key-name:
+    description: "Normalized Linux SSH private key name (without .pem suffix)"
+    value: ${{ steps.write-keys.outputs.ssh-private-key-name }}
+  windows-ssh-private-key-name:
+    description: "Normalized Windows SSH private key name (without .pem suffix)"
+    value: ${{ steps.write-keys.outputs.windows-ssh-private-key-name }}
+  ssh-private-key-path:
+    description: "Path to Linux SSH private key in workspace .ssh"
+    value: ${{ steps.write-keys.outputs.ssh-private-key-path }}
+  windows-ssh-private-key-path:
+    description: "Path to Windows SSH private key in workspace .ssh"
+    value: ${{ steps.write-keys.outputs.windows-ssh-private-key-path }}
 runs:
   using: composite
   steps:
-    - run: |
+    - id: write-keys
+      run: |
+        set +x
+
+        mask_multiline() {
+          local content="$1"
+          while IFS= read -r line; do
+            if [[ -n "$line" ]]; then
+              echo "::add-mask::$line"
+            fi
+          done <<< "$content"
+        }
+
+        normalize_secret_value() {
+          local raw="$1"
+          local parsed
+
+          if parsed=$(printf '%s' "$raw" | jq -er '.value' 2>/dev/null); then
+            printf '%s' "$parsed"
+            return
+          fi
+
+          printf '%s' "$raw"
+        }
+
+        ssh_private_key="$(normalize_secret_value "$SSH_PRIVATE_KEY")"
+        ssh_private_key_name="$(normalize_secret_value "$SSH_PRIVATE_KEY_NAME")"
+        windows_ssh_private_key="$(normalize_secret_value "$WINDOWS_SSH_PRIVATE_KEY")"
+        windows_ssh_private_key_name="$(normalize_secret_value "$WINDOWS_SSH_PRIVATE_KEY_NAME")"
+
+        mask_multiline "$ssh_private_key"
+        mask_multiline "$windows_ssh_private_key"
+
+        # Key names in AWS are typically bare key pair names. Accept either with or without .pem suffix.
+        ssh_private_key_name="${ssh_private_key_name%.pem}"
+        windows_ssh_private_key_name="${windows_ssh_private_key_name%.pem}"
+
+        if [[ -z "$ssh_private_key_name" || -z "$windows_ssh_private_key_name" ]]; then
+          echo "SSH key names cannot be empty after normalization"
+          exit 1
+        fi
+
+        if [[ ! "$ssh_private_key" =~ -----BEGIN[[:space:]][A-Z[:space:]]*PRIVATE[[:space:]]KEY----- ]]; then
+          echo "Linux SSH private key secret does not look like a valid private key payload"
+          exit 1
+        fi
+
+        if [[ ! "$windows_ssh_private_key" =~ -----BEGIN[[:space:]][A-Z[:space:]]*PRIVATE[[:space:]]KEY----- ]]; then
+          echo "Windows SSH private key secret does not look like a valid private key payload"
+          exit 1
+        fi
+
         mkdir -p /home/runner/work/tests/tests/.ssh
         mkdir -p /home/runner/work/tests/tests/tfp-automation/.ssh
 
-        echo "${{ inputs.ssh-private-key }}" > /home/runner/work/tests/tests/.ssh/${{ inputs.ssh-private-key-name }}.pem
-        chmod 600 /home/runner/work/tests/tests/.ssh/${{ inputs.ssh-private-key-name }}.pem
+        ssh_private_key_path="/home/runner/work/tests/tests/.ssh/${ssh_private_key_name}.pem"
+        windows_ssh_private_key_path="/home/runner/work/tests/tests/.ssh/${windows_ssh_private_key_name}.pem"
 
-        echo "${{ inputs.ssh-private-key }}" > /home/runner/work/tests/tests/tfp-automation/.ssh/${{ inputs.ssh-private-key-name }}.pem
-        chmod 600 /home/runner/work/tests/tests/tfp-automation/.ssh/${{ inputs.ssh-private-key-name }}.pem
+        printf '%s' "$ssh_private_key" > "$ssh_private_key_path"
+        chmod 600 "$ssh_private_key_path"
+    
+        printf '%s' "$ssh_private_key" > /home/runner/work/tests/tests/tfp-automation/.ssh/${ssh_private_key_name}.pem
+        chmod 600 /home/runner/work/tests/tests/tfp-automation/.ssh/${ssh_private_key_name}.pem
 
-        echo "${{ inputs.windows-ssh-private-key }}" > /home/runner/work/tests/tests/.ssh/${{ inputs.windows-ssh-private-key-name }}.pem
-        chmod 600 /home/runner/work/tests/tests/.ssh/${{ inputs.windows-ssh-private-key-name }}.pem
+        printf '%s' "$windows_ssh_private_key" > "$windows_ssh_private_key_path"
+        chmod 600 "$windows_ssh_private_key_path"
+
+        echo "ssh-private-key-name=$ssh_private_key_name" >> "$GITHUB_OUTPUT"
+        echo "windows-ssh-private-key-name=$windows_ssh_private_key_name" >> "$GITHUB_OUTPUT"
+        echo "ssh-private-key-path=$ssh_private_key_path" >> "$GITHUB_OUTPUT"
+        echo "windows-ssh-private-key-path=$windows_ssh_private_key_path" >> "$GITHUB_OUTPUT"
+      env:
+        SSH_PRIVATE_KEY: ${{ inputs.ssh-private-key }}
+        SSH_PRIVATE_KEY_NAME: ${{ inputs.ssh-private-key-name }}
+        WINDOWS_SSH_PRIVATE_KEY: ${{ inputs.windows-ssh-private-key }}
+        WINDOWS_SSH_PRIVATE_KEY_NAME: ${{ inputs.windows-ssh-private-key-name }}
       shell: bash

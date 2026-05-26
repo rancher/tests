@@ -1,27 +1,29 @@
 rancher:
-  host: "<required>"
-  adminPassword: "<required>"
+  host: "<required>.<HB_AWS_ROUTE_53_ZONE>"
+  adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
   insecure: true
   cleanup: true
 
 awsCredentials:
-  awsAccessKey: "<required>"
-  awsSecretKey: "<required>"
+  accessKey: "<required>"
+  secretKey: "<required>"
+  defaultRegion: "<required>"
 
 terraform:
-  awsCredentials:
-    awsAccessKey: "<required>"
-    awsSecretKey: "<required>"
-  cni: "<HB_CNI>"
-  defaultClusterRoleForProjectMembers: "true"
-  enableNetworkPolicy: false
-  provider: "<HB_PROVIDER_AMAZON>"
-  privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
+  provider: "<HB_PROVIDER>"
+  downstreamClusterProvider: "<HB_PROVIDER>"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
+  localCluster: "rke2"
+  cni: "<HB_CNI>"
+  defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
+  privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
+  awsCredentials:
+    awsAccessKey: "<AWS_ACCESS_KEY_ID>"
+    awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
   proxy:
     proxyBastion: "<HB_PROXY_BASTION>"
   awsConfig:
-    ami: "<HB_AWS_AMI>"
+    ami: "<HB_DEFAULT_AMI>"
     awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
     awsInstanceType: "<HB_AWS_INSTANCE_TYPE>"
     awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
@@ -33,30 +35,36 @@ terraform:
     awsZoneLetter: "<HB_AWS_ZONE_LETTER>"
     awsRootSize: "<HB_AWS_ROOT_SIZE>"
     awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
-    awsUser: "<HB_AWS_USER>"
+    ipAddressType: "<HB_IP_ADDRESS_TYPE>"
+    loadBalancerType: "<HB_LOAD_BALANCER_TYPE>"
+    targetType: "<HB_TARGET_TYPE>"
+    awsUser: "<HB_AWS_OS_USER>"
     sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
-    timeout: "<HB_TIMEOUT>"
+    timeout: "<HB_SSH_TIMEOUT>"
     windowsAWSUser: "<HB_AWS_WINDOWS_USER>"
     windows2019AMI: "<HB_WINDOWS_2019_AMI>"
     windows2022AMI: "<HB_WINDOWS_2022_AMI>"
     windows2019Password: "<HB_AWS_WINDOWS_2019_PASSWORD>"
     windows2022Password: "<HB_AWS_WINDOWS_2022_PASSWORD>"
     windowsInstanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
-    ipAddressType: "<HB_IP_ADDRESS_TYPE>"
-    loadBalancerType: "<HB_LOAD_BALANCER_TYPE>"
-    targetType: "<HB_TARGET_TYPE>"
   standalone:
+    chartVersion: "<required>"
+    rancherTagVersion: "<required>"
+    rancherChartRepository: "<required>"
+    repo: "<required>"
+    rancherImage: "<HB_RANCHER_IMAGE>"
+    rancherHostname: "<required>"
     bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
     certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
     certType: "<HB_CERT_TYPE>"
-    chartVersion: "<HB_RANCHER_CHART_VERSION>"
-    osUser: "<HB_OS_USER>"
-    osGroup: "<HB_OS_GROUP>"
-    rancherChartRepository: "<HB_RANCHER_HELM_CHART_URL>"
-    rancherHostname: "<HB_RANCHER_HOSTNAME>"
-    rancherImage: "<HB_RANCHER_IMAGE>"
-    rancherTagVersion: "<HB_RANCHER_VERSION>"
+    osUser: "<HB_AWS_OS_USER>"
+    osGroup: "<HB_AWS_OS_GROUP>"
     registryPassword: "<HB_DOCKERHUB_PASSWORD>"
     registryUsername: "<HB_DOCKERHUB_USERNAME>"
-    repo: "<HB_RANCHER_REPO>"
     rke2Version: "<HB_RKE2_VERSION>"
+terratest:
+  pathToRepo: "<HB_PATH_TO_TFP_REPO>"
+  standaloneLogging: false
+  tfLogging: false
+logging:
+  level: "<HB_LOGGING_LEVEL>"

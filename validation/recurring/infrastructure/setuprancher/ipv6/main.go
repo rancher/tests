@@ -33,6 +33,11 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("Failed to load package defaults: %v", err)
 	}
+
+	cattleConfig, err = defaults.LoadSecretsManagerDefaults(cattleConfig)
+	if err != nil {
+		logrus.Fatalf("Failed to load Secrets Manager defaults: %v", err)
+	}
 	testSession := session.NewSession()
 
 	client, _, _, _, _ := setupipv6.SetupIPv6Rancher(t, testSession, keypath.IPv6KeyPath, cattleConfig)

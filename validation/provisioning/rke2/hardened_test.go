@@ -24,6 +24,7 @@ import (
 	"github.com/rancher/tests/actions/workloads/pods"
 	compliance "github.com/rancher/tests/validation/provisioning/resources/rancherCompliance"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -50,6 +51,14 @@ func hardenedSetup(t *testing.T) hardenedTest {
 
 	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
 	require.NoError(t, err)
+
+	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
+	require.NoError(t, err)
+
+	err = defaults.VerifyCattleConfig(r.cattleConfig)
+	require.NoError(t, err)
+
+	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), r.cattleConfig)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
