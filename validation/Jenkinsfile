@@ -7,7 +7,6 @@ node {
       job_name = job_names[job_names.size() - 1]
     }
     def testContainer = "${job_name}${env.BUILD_NUMBER}_test"
-    def reporterContainer = "${job_name}${env.BUILD_NUMBER}_reporter"
     def imageName = "rancher-validation-${job_name}${env.BUILD_NUMBER}"
     def testsDir = "github.com/rancher/tests/validation/${env.TEST_PACKAGE}"
     def testResultsOut = "results.xml"
@@ -131,48 +130,46 @@ node {
                   writeFile file: "${envFile}", text: envText+env.ENV_VARIABLE
                 }
               }
-
               stage('Run Validation Tests') {
-                if (env.CAPTURE_IMAGES == "true") {
-                  sh "mkdir -p ./validation/image-report"
-                  sh """
-                      docker run -d --name imageCapturer \
-                      -v ./validation/image-report:/app/image-report \
-                      -v ./validation/config.yaml:/app/config.yaml \
-                      -t ${imageName} sh -c 'go build -o /app/capturer ../scripts/capture_images/capture_images.go && CATTLE_TEST_CONFIG=/app/config.yaml exec /app/capturer'
+                sh "mkdir -p ./validation/images"
+                try {
+                  if (env.CAPTURE_IMAGES == "true") {
+                    sh """
+                        docker run -d --name imageCapturer \
+                        -v ./validation/config.yaml:/app/config.yaml \
+                        -v ./validation/images/:/app/images \
+                        -t ${imageName} sh -c 'go build ../scripts/capture_images/capture_images.go && CATTLE_TEST_CONFIG=/app/config.yaml ./capture_images'
                     """
-
-                  sh 'grep -qm 1 "Listening to events on cluster" <(docker logs -f imageCapturer)'
-                }
-
-                try {
-                  sh """
-                    docker run --name ${testContainer} -t --env-file ${envFile} ${imageName} \
-                    sh -c "/root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} \
-                    --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v"
-                  """
-                  sh "mkdir -p ./results && docker cp ${testContainer}:${rootPath}${testResultsJSON} ./results"
-                } catch(err) {
-                  echo "Test run had failures: " + err + "\nCollecting results..."
-                }
-
-                if (env.CAPTURE_IMAGES == "true") {
-                  stage('Showing images used on this run') {
-                    sh "docker kill --signal SIGTERM imageCapturer && docker wait imageCapturer"
-                    def content = readFile("./validation/image-report/image-report.txt")
-                    echo "${content}"
-                    sh "docker rm imageCapturer"
+                    sh 'grep -m 1 "Listening to events on cluster" <(docker logs -f imageCapturer)'
                   }
-                }
 
-                try {
                   sh """
-                    docker run --name ${reporterContainer} -t --env-file ${envFile} \
-                    -v ./validation/image-report:/app/image-report -v ./results:/app/results ${imageName} \
-                    sh -c "${rootPath}/pipeline/scripts/${reporterScript}; if [ -f ./reporter ]; then ./reporter; else echo 'Reporter script not present'; fi"
+                    docker run --name ${testContainer} -v ./validation/images/:/app/images -t --env-file ${envFile} ${imageName} \
+                    sh -c "/root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v; \
+                    ${rootPath}pipeline/scripts/${reporterScript}; \
+                    if [ -f ${rootPath}reporter ]; then ${rootPath}reporter; else echo \\"Reporter script not present\\"; fi"
                   """
+
+                  if (env.CAPTURE_IMAGES == "true") {
+                    stage('Showing images used on this run') {
+                      sh "docker kill --signal SIGTERM imageCapturer && docker wait imageCapturer"
+                      final imagefiles = sh(script: 'ls -1 ./validation/images', returnStdout: true).split("\n").toList()
+                      if (imagefiles.isEmpty()) {
+                        echo "No image list found, showing docker logs:"
+                        final logs = sh("docker logs imageCapturer", returnStdout: true)
+                        echo "${logs}"
+                      } else {
+                        imagefiles.each { file ->
+                          echo "Images used within cluster ${file}"
+                          def content = readFile("./validation/images/${file}")
+                          echo "${content}"
+                        }
+                      }
+                      sh "docker rm imageCapturer"
+                    }
+                  }
                 } catch(err) {
-                  echo "Qase report had failures: " + err + "\nCollecting results..."
+                  echo 'Test run had failures. Collecting results...'
                 }
               }
               stage('Test Report') {
@@ -180,13 +177,11 @@ node {
                 step([$class: 'JUnitResultArchiver', testResults: "**/${testResultsOut}"])
                 sh "docker stop ${testContainer}"
                 sh "docker rm -v ${testContainer}"
-                sh "docker rm -v ${reporterContainer}"
                 sh "docker rmi -f ${imageName}"
               }
             } catch(err) {
                 sh "docker stop ${testContainer}"
                 sh "docker rm -v ${testContainer}"
-                sh "docker rm -v ${reporterContainer}"
                 sh "docker rmi -f ${imageName}"
             } // catch error
           } // dir

@@ -161,12 +161,36 @@ func getOSNameParam(client *rancher.Client, clusterConfig *clusters.ClusterConfi
 }
 
 func getOSNameCustomParam(client *rancher.Client, cattleConfig map[string]any, clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
-	customConfig := new(rancherEc2.AWSEC2Configs)
-	operations.LoadObjectFromMap(defaults.AWSEC2Configs, cattleConfig, customConfig)
+	terraformConfig := new(config.TerraformConfig)
+	operations.LoadObjectFromMap(config.TerraformConfigurationFileKey, cattleConfig, terraformConfig)
+
+	customConfig := rancherEc2.AWSEC2Configs{
+		AWSAccessKeyID:     terraformConfig.AWSCredentials.AWSAccessKey,
+		AWSSecretAccessKey: terraformConfig.AWSCredentials.AWSSecretKey,
+		Region:             terraformConfig.AWSConfig.Region,
+	}
+
+	if terraformConfig.AWSConfig.AMI != "" {
+		customConfig.AWSEC2Config = append(customConfig.AWSEC2Config, rancherEc2.AWSEC2Config{AWSAMI: terraformConfig.AWSConfig.AMI})
+	}
+
+	if terraformConfig.AWSConfig.Windows2019AMI != "" {
+		customConfig.AWSEC2Config = append(customConfig.AWSEC2Config, rancherEc2.AWSEC2Config{AWSAMI: terraformConfig.AWSConfig.Windows2019AMI})
+	}
+
+	if terraformConfig.AWSConfig.Windows2022AMI != "" {
+		customConfig.AWSEC2Config = append(customConfig.AWSEC2Config, rancherEc2.AWSEC2Config{AWSAMI: terraformConfig.AWSConfig.Windows2022AMI})
+	}
+
+	if len(customConfig.AWSEC2Config) == 0 {
+		logrus.Warning("No AMI values found in terraform awsConfig for custom OS parameter")
+		return upstream.TestCaseParameterCreate{}
+	}
+
 	externalNodeProvider := ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
 	if strings.Contains(clusterConfig.Provider, "aws") {
-		osNames, err := externalNodeProvider.GetOSNamesFunc(client, *customConfig)
+		osNames, err := externalNodeProvider.GetOSNamesFunc(client, customConfig)
 		if err != nil {
 			logrus.Warningf("Error getting OS Name %s", err)
 			return upstream.TestCaseParameterCreate{}

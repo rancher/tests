@@ -33,7 +33,7 @@ const (
 	testSource           = "GoValidation"
 	multiSubTestPattern  = `(\w+/\w+/\w+){1,}`
 	subtestPattern       = `(\w+/\w+){1,1}`
-	testResultsJSON      = "/app/results/results.json"
+	testResultsJSON      = "results.json"
 )
 
 var (

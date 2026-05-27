@@ -5,40 +5,59 @@ FROM --platform=linux/amd64 alpine:3.22@sha256:e0baf8c394150ac5a14925e179100519f
 ARG TOFU_VERSION=1.10.7
 ARG AWSCLI_VERSION=1.44.44
 
+ARG KUBECTL_VERSION=1.32.3
+ARG HELM_VERSION=3.17.3
+
 # Install runtime dependencies
 RUN apk add --no-cache \
     bash \
     curl \
     git \
+    make \
     openssh-client \
     python3 \
     py3-pip \
     ca-certificates \
     ansible \
+    && ln -sf /bin/bash /usr/bin/bash \
     && rm -rf /var/cache/apk/*
 
 # Install OpenTofu
-RUN TOFU_TAR="tofu_${TOFU_VERSION}_linux_amd64.tar.gz" && \
-    curl -Lo "/tmp/${TOFU_TAR}" "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/${TOFU_TAR}" && \
-    curl -Lo /tmp/tofu_SHA256SUMS "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" && \
-    grep "${TOFU_TAR}$" /tmp/tofu_SHA256SUMS > /tmp/tofu.sha256 && \
-    test -s /tmp/tofu.sha256 && \
-    sha256sum -c /tmp/tofu.sha256 && \
-    rm /tmp/tofu.sha256 && \
-    tar -xzf "/tmp/${TOFU_TAR}" -C /usr/local/bin/ && \
-    rm "/tmp/${TOFU_TAR}" /tmp/tofu_SHA256SUMS && \
+RUN cd /tmp && \
+    TOFU_TAR="tofu_${TOFU_VERSION}_linux_amd64.tar.gz" && \
+    curl -Lo "${TOFU_TAR}" "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/${TOFU_TAR}" && \
+    curl -Lo tofu_SHA256SUMS "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" && \
+    grep "${TOFU_TAR}$" tofu_SHA256SUMS > tofu.sha256 && \
+    test -s tofu.sha256 && \
+    sha256sum -c tofu.sha256 && \
+    rm tofu.sha256 && \
+    tar -xzf "${TOFU_TAR}" -C /usr/local/bin/ && \
+    rm "${TOFU_TAR}" tofu_SHA256SUMS && \
     chmod +x /usr/local/bin/tofu
 
-# Install AWS CLI
-RUN pip3 install --no-cache-dir --break-system-packages awscli==${AWSCLI_VERSION}
+# Install AWS CLI + Kubernetes Python library (required by ansible kubernetes.core collection)
+RUN pip3 install --no-cache-dir --break-system-packages awscli==${AWSCLI_VERSION} kubernetes
+
+# Install kubectl
+RUN curl -Lo /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+    && chmod +x /usr/local/bin/kubectl
+
+# Install Helm
+RUN curl -Lo /tmp/helm.tar.gz "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" \
+    && tar -xzf /tmp/helm.tar.gz -C /tmp/ \
+    && mv /tmp/linux-amd64/helm /usr/local/bin/helm \
+    && rm -rf /tmp/helm.tar.gz /tmp/linux-amd64
 
 # Create working directory
 WORKDIR /workspace
 
 # Verify installations
 RUN tofu version && \
+    make --version && \
     ansible --version && \
-    aws --version
+    aws --version && \
+    kubectl version --client && \
+    helm version
 
 # Default to sh shell (compatible with alpine and docker run sh -c)
 CMD ["/bin/sh"]

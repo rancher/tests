@@ -37,11 +37,10 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	capi "sigs.k8s.io/cluster-api/api/v1beta1"
+	capi "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 const (
@@ -700,19 +699,9 @@ func VerifyHostnameLength(t *testing.T, client *rancher.Client, clusterObject *s
 		require.NoError(t, err)
 		require.NotNil(t, capiMachine.Status.NodeRef)
 
-		dynamic, err := client.GetRancherDynamicClient()
-		require.NoError(t, err)
-
-		gv, err := schema.ParseGroupVersion(capiMachine.Spec.InfrastructureRef.APIVersion)
-		require.NoError(t, err)
-
-		gvr := schema.GroupVersionResource{
-			Group:    gv.Group,
-			Version:  gv.Version,
-			Resource: strings.ToLower(capiMachine.Spec.InfrastructureRef.Kind) + "s",
-		}
-
-		ustr, err := dynamic.Resource(gvr).Namespace(capiMachine.Namespace).Get(context.TODO(), capiMachine.Spec.InfrastructureRef.Name, metav1.GetOptions{})
+		steveType := capiMachine.Spec.InfrastructureRef.APIGroup + "." + strings.ToLower(capiMachine.Spec.InfrastructureRef.Kind)
+		resourceID := capiMachine.Namespace + "/" + capiMachine.Spec.InfrastructureRef.Name
+		infraResource, err := client.Steve.SteveType(steveType).ByID(resourceID)
 		require.NoError(t, err)
 
 		limit := hostnameLimit
@@ -723,8 +712,8 @@ func VerifyHostnameLength(t *testing.T, client *rancher.Client, clusterObject *s
 		}
 
 		require.True(t, len(capiMachine.Status.NodeRef.Name) <= limit)
-		if len(ustr.GetName()) < limit {
-			require.True(t, capiMachine.Status.NodeRef.Name == ustr.GetName())
+		if len(infraResource.Name) < limit {
+			require.True(t, capiMachine.Status.NodeRef.Name == infraResource.Name)
 		}
 
 		logrus.Debugf("Hostname: %s, HostnameLimit: %v", capiMachine.Status.NodeRef.Name, limit)
@@ -733,14 +722,10 @@ func VerifyHostnameLength(t *testing.T, client *rancher.Client, clusterObject *s
 
 // VerifyUpgrade validates that a cluster has been upgraded to a given version
 func VerifyUpgrade(t *testing.T, updatedCluster *bundledclusters.BundledCluster, upgradedVersion string) {
-	if updatedCluster.V3 != nil {
-		assert.Equalf(t, upgradedVersion, updatedCluster.V3.RancherKubernetesEngineConfig.Version, "[%v]: %v", updatedCluster.Meta.Name, logMessageKubernetesVersion)
-	} else {
-		clusterSpec := &provv1.ClusterSpec{}
-		err := steveV1.ConvertToK8sType(updatedCluster.V1.Spec, clusterSpec)
-		require.NoError(t, err)
-		assert.Equalf(t, upgradedVersion, clusterSpec.KubernetesVersion, "[%v]: %v", updatedCluster.Meta.Name, logMessageKubernetesVersion)
-	}
+	clusterSpec := &provv1.ClusterSpec{}
+	err := steveV1.ConvertToK8sType(updatedCluster.V1.Spec, clusterSpec)
+	require.NoError(t, err)
+	assert.Equalf(t, upgradedVersion, clusterSpec.KubernetesVersion, "[%v]: %v", updatedCluster.Meta.Name, logMessageKubernetesVersion)
 }
 
 // VerifyDataDirectories validates that data is being distributed properly across data directories.

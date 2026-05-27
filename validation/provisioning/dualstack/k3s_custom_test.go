@@ -6,20 +6,20 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	tfpConfig "github.com/rancher/tfp-automation/config"
+	"github.com/rancher/tfp-automation/framework/cleanup"
+	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -53,9 +53,6 @@ func customK3SDualstackSetup(t *testing.T) customK3SDualstackTest {
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(t, err)
 
-	k.cattleConfig, err = defaults.SetK8sDefault(k.client, defaults.K3S, k.cattleConfig)
-	require.NoError(t, err)
-
 	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
 	require.NoError(t, err)
 
@@ -66,55 +63,25 @@ func TestCustomK3SDualstack(t *testing.T) {
 	t.Parallel()
 	k := customK3SDualstackSetup(t)
 
-	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
+	nodeRolesStandard := []tfpConfig.Nodepool{{Quantity: 3, Etcd: true}, {Quantity: 2, Controlplane: true}, {Quantity: 3, Worker: true}}
 
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-
-	clusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
-
-	cidr := &provisioninginput.Networking{
-		ClusterCIDR: clusterConfig.Networking.ClusterCIDR,
-		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
-	}
-
-	ipv4StackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     "",
-		ServiceCIDR:     "",
-		StackPreference: "ipv4",
-	}
-
-	dualStackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     "",
-		ServiceCIDR:     "",
-		StackPreference: "dual",
-	}
-
-	cidrDualStackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
-		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
-		StackPreference: "dual",
-	}
-
-	ipv6FirstDualStackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     clusterConfig.Networking.IPV6FirstClusterCIDR,
-		ServiceCIDR:     clusterConfig.Networking.IPV6FirstServiceCIDR,
-		StackPreference: "dual",
-	}
+	_, terraform, _, _ := tfpConfig.LoadTFPConfigs(k.cattleConfig)
+	cidrCluster := terraform.AWSConfig.ClusterCIDR
+	cidrService := terraform.AWSConfig.ServiceCIDR
 
 	tests := []struct {
-		name         string
-		client       *rancher.Client
-		machinePools []provisioninginput.MachinePools
-		networking   *provisioninginput.Networking
+		name            string
+		client          *rancher.Client
+		nodePools       []tfpConfig.Nodepool
+		clusterCIDR     string
+		serviceCIDR     string
+		stackPreference string
 	}{
-		{"K3S_Dual_Stack_Custom_CIDR", k.standardUserClient, nodeRolesStandard, cidr},
-		{"K3S_Dual_Stack_Custom_IPv4_Stack_Preference", k.standardUserClient, nodeRolesStandard, ipv4StackPreference},
-		{"K3S_Dual_Stack_Custom_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, dualStackPreference},
-		{"K3S_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
-		{"K3S_Dual_Stack_Custom_CIDR_IPv6_First_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, ipv6FirstDualStackPreference},
+		{"K3S_Dual_Stack_Custom_CIDR", k.standardUserClient, nodeRolesStandard, cidrCluster, cidrService, ""},
+		{"K3S_Dual_Stack_Custom_IPv4_Stack_Preference", k.standardUserClient, nodeRolesStandard, "", "", "ipv4"},
+		{"K3S_Dual_Stack_Custom_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, "", "", "dual"},
+		{"K3S_Dual_Stack_Custom_CIDR_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, cidrCluster, cidrService, "dual"},
+		{"K3S_Dual_Stack_Custom_CIDR_IPv6_First_Dual_Stack_Preference", k.standardUserClient, nodeRolesStandard, SetCIDROrder(cidrCluster, true), SetCIDROrder(cidrService, true), "dual"},
 	}
 
 	for _, tt := range tests {
@@ -123,34 +90,33 @@ func TestCustomK3SDualstack(t *testing.T) {
 			k.session.Cleanup()
 		})
 
-		clusterConfig := new(clusters.ClusterConfig)
-		operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
-
-		clusterConfig.MachinePools = tt.machinePools
-		clusterConfig.Networking = tt.networking
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
+			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(k.cattleConfig)
+			terratestConfig.Nodepools = tt.nodePools
+			terraformConfig.AWSConfig.EnablePrimaryIPv6 = true
+			terraformConfig.AWSConfig.ClusterCIDR = tt.clusterCIDR
+			terraformConfig.AWSConfig.ServiceCIDR = tt.serviceCIDR
+			if terraformConfig.AWSConfig.Networking != nil {
+				terraformConfig.AWSConfig.Networking.StackPreference = tt.stackPreference
+			}
 
-			awsEC2Configs := new(ec2.AWSEC2Configs)
-			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, k.cattleConfig, awsEC2Configs)
-
-			logrus.Info("Provisioning cluster")
-			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
-			require.NoError(t, err)
+			logrus.Info("Provisioning custom cluster")
+			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.K3S, "validation/provisioning/dualstack")
+			defer os.RemoveAll(nestedRancherModuleDir)
+			defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			err = provisioning.VerifyClusterReady(tt.client, cluster)
+			err := provisioning.VerifyClusterReady(k.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(tt.client, cluster)
+			err = deployment.VerifyClusterDeployments(k.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(tt.client, cluster)
+			err = pods.VerifyClusterPods(k.client, cluster)
 			require.NoError(t, err)
 		})
 

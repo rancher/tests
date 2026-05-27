@@ -1,0 +1,214 @@
+#!groovy
+/**
+ * Test-only pipeline for running Go test suites against an existing Rancher instance.
+ *
+ * Triggered as a downstream job by validation/Jenkinsfile.e2e after infrastructure
+ * provisioning, Rancher deployment, and admin token injection are complete.
+ *
+ * Does NOT provision infrastructure or deploy Rancher.
+ *
+ * Consumes shared functions from qa-jenkins-library:
+ *   property.useWithProperties
+ *
+ * Parameter names (CONFIG, REPO, BRANCH, TAGS, GOTEST_TESTCASE, etc.) match the
+ * existing go-automation-freeform-job pattern for compatibility with downstream
+ * triggers from both the new E2E pipeline and the legacy recurring pipeline.
+ */
+
+def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+library "qa-jenkins-library@${libraryBranch}"
+
+pipeline {
+    agent any
+
+    options {
+        ansiColor('xterm')
+        timeout(time: 180, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+
+    parameters {
+        // ── Test execution parameters ────────────────────────────
+        string(
+            name: 'TIMEOUT',
+            defaultValue: '60m',
+            description: 'Go test timeout duration (e.g., 60m, 2h)'
+        )
+        text(
+            name: 'CONFIG',
+            defaultValue: '',
+            description: 'Test configuration YAML (cattle-config with admin token already injected by orchestrator)'
+        )
+        string(
+            name: 'TEST_PACKAGE',
+            defaultValue: './validation/...',
+            description: 'Go test package path (e.g., ./validation/..., ./validation/provisioning/rke2/...)'
+        )
+        string(
+            name: 'GOTEST_TESTCASE',
+            defaultValue: '',
+            description: 'Go test case regex (-run flag). Empty = all tests in the package.'
+        )
+        string(
+            name: 'TAGS',
+            defaultValue: 'validation',
+            description: 'Go build tags (e.g., validation, pit.daily, recurring)'
+        )
+
+        // ── Repository parameters ────────────────────────────────
+        string(
+            name: 'REPO',
+            defaultValue: 'https://github.com/rancher/tests',
+            description: 'Test repository URL'
+        )
+        string(
+            name: 'BRANCH',
+            defaultValue: 'main',
+            description: 'Test repository branch'
+        )
+
+        // ── Qase reporting parameters ────────────────────────────
+        string(
+            name: 'QASE_TEST_RUN_ID',
+            defaultValue: '',
+            description: 'Qase test run ID. Enables Qase reporting when set.'
+        )
+        string(
+            name: 'QASE_REPORTER_SCRIPT',
+            defaultValue: 'build_qase_reporter_v2.sh',
+            description: 'Qase reporter script name in validation/pipeline/scripts/'
+        )
+
+        // ── Library parameter ────────────────────────────────────
+        string(
+            name: 'QA_JENKINS_LIBRARY_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-jenkins-library to use'
+        )
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    deleteDir()
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: "*/${params.BRANCH}"]],
+                        extensions: [[$class: 'CleanCheckout']],
+                        userRemoteConfigs: [[url: params.REPO]]
+                    ])
+                    env.TESTS_DIR = pwd()
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.TAGS}"
+                }
+            }
+        }
+
+        stage('Build Test Image') {
+            steps {
+                sh 'docker build --no-cache --platform linux/amd64 -t rancher-go-test:latest -f validation/pipeline/Dockerfile.airgap-go-tests .'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                script {
+                    property.useWithProperties([
+                        'AWS_ACCESS_KEY_ID',
+                        'AWS_SECRET_ACCESS_KEY',
+                        'AWS_SSH_PEM_KEY',
+                        'AWS_SSH_PEM_KEY_NAME',
+                        'ADMIN_PASSWORD',
+                        'QASE_AUTOMATION_TOKEN'
+                    ]) {
+                        def workspace = pwd()
+
+                        // ── Write test config ─────────────────────────
+                        if (!params.CONFIG?.trim()) {
+                            error 'CONFIG parameter is empty — cannot run tests without a cattle-config'
+                        }
+                        writeFile file: 'validation/cattle-config.yaml', text: params.CONFIG.trim() + '\n'
+
+                        // ── Build environment file for Docker ─────────
+                        def envLines = []
+                        envLines += "CATTLE_TEST_CONFIG=/workspace/validation/cattle-config.yaml"
+                        envLines += "AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}"
+                        envLines += "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}"
+                        envLines += "ADMIN_PASSWORD=${env.ADMIN_PASSWORD}"
+                        writeFile file: '.go_test_env', text: envLines.join('\n') + '\n'
+
+                        // ── Build gotestsum command ────────────────────
+                        def goPackage = params.TEST_PACKAGE ?: './validation/...'
+                        def testCmd = "gotestsum --format standard-verbose --packages=${goPackage} --junitfile results.xml --jsonfile results.json -- -tags=${params.TAGS}"
+
+                        def testCase = params.GOTEST_TESTCASE?.trim()
+                        if (testCase) {
+                            testCmd += " ${testCase}"
+                        }
+                        testCmd += " -timeout=${params.TIMEOUT ?: '60m'} -v"
+
+                        echo "Test command: ${testCmd}"
+
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                            sh """
+                                docker run --rm --platform linux/amd64 \
+                                    --env-file .go_test_env \
+                                    -v ${workspace}:/workspace \
+                                    -w /workspace \
+                                    rancher-go-test:latest \
+                                    sh -c 'set -e; set -o pipefail; ${testCmd} | tee validation/go-test.log'
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Report Results') {
+            steps {
+                script {
+                    // JUnit results
+                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                        junit allowEmptyResults: true, testResults: 'results.xml'
+                    }
+
+                    // Archive test artifacts
+                    archiveArtifacts allowEmptyArchive: true, artifacts: 'validation/go-test.log, results.xml, results.json', fingerprint: true
+
+                    // Qase reporting
+                    if (params.QASE_TEST_RUN_ID?.trim() && env.QASE_AUTOMATION_TOKEN?.trim()) {
+                        echo "Reporting results to Qase (Run: ${params.QASE_TEST_RUN_ID})"
+
+                        def workspace = pwd()
+                        sh """
+                            docker run --rm --platform linux/amd64 \
+                                -e QASE_TEST_RUN_ID=${params.QASE_TEST_RUN_ID} \
+                                -e QASE_AUTOMATION_TOKEN=\${QASE_AUTOMATION_TOKEN} \
+                                -v ${workspace}:/workspace \
+                                -w /workspace \
+                                rancher-go-test:latest \
+                                sh -c '
+                                    set -e
+                                    validation/pipeline/scripts/${params.QASE_REPORTER_SCRIPT ?: 'build_qase_reporter_v2.sh'}
+                                    if [ -f ./validation/reporter ]; then
+                                        ./validation/reporter
+                                    else
+                                        echo "Reporter binary not found — reporter script may have skipped build"
+                                    fi
+                                '
+                        """
+                    } else {
+                        echo 'Skipping Qase reporting: QASE_TEST_RUN_ID or QASE_AUTOMATION_TOKEN not available'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker rmi -f rancher-go-test:latest || true'
+            sh 'rm -f .go_test_env'
+        }
+    }
+}

@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -15,11 +14,13 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	tfpConfig "github.com/rancher/tfp-automation/config"
+	"github.com/rancher/tfp-automation/framework/cleanup"
+	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -65,19 +66,15 @@ func TestCustom(t *testing.T) {
 	t.Parallel()
 	k := customSetup(t)
 
-	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
-	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	nodeRolesDedicated := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
+	nodeRolesAll := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true, Controlplane: true, Worker: true}}
+	nodeRolesShared := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true, Controlplane: true}, {Quantity: 1, Worker: true}}
+	nodeRolesDedicated := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true}, {Quantity: 1, Controlplane: true}, {Quantity: 1, Worker: true}}
+	nodeRolesStandard := []tfpConfig.Nodepool{{Quantity: 3, Etcd: true}, {Quantity: 2, Controlplane: true}, {Quantity: 3, Worker: true}}
 
 	tests := []struct {
-		name         string
-		client       *rancher.Client
-		machinePools []provisioninginput.MachinePools
+		name      string
+		client    *rancher.Client
+		nodePools []tfpConfig.Nodepool
 	}{
 		{"K3S_Custom|etcd_cp_worker", k.standardUserClient, nodeRolesAll},
 		{"K3S_Custom|etcd_cp|worker", k.standardUserClient, nodeRolesShared},
@@ -90,41 +87,36 @@ func TestCustom(t *testing.T) {
 			k.session.Cleanup()
 		})
 
-		clusterConfig := new(clusters.ClusterConfig)
-		operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
-
-		clusterConfig.MachinePools = tt.machinePools
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			var err error
 
-			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
+			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(k.cattleConfig)
+			terratestConfig.Nodepools = tt.nodePools
 
-			awsEC2Configs := new(ec2.AWSEC2Configs)
-			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, k.cattleConfig, awsEC2Configs)
-
-			logrus.Info("Provisioning cluster")
-			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
-			require.NoError(t, err)
+			logrus.Info("Provisioning custom cluster")
+			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.K3S, "validation/provisioning/k3s")
+			defer os.RemoveAll(nestedRancherModuleDir)
+			defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			err = provisioning.VerifyClusterReady(tt.client, cluster)
+			err = provisioning.VerifyClusterReady(k.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(tt.client, cluster)
+			err = deployment.VerifyClusterDeployments(k.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(tt.client, cluster)
+			err = pods.VerifyClusterPods(k.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
-			err = clusters.VerifyServiceAccountTokenSecret(tt.client, cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(k.client, cluster.Name)
 			require.NoError(t, err)
 		})
 
-		params := provisioning.GetCustomSchemaParams(tt.client, k.cattleConfig)
+		params := provisioning.GetCustomSchemaParams(k.client, k.cattleConfig)
 		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)

@@ -167,7 +167,7 @@ jobs:
             insecure: true
             cleanup: true
           terraform:
-            cni: "${{ secrets.CNI }}"
+            cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             provider: "${{ vars.PROVIDER_AMAZON }}"
@@ -421,7 +421,7 @@ jobs:
             insecure: true
             cleanup: true
           terraform:
-            cni: "${{ secrets.CNI }}"
+            cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             provider: "${{ vars.PROVIDER_AMAZON }}"

@@ -311,18 +311,8 @@ func addMonitoringProviderPrefix(provider clusters.KubernetesProvider, opts *Ran
 	}
 
 	newOptsMap := map[string]any{}
-	ingressKey := "ingressNginx"
 
 	for k, v := range optsMap {
-		// ingressNginx on RKE1 doesn't have prefix
-		if k == ingressKey && provider == clusters.KubernetesProviderRKE {
-			newOptsMap[k] = map[string]any{
-				"enabled": v,
-			}
-
-			continue
-		}
-
 		newKey := fmt.Sprintf("%v%v%v", provider, strings.ToUpper(string(k[0])), k[1:])
 		newOptsMap[newKey] = map[string]any{
 			"enabled": v,
