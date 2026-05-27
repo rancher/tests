@@ -356,6 +356,7 @@ jobs:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: proxy
           run_ace: "false"
+          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -741,6 +742,7 @@ jobs:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: proxy
           run_ace: "false"
+          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1127,6 +1129,7 @@ jobs:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: proxy
           run_ace: "false"
+          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
