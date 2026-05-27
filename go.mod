@@ -10,8 +10,8 @@ replace (
 
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20191219222812-2987a591a72c
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20191219222812-2987a591a72c
-	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260526130302-36fd88c8ebfc
-	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260526130302-36fd88c8ebfc
+	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260527150105-ae26ccbc3fed
+	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260527150105-ae26ccbc3fed
 
 	github.com/rancher/tests/actions => ./actions
 	github.com/rancher/tests/interoperability => ./interoperability
@@ -69,9 +69,9 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/qase-tms/qase-go/pkg/qase-go v1.0.7
 	github.com/qase-tms/qase-go/qase-api-client v1.2.1
-	github.com/rancher/rancher v0.0.0-20260526130302-36fd88c8ebfc
-	github.com/rancher/shepherd v0.0.0-20260521205112-40aaebca2277
-	github.com/rancher/tests/actions v0.0.0-20260526204646-b05ec47f6cc4
+	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
+	github.com/rancher/shepherd v0.0.0-20260527153006-f350691ca9d7
+	github.com/rancher/tests/actions v0.0.0-20260526213827-7db4f81380b6
 	github.com/rancher/tests/interoperability v0.0.0
 	github.com/rancher/tfp-automation v0.0.0-20260521181000-a79c35802dc9
 )
