@@ -8,8 +8,8 @@ replace (
 	github.com/docker/distribution => github.com/docker/distribution v2.8.2+incompatible // rancher-machine requires a replace is set
 	github.com/docker/docker => github.com/docker/docker v20.10.27+incompatible // rancher-machine requires a replace is set
 
-	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260526130302-36fd88c8ebfc
-	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260526130302-36fd88c8ebfc
+	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260527150105-ae26ccbc3fed
+	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260521181000-a79c35802dc9
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
@@ -59,7 +59,7 @@ replace (
 require (
 	github.com/qase-tms/qase-go/qase-api-client v1.2.1
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20260521205112-40aaebca2277
+	github.com/rancher/shepherd v0.0.0-20260527153006-f350691ca9d7
 	github.com/rancher/tfp-automation v0.0.0-20260521181000-a79c35802dc9
 )
 
@@ -71,7 +71,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.3
 	github.com/pkg/errors v0.9.1
 	github.com/rancher/norman v0.9.1
-	github.com/rancher/rancher v0.0.0-20260526130302-36fd88c8ebfc
+	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/wrangler v1.1.2
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1

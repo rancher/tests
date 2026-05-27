@@ -10,8 +10,8 @@ replace (
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20191219222812-2987a591a72c
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20191219222812-2987a591a72c
 
-	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260526130302-36fd88c8ebfc
-	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260526130302-36fd88c8ebfc
+	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260527150105-ae26ccbc3fed
+	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/tests/actions => ./../actions
 	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260521181000-a79c35802dc9
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
@@ -67,8 +67,8 @@ require (
 	github.com/rancher/norman v0.9.1
 	github.com/rancher/qa-infra-automation v0.0.0-20260514152023-976143409dc3
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20260521205112-40aaebca2277
-	github.com/rancher/tests/actions v0.0.0-20260526204646-b05ec47f6cc4
+	github.com/rancher/shepherd v0.0.0-20260527153006-f350691ca9d7
+	github.com/rancher/tests/actions v0.0.0-20260526213827-7db4f81380b6
 	github.com/rancher/tfp-automation v0.0.0-20260521181000-a79c35802dc9
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
@@ -165,7 +165,7 @@ require (
 	github.com/rancher/eks-operator v1.14.0-rc.5 // indirect
 	github.com/rancher/gke-operator v1.14.0-rc.3 // indirect
 	github.com/rancher/lasso v0.2.7 // indirect
-	github.com/rancher/rancher v0.0.0-20260526130302-36fd88c8ebfc // indirect
+	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed // indirect
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260218133309-b0ff1f4c330d // indirect
 	github.com/rancher/wrangler v1.1.2 // indirect
 	github.com/rancher/wrangler/v3 v3.6.0-rc.2 // indirect

@@ -1094,7 +1094,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectResourceQuotaUsed
 	require.NoError(perq.T(), err)
 
 	log.Infof("Deleting namespace %s and verifying project used quota decreases.", ns2.Name)
-	err = extnamespaceapi.DeleteNamespace(standardUserClient, perq.cluster.ID, ns2.Name)
+	err = extnamespaceapi.DeleteNamespace(standardUserClient, perq.cluster.ID, ns2.Name, true)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying project UsedLimit is updated after namespace deletion.")
