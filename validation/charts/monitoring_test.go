@@ -18,7 +18,6 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/ingresses"
 	kubeapinodes "github.com/rancher/shepherd/extensions/kubeapi/nodes"
-	"github.com/sirupsen/logrus"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
 	actionsClusters "github.com/rancher/tests/actions/clusters"
@@ -26,6 +25,7 @@ import (
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/secrets"
 	"github.com/rancher/tests/actions/services"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -33,7 +33,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
 
 type MonitoringTestSuite struct {
 	suite.Suite
