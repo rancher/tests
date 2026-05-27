@@ -67,8 +67,7 @@ def destroyInfrastructure(String reason) {
                 path:    "${tofuDir}/terraform.tfvars",
                 content: terraformConfig
             )
-            def mk = new make()
-            mk.runTarget(target: 'infra-down', dir: env.INFRA_DIR, makeArgs: "WORKSPACE=${wsName} AUTO_APPROVE=yes")
+            make.runTarget(target: 'infra-down', dir: env.INFRA_DIR, makeArgs: "WORKSPACE=${wsName} AUTO_APPROVE=yes")
             env.INFRA_CLEANED = 'true'
         }
     } catch (cleanupErr) {
@@ -656,11 +655,9 @@ rancher_use_bundled_system_charts: true
                             )
                         }
 
-                        def mk = new make()
-
                         // ── Initialize S3 backend ──────────────────────────
                         stage('Initialize Tofu Backend') {
-                            mk.runTarget(
+                            make.runTarget(
                                 target:   'backend-s3',
                                 dir:      env.INFRA_DIR,
                                 makeArgs: [
@@ -678,7 +675,7 @@ rancher_use_bundled_system_charts: true
                                 suffix:           params.HOSTNAME_PREFIX,
                                 includeTimestamp: false
                             )
-                            mk.runTarget(
+                            make.runTarget(
                                 target:   'workspace-new',
                                 dir:      env.INFRA_DIR,
                                 makeArgs: "WORKSPACE=${workspaceName}"
@@ -689,7 +686,7 @@ rancher_use_bundled_system_charts: true
 
                         // ── Provision infra + generate inventory ───────────
                         stage('Provision Infrastructure') {
-                            mk.runTarget(
+                            make.runTarget(
                                 target:   'infra-up',
                                 dir:      env.INFRA_DIR,
                                 makeArgs: "WORKSPACE=${workspaceName}"
@@ -698,7 +695,7 @@ rancher_use_bundled_system_charts: true
 
                         // ── Deploy RKE2 cluster ────────────────────────────
                         stage('Deploy RKE2 Cluster') {
-                            mk.runTarget(
+                            make.runTarget(
                                 target:   'cluster',
                                 dir:      env.INFRA_DIR
                             )
@@ -707,7 +704,7 @@ rancher_use_bundled_system_charts: true
                         // ── Deploy Rancher ─────────────────────────────────
                         stage('Deploy Rancher') {
                             if (params.DEPLOY_RANCHER) {
-                                mk.runTarget(
+                                make.runTarget(
                                     target: 'rancher',
                                     dir:    env.INFRA_DIR
                                 )
