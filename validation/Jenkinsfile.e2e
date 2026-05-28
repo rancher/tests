@@ -12,7 +12,7 @@
  *
  *
  * Consumes shared functions from qa-jenkins-library:
- *   infra.backendS3, infra.workspaceNew, infra.up, infra.cluster, infra.rancher, infra.down
+ *   make.runTarget (backend-s3, workspace-new, infra-up, cluster, rancher, infra-down)
  *   airgap.standardCheckout
  *   infrastructure.parseAndSubstituteVars, infrastructure.writeConfig,
  *   infrastructure.generateWorkspaceName, infrastructure.archiveWorkspaceName,
@@ -67,7 +67,7 @@ def destroyInfrastructure(String reason) {
                 path:    "${tofuDir}/terraform.tfvars",
                 content: terraformConfig
             )
-            infra.down(env.INFRA_DIR, wsName)
+            make.runTarget(target: 'infra-down', dir: env.INFRA_DIR, makeArgs: "WORKSPACE=${wsName} AUTO_APPROVE=yes")
             env.INFRA_CLEANED = 'true'
         }
     } catch (cleanupErr) {
@@ -657,11 +657,14 @@ rancher_use_bundled_system_charts: true
 
                         // ── Initialize S3 backend ──────────────────────────
                         stage('Initialize Tofu Backend') {
-                            infra.backendS3(
-                                env.INFRA_DIR,
-                                params.S3_BUCKET_NAME,
-                                params.S3_KEY_PREFIX,
-                                params.S3_BUCKET_REGION
+                            make.runTarget(
+                                target:   'backend-s3',
+                                dir:      env.INFRA_DIR,
+                                makeArgs: [
+                                    "BUCKET=${params.S3_BUCKET_NAME}",
+                                    "KEY=${params.S3_KEY_PREFIX}",
+                                    "REGION=${params.S3_BUCKET_REGION}"
+                                ]
                             )
                         }
 
@@ -672,25 +675,39 @@ rancher_use_bundled_system_charts: true
                                 suffix:           params.HOSTNAME_PREFIX,
                                 includeTimestamp: false
                             )
-                            infra.workspaceNew(env.INFRA_DIR, workspaceName)
+                            make.runTarget(
+                                target:   'workspace-new',
+                                dir:      env.INFRA_DIR,
+                                makeArgs: "WORKSPACE=${workspaceName}"
+                            )
                             infrastructure.archiveWorkspaceName(workspaceName: workspaceName)
                             env.WORKSPACE_NAME = workspaceName
                         }
 
                         // ── Provision infra + generate inventory ───────────
                         stage('Provision Infrastructure') {
-                            infra.up(env.INFRA_DIR, workspaceName)
+                            make.runTarget(
+                                target:   'infra-up',
+                                dir:      env.INFRA_DIR,
+                                makeArgs: "WORKSPACE=${workspaceName}"
+                            )
                         }
 
                         // ── Deploy RKE2 cluster ────────────────────────────
                         stage('Deploy RKE2 Cluster') {
-                            infra.cluster(env.INFRA_DIR, workspaceName)
+                            make.runTarget(
+                                target:   'cluster',
+                                dir:      env.INFRA_DIR
+                            )
                         }
 
                         // ── Deploy Rancher ─────────────────────────────────
                         stage('Deploy Rancher') {
                             if (params.DEPLOY_RANCHER) {
-                                infra.rancher(env.INFRA_DIR, workspaceName)
+                                make.runTarget(
+                                    target: 'rancher',
+                                    dir:    env.INFRA_DIR
+                                )
                             } else {
                                 echo 'Skipping Rancher deployment (DEPLOY_RANCHER not checked)'
                             }
