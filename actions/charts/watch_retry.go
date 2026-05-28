@@ -1,11 +1,14 @@
 package charts
 
 import (
+	"context"
 	"strings"
 	"time"
 
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/sirupsen/logrus"
+
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -29,7 +32,9 @@ func RetryOnWatchError(maxRetries int, fn func() error) error {
 			return lastErr
 		}
 		logrus.Warnf("Watch connection error (attempt %d/%d): %v", i+1, maxRetries, lastErr)
-		time.Sleep(watchRetryDelay)
+		_ = kwait.PollUntilContextTimeout(context.TODO(), watchRetryDelay, watchRetryDelay+time.Second, false, func(context.Context) (bool, error) {
+			return true, nil
+		})
 	}
 	return lastErr
 }
