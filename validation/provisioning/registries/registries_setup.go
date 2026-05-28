@@ -17,7 +17,8 @@ import (
 	"github.com/rancher/tfp-automation/defaults/keypath"
 	"github.com/rancher/tfp-automation/framework"
 	"github.com/rancher/tfp-automation/framework/set/resources/rancher2"
-	"github.com/rancher/tfp-automation/tests/infrastructure/ranchers"
+
+	ranchersetup "github.com/rancher/tfp-automation/tests/infrastructure/ranchers/setup"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,7 +48,7 @@ func registriesSetup(t *testing.T) registriesTest {
 
 	r.terraformOptions = terraformOptions
 
-	client, err := ranchers.PostRancherSetup(t, r.terraformOptions, r.rancherConfig, r.session, r.terraformConfig.Standalone.RancherHostname, keyPath, false)
+	client, err := ranchersetup.PostRancherSetup(t, r.terraformOptions, r.rancherConfig, r.session, r.terraformConfig.Standalone.RancherHostname, keyPath, false)
 	require.NoError(t, err)
 
 	r.client = client

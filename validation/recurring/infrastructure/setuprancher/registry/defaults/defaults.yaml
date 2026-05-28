@@ -1,0 +1,63 @@
+rancher:
+  host: "<required>"
+  adminPassword: "<required>"
+  insecure: true
+  cleanup: true
+
+awsCredentials:
+  awsAccessKey: "<required>"
+  awsSecretKey: "<required>"
+
+terraform:
+  awsCredentials:
+    awsAccessKey: "<required>"
+    awsSecretKey: "<required>"
+  cni: "<HB_CNI>"
+  defaultClusterRoleForProjectMembers: "true"
+  enableNetworkPolicy: false
+  provider: "<HB_PROVIDER_AMAZON>"
+  privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
+  resourcePrefix: "<HB_HOSTNAME_PREFIX>"
+  awsConfig:
+    ami: "<HB_AWS_AMI>"
+    awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+    awsInstanceType: "<HB_AWS_INSTANCE_TYPE>"
+    awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
+    region: "<HB_AWS_REGION>"
+    awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS>"]
+    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES>"]
+    awsSubnetID: "<HB_AWS_SUBNET_ID>"
+    awsVpcID: "<HB_AWS_VPC_ID>"
+    awsZoneLetter: "<HB_AWS_ZONE_LETTER>"
+    awsRootSize: "<HB_AWS_ROOT_SIZE>"
+    registryRootSize: "<HB_AWS_ROOT_SIZE_REGISTRY>"
+    awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
+    awsUser: "<HB_AWS_USER>"
+    sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
+    timeout: "<HB_TIMEOUT>"
+    ipAddressType: "<HB_IP_ADDRESS_TYPE>"
+    loadBalancerType: "<HB_LOAD_BALANCER_TYPE>"
+    targetType: "<HB_TARGET_TYPE>"
+  standalone:
+    bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
+    certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
+    chartVersion: "<HB_RANCHER_CHART_VERSION>"
+    certType: "<HB_CERT_TYPE>"
+    osUser: "<HB_OS_USER>"
+    osGroup: "<HB_OS_GROUP>"
+    rancherChartRepository: "<HB_RANCHER_HELM_CHART_URL>"
+    rancherHostname: "<HB_RANCHER_HOSTNAME>"
+    rancherImage: "<HB_RANCHER_IMAGE>"
+    rancherTagVersion: "<HB_RANCHER_VERSION>"
+    registryUsername: "<HB_PRIVATE_REGISTRY_USERNAME>"
+    registryPassword: "<HB_PRIVATE_REGISTRY_PASSWORD>"
+    repo: "<HB_RANCHER_REPO>"
+    rke2Version: "<HB_RKE2_VERSION>"
+  standaloneRegistry:
+    assetsPath: "<HB_ASSETS_PATH>"
+    registryName: "<HB_HOSTNAME_PREFIX>"
+    registryPassword: "<HB_REGISTRY_PASSWORD>"
+    registryUsername: "<HB_REGISTRY_USERNAME>"
+    ecrUsername: "<HB_ECR_USERNAME>"
+    ecrPassword: "<HB_ECR_PASSWORD>"
+    ecrURI: "<HB_ECR_URI>"

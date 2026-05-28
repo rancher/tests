@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultFilePath = "defaults/defaults.yaml"
+	DefaultFilePath = "defaults/defaults.yaml"
 	RKE2            = "rke2"
 	K3S             = "k3s"
 )
@@ -28,17 +28,17 @@ func LoadPackageDefaults(cattleConfig map[string]any, filePath string) (map[stri
 		parentPath := packagePath[:index+1]
 
 		var packageDefaultsConfig map[string]any
-		_, err = os.Stat(packagePath + "/" + defaultFilePath)
+		_, err = os.Stat(packagePath + "/" + DefaultFilePath)
 		if err == nil {
-			packageDefaultsConfig = config.LoadConfigFromFile(packagePath + "/" + defaultFilePath)
+			packageDefaultsConfig = config.LoadConfigFromFile(packagePath + "/" + DefaultFilePath)
 		} else {
 			logrus.Warningf("No defaults found in: %s", packagePath)
 		}
 
 		var parentDefaultsConfig map[string]any
-		_, err = os.Stat(parentPath + defaultFilePath)
+		_, err = os.Stat(parentPath + DefaultFilePath)
 		if err == nil {
-			parentDefaultsConfig = config.LoadConfigFromFile(parentPath + defaultFilePath)
+			parentDefaultsConfig = config.LoadConfigFromFile(parentPath + DefaultFilePath)
 			defaultsConfig, err = DeepMerge(packageDefaultsConfig, parentDefaultsConfig, true)
 			if err != nil {
 				return nil, err
