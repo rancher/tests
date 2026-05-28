@@ -76,12 +76,14 @@ func TestCustom(t *testing.T) {
 		client      *rancher.Client
 		clusterType string
 		nodePools   []tfpConfig.Nodepool
+		isWindows   bool
 	}{
-		{"RKE2_Custom|etcd_cp_worker", r.standardUserClient, defaults.RKE2, nodeRolesAll},
-		{"RKE2_Custom|etcd_cp|worker", r.standardUserClient, defaults.RKE2, nodeRolesShared},
-		{"RKE2_Custom|etcd|cp|worker", r.standardUserClient, defaults.RKE2, nodeRolesDedicated},
-		{"RKE2_Custom|etcd|cp|worker|windows", r.standardUserClient, "rke2_windows_2022", nodeRolesDedicatedWindows},
-		{"RKE2_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, defaults.RKE2, nodeRolesStandard},
+		{"RKE2_Custom|etcd_cp_worker", r.standardUserClient, defaults.RKE2, nodeRolesAll, false},
+		{"RKE2_Custom|etcd_cp|worker", r.standardUserClient, defaults.RKE2, nodeRolesShared, false},
+		{"RKE2_Custom|etcd|cp|worker", r.standardUserClient, defaults.RKE2, nodeRolesDedicated, false},
+		{"RKE2_Custom|etcd|cp|worker|windows_2019", r.standardUserClient, "rke2_windows_2019", nodeRolesDedicatedWindows, true},
+		{"RKE2_Custom|etcd|cp|worker|windows_2022", r.standardUserClient, "rke2_windows_2022", nodeRolesDedicatedWindows, true},
+		{"RKE2_Custom|3_etcd|2_cp|3_worker", r.standardUserClient, defaults.RKE2, nodeRolesStandard, false},
 	}
 	for _, tt := range tests {
 		t.Cleanup(func() {
@@ -97,7 +99,7 @@ func TestCustom(t *testing.T) {
 			terratestConfig.Nodepools = tt.nodePools
 
 			logrus.Info("Provisioning custom cluster")
-			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, tt.clusterType, "validation/provisioning/rke2")
+			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, tt.clusterType, "validation/provisioning/rke2", tt.isWindows)
 			defer os.RemoveAll(nestedRancherModuleDir)
 			defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
 

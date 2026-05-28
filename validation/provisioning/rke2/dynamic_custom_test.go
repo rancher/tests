@@ -102,8 +102,15 @@ func TestDynamicCustom(t *testing.T) {
 					t.Skip()
 				}
 
+				var isWindows bool
+				if terraformConfig.AWSConfig.WindowsInstanceType != "" {
+					isWindows = true
+				} else {
+					isWindows = false
+				}
+
 				logrus.Info("Provisioning custom cluster")
-				nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.RKE2, "validation/provisioning/rke2")
+				nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.RKE2, "validation/provisioning/rke2", isWindows)
 				defer os.RemoveAll(nestedRancherModuleDir)
 				defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
 

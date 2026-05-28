@@ -209,8 +209,33 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
-  - description: Provisions a 4 node etcd/cp/worker/windows custom cluster
-    title: RKE2_Custom|etcd|cp|worker|windows
+  - description: Provisions a 4 node etcd/cp/worker/windows 2019 custom cluster
+    title: RKE2_Custom|etcd|cp|worker|windows_2019
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 4 node etcd/cp/worker/windows 2022 custom cluster
+    title: RKE2_Custom|etcd|cp|worker|windows_2022
     priority: 4
     type: 8
     is_flaky: 0
