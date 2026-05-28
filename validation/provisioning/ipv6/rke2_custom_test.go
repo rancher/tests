@@ -98,7 +98,7 @@ func TestCustomRKE2IPv6(t *testing.T) {
 			}
 
 			logrus.Info("Provisioning custom cluster")
-			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.RKE2, "validation/provisioning/ipv6")
+			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.RKE2, "validation/provisioning/ipv6", false)
 			defer os.RemoveAll(nestedRancherModuleDir)
 			defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
 

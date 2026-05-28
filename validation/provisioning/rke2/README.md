@@ -97,8 +97,9 @@ Custom test verifies that various custom cluster configurations provision proper
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config)
-3. [Custom Cluster Config](#custom-cluster)
+2. [Terraform Config](#terraform-config)
+3. [Cluster Config](#cluster-config)
+4. [Custom Cluster Config](#custom-cluster)
 
 #### Table Tests
 1. `RKE2_Custom|etcd_cp_worker`
@@ -135,8 +136,9 @@ Dynamic custom test verifies that a user defined custom cluster provisions prope
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config)
-3. [Custom Cluster Config](#custom-cluster)
+2. [Terraform Config](#terraform-config)
+3. [Cluster Config](#cluster-config)
+4. [Custom Cluster Config](#custom-cluster)
 
 #### Table Tests
 Dynamic tests do not have a static name
@@ -292,6 +294,47 @@ All table tests listed above except the dynamic tests
 
 
 ## Configurations
+
+### Terraform Config
+terraform config is needed when running the custom clusters as rancher/tfp-automation is utilized to create the clusters.
+
+```yaml
+terraform:
+  downstreamClusterProvider: "aws"
+  privateKeyPath: ""
+  resourcePrefix: ""
+  windowsPrivateKeyPath: ""
+  awsConfig:
+    ami: ""
+    awsKeyName: ""
+    awsInstanceType: "t"
+    awsVolumeType: ""
+    region: ""
+    awsSecurityGroups: ["sg-"]
+    awsSecurityGroupNames: [""]
+    awsSubnetID: ""
+    awsVpcID: ""
+    awsZoneLetter: "a"
+    awsRootSize: 100
+    awsUser: "ubuntu"
+    sshConnectionType: "ssh"
+    timeout: "5m"
+    windows2019AMI: ""
+    windows2022AMI: ""
+    windowsAWSUser: ""
+    windows2019Password: ""
+    windows2022Password: ""
+    windowsInstanceType: ""
+    windowsKeyName: ""
+```
+
+Also, be sure to export the following variables:
+
+```
+export RANCHER2_PROVIDER_VERSION=""                                     # Required
+export CLOUD_PROVIDER_VERSION=""                                        # Required for custom cluster / infrastructure building
+export LOCALS_PROVIDER_VERSION=""                                       # Required for custom cluster / infrastructure building
+```
 
 ### Cluster Config
 clusterConfig is needed to the run the all RKE2 tests. If no cluster config is provided all values have defaults.
