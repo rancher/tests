@@ -139,6 +139,7 @@ node {
                         text(name: 'DOWNSTREAM_CLUSTERTERRAFORM_CONFIG', value: downstreamClusterTerraformConfig),
                         string(name: 'BRANCH', value: "${branch}"),
                         string(name: 'TEST_RUN_NAME', value: "${testTag}-${env.TEST_RUN_NAME}"),
+                        string(name: 'VALIDATION_TEST_TAGS', value: "${env.VALIDATION_TEST_TAGS}"),
                       ]
 
                       jobs["$testTag-test-validation"] = { build job: recurringRunJob, parameters: goValidationParams }
