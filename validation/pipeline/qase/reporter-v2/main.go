@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -38,7 +37,8 @@ const (
 	requestLimit = 100
 	// Doc: https://developers.qase.io/reference/create-run
 	descriptionLimit = 10000
-	imagesPath       = "/app/images/"
+	imageReportPath  = "/app/image-report/image-report.txt"
+	testResultsJSON  = "results.json"
 )
 
 func main() {
@@ -355,36 +355,11 @@ func createRunDescription(buildUrl string, commitId string) string {
 
 // getVersionInformation gets versions and commits id from cluster
 func getVersionInformation() string {
-
-	files, err := os.ReadDir(imagesPath)
+	// Prepare the command: docker logs imageCapturer
+	data, err := os.ReadFile(imageReportPath)
 	if err != nil {
-		logrus.Warning(fmt.Errorf("Failed to get files: %v", err))
-		return ""
+		logrus.Warning(fmt.Errorf("Failed to read file: %v", err))
 	}
 
-	var b strings.Builder
-
-	for _, file := range files {
-		path := filepath.Join(imagesPath, file.Name())
-
-		data, err := os.ReadFile(path)
-		if err != nil {
-			logrus.Warning(fmt.Errorf("Failed to read file: %v", err))
-			continue
-		}
-
-		s := string(data)
-		lines := strings.Split(s, "\n")
-		slices.Sort(lines)
-		compactLines := slices.Compact(lines)
-		s = strings.Join(compactLines, "\n")
-
-		b.WriteString(fmt.Sprintf("Images used within %s", file.Name()))
-		b.WriteString("\n")
-		b.WriteString(s)
-		b.WriteString("\n")
-		b.WriteString("\n")
-	}
-
-	return b.String()
+	return string(data)
 }

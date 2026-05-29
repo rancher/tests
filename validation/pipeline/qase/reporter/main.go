@@ -15,6 +15,7 @@ import (
 	"github.com/qase-tms/qase-go/pkg/qase-go/clients"
 	api_v1_client "github.com/qase-tms/qase-go/qase-api-client"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/tests/actions/qase"
 	qaseactions "github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/qase/testresult"
 	"github.com/rancher/tests/validation/pipeline/slack"
@@ -33,7 +34,6 @@ const (
 	testSource           = "GoValidation"
 	multiSubTestPattern  = `(\w+/\w+/\w+){1,}`
 	subtestPattern       = `(\w+/\w+){1,1}`
-	testResultsJSON      = "results.json"
 )
 
 var (
@@ -183,7 +183,7 @@ func getAllAutomationTestCases(client *clients.V1Client) (map[string]qaseCaseLoo
 }
 
 func readTestCase() ([]testresult.GoTestOutput, error) {
-	file, err := os.Open(testResultsJSON)
+	file, err := os.Open(qase.TestResultsJSON)
 	if err != nil {
 		return nil, err
 	}
