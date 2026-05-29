@@ -353,7 +353,9 @@ func (m *MonitoringTestSuite) TestUpgradeMonitoringChart() {
 	require.NoError(m.T(), err)
 
 	m.T().Log("Upgrading monitoring chart with the latest version")
-	err = charts.UpgradeRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
+	err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+		return charts.UpgradeRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
+	})
 	require.NoError(m.T(), err)
 
 	monitoringChartPostUpgrade, err := extencharts.GetChartStatus(client, m.project.ClusterID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
