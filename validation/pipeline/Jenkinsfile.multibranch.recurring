@@ -38,6 +38,7 @@ node {
       branch = "${env.BRANCH}"
     }
 
+    def rancherRepo = "https://github.com/rancher/tests"
     if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
       rancherRepo = "${env.REPO}"
     }
@@ -50,9 +51,9 @@ node {
     def configFiles = []
     wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
       withFolderProperties {
-        paramsMap = []
+        def paramsMap = []
         params.each {
-          if (it.value && it.value.trim() != "") {
+          if (it.value != null && it.value.toString().trim() != "") {
               paramsMap << "$it.key=$it.value"
           }
         }
@@ -101,7 +102,7 @@ node {
             }
             stage('Run Different Release Branches Testing') {
               try {
-                  jobs = [:]
+                  def jobs = [:]
                   def hostnamePrefix = sh ( // Read from the correct terraform config file
                     script: "sed -n 's|^aws_hostname_prefix = \\\"\\(.*\\)\\\"|\\1|p' ${terraformConfigPath}",
                     returnStdout: true
