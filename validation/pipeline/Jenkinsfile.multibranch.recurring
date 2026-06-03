@@ -28,11 +28,10 @@ node {
       recurringRunJob = "${env.RECURRING_JOB}"
     } else {
       if (jobName.contains('/')) { 
-        jobNames = jobName.split('/')
+        def jobNames = jobName.split('/')
         jobName = jobNames[jobNames.size() - 1] 
       }
-      recurringRunJob = (jobName =~ /(go-recurring-[a-z]+)/)[0][1]
-      recurringRunJob = "${recurringRunJob}-job"
+      recurringRunJob = jobName.replace('-multibranch', '')
     }
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
