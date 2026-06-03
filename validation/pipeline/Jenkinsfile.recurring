@@ -12,7 +12,7 @@ node {
     def qaInfraWorkPath = "/root/go/src/github.com/rancher/qa-infra-automation"
     def jobName = "${JOB_NAME}"
     if (jobName.contains('/')) { 
-      jobNames = jobName.split('/')
+      def jobNames = jobName.split('/')
       jobName = jobNames[jobNames.size() - 1] 
     }
     def golangTestContainer = "${jobName}${env.BUILD_NUMBER}-golangtest"
@@ -73,10 +73,11 @@ node {
     def configFiles = []
     wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
       withFolderProperties {
-        paramsMap = []
+        def paramsMap = []
         params.each {
-          if (it.value && it.value.trim() != "") {
-              paramsMap << "$it.key=$it.value"
+          def value = it.value?.toString()
+          if (value && value.trim() != "") {
+              paramsMap << "$it.key=$value"
           }
         }
         withCredentials([ string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
