@@ -4,10 +4,10 @@ node {
     def workPath = "/root/go/src/github.com/rancher/tests/validation/"
     def rancherImageTags = "${env.RANCHER_IMAGE_TAGS}".split(',')
     def jobName = "${JOB_NAME}"
-    def config = env.CONFIG ?: ""
-    def ansibleConfig = env.ANSIBLE_CONFIG ?: ""
+    def config = env.CATTLE_TEST_CONFIG ?: ""
+    def ansibleConfig = env.ANSIBLE_VARIABLES ?: ""
     def terraformConfig = env.TERRAFORM_CONFIG ?: ""
-    def downstreamClusterTerraformConfig = env.DOWNSTREAM_CLUSTERTERRAFORM_CONFIG ?: ""
+    def downstreamClusterTerraformConfig = env.DOWNSTREAM_CLUSTER_CONFIG ?: ""
     def filename = "config.yaml"
     def ansibleVarsFilename = "vars.yaml"
     def terraformVarsfilename = "cluster.tfvars"
@@ -133,10 +133,10 @@ node {
                     def ansibleConfigYaml = readFile(file: "${ansibleConfigPath}")
                     def terraformConfigYaml = readFile(file: "${terraformConfigPath}")
                     def goValidationParams = [
-                        text(name: 'CONFIG', value: configYaml),
-                        text(name: 'ANSIBLE_CONFIG', value: ansibleConfigYaml),
+                        text(name: 'CATTLE_TEST_CONFIG', value: configYaml),
+                        text(name: 'ANSIBLE_VARIABLES', value: ansibleConfigYaml),
                         text(name: 'TERRAFORM_CONFIG', value: terraformConfigYaml),
-                        text(name: 'DOWNSTREAM_CLUSTERTERRAFORM_CONFIG', value: downstreamClusterTerraformConfig),
+                        text(name: 'DOWNSTREAM_CLUSTER_CONFIG', value: downstreamClusterTerraformConfig),
                         string(name: 'BRANCH', value: "${branch}"),
                         string(name: 'TEST_RUN_NAME', value: "${testTag}-${env.TEST_RUN_NAME}"),
                         string(name: 'VALIDATION_TEST_TAGS', value: "${env.VALIDATION_TEST_TAGS}"),
