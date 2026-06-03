@@ -32,10 +32,10 @@ node {
     def branch = "main"
     def qaInfraBranch = "main"
     def qaInfraRepo = "https://github.com/rancher/qa-infra-automation"
-    def config = env.CONFIG
-    def ansibleConfig = env.ANSIBLE_CONFIG
-    def terraformConfig = env.TERRAFORM_CONFIG 
-    def downstreamClusterTerraformConfig = env.DOWNSTREAM_CLUSTERTERRAFORM_CONFIG 
+    def config = env.CONFIG ?: ""
+    def ansibleConfig = env.ANSIBLE_CONFIG ?: ""
+    def terraformConfig = env.TERRAFORM_CONFIG ?: ""
+    def downstreamClusterTerraformConfig = env.DOWNSTREAM_CLUSTERTERRAFORM_CONFIG ?: ""
     def rancherToken = ""
     def filename = "config.yaml"
     def ansibleVarsFilename = "vars.yaml"
