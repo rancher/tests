@@ -53,6 +53,7 @@ node {
       branch = "${env.BRANCH}"
     }
 
+    def rancherRepo = "https://github.com/rancher/tests"
     if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
       rancherRepo = "${env.REPO}"
     }
@@ -187,7 +188,7 @@ node {
             try {
               stage('Run Test Validations') {
                   try {
-                    jobs = [:]
+                    def jobs = [:]
                     
                     // copy updated config file from the build test container
                     sh "docker cp ${buildTestContainer}:${workPath}${filename} ./"
