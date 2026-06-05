@@ -18,7 +18,8 @@ import (
 	"github.com/rancher/tfp-automation/framework"
 	"github.com/rancher/tfp-automation/framework/set/resources/rancher2"
 	"github.com/rancher/tfp-automation/tests/extensions/ssh"
-	"github.com/rancher/tfp-automation/tests/infrastructure/ranchers"
+
+	ranchersetup "github.com/rancher/tfp-automation/tests/infrastructure/ranchers/setup"
 	"github.com/stretchr/testify/require"
 )
 
@@ -55,7 +56,7 @@ func airgapSetup(t *testing.T, clusterType string) airgapTest {
 	r.tunnel, err = ssh.StartBastionSSHTunnel(r.terraformConfig.AirgapBastion, r.standaloneConfig.OSUser, sshKey, "8443", r.standaloneConfig.RancherHostname, "443")
 	require.NoError(t, err)
 
-	client, err := ranchers.PostRancherSetup(t, r.terraformOptions, r.rancherConfig, r.session, r.terraformConfig.Standalone.RancherHostname, keyPath, false)
+	client, err := ranchersetup.PostRancherSetup(t, r.terraformOptions, r.rancherConfig, r.session, r.terraformConfig.Standalone.RancherHostname, keyPath, false)
 	require.NoError(t, err)
 
 	r.client = client

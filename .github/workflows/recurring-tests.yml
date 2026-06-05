@@ -325,7 +325,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
+        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
 
       - name: Run Test Suites
         env:
@@ -692,7 +692,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
+        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
 
       - name: Run Test Suites
         env:
@@ -1060,7 +1060,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/createRancherServer.go
+        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
 
       - name: Run Test Suites
         env:

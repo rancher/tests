@@ -223,8 +223,8 @@ github.com/rancher/shepherd v0.0.0-20260527153006-f350691ca9d7 h1:5yrD/BHQVYwAft
 github.com/rancher/shepherd v0.0.0-20260527153006-f350691ca9d7/go.mod h1:s0+3Z0LuHCQIBKJ2tsvd5HULR55MTOslcpzFMt7xmnE=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260218133309-b0ff1f4c330d h1:OfXAOEoBm4BYEFd4wWkF7c+Eu/OvaOpLb1a+ZBTfZps=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260218133309-b0ff1f4c330d/go.mod h1:SUiQyIpckuP2ZGusrd+avYyt5WTQ9wuvhffw/ukbcrk=
-github.com/rancher/tfp-automation v0.0.0-20260528215432-b657fd58df43 h1:tkiw94lez0q1/+lHCs3HNEWrlPQuBUjh70TiKPSEJ5w=
-github.com/rancher/tfp-automation v0.0.0-20260528215432-b657fd58df43/go.mod h1:ojRA9GMeD9BxP4A7pytxHWMiDrTn4yZnkO0cKZ6Qud4=
+github.com/rancher/tfp-automation v0.0.0-20260604203037-33dec16a7689 h1:u2Qrm7vX2YoPmxVCpqIMwc/XoH4ysya3JT4N/R9avkA=
+github.com/rancher/tfp-automation v0.0.0-20260604203037-33dec16a7689/go.mod h1:ojRA9GMeD9BxP4A7pytxHWMiDrTn4yZnkO0cKZ6Qud4=
 github.com/rancher/wrangler v1.1.2 h1:oXbXo9k7y/H4drUpb4RM1c++vT9O3rpoNEfyusGykiU=
 github.com/rancher/wrangler v1.1.2/go.mod h1:2k9MyhlBdjcutcBGoOJSUAz0HgDAXnMjv81d3n/AaQc=
 github.com/rancher/wrangler/v3 v3.6.0-rc.2 h1:2M3pCJ18jiZwH9embvueYYZcVJs6BvO5CWHjPdloJAw=
