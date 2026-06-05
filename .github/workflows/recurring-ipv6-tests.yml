@@ -198,8 +198,8 @@ jobs:
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
               awsUser: "${{ secrets.IPV6_AWS_USER }}"
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
               enablePrimaryIPv6: true
               httpProtocolIPv6: "enabled"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
@@ -236,8 +236,8 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             networking:
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_IPV6 }}"
             advanced:
               machineGlobalConfig:
@@ -562,8 +562,8 @@ jobs:
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
               awsUser: "${{ secrets.IPV6_AWS_USER }}"
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
               enablePrimaryIPv6: true
               httpProtocolIPv6: "enabled"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
@@ -600,8 +600,8 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             networking:
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_IPV6 }}"
             advanced:
               machineGlobalConfig:
@@ -925,8 +925,8 @@ jobs:
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
               awsUser: "${{ secrets.IPV6_AWS_USER }}"
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
               enablePrimaryIPv6: true
               httpProtocolIPv6: "enabled"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
@@ -964,8 +964,8 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             networking:
-              clusterCIDR: "${{ secrets.IPV6_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ secrets.IPV6_SERVICE_CIDR }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
               stackPreference: "${{ vars.STACK_PREFERENCE_IPV6 }}"
             advanced:
               machineGlobalConfig:
