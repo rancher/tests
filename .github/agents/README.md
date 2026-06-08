@@ -81,6 +81,21 @@ Generates or updates `schemas/pit_schemas.yaml` files for PIT (Platform Interope
 copilot --agent=pit.crew.schema --allow-tool write -p "Create the pit_schemas.yaml for @validation/networking/connectivity/"
 ```
 
+### `pit.crew.code.style` — Code Style Enforcer
+
+**File:** [`pit.crew.code.style.agent.md`](./pit.crew.code.style.agent.md)
+
+Reviews and fixes Go validation test files to comply with the repository's code style, naming conventions, error handling patterns, and linter rules.
+
+**When to use:** Reviewing, creating, or modifying test files to identify style violations and ensure consistency with project standards before opening a PR
+
+**Example prompt:**
+```
+copilot --agent=pit.crew.code.style -p "Review @validation/networking/connectivity/network_policy_test.go for code style issues"
+```
+
+---
+
 ## Additional Resources
 
 - [GitHub Copilot CLI documentation](https://docs.github.com/copilot/concepts/agents/about-copilot-cli)
