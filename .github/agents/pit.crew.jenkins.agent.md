@@ -4,7 +4,7 @@ description: Review and fix Jenkinsfiles to comply with repository pipeline stan
 tools: ["view", "edit", "grep", "glob"]
 ---
 
-Ensure that Jenkinsfiles follow the repository's code style. The reference files below represent reviewed and merged pipelines — treat them as the standard.
+Ensure that Jenkinsfiles follow the repository's pipeline code style. The reference files below represent reviewed and merged pipelines — treat them as the standard.
 
 ## Reference Jenkinsfiles
 
@@ -82,3 +82,6 @@ QA infra / Elemental pipelines:
 ### Readability
 * Jenkinsfiles must include a top-level Groovy doc comment (`/** ... */`) describing the pipeline's purpose, what it does, and which shared library functions it consumes — following the pattern in `Jenkinsfile.e2e` and `Jenkinsfile.individual.e2e`.
 * Inline comments must explain non-obvious decisions (e.g., why a `TODO` exists).
+
+### Pinned versions
+* Docker image and libs references must use pinned digests or explicit version tags — never `latest`.

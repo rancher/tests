@@ -92,10 +92,7 @@ Reviews and fixes Go validation test files to comply with the repository's code 
 **Example prompt:**
 ```
 copilot --agent=pit.crew.code.style -p "Review @validation/networking/connectivity/network_policy_test.go for code style issues"
-```
 
-**Github example:**
-```
 In an issue or PR comment:
 @github-copilot Use the pit.crew.code.style agent to review the changes in this PR
 ```
