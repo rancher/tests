@@ -102,6 +102,23 @@ In an issue or PR comment:
 
 ---
 
+### `pit.crew.jenkins` — Jenkinsfile Code Style Enforcer
+
+**File:** [`pit.crew.jenkins.agent.md`](./pit.crew.jenkins.agent.md)
+
+Reviews and fixes Jenkinsfiles to comply with the repository's pipeline standards, including `qa-jenkins-library` shared library usage, declarative pipeline structure, credential handling, and cleanup patterns.
+
+**When to use:** After writing or modifying a Jenkinsfile, run this agent to catch style and structural violations before opening a PR.
+
+**Example prompt:**
+```
+copilot --agent=pit.crew.jenkins -p "Review @validation/Jenkinsfile.e2e for pipeline code style issues"
+
+@github-copilot Use the pit.crew.jenkins agent to review the changes in this PR
+```
+
+---
+
 ## Additional Resources
 
 - [GitHub Copilot CLI documentation](https://docs.github.com/copilot/concepts/agents/about-copilot-cli)
