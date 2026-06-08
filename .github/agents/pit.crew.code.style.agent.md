@@ -50,9 +50,10 @@ Workload upgrade test file:
 * Code must not be duplicated.
 
 ### Naming conventions
+### Naming conventions
 * Public functions must use `UpperCamelCase`.
 * Private functions must use `lowerCamelCase`.
-* The receiver variable must use the initial letters of the test suite struct name (e.g., `func (m *MonitoringTestSuite)` not `func (i *MonitoringTestSuite)`).
+* The receiver variable must use the first letter of the test suite struct name (e.g., `func (m *MonitoringTestSuite)` not `func (i *MonitoringTestSuite)`).
 * Test names must not be redundant with the suite name (e.g., prefer `LoggingTestSuite.TestChartInstallation` over `LoggingTestSuite.TestLoggingInstallation`).
 * Test and suite names must not be ambiguous.
 
