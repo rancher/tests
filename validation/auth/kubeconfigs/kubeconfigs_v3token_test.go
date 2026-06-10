@@ -37,7 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type ExtKubeconfigTestSuite struct {
+type ExtKubeconfigV3TokenTestSuite struct {
 	suite.Suite
 	client      *rancher.Client
 	session     *session.Session
@@ -47,7 +47,7 @@ type ExtKubeconfigTestSuite struct {
 	cluster2    *management.Cluster
 }
 
-func (kc *ExtKubeconfigTestSuite) SetupSuite() {
+func (kc *ExtKubeconfigV3TokenTestSuite) SetupSuite() {
 	kc.session = session.NewSession()
 
 	client, err := rancher.NewClient("", kc.session)
@@ -138,11 +138,11 @@ func (kc *ExtKubeconfigTestSuite) SetupSuite() {
 	log.Infof("ACE-disabled cluster created: %s (%s)", kc.cluster2.Name, cluster2ID)
 }
 
-func (kc *ExtKubeconfigTestSuite) TearDownSuite() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TearDownSuite() {
 	kc.session.Cleanup()
 }
 
-func (kc *ExtKubeconfigTestSuite) validateKubeconfigAndBackingResources(client *rancher.Client, userClient *rancher.Client, kubeconfigName string, expectedClusters []string, expectedUserID string,
+func (kc *ExtKubeconfigV3TokenTestSuite) validateKubeconfigAndBackingResources(client *rancher.Client, userClient *rancher.Client, kubeconfigName string, expectedClusters []string, expectedUserID string,
 	expectedCurrentContext string, expectedTTL int64, clusterType string) {
 
 	log.Infof("GET the kubeconfig to validate the fields")
@@ -162,7 +162,7 @@ func (kc *ExtKubeconfigTestSuite) validateKubeconfigAndBackingResources(client *
 	require.Equal(kc.T(), kubeconfigapi.StatusCompletedSummary, kubeconfigObj.Status.Summary)
 
 	log.Infof("Validating tokens and owner references")
-	err = kubeconfigapi.VerifyKubeconfigTokens(client, kubeconfigObj, clusterType)
+	err = kubeconfigapi.VerifyKubeconfigV3Tokens(client, kubeconfigObj, clusterType)
 	require.NoError(kc.T(), err)
 
 	log.Infof("Validating backing tokens are created for kubeconfig %q", kubeconfigName)
@@ -187,7 +187,7 @@ func (kc *ExtKubeconfigTestSuite) validateKubeconfigAndBackingResources(client *
 	require.Equal(kc.T(), 1, len(backingConfigMap.Items))
 }
 
-func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigAsAdmin() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestCreateKubeconfigAsAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -221,7 +221,7 @@ func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigAsAdmin() {
 	require.NoError(kc.T(), err)
 }
 
-func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigAsClusterOwner() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestCreateKubeconfigAsClusterOwner() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -257,7 +257,7 @@ func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigAsClusterOwner() {
 	require.NoError(kc.T(), err)
 }
 
-func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigForAceCluster() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestCreateKubeconfigForAceCluster() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -291,7 +291,7 @@ func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigForAceCluster() {
 	require.NoError(kc.T(), err)
 }
 
-func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigMultipleClusters() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestCreateKubeconfigMultipleClusters() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -324,7 +324,7 @@ func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigMultipleClusters() {
 	require.NoError(kc.T(), err)
 }
 
-func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigMultipleAceClusters() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestCreateKubeconfigMultipleAceClusters() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -357,7 +357,7 @@ func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigMultipleAceClusters() {
 	require.NoError(kc.T(), err)
 }
 
-func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigForUnauthorizedUser() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestCreateKubeconfigForUnauthorizedUser() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -375,7 +375,7 @@ func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigForUnauthorizedUser() {
 	require.True(kc.T(), k8serrors.IsForbidden(err))
 }
 
-func (kc *ExtKubeconfigTestSuite) TestGetKubeconfigAsAdmin() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestGetKubeconfigAsAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -421,7 +421,7 @@ func (kc *ExtKubeconfigTestSuite) TestGetKubeconfigAsAdmin() {
 	require.Equal(kc.T(), secondUserKubeconfig.Name, kcObjSecondUser.Name)
 }
 
-func (kc *ExtKubeconfigTestSuite) TestGetKubeconfigAsNonAdmin() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestGetKubeconfigAsNonAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -475,7 +475,7 @@ func (kc *ExtKubeconfigTestSuite) TestGetKubeconfigAsNonAdmin() {
 	require.True(kc.T(), k8serrors.IsNotFound(err))
 }
 
-func (kc *ExtKubeconfigTestSuite) TestListKubeconfigAsAdmin() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestListKubeconfigAsAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -512,7 +512,7 @@ func (kc *ExtKubeconfigTestSuite) TestListKubeconfigAsAdmin() {
 	require.Contains(kc.T(), names, secondUserKubeconfig.Name)
 }
 
-func (kc *ExtKubeconfigTestSuite) TestListKubeconfigAsNonAdmin() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestListKubeconfigAsNonAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -559,7 +559,7 @@ func (kc *ExtKubeconfigTestSuite) TestListKubeconfigAsNonAdmin() {
 	require.Contains(kc.T(), names, secondUserKubeconfig.Name)
 }
 
-func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsAdmin() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestUpdateKubeconfigAsAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -639,7 +639,7 @@ func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsAdmin() {
 	require.Contains(kc.T(), err.Error(), "spec.clusters is immutable")
 }
 
-func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsNonAdmin() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestUpdateKubeconfigAsNonAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -701,7 +701,7 @@ func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsNonAdmin() {
 	require.True(kc.T(), k8serrors.IsNotFound(err))
 }
 
-func (kc *ExtKubeconfigTestSuite) TestDeleteKubeconfigAsAdmin() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestDeleteKubeconfigAsAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -743,7 +743,7 @@ func (kc *ExtKubeconfigTestSuite) TestDeleteKubeconfigAsAdmin() {
 	require.NoError(kc.T(), err, "Backing configmap %s should be deleted when kubeconfig is deleted", secondUserKc.Name)
 }
 
-func (kc *ExtKubeconfigTestSuite) TestDeleteKubeconfigAsNonAdmin() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestDeleteKubeconfigAsNonAdmin() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -787,7 +787,7 @@ func (kc *ExtKubeconfigTestSuite) TestDeleteKubeconfigAsNonAdmin() {
 	require.NoError(kc.T(), err, "Backing configmap %s should be deleted when kubeconfig is deleted", secondUserKc.Name)
 }
 
-func (kc *ExtKubeconfigTestSuite) TestKubeconfigAfterBackingTokensDeleted() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestKubeconfigAfterBackingTokensDeleted() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -810,7 +810,7 @@ func (kc *ExtKubeconfigTestSuite) TestKubeconfigAfterBackingTokensDeleted() {
 	require.NoError(kc.T(), err, "timed out waiting for kubeconfig %s to be deleted", adminKc.Name)
 }
 
-func (kc *ExtKubeconfigTestSuite) TestKubeconfigCreationWithTTL() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestKubeconfigCreationWithTTL() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -838,7 +838,7 @@ func (kc *ExtKubeconfigTestSuite) TestKubeconfigCreationWithTTL() {
 	require.Equal(kc.T(), strconv.FormatInt(ttlSeconds, 10), backingConfigMap.Items[0].Data["ttl"], "Backing ConfigMap TTL should match requested TTL")
 }
 
-func (kc *ExtKubeconfigTestSuite) TestKubeconfigWithCurrentContext() {
+func (kc *ExtKubeconfigV3TokenTestSuite) TestKubeconfigWithCurrentContext() {
 	subSession := kc.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -876,6 +876,6 @@ func (kc *ExtKubeconfigTestSuite) TestKubeconfigWithCurrentContext() {
 	require.NoError(kc.T(), err)
 }
 
-func TestExtKubeconfigTestSuite(t *testing.T) {
-	suite.Run(t, new(ExtKubeconfigTestSuite))
+func TestExtKubeconfigV3TokenTestSuite(t *testing.T) {
+	suite.Run(t, new(ExtKubeconfigV3TokenTestSuite))
 }
