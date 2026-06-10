@@ -58,6 +58,8 @@ func TestECR(t *testing.T) {
 			clusterConfig.Registries.RKE2Registries.Configs[tt.systemDefaultRegistry] = clusterConfig.Registries.RKE2Registries.Configs["<required>"]
 			delete(clusterConfig.Registries.RKE2Registries.Configs, "<required>")
 
+			initializeRegistryMachineSelectors(t, clusterConfig)
+
 			(*clusterConfig.Advanced.MachineSelectors)[0].Config.Data["system-default-registry"] = tt.systemDefaultRegistry
 			clusterConfig.Registries.RKE2Password = r.terraformConfig.StandaloneRegistry.ECRPassword
 			clusterConfig.Registries.RKE2Username = r.terraformConfig.StandaloneRegistry.ECRUsername

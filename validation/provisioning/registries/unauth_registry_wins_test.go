@@ -5,6 +5,7 @@ package registries
 import (
 	"testing"
 
+	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/tests/actions/clusters"
@@ -14,22 +15,22 @@ import (
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
-	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
-func TestNonAuthenticatedRegistry(t *testing.T) {
+func TestUnauthenticatedRegistryWindows(t *testing.T) {
+	var err error
 	r := registriesSetup(t)
 
-	nodeRolesAll := []provisioninginput.MachinePools{
-		provisioninginput.AllRolesMachinePool,
-	}
+	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.RKE2, r.cattleConfig)
+	require.NoError(t, err)
 
-	nodeRolesDedicated := []provisioninginput.MachinePools{
+	nodeRolesDedicatedWindows := []provisioninginput.MachinePools{
 		provisioninginput.EtcdMachinePool,
 		provisioninginput.ControlPlaneMachinePool,
 		provisioninginput.WorkerMachinePool,
+		provisioninginput.WindowsMachinePool,
 	}
 
 	tests := []struct {
@@ -39,8 +40,7 @@ func TestNonAuthenticatedRegistry(t *testing.T) {
 		machinePools          []provisioninginput.MachinePools
 		systemDefaultRegistry string
 	}{
-		{"Non_Auth_RKE2", r.standardUserClient, defaults.RKE2, nodeRolesDedicated, r.terraformConfig.StandaloneRegistry.NonAuthRegistryFQDN},
-		{"Non_Auth_K3S", r.standardUserClient, defaults.K3S, nodeRolesAll, r.terraformConfig.StandaloneRegistry.NonAuthRegistryFQDN},
+		{"Unauth_RKE2_Windows", r.standardUserClient, defaults.RKE2, nodeRolesDedicatedWindows, r.terraformConfig.StandaloneRegistry.UnauthRegistryFQDN},
 	}
 
 	for _, tt := range tests {
@@ -58,14 +58,26 @@ func TestNonAuthenticatedRegistry(t *testing.T) {
 			clusterConfig.Registries.RKE2Registries.Configs[tt.systemDefaultRegistry] = clusterConfig.Registries.RKE2Registries.Configs["<required>"]
 			delete(clusterConfig.Registries.RKE2Registries.Configs, "<required>")
 
+			registryConfig := clusterConfig.Registries.RKE2Registries.Configs[tt.systemDefaultRegistry]
+			registryConfig.InsecureSkipVerify = true
+			clusterConfig.Registries.RKE2Registries.Configs[tt.systemDefaultRegistry] = registryConfig
+
+			initializeRegistryMachineSelectors(t, clusterConfig)
+
 			(*clusterConfig.Advanced.MachineSelectors)[0].Config.Data["system-default-registry"] = tt.systemDefaultRegistry
 			clusterConfig.MachinePools = tt.machinePools
 
-			provider := provisioning.CreateProvider(clusterConfig.Provider)
-			machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
+			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
+
+			awsEC2Configs := new(ec2.AWSEC2Configs)
+			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, r.cattleConfig, awsEC2Configs)
+			windowsMachineConfigs := externalNodeProvider.GetWindowsPoolsFunc(tt.client, *awsEC2Configs)
+			if len(windowsMachineConfigs) == 0 {
+				t.Skip("Windows test requires a windows machine pool")
+			}
 
 			logrus.Infof("Provisioning %s cluster", tt.clusterType)
-			cluster, err := resources.ProvisionRKE2K3SCluster(t, r.client, tt.clusterType, provider, *clusterConfig, machineConfigSpec, nil, true, false)
+			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)

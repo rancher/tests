@@ -55,9 +55,7 @@ func TestGlobalRegistryWindows(t *testing.T) {
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
-			clusterConfig.Registries.RKE2Registries.Configs[tt.systemDefaultRegistry] = clusterConfig.Registries.RKE2Registries.Configs["<required>"]
 			delete(clusterConfig.Registries.RKE2Registries.Configs, "<required>")
-			(*clusterConfig.Advanced.MachineSelectors)[0].Config.Data["system-default-registry"] = tt.systemDefaultRegistry
 			clusterConfig.MachinePools = tt.machinePools
 
 			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
