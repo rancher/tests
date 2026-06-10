@@ -88,4 +88,4 @@ workloadConfigs:
               image: "nginx:latest"
 
 logging:
-   level: "info"
+  level: "<HB_LOGGING_LEVEL>"

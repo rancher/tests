@@ -24,32 +24,34 @@ clusterConfig:
       worker: true
       quantity: 1
   kubernetesVersion: ""
-  cni: "calico"
-  provider: "aws"
-  nodeProvider: "ec2"
+  cni: "<HB_CNI>"
+  provider: "<HB_PROVIDER>"
+  nodeProvider: "<HB_NODE_PROVIDER>"
 
 #Required for all tests
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "<required>"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
-  region: "us-east-2"
+  region: "<HB_AWS_REGION>"
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
-    ami: "<required>"
+    ami: "<HB_DEFAULT_AMI>"
     instanceType: "t3a.medium"
-    sshUser: "<required>"
-    vpcId: "<required>"
+    sshUser: "<HB_AWS_OS_USER>"
+    vpcId: "<HB_AWS_VPC_ID>"
     retries: "5"
   - roles: ["windows"]
-    ami: "<required>"
+    ami: "<HB_DEFAULT_AMI>"
     instanceType: "t2.2xlarge"
-    sshUser: "<required>"
-    vpcId: "<required>"
-    volumeType: "<required>"
-    zone: "a"
+    sshUser: "<HB_AWS_OS_USER>"
+    vpcId: "<HB_AWS_VPC_ID>"
+    volumeType: "<HB_AWS_VOLUME_TYPE>"
+    zone: "<HB_AWS_ZONE_LETTER>"
     retries: "5"
-    rootSize: "100"
+    rootSize: "<HB_AWS_ROOT_SIZE>"
+logging:
+  level: "<HB_LOGGING_LEVEL>"
