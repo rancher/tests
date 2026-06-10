@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
+	extprojectapi "github.com/rancher/shepherd/extensions/kubeapi/projects"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
@@ -111,9 +112,7 @@ func (rbp *RbacProjectTestSuite) TestListProject() {
 			assert.NoError(rbp.T(), err, "failed to create project")
 
 			log.Infof("As a %v, get the project in the downstream cluster.", tt.role.String())
-			err = projectapi.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
-			assert.NoError(rbp.T(), err)
-			projectObj, err := projectapi.GetProjectByName(standardUserClient, rbp.cluster.ID, createdProject.Name)
+			projectObj, err := extprojectapi.GetProjectByName(standardUserClient, rbp.cluster.ID, createdProject.Name)
 			assert.NoError(rbp.T(), err, "Failed to get project.")
 			assert.NotNil(rbp.T(), projectObj, "Expected project to be not nil.")
 		})
@@ -149,9 +148,7 @@ func (rbp *RbacProjectTestSuite) TestUpdateProject() {
 			assert.NoError(rbp.T(), err, "failed to create project")
 
 			log.Infof("As a %v, get the project in the downstream cluster.", tt.role.String())
-			err = projectapi.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
-			assert.NoError(rbp.T(), err)
-			currentProject, err := projectapi.GetProjectByName(standardUserClient, rbp.cluster.ID, createdProject.Name)
+			currentProject, err := extprojectapi.GetProjectByName(standardUserClient, rbp.cluster.ID, createdProject.Name)
 			assert.NoError(rbp.T(), err, "Failed to get project.")
 			assert.NotNil(rbp.T(), currentProject, "Expected project to be not nil.")
 
@@ -160,10 +157,10 @@ func (rbp *RbacProjectTestSuite) TestUpdateProject() {
 				currentProject.Labels = make(map[string]string)
 			}
 			currentProject.Labels["hello"] = "world"
-			_, err = projectapi.UpdateProject(standardUserClient, currentProject)
+			_, err = extprojectapi.UpdateProject(standardUserClient, currentProject)
 			assert.NoError(rbp.T(), err, "Failed to update project.")
 
-			updatedProject, err := projectapi.GetProjectByName(standardUserClient, rbp.cluster.ID, currentProject.Name)
+			updatedProject, err := extprojectapi.GetProjectByName(standardUserClient, rbp.cluster.ID, currentProject.Name)
 			assert.NoError(rbp.T(), err)
 			assert.Equal(rbp.T(), "world", updatedProject.Labels["hello"], "Label was not added to the project.")
 		})
@@ -199,15 +196,15 @@ func (rbp *RbacProjectTestSuite) TestDeleteProject() {
 			assert.NoError(rbp.T(), err, "failed to create project")
 
 			log.Infof("As a %v, get the project in the downstream cluster.", tt.role.String())
-			err = projectapi.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
-			assert.NoError(rbp.T(), err)
-			currentProject, err := projectapi.GetProjectByName(standardUserClient, createdProject.Namespace, createdProject.Name)
+			currentProject, err := extprojectapi.GetProjectByName(standardUserClient, rbp.cluster.ID, createdProject.Name)
 			assert.NoError(rbp.T(), err, "Failed to get project.")
 			assert.NotNil(rbp.T(), currentProject, "Expected project to be not nil.")
 
 			log.Infof("As a %v, delete the project.", tt.role.String())
-			err = projectapi.DeleteProject(standardUserClient, rbp.cluster.ID, createdProject.Name, true)
-			assert.NoError(rbp.T(), err, tt.role.String()+" should be able to delete project")
+			err = extprojectapi.DeleteProject(standardUserClient, rbp.cluster.ID, createdProject.Name, false)
+			assert.NoError(rbp.T(), err, "Failed to delete project.")
+			err = extprojectapi.WaitForProjectDeletion(rbp.client, rbp.cluster.ID, createdProject.Name)
+			assert.NoError(rbp.T(), err, "Failed to delete project.")
 		})
 	}
 }
@@ -231,9 +228,6 @@ func (rbp *RbacProjectTestSuite) TestCrossClusterResourceIsolation() {
 		"field.cattle.io/creatorId": standardUser.ID,
 	}
 	createdProject, err := projectapi.CreateProjectWithTemplate(standardUserClient, rbp.cluster.ID, projectTemplate)
-	require.NoError(rbp.T(), err)
-
-	err = projectapi.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rbp.T(), err)
 
 	secondNamespace, err := namespaceapi.CreateNamespace(standardUserClient, rbp.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns-"), "", nil, nil)

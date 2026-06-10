@@ -3,10 +3,10 @@ package projects
 import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
+	extprojectapi "github.com/rancher/shepherd/extensions/kubeapi/projects"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // CreateProject creates a project with default test template using wrangler context
@@ -16,7 +16,7 @@ func CreateProject(client *rancher.Client, clusterID string) (*v3.Project, error
 
 // CreateProjectWithTemplate creates a project using wrangler context with a provided project template
 func CreateProjectWithTemplate(client *rancher.Client, clusterID string, projectTemplate *v3.Project) (*v3.Project, error) {
-	createdProject, err := client.WranglerContext.Mgmt.Project().Create(projectTemplate)
+	createdProject, err := extprojectapi.CreateProject(client, clusterID, projectTemplate)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +25,7 @@ func CreateProjectWithTemplate(client *rancher.Client, clusterID string, project
 		return nil, err
 	}
 
-	return client.WranglerContext.Mgmt.Project().Get(clusterID, createdProject.Name, metav1.GetOptions{})
+	return extprojectapi.GetProjectByName(client, clusterID, createdProject.Name)
 }
 
 // CreateProjectAndNamespace is a helper to create a project and a namespace in the project using wrangler context
@@ -75,4 +75,24 @@ func CreateProjectWithLimitsAndNamespace(client *rancher.Client, clusterID strin
 	projectTemplate.Spec.ContainerDefaultResourceLimit.RequestsMemory = memoryReservation
 
 	return CreateProjectWithTemplateAndNamespace(client, clusterID, projectTemplate)
+}
+
+// CreateProjectAndPrivilegedNamespace creates a project and a namespace labeled with the privileged Pod Security Standard. The local cluster enforces the restricted PSS by default,
+func CreateProjectAndPrivilegedNamespace(client *rancher.Client, clusterID string) (*v3.Project, *corev1.Namespace, error) {
+	createdProject, err := CreateProject(client, clusterID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	labels := map[string]string{
+		PSAEnforceLabelKey: PSAPrivilegedPolicy,
+		PSAWarnLabelKey:    PSAPrivilegedPolicy,
+		PSAAuditLabelKey:   PSAPrivilegedPolicy,
+	}
+	createdNamespace, err := namespaceapi.CreateNamespace(client, clusterID, createdProject.Name, namegen.AppendRandomString("testns"), "", labels, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return createdProject, createdNamespace, nil
 }

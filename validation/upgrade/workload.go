@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/rancher/tests/actions/charts"
+	servicesapi "github.com/rancher/tests/actions/kubeapi/services"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/secrets"
@@ -435,7 +436,7 @@ func newServiceTemplate(serviceName, namespaceName string, selector map[string]s
 		},
 	}
 
-	return services.NewServiceTemplate(serviceName, namespaceName, serviceType, ports, selector)
+	return servicesapi.NewServiceTemplate(serviceName, namespaceName, serviceType, ports, selector)
 }
 
 // newTestContainerMinimal is a private constructor that returns container for minimal workload creations

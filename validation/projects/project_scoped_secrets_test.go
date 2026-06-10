@@ -11,6 +11,8 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extprojectapi "github.com/rancher/shepherd/extensions/kubeapi/projects"
+	extsecretapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
@@ -179,7 +181,7 @@ func (pss *ProjectScopedSecretTestSuite) TestDeleteProjectScopedSecret() {
 
 	log.Info("Delete the Project scoped secret.")
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-	err := secretapi.DeleteSecret(pss.client, extclusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
+	err := extsecretapi.DeleteSecret(pss.client, extclusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, true)
 	require.NoError(pss.T(), err)
 
 	log.Info("Verify that the project scoped secret is deleted.")
@@ -199,7 +201,7 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretCleanupOnProject
 	createdProject, namespaceList, createdProjectScopedSecret := pss.testProjectScopedSecret(pss.cluster.ID, corev1.SecretTypeOpaque, opaqueSecretData)
 
 	log.Infof("Deleting the project: %s", createdProject.Name)
-	err := projectapi.DeleteProject(pss.client, pss.cluster.ID, createdProject.Name, true)
+	err := extprojectapi.DeleteProject(pss.client, pss.cluster.ID, createdProject.Name, true)
 	require.NoError(pss.T(), err, "Failed to delete the project")
 
 	log.Info("Verify that the project scoped secret is deleted.")
@@ -302,7 +304,7 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretByRole() {
 
 			log.Infof("As a %v, delete the project scoped secret %s in project %s", tt.role.String(), createdProjectScopedSecret.Name, createdProject.Name)
 			backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-			err = secretapi.DeleteSecret(standardUserClient, extclusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
+			err = extsecretapi.DeleteSecret(standardUserClient, extclusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, true)
 			assert.NoError(pss.T(), err, "Failed to delete project scoped secret")
 
 			log.Info("Verify that the project scoped secret is deleted.")
@@ -331,10 +333,7 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretAsClusterMember(
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": standardUser.ID,
 	}
-	createdProject, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
-	require.NoError(pss.T(), err)
-
-	err = projectapi.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
+	createdProject, err := projectapi.CreateProjectWithTemplate(standardUserClient, pss.cluster.ID, projectTemplate)
 	require.NoError(pss.T(), err)
 
 	log.Info("Create a project scoped secret in the project.")
@@ -355,7 +354,7 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecretAsClusterMember(
 
 	log.Infof("As a %v, delete the project scoped secret %s in project %s", role, createdProjectScopedSecret.Name, createdProject.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject.Name)
-	err = secretapi.DeleteSecret(standardUserClient, extclusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name)
+	err = extsecretapi.DeleteSecret(standardUserClient, extclusterapi.LocalCluster, backingNamespace, createdProjectScopedSecret.Name, true)
 	require.NoError(pss.T(), err, "Failed to delete project scoped secret as cluster member")
 
 	log.Info("Verify that the project scoped secret is deleted.")
@@ -385,7 +384,7 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectMemberCannotAccessOtherProje
 
 	log.Infof("As a %v, try to delete the project scoped secret %s in project %s (unauthorized access).", role, createdProjectSecret.Name, createdProject1.Name)
 	backingNamespace := fmt.Sprintf("%s-%s", pss.cluster.ID, createdProject1.Name)
-	err = secretapi.DeleteSecret(standardUserClient, extclusterapi.LocalCluster, backingNamespace, createdProjectSecret.Name)
+	err = extsecretapi.DeleteSecret(standardUserClient, extclusterapi.LocalCluster, backingNamespace, createdProjectSecret.Name, false)
 	require.Error(pss.T(), err)
 	require.True(pss.T(), apierrors.IsForbidden(err), "Expected Forbidden error, got: %v", err)
 

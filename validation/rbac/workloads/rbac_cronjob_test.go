@@ -8,14 +8,14 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extcronjobsapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/cronjobs"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	cronjobsapi "github.com/rancher/tests/actions/kubeapi/workloads/cronjobs"
+	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads/cronjob"
-	"github.com/rancher/tests/actions/workloads/pods"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,7 +42,7 @@ func (rcj *RbacCronJobTestSuite) SetupSuite() {
 	require.NoError(rcj.T(), err)
 	rcj.client = client
 
-	log.Info("Getting cluster name from the config file and append cluster details in rcj")
+	log.Info("Getting cluster name from the config file and append cluster details in the struct")
 	clusterName := client.RancherConfig.ClusterName
 	require.NotEmptyf(rcj.T(), clusterName, "Cluster name to install should be set")
 	clusterID, err := clusters.GetClusterIDByName(rcj.client, clusterName)
@@ -77,11 +77,13 @@ func (rcj *RbacCronJobTestSuite) TestCreateCronJob() {
 			assert.NoError(rcj.T(), err)
 
 			log.Infof("As a %v, creating a cronjob", tt.role.String())
-			podTemplate := pods.CreateContainerAndPodTemplate()
-			_, err = cronjob.CreateCronJob(userClient, rcj.cluster.ID, namespace.Name, "*/1 * * * *", podTemplate, false)
+			podTemplate := podapi.CreateContainerAndPodTemplate("")
+			createdCronJob, err := cronjobsapi.CreateCronJob(userClient, rcj.cluster.ID, namespace.Name, cronjobsapi.CronJobSchedule, podTemplate, false)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rcj.T(), err, "failed to create cronjob")
+				err = extcronjobsapi.WaitForCronJobActive(userClient, rcj.cluster.ID, createdCronJob.Namespace, createdCronJob.Name)
+				assert.NoError(rcj.T(), err, "failed to wait for cronjob to become active")
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
 				assert.Error(rcj.T(), err)
 				assert.True(rcj.T(), errors.IsForbidden(err))
@@ -116,14 +118,12 @@ func (rcj *RbacCronJobTestSuite) TestListCronJob() {
 			assert.NoError(rcj.T(), err)
 
 			log.Infof("As a %v, creating a cronjob in the namespace %v", rbac.Admin, namespace.Name)
-			podTemplate := pods.CreateContainerAndPodTemplate()
-			createdCronJob, err := cronjob.CreateCronJob(rcj.client, rcj.cluster.ID, namespace.Name, "*/1 * * * *", podTemplate, true)
+			podTemplate := podapi.CreateContainerAndPodTemplate("")
+			createdCronJob, err := cronjobsapi.CreateCronJob(rcj.client, rcj.cluster.ID, namespace.Name, cronjobsapi.CronJobSchedule, podTemplate, true)
 			assert.NoError(rcj.T(), err, "failed to create cronjob")
 
 			log.Infof("As a %v, listing the cronjob", tt.role.String())
-			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rcj.cluster.ID)
-			assert.NoError(rcj.T(), err)
-			cronJobList, err := standardUserContext.Batch.CronJob().List(namespace.Name, metav1.ListOptions{})
+			cronJobList, err := extcronjobsapi.ListCronJobs(userClient, rcj.cluster.ID, createdCronJob.Namespace, metav1.ListOptions{})
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
 				assert.NoError(rcj.T(), err, "failed to list cronjob")
@@ -163,17 +163,12 @@ func (rcj *RbacCronJobTestSuite) TestUpdateCronJob() {
 			assert.NoError(rcj.T(), err)
 
 			log.Infof("As a %v, creating a cronjob in the namespace %v", rbac.Admin, namespace.Name)
-			podTemplate := pods.CreateContainerAndPodTemplate()
-			createdCronJob, err := cronjob.CreateCronJob(rcj.client, rcj.cluster.ID, namespace.Name, "*/1 * * * *", podTemplate, true)
+			podTemplate := podapi.CreateContainerAndPodTemplate("")
+			createdCronJob, err := cronjobsapi.CreateCronJob(rcj.client, rcj.cluster.ID, namespace.Name, cronjobsapi.CronJobSchedule, podTemplate, true)
 			assert.NoError(rcj.T(), err, "failed to create cronjob")
 
 			log.Infof("As a %v, updating the cronjob %s with a new label.", tt.role.String(), createdCronJob.Name)
-			adminContext, err := extclusterapi.GetClusterWranglerContext(rcj.client, rcj.cluster.ID)
-			assert.NoError(rcj.T(), err)
-			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rcj.cluster.ID)
-			assert.NoError(rcj.T(), err)
-
-			latestCronJob, err := adminContext.Batch.CronJob().Get(namespace.Name, createdCronJob.Name, metav1.GetOptions{})
+			latestCronJob, err := extcronjobsapi.GetCronJobByName(rcj.client, rcj.cluster.ID, createdCronJob.Namespace, createdCronJob.Name)
 			assert.NoError(rcj.T(), err, "Failed to list cronjob.")
 
 			if latestCronJob.Labels == nil {
@@ -181,12 +176,14 @@ func (rcj *RbacCronJobTestSuite) TestUpdateCronJob() {
 			}
 			latestCronJob.Labels["updated"] = "true"
 
-			_, err = standardUserContext.Batch.CronJob().Update(latestCronJob)
+			_, err = extcronjobsapi.UpdateCronJob(userClient, rcj.cluster.ID, latestCronJob, false)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rcj.T(), err, "failed to update cronjob")
-				updatedCronJob, err := standardUserContext.Batch.CronJob().Get(namespace.Name, createdCronJob.Name, metav1.GetOptions{})
-				assert.NoError(rcj.T(), err, "Failed to list the cronjob after updating labels.")
+				err := extcronjobsapi.WaitForCronJobActive(userClient, rcj.cluster.ID, latestCronJob.Namespace, latestCronJob.Name)
+				assert.NoError(rcj.T(), err, "failed to wait for cronjob to become active")
+				updatedCronJob, err := extcronjobsapi.GetCronJobByName(userClient, rcj.cluster.ID, latestCronJob.Namespace, latestCronJob.Name)
+				assert.NoError(rcj.T(), err, "Failed to get the cronjob after updating labels.")
 				assert.Equal(rcj.T(), "true", updatedCronJob.Labels["updated"], "job label update failed.")
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
 				assert.Error(rcj.T(), err)
@@ -222,16 +219,16 @@ func (rcj *RbacCronJobTestSuite) TestDeleteCronJob() {
 			assert.NoError(rcj.T(), err)
 
 			log.Infof("As a %v, creating a cronjob in the namespace %v", rbac.Admin, namespace.Name)
-			podTemplate := pods.CreateContainerAndPodTemplate()
-			createdCronJob, err := cronjob.CreateCronJob(rcj.client, rcj.cluster.ID, namespace.Name, "*/1 * * * *", podTemplate, true)
+			podTemplate := podapi.CreateContainerAndPodTemplate("")
+			createdCronJob, err := cronjobsapi.CreateCronJob(rcj.client, rcj.cluster.ID, namespace.Name, cronjobsapi.CronJobSchedule, podTemplate, true)
 			assert.NoError(rcj.T(), err, "failed to create cronjob")
 
 			log.Infof("As a %v, deleting the cronjob", tt.role.String())
-			err = cronjob.DeleteCronJob(userClient, rcj.cluster.ID, createdCronJob, false)
+			err = extcronjobsapi.DeleteCronJob(userClient, rcj.cluster.ID, createdCronJob.Namespace, createdCronJob.Name, false)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rcj.T(), err, "failed to delete cronjob")
-				err = cronjob.WaitForDeleteCronJob(userClient, rcj.cluster.ID, createdCronJob)
+				err = extcronjobsapi.WaitForCronJobDeletion(userClient, rcj.cluster.ID, createdCronJob.Namespace, createdCronJob.Name)
 				assert.NoError(rcj.T(), err)
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
 				assert.Error(rcj.T(), err)
@@ -254,30 +251,25 @@ func (rcj *RbacCronJobTestSuite) TestCrudCronJobAsClusterMember() {
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": user.ID,
 	}
-	createdProject, err := userClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
-	require.NoError(rcj.T(), err)
-
-	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
+	createdProject, err := projectapi.CreateProjectWithTemplate(userClient, rcj.cluster.ID, projectTemplate)
 	require.NoError(rcj.T(), err)
 
 	namespace, err := namespaceapi.CreateNamespace(userClient, rcj.cluster.ID, createdProject.Name, namegen.AppendRandomString("ns-"), "", nil, nil)
 	require.NoError(rcj.T(), err)
 
 	log.Infof("As a %v, creating a cronjob in the namespace %v", role, namespace.Name)
-	podTemplate := pods.CreateContainerAndPodTemplate()
-	createdCronJob, err := cronjob.CreateCronJob(userClient, rcj.cluster.ID, namespace.Name, "*/1 * * * *", podTemplate, true)
+	podTemplate := podapi.CreateContainerAndPodTemplate("")
+	createdCronJob, err := cronjobsapi.CreateCronJob(userClient, rcj.cluster.ID, namespace.Name, cronjobsapi.CronJobSchedule, podTemplate, true)
 	require.NoError(rcj.T(), err, "failed to create cronjob")
 
 	log.Infof("As a %v, listing the cronjob", role)
-	standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rcj.cluster.ID)
-	assert.NoError(rcj.T(), err)
-	cronJobList, err := standardUserContext.Batch.CronJob().List(namespace.Name, metav1.ListOptions{})
+	cronJobList, err := extcronjobsapi.ListCronJobs(userClient, rcj.cluster.ID, createdCronJob.Namespace, metav1.ListOptions{})
 	require.NoError(rcj.T(), err, "failed to list cronjobs")
 	require.Equal(rcj.T(), len(cronJobList.Items), 1)
 	require.Equal(rcj.T(), cronJobList.Items[0].Name, createdCronJob.Name)
 
 	log.Infof("As a %v, updating the cronjob %s with a new label.", role, createdCronJob.Name)
-	latestCronJob, err := standardUserContext.Batch.CronJob().Get(namespace.Name, createdCronJob.Name, metav1.GetOptions{})
+	latestCronJob, err := extcronjobsapi.GetCronJobByName(userClient, rcj.cluster.ID, createdCronJob.Namespace, createdCronJob.Name)
 	assert.NoError(rcj.T(), err, "Failed to get the latest cronjob.")
 
 	if latestCronJob.Labels == nil {
@@ -285,14 +277,14 @@ func (rcj *RbacCronJobTestSuite) TestCrudCronJobAsClusterMember() {
 	}
 	latestCronJob.Labels["updated"] = "true"
 
-	_, err = standardUserContext.Batch.CronJob().Update(latestCronJob)
+	_, err = extcronjobsapi.UpdateCronJob(userClient, rcj.cluster.ID, latestCronJob, true)
 	require.NoError(rcj.T(), err, "failed to update cronjob")
-	updatedCronJobList, err := standardUserContext.Batch.CronJob().List(namespace.Name, metav1.ListOptions{})
+	updatedCronJob, err := extcronjobsapi.GetCronJobByName(userClient, rcj.cluster.ID, latestCronJob.Namespace, latestCronJob.Name)
 	require.NoError(rcj.T(), err, "Failed to list the cronjob after updating labels.")
-	require.Equal(rcj.T(), "true", updatedCronJobList.Items[0].Labels["updated"], "job label update failed.")
+	require.Equal(rcj.T(), "true", updatedCronJob.Labels["updated"], "job label update failed.")
 
 	log.Infof("As a %v, deleting the cronjob", role)
-	err = cronjob.DeleteCronJob(userClient, rcj.cluster.ID, createdCronJob, true)
+	err = extcronjobsapi.DeleteCronJob(userClient, rcj.cluster.ID, createdCronJob.Namespace, createdCronJob.Name, true)
 	require.NoError(rcj.T(), err, "failed to delete cronjob")
 }
 

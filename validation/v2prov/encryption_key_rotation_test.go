@@ -15,12 +15,12 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extsecretapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
 	"github.com/rancher/shepherd/extensions/vai"
 	"github.com/rancher/shepherd/pkg/environmentflag"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wait"
-	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	corev1 "k8s.io/api/core/v1"
@@ -165,7 +165,7 @@ func createSecretsForCluster(t *testing.T, client *rancher.Client, steveID strin
 				"key": []byte(namegen.RandStringLower(5)),
 			},
 		}
-		_, err = secretapi.CreateSecretWithTemplate(client, clusterID, secret)
+		_, err = extsecretapi.CreateSecretWithTemplate(client, clusterID, secret)
 		require.NoError(t, err)
 	}
 }

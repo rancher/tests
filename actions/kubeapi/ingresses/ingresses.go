@@ -5,9 +5,9 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	ingress "github.com/rancher/shepherd/extensions/ingresses"
+	extservicesapi "github.com/rancher/shepherd/extensions/kubeapi/services"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	serviceapi "github.com/rancher/tests/actions/kubeapi/services"
-	"github.com/rancher/tests/actions/services"
+	servicesapi "github.com/rancher/tests/actions/kubeapi/services"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -30,8 +30,8 @@ func CreateServiceAndIngressTemplateForDeployment(client *rancher.Client, cluste
 			Port: ServicePortNumber,
 		},
 	}
-	serviceTemplateForDeployment := services.NewServiceTemplate(serviceNameForDeployment, namespaceName, serviceType, ports, deploymentForIngress.Spec.Template.Labels)
-	_, err := serviceapi.CreateServiceWithTemplate(client, clusterID, &serviceTemplateForDeployment)
+	serviceTemplateForDeployment := servicesapi.NewServiceTemplate(serviceNameForDeployment, namespaceName, serviceType, ports, deploymentForIngress.Spec.Template.Labels)
+	_, err := extservicesapi.CreateServiceWithTemplate(client, clusterID, &serviceTemplateForDeployment)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create service: %v", err)
 	}

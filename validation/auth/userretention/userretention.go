@@ -7,9 +7,9 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extsettingsapi "github.com/rancher/shepherd/extensions/kubeapi/settings"
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/tests/actions/auth"
-	"github.com/rancher/tests/actions/settings"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -57,31 +57,31 @@ func setupUserRetentionSettings(client *rancher.Client, disableAfterValue string
 
 func resetUserRetentionSettings(client *rancher.Client) error {
 	logrus.Infof("Resetting %s to default value", disableInactiveUserAfter)
-	err := settings.ResetGlobalSettingToDefaultValue(client, disableInactiveUserAfter)
+	err := extsettingsapi.ResetGlobalSettingToDefaultValue(client, disableInactiveUserAfter)
 	if err != nil {
 		return fmt.Errorf("failed to update disable-inactive-user-after setting: %w", err)
 	}
 
 	logrus.Infof("Resetting %s to default value", deleteInactiveUserAfter)
-	err = settings.ResetGlobalSettingToDefaultValue(client, deleteInactiveUserAfter)
+	err = extsettingsapi.ResetGlobalSettingToDefaultValue(client, deleteInactiveUserAfter)
 	if err != nil {
 		return fmt.Errorf("failed to update delete-inactive-user-after setting: %w", err)
 	}
 
 	logrus.Infof("Resetting %s to default value", userRetentionCron)
-	err = settings.ResetGlobalSettingToDefaultValue(client, userRetentionCron)
+	err = extsettingsapi.ResetGlobalSettingToDefaultValue(client, userRetentionCron)
 	if err != nil {
 		return fmt.Errorf("failed to update user-retention-cron setting: %w", err)
 	}
 
 	logrus.Infof("Resetting %s to default value", userRetentionDryRun)
-	err = settings.ResetGlobalSettingToDefaultValue(client, userRetentionDryRun)
+	err = extsettingsapi.ResetGlobalSettingToDefaultValue(client, userRetentionDryRun)
 	if err != nil {
 		return fmt.Errorf("failed to update user-retention-dry-run setting: %w", err)
 	}
 
 	logrus.Infof("Resetting %s to default value", authUserSessionTTLMinutes)
-	err = settings.ResetGlobalSettingToDefaultValue(client, authUserSessionTTLMinutes)
+	err = extsettingsapi.ResetGlobalSettingToDefaultValue(client, authUserSessionTTLMinutes)
 	if err != nil {
 		return fmt.Errorf("failed to update auth-user-session-ttl-minutes setting: %w", err)
 	}

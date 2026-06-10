@@ -9,9 +9,7 @@ import (
 )
 
 const (
-	cattleSystemNamespace                                   = "cattle-system"
 	customClusterRoleName                                   = "custom-cluster-owner"
-	deploymentName                                          = "rancher"
 	deploymentEnvVarName                                    = "CATTLE_RESYNC_DEFAULT"
 	trueConditionStatus              metav1.ConditionStatus = "True"
 	falseConditionStatus             metav1.ConditionStatus = "False"

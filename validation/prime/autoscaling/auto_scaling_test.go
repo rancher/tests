@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
@@ -83,7 +84,7 @@ func TestAutoScalingUp(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Info("Creating unscheduleable deployement")
-			_, err = deployment.CreateDeployment(s.client, v3ClusterID, namespace.Name, 1000, "", "", false, false, false, false)
+			_, err = deploymentapi.CreateDeployment(s.client, v3ClusterID, namespace.Name, "", 1000, "", "", false, false, false, false)
 			require.NoError(t, err)
 
 			logrus.Infof("Waiting for cluster to scale (%s)", cluster.Name)
@@ -182,7 +183,7 @@ func TestAutoScalingDown(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Info("Creating unscheduleable deployement")
-			unscheduleableDeployment, err := deployment.CreateDeployment(tt.client, v3ClusterID, namespace.Name, 1000, "", "", false, false, false, false)
+			unscheduleableDeployment, err := deploymentapi.CreateDeployment(tt.client, v3ClusterID, namespace.Name, "", 1000, "", "", false, false, false, false)
 			require.NoError(t, err)
 
 			time.Sleep(time.Second * 60)
@@ -277,7 +278,7 @@ func TestAutoScalingPause(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Info("Creating unscheduleable deployement")
-			_, err = deployment.CreateDeployment(s.client, v3ClusterID, namespace.Name, 1000, "", "", false, false, false, false)
+			_, err = deploymentapi.CreateDeployment(s.client, v3ClusterID, namespace.Name, "", 1000, "", "", false, false, false, false)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster does not scale (%s)", cluster.Name)
