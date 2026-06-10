@@ -8,15 +8,26 @@ import (
 	"strings"
 	"testing"
 
+	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	"github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	extclusters "github.com/rancher/shepherd/extensions/clusters"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extconfigmapapi "github.com/rancher/shepherd/extensions/kubeapi/configmaps"
+	extkubeconfigapi "github.com/rancher/shepherd/extensions/kubeapi/kubeconfigs"
+	extsettingsapi "github.com/rancher/shepherd/extensions/kubeapi/settings"
 	"github.com/rancher/shepherd/extensions/users"
+	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
-	kubeconfigapi "github.com/rancher/tests/actions/kubeconfigs"
+	"github.com/rancher/tests/actions/clusters"
+	configDefaults "github.com/rancher/tests/actions/config/defaults"
+	kubeconfigapi "github.com/rancher/tests/actions/kubeapi/kubeconfigs"
+	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/settings"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	log "github.com/sirupsen/logrus"
@@ -46,31 +57,49 @@ func (kc *ExtKubeconfigTestSuite) SetupSuite() {
 	log.Info("Getting cluster name from the config file and append cluster details in the struct")
 	clusterName := client.RancherConfig.ClusterName
 	require.NotEmptyf(kc.T(), clusterName, "Cluster name to install should be set")
-	clusterID, err := clusters.GetClusterIDByName(kc.client, clusterName)
+	clusterID, err := extclusters.GetClusterIDByName(kc.client, clusterName)
 	require.NoError(kc.T(), err, "Error getting cluster ID")
 	kc.cluster, err = kc.client.Management.Cluster.ByID(clusterID)
 	require.NoError(kc.T(), err)
 
-	log.Infof("Creating additional clusters - ACE-enabled and non-ACE clusters")
-	aceClusterObject1, aceClusterConfig1, err := kubeconfigapi.CreateDownstreamCluster(kc.client, true)
-	require.NoError(kc.T(), err)
-	require.NotNil(kc.T(), aceClusterObject1)
-	require.NotNil(kc.T(), aceClusterConfig1)
-	aceCluster1ID, err := clusters.GetClusterIDByName(kc.client, aceClusterObject1.Name)
+	log.Infof("Creating additional clusters for kubeconfig tests")
+	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	cattleConfig, err = configDefaults.SetK8sDefault(client, configDefaults.K3S, cattleConfig)
 	require.NoError(kc.T(), err)
 
-	aceClusterObject2, aceClusterConfig2, err := kubeconfigapi.CreateDownstreamCluster(kc.client, true)
-	require.NoError(kc.T(), err)
-	require.NotNil(kc.T(), aceClusterObject2)
-	require.NotNil(kc.T(), aceClusterConfig2)
-	aceCluster2ID, err := clusters.GetClusterIDByName(kc.client, aceClusterObject2.Name)
-	require.NoError(kc.T(), err)
+	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
 
-	clusterObject2, clusterConfig2, err := kubeconfigapi.CreateDownstreamCluster(kc.client, false)
+	clusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(configDefaults.ClusterConfigKey, cattleConfig, clusterConfig)
+	clusterConfig.MachinePools = nodeRolesAll
+	provider := provisioning.CreateProvider(clusterConfig.Provider)
+	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+
+	log.Infof("Creating ACE-disabled clusters")
+	clusterObject2, err := provisioning.CreateProvisioningCluster(client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 	require.NoError(kc.T(), err)
 	require.NotNil(kc.T(), clusterObject2)
-	require.NotNil(kc.T(), clusterConfig2)
-	cluster2ID, err := clusters.GetClusterIDByName(kc.client, clusterObject2.Name)
+	cluster2ID, err := extclusters.GetClusterIDByName(kc.client, clusterObject2.Name)
+	require.NoError(kc.T(), err)
+
+	log.Infof("Creating ACE-enabled clusters")
+	networking := provisioninginput.Networking{
+		LocalClusterAuthEndpoint: &rkev1.LocalClusterAuthEndpoint{
+			Enabled: true,
+		},
+	}
+	clusterConfig.Networking = &networking
+	aceClusterObject1, err := provisioning.CreateProvisioningCluster(client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+	require.NoError(kc.T(), err)
+	require.NotNil(kc.T(), aceClusterObject1)
+	aceCluster1ID, err := extclusters.GetClusterIDByName(kc.client, aceClusterObject1.Name)
+	require.NoError(kc.T(), err)
+
+	aceClusterObject2, err := provisioning.CreateProvisioningCluster(client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+	require.NoError(kc.T(), err)
+	require.NotNil(kc.T(), aceClusterObject2)
+	aceCluster2ID, err := extclusters.GetClusterIDByName(kc.client, aceClusterObject2.Name)
 	require.NoError(kc.T(), err)
 
 	err = provisioning.VerifyClusterReady(client, aceClusterObject1)
@@ -117,7 +146,7 @@ func (kc *ExtKubeconfigTestSuite) validateKubeconfigAndBackingResources(client *
 	expectedCurrentContext string, expectedTTL int64, clusterType string) {
 
 	log.Infof("GET the kubeconfig to validate the fields")
-	kubeconfigObj, err := kubeconfigapi.GetKubeconfig(client, kubeconfigName)
+	kubeconfigObj, err := extkubeconfigapi.GetKubeconfigByName(client, kubeconfigName)
 	require.NoError(kc.T(), err)
 
 	log.Infof("Validating kubeconfig has the label cattle.io/user-id and it matches the expected user ID: %s", expectedUserID)
@@ -137,7 +166,7 @@ func (kc *ExtKubeconfigTestSuite) validateKubeconfigAndBackingResources(client *
 	require.NoError(kc.T(), err)
 
 	log.Infof("Validating backing tokens are created for kubeconfig %q", kubeconfigName)
-	tokens, err := kubeconfigapi.GetBackingTokensForKubeconfigName(userClient, kubeconfigName)
+	tokens, err := kubeconfigapi.GetBackingV3TokensForKubeconfig(userClient, kubeconfigName)
 	require.NoError(kc.T(), err)
 	require.NotEmpty(kc.T(), tokens, "Expected at least one backing token for kubeconfig")
 
@@ -151,7 +180,7 @@ func (kc *ExtKubeconfigTestSuite) validateKubeconfigAndBackingResources(client *
 	log.Infof("Number of backing tokens: %d", len(tokens))
 
 	log.Infof("Validating backing ConfigMap is created for kubeconfig %q", kubeconfigName)
-	backingConfigMap, err := client.WranglerContext.Core.ConfigMap().List(kubeconfigapi.KubeconfigConfigmapNamespace, metav1.ListOptions{
+	backingConfigMap, err := extconfigmapapi.ListConfigMaps(kc.client, extclusterapi.LocalCluster, kubeconfigapi.KubeconfigConfigmapNamespace, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + kubeconfigName,
 	})
 	require.NoError(kc.T(), err)
@@ -175,7 +204,7 @@ func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigAsAdmin() {
 	err = kubeconfigapi.VerifyKubeconfigContent(kc.client, kubeconfigapi.KubeconfigFile, []string{kc.cluster.ID}, kc.client.RancherConfig.Host, false, "")
 	require.NoError(kc.T(), err, "Kubeconfig content validation failed")
 
-	ttlStr, err := settings.GetGlobalSettingDefaultValue(kc.client, settings.KubeconfigDefaultTTLMinutes)
+	ttlStr, err := extsettingsapi.GetGlobalSettingDefaultValue(kc.client, extsettingsapi.KubeconfigDefaultTTLMinutes)
 	require.NoError(kc.T(), err)
 	ttlInt, err := strconv.Atoi(ttlStr)
 	require.NoError(kc.T(), err)
@@ -213,7 +242,7 @@ func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigAsClusterOwner() {
 	err = kubeconfigapi.VerifyKubeconfigContent(kc.client, kubeconfigapi.KubeconfigFile, []string{kc.cluster.ID}, kc.client.RancherConfig.Host, false, "")
 	require.NoError(kc.T(), err, "Kubeconfig content validation failed")
 
-	ttlStr, err := settings.GetGlobalSettingDefaultValue(kc.client, settings.KubeconfigDefaultTTLMinutes)
+	ttlStr, err := extsettingsapi.GetGlobalSettingDefaultValue(kc.client, extsettingsapi.KubeconfigDefaultTTLMinutes)
 	require.NoError(kc.T(), err)
 	ttlInt, err := strconv.Atoi(ttlStr)
 	require.NoError(kc.T(), err)
@@ -245,7 +274,7 @@ func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigForAceCluster() {
 	err = kubeconfigapi.VerifyKubeconfigContent(kc.client, kubeconfigapi.KubeconfigFile, []string{kc.aceCluster1.ID}, kc.client.RancherConfig.Host, true, "")
 	require.NoError(kc.T(), err, "Kubeconfig content validation failed")
 
-	ttlStr, err := settings.GetGlobalSettingDefaultValue(kc.client, settings.KubeconfigDefaultTTLMinutes)
+	ttlStr, err := extsettingsapi.GetGlobalSettingDefaultValue(kc.client, extsettingsapi.KubeconfigDefaultTTLMinutes)
 	require.NoError(kc.T(), err)
 	ttlInt, err := strconv.Atoi(ttlStr)
 	require.NoError(kc.T(), err)
@@ -279,7 +308,7 @@ func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigMultipleClusters() {
 	err = kubeconfigapi.VerifyKubeconfigContent(kc.client, kubeconfigapi.KubeconfigFile, []string{kc.cluster2.ID, kc.cluster.ID}, kc.client.RancherConfig.Host, false, "")
 	require.NoError(kc.T(), err, "Kubeconfig content validation failed")
 
-	ttlStr, err := settings.GetGlobalSettingDefaultValue(kc.client, settings.KubeconfigDefaultTTLMinutes)
+	ttlStr, err := extsettingsapi.GetGlobalSettingDefaultValue(kc.client, extsettingsapi.KubeconfigDefaultTTLMinutes)
 	require.NoError(kc.T(), err)
 	ttlInt, err := strconv.Atoi(ttlStr)
 	require.NoError(kc.T(), err)
@@ -312,7 +341,7 @@ func (kc *ExtKubeconfigTestSuite) TestCreateKubeconfigMultipleAceClusters() {
 	err = kubeconfigapi.VerifyKubeconfigContentMixed(kc.client, kubeconfigapi.KubeconfigFile, []string{}, []string{kc.aceCluster1.ID, kc.aceCluster2.ID}, kc.client.RancherConfig.Host, "")
 	require.NoError(kc.T(), err, "Kubeconfig content validation failed")
 
-	ttlStr, err := settings.GetGlobalSettingDefaultValue(kc.client, settings.KubeconfigDefaultTTLMinutes)
+	ttlStr, err := extsettingsapi.GetGlobalSettingDefaultValue(kc.client, extsettingsapi.KubeconfigDefaultTTLMinutes)
 	require.NoError(kc.T(), err)
 	ttlInt, err := strconv.Atoi(ttlStr)
 	require.NoError(kc.T(), err)
@@ -379,15 +408,15 @@ func (kc *ExtKubeconfigTestSuite) TestGetKubeconfigAsAdmin() {
 	require.NotEmpty(kc.T(), secondUserKubeconfig.Status.Value)
 
 	log.Infof("Verifying that the admin can access all kubeconfigs")
-	kcObjAdmin, err := kubeconfigapi.GetKubeconfig(kc.client, adminKubeconfig.Name)
+	kcObjAdmin, err := extkubeconfigapi.GetKubeconfigByName(kc.client, adminKubeconfig.Name)
 	require.NoError(kc.T(), err)
 	require.Equal(kc.T(), adminKubeconfig.Name, kcObjAdmin.Name)
 
-	kcObjFirstUser, err := kubeconfigapi.GetKubeconfig(kc.client, firstUserKubeconfig.Name)
+	kcObjFirstUser, err := extkubeconfigapi.GetKubeconfigByName(kc.client, firstUserKubeconfig.Name)
 	require.NoError(kc.T(), err)
 	require.Equal(kc.T(), firstUserKubeconfig.Name, kcObjFirstUser.Name)
 
-	kcObjSecondUser, err := kubeconfigapi.GetKubeconfig(kc.client, secondUserKubeconfig.Name)
+	kcObjSecondUser, err := extkubeconfigapi.GetKubeconfigByName(kc.client, secondUserKubeconfig.Name)
 	require.NoError(kc.T(), err)
 	require.Equal(kc.T(), secondUserKubeconfig.Name, kcObjSecondUser.Name)
 }
@@ -432,16 +461,16 @@ func (kc *ExtKubeconfigTestSuite) TestGetKubeconfigAsNonAdmin() {
 	require.NoError(kc.T(), err)
 
 	log.Infof("Verifying that the users can access their respective kubeconfig")
-	kcObj1, err := kubeconfigapi.GetKubeconfig(firstUserClient, firstUserKubeconfig.Name)
+	kcObj1, err := extkubeconfigapi.GetKubeconfigByName(firstUserClient, firstUserKubeconfig.Name)
 	require.NoError(kc.T(), err)
 	require.Equal(kc.T(), firstUserKubeconfig.Name, kcObj1.Name)
 
-	kcObj2, err := kubeconfigapi.GetKubeconfig(secondUserClient, secondUserKubeconfig.Name)
+	kcObj2, err := extkubeconfigapi.GetKubeconfigByName(secondUserClient, secondUserKubeconfig.Name)
 	require.NoError(kc.T(), err)
 	require.Equal(kc.T(), secondUserKubeconfig.Name, kcObj2.Name)
 
 	log.Infof("Verifying a non-admin users cannot access another user's kubeconfig")
-	_, err = kubeconfigapi.GetKubeconfig(firstUserClient, secondUserKubeconfig.Name)
+	_, err = extkubeconfigapi.GetKubeconfigByName(firstUserClient, secondUserKubeconfig.Name)
 	require.Error(kc.T(), err, "Non-admin user should not be able to access another user's kubeconfig")
 	require.True(kc.T(), k8serrors.IsNotFound(err))
 }
@@ -472,7 +501,7 @@ func (kc *ExtKubeconfigTestSuite) TestListKubeconfigAsAdmin() {
 	require.NotEmpty(kc.T(), secondUserKubeconfig.Status.Value)
 
 	log.Infof("Verifying that the admin can list all kubeconfigs")
-	kcObjAdmin, err := kubeconfigapi.ListKubeconfigs(kc.client)
+	kcObjAdmin, err := extkubeconfigapi.ListKubeconfigs(kc.client, metav1.ListOptions{})
 	require.NoError(kc.T(), err)
 	names := []string{}
 	for _, kc := range kcObjAdmin.Items {
@@ -509,7 +538,7 @@ func (kc *ExtKubeconfigTestSuite) TestListKubeconfigAsNonAdmin() {
 	require.NotEmpty(kc.T(), secondUserKubeconfig.Status.Value)
 
 	log.Infof("Verifying that the users can list their respective kubeconfig")
-	kcObj1, err := kubeconfigapi.ListKubeconfigs(firstUserClient)
+	kcObj1, err := extkubeconfigapi.ListKubeconfigs(firstUserClient, metav1.ListOptions{})
 	require.NoError(kc.T(), err)
 	names := []string{}
 	for _, kc := range kcObj1.Items {
@@ -519,7 +548,7 @@ func (kc *ExtKubeconfigTestSuite) TestListKubeconfigAsNonAdmin() {
 	require.Contains(kc.T(), names, firstUserKubeconfig.Name)
 	require.NotContains(kc.T(), names, secondUserKubeconfig.Name)
 
-	kcObj2, err := kubeconfigapi.ListKubeconfigs(secondUserClient)
+	kcObj2, err := extkubeconfigapi.ListKubeconfigs(secondUserClient, metav1.ListOptions{})
 	require.NoError(kc.T(), err)
 	names = []string{}
 	for _, kc := range kcObj2.Items {
@@ -568,7 +597,7 @@ func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsAdmin() {
 	kcToUpdate.Annotations["note"] = "admin update"
 	kcToUpdate.Finalizers = append(kcToUpdate.Finalizers, kubeconfigapi.DummyFinalizer)
 
-	updatedKc, err := kubeconfigapi.UpdateKubeconfig(kc.client, kcToUpdate)
+	updatedKc, err := extkubeconfigapi.UpdateKubeconfig(kc.client, kcToUpdate)
 	require.NoError(kc.T(), err)
 	require.Equal(kc.T(), "Updated by admin", updatedKc.Spec.Description)
 	require.Equal(kc.T(), "admin", updatedKc.Labels["edited-by"])
@@ -578,7 +607,7 @@ func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsAdmin() {
 	log.Infof("As an admin, attempting to update immutable field spec.clusters")
 	kcImmutable := kcToUpdate.DeepCopy()
 	kcImmutable.Spec.Clusters = []string{"c-m-immutable"}
-	_, err = kubeconfigapi.UpdateKubeconfig(kc.client, kcImmutable)
+	_, err = extkubeconfigapi.UpdateKubeconfig(kc.client, kcImmutable)
 	require.Error(kc.T(), err)
 	require.Contains(kc.T(), err.Error(), "spec.clusters is immutable")
 
@@ -595,7 +624,7 @@ func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsAdmin() {
 	kcToUpdate.Annotations["note"] = "admin update"
 	kcToUpdate.Finalizers = append(kcToUpdate.Finalizers, kubeconfigapi.DummyFinalizer)
 
-	updatedKc, err = kubeconfigapi.UpdateKubeconfig(kc.client, kcToUpdate)
+	updatedKc, err = extkubeconfigapi.UpdateKubeconfig(kc.client, kcToUpdate)
 	require.NoError(kc.T(), err)
 	require.Equal(kc.T(), "Updated by admin", updatedKc.Spec.Description)
 	require.Equal(kc.T(), "admin", updatedKc.Labels["edited-by"])
@@ -605,7 +634,7 @@ func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsAdmin() {
 	log.Infof("As an admin, attempting to update immutable field spec.clusters")
 	kcImmutable = kcToUpdate.DeepCopy()
 	kcImmutable.Spec.Clusters = []string{"c-m-immutable"}
-	_, err = kubeconfigapi.UpdateKubeconfig(kc.client, kcImmutable)
+	_, err = extkubeconfigapi.UpdateKubeconfig(kc.client, kcImmutable)
 	require.Error(kc.T(), err)
 	require.Contains(kc.T(), err.Error(), "spec.clusters is immutable")
 }
@@ -648,7 +677,7 @@ func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsNonAdmin() {
 	kcToUpdate.Annotations["note"] = "user update"
 	kcToUpdate.Finalizers = append(kcToUpdate.Finalizers, kubeconfigapi.DummyFinalizer)
 
-	updatedKc, err := kubeconfigapi.UpdateKubeconfig(firstUserClient, kcToUpdate)
+	updatedKc, err := extkubeconfigapi.UpdateKubeconfig(firstUserClient, kcToUpdate)
 	require.NoError(kc.T(), err)
 	require.Equal(kc.T(), "Updated by non-admin user", updatedKc.Spec.Description)
 	require.Equal(kc.T(), firstUser.Name, updatedKc.Labels["edited-by"])
@@ -658,7 +687,7 @@ func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsNonAdmin() {
 	log.Infof("As user %s, attempting to update immutable field spec.clusters", firstUser.Name)
 	kcImmutable := kcToUpdate.DeepCopy()
 	kcImmutable.Spec.Clusters = []string{"c-m-immutable"}
-	_, err = kubeconfigapi.UpdateKubeconfig(firstUserClient, kcImmutable)
+	_, err = extkubeconfigapi.UpdateKubeconfig(firstUserClient, kcImmutable)
 	require.Error(kc.T(), err)
 	require.Contains(kc.T(), err.Error(), "spec.clusters is immutable")
 
@@ -667,7 +696,7 @@ func (kc *ExtKubeconfigTestSuite) TestUpdateKubeconfigAsNonAdmin() {
 	kcToUpdate.Spec.Description = "Forbidden update by non-admin user"
 	kcToUpdate.Labels = map[string]string{"edited-by": firstUser.Name}
 
-	_, err = kubeconfigapi.UpdateKubeconfig(firstUserClient, kcToUpdate)
+	_, err = extkubeconfigapi.UpdateKubeconfig(firstUserClient, kcToUpdate)
 	require.Error(kc.T(), err)
 	require.True(kc.T(), k8serrors.IsNotFound(err))
 }
@@ -691,19 +720,19 @@ func (kc *ExtKubeconfigTestSuite) TestDeleteKubeconfigAsAdmin() {
 	require.NoError(kc.T(), err)
 
 	log.Infof("As admin, deleting all kubeconfigs")
-	err = kubeconfigapi.DeleteKubeconfig(kc.client, adminKc.Name)
+	err = extkubeconfigapi.DeleteKubeconfig(kc.client, adminKc.Name, true)
 	require.NoError(kc.T(), err)
-	err = kubeconfigapi.DeleteKubeconfig(kc.client, firstUserKc.Name)
+	err = extkubeconfigapi.DeleteKubeconfig(kc.client, firstUserKc.Name, true)
 	require.NoError(kc.T(), err)
-	err = kubeconfigapi.DeleteKubeconfig(kc.client, secondUserKc.Name)
+	err = extkubeconfigapi.DeleteKubeconfig(kc.client, secondUserKc.Name, true)
 	require.NoError(kc.T(), err)
 
 	log.Infof("Verifying backing resources are deleted when kubeconfig is deleted")
-	err = kubeconfigapi.WaitForBackingTokenDeletion(kc.client, adminKc.Name)
+	err = kubeconfigapi.WaitForBackingV3TokenDeletion(kc.client, adminKc.Name)
 	require.NoError(kc.T(), err, "Backing token %s should be deleted when kubeconfig is deleted", adminKc.Name)
-	err = kubeconfigapi.WaitForBackingTokenDeletion(kc.client, firstUserKc.Name)
+	err = kubeconfigapi.WaitForBackingV3TokenDeletion(kc.client, firstUserKc.Name)
 	require.NoError(kc.T(), err, "Backing token %s should be deleted when kubeconfig is deleted", firstUserKc.Name)
-	err = kubeconfigapi.WaitForBackingTokenDeletion(kc.client, secondUserKc.Name)
+	err = kubeconfigapi.WaitForBackingV3TokenDeletion(kc.client, secondUserKc.Name)
 	require.NoError(kc.T(), err, "Backing token %s should be deleted when kubeconfig is deleted", secondUserKc.Name)
 
 	err = kubeconfigapi.WaitForBackingConfigMapDeletion(kc.client, adminKc.Name)
@@ -733,23 +762,23 @@ func (kc *ExtKubeconfigTestSuite) TestDeleteKubeconfigAsNonAdmin() {
 	require.NoError(kc.T(), err)
 
 	log.Infof("As non-admin users, attempting to delete each other's and admin's kubeconfigs")
-	err = kubeconfigapi.DeleteKubeconfig(firstUserClient, adminKc.Name)
+	err = extkubeconfigapi.DeleteKubeconfig(firstUserClient, adminKc.Name, false)
 	require.Error(kc.T(), err, "Non-admin user should not be able to delete admin's kubeconfig")
 	require.True(kc.T(), k8serrors.IsNotFound(err))
-	err = kubeconfigapi.DeleteKubeconfig(secondUserClient, firstUserKc.Name)
+	err = extkubeconfigapi.DeleteKubeconfig(secondUserClient, firstUserKc.Name, false)
 	require.Error(kc.T(), err, "Non-admin user should not be able to delete another user's kubeconfig")
 	require.True(kc.T(), k8serrors.IsNotFound(err))
 
 	log.Infof("As non-admin users, verifying kubeconfig owned by self can be deleted")
-	err = kubeconfigapi.DeleteKubeconfig(firstUserClient, firstUserKc.Name)
+	err = extkubeconfigapi.DeleteKubeconfig(firstUserClient, firstUserKc.Name, true)
 	require.NoError(kc.T(), err)
-	err = kubeconfigapi.DeleteKubeconfig(secondUserClient, secondUserKc.Name)
+	err = extkubeconfigapi.DeleteKubeconfig(secondUserClient, secondUserKc.Name, true)
 	require.NoError(kc.T(), err)
 
 	log.Infof("Verifying backing resources are deleted when kubeconfig is deleted")
-	err = kubeconfigapi.WaitForBackingTokenDeletion(kc.client, firstUserKc.Name)
+	err = kubeconfigapi.WaitForBackingV3TokenDeletion(kc.client, firstUserKc.Name)
 	require.NoError(kc.T(), err, "Backing token %s should be deleted when kubeconfig is deleted", firstUserKc.Name)
-	err = kubeconfigapi.WaitForBackingTokenDeletion(kc.client, secondUserKc.Name)
+	err = kubeconfigapi.WaitForBackingV3TokenDeletion(kc.client, secondUserKc.Name)
 	require.NoError(kc.T(), err, "Backing token %s should be deleted when kubeconfig is deleted", secondUserKc.Name)
 
 	err = kubeconfigapi.WaitForBackingConfigMapDeletion(kc.client, firstUserKc.Name)
@@ -768,7 +797,7 @@ func (kc *ExtKubeconfigTestSuite) TestKubeconfigAfterBackingTokensDeleted() {
 	require.NotEmpty(kc.T(), adminKc.Status.Value)
 
 	log.Infof("Validating backing tokens are created for kubeconfig %q", adminKc.Name)
-	tokens, err := kubeconfigapi.GetBackingTokensForKubeconfigName(kc.client, adminKc.Name)
+	tokens, err := kubeconfigapi.GetBackingV3TokensForKubeconfig(kc.client, adminKc.Name)
 	require.NoError(kc.T(), err)
 	require.NotEmpty(kc.T(), tokens, "Expected at least one backing token for kubeconfig")
 
@@ -777,7 +806,7 @@ func (kc *ExtKubeconfigTestSuite) TestKubeconfigAfterBackingTokensDeleted() {
 	require.NoError(kc.T(), err)
 
 	log.Infof("Verifying that the kubeconfig %q is deleted automatically after backing token is deleted", adminKc.Name)
-	err = kubeconfigapi.WaitForKubeconfigDeletion(kc.client, adminKc.Name)
+	err = extkubeconfigapi.WaitForKubeconfigDeletion(kc.client, adminKc.Name)
 	require.NoError(kc.T(), err, "timed out waiting for kubeconfig %s to be deleted", adminKc.Name)
 }
 
@@ -792,12 +821,12 @@ func (kc *ExtKubeconfigTestSuite) TestKubeconfigCreationWithTTL() {
 	require.NotEmpty(kc.T(), adminKc.Status.Value)
 
 	log.Infof("Validating backing tokens are created for kubeconfig %q", adminKc.Name)
-	tokens, err := kubeconfigapi.GetBackingTokensForKubeconfigName(kc.client, adminKc.Name)
+	tokens, err := kubeconfigapi.GetBackingV3TokensForKubeconfig(kc.client, adminKc.Name)
 	require.NoError(kc.T(), err)
 	require.NotEmpty(kc.T(), tokens, "Expected at least one backing token for kubeconfig")
 
 	log.Infof("Validating backing config map is created for kubeconfig %q", adminKc.Name)
-	backingConfigMap, err := kc.client.WranglerContext.Core.ConfigMap().List(kubeconfigapi.KubeconfigConfigmapNamespace, metav1.ListOptions{
+	backingConfigMap, err := extconfigmapapi.ListConfigMaps(kc.client, "local", kubeconfigapi.KubeconfigConfigmapNamespace, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + adminKc.Name,
 	})
 	require.NoError(kc.T(), err)
@@ -826,7 +855,7 @@ func (kc *ExtKubeconfigTestSuite) TestKubeconfigWithCurrentContext() {
 	err = kubeconfigapi.VerifyKubeconfigContent(kc.client, kubeconfigapi.KubeconfigFile, []string{kc.cluster.ID, kc.cluster2.ID}, kc.client.RancherConfig.Host, false, kc.cluster2.Name)
 	require.NoError(kc.T(), err, "Kubeconfig content validation failed")
 
-	ttlStr, err := settings.GetGlobalSettingDefaultValue(kc.client, settings.KubeconfigDefaultTTLMinutes)
+	ttlStr, err := extsettingsapi.GetGlobalSettingDefaultValue(kc.client, extsettingsapi.KubeconfigDefaultTTLMinutes)
 	require.NoError(kc.T(), err)
 	ttlInt, err := strconv.Atoi(ttlStr)
 	require.NoError(kc.T(), err)

@@ -11,12 +11,13 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/kubectl"
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -100,7 +101,7 @@ func (grbs *GlobalRoleBindingStatusFieldTestSuite) TestGlobalRoleBindingStatusFi
 	require.NotEmpty(grbs.T(), grb, "Global Role Binding not found for the user")
 
 	log.Info("Add environment variable CATTLE_RESYNC_DEFAULT and set it to 1 minute")
-	err = deployment.UpdateOrRemoveEnvVarForDeployment(grbs.client, deploymentNamespace, deploymentName, deploymentEnvVarName, "1")
+	err = deploymentapi.UpdateOrRemoveEnvVarForDeployment(grbs.client, extclusterapi.LocalCluster, deploymentapi.RancherDeploymentNamespace, deploymentapi.RancherDeploymentName, deploymentEnvVarName, "1")
 	require.NoError(grbs.T(), err, "Failed to add environment variable")
 
 	log.Info("Verify that global role binding resourceVersion and generation have not been updated upon reconciliation")
@@ -122,7 +123,7 @@ func (grbs *GlobalRoleBindingStatusFieldTestSuite) TestGlobalRoleBindingStatusFi
 	require.Equal(grbs.T(), initialGeneration, updatedGrb.Generation)
 
 	log.Info("Remove environment variable CATTLE_RESYNC_DEFAULT")
-	err = deployment.UpdateOrRemoveEnvVarForDeployment(grbs.client, deploymentNamespace, deploymentName, deploymentEnvVarName, "")
+	err = deploymentapi.UpdateOrRemoveEnvVarForDeployment(grbs.client, extclusterapi.LocalCluster, deploymentapi.RancherDeploymentNamespace, deploymentapi.RancherDeploymentName, deploymentEnvVarName, "")
 	require.NoError(grbs.T(), err, "Failed to remove environment variable")
 }
 

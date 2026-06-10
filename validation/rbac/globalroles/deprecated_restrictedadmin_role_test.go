@@ -19,7 +19,7 @@ import (
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	rbac "github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/users"
+	"github.com/rancher/tests/actions/kubeapi/users"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -10,10 +10,10 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extsettingsapi "github.com/rancher/shepherd/extensions/kubeapi/settings"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/settings"
-	exttokenapi "github.com/rancher/tests/actions/tokens/exttokens"
-	watchlistapi "github.com/rancher/tests/actions/watchlist"
+	tokenapi "github.com/rancher/tests/actions/kubeapi/tokens/exttokens"
+	watchlistapi "github.com/rancher/tests/actions/kubeapi/watchlist"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -40,7 +40,7 @@ func (w *ExtTokenWatchListTestSuite) SetupSuite() {
 	w.client = client
 
 	log.Info("Getting default TTL value to be used in tests")
-	defaultTTLString, err := settings.GetGlobalSettingDefaultValue(w.client, settings.AuthTokenMaxTTLMinutes)
+	defaultTTLString, err := extsettingsapi.GetGlobalSettingDefaultValue(w.client, extsettingsapi.AuthTokenMaxTTLMinutes)
 	require.NoError(w.T(), err)
 	defaultTTLInt, err := strconv.Atoi(defaultTTLString)
 	require.NoError(w.T(), err)
@@ -53,7 +53,7 @@ func (w *ExtTokenWatchListTestSuite) TestWatchListForExtTokens() {
 	defer subSession.Cleanup()
 
 	log.Infof("As user %s, creating ext token", w.client.UserID)
-	_, err := exttokenapi.CreateExtToken(w.client, w.defaultExtTokenTTL)
+	_, err := tokenapi.CreateExtToken(w.client, w.defaultExtTokenTTL)
 	require.NoError(w.T(), err)
 
 	log.Info("Starting watch on ext tokens")

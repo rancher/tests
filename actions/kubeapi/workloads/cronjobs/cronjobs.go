@@ -1,13 +1,58 @@
 package cronjobs
 
 import (
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"fmt"
+
+	"github.com/rancher/shepherd/clients/rancher"
+	extcronjobsapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/cronjobs"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// CronJobGroupVersionResource is the required Group Version Resource for accessing cron jobs in a cluster,
-// using the dynamic client.
-var CronJobGroupVersionResource = schema.GroupVersionResource{
-	Group:    "batch",
-	Version:  "v1",
-	Resource: "cronjobs",
+const (
+	CronJobSchedule = "*/1 * * * *"
+)
+
+// NewCronJobTemplate is a constructor that creates the template for cronjob
+func NewCronJobTemplate(namespaceName, schedule string, podTemplate corev1.PodTemplateSpec) *batchv1.CronJob {
+	cronJobName := namegen.AppendRandomString("testcronjob")
+	var limit int32 = 10
+
+	podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+	cronJobTemplate := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cronJobName,
+			Namespace: namespaceName,
+		},
+		Spec: batchv1.CronJobSpec{
+			JobTemplate: batchv1.JobTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespaceName,
+				},
+				Spec: batchv1.JobSpec{
+					Template: podTemplate,
+				},
+			},
+			Schedule:                   schedule,
+			ConcurrencyPolicy:          batchv1.ForbidConcurrent,
+			FailedJobsHistoryLimit:     &limit,
+			SuccessfulJobsHistoryLimit: &limit,
+		},
+	}
+
+	return cronJobTemplate
+}
+
+// CreateCronJob is a helper to create a cronjob in a namespace using wrangler context with a template generated from a pod template spec and provided schedule
+func CreateCronJob(client *rancher.Client, clusterID, namespaceName, schedule string, podTemplate corev1.PodTemplateSpec, watchCronJob bool) (*batchv1.CronJob, error) {
+	cronJobTemplate := NewCronJobTemplate(namespaceName, schedule, podTemplate)
+	createdCronJob, err := extcronjobsapi.CreateCronJobWithTemplate(client, clusterID, cronJobTemplate, watchCronJob)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create job: %w", err)
+	}
+
+	return createdCronJob, nil
 }

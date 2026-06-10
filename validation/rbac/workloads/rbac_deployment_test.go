@@ -9,13 +9,13 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extdeploymentapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/deployments"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,7 +77,7 @@ func (rd *RbacDeploymentTestSuite) TestCreateDeployment() {
 			assert.NoError(rd.T(), err)
 
 			log.Infof("As a %v, create a deployment", tt.role.String())
-			_, err = deployment.CreateDeployment(userClient, rd.cluster.ID, namespace.Name, 1, "", "", false, false, false, false)
+			_, err = deploymentapi.CreateDeployment(userClient, rd.cluster.ID, namespace.Name, "", 1, "", "", false, false, false, false)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rd.T(), err, "failed to create deployment")
@@ -115,7 +115,7 @@ func (rd *RbacDeploymentTestSuite) TestListDeployment() {
 			assert.NoError(rd.T(), err)
 
 			log.Infof("As a %v, create a deployment in the namespace %v", rbac.Admin, namespace.Name)
-			createdDeployment, err := deployment.CreateDeployment(rd.client, rd.cluster.ID, namespace.Name, 1, "", "", false, false, false, true)
+			createdDeployment, err := deploymentapi.CreateDeployment(rd.client, rd.cluster.ID, namespace.Name, "", 1, "", "", false, false, false, true)
 			assert.NoError(rd.T(), err, "failed to create deployment")
 
 			log.Infof("As a %v, list the deployment", tt.role.String())
@@ -161,7 +161,7 @@ func (rd *RbacDeploymentTestSuite) TestUpdateDeployment() {
 			assert.NoError(rd.T(), err)
 
 			log.Infof("As a %v, create a deployment in the namespace %v", rbac.Admin, namespace.Name)
-			createdDeployment, err := deployment.CreateDeployment(rd.client, rd.cluster.ID, namespace.Name, 1, "", "", false, false, false, true)
+			createdDeployment, err := deploymentapi.CreateDeployment(rd.client, rd.cluster.ID, namespace.Name, "", 1, "", "", false, false, false, true)
 			assert.NoError(rd.T(), err, "failed to create deployment")
 
 			log.Infof("As a %v, update the deployment %s with a new label.", tt.role.String(), createdDeployment.Name)
@@ -169,7 +169,7 @@ func (rd *RbacDeploymentTestSuite) TestUpdateDeployment() {
 				createdDeployment.Labels = make(map[string]string)
 			}
 			createdDeployment.Labels["updated"] = "true"
-			updatedDeployment, err := deploymentapi.UpdateDeployment(userClient, rd.cluster.ID, namespace.Name, createdDeployment, false)
+			updatedDeployment, err := extdeploymentapi.UpdateDeployment(userClient, rd.cluster.ID, createdDeployment, false)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rd.T(), err, "failed to update deployment")
@@ -212,7 +212,7 @@ func (rd *RbacDeploymentTestSuite) TestDeleteDeployment() {
 			assert.NoError(rd.T(), err)
 
 			log.Infof("As a %v, create a deployment in the namespace %v", rbac.Admin, namespace.Name)
-			createdDeployment, err := deployment.CreateDeployment(rd.client, rd.cluster.ID, namespace.Name, 1, "", "", false, false, false, true)
+			createdDeployment, err := deploymentapi.CreateDeployment(rd.client, rd.cluster.ID, namespace.Name, "", 1, "", "", false, false, false, true)
 			assert.NoError(rd.T(), err, "failed to create deployment")
 
 			log.Infof("As a %v, delete the deployment", tt.role.String())
@@ -246,17 +246,14 @@ func (rd *RbacDeploymentTestSuite) TestCrudDeploymentAsClusterMember() {
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": user.ID,
 	}
-	createdProject, err := userClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
-	require.NoError(rd.T(), err)
-
-	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
+	createdProject, err := projectapi.CreateProjectWithTemplate(userClient, rd.cluster.ID, projectTemplate)
 	require.NoError(rd.T(), err)
 
 	namespace, err := namespaceapi.CreateNamespace(userClient, rd.cluster.ID, createdProject.Name, namegen.AppendRandomString("ns-"), "", nil, nil)
 	require.NoError(rd.T(), err)
 
 	log.Infof("As a %v, create a deployment in the namespace %v", role, namespace.Name)
-	createdDeployment, err := deployment.CreateDeployment(userClient, rd.cluster.ID, namespace.Name, 1, "", "", false, false, false, true)
+	createdDeployment, err := deploymentapi.CreateDeployment(userClient, rd.cluster.ID, namespace.Name, "", 1, "", "", false, false, false, true)
 	require.NoError(rd.T(), err, "failed to create deployment")
 
 	log.Infof("As a %v, list the deployment", role)
@@ -272,7 +269,7 @@ func (rd *RbacDeploymentTestSuite) TestCrudDeploymentAsClusterMember() {
 		createdDeployment.Labels = make(map[string]string)
 	}
 	createdDeployment.Labels["updated"] = "true"
-	updatedDeployment, err := deploymentapi.UpdateDeployment(userClient, rd.cluster.ID, namespace.Name, createdDeployment, true)
+	updatedDeployment, err := extdeploymentapi.UpdateDeployment(userClient, rd.cluster.ID, createdDeployment, true)
 	require.NoError(rd.T(), err, "failed to update deployment")
 	updatedDeployment, err = standardUserContext.Apps.Deployment().Get(namespace.Name, updatedDeployment.Name, metav1.GetOptions{})
 	require.NoError(rd.T(), err, "Failed to get the updated deployment after updating labels.")

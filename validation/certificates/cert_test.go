@@ -9,15 +9,15 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
-	ingressapi "github.com/rancher/shepherd/extensions/kubeapi/ingresses"
+	extingressapi "github.com/rancher/shepherd/extensions/kubeapi/ingresses"
+	extsecretapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
 	"github.com/rancher/shepherd/pkg/session"
-	ingress "github.com/rancher/tests/actions/kubeapi/ingresses"
+	ingressapi "github.com/rancher/tests/actions/kubeapi/ingresses"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
 	secrets "github.com/rancher/tests/actions/secrets"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -96,10 +96,10 @@ func (c *CertificateTestSuite) createCertWithData(namespace *corev1.Namespace, c
 }
 
 func (c *CertificateTestSuite) setupIngressWithCert(namespace *corev1.Namespace, tlsSecret *corev1.Secret, hosts []string) (*netv1.Ingress, error) {
-	deploymentForIngress, err := deployment.CreateDeployment(c.client, c.cluster.ID, namespace.Name, 1, tlsSecret.Name, "", false, false, false, true)
+	deploymentForIngress, err := deploymentapi.CreateDeployment(c.client, c.cluster.ID, namespace.Name, "", 1, tlsSecret.Name, "", false, false, false, true)
 	require.NoError(c.T(), err)
 
-	ingressTemplate, err := ingress.CreateServiceAndIngressTemplateForDeployment(c.client, c.cluster.ID, namespace.Name, deploymentForIngress)
+	ingressTemplate, err := ingressapi.CreateServiceAndIngressTemplateForDeployment(c.client, c.cluster.ID, namespace.Name, deploymentForIngress)
 	require.NoError(c.T(), err, "Error creating ingress template")
 
 	ingressTemplate.Spec.TLS = []netv1.IngressTLS{
@@ -109,7 +109,7 @@ func (c *CertificateTestSuite) setupIngressWithCert(namespace *corev1.Namespace,
 		},
 	}
 
-	return ingressapi.CreateIngress(c.client, c.cluster.ID, ingressTemplate.Name, namespace.Name, &ingressTemplate.Spec)
+	return extingressapi.CreateIngress(c.client, c.cluster.ID, ingressTemplate.Name, namespace.Name, &ingressTemplate.Spec)
 }
 
 func (c *CertificateTestSuite) TestCertificateScopes() {
@@ -121,10 +121,7 @@ func (c *CertificateTestSuite) TestCertificateScopes() {
 	require.NoError(c.T(), err)
 
 	log.Info("Verifying the certificate exists in the namespace")
-	adminContext, err := extclusterapi.GetClusterWranglerContext(c.client, c.cluster.ID)
-	require.NoError(c.T(), err)
-
-	retrievedSecret, err := adminContext.Core.Secret().Get(namespace.Name, tlsSecret.Name, metav1.GetOptions{})
+	retrievedSecret, err := extsecretapi.GetSecretByName(c.client, c.cluster.ID, namespace.Name, tlsSecret.Name)
 	require.NoError(c.T(), err)
 	require.Equal(c.T(), corev1.SecretTypeTLS, retrievedSecret.Type)
 
@@ -133,7 +130,7 @@ func (c *CertificateTestSuite) TestCertificateScopes() {
 	require.NoError(c.T(), err)
 
 	log.Info("Verifying the certificate is not accessible in the second namespace")
-	_, err = adminContext.Core.Secret().Get(namespace2.Name, tlsSecret.Name, metav1.GetOptions{})
+	_, err = extsecretapi.GetSecretByName(c.client, c.cluster.ID, namespace2.Name, tlsSecret.Name)
 
 	require.Error(c.T(), err, "Should return an error when accessing certificate from another namespace")
 	require.True(c.T(), errors.IsNotFound(err) || errors.IsForbidden(err), "Error should be 'not found' or 'forbidden' when accessing certificate from another namespace")
@@ -152,14 +149,11 @@ func (c *CertificateTestSuite) TestMultipleCertificateTypes() {
 	require.NoError(c.T(), err)
 
 	log.Info("Verifying both certificates were created successfully")
-	adminContext, err := extclusterapi.GetClusterWranglerContext(c.client, c.cluster.ID)
-	require.NoError(c.T(), err)
-
-	retrievedCert1, err := adminContext.Core.Secret().Get(namespace.Name, cert1.Name, metav1.GetOptions{})
+	retrievedCert1, err := extsecretapi.GetSecretByName(c.client, c.cluster.ID, namespace.Name, cert1.Name)
 	require.NoError(c.T(), err)
 	require.Equal(c.T(), corev1.SecretTypeTLS, retrievedCert1.Type)
 
-	retrievedCert2, err := adminContext.Core.Secret().Get(namespace.Name, cert2.Name, metav1.GetOptions{})
+	retrievedCert2, err := extsecretapi.GetSecretByName(c.client, c.cluster.ID, namespace.Name, cert2.Name)
 	require.NoError(c.T(), err)
 	require.Equal(c.T(), corev1.SecretTypeTLS, retrievedCert2.Type)
 }
@@ -171,29 +165,17 @@ func (c *CertificateTestSuite) TestUpdateCertificate() {
 	_, namespace, tlsSecret, err := c.createTestCertAndNamespace(c.certData1, c.keyData1)
 	require.NoError(c.T(), err)
 
-	log.Info("Getting the certificate for updating")
-	adminContext, err := extclusterapi.GetClusterWranglerContext(c.client, c.cluster.ID)
-	require.NoError(c.T(), err)
-
-	retrievedSecret, err := adminContext.Core.Secret().Get(namespace.Name, tlsSecret.Name, metav1.GetOptions{})
-	require.NoError(c.T(), err)
-
 	log.Info("Updating the certificate with new data")
 	secretData2 := map[string][]byte{
 		corev1.TLSCertKey:       []byte(c.certData2),
 		corev1.TLSPrivateKeyKey: []byte(c.keyData2),
 	}
-
-	updatedSecret := retrievedSecret.DeepCopy()
-	updatedSecret.Data = secretData2
-
-	_, err = adminContext.Core.Secret().Update(updatedSecret)
+	_, err = secretapi.UpdateSecretData(c.client, c.cluster.ID, namespace.Name, tlsSecret.Name, secretData2)
 	require.NoError(c.T(), err)
 
 	log.Info("Verifying the certificate was updated")
-	retrievedUpdatedSecret, err := adminContext.Core.Secret().Get(namespace.Name, tlsSecret.Name, metav1.GetOptions{})
+	retrievedUpdatedSecret, err := extsecretapi.GetSecretByName(c.client, c.cluster.ID, namespace.Name, tlsSecret.Name)
 	require.NoError(c.T(), err)
-
 	require.Equal(c.T(), secretData2[corev1.TLSCertKey], retrievedUpdatedSecret.Data[corev1.TLSCertKey])
 	require.Equal(c.T(), secretData2[corev1.TLSPrivateKeyKey], retrievedUpdatedSecret.Data[corev1.TLSPrivateKeyKey])
 }
@@ -216,10 +198,7 @@ func (c *CertificateTestSuite) TestCrossProjectAccess() {
 	log.Infof("Created user: %v", user.Username)
 
 	log.Infof("As user %s, attempting to access the TLS secret in the first project", user.Username)
-	userContext, err := extclusterapi.GetClusterWranglerContext(userClient, c.cluster.ID)
-	require.NoError(c.T(), err)
-
-	_, err = userContext.Core.Secret().Get(namespace1.Name, tlsSecret.Name, metav1.GetOptions{})
+	_, err = extsecretapi.GetSecretByName(userClient, c.cluster.ID, namespace1.Name, tlsSecret.Name)
 	require.True(c.T(), errors.IsForbidden(err), "User should not be able to access TLS secret in another project")
 }
 
@@ -273,24 +252,15 @@ func (c *CertificateTestSuite) TestUpdateCertificateWithIngress() {
 	require.NoError(c.T(), err)
 
 	log.Info("Updating the certificate")
-	adminContext, err := extclusterapi.GetClusterWranglerContext(c.client, c.cluster.ID)
-	require.NoError(c.T(), err)
-
-	retrievedSecret, err := adminContext.Core.Secret().Get(namespace.Name, tlsSecret.Name, metav1.GetOptions{})
-	require.NoError(c.T(), err)
-
 	secretData2 := map[string][]byte{
 		corev1.TLSCertKey:       []byte(c.certData2),
 		corev1.TLSPrivateKeyKey: []byte(c.keyData2),
 	}
 
-	updatedSecret := retrievedSecret.DeepCopy()
-	updatedSecret.Data = secretData2
-
-	_, err = adminContext.Core.Secret().Update(updatedSecret)
+	_, err = secretapi.UpdateSecretData(c.client, c.cluster.ID, namespace.Name, tlsSecret.Name, secretData2)
 	require.NoError(c.T(), err)
 
-	updatedIngress, err := adminContext.Networking.Ingress().Get(namespace.Name, ingress.Name, metav1.GetOptions{})
+	updatedIngress, err := extingressapi.GetIngressByName(c.client, c.cluster.ID, namespace.Name, ingress.Name)
 	require.NoError(c.T(), err)
 	require.Len(c.T(), updatedIngress.Spec.TLS, 1)
 	require.Equal(c.T(), tlsSecret.Name, updatedIngress.Spec.TLS[0].SecretName)
@@ -333,16 +303,14 @@ func (c *CertificateTestSuite) TestDeleteCertificateUsedByIngress() {
 	require.NoError(c.T(), err)
 
 	log.Info("Deleting the tls secret")
-	adminContext, err := extclusterapi.GetClusterWranglerContext(c.client, c.cluster.ID)
-	require.NoError(c.T(), err)
-	err = adminContext.Core.Secret().Delete(namespace.Name, tlsSecret.Name, &metav1.DeleteOptions{})
+	err = extsecretapi.DeleteSecret(c.client, c.cluster.ID, namespace.Name, tlsSecret.Name, true)
 	require.NoError(c.T(), err)
 
 	log.Info("Verifying that the tls secret was deleted")
-	_, err = adminContext.Core.Secret().Get(namespace.Name, tlsSecret.Name, metav1.GetOptions{})
+	_, err = extsecretapi.GetSecretByName(c.client, c.cluster.ID, namespace.Name, tlsSecret.Name)
 	require.True(c.T(), errors.IsNotFound(err), "tls secret should be deleted")
 
-	updatedIngress, err := adminContext.Networking.Ingress().Get(namespace.Name, ingress.Name, metav1.GetOptions{})
+	updatedIngress, err := extingressapi.GetIngressByName(c.client, c.cluster.ID, namespace.Name, ingress.Name)
 	require.NoError(c.T(), err)
 	require.Len(c.T(), updatedIngress.Spec.TLS, 1)
 	require.Equal(c.T(), tlsSecret.Name, updatedIngress.Spec.TLS[0].SecretName)
@@ -376,10 +344,6 @@ func (c *CertificateTestSuite) TestCertificateWithAnnotations() {
 	require.NoError(c.T(), err)
 
 	log.Info("Creating certificate with annotations")
-
-	adminContext, err := extclusterapi.GetClusterWranglerContext(c.client, c.cluster.ID)
-	require.NoError(c.T(), err)
-
 	secretData := map[string][]byte{
 		corev1.TLSCertKey:       []byte(c.certData1),
 		corev1.TLSPrivateKeyKey: []byte(c.keyData1),
@@ -399,10 +363,10 @@ func (c *CertificateTestSuite) TestCertificateWithAnnotations() {
 		Data: secretData,
 	}
 
-	createdSecret, err := adminContext.Core.Secret().Create(secret)
+	createdSecret, err := extsecretapi.CreateSecretWithTemplate(c.client, c.cluster.ID, secret)
 	require.NoError(c.T(), err)
 
-	retrievedSecret, err := adminContext.Core.Secret().Get(namespace.Name, createdSecret.Name, metav1.GetOptions{})
+	retrievedSecret, err := extsecretapi.GetSecretByName(c.client, c.cluster.ID, namespace.Name, createdSecret.Name)
 	require.NoError(c.T(), err)
 	require.Equal(c.T(), "test-issuer", retrievedSecret.Annotations["cert-manager.io/issuer"])
 	require.Equal(c.T(), "ClusterIssuer", retrievedSecret.Annotations["cert-manager.io/issuer-kind"])
@@ -428,7 +392,7 @@ func (c *CertificateTestSuite) TestCertificateRotation() {
 	require.NoError(c.T(), err)
 
 	log.Info("Deleting old ingress")
-	err = ingressapi.DeleteIngress(c.client, c.cluster.ID, namespace.Name, ingress.Name)
+	err = extingressapi.DeleteIngress(c.client, c.cluster.ID, namespace.Name, ingress.Name)
 	require.NoError(c.T(), err)
 
 	log.Info("Creating new ingress with rotated certificate")

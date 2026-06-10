@@ -15,9 +15,9 @@ import (
 	"github.com/rancher/shepherd/pkg/wrangler"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -161,7 +161,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestCpuAndMemoryLimitEqualT
 	require.NoError(pcrl.T(), err)
 
 	log.Info("Create a deployment in the namespace with one replica and verify that a pod is created.")
-	createdDeployment, err := deployment.CreateDeployment(standardUserClient, pcrl.cluster.ID, createdNamespace.Name, 1, "", "", false, false, false, true)
+	createdDeployment, err := deploymentapi.CreateDeployment(standardUserClient, pcrl.cluster.ID, createdNamespace.Name, "", 1, "", "", false, false, false, true)
 	require.NoError(pcrl.T(), err, "Failed to create deployment in the namespace")
 
 	log.Info("Verify that the resource limits and requests for the container in the pod spec is accurate.")
@@ -200,7 +200,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestCpuAndMemoryLimitGreate
 	require.NoError(pcrl.T(), err)
 
 	log.Info("Create a deployment in the namespace with one replica and verify that a pod is created.")
-	createdDeployment, err := deployment.CreateDeployment(standardUserClient, pcrl.cluster.ID, createdNamespace.Name, 1, "", "", false, false, false, true)
+	createdDeployment, err := deploymentapi.CreateDeployment(standardUserClient, pcrl.cluster.ID, createdNamespace.Name, "", 1, "", "", false, false, false, true)
 	require.NoError(pcrl.T(), err, "Failed to create deployment in the namespace")
 
 	log.Info("Verify that the resource limits and requests for the container in the pod spec is accurate.")
@@ -367,7 +367,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestLimitDeletionPropagatio
 	require.NoError(pcrl.T(), err, "LimitRange should be deleted from the namespace")
 
 	log.Info("Create a deployment in the namespace with one replica and verify that a pod is created.")
-	createdDeployment, err := deployment.CreateDeployment(standardUserClient, pcrl.cluster.ID, createdNamespace.Name, 1, "", "", false, false, false, true)
+	createdDeployment, err := deploymentapi.CreateDeployment(standardUserClient, pcrl.cluster.ID, createdNamespace.Name, "", 1, "", "", false, false, false, true)
 	require.NoError(pcrl.T(), err, "Failed to create deployment in the namespace")
 
 	log.Info("Verify that the resource limits and requests for the container in the pod spec is accurate.")
@@ -406,7 +406,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestOverrideDefaultLimitInN
 	require.NoError(pcrl.T(), err)
 
 	log.Info("Create a deployment in the namespace with one replica and verify that a pod is created.")
-	createdDeployment, err := deployment.CreateDeployment(standardUserClient, pcrl.cluster.ID, createdNamespace.Name, 1, "", "", false, false, false, true)
+	createdDeployment, err := deploymentapi.CreateDeployment(standardUserClient, pcrl.cluster.ID, createdNamespace.Name, "", 1, "", "", false, false, false, true)
 	require.NoError(pcrl.T(), err, "Failed to create deployment in the namespace")
 
 	log.Info("Verify that the resource limits and requests for the container in the pod spec is accurate.")
@@ -433,7 +433,7 @@ func (pcrl *ProjectsContainerResourceLimitTestSuite) TestOverrideDefaultLimitInN
 	require.NoError(pcrl.T(), err)
 
 	log.Info("Create a deployment in the namespace with one replica and verify that a pod is created.")
-	createdDeployment, err = deployment.CreateDeployment(standardUserClient, pcrl.cluster.ID, namespace.Name, 1, "", "", false, false, false, true)
+	createdDeployment, err = deploymentapi.CreateDeployment(standardUserClient, pcrl.cluster.ID, namespace.Name, "", 1, "", "", false, false, false, true)
 	require.NoError(pcrl.T(), err, "Failed to create deployment in the namespace")
 
 	log.Info("Verify that the resource limits and requests for the container in the pod spec is accurate.")

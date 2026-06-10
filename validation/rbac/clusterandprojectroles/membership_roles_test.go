@@ -3,17 +3,24 @@
 package clusterandprojectroles
 
 import (
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/clusters"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
+	configDefaults "github.com/rancher/tests/actions/config/defaults"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	kubeconfigapi "github.com/rancher/tests/actions/kubeconfigs"
+	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	log "github.com/sirupsen/logrus"
@@ -51,10 +58,25 @@ func (mr *MembershipRolesTestSuite) SetupSuite() {
 
 func (mr *MembershipRolesTestSuite) TestClusterRolesOnClusterCreationAndDeletion() {
 	log.Info("Creating a downstream cluster to verify membership roles on cluster creation and deletion")
-	clusterObj, clusterConfig2, err := kubeconfigapi.CreateDownstreamCluster(mr.client, false)
+	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	cattleConfig, err := configDefaults.SetK8sDefault(mr.client, configDefaults.K3S, cattleConfig)
+	require.NoError(mr.T(), err)
+
+	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
+
+	clusterConfig := new(actionsClusters.ClusterConfig)
+	operations.LoadObjectFromMap(configDefaults.ClusterConfigKey, cattleConfig, clusterConfig)
+
+	clusterConfig.MachinePools = nodeRolesAll
+
+	provider := provisioning.CreateProvider(clusterConfig.Provider)
+	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+
+	clusterObj, err := provisioning.CreateProvisioningCluster(mr.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 	require.NoError(mr.T(), err)
 	require.NotNil(mr.T(), clusterObj)
-	require.NotNil(mr.T(), clusterConfig2)
+	require.NotNil(mr.T(), clusterConfig)
 	createdClusterID, err := clusters.GetClusterIDByName(mr.client, clusterObj.Name)
 	require.NoError(mr.T(), err)
 

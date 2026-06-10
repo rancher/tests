@@ -10,11 +10,14 @@ import (
 	extapi "github.com/rancher/rancher/pkg/apis/ext.cattle.io/v1"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extsecretapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
+	extsettingsapi "github.com/rancher/shepherd/extensions/kubeapi/settings"
+	extuserapi "github.com/rancher/shepherd/extensions/kubeapi/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
+	userapi "github.com/rancher/tests/actions/kubeapi/users"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/settings"
-	userapi "github.com/rancher/tests/actions/users"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -51,12 +54,12 @@ func (pu *PapiUsersTestSuite) TestCreateUserAsAdmin() {
 	require.NoError(pu.T(), err, "failed to create user with password secret")
 
 	log.Infof("Verifying annotations and ownerReferences for the user %s's password secret", stdUser.Username)
-	passwordSecret, err := pu.client.WranglerContext.Core.Secret().Get(userapi.UserPasswordSecretNamespace, stdUser.Username, metav1.GetOptions{})
+	passwordSecret, err := extsecretapi.GetSecretByName(pu.client, extclusterapi.LocalCluster, extuserapi.UserPasswordSecretNamespace, stdUser.Username)
 	require.NoError(pu.T(), err, "failed to get password secret")
 
-	hash, ok := passwordSecret.Annotations[userapi.PasswordHashAnnotation]
+	hash, ok := passwordSecret.Annotations[extuserapi.PasswordHashAnnotation]
 	require.True(pu.T(), ok, "password-hash annotation not found")
-	require.Equal(pu.T(), userapi.PasswordHash, hash, "password-hash value mismatch")
+	require.Equal(pu.T(), extuserapi.PasswordHash, hash, "password-hash value mismatch")
 	require.Len(pu.T(), passwordSecret.OwnerReferences, 1, "secret should have one ownerReference")
 	require.Equal(pu.T(), stdUser.Username, passwordSecret.OwnerReferences[0].Name, "ownerReference does not match user")
 
@@ -86,12 +89,12 @@ func (pu *PapiUsersTestSuite) TestCreateUserWithManageUsersRole() {
 	require.NoError(pu.T(), err, "failed to create user and password secret")
 
 	log.Infof("Verifying annotations and ownerReferences for the user %s's password secret", stdUser.Username)
-	passwordSecret, err := pu.client.WranglerContext.Core.Secret().Get(userapi.UserPasswordSecretNamespace, stdUser.Username, metav1.GetOptions{})
+	passwordSecret, err := pu.client.WranglerContext.Core.Secret().Get(extuserapi.UserPasswordSecretNamespace, stdUser.Username, metav1.GetOptions{})
 	require.NoError(pu.T(), err, "failed to get password secret")
 
-	hash, ok := passwordSecret.Annotations[userapi.PasswordHashAnnotation]
+	hash, ok := passwordSecret.Annotations[extuserapi.PasswordHashAnnotation]
 	require.True(pu.T(), ok, "password-hash annotation not found")
-	require.Equal(pu.T(), userapi.PasswordHash, hash, "password-hash value mismatch")
+	require.Equal(pu.T(), extuserapi.PasswordHash, hash, "password-hash value mismatch")
 	require.Len(pu.T(), passwordSecret.OwnerReferences, 1, "secret should have one ownerReference")
 	require.Equal(pu.T(), stdUser.Username, passwordSecret.OwnerReferences[0].Name, "ownerReference does not match user")
 
@@ -154,7 +157,7 @@ func (pu *PapiUsersTestSuite) TestCreatingPasswordSecretBeforeUserIsBlocked() {
 	defer subSession.Cleanup()
 
 	log.Infof("As admin, attempting to create a password secret for non-existent user %q", userapi.DummyUserName)
-	_, _, err := userapi.CreateUserPassword(pu.client, userapi.DummyUserName, 15)
+	_, _, err := extuserapi.CreateUserPassword(pu.client, userapi.DummyUserName, 15)
 	require.Error(pu.T(), err, "expected error when creating password secret before user creation")
 
 	expectedErr := fmt.Sprintf(`admission webhook "rancher.cattle.io.secrets" denied the request: user %s does not exist. User must be created before the secret`, userapi.DummyUserName)
@@ -169,7 +172,7 @@ func (pu *PapiUsersTestSuite) TestUpdateUserAsAdmin() {
 	adminUser, err := userapi.GetUserByUsername(pu.client, rbac.Admin.String())
 	require.NoError(pu.T(), err, "failed to fetch admin user")
 	adminUser.Description = "Edited by self"
-	updatedAdminUser, err := userapi.UpdateUser(pu.client, adminUser)
+	updatedAdminUser, err := extuserapi.UpdateUser(pu.client, adminUser)
 	require.NoError(pu.T(), err, "failed to update admin user description")
 	require.Equal(pu.T(), "Edited by self", updatedAdminUser.Description, "admin user description was not updated")
 
@@ -180,7 +183,7 @@ func (pu *PapiUsersTestSuite) TestUpdateUserAsAdmin() {
 
 	log.Infof("As admin, updating the description for the user %s", testUser.Username)
 	testUser.Description = "Edited by admin"
-	updatedTestUser, err := userapi.UpdateUser(pu.client, testUser)
+	updatedTestUser, err := extuserapi.UpdateUser(pu.client, testUser)
 	require.NoError(pu.T(), err, "failed to update description")
 	require.Equal(pu.T(), "Edited by admin", updatedTestUser.Description, "user description was not updated")
 }
@@ -197,10 +200,10 @@ func (pu *PapiUsersTestSuite) TestUpdateUserWithManageUsersRole() {
 	require.NoError(pu.T(), err, "failed to login as user")
 
 	log.Infof("As %s, updating its own description", mUser.Username)
-	mUser, err = userapi.GetUserByUsername(manageUserClient, mUser.Username)
+	mUser, err = extuserapi.GetUserByName(manageUserClient, mUser.Username)
 	require.NoError(pu.T(), err, "failed to fetch user")
 	mUser.Description = "Edited by self"
-	updatedTestUser, err := userapi.UpdateUser(manageUserClient, mUser)
+	updatedTestUser, err := extuserapi.UpdateUser(manageUserClient, mUser)
 	require.NoError(pu.T(), err, "failed to update description")
 	require.Equal(pu.T(), "Edited by self", updatedTestUser.Description, "user description was not updated")
 
@@ -211,7 +214,7 @@ func (pu *PapiUsersTestSuite) TestUpdateUserWithManageUsersRole() {
 
 	log.Infof("As %s, updating the description for the user %s", mUser.Username, testUser.Username)
 	testUser.Description = "Edited by user with manage users role"
-	updatedTestUser, err = userapi.UpdateUser(manageUserClient, testUser)
+	updatedTestUser, err = extuserapi.UpdateUser(manageUserClient, testUser)
 	require.NoError(pu.T(), err, "failed to update description")
 	require.Equal(pu.T(), "Edited by user with manage users role", updatedTestUser.Description, "user description was not updated")
 }
@@ -227,10 +230,10 @@ func (pu *PapiUsersTestSuite) TestStandardUserCannotUpdateUser() {
 	log.Infof("Verifying that the user %s cannot update itself", stdUser.Username)
 	stdUserClient, err := pu.client.AsPublicAPIUser(stdUser, stdUserPassword)
 	require.NoError(pu.T(), err, "failed to login as user")
-	stdUser, err = userapi.GetUserByUsername(pu.client, stdUser.Username)
+	stdUser, err = extuserapi.GetUserByName(pu.client, stdUser.Username)
 	require.NoError(pu.T(), err, "failed to fetch user")
 	stdUser.Description = "Edited by self"
-	_, err = userapi.UpdateUser(stdUserClient, stdUser)
+	_, err = extuserapi.UpdateUser(stdUserClient, stdUser)
 	require.Error(pu.T(), err)
 	require.True(pu.T(), apierrors.IsForbidden(err), "expected 403 Forbidden error, got: %v", err)
 
@@ -238,7 +241,7 @@ func (pu *PapiUsersTestSuite) TestStandardUserCannotUpdateUser() {
 	newUser, err := userapi.CreateUser(pu.client)
 	require.NoError(pu.T(), err, "failed to create user")
 	newUser.Description = "Edited by another user"
-	_, err = userapi.UpdateUser(stdUserClient, newUser)
+	_, err = extuserapi.UpdateUser(stdUserClient, newUser)
 	require.Error(pu.T(), err)
 	require.True(pu.T(), apierrors.IsForbidden(err), "expected 403 Forbidden error, got: %v", err)
 }
@@ -257,22 +260,22 @@ func (pu *PapiUsersTestSuite) TestCreateUserWithoutUsernameAndUpdate() {
 	}
 	_, err := pu.client.WranglerContext.Mgmt.User().Create(newUser)
 	require.NoError(pu.T(), err, "failed to create user without username")
-	createdUser, err := userapi.WaitForUserCreation(pu.client, username)
+	createdUser, err := extuserapi.WaitForUserCreation(pu.client, username)
 	require.NoError(pu.T(), err, "timed out waiting for user to exist")
 
-	log.Infof("Updating the username for user %s", createdUser.Name)
+	log.Infof("Updating the username for user %s", createdUser.Username)
 	createdUser.Username = username
-	updatedUser, err := userapi.UpdateUser(pu.client, createdUser)
+	updatedUser, err := extuserapi.UpdateUser(pu.client, createdUser)
 	require.NoError(pu.T(), err, "failed to update username")
 	require.Equal(pu.T(), username, updatedUser.Username, "username was not updated successfully")
 
 	log.Infof("Creating password secret for user '%s'", updatedUser.Username)
-	passwordSecret, stdUserPassword, err := userapi.CreateUserPassword(pu.client, updatedUser.Username, 15)
+	passwordSecret, stdUserPassword, err := extuserapi.CreateUserPassword(pu.client, updatedUser.Username, 15)
 	require.NoError(pu.T(), err, "failed to create password secret")
 
-	hash, ok := passwordSecret.Annotations[userapi.PasswordHashAnnotation]
+	hash, ok := passwordSecret.Annotations[extuserapi.PasswordHashAnnotation]
 	require.True(pu.T(), ok, "password-hash annotation not found")
-	require.Equal(pu.T(), userapi.PasswordHash, hash, "password-hash value mismatch")
+	require.Equal(pu.T(), extuserapi.PasswordHash, hash, "password-hash value mismatch")
 	require.Len(pu.T(), passwordSecret.OwnerReferences, 1, "secret should have one ownerReference")
 	require.Equal(pu.T(), updatedUser.Username, passwordSecret.OwnerReferences[0].Name, "ownerReference does not match user")
 
@@ -290,17 +293,17 @@ func (pu *PapiUsersTestSuite) TestUsernameIsImmutable() {
 	require.NoError(pu.T(), err, "failed to create user with password secret")
 
 	log.Infof("As admin, attempting to update username of user %s", createdUser.Username)
-	latestUser, err := userapi.GetUserByName(pu.client, createdUser.Name)
+	latestUser, err := extuserapi.GetUserByName(pu.client, createdUser.Username)
 	require.NoError(pu.T(), err, "failed to fetch latest user object")
 
 	latestUser.Username = namegen.AppendRandomString("newtestuser")
-	_, err = userapi.UpdateUser(pu.client, latestUser)
+	_, err = extuserapi.UpdateUser(pu.client, latestUser)
 	require.Error(pu.T(), err, "expected error when updating immutable username")
 	require.Contains(pu.T(), err.Error(), "field is immutable", "unexpected error: %v", err)
 
 	log.Infof("Attempting to patch username of user %s", createdUser.Username)
 	patch := `[{"op": "replace", "path": "/username", "value": "test"}]`
-	_, err = pu.client.WranglerContext.Mgmt.User().Patch(createdUser.Name, types.JSONPatchType, []byte(patch))
+	_, err = pu.client.WranglerContext.Mgmt.User().Patch(createdUser.Username, types.JSONPatchType, []byte(patch))
 	require.Error(pu.T(), err, "expected error when patching immutable username")
 	require.Contains(pu.T(), err.Error(), "field is immutable", "unexpected error: %v", err)
 }
@@ -320,7 +323,7 @@ func (pu *PapiUsersTestSuite) TestCannotUpdateUsernameToExistingAdmin() {
 	createdUser, err := pu.client.WranglerContext.Mgmt.User().Create(newUser)
 	require.NoError(pu.T(), err, "failed to create user without username")
 
-	log.Infof("As admin, attempting to patch username of '%s' to %s", createdUser.Name, rbac.Admin.String())
+	log.Infof("As admin, attempting to patch username of '%s' to %s", createdUser.Username, rbac.Admin.String())
 	patch := fmt.Sprintf(`[{"op":"replace","path":"/username","value":"%s"}]`, rbac.Admin.String())
 	_, err = pu.client.WranglerContext.Mgmt.User().Patch(createdUser.Name, types.JSONPatchType, []byte(patch))
 	require.Error(pu.T(), err, "expected error when patching username to existing admin")
@@ -337,13 +340,13 @@ func (pu *PapiUsersTestSuite) TestAdminCanGetAndListUsers() {
 	testUser2, _, err := userapi.CreateUserWithRoles(pu.client, rbac.StandardUser.String())
 	require.NoError(pu.T(), err, "failed to create user")
 
-	log.Infof("As %s, GET %s by name", rbac.Admin.String(), testUser1.Name)
-	getUser, err := userapi.GetUserByName(pu.client, testUser1.Name)
-	require.NoError(pu.T(), err, "%s should be able to get %s by name", rbac.Admin.String(), testUser1.Name)
-	require.Equal(pu.T(), testUser1.Name, getUser.Name, "fetched user does not match expected")
+	log.Infof("As %s, GET %s by name", rbac.Admin.String(), testUser1.Username)
+	getUser, err := extuserapi.GetUserByName(pu.client, testUser1.Username)
+	require.NoError(pu.T(), err, "%s should be able to get %s by name", rbac.Admin.String(), testUser1.Username)
+	require.Equal(pu.T(), testUser1.Username, getUser.Username, "fetched user does not match expected")
 
 	log.Infof("As %s, LIST users", rbac.Admin.String())
-	userList, err := userapi.ListUsers(pu.client)
+	userList, err := extuserapi.ListUsers(pu.client)
 	require.NoError(pu.T(), err, "%s should be able to list all users", rbac.Admin.String())
 
 	usernames := make([]string, 0, len(userList.Items))
@@ -369,15 +372,15 @@ func (pu *PapiUsersTestSuite) TestManageUsersCanGetAndListUsers() {
 	testUser2, _, err := userapi.CreateUserWithRoles(pu.client, rbac.StandardUser.String())
 	require.NoError(pu.T(), err, "failed to create user")
 
-	log.Infof("As %s, GET %s by name", mUser.Username, testUser1.Name)
+	log.Infof("As %s, GET %s by name", mUser.Username, testUser1.Username)
 	mUserClient, err := pu.client.AsPublicAPIUser(mUser, mUserPassword)
 	require.NoError(pu.T(), err, "failed to login as %s", mUser.Username)
-	getUser, err := userapi.GetUserByName(mUserClient, testUser1.Name)
-	require.NoError(pu.T(), err, "%s should be able to get %s by name", mUser.Username, testUser1.Name)
-	require.Equal(pu.T(), testUser1.Name, getUser.Name, "fetched user does not match expected")
+	getUser, err := extuserapi.GetUserByName(mUserClient, testUser1.Username)
+	require.NoError(pu.T(), err, "%s should be able to get %s by name", mUser.Username, testUser1.Username)
+	require.Equal(pu.T(), testUser1.Username, getUser.Username, "fetched user does not match expected")
 
 	log.Infof("As %s, LIST users", mUser.Username)
-	userList, err := userapi.ListUsers(mUserClient)
+	userList, err := extuserapi.ListUsers(mUserClient)
 	require.NoError(pu.T(), err, "%s should be able to list all users", mUser.Username)
 
 	usernames := make([]string, 0, len(userList.Items))
@@ -398,12 +401,12 @@ func (pu *PapiUsersTestSuite) TestStandardUserCanGetSelf() {
 	testUser1, testUser1Password, err := userapi.CreateUserWithRoles(pu.client, rbac.StandardUser.String())
 	require.NoError(pu.T(), err, "failed to create user")
 
-	log.Infof("As %s, GET its own user object", testUser1.Name)
+	log.Infof("As %s, GET its own user object", testUser1.Username)
 	testUser1Client, err := pu.client.AsPublicAPIUser(testUser1, testUser1Password)
-	require.NoError(pu.T(), err, "failed to login as %s", testUser1.Name)
-	gotUser, err := userapi.GetUserByName(testUser1Client, testUser1.Name)
-	require.NoError(pu.T(), err, "%s should be able to get itself", testUser1.Name)
-	require.Equal(pu.T(), testUser1.Name, gotUser.Name, "fetched user does not match %s", testUser1.Name)
+	require.NoError(pu.T(), err, "failed to login as %s", testUser1.Username)
+	gotUser, err := extuserapi.GetUserByName(testUser1Client, testUser1.Username)
+	require.NoError(pu.T(), err, "%s should be able to get itself", testUser1.Username)
+	require.Equal(pu.T(), testUser1.Username, gotUser.Username, "fetched user does not match %s", testUser1.Username)
 }
 
 func (pu *PapiUsersTestSuite) TestStandardUserCannotListAllUsers() {
@@ -420,10 +423,10 @@ func (pu *PapiUsersTestSuite) TestStandardUserCannotListAllUsers() {
 	_, _, err = userapi.CreateUserWithRoles(pu.client, rbac.StandardUser.String())
 	require.NoError(pu.T(), err, "failed to create user")
 
-	log.Infof("As %s, attempting to LIST all users", testUser1.Name)
+	log.Infof("As %s, attempting to LIST all users", testUser1.Username)
 	testUser1Client, err := pu.client.AsPublicAPIUser(testUser1, testUser1Password)
-	require.NoError(pu.T(), err, "failed to login as %s", testUser1.Name)
-	_, err = userapi.ListUsers(testUser1Client)
+	require.NoError(pu.T(), err, "failed to login as %s", testUser1.Username)
+	_, err = extuserapi.ListUsers(testUser1Client)
 	require.Error(pu.T(), err, "expected error when listing all users as standard user")
 	require.True(pu.T(), apierrors.IsForbidden(err), "expected forbidden error, got: %v", err)
 }
@@ -436,12 +439,12 @@ func (pu *PapiUsersTestSuite) TestAdminCanDeleteUser() {
 	testUser1, _, err := userapi.CreateUserWithRoles(pu.client, rbac.StandardUser.String())
 	require.NoError(pu.T(), err, "failed to create user")
 
-	log.Infof("As admin, deleting user %s", testUser1.Name)
-	err = userapi.DeleteUser(pu.client, testUser1.Name)
-	require.NoError(pu.T(), err, "failed to delete user %s", testUser1.Name)
+	log.Infof("As admin, deleting user %s", testUser1.Username)
+	err = extuserapi.DeleteUser(pu.client, testUser1.Username, true)
+	require.NoError(pu.T(), err, "failed to delete user %s", testUser1.Username)
 
-	_, err = userapi.GetUserByName(pu.client, testUser1.Name)
-	require.Error(pu.T(), err, "expected error when fetching deleted user %s", testUser1.Name)
+	_, err = extuserapi.GetUserByName(pu.client, testUser1.Username)
+	require.Error(pu.T(), err, "expected error when fetching deleted user %s", testUser1.Username)
 	require.True(pu.T(), apierrors.IsNotFound(err), "expected NotFound error, got: %v", err)
 }
 
@@ -452,7 +455,7 @@ func (pu *PapiUsersTestSuite) TestAdminCannotDeleteSelf() {
 	log.Infof("As admin, attempting to delete itself")
 	adminUser, err := userapi.GetUserByUsername(pu.client, rbac.Admin.String())
 	require.NoError(pu.T(), err, "failed to fetch admin user")
-	err = userapi.DeleteUser(pu.client, adminUser.Name)
+	err = extuserapi.DeleteUser(pu.client, adminUser.Name, false)
 	require.Error(pu.T(), err, "expected error when admin attempts to delete itself")
 	require.Contains(pu.T(), err.Error(), "can't delete yourself", "unexpected error: %v", err)
 }
@@ -469,14 +472,14 @@ func (pu *PapiUsersTestSuite) TestManageUsersCanDeleteUser() {
 	testUser1, _, err := userapi.CreateUserWithRoles(pu.client, rbac.StandardUser.String())
 	require.NoError(pu.T(), err, "failed to create user")
 
-	log.Infof("As %s, deleting user %s", mUser.Username, testUser1.Name)
+	log.Infof("As %s, deleting user %s", mUser.Username, testUser1.Username)
 	mUserClient, err := pu.client.AsPublicAPIUser(mUser, mUserPassword)
 	require.NoError(pu.T(), err, "failed to login as %s", mUser.Username)
-	err = userapi.DeleteUser(mUserClient, testUser1.Name)
-	require.NoError(pu.T(), err, "failed to delete user %s", testUser1.Name)
+	err = extuserapi.DeleteUser(mUserClient, testUser1.Username, true)
+	require.NoError(pu.T(), err, "failed to delete user %s", testUser1.Username)
 
-	_, err = userapi.GetUserByName(pu.client, testUser1.Name)
-	require.Error(pu.T(), err, "expected error when fetching deleted user %s", testUser1.Name)
+	_, err = extuserapi.GetUserByName(pu.client, testUser1.Username)
+	require.Error(pu.T(), err, "expected error when fetching deleted user %s", testUser1.Username)
 	require.True(pu.T(), apierrors.IsNotFound(err), "expected NotFound error, got: %v", err)
 }
 
@@ -491,7 +494,7 @@ func (pu *PapiUsersTestSuite) TestManageUsersCannotDeleteSelf() {
 	log.Infof("As %s, attempting to delete itself", mUser.Username)
 	mUserClient, err := pu.client.AsPublicAPIUser(mUser, mUserPassword)
 	require.NoError(pu.T(), err, "failed to login as %s", mUser.Username)
-	err = userapi.DeleteUser(mUserClient, mUser.Name)
+	err = extuserapi.DeleteUser(mUserClient, mUser.Username, false)
 	require.Error(pu.T(), err, "expected error when user with Manage Users role attempts to delete itself")
 	require.Contains(pu.T(), err.Error(), "can't delete yourself", "unexpected error: %v", err)
 }
@@ -506,15 +509,15 @@ func (pu *PapiUsersTestSuite) TestStandardUserCannotDeleteOtherUsers() {
 	user2, _, err := userapi.CreateUserWithRoles(pu.client, rbac.StandardUser.String())
 	require.NoError(pu.T(), err, "failed to create user")
 
-	log.Infof("As %s, attempting to delete %s", user1.Username, user2.Name)
+	log.Infof("As %s, attempting to delete %s", user1.Username, user2.Username)
 	user1Client, err := pu.client.AsPublicAPIUser(user1, user1Password)
 	require.NoError(pu.T(), err, "failed to login as %s", user1.Username)
-	err = userapi.DeleteUser(user1Client, user2.Name)
+	err = extuserapi.DeleteUser(user1Client, user2.Username, false)
 	require.Error(pu.T(), err, "expected error when standard user attempts to delete another user")
 	require.True(pu.T(), apierrors.IsForbidden(err), "expected 403 Forbidden error, got: %v", err)
 
-	_, err = userapi.GetUserByName(pu.client, user2.Name)
-	require.NoError(pu.T(), err, "%s should still exist", user2.Name)
+	_, err = extuserapi.GetUserByName(pu.client, user2.Username)
+	require.NoError(pu.T(), err, "%s should still exist", user2.Username)
 }
 
 func (pu *PapiUsersTestSuite) TestUserDeletionRemovesBackingSecret() {
@@ -525,12 +528,12 @@ func (pu *PapiUsersTestSuite) TestUserDeletionRemovesBackingSecret() {
 	testUser1, _, err := userapi.CreateUserWithRoles(pu.client, rbac.StandardUser.String())
 	require.NoError(pu.T(), err, "failed to create user")
 
-	log.Infof("As admin, deleting user %s", testUser1.Name)
-	err = userapi.DeleteUser(pu.client, testUser1.Name)
-	require.NoError(pu.T(), err, "failed to delete user %s", testUser1.Name)
+	log.Infof("As admin, deleting user %s", testUser1.Username)
+	err = extuserapi.DeleteUser(pu.client, testUser1.Username, true)
+	require.NoError(pu.T(), err, "failed to delete user %s", testUser1.Username)
 
-	log.Infof("Verifying backing secret is deleted for user %s", testUser1.Name)
-	err = userapi.WaitForBackingSecretDeletion(pu.client, testUser1.Name)
+	log.Infof("Verifying backing secret is deleted for user %s", testUser1.Username)
+	err = userapi.WaitForBackingSecretDeletion(pu.client, testUser1.Username)
 	require.NoError(pu.T(), err, "timed out waiting for backing secret deletion")
 }
 
@@ -545,26 +548,26 @@ func (pu *PapiUsersTestSuite) TestDeletingBackingSecretBlocksUserAccess() {
 	_, err = pu.client.AsPublicAPIUser(testUser, testPassword)
 	require.NoError(pu.T(), err, "user %s should be able to login before secret deletion", testUser.Username)
 
-	log.Infof("As admin, deleting backing secret for %s", testUser.Name)
-	err = pu.client.WranglerContext.Core.Secret().Delete(userapi.UserPasswordSecretNamespace, testUser.Name, &metav1.DeleteOptions{})
-	require.NoError(pu.T(), err, "failed to delete backing secret for user %s", testUser.Name)
+	log.Infof("As admin, deleting backing secret for %s", testUser.Username)
+	err = pu.client.WranglerContext.Core.Secret().Delete(extuserapi.UserPasswordSecretNamespace, testUser.Username, &metav1.DeleteOptions{})
+	require.NoError(pu.T(), err, "failed to delete backing secret for user %s", testUser.Username)
 
-	log.Infof("Verifying that %s can no longer login", testUser.Name)
+	log.Infof("Verifying that %s can no longer login", testUser.Username)
 	_, err = pu.client.AsPublicAPIUser(testUser, testPassword)
 	require.Error(pu.T(), err, "expected login to fail after backing secret deletion")
 	require.Contains(pu.T(), err.Error(), "401", "expected 401 Unauthorized error, got: %v", err)
 
-	log.Infof("Recreating password secret for %s", testUser.Name)
-	secret, newTestPassword, err := userapi.CreateUserPassword(pu.client, testUser.Username, 15)
-	require.NoError(pu.T(), err, "failed to recreate password secret for user %s", testUser.Name)
+	log.Infof("Recreating password secret for %s", testUser.Username)
+	secret, newTestPassword, err := extuserapi.CreateUserPassword(pu.client, testUser.Username, 15)
+	require.NoError(pu.T(), err, "failed to recreate password secret for user %s", testUser.Username)
 
-	hash, ok := secret.Annotations[userapi.PasswordHashAnnotation]
+	hash, ok := secret.Annotations[extuserapi.PasswordHashAnnotation]
 	require.True(pu.T(), ok, "password-hash annotation not found")
-	require.Equal(pu.T(), userapi.PasswordHash, hash, "password-hash value mismatch")
+	require.Equal(pu.T(), extuserapi.PasswordHash, hash, "password-hash value mismatch")
 	require.Len(pu.T(), secret.OwnerReferences, 1, "secret should have one ownerReference")
 	require.Equal(pu.T(), testUser.Username, secret.OwnerReferences[0].Name, "ownerReference does not match user")
 
-	log.Infof("Verifying that %s can login after secret recreation", testUser.Name)
+	log.Infof("Verifying that %s can login after secret recreation", testUser.Username)
 	_, err = pu.client.AsPublicAPIUser(testUser, newTestPassword)
 	require.NoError(pu.T(), err, "user %s should be able to login after secret recreation", testUser.Username)
 }
@@ -580,32 +583,32 @@ func (pu *PapiUsersTestSuite) TestDeactivateAndReactivateUserAsAdmin() {
 	_, err = pu.client.AsPublicAPIUser(testUser, testPassword)
 	require.NoError(pu.T(), err, "user %s should be able to login before deactivation", testUser.Username)
 
-	log.Infof("As admin, deactivating user %s", testUser.Name)
+	log.Infof("As admin, deactivating user %s", testUser.Username)
 	patch := []byte(`{"enabled":false}`)
-	_, err = pu.client.WranglerContext.Mgmt.User().Patch(testUser.Name, types.MergePatchType, patch)
-	require.NoError(pu.T(), err, "failed to deactivate user %s", testUser.Name)
+	_, err = pu.client.WranglerContext.Mgmt.User().Patch(testUser.Username, types.MergePatchType, patch)
+	require.NoError(pu.T(), err, "failed to deactivate user %s", testUser.Username)
 
-	log.Infof("Verifying that %s is deactivated", testUser.Name)
-	updatedUser, err := userapi.GetUserByName(pu.client, testUser.Name)
-	require.NoError(pu.T(), err, "failed to get user %s after deactivation", testUser.Name)
+	log.Infof("Verifying that %s is deactivated", testUser.Username)
+	updatedUser, err := extuserapi.GetUserByName(pu.client, testUser.Username)
+	require.NoError(pu.T(), err, "failed to get user %s after deactivation", testUser.Username)
 	require.False(pu.T(), *updatedUser.Enabled, "expected enabled=false, got true")
 
-	log.Infof("Verifying that %s can no longer login", testUser.Name)
+	log.Infof("Verifying that %s can no longer login", testUser.Username)
 	_, err = pu.client.AsPublicAPIUser(testUser, testPassword)
 	require.Error(pu.T(), err, "expected login to fail after deactivation")
 	require.Contains(pu.T(), err.Error(), "403 Forbidden", "expected 403 Forbidden error, got: %v", err)
 
-	log.Infof("As admin, reactivating user %s", testUser.Name)
+	log.Infof("As admin, reactivating user %s", testUser.Username)
 	reactivatePatch := []byte(`{"enabled":true}`)
-	_, err = pu.client.WranglerContext.Mgmt.User().Patch(testUser.Name, types.MergePatchType, reactivatePatch)
-	require.NoError(pu.T(), err, "failed to reactivate user %s", testUser.Name)
+	_, err = pu.client.WranglerContext.Mgmt.User().Patch(testUser.Username, types.MergePatchType, reactivatePatch)
+	require.NoError(pu.T(), err, "failed to reactivate user %s", testUser.Username)
 
-	reactivatedUser, err := userapi.GetUserByName(pu.client, testUser.Name)
-	require.NoError(pu.T(), err, "failed to get user %s after reactivation", testUser.Name)
-	log.Infof("User %s enabled=%v after reactivation", testUser.Name, *reactivatedUser.Enabled)
+	reactivatedUser, err := extuserapi.GetUserByName(pu.client, testUser.Username)
+	require.NoError(pu.T(), err, "failed to get user %s after reactivation", testUser.Username)
+	log.Infof("User %s enabled=%v after reactivation", testUser.Username, *reactivatedUser.Enabled)
 	require.True(pu.T(), *reactivatedUser.Enabled, "expected enabled=true, got false")
 
-	log.Infof("Verifying that %s can login after reactivation", testUser.Name)
+	log.Infof("Verifying that %s can login after reactivation", testUser.Username)
 	_, err = pu.client.AsPublicAPIUser(testUser, testPassword)
 	require.NoError(pu.T(), err, "user %s should be able to login after reactivation", testUser.Username)
 }
@@ -635,7 +638,7 @@ func (pu *PapiUsersTestSuite) TestManageUsersCannotDeactivateSelf() {
 	mUserClient, err := pu.client.AsPublicAPIUser(mUser, mUserPassword)
 	require.NoError(pu.T(), err, "failed to login as %s", mUser.Username)
 	deactivatePatch := []byte(`{"enabled":false}`)
-	_, err = mUserClient.WranglerContext.Mgmt.User().Patch(mUser.Name, types.MergePatchType, deactivatePatch)
+	_, err = mUserClient.WranglerContext.Mgmt.User().Patch(mUser.Username, types.MergePatchType, deactivatePatch)
 	require.Error(pu.T(), err, "expected error when %s attempts to deactivate itself", mUser.Username)
 	require.Contains(pu.T(), err.Error(), "can't deactivate yourself", "unexpected error: %v", err)
 }
@@ -652,32 +655,32 @@ func (pu *PapiUsersTestSuite) TestDeactivateAndReactivateUserAsManageUsers() {
 	targetUser, targetPassword, err := userapi.CreateUserWithRoles(pu.client, rbac.StandardUser.String())
 	require.NoError(pu.T(), err, "failed to create target user")
 
-	log.Infof("As %s, deactivating user %s", mUser.Username, targetUser.Name)
+	log.Infof("As %s, deactivating user %s", mUser.Username, targetUser.Username)
 	mUserClient, err := pu.client.AsPublicAPIUser(mUser, mUserPassword)
 	require.NoError(pu.T(), err, "failed to login as %s", mUser.Username)
 	deactivatePatch := []byte(`{"enabled":false}`)
-	_, err = mUserClient.WranglerContext.Mgmt.User().Patch(targetUser.Name, types.MergePatchType, deactivatePatch)
-	require.NoError(pu.T(), err, "%s failed to deactivate user %s", mUser.Username, targetUser.Name)
+	_, err = mUserClient.WranglerContext.Mgmt.User().Patch(targetUser.Username, types.MergePatchType, deactivatePatch)
+	require.NoError(pu.T(), err, "%s failed to deactivate user %s", mUser.Username, targetUser.Username)
 
-	updatedUser, err := userapi.GetUserByName(mUserClient, targetUser.Name)
-	require.NoError(pu.T(), err, "failed to get user %s after deactivation", targetUser.Name)
+	updatedUser, err := extuserapi.GetUserByName(mUserClient, targetUser.Username)
+	require.NoError(pu.T(), err, "failed to get user %s after deactivation", targetUser.Username)
 	require.False(pu.T(), *updatedUser.Enabled, "expected enabled=false, got true")
 
-	log.Infof("Verifying that %s can no longer login", targetUser.Name)
+	log.Infof("Verifying that %s can no longer login", targetUser.Username)
 	_, err = pu.client.AsPublicAPIUser(targetUser, targetPassword)
 	require.Error(pu.T(), err, "expected login to fail after deactivation")
 	require.Contains(pu.T(), err.Error(), "403 Forbidden", "expected 403 Forbidden error, got: %v", err)
 
-	log.Infof("As %s, reactivating user %s", mUser.Username, targetUser.Name)
+	log.Infof("As %s, reactivating user %s", mUser.Username, targetUser.Username)
 	reactivatePatch := []byte(`{"enabled":true}`)
-	_, err = mUserClient.WranglerContext.Mgmt.User().Patch(targetUser.Name, types.MergePatchType, reactivatePatch)
-	require.NoError(pu.T(), err, "%s failed to reactivate user %s", mUser.Username, targetUser.Name)
+	_, err = mUserClient.WranglerContext.Mgmt.User().Patch(targetUser.Username, types.MergePatchType, reactivatePatch)
+	require.NoError(pu.T(), err, "%s failed to reactivate user %s", mUser.Username, targetUser.Username)
 
-	reactivatedUser, err := userapi.GetUserByName(mUserClient, targetUser.Name)
-	require.NoError(pu.T(), err, "failed to get user %s after reactivation", targetUser.Name)
+	reactivatedUser, err := extuserapi.GetUserByName(mUserClient, targetUser.Username)
+	require.NoError(pu.T(), err, "failed to get user %s after reactivation", targetUser.Username)
 	require.True(pu.T(), *reactivatedUser.Enabled, "expected enabled=true, got false")
 
-	log.Infof("Verifying that %s can login after reactivation", targetUser.Name)
+	log.Infof("Verifying that %s can login after reactivation", targetUser.Username)
 	_, err = pu.client.AsPublicAPIUser(targetUser, targetPassword)
 	require.NoError(pu.T(), err, "user %s should be able to login after reactivation", targetUser.Username)
 }
@@ -696,7 +699,7 @@ func (pu *PapiUsersTestSuite) TestStandardUserCannotDeactivateOtherUser() {
 	user1Client, err := pu.client.AsPublicAPIUser(user1, user1Password)
 	require.NoError(pu.T(), err, "failed to login as %s", user1.Username)
 	deactivatePatch := []byte(`{"enabled":false}`)
-	_, err = user1Client.WranglerContext.Mgmt.User().Patch(user2.Name, types.MergePatchType, deactivatePatch)
+	_, err = user1Client.WranglerContext.Mgmt.User().Patch(user2.Username, types.MergePatchType, deactivatePatch)
 	require.Error(pu.T(), err, "expected deactivation attempt by %s to fail", user1.Username)
 	require.Contains(pu.T(), err.Error(), "forbidden", "expected forbidden error, got: %v", err)
 
@@ -718,7 +721,7 @@ func (pu *PapiUsersTestSuite) TestAdminChangeUserPassword() {
 	require.NoError(pu.T(), err, "user %s should be able to login with initial password", testUser1.Username)
 
 	log.Infof("As admin, changing password for user %s", testUser1.Username)
-	newPassword, err := userapi.PasswordChangeRequest(pu.client, testUser1.Username, initialPassword, 15)
+	newPassword, err := extuserapi.ChangePasswordForUser(pu.client, testUser1.Username, initialPassword, 15)
 	require.NoError(pu.T(), err, "failed to change password for user %s", testUser1.Username)
 
 	log.Infof("Verifying that %s cannot login with the initial password", testUser1.Username)
@@ -744,7 +747,7 @@ func (pu *PapiUsersTestSuite) TestAdminChangeUserPasswordWithoutCurrentPassword(
 	require.NoError(pu.T(), err, "user %s should be able to login with initial password", testUser1.Username)
 
 	log.Infof("As admin, changing password for user %s", testUser1.Username)
-	newPassword, err := userapi.PasswordChangeRequest(pu.client, testUser1.Username, "", 15)
+	newPassword, err := extuserapi.ChangePasswordForUser(pu.client, testUser1.Username, "", 15)
 	require.NoError(pu.T(), err, "failed to change password for user %s", testUser1.Username)
 
 	log.Infof("Verifying that %s cannot login with the initial password", testUser1.Username)
@@ -771,7 +774,7 @@ func (pu *PapiUsersTestSuite) TestChangeUserPasswordWithInvalidUserID() {
 
 	log.Infof("As admin, changing password for user %s", testUser1.Username)
 	dummyUsername := namegen.AppendRandomString("dummyuser")
-	_, err = userapi.PasswordChangeRequest(pu.client, dummyUsername, initialPassword, 15)
+	_, err = extuserapi.ChangePasswordForUser(pu.client, dummyUsername, initialPassword, 15)
 	require.Error(pu.T(), err, "expected error when changing password for non-existent user")
 	require.Contains(pu.T(), err.Error(), "not found", "expected not found error, got: %v", err)
 }
@@ -785,9 +788,9 @@ func (pu *PapiUsersTestSuite) TestCreatePasswordWithShortPassword() {
 	require.NoError(pu.T(), err, "failed to create user")
 
 	log.Infof("As admin, creating a password for user %s with shorter length", testUser1.Username)
-	passwordLength, err := settings.GetGlobalSettingDefaultValue(pu.client, settings.UserPasswordMinLength)
+	passwordLength, err := extsettingsapi.GetGlobalSettingDefaultValue(pu.client, extsettingsapi.UserPasswordMinLength)
 	require.NoError(pu.T(), err, "failed to get password minimum length")
-	_, _, err = userapi.CreateUserPassword(pu.client, testUser1.Username, 5)
+	_, _, err = extuserapi.CreateUserPassword(pu.client, testUser1.Username, 5)
 	require.Error(pu.T(), err, "expected error when creating password with shorter length")
 	require.Contains(pu.T(), err.Error(), fmt.Sprintf("password must be at least %s characters", passwordLength), "unexpected error: %v", err)
 }
@@ -801,13 +804,13 @@ func (pu *PapiUsersTestSuite) TestChangePasswordWithShortPassword() {
 	require.NoError(pu.T(), err, "failed to create user")
 
 	log.Infof("As admin, changing password for user %s with shorter length", testUser1.Username)
-	passwordLength, err := settings.GetGlobalSettingDefaultValue(pu.client, settings.UserPasswordMinLength)
+	passwordLength, err := extsettingsapi.GetGlobalSettingDefaultValue(pu.client, extsettingsapi.UserPasswordMinLength)
 	require.NoError(pu.T(), err, "failed to get password minimum length")
-	_, err = userapi.PasswordChangeRequest(pu.client, testUser1.Username, initialPassword, 5)
+	_, err = extuserapi.ChangePasswordForUser(pu.client, testUser1.Username, initialPassword, 5)
 	require.Error(pu.T(), err, "expected error when creating password with shorter length")
 	require.Contains(pu.T(), err.Error(), fmt.Sprintf("password must be at least %s characters", passwordLength), "unexpected error: %v", err)
 	log.Infof("As admin, updating password for user %s with empty newPassword", testUser1.Username)
-	_, err = userapi.PasswordChangeRequest(pu.client, testUser1.Username, initialPassword, 0)
+	_, err = extuserapi.ChangePasswordForUser(pu.client, testUser1.Username, initialPassword, 0)
 	require.Error(pu.T(), err, "expected error when newPassword is empty")
 	require.Contains(pu.T(), err.Error(), fmt.Sprintf("password must be at least %s characters", passwordLength), "unexpected error: %v", err)
 }
@@ -831,7 +834,7 @@ func (pu *PapiUsersTestSuite) TestPasswordCannotBeSameAsUsernameOnCreate() {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      username,
-			Namespace: userapi.UserPasswordSecretNamespace,
+			Namespace: extuserapi.UserPasswordSecretNamespace,
 		},
 		Type: corev1.SecretTypeOpaque,
 		StringData: map[string]string{
@@ -899,7 +902,7 @@ func (pu *PapiUsersTestSuite) TestDeprecatedPasswordFieldIgnored() {
 
 	log.Infof("As admin, attempting to update user resource with the deprecated 'password' field")
 	testUser2.Password = deprecatedPassword
-	_, err = pu.client.WranglerContext.Mgmt.User().Update(testUser2)
+	_, err = extuserapi.UpdateUser(pu.client, testUser2)
 	require.NoError(pu.T(), err)
 
 	log.Infof("Verifying that the deprecated 'password' field is not honored for user %s", testUser2.Username)
@@ -920,7 +923,7 @@ func (pu *PapiUsersTestSuite) TestSelfUserAsAdmin() {
 	adminUser, err := userapi.GetUserByUsername(pu.client, rbac.Admin.String())
 	require.NoError(pu.T(), err, "failed to fetch admin user")
 
-	selfUserID, err := userapi.CreateSelfUserRequest(pu.client)
+	selfUserID, err := extuserapi.CreateSelfUserRequest(pu.client)
 	require.NoError(pu.T(), err, "failed to create self user request as admin")
 
 	require.Equal(pu.T(), adminUser.Name, selfUserID, "self user ID does not match admin user ID")
@@ -938,9 +941,9 @@ func (pu *PapiUsersTestSuite) TestSelfUserAsStandardUser() {
 	stdUserClient, err := pu.client.AsPublicAPIUser(stdUser, stdUserPassword)
 	require.NoError(pu.T(), err, "failed to login as %s", stdUser.Username)
 
-	selfUserID, err := userapi.CreateSelfUserRequest(stdUserClient)
+	selfUserID, err := extuserapi.CreateSelfUserRequest(stdUserClient)
 	require.NoError(pu.T(), err, "failed to create self user request as admin")
-	require.Equal(pu.T(), stdUser.Name, selfUserID, "self user ID does not match standard user ID")
+	require.Equal(pu.T(), stdUser.Username, selfUserID, "self user ID does not match standard user ID")
 }
 
 func (pu *PapiUsersTestSuite) TestGroupMembershipRefreshSingleUser() {
@@ -959,9 +962,9 @@ func (pu *PapiUsersTestSuite) TestGroupMembershipRefreshSingleUser() {
 	require.NoError(pu.T(), err)
 
 	log.Infof("Fetching current LastRefresh timestamps for all users")
-	testUser1AttrsBefore, err := pu.client.WranglerContext.Mgmt.UserAttribute().Get(testUser1.Name, metav1.GetOptions{})
+	testUser1AttrsBefore, err := pu.client.WranglerContext.Mgmt.UserAttribute().Get(testUser1.Username, metav1.GetOptions{})
 	require.NoError(pu.T(), err)
-	testUser2AttrsBefore, err := pu.client.WranglerContext.Mgmt.UserAttribute().Get(testUser2.Name, metav1.GetOptions{})
+	testUser2AttrsBefore, err := pu.client.WranglerContext.Mgmt.UserAttribute().Get(testUser2.Username, metav1.GetOptions{})
 	require.NoError(pu.T(), err)
 
 	beforeTime1, err := time.Parse(time.RFC3339, testUser1AttrsBefore.LastRefresh)
@@ -969,19 +972,19 @@ func (pu *PapiUsersTestSuite) TestGroupMembershipRefreshSingleUser() {
 	beforeTime2, err := time.Parse(time.RFC3339, testUser2AttrsBefore.LastRefresh)
 	require.NoError(pu.T(), err)
 
-	log.Infof("Triggering group membership refresh for a single user: %s", testUser1.Name)
-	err = userapi.CreateGroupMembershipRefreshRequest(pu.client, testUser1.Name)
-	require.NoError(pu.T(), err, "failed to trigger group membership refresh for user %s", testUser1.Name)
+	log.Infof("Triggering group membership refresh for a single user: %s", testUser1.Username)
+	err = extuserapi.CreateGroupMembershipRefreshRequest(pu.client, testUser1.Username)
+	require.NoError(pu.T(), err, "failed to trigger group membership refresh for user %s", testUser1.Username)
 
 	log.Infof("Fetching LastRefresh timestamps after refresh")
-	afterTime1, err := userapi.WaitForUserLastRefreshUpdate(pu.client, testUser1.Name, beforeTime1)
-	require.NoError(pu.T(), err, "LastRefresh for %s did not update after refresh request", testUser1.Name)
-	testUser2AttrsAfter, _ := pu.client.WranglerContext.Mgmt.UserAttribute().Get(testUser2.Name, metav1.GetOptions{})
+	afterTime1, err := userapi.WaitForUserLastRefreshUpdate(pu.client, testUser1.Username, beforeTime1)
+	require.NoError(pu.T(), err, "LastRefresh for %s did not update after refresh request", testUser1.Username)
+	testUser2AttrsAfter, _ := pu.client.WranglerContext.Mgmt.UserAttribute().Get(testUser2.Username, metav1.GetOptions{})
 	afterTime2, _ := time.Parse(time.RFC3339, testUser2AttrsAfter.LastRefresh)
 
-	log.Infof("%s LastRefresh before: %s, after: %s", testUser1.Name, beforeTime1, afterTime1)
-	require.True(pu.T(), afterTime1.After(beforeTime1), "expected LastRefresh for %s to be updated", testUser1.Name)
-	require.Equal(pu.T(), beforeTime2, afterTime2, "expected LastRefresh for %s to be unchanged", testUser2.Name)
+	log.Infof("%s LastRefresh before: %s, after: %s", testUser1.Username, beforeTime1, afterTime1)
+	require.True(pu.T(), afterTime1.After(beforeTime1), "expected LastRefresh for %s to be updated", testUser1.Username)
+	require.Equal(pu.T(), beforeTime2, afterTime2, "expected LastRefresh for %s to be unchanged", testUser2.Username)
 }
 
 func (pu *PapiUsersTestSuite) TestGroupMembershipRefreshAllUsers() {
@@ -1000,9 +1003,9 @@ func (pu *PapiUsersTestSuite) TestGroupMembershipRefreshAllUsers() {
 	require.NoError(pu.T(), err)
 
 	log.Infof("Fetching current LastRefresh timestamps for all users")
-	testUser1AttrsBefore, err := pu.client.WranglerContext.Mgmt.UserAttribute().Get(testUser1.Name, metav1.GetOptions{})
+	testUser1AttrsBefore, err := pu.client.WranglerContext.Mgmt.UserAttribute().Get(testUser1.Username, metav1.GetOptions{})
 	require.NoError(pu.T(), err)
-	testUser2AttrsBefore, err := pu.client.WranglerContext.Mgmt.UserAttribute().Get(testUser2.Name, metav1.GetOptions{})
+	testUser2AttrsBefore, err := pu.client.WranglerContext.Mgmt.UserAttribute().Get(testUser2.Username, metav1.GetOptions{})
 	require.NoError(pu.T(), err)
 
 	beforeTime1, err := time.Parse(time.RFC3339, testUser1AttrsBefore.LastRefresh)
@@ -1011,19 +1014,19 @@ func (pu *PapiUsersTestSuite) TestGroupMembershipRefreshAllUsers() {
 	require.NoError(pu.T(), err)
 
 	log.Infof("Triggering group membership refresh for all users")
-	err = userapi.CreateGroupMembershipRefreshRequest(pu.client, "*")
+	err = extuserapi.CreateGroupMembershipRefreshRequest(pu.client, "*")
 	require.NoError(pu.T(), err, "failed to trigger group membership refresh for all users")
 
 	log.Infof("Fetching LastRefresh timestamps after refresh")
-	afterTime1, err := userapi.WaitForUserLastRefreshUpdate(pu.client, testUser1.Name, beforeTime1)
-	require.NoError(pu.T(), err, "LastRefresh for %s did not update after refresh request", testUser1.Name)
-	afterTime2, err := userapi.WaitForUserLastRefreshUpdate(pu.client, testUser2.Name, beforeTime2)
-	require.NoError(pu.T(), err, "LastRefresh for %s did not update after refresh request", testUser2.Name)
+	afterTime1, err := userapi.WaitForUserLastRefreshUpdate(pu.client, testUser1.Username, beforeTime1)
+	require.NoError(pu.T(), err, "LastRefresh for %s did not update after refresh request", testUser1.Username)
+	afterTime2, err := userapi.WaitForUserLastRefreshUpdate(pu.client, testUser2.Username, beforeTime2)
+	require.NoError(pu.T(), err, "LastRefresh for %s did not update after refresh request", testUser2.Username)
 
-	log.Infof("%s LastRefresh before: %s, after: %s", testUser1.Name, beforeTime1, afterTime1)
-	require.True(pu.T(), afterTime1.After(beforeTime1), "expected LastRefresh for %s to be updated", testUser1.Name)
-	log.Infof("%s LastRefresh before: %s, after: %s", testUser2.Name, beforeTime2, afterTime2)
-	require.True(pu.T(), afterTime2.After(beforeTime2), "expected LastRefresh for %s to be updated", testUser2.Name)
+	log.Infof("%s LastRefresh before: %s, after: %s", testUser1.Username, beforeTime1, afterTime1)
+	require.True(pu.T(), afterTime1.After(beforeTime1), "expected LastRefresh for %s to be updated", testUser1.Username)
+	log.Infof("%s LastRefresh before: %s, after: %s", testUser2.Username, beforeTime2, afterTime2)
+	require.True(pu.T(), afterTime2.After(beforeTime2), "expected LastRefresh for %s to be updated", testUser2.Username)
 }
 
 func TestPapiUsersTestSuite(t *testing.T) {

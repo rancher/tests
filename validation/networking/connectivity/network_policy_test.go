@@ -11,6 +11,7 @@ import (
 	client "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extdaemonsetapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/daemonsets"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -96,7 +97,7 @@ func (n *NetworkPolicyTestSuite) TestPingPodsFromCPNode() {
 			require.NoError(n.T(), err)
 
 			logrus.Infof("Verifying daemonset %s is running", testDaemonset.Name)
-			err = daemonset.VerifyDaemonset(n.client, n.cluster.ID, n.namespace.Name, testDaemonset.Name)
+			err = extdaemonsetapi.WaitForDaemonSetReady(n.client, n.cluster.ID, n.namespace.Name, testDaemonset.Name)
 			require.NoError(n.T(), err)
 
 			logrus.Infof("Verifying network policy by pinging pods from control plane node")

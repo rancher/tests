@@ -4,11 +4,12 @@ import (
 	"fmt"
 
 	"github.com/rancher/shepherd/clients/rancher"
+	extprojectapi "github.com/rancher/shepherd/extensions/kubeapi/projects"
 )
 
 // VerifyUsedProjectExtendedResourceQuota checks used project-level extended resource quotas.
 func VerifyUsedProjectExtendedResourceQuota(client *rancher.Client, clusterID, projectName string, expectedUsed map[string]string) error {
-	project, err := GetProjectByName(client, clusterID, projectName)
+	project, err := extprojectapi.GetProjectByName(client, clusterID, projectName)
 	if err != nil {
 		return err
 	}
@@ -31,7 +32,7 @@ func VerifyUsedProjectExtendedResourceQuota(client *rancher.Client, clusterID, p
 
 // VerifyUsedProjectExistingResourceQuota checks used project-level resource quotas defined via existing fields, e.g. pods, limitsCpu, limitsMemory.
 func VerifyUsedProjectExistingResourceQuota(client *rancher.Client, clusterID, projectName string, expectedUsed map[string]string) error {
-	project, err := GetProjectByName(client, clusterID, projectName)
+	project, err := extprojectapi.GetProjectByName(client, clusterID, projectName)
 	if err != nil {
 		return err
 	}
@@ -66,7 +67,7 @@ func VerifyUsedProjectExistingResourceQuota(client *rancher.Client, clusterID, p
 
 // VerifyProjectHasNoExtendedResourceQuota checks that the project has no extended resource quotas set.
 func VerifyProjectHasNoExtendedResourceQuota(client *rancher.Client, clusterID, projectName string) error {
-	project, err := GetProjectByName(client, clusterID, projectName)
+	project, err := extprojectapi.GetProjectByName(client, clusterID, projectName)
 	if err != nil {
 		return err
 	}

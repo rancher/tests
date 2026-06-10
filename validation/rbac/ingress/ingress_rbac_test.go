@@ -12,10 +12,10 @@ import (
 	extingressapi "github.com/rancher/shepherd/extensions/kubeapi/ingresses"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	ingress "github.com/rancher/tests/actions/kubeapi/ingresses"
+	ingressapi "github.com/rancher/tests/actions/kubeapi/ingresses"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -79,10 +79,10 @@ func (i *IngressRBACTestSuite) TestCreateIngress() {
 			assert.NoError(i.T(), err)
 
 			log.Info("As a admin, create a deployment")
-			deploymentForIngress, err := deployment.CreateDeployment(i.client, i.cluster.ID, namespace.Name, 1, "", "", false, false, false, true)
+			deploymentForIngress, err := deploymentapi.CreateDeployment(i.client, i.cluster.ID, namespace.Name, "", 1, "", "", false, false, false, true)
 			assert.NoError(i.T(), err)
 
-			ingressTemplate, err := ingress.CreateServiceAndIngressTemplateForDeployment(i.client, i.cluster.ID, namespace.Name, deploymentForIngress)
+			ingressTemplate, err := ingressapi.CreateServiceAndIngressTemplateForDeployment(i.client, i.cluster.ID, namespace.Name, deploymentForIngress)
 			assert.NoError(i.T(), err)
 
 			log.Infof("As a %v, create a ingress", tt.role.String())
@@ -128,10 +128,10 @@ func (i *IngressRBACTestSuite) TestListIngress() {
 			assert.NoError(i.T(), err)
 
 			log.Info("As a admin, create a deployment")
-			deploymentForIngress, err := deployment.CreateDeployment(i.client, i.cluster.ID, namespace.Name, 1, "", "", false, false, false, true)
+			deploymentForIngress, err := deploymentapi.CreateDeployment(i.client, i.cluster.ID, namespace.Name, "", 1, "", "", false, false, false, true)
 			assert.NoError(i.T(), err)
 
-			ingressTemplateForDeployment, err := ingress.CreateServiceAndIngressTemplateForDeployment(i.client, i.cluster.ID, namespace.Name, deploymentForIngress)
+			ingressTemplateForDeployment, err := ingressapi.CreateServiceAndIngressTemplateForDeployment(i.client, i.cluster.ID, namespace.Name, deploymentForIngress)
 			assert.NoError(i.T(), err)
 
 			log.Info("As a admin, create a ingress")
@@ -181,10 +181,10 @@ func (i *IngressRBACTestSuite) TestUpdateIngress() {
 			assert.NoError(i.T(), err)
 
 			log.Info("As a admin, create a deployment")
-			deploymentForIngress, err := deployment.CreateDeployment(i.client, i.cluster.ID, namespace.Name, 1, "", "", false, false, false, true)
+			deploymentForIngress, err := deploymentapi.CreateDeployment(i.client, i.cluster.ID, namespace.Name, "", 1, "", "", false, false, false, true)
 			assert.NoError(i.T(), err)
 
-			ingressTemplateForDeployment, err := ingress.CreateServiceAndIngressTemplateForDeployment(i.client, i.cluster.ID, namespace.Name, deploymentForIngress)
+			ingressTemplateForDeployment, err := ingressapi.CreateServiceAndIngressTemplateForDeployment(i.client, i.cluster.ID, namespace.Name, deploymentForIngress)
 			assert.NoError(i.T(), err)
 
 			log.Info("As a admin, create a ingress")
@@ -198,7 +198,6 @@ func (i *IngressRBACTestSuite) TestUpdateIngress() {
 			updatedIngress.Spec.Rules[0].Host = fmt.Sprintf("%s.updated.com", namegen.AppendRandomString("test"))
 
 			_, err = extingressapi.UpdateIngress(standardUserClient, i.cluster.ID, namespace.Name, createdIngress, updatedIngress)
-
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(i.T(), err, "failed to update ingress")
@@ -239,10 +238,10 @@ func (i *IngressRBACTestSuite) TestDeleteIngress() {
 			assert.NoError(i.T(), err)
 
 			log.Info("As a admin, create a deployment")
-			deploymentForIngress, err := deployment.CreateDeployment(i.client, i.cluster.ID, namespace.Name, 1, "", "", false, false, false, true)
+			deploymentForIngress, err := deploymentapi.CreateDeployment(i.client, i.cluster.ID, namespace.Name, "", 1, "", "", false, false, false, true)
 			assert.NoError(i.T(), err)
 
-			ingressTemplateForDeployment, err := ingress.CreateServiceAndIngressTemplateForDeployment(i.client, i.cluster.ID, namespace.Name, deploymentForIngress)
+			ingressTemplateForDeployment, err := ingressapi.CreateServiceAndIngressTemplateForDeployment(i.client, i.cluster.ID, namespace.Name, deploymentForIngress)
 			assert.NoError(i.T(), err)
 
 			log.Info("As a admin, create a ingress")

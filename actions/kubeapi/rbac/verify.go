@@ -9,7 +9,6 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
@@ -22,7 +21,7 @@ import (
 
 // VerifyClusterRoleTemplateBindingForUser is a helper function to verify the number of cluster role template bindings for a user
 func VerifyClusterRoleTemplateBindingForUser(client *rancher.Client, username string, expectedCount int) ([]v3.ClusterRoleTemplateBinding, error) {
-	crtbList, err := ListClusterRoleTemplateBindings(client, metav1.ListOptions{})
+	crtbList, err := client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().List("", metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list ClusterRoleTemplateBindings: %w", err)
 	}
@@ -46,7 +45,7 @@ func VerifyClusterRoleTemplateBindingForUser(client *rancher.Client, username st
 
 // VerifyProjectRoleTemplateBindingForUser is a helper function to verify the number of project role template bindings for a user
 func VerifyProjectRoleTemplateBindingForUser(client *rancher.Client, username string, expectedCount int) ([]v3.ProjectRoleTemplateBinding, error) {
-	prtbList, err := ListProjectRoleTemplateBindings(client, metav1.ListOptions{})
+	prtbList, err := client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().List("", metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list ProjectRoleTemplateBindings: %w", err)
 	}
@@ -91,8 +90,8 @@ func VerifyRoleRules(expected, actual map[string][]string) error {
 }
 
 // VerifyUserPermission validates that a user has the expected permissions for a given resource
-func VerifyUserPermission(client *rancher.Client, clusterID string, user *management.User, verb, resourceType, namespaceName, resourceName string, expected, isCRDInLocalCluster bool) error {
-	allowed, err := CheckUserAccess(client, clusterID, user, verb, resourceType, namespaceName, resourceName, isCRDInLocalCluster)
+func VerifyUserPermission(userClient *rancher.Client, clusterID string, verb, resourceType, namespaceName, resourceName string, expected, isCRDInLocalCluster bool) error {
+	allowed, err := CheckUserAccess(userClient, clusterID, verb, resourceType, namespaceName, resourceName, isCRDInLocalCluster)
 
 	if expected {
 		if err != nil {
@@ -117,13 +116,9 @@ func VerifyUserPermission(client *rancher.Client, clusterID string, user *manage
 }
 
 // CheckUserAccess checks if a user has the specified access to a resource in a cluster. It returns true if the user has access, false otherwise.
-func CheckUserAccess(client *rancher.Client, clusterID string, user *management.User, verb, resourceType, namespaceName, resourceName string, isCRDInLocalCluster bool) (bool, error) {
-	userClient, err := client.AsUser(user)
-	if err != nil {
-		return false, fmt.Errorf("failed to create user client: %w", err)
-	}
-
+func CheckUserAccess(userClient *rancher.Client, clusterID string, verb, resourceType, namespaceName, resourceName string, isCRDInLocalCluster bool) (bool, error) {
 	var userContext *wrangler.Context
+	var err error
 	if isCRDInLocalCluster {
 		userContext, err = extclusterapi.GetClusterWranglerContext(userClient, extclusterapi.LocalCluster)
 	} else {
@@ -254,7 +249,7 @@ func CheckSecretAccess(userContext *wrangler.Context, verb, namespaceName, secre
 		err := userContext.Core.Secret().Delete(namespaceName, secretName, &metav1.DeleteOptions{})
 		return err == nil, err
 	default:
-		return false, fmt.Errorf("verb '%s' not available in checks for resource 'namespaces'", verb)
+		return false, fmt.Errorf("verb '%s' not available in checks for resource 'secrets'", verb)
 	}
 }
 
