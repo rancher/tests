@@ -258,10 +258,10 @@ func buildClusterNodesInventory(input clusterNodesInput, schema distroEnvSchema,
 
 	// Determine rke2_node_role per node
 	type hostEntry struct {
-		AnsibleHost           string   `yaml:"ansible_host"`
-		NodeRoles             []string `yaml:"node_roles"`
-		RKE2NodeRole          string   `yaml:"rke2_node_role"`
-		AnsibleSSHPrivateKey  string   `yaml:"ansible_ssh_private_key_file,omitempty"`
+		AnsibleHost          string   `yaml:"ansible_host"`
+		NodeRoles            []string `yaml:"node_roles"`
+		RKE2NodeRole         string   `yaml:"rke2_node_role"`
+		AnsibleSSHPrivateKey string   `yaml:"ansible_ssh_private_key_file,omitempty"`
 	}
 
 	allHosts := make(map[string]hostEntry, len(nodes))

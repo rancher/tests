@@ -99,17 +99,30 @@ func waitUnknownPrometheusTargets(client *rancher.Client) error {
 	checkUnknownPrometheusTargets := func() (bool, error) {
 		bodyString, err := ingresses.GetExternalIngressResponse(client, client.RancherConfig.Host, prometheusTargetsPathAPI, true)
 		if err != nil {
-			return false, err
+			logrus.Warnf("Prometheus targets proxy error, will retry: %v", err)
+			return false, nil
 		}
 
 		var mapResponse map[string]interface{}
 		if err = json.Unmarshal([]byte(bodyString), &mapResponse); err != nil {
-			return false, err
+			logrus.Warnf("Prometheus targets parse error, will retry: %v", err)
+			return false, nil
 		}
 		if mapResponse["status"] != "success" {
 			return false, errors.New("failed to get targets from prometheus")
 		}
-		activeTargets := mapResponse["data"].(map[string]interface{})["activeTargets"].([]interface{})
+		data, ok := mapResponse["data"].(map[string]interface{})
+		if !ok {
+			return false, errors.New("prometheus targets response missing or invalid data field")
+		}
+		activeTargetsIface, ok := data["activeTargets"]
+		if !ok {
+			return false, errors.New("prometheus targets missing activeTargets")
+		}
+		activeTargets, ok := activeTargetsIface.([]interface{})
+		if !ok {
+			return false, errors.New("prometheus activeTargets is not a list")
+		}
 		if len(activeTargets) < 1 {
 			return false, errors.New("failed to find any active targets")
 		}
@@ -149,18 +162,19 @@ func checkPrometheusTargets(client *rancher.Client) (bool, error) {
 		err := waitUnknownPrometheusTargets(client)
 		if err != nil {
 			logrus.Infof("Waiting for unknown prometheus targets to resolve, retrying: %v", err)
-			return false, err
+			return false, nil
 		}
 
 		bodyString, err := ingresses.GetExternalIngressResponse(client, client.RancherConfig.Host, prometheusTargetsPathAPI, true)
 		if err != nil {
-			logrus.Infof("Failed to get prometheus targets response, retrying: %v", err)
-			return false, err
+			logrus.Warnf("Failed to get prometheus targets response, retrying: %v", err)
+			return false, nil
 		}
 
 		var mapResponse map[string]interface{}
 		if err = json.Unmarshal([]byte(bodyString), &mapResponse); err != nil {
-			return false, err
+			logrus.Warnf("Failed to parse prometheus targets response, retrying: %v", err)
+			return false, nil // incomplete response, keep retrying
 		}
 
 		if mapResponse["status"] != "success" {
@@ -168,8 +182,13 @@ func checkPrometheusTargets(client *rancher.Client) (bool, error) {
 			return false, nil
 		}
 
-		activeTargets := mapResponse["data"].(map[string]any)["activeTargets"].([]any)
-		if len(activeTargets) < 1 {
+		data, ok := mapResponse["data"].(map[string]any)
+		if !ok {
+			logrus.Warnf("Prometheus targets response data field missing or wrong type, retrying")
+			return false, nil
+		}
+		activeTargets, ok := data["activeTargets"].([]any)
+		if !ok || len(activeTargets) < 1 {
 			logrus.Infof("No active prometheus targets found, data: [%v]", mapResponse["data"])
 			return false, nil
 		}

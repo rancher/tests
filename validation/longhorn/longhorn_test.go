@@ -4,6 +4,7 @@ package longhorn
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -40,6 +41,11 @@ type LonghornTestSuite struct {
 }
 
 func (l *LonghornTestSuite) TearDownSuite() {
+	l.T().Log("Uninstalling Longhorn chart")
+	err := charts.UninstallLonghornChart(l.client, charts.LonghornNamespace, l.cluster.ID, l.client.RancherConfig.Host)
+	if err != nil {
+		l.T().Logf("Failed to uninstall Longhorn chart: %v", err)
+	}
 	l.session.Cleanup()
 }
 
@@ -65,7 +71,13 @@ func (l *LonghornTestSuite) SetupSuite() {
 
 	l.T().Logf("Creating %s namespace", charts.LonghornNamespace)
 	_, err = namespaceActions.CreateNamespace(client, charts.LonghornNamespace, "{}", map[string]string{}, map[string]string{}, l.project)
-	require.NoError(l.T(), err)
+	if err != nil {
+		if strings.Contains(err.Error(), "409") || strings.Contains(err.Error(), "AlreadyExists") {
+			l.T().Logf("Namespace %s already exists, continuing with existing namespace: %v", charts.LonghornNamespace, err)
+		} else {
+			require.NoError(l.T(), err)
+		}
+	}
 
 	chart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(l.T(), err)

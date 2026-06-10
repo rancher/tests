@@ -16,14 +16,14 @@ func VerifyExtTokenData(client *rancher.Client, exttoken *extapi.Token, expected
 	if userID != expectedUserID {
 		return fmt.Errorf("label mismatch for user ID: got '%s', want '%s'", userID, expectedUserID)
 	}
-	
+
 	if exttoken.Spec.Enabled == nil {
 		return fmt.Errorf("Spec.Enabled should not be nil")
 	}
 	if !*exttoken.Spec.Enabled {
 		return fmt.Errorf("expected token to be enabled, but it was disabled")
 	}
-	if exttoken.Spec.TTL != expectedDefaultTTL{
+	if exttoken.Spec.TTL != expectedDefaultTTL {
 		return fmt.Errorf("TTL mismatch: got %d, want %d", exttoken.Spec.TTL, expectedDefaultTTL)
 	}
 

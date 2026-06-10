@@ -21,9 +21,9 @@ import (
 
 type ExtKubeconfigWatchListTestSuite struct {
 	suite.Suite
-	client             *rancher.Client
-	session            *session.Session
-	cluster            *management.Cluster
+	client  *rancher.Client
+	session *session.Session
+	cluster *management.Cluster
 }
 
 func (w *ExtKubeconfigWatchListTestSuite) TearDownSuite() {
@@ -67,7 +67,7 @@ func (w *ExtKubeconfigWatchListTestSuite) TestWatchListForKubeconfigs() {
 	log.Info("Verifying WatchList completion signal")
 	ctx, cancel := context.WithTimeout(context.Background(), defaults.OneMinuteTimeout)
 	defer cancel()
-	
+
 	err = watchlistapi.WaitForWatchListEnd(ctx, watcher)
 	require.NoError(w.T(), err, "WatchList validation failed")
 }
@@ -75,4 +75,3 @@ func (w *ExtKubeconfigWatchListTestSuite) TestWatchListForKubeconfigs() {
 func TestKubeconfigWatchListTestSuite(w *testing.T) {
 	suite.Run(w, new(ExtKubeconfigWatchListTestSuite))
 }
-
