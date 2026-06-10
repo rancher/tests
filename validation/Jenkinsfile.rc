@@ -129,10 +129,6 @@ node {
                   def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
                   writeFile file: AWS_SSH_KEY_NAME, text: decoded
                 }
-                dir("./validation/.ssh") {
-                  def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
-                  writeFile file: JENKINS_RKE_VALIDATION, text: decodedRsa
-                }
               }
               dir("./tests/validation") {
                 writeFile file: filename, text: config
