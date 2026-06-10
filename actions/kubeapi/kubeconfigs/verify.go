@@ -10,17 +10,176 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
 	log "github.com/sirupsen/logrus"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	clientcmd "k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
-// VerifyKubeconfigTokens validates tokens and ownerReferences based on cluster type.
-func VerifyKubeconfigTokens(client *rancher.Client, kubeconfigObj *extapi.Kubeconfig, clusterType string) error {
+// VerifyKubeconfigV3Tokens validates tokens and ownerReferences for kubeconfigs backed by management.cattle.io/v3 Tokens.
+// The owner references point to the v3 Token object (kind: Token).
+func VerifyKubeconfigV3Tokens(client *rancher.Client, kubeconfigObj *extapi.Kubeconfig, clusterType string) error {
+	return verifyKubeconfigTokens(kubeconfigObj, clusterType, TokenKind)
+}
+
+// VerifyKubeconfigExtTokens validates tokens and ownerReferences for kubeconfigs backed by ext.cattle.io/v1 Tokens.
+// The owner references point to the token's backing Secret (kind: Secret, apiVersion: v1) in the cattle-tokens namespace.
+func VerifyKubeconfigExtTokens(client *rancher.Client, kubeconfigObj *extapi.Kubeconfig, clusterType string) error {
+	return verifyKubeconfigTokens(kubeconfigObj, clusterType, SecretKind)
+}
+
+// VerifyExtKubeconfigBackingResources verifies, for a kubeconfig backed by ext.cattle.io/v1 Tokens, that:
+// - a corresponding Secret exists in the cattle-tokens namespace for each backing ext token
+// - the kubeconfig's backing ConfigMap has an ownerReference per token with kind: Secret, pointing at that secret.
+func VerifyExtKubeconfigBackingResources(client *rancher.Client, kubeconfigName string) error {
+	tokens, err := GetBackingExtTokensForKubeconfig(client, kubeconfigName)
+	if err != nil {
+		return fmt.Errorf("failed to list backing ext tokens for kubeconfig %q: %w", kubeconfigName, err)
+	}
+	if len(tokens.Items) == 0 {
+		return fmt.Errorf("no backing ext tokens found for kubeconfig %q", kubeconfigName)
+	}
+
+	secretNames := map[string]struct{}{}
+	for _, token := range tokens.Items {
+		secret, err := client.WranglerContext.Core.Secret().Get(KubeconfigConfigmapNamespace, token.Name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get backing secret %q in namespace %q for token: %w", token.Name, KubeconfigConfigmapNamespace, err)
+		}
+		secretNames[secret.Name] = struct{}{}
+	}
+
+	configMap, err := client.WranglerContext.Core.ConfigMap().Get(KubeconfigConfigmapNamespace, kubeconfigName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get backing configmap %q in namespace %q: %w", kubeconfigName, KubeconfigConfigmapNamespace, err)
+	}
+
+	secretOwnerRefs := map[string]struct{}{}
+	for _, ownerRef := range configMap.OwnerReferences {
+		if ownerRef.Kind != SecretKind {
+			continue
+		}
+		secretOwnerRefs[ownerRef.Name] = struct{}{}
+	}
+
+	if len(secretOwnerRefs) != len(secretNames) {
+		return fmt.Errorf("configmap %q has %d Secret ownerReferences, want %d",
+			kubeconfigName, len(secretOwnerRefs), len(secretNames))
+	}
+
+	for secretName := range secretNames {
+		if _, ok := secretOwnerRefs[secretName]; !ok {
+			return fmt.Errorf("configmap %q is missing an ownerReference to backing secret %q in namespace %q",
+				kubeconfigName, secretName, KubeconfigConfigmapNamespace)
+		}
+	}
+
+	return nil
+}
+
+// VerifyKubeconfigResourceLabels verifies the labels on the kubeconfig and its backing resources
+func VerifyKubeconfigResourceLabels(client *rancher.Client, kubeconfigObj *extapi.Kubeconfig, expectedUserID string) error {
+	kubeconfigName := kubeconfigObj.Name
+
+	if err := verifyLabels(fmt.Sprintf("kubeconfig %q", kubeconfigName), kubeconfigObj.Labels, map[string]string{
+		UserIDLabel: expectedUserID,
+	}); err != nil {
+		return err
+	}
+
+	tokens, err := GetBackingExtTokensForKubeconfig(client, kubeconfigName)
+	if err != nil {
+		return fmt.Errorf("failed to list backing ext tokens for kubeconfig %q: %w", kubeconfigName, err)
+	}
+	if len(tokens.Items) == 0 {
+		return fmt.Errorf("no backing ext tokens found for kubeconfig %q", kubeconfigName)
+	}
+
+	for _, token := range tokens.Items {
+		if err := verifyLabels(fmt.Sprintf("ext token %q", token.Name), token.Labels, map[string]string{
+			KindLabel:         KindLabelKubeconfigValue,
+			KubeconfigIDLabel: kubeconfigName,
+			UserIDLabel:       expectedUserID,
+		}); err != nil {
+			return err
+		}
+
+		secret, err := client.WranglerContext.Core.Secret().Get(KubeconfigConfigmapNamespace, token.Name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get backing secret %q in namespace %q: %w", token.Name, KubeconfigConfigmapNamespace, err)
+		}
+		if err := verifyLabels(fmt.Sprintf("secret %q", secret.Name), secret.Labels, map[string]string{
+			KindLabel:         KindLabelKubeconfigValue,
+			KubeconfigIDLabel: kubeconfigName,
+			CattleKindLabel:   CattleKindTokenValue,
+			UserIDLabel:       expectedUserID,
+		}); err != nil {
+			return err
+		}
+	}
+
+	configMap, err := client.WranglerContext.Core.ConfigMap().Get(KubeconfigConfigmapNamespace, kubeconfigName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get backing configmap %q in namespace %q: %w", kubeconfigName, KubeconfigConfigmapNamespace, err)
+	}
+	if err := verifyLabels(fmt.Sprintf("configmap %q", configMap.Name), configMap.Labels, map[string]string{
+		CattleKindLabel: KindLabelKubeconfigValue,
+		UserIDLabel:     expectedUserID,
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// verifyLabels checks that the actual labels contain every expected key with the expected value.
+func verifyLabels(resource string, actual map[string]string, expected map[string]string) error {
+	for key, want := range expected {
+		got, ok := actual[key]
+		if !ok {
+			return fmt.Errorf("%s is missing expected label %q", resource, key)
+		}
+		if got != want {
+			return fmt.Errorf("%s label %q mismatch: got %q, want %q", resource, key, got, want)
+		}
+	}
+	return nil
+}
+
+// VerifyKubeconfigExtTokenPrefix verifies that every user token uses the format "ext/<name>:<value>"
+func VerifyKubeconfigExtTokenPrefix(kubeconfigFile string) error {
+	kc, err := clientcmd.LoadFromFile(kubeconfigFile)
+	if err != nil {
+		return fmt.Errorf("failed to load kubeconfig file %s: %w", kubeconfigFile, err)
+	}
+
+	if len(kc.AuthInfos) == 0 {
+		return fmt.Errorf("no users found in kubeconfig %s", kubeconfigFile)
+	}
+
+	for name, authInfo := range kc.AuthInfos {
+		token := authInfo.Token
+		if token == "" {
+			return fmt.Errorf("user %q has an empty token", name)
+		}
+		if !strings.HasPrefix(token, ExtTokenPrefix) {
+			return fmt.Errorf("user %q token does not have the %q prefix: got %q", name, ExtTokenPrefix, token)
+		}
+		tokenName, value, found := strings.Cut(strings.TrimPrefix(token, ExtTokenPrefix), ":")
+		if !found || tokenName == "" || value == "" {
+			return fmt.Errorf("user %q token is not in the expected format ext/<name>:<value>: got %q", name, token)
+		}
+	}
+
+	return nil
+}
+
+func verifyKubeconfigTokens(kubeconfigObj *extapi.Kubeconfig, clusterType string, ownerRefKind string) error {
 	tokenOwnerRefs := map[string]struct{}{}
 	for _, ownerRef := range kubeconfigObj.OwnerReferences {
-		if ownerRef.Kind == TokenKind {
+		if ownerRef.Kind == ownerRefKind {
 			tokenOwnerRefs[ownerRef.Name] = struct{}{}
 		}
 	}
@@ -116,6 +275,21 @@ func VerifyAllContextsUsable(kubeconfigFile string, skipRancherContext bool) err
 
 	for ctxName := range config.Contexts {
 		if err := verifyClusterContextUsable(kubeconfigFile, ctxName, skipRancherContext); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// VerifyAllContextsExpired loads all contexts in the kubeconfig and verifies that each one fails with an Unauthorized error
+func VerifyAllContextsExpired(kubeconfigFile string) error {
+	config, err := clientcmd.LoadFromFile(kubeconfigFile)
+	if err != nil {
+		return fmt.Errorf("failed to load kubeconfig: %w", err)
+	}
+
+	for ctxName := range config.Contexts {
+		if err := verifyClusterContextExpired(kubeconfigFile, ctxName); err != nil {
 			return err
 		}
 	}
@@ -257,14 +431,53 @@ func verifyClusterContextUsable(kubeconfigFile, contextName string, skipRancherC
 		return fmt.Errorf("failed to create kubernetes clientset for context %q: %w", contextName, err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaults.TenSecondTimeout)
-	defer cancel()
-	_, err = clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to verify context %q by listing nodes: %w", contextName, err)
+	pollErr := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		if _, listErr := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{}); listErr != nil {
+			log.Infof("Context %q not usable yet, retrying: %v", contextName, listErr)
+			return false, nil
+		}
+		return true, nil
+	})
+	if pollErr != nil {
+		return fmt.Errorf("failed to verify context %q by listing nodes: %w", contextName, pollErr)
 	}
 
 	log.Infof("Context %q is usable.", contextName)
+	return nil
+}
+
+// verifyClusterContextExpired verifies that listing nodes using the given context fails with an Unauthorized (401) or Forbidden (403) error
+func verifyClusterContextExpired(kubeconfigFile, contextName string) error {
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigFile},
+		&clientcmd.ConfigOverrides{
+			CurrentContext: contextName,
+		}).ClientConfig()
+	if err != nil {
+		return fmt.Errorf("failed to create client config for context %q: %w", contextName, err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to create kubernetes clientset for context %q: %w", contextName, err)
+	}
+
+	pollErr := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TenMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		_, listErr := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		if listErr == nil {
+			return false, nil
+		}
+		if k8serrors.IsUnauthorized(listErr) || k8serrors.IsForbidden(listErr) {
+			log.Infof("Context %q is denied access as expected: %v", contextName, listErr)
+			return true, nil
+		}
+		log.Infof("Context %q returned an unexpected error, retrying: %v", contextName, listErr)
+		return false, nil
+	})
+	if pollErr != nil {
+		return fmt.Errorf("expected context %q to fail with Unauthorized or Forbidden error: %w", contextName, pollErr)
+	}
+
 	return nil
 }
 
