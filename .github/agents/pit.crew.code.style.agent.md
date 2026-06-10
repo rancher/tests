@@ -44,12 +44,11 @@ Workload upgrade test file:
 ## Checklist
 
 ### File and package structure
-* Helper functions specific to a test package must live in a separate file that does **not** end in `_test.go`.
+* Helper functions specific to a test package must live in a separate file in the same package directory that does **not** end in `_test.go` (e.g., `validation/charts/monitoring.go` alongside `validation/charts/monitoring_test.go`).
 * Helper functions that can be generalized across packages belong in the `actions/` directory.
 * Avoid unnecessary or multiple layers of abstraction.
 * Code must not be duplicated.
 
-### Naming conventions
 ### Naming conventions
 * Public functions must use `UpperCamelCase`.
 * Private functions must use `lowerCamelCase`.
@@ -66,7 +65,7 @@ Workload upgrade test file:
 * Automatic cleanup registration (via `session.Cleanup()`) is required.
 
 ### Helper functions
-* Default to returning an `error` instead of accepting a `*testing.T` parameter.
+* Default to returning an `error` instead of accepting a `*testing.T` parameter. Exception: a `*testing.T` parameter is acceptable when the function needs to emit structured test logs via `t.Log` or assertions that must surface in the test output as part of the function's own responsibility (e.g., a reusable validation helper that logs context on failure).
 * Return pointers to objects where possible.
 * All function parameters should use primitive types whenever possible.
 * Avoid adding new parameters to Create calls unless strictly necessary.
