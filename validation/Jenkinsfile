@@ -30,6 +30,9 @@ node {
   if ("${env.REPORTER_BUILD_SCRIPT}" != "null" && "${env.REPORTER_BUILD_SCRIPT}" != "") {
     reporterScript = "${env.REPORTER_BUILD_SCRIPT}"
   }
+  if ("${env.QASE_REPORTER_SCRIPT}" != "null" && "${env.QASE_REPORTER_SCRIPT}" != "") {
+    reporterScript = "${env.QASE_REPORTER_SCRIPT}"
+  }
   wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
     withFolderProperties {
       paramsMap = []
