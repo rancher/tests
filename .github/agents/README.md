@@ -81,6 +81,41 @@ Generates or updates `schemas/pit_schemas.yaml` files for PIT (Platform Interope
 copilot --agent=pit.crew.schema --allow-tool write -p "Create the pit_schemas.yaml for @validation/networking/connectivity/"
 ```
 
+### `pit.crew.code.style` — Code Style Enforcer
+
+**File:** [`pit.crew.code.style.agent.md`](./pit.crew.code.style.agent.md)
+
+Reviews and fixes Go validation test files to comply with the repository's code style, naming conventions, error handling patterns, and linter rules.
+
+**When to use:** Reviewing, creating, or modifying test files to identify style violations and ensure consistency with project standards before opening a PR
+
+**Example prompt:**
+```
+copilot --agent=pit.crew.code.style -p "Review @validation/networking/connectivity/network_policy_test.go for code style issues"
+
+In an issue or PR comment:
+@github-copilot Use the pit.crew.code.style agent to review the changes in this PR
+```
+
+---
+
+### `pit.crew.jenkins` — Jenkinsfile Code Style Enforcer
+
+**File:** [`pit.crew.jenkins.agent.md`](./pit.crew.jenkins.agent.md)
+
+Reviews and fixes Jenkinsfiles to comply with the repository's pipeline standards, including `qa-jenkins-library` shared library usage, declarative pipeline structure, credential handling, and cleanup patterns.
+
+**When to use:** After writing or modifying a Jenkinsfile, run this agent to catch style and structural violations before opening a PR.
+
+**Example prompt:**
+```
+copilot --agent=pit.crew.jenkins -p "Review @validation/Jenkinsfile.e2e for pipeline code style issues"
+
+@github-copilot Use the pit.crew.jenkins agent to review the changes in this PR
+```
+
+---
+
 ## Additional Resources
 
 - [GitHub Copilot CLI documentation](https://docs.github.com/copilot/concepts/agents/about-copilot-cli)
