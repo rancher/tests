@@ -27,18 +27,12 @@ clusterConfig:
   cni: "calico"
   provider: "aws"
   nodeProvider: "ec2"
-  advanced:
-    machineSelectors:
-      - config:
-          data:
-            system-default-registry: "<required>"
   registries:
     rke2Username: ""
     rke2Password: ""
     rke2Registries:
       configs:
         <required>:
-          insecureSkipVerify: true
 
 #Required for all tests
 awsCredentials:

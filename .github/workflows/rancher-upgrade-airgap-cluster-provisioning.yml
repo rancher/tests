@@ -214,6 +214,7 @@ jobs:
               assetsPath: "${{ secrets.ASSETS_PATH }}"
               registryName: "${{ env.HOSTNAME_PREFIX }}"
               upgradedAssetsPath: "${{ secrets.UPGRADED_ASSETS_PATH }}"
+              useAuthGlobalRegistry: false
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
@@ -529,6 +530,7 @@ jobs:
               assetsPath: "${{ secrets.ASSETS_PATH }}"
               registryName: "${{ env.HOSTNAME_PREFIX }}"
               upgradedAssetsPath: "${{ secrets.UPGRADED_ASSETS_PATH }}"
+              useAuthGlobalRegistry: false
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
@@ -846,6 +848,7 @@ jobs:
               assetsPath: "${{ secrets.ASSETS_PATH }}"
               registryName: "${{ env.HOSTNAME_PREFIX }}"
               upgradedAssetsPath: "${{ secrets.UPGRADED_ASSETS_PATH }}"
+              useAuthGlobalRegistry: false
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}

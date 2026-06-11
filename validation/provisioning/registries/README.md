@@ -64,10 +64,10 @@ Global private registries test verifies that a downstream cluster can be provisi
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/registries --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestGlobalRegistry -timeout=1h -v`
 2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/registries --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestGlobalRegistryWindows -timeout=1h -v`
 
-### Non-Auth Registry Test
+### Unauth Registry Test
 
 #### Description: 
-Non-authenticated private registries test verifies that a downstream cluster can be provisioned with a non-authenticated private registry
+Unauthenticated private registries test verifies that a downstream cluster can be provisioned with a unauthenticated private registry
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
@@ -75,11 +75,11 @@ Non-authenticated private registries test verifies that a downstream cluster can
 3. [Custom Cluster Config](#custom-cluster)
 
 #### Table Tests
-1. `Non_Auth_RKE2`
-2. `Non_Auth_K3S`
+1. `Unauth_RKE2`
+2. `Unauth_K3S`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/registries --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestNonAuthenticatedRegistry -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/registries --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestUnauthenticatedRegistry -timeout=1h -v`
 
 
 ## Configurations

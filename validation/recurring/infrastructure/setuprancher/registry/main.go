@@ -35,16 +35,16 @@ func main() {
 	}
 	testSession := session.NewSession()
 
-	client, authRegistry, nonAuthRegistry, globalRegistry, _, _, _ := setupregistry.SetupRegistryRancher(t, testSession, keypath.RegistryKeyPath, cattleConfig)
+	client, authRegistry, unauthRegistry, globalRegistry, _, _, _ := setupregistry.SetupRegistryRancher(t, testSession, keypath.RegistryKeyPath, cattleConfig)
 
 	cattleConfig, err = operations.ReplaceValue([]string{"terraform", "standaloneRegistry", "authRegistryFQDN"}, authRegistry, cattleConfig)
 	if err != nil {
 		logrus.Fatalf("Failed to replace auth registry: %v", err)
 	}
 
-	cattleConfig, err = operations.ReplaceValue([]string{"terraform", "standaloneRegistry", "nonAuthRegistryFQDN"}, nonAuthRegistry, cattleConfig)
+	cattleConfig, err = operations.ReplaceValue([]string{"terraform", "standaloneRegistry", "unauthRegistryFQDN"}, unauthRegistry, cattleConfig)
 	if err != nil {
-		logrus.Fatalf("Failed to replace non-auth registry: %v", err)
+		logrus.Fatalf("Failed to replace unauth registry: %v", err)
 	}
 
 	cattleConfig, err = operations.ReplaceValue([]string{"terraform", "standaloneRegistry", "globalRegistryFQDN"}, globalRegistry, cattleConfig)

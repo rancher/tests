@@ -5,13 +5,16 @@ import (
 	"testing"
 
 	"github.com/gruntwork-io/terratest/modules/terraform"
+	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/config"
 	shepherdConfig "github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
+	"github.com/rancher/tests/actions/provisioninginput"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	tfpConfig "github.com/rancher/tfp-automation/config"
 	"github.com/rancher/tfp-automation/defaults/keypath"
@@ -71,4 +74,22 @@ func registriesSetup(t *testing.T) registriesTest {
 	require.NoError(t, err)
 
 	return r
+}
+
+func initializeRegistryMachineSelectors(t *testing.T, clusterConfig *clusters.ClusterConfig) {
+	if clusterConfig.Advanced == nil {
+		clusterConfig.Advanced = &provisioninginput.Advanced{}
+	}
+
+	if clusterConfig.Advanced.MachineSelectors == nil {
+		clusterConfig.Advanced.MachineSelectors = &[]rkev1.RKESystemConfig{}
+	}
+
+	if len(*clusterConfig.Advanced.MachineSelectors) == 0 {
+		*clusterConfig.Advanced.MachineSelectors = append(*clusterConfig.Advanced.MachineSelectors, rkev1.RKESystemConfig{})
+	}
+
+	if (*clusterConfig.Advanced.MachineSelectors)[0].Config.Data == nil {
+		(*clusterConfig.Advanced.MachineSelectors)[0].Config.Data = map[string]interface{}{}
+	}
 }
