@@ -11,12 +11,13 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
+	extprojectapi "github.com/rancher/shepherd/extensions/kubeapi/projects"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -71,7 +72,7 @@ func (pr *ProjectsTestSuite) TestProjectsCrudLocalCluster() {
 		currentProject.Labels = make(map[string]string)
 	}
 	currentProject.Labels["hello"] = "world"
-	_, err = projectapi.UpdateProject(pr.client, &currentProject)
+	_, err = extprojectapi.UpdateProject(pr.client, &currentProject)
 	require.NoError(pr.T(), err, "Failed to update project.")
 
 	updatedProjectList, err := pr.client.WranglerContext.Mgmt.Project().List(createdProject.Namespace, metav1.ListOptions{
@@ -81,7 +82,7 @@ func (pr *ProjectsTestSuite) TestProjectsCrudLocalCluster() {
 	require.Equal(pr.T(), 1, len(updatedProjectList.Items), "Expected one project in the list")
 
 	log.Info("Delete the project.")
-	err = projectapi.DeleteProject(pr.client, createdProject.Namespace, createdProject.Name, true)
+	err = extprojectapi.DeleteProject(pr.client, createdProject.Namespace, createdProject.Name, true)
 	require.NoError(pr.T(), err, "Failed to delete project")
 }
 
@@ -97,7 +98,7 @@ func (pr *ProjectsTestSuite) TestProjectsCrudDownstreamCluster() {
 	createdProject, err := projectapi.CreateProject(pr.client, pr.cluster.ID)
 	require.NoError(pr.T(), err, "Failed to create project")
 
-	currentProject, err := standardUserClient.WranglerContext.Mgmt.Project().Get(createdProject.Namespace, createdProject.Name, metav1.GetOptions{})
+	currentProject, err := extprojectapi.GetProjectByName(standardUserClient, pr.cluster.ID, createdProject.Name)
 	require.NoError(pr.T(), err, "Failed to get project.")
 
 	log.Info("Verify that the project can be updated by adding a label.")
@@ -105,7 +106,7 @@ func (pr *ProjectsTestSuite) TestProjectsCrudDownstreamCluster() {
 		currentProject.Labels = make(map[string]string)
 	}
 	currentProject.Labels["hello"] = "world"
-	_, err = projectapi.UpdateProject(standardUserClient, currentProject)
+	_, err = extprojectapi.UpdateProject(standardUserClient, currentProject)
 	require.NoError(pr.T(), err, "Failed to update project.")
 
 	updatedProjectList, err := standardUserClient.WranglerContext.Mgmt.Project().List(createdProject.Namespace, metav1.ListOptions{
@@ -115,7 +116,7 @@ func (pr *ProjectsTestSuite) TestProjectsCrudDownstreamCluster() {
 	require.Equal(pr.T(), 1, len(updatedProjectList.Items), "Expected one project in the list")
 
 	log.Info("Delete the project.")
-	err = projectapi.DeleteProject(standardUserClient, createdProject.Namespace, createdProject.Name, true)
+	err = extprojectapi.DeleteProject(standardUserClient, createdProject.Namespace, createdProject.Name, true)
 	require.NoError(pr.T(), err, "Failed to delete project")
 }
 
@@ -131,7 +132,7 @@ func (pr *ProjectsTestSuite) TestDeleteSystemProject() {
 	require.Equal(pr.T(), 1, len(projectList.Items), "Expected one project in the list")
 
 	systemProjectName := projectList.Items[0].ObjectMeta.Name
-	err = projectapi.DeleteProject(pr.client, extclusterapi.LocalCluster, systemProjectName, false)
+	err = extprojectapi.DeleteProject(pr.client, extclusterapi.LocalCluster, systemProjectName, false)
 	require.Error(pr.T(), err, "Failed to delete project")
 	expectedErrorMessage := "admission webhook \"rancher.cattle.io.projects.management.cattle.io\" denied the request: System Project cannot be deleted"
 	require.Equal(pr.T(), expectedErrorMessage, err.Error())
@@ -144,7 +145,7 @@ func (pr *ProjectsTestSuite) TestDeleteSystemProject() {
 	require.Equal(pr.T(), 1, len(projectList.Items), "Expected one project in the list")
 
 	systemProjectName = projectList.Items[0].ObjectMeta.Name
-	err = projectapi.DeleteProject(pr.client, pr.cluster.ID, systemProjectName, false)
+	err = extprojectapi.DeleteProject(pr.client, pr.cluster.ID, systemProjectName, false)
 	require.Error(pr.T(), err, "Failed to delete project")
 	expectedErrorMessage = "admission webhook \"rancher.cattle.io.projects.management.cattle.io\" denied the request: System Project cannot be deleted"
 	require.Equal(pr.T(), expectedErrorMessage, err.Error())
@@ -235,7 +236,7 @@ func (pr *ProjectsTestSuite) TestProjectWithResourceQuotaAndContainerDefaultReso
 	require.NoError(pr.T(), err)
 
 	log.Info("Create a deployment in the namespace with two replicas and verify that the pods are created.")
-	createdDeployment, err := deployment.CreateDeployment(standardUserClient, pr.cluster.ID, createdNamespace.Name, 2, "", "", false, false, false, true)
+	createdDeployment, err := deploymentapi.CreateDeployment(standardUserClient, pr.cluster.ID, createdNamespace.Name, "", 2, "", "", false, false, false, true)
 	require.NoError(pr.T(), err, "Failed to create deployment in the namespace")
 
 	log.Info("Verify that the resource limits and requests for the container in the pod spec is accurate.")

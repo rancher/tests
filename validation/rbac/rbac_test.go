@@ -60,10 +60,10 @@ func (rb *RBTestSuite) sequentialTestRBAC(role rbac.Role, member string, user *m
 
 	if member == rbac.StandardUser.String() {
 		if strings.Contains(role.String(), "project") {
-			_, err = rbacapi.CreateProjectRoleTemplateBinding(rb.client, user, adminProject, role.String())
+			_, err = rbacapi.CreateProjectRoleTemplateBinding(rb.client, user.ID, adminProject, role.String())
 			require.NoError(rb.T(), err)
 		} else {
-			_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, user, role.String())
+			_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, user.ID, role.String())
 			require.NoError(rb.T(), err)
 		}
 	}

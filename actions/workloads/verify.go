@@ -7,12 +7,12 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
-	"github.com/rancher/tests/actions/workloads/cronjob"
-	"github.com/rancher/tests/actions/workloads/daemonset"
+	extcronjobsapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/cronjobs"
+	extdaemonsetsapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/daemonsets"
+	extjobsapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/jobs"
+	extstatefulsetsapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/statefulsets"
 	"github.com/rancher/tests/actions/workloads/deployment"
-	"github.com/rancher/tests/actions/workloads/job"
 	"github.com/rancher/tests/actions/workloads/pods"
-	"github.com/rancher/tests/actions/workloads/statefulset"
 	"github.com/sirupsen/logrus"
 )
 
@@ -70,7 +70,7 @@ func VerifyWorkloads(client *rancher.Client, clusterName string, workloads Workl
 
 	if workloads.DaemonSet != nil {
 		logrus.Debugf("Verifying daemonset on cluster: %s", clusterName)
-		err = daemonset.VerifyDaemonset(client, clusterID, workloads.DaemonSet.Namespace, workloads.DaemonSet.Name)
+		err = extdaemonsetsapi.WaitForDaemonSetReady(client, clusterID, workloads.DaemonSet.Namespace, workloads.DaemonSet.Name)
 		if err != nil {
 			logrus.Warningf("Daemonset verification failed: %s, attempting to continue with other verifications", err)
 		}
@@ -78,7 +78,7 @@ func VerifyWorkloads(client *rancher.Client, clusterName string, workloads Workl
 
 	if workloads.CronJob != nil {
 		logrus.Debugf("Verifying cronjob on cluster: %s", clusterName)
-		err = cronjob.VerifyCronJob(client, clusterID, workloads.CronJob.Namespace, workloads.CronJob.Name)
+		err = extcronjobsapi.WaitForCronJobActive(client, clusterID, workloads.CronJob.Namespace, workloads.CronJob.Name)
 		if err != nil {
 			logrus.Warningf("Cronjob verification failed: %s, attempting to continue with other verifications", err)
 		}
@@ -86,7 +86,7 @@ func VerifyWorkloads(client *rancher.Client, clusterName string, workloads Workl
 
 	if workloads.Job != nil {
 		logrus.Debugf("Verifying job on cluster: %s", clusterName)
-		err = job.VerifyJob(client, clusterID, workloads.Job.Namespace, workloads.Job.Name)
+		err = extjobsapi.WaitForJobActive(client, clusterID, workloads.Job.Namespace, workloads.Job.Name)
 		if err != nil {
 			logrus.Warningf("Job verification failed: %s, attempting to continue with other verifications", err)
 		}
@@ -94,7 +94,7 @@ func VerifyWorkloads(client *rancher.Client, clusterName string, workloads Workl
 
 	if workloads.StatefulSet != nil {
 		logrus.Debugf("Verifying statefulset on cluster: %s", clusterName)
-		err = statefulset.VerifyStatefulset(client, clusterID, workloads.StatefulSet.Namespace, workloads.StatefulSet.Name)
+		err = extstatefulsetsapi.WaitForStatefulSetReady(client, clusterID, workloads.StatefulSet.Namespace, workloads.StatefulSet.Name)
 		if err != nil {
 			logrus.Warningf("Statefulset verification failed: %s, attempting to continue with other verifications", err)
 		}

@@ -8,9 +8,9 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -53,7 +53,7 @@ func (upn *GlobalRoleBindingUserPrincipalNameTestSuite) TestCreateGlobalRoleBind
 	require.NoError(upn.T(), err)
 
 	globalRoleWithInheritedClusterMember.InheritedClusterRoles = []string{rbac.ClusterMember.String()}
-	_, err = rbacapi.UpdateGlobalRole(upn.client, globalRoleWithInheritedClusterMember)
+	_, err = extrbacapi.UpdateGlobalRole(upn.client, globalRoleWithInheritedClusterMember)
 	require.NoError(upn.T(), err)
 
 	log.Info("Create a globalrolebinding with userPrincipalName set")
@@ -76,7 +76,7 @@ func (upn *GlobalRoleBindingUserPrincipalNameTestSuite) TestGlobalRoleBindingPri
 	require.NoError(upn.T(), err)
 
 	globalRoleWithInheritedClusterMember.InheritedClusterRoles = []string{rbac.ClusterMember.String()}
-	_, err = rbacapi.UpdateGlobalRole(upn.client, globalRoleWithInheritedClusterMember)
+	_, err = extrbacapi.UpdateGlobalRole(upn.client, globalRoleWithInheritedClusterMember)
 	require.NoError(upn.T(), err)
 
 	log.Info("Create a globalrolebinding with userPrincipalName and principal-display-name annotation set")
@@ -97,7 +97,7 @@ func (upn *GlobalRoleBindingUserPrincipalNameTestSuite) TestGlobalRoleBindingUse
 	require.NoError(upn.T(), err)
 
 	globalRoleWithInheritedClusterMember.InheritedClusterRoles = []string{rbac.ClusterMember.String()}
-	_, err = rbacapi.UpdateGlobalRole(upn.client, globalRoleWithInheritedClusterMember)
+	_, err = extrbacapi.UpdateGlobalRole(upn.client, globalRoleWithInheritedClusterMember)
 	require.NoError(upn.T(), err)
 
 	log.Info("Attempt to create a globalrolebinding with userPrincipalName and groupPrincipalName")

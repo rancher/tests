@@ -86,10 +86,10 @@ func (etcd *SnapshotRBACTestSuite) TestRKE2K3SSnapshotRBAC() {
 
 			if tt.member == rbac.StandardUser.String() {
 				if strings.Contains(tt.role, "project") {
-					_, err = rbacapi.CreateProjectRoleTemplateBinding(etcd.client, clusterUser, adminProject, tt.role)
+					_, err = rbacapi.CreateProjectRoleTemplateBinding(etcd.client, clusterUser.ID, adminProject, tt.role)
 					require.NoError(etcd.T(), err)
 				} else {
-					_, err = rbacapi.CreateClusterRoleTemplateBinding(etcd.client, etcd.cluster.ID, clusterUser, tt.role)
+					_, err = rbacapi.CreateClusterRoleTemplateBinding(etcd.client, etcd.cluster.ID, clusterUser.ID, tt.role)
 					require.NoError(etcd.T(), err)
 				}
 			}

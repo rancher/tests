@@ -7,40 +7,34 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extsecretapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 // UpdateSecretData updates the data of a secret in the specified namespace using the wrangler context for the given cluster
 func UpdateSecretData(client *rancher.Client, clusterID, namespace, secretName string, newData map[string][]byte) (*corev1.Secret, error) {
-	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster context: %w", err)
-	}
-
 	var updatedSecret *corev1.Secret
 	var lastErr error
-	err = kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-		existingSecret, getErr := clusterContext.Core.Secret().Get(namespace, secretName, metav1.GetOptions{})
+	err := kwait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+		existingSecret, getErr := extsecretapi.GetSecretByName(client, clusterID, namespace, secretName)
 		if getErr != nil {
 			lastErr = fmt.Errorf("failed to get secret %s: %w", secretName, getErr)
 			return false, nil
 		}
+
 		existingSecret.Data = newData
-		updatedSecret, lastErr = clusterContext.Core.Secret().Update(existingSecret)
+
+		updatedSecret, lastErr = extsecretapi.UpdateSecret(client, clusterID, existingSecret)
 		if lastErr != nil {
-			if errors.IsConflict(lastErr) {
-				return false, nil
-			}
-			return false, lastErr
+			return false, nil
 		}
 		return true, nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("timed out updating secret %s: %w", secretName, lastErr)
+		return nil, fmt.Errorf("timed out updating secret %s/%s: %w", namespace, secretName, lastErr)
 	}
+
 	return updatedSecret, nil
 }
 

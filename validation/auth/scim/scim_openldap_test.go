@@ -19,6 +19,7 @@ import (
 
 	cattlev3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	scimclient "github.com/rancher/shepherd/clients/rancher/auth/scim"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
 	"github.com/rancher/shepherd/pkg/clientbase"
 	authactions "github.com/rancher/tests/actions/auth"
 	"github.com/rancher/tests/actions/features"
@@ -562,7 +563,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCannotViewDefaultAdmin() {
 	logrus.Info("Verifying default admin user is not visible via SCIM (local users are not SCIM-provisioned)")
 
 	params := url.Values{}
-	params.Set("filter", `userName eq "admin"`)
+	params.Set("filter", `username eq "admin"`)
 
 	resp, err := s.scim.Users().List(params)
 	require.NoError(s.T(), err)
@@ -660,9 +661,8 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMAuthUsersAsClusterMembers() {
 			UserName:         mgmtUser.ID,
 			RoleTemplateName: string(rbac.ClusterMember),
 		}
-		crtb, err := s.client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Create(crtbObj)
+		_, err = extrbacapi.CreateClusterRoleTemplateBinding(s.client, crtbObj)
 		require.NoError(s.T(), err, "Should be able to create CRTB for auth user %s", authUser.Username)
-		require.NoError(s.T(), rbacapi.WaitForCrtbStatus(s.client, crtb.Namespace, crtb.Name))
 
 		crtbs, err := rbacapi.VerifyClusterRoleTemplateBindingForUser(s.client, mgmtUser.ID, 1)
 		require.NoError(s.T(), err, "Should find exactly 1 CRTB for auth user %s", authUser.Username)
@@ -789,10 +789,8 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMUserRoleBindingsWork() {
 		UserName:         mgmtUserA.ID,
 		RoleTemplateName: string(rbac.ClusterMember),
 	}
-	crtb, err := s.client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Create(crtbObjA)
+	_, err = extrbacapi.CreateClusterRoleTemplateBinding(s.client, crtbObjA)
 	require.NoError(s.T(), err, "Should be able to create CRTB for SCIM user %s", userIDA)
-	require.NotEmpty(s.T(), crtb.Name)
-	require.NoError(s.T(), rbacapi.WaitForCrtbStatus(s.client, crtb.Namespace, crtb.Name))
 
 	crtbsA, err := rbacapi.VerifyClusterRoleTemplateBindingForUser(s.client, mgmtUserA.ID, 1)
 	require.NoError(s.T(), err, "User A should have exactly 1 CRTB")
@@ -835,10 +833,8 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMUsersAsClusterMembers() {
 			UserName:         mgmtUser.ID,
 			RoleTemplateName: string(rbac.ClusterMember),
 		}
-		crtb, err := s.client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Create(crtbObj)
-		require.NoError(s.T(), err, "Should create CRTB for SCIM user %s", userID)
-		require.NoError(s.T(), rbacapi.WaitForCrtbStatus(s.client, crtb.Namespace, crtb.Name))
-
+		_, err = extrbacapi.CreateClusterRoleTemplateBinding(s.client, crtbObj)
+		require.NoError(s.T(), err, "Should be able to create CRTB for SCIM user %s", userID)
 		_, err = rbacapi.VerifyClusterRoleTemplateBindingForUser(s.client, mgmtUser.ID, 1)
 		require.NoError(s.T(), err, "Should find exactly 1 CRTB for SCIM user %s", userID)
 	}

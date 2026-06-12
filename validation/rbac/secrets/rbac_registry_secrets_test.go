@@ -8,13 +8,13 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extsecretapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -92,8 +92,8 @@ func (rbrs *RbacRegistrySecretTestSuite) TestCreateRegistrySecret() {
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rbrs.T(), err, "failed to create a registry secret")
-				log.Infof("As a %v, create a deployment using the registry secretapi.", tt.role.String())
-				_, err := deployment.CreateDeployment(standardUserClient, rbrs.cluster.ID, namespace.Name, 1, createdRegistrySecret.Name, "", false, false, true, true)
+				log.Infof("As a %v, create a deployment using the registry secret.", tt.role.String())
+				_, err := deploymentapi.CreateDeployment(standardUserClient, rbrs.cluster.ID, namespace.Name, "", 1, createdRegistrySecret.Name, "", false, false, true, true)
 				assert.NoError(rbrs.T(), err, "failed to create deployment with registry secret")
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
 				assert.Error(rbrs.T(), err)
@@ -139,10 +139,8 @@ func (rbrs *RbacRegistrySecretTestSuite) TestListRegistrySecret() {
 			createdRegistrySecret, err := secretapi.CreateSecret(rbrs.client, rbrs.cluster.ID, namespace.Name, secretData, corev1.SecretTypeDockerConfigJson, nil, nil)
 			assert.NoError(rbrs.T(), err, "failed to create a registry secret")
 
-			log.Infof("As a %v, list the registry secretapi.", tt.role.String())
-			standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, rbrs.cluster.ID)
-			assert.NoError(rbrs.T(), err)
-			secretList, err := standardUserContext.Core.Secret().List(namespace.Name, metav1.ListOptions{})
+			log.Infof("As a %v, list the registry secret.", tt.role.String())
+			secretList, err := extsecretapi.ListSecrets(standardUserClient, rbrs.cluster.ID, namespace.Name, metav1.ListOptions{})
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rbrs.T(), err, "failed to list registry secret")
@@ -193,15 +191,12 @@ func (rbrs *RbacRegistrySecretTestSuite) TestUpdateRegistrySecret() {
 			assert.NoError(rbrs.T(), err, "failed to create a registry secret")
 
 			log.Infof("As a %v, update the registry secret with a new label.", tt.role.String())
-			standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, rbrs.cluster.ID)
-			assert.NoError(rbrs.T(), err)
-
 			if createdRegistrySecret.Labels == nil {
 				createdRegistrySecret.Labels = make(map[string]string)
 			}
 			createdRegistrySecret.Labels["dummy"] = "true"
 
-			updatedRegistrySecret, err := standardUserContext.Core.Secret().Update(createdRegistrySecret)
+			updatedRegistrySecret, err := extsecretapi.UpdateSecret(standardUserClient, rbrs.cluster.ID, createdRegistrySecret)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rbrs.T(), err, "failed to update registry secret")
@@ -250,17 +245,13 @@ func (rbrs *RbacRegistrySecretTestSuite) TestDeleteRegistrySecret() {
 			createdRegistrySecret, err := secretapi.CreateSecret(rbrs.client, rbrs.cluster.ID, namespace.Name, secretData, corev1.SecretTypeDockerConfigJson, nil, nil)
 			assert.NoError(rbrs.T(), err, "failed to create a registry secret")
 
-			log.Infof("As a %v, delete the registry secretapi.", tt.role.String())
-			standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, rbrs.cluster.ID)
-			assert.NoError(rbrs.T(), err)
-
-			err = standardUserContext.Core.Secret().Delete(namespace.Name, createdRegistrySecret.Name, &metav1.DeleteOptions{})
+			log.Infof("As a %v, delete the registry secret.", tt.role.String())
+			err = extsecretapi.DeleteSecret(standardUserClient, rbrs.cluster.ID, namespace.Name, createdRegistrySecret.Name, false)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rbrs.T(), err, "failed to delete registry secret")
-				secretList, err := rbrs.client.WranglerContext.Core.Secret().List(namespace.Name, metav1.ListOptions{})
-				assert.NoError(rbrs.T(), err)
-				assert.Equal(rbrs.T(), len(secretList.Items), 0)
+				err = extsecretapi.WaitForSecretDeletion(standardUserClient, rbrs.cluster.ID, namespace.Name, createdRegistrySecret.Name)
+				assert.NoError(rbrs.T(), err, "failed waiting for secret to be deleted")
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
 				assert.Error(rbrs.T(), err)
 				assert.True(rbrs.T(), errors.IsForbidden(err))
