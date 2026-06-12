@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
@@ -34,20 +36,15 @@ import (
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
-const scimProvider = authactions.OpenLdap
-
 type SCIMOpenLDAPTestSuite struct {
-	suite.Suite
-	session    *session.Session
-	client     *rancher.Client
-	cluster    *v3.Cluster
+	SCIMBaseSuite
 	adminUser  *v3.User
 	authConfig *authactions.AuthConfig
-	scim       *scimclient.Client
 }
 
 func (s *SCIMOpenLDAPTestSuite) SetupSuite() {
 	s.session = session.NewSession()
+	s.provider = authactions.OpenLdap
 
 	client, err := rancher.NewClient("", s.session)
 	require.NoError(s.T(), err, "Failed to create Rancher client")
@@ -75,9 +72,15 @@ func (s *SCIMOpenLDAPTestSuite) SetupSuite() {
 	}
 
 	logrus.Info("Setting up SCIM client for OpenLDAP provider")
-	scimClient, err := scimactions.SetupSCIMClient(s.client, scimProvider)
+	scimClient, err := scimactions.SetupSCIMClient(s.client, s.provider)
 	require.NoError(s.T(), err, "Failed to setup SCIM client")
 	s.scim = scimClient
+
+	logrus.Info("Ensuring baseline SCIM ConfigMap (enabled=true) for OpenLDAP provider")
+	err = scimactions.SetSCIMConfigMap(s.client, s.provider, map[string]string{"enabled": "true"})
+	require.NoError(s.T(), err, "Failed to set baseline SCIM ConfigMap")
+	err = scimactions.WaitForSCIMEndpointStatus(s.scim, http.StatusOK)
+	require.NoError(s.T(), err, "SCIM endpoint should respond 200 after baseline ConfigMap set")
 }
 
 func (s *SCIMOpenLDAPTestSuite) TearDownSuite() {
@@ -112,9 +115,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMTokenSecretExistsInKubeAPI() {
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()
 
-	logrus.Infof("Verifying SCIM token secret exists in %s via label selector for provider %s", scimactions.SCIMSecretNamespace, scimProvider)
+	logrus.Infof("Verifying SCIM token secret exists in %s via label selector for provider %s", scimactions.SCIMSecretNamespace, s.provider)
 
-	token, err := scimactions.FetchSCIMBearerToken(s.client, scimProvider)
+	token, err := scimactions.FetchSCIMBearerToken(s.client, s.provider)
 	require.NoError(s.T(), err, "SCIM token secret should exist in %s", scimactions.SCIMSecretNamespace)
 	require.NotEmpty(s.T(), token, "SCIM bearer token should not be empty")
 }
@@ -137,7 +140,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMZFeatureFlagDisableAndReenableEndpoint()
 	require.NoError(s.T(), err, "Should be able to re-enable SCIM feature flag")
 
 	logrus.Info("Waiting for SCIM endpoint to become available")
-	probe := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, scimProvider, "probe")
+	probe := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, s.provider, "probe")
 	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (bool, error) {
 		resp, pollErr := probe.Discovery().ServiceProviderConfig()
 		if pollErr != nil {
@@ -176,9 +179,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMResourceTypes() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "ResourceTypes should return 200"))
 
-	var body map[string]interface{}
-	err = resp.DecodeJSON(&body)
-	require.NoError(s.T(), err)
+	body := s.decodeJSONBody(resp)
 
 	resourceTypes, ok := body["Resources"].([]interface{})
 	require.True(s.T(), ok, "ResourceTypes response should have Resources array")
@@ -195,7 +196,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMInvalidTokenReturns401() {
 		URL:      fmt.Sprintf("https://%s", s.client.RancherConfig.Host),
 		TokenKey: "invalid-token",
 		Insecure: true,
-	}, scimProvider)
+	}, s.provider)
 
 	resp, err := badClient.Users().List(nil)
 	require.NoError(s.T(), err)
@@ -212,9 +213,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMListUsers() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "GET /Users should return 200"))
 
-	var body map[string]interface{}
-	err = resp.DecodeJSON(&body)
-	require.NoError(s.T(), err)
+	body := s.decodeJSONBody(resp)
 	require.Contains(s.T(), body, "totalResults", "ListResponse should have totalResults")
 	require.Contains(s.T(), body, "Resources", "ListResponse should have Resources array")
 }
@@ -233,9 +232,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCreateAndGetUser() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(getResp, http.StatusOK, "GET /Users/{id} should return 200"))
 
-	var body map[string]interface{}
-	err = getResp.DecodeJSON(&body)
-	require.NoError(s.T(), err)
+	body := s.decodeJSONBody(getResp)
 	require.Equal(s.T(), userName, body["userName"], "userName in response should match created value")
 	require.Equal(s.T(), userID, body["id"], "id in response should match")
 }
@@ -246,9 +243,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCreateDuplicateUserReturns409() {
 
 	logrus.Info("Verifying duplicate userName returns 409")
 
-	userName, userID, err := scimactions.CreateSCIMUser(s.scim, "", true)
-	require.NoError(s.T(), err)
-	defer s.scim.Users().Delete(userID)
+	userName, _ := s.createUserWithCleanup("", true)
 
 	resp2, err := s.scim.Users().Create(scimclient.User{
 		Schemas:  []string{scimclient.SCIMSchemaUser},
@@ -264,9 +259,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMFilterUserByUserName() {
 
 	logrus.Info("Verifying filter by userName")
 
-	userName, userID, err := scimactions.CreateSCIMUser(s.scim, "", true)
-	require.NoError(s.T(), err)
-	defer s.scim.Users().Delete(userID)
+	userName, _ := s.createUserWithCleanup("", true)
 
 	params := url.Values{}
 	params.Set("filter", fmt.Sprintf("userName eq %q", userName))
@@ -275,9 +268,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMFilterUserByUserName() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(filterResp, http.StatusOK, "Filtered GET /Users should return 200"))
 
-	var body map[string]interface{}
-	err = filterResp.DecodeJSON(&body)
-	require.NoError(s.T(), err)
+	body := s.decodeJSONBody(filterResp)
 
 	userResources, _ := body["Resources"].([]interface{})
 	require.Len(s.T(), userResources, 1, "Filter should return exactly 1 user")
@@ -292,10 +283,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchDeactivateUser() {
 
 	logrus.Info("Verifying PATCH deactivate for user")
 
-	_, userID, err := scimactions.CreateSCIMUser(s.scim, "", false)
-	require.NoError(s.T(), err)
-
-	defer s.scim.Users().Delete(userID)
+	_, userID := s.createUserWithCleanup("", false)
 
 	getResp, err := s.scim.Users().ByID(userID)
 	require.NoError(s.T(), err)
@@ -310,9 +298,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchDeactivateUser() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH active=false should return 200"))
 
-	var body map[string]interface{}
-	err = patchResp.DecodeJSON(&body)
-	require.NoError(s.T(), err)
+	body := s.decodeJSONBody(patchResp)
 	require.Equal(s.T(), false, body["active"], "active should be false after deactivation")
 }
 
@@ -322,10 +308,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchReactivateUser() {
 
 	logrus.Info("Verifying PATCH reactivate for user")
 
-	_, userID, err := scimactions.CreateSCIMUser(s.scim, "", false)
-	require.NoError(s.T(), err)
-
-	defer s.scim.Users().Delete(userID)
+	_, userID := s.createUserWithCleanup("", false)
 
 	deactivateResp, err := s.scim.Users().Patch(userID, scimclient.PatchOp{
 		Schemas: []string{scimclient.SCIMSchemaPatchOp},
@@ -345,9 +328,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchReactivateUser() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH active=true should return 200"))
 
-	var body map[string]interface{}
-	err = patchResp.DecodeJSON(&body)
-	require.NoError(s.T(), err)
+	body := s.decodeJSONBody(patchResp)
 	require.Equal(s.T(), true, body["active"], "active should be true after reactivation")
 }
 
@@ -399,9 +380,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMUserPagination() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "Paginated GET /Users should return 200"))
 
-	var body map[string]interface{}
-	err = resp.DecodeJSON(&body)
-	require.NoError(s.T(), err)
+	body := s.decodeJSONBody(resp)
 	require.Contains(s.T(), body, "totalResults", "Paginated response should include totalResults")
 	require.Contains(s.T(), body, "startIndex", "Paginated response should echo startIndex")
 	require.Contains(s.T(), body, "itemsPerPage", "Paginated response should include itemsPerPage")
@@ -421,9 +400,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMOutOfBoundsStartIndexReturnsEmpty() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "Out-of-bounds startIndex should return 200"))
 
-	var body map[string]interface{}
-	err = resp.DecodeJSON(&body)
-	require.NoError(s.T(), err)
+	body := s.decodeJSONBody(resp)
 
 	userResources, _ := body["Resources"].([]interface{})
 	require.Empty(s.T(), userResources, "Resources should be empty for out-of-bounds startIndex")
@@ -435,17 +412,13 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCreateAndGetGroup() {
 
 	logrus.Info("Creating SCIM group")
 
-	groupName, groupID, err := scimactions.CreateSCIMGroup(s.scim, "")
-	require.NoError(s.T(), err)
-	defer s.scim.Groups().Delete(groupID)
+	groupName, groupID := s.createGroupWithCleanup("")
 
 	getResp, err := s.scim.Groups().ByID(groupID)
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(getResp, http.StatusOK, "GET /Groups/{id} should return 200"))
 
-	var body map[string]interface{}
-	err = getResp.DecodeJSON(&body)
-	require.NoError(s.T(), err)
+	body := s.decodeJSONBody(getResp)
 	require.Equal(s.T(), groupName, body["displayName"], "displayName should match")
 }
 
@@ -455,9 +428,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCreateDuplicateGroupReturns409() {
 
 	logrus.Info("Verifying duplicate group displayName returns 409")
 
-	groupName, groupID, err := scimactions.CreateSCIMGroup(s.scim, "")
-	require.NoError(s.T(), err)
-	defer s.scim.Groups().Delete(groupID)
+	groupName, _ := s.createGroupWithCleanup("")
 
 	resp2, err := s.scim.Groups().Create(scimclient.Group{
 		Schemas:     []string{scimclient.SCIMSchemaGroup},
@@ -473,13 +444,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchAddMemberToGroup() {
 
 	logrus.Info("Verifying PATCH add member to group")
 
-	_, userID, err := scimactions.CreateSCIMUser(s.scim, "", true)
-	require.NoError(s.T(), err)
-	defer s.scim.Users().Delete(userID)
+	_, userID := s.createUserWithCleanup("", true)
 
-	_, groupID, err := scimactions.CreateSCIMGroup(s.scim, "")
-	require.NoError(s.T(), err)
-	defer s.scim.Groups().Delete(groupID)
+	_, groupID := s.createGroupWithCleanup("")
 
 	patchResp, err := s.scim.Groups().Patch(groupID, scimclient.PatchOp{
 		Schemas: []string{scimclient.SCIMSchemaPatchOp},
@@ -500,13 +467,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchRemoveMemberFromGroup() {
 
 	logrus.Info("Verifying PATCH remove member from group")
 
-	_, userID, err := scimactions.CreateSCIMUser(s.scim, "", true)
-	require.NoError(s.T(), err)
-	defer s.scim.Users().Delete(userID)
+	_, userID := s.createUserWithCleanup("", true)
 
-	_, groupID, err := scimactions.CreateSCIMGroup(s.scim, "")
-	require.NoError(s.T(), err)
-	defer s.scim.Groups().Delete(groupID)
+	_, groupID := s.createGroupWithCleanup("")
 
 	addResp, err := s.scim.Groups().Patch(groupID, scimclient.PatchOp{
 		Schemas: []string{scimclient.SCIMSchemaPatchOp},
@@ -543,9 +506,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMGroupListExcludeMembersAttribute() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "GET /Groups?excludedAttributes=members should return 200"))
 
-	var body map[string]interface{}
-	err = resp.DecodeJSON(&body)
-	require.NoError(s.T(), err)
+	body := s.decodeJSONBody(resp)
 
 	groupResources, _ := body["Resources"].([]interface{})
 	for _, rawGroup := range groupResources {
@@ -568,9 +529,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCannotViewDefaultAdmin() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "Filter request should return 200"))
 
-	var body map[string]interface{}
-	err = resp.DecodeJSON(&body)
-	require.NoError(s.T(), err)
+	body := s.decodeJSONBody(resp)
 
 	userResources, _ := body["Resources"].([]interface{})
 	require.Empty(s.T(), userResources, "Local admin should not appear in SCIM — only SCIM-provisioned users are returned")
@@ -619,7 +578,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMTokenSecretStillPresentAfterAuthTests() 
 
 	logrus.Info("Verifying SCIM token secret is still present via kubeapi after auth regression tests")
 
-	token, err := scimactions.FetchSCIMBearerToken(s.client, scimProvider)
+	token, err := scimactions.FetchSCIMBearerToken(s.client, s.provider)
 	require.NoError(s.T(), err, "SCIM secret should still be present after auth regression tests")
 	require.NotEmpty(s.T(), token, "SCIM bearer token should still be non-empty")
 }
@@ -648,7 +607,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMAuthUsersAsClusterMembers() {
 		logrus.Infof("Creating cluster-member CRTB for auth user %s", authUser.Username)
 
 		userV3 := &v3.User{Username: authUser.Username, Password: authUser.Password}
-		authAdmin, err := authactions.LoginAsAuthUser(s.client, userV3, scimProvider)
+		authAdmin, err := authactions.LoginAsAuthUser(s.client, userV3, s.provider)
 		require.NoError(s.T(), err, "Auth user %s should be able to login", authUser.Username)
 
 		mgmtUser, err := s.client.Management.User.ByID(authAdmin.UserID)
@@ -676,9 +635,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMGroupRoleBindings() {
 
 	logrus.Info("Verifying group CRTB for SCIM group")
 
-	groupName, groupID, err := scimactions.CreateSCIMGroup(s.scim, "")
-	require.NoError(s.T(), err)
-	defer s.scim.Groups().Delete(groupID)
+	groupName, groupID := s.createGroupWithCleanup("")
 
 	var userIDs []string
 	for i := 0; i < 2; i++ {
@@ -697,7 +654,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMGroupRoleBindings() {
 		require.NoError(s.T(), scimactions.CheckStatus(addResp, http.StatusOK, "PATCH add member to group should return 200"))
 	}
 
-	groupPrincipal := fmt.Sprintf("%s_group://%s", scimProvider, groupName)
+	groupPrincipal := fmt.Sprintf("%s_group://%s", s.provider, groupName)
 	logrus.Infof("Creating group CRTB for principal %s", groupPrincipal)
 
 	crtb, err := rbacapi.CreateGroupClusterRoleTemplateBinding(s.client, s.cluster.ID, groupPrincipal, string(rbac.ClusterMember))
@@ -859,7 +816,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMZZDisableAuthCleansUpGroupsAndToken() {
 	_, userID, err := scimactions.CreateSCIMUser(s.scim, "", false)
 	require.NoError(s.T(), err)
 
-	_, err = scimactions.FetchSCIMBearerToken(s.client, scimProvider)
+	_, err = scimactions.FetchSCIMBearerToken(s.client, s.provider)
 	require.NoError(s.T(), err, "Token secret should exist before disabling auth provider")
 
 	logrus.Info("Disabling OpenLDAP auth provider to trigger SCIM cleanup")
@@ -880,7 +837,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMZZDisableAuthCleansUpGroupsAndToken() {
 
 	logrus.Info("Verifying SCIM token secret is deleted")
 	err = scimactions.WaitForSCIMResourceDeletion(func() (int, error) {
-		_, fetchErr := scimactions.FetchSCIMBearerToken(s.client, scimProvider)
+		_, fetchErr := scimactions.FetchSCIMBearerToken(s.client, s.provider)
 		if fetchErr != nil {
 			return http.StatusNotFound, nil
 		}
@@ -925,9 +882,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMFilterGroupByDisplayName() {
 
 	logrus.Info("Verifying GET /Groups?filter=displayName eq")
 
-	groupName, groupID, err := scimactions.CreateSCIMGroup(s.scim, "")
-	require.NoError(s.T(), err)
-	defer s.scim.Groups().Delete(groupID)
+	groupName, groupID := s.createGroupWithCleanup("")
 
 	params := url.Values{}
 	params.Set("filter", fmt.Sprintf("displayName eq %q", groupName))
@@ -936,8 +891,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMFilterGroupByDisplayName() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(filterResp, http.StatusOK, "Filtered GET /Groups should return 200"))
 
-	var body map[string]interface{}
-	require.NoError(s.T(), filterResp.DecodeJSON(&body))
+	body := s.decodeJSONBody(filterResp)
 
 	groupResources, _ := body["Resources"].([]interface{})
 	require.Len(s.T(), groupResources, 1, "Filter should return exactly 1 group")
@@ -951,9 +905,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMGetGroupByIDExcludeMembersAttribute() {
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()
 
-	_, groupID, err := scimactions.CreateSCIMGroup(s.scim, "")
-	require.NoError(s.T(), err)
-	defer s.scim.Groups().Delete(groupID)
+	_, groupID := s.createGroupWithCleanup("")
 
 	params := url.Values{}
 	params.Set("excludedAttributes", "members")
@@ -962,8 +914,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMGetGroupByIDExcludeMembersAttribute() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "GET /Groups/{id}?excludedAttributes=members should return 200"))
 
-	var body map[string]interface{}
-	require.NoError(s.T(), resp.DecodeJSON(&body))
+	body := s.decodeJSONBody(resp)
 	require.Equal(s.T(), groupID, body["id"])
 	_, hasMembersField := body["members"]
 	require.False(s.T(), hasMembersField, "members field should be absent when excludedAttributes=members")
@@ -975,9 +926,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchGroupReplaceExternalID() {
 
 	logrus.Info("Verifying PATCH replace externalId for group")
 
-	groupName, groupID, err := scimactions.CreateSCIMGroup(s.scim, "")
-	require.NoError(s.T(), err)
-	defer s.scim.Groups().Delete(groupID)
+	groupName, groupID := s.createGroupWithCleanup("")
 
 	newExternalID := "ext-" + groupName
 
@@ -990,8 +939,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchGroupReplaceExternalID() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH replace externalId should return 200"))
 
-	var body map[string]interface{}
-	require.NoError(s.T(), patchResp.DecodeJSON(&body))
+	body := s.decodeJSONBody(patchResp)
 	require.Equal(s.T(), newExternalID, body["externalId"], "externalId should be updated after PATCH replace")
 }
 
@@ -1001,9 +949,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchUserReplaceExternalID() {
 
 	logrus.Info("Verifying PATCH replace externalId for user")
 
-	userName, userID, err := scimactions.CreateSCIMUser(s.scim, "", false)
-	require.NoError(s.T(), err)
-	defer s.scim.Users().Delete(userID)
+	userName, userID := s.createUserWithCleanup("", false)
 
 	newExternalID := "ext-" + userName
 
@@ -1016,8 +962,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchUserReplaceExternalID() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH replace externalId should return 200"))
 
-	var body map[string]interface{}
-	require.NoError(s.T(), patchResp.DecodeJSON(&body))
+	body := s.decodeJSONBody(patchResp)
 	require.Equal(s.T(), newExternalID, body["externalId"], "externalId should be updated after PATCH replace")
 }
 
@@ -1027,9 +972,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchUserReplacePrimaryEmail() {
 
 	logrus.Info("Verifying PATCH replace primary email for user")
 
-	userName, userID, err := scimactions.CreateSCIMUser(s.scim, "", false)
-	require.NoError(s.T(), err)
-	defer s.scim.Users().Delete(userID)
+	userName, userID := s.createUserWithCleanup("", false)
 
 	newEmail := userName + "@example.com"
 
@@ -1042,8 +985,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchUserReplacePrimaryEmail() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH replace primary email should return 200"))
 
-	var body map[string]interface{}
-	require.NoError(s.T(), patchResp.DecodeJSON(&body))
+	body := s.decodeJSONBody(patchResp)
 
 	emails, _ := body["emails"].([]interface{})
 	require.Len(s.T(), emails, 1, "User should have exactly 1 email after PATCH")
@@ -1084,8 +1026,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMSchemas() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "GET /Schemas should return 200"))
 
-	var body map[string]interface{}
-	require.NoError(s.T(), resp.DecodeJSON(&body))
+	body := s.decodeJSONBody(resp)
 	require.Contains(s.T(), body, "totalResults")
 
 	resourceTypes, _ := body["Resources"].([]interface{})
@@ -1135,9 +1076,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMUpdateGroup() {
 
 	logrus.Info("Verifying PUT /Groups/{id}")
 
-	groupName, groupID, err := scimactions.CreateSCIMGroup(s.scim, "")
-	require.NoError(s.T(), err)
-	defer s.scim.Groups().Delete(groupID)
+	groupName, groupID := s.createGroupWithCleanup("")
 
 	newExternalID := "ext-" + groupName
 	updateResp, err := s.scim.Groups().Update(groupID, scimclient.Group{
@@ -1149,8 +1088,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMUpdateGroup() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(updateResp, http.StatusOK, "PUT /Groups/{id} should return 200"))
 
-	var body map[string]interface{}
-	require.NoError(s.T(), updateResp.DecodeJSON(&body))
+	body := s.decodeJSONBody(updateResp)
 	require.Equal(s.T(), groupID, body["id"])
 	require.Equal(s.T(), groupName, body["displayName"])
 	require.Equal(s.T(), newExternalID, body["externalId"], "externalId should be updated after PUT")
@@ -1162,9 +1100,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMUpdateUser() {
 
 	logrus.Info("Verifying PUT /Users/{id}")
 
-	userName, userID, err := scimactions.CreateSCIMUser(s.scim, "", false)
-	require.NoError(s.T(), err)
-	defer s.scim.Users().Delete(userID)
+	userName, userID := s.createUserWithCleanup("", false)
 
 	newExternalID := "ext-" + userName
 	updateResp, err := s.scim.Users().Update(userID, scimclient.User{
@@ -1176,8 +1112,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMUpdateUser() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(updateResp, http.StatusOK, "PUT /Users/{id} should return 200"))
 
-	var body map[string]interface{}
-	require.NoError(s.T(), updateResp.DecodeJSON(&body))
+	body := s.decodeJSONBody(updateResp)
 	require.Equal(s.T(), userID, body["id"])
 	require.Equal(s.T(), userName, body["userName"])
 	require.Equal(s.T(), newExternalID, body["externalId"], "externalId should be updated after PUT")
@@ -1225,6 +1160,725 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMUserProjectRoleBinding() {
 	require.Equal(s.T(), projectName, prtbs[0].ProjectName, "PRTB should reference the correct project")
 	require.Equal(s.T(), string(rbac.ProjectOwner), prtbs[0].RoleTemplateName, "PRTB role should be project-owner")
 	require.Equal(s.T(), mgmtUser.ID, prtbs[0].UserName, "PRTB should be bound to the correct user")
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMNoConfigMapAllEndpointsReturn404() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying all SCIM endpoints return 404 with SCIM error body when ConfigMap is absent")
+
+	defer s.restoreBaseline()
+	require.NoError(s.T(), scimactions.DeleteSCIMConfigMap(s.client, s.provider))
+	require.NoError(s.T(), scimactions.WaitForSCIMEndpointStatus(s.scim, http.StatusNotFound))
+
+	endpoints := []struct {
+		name string
+		call func() (*scimclient.Response, error)
+	}{
+		{"GET /Users", func() (*scimclient.Response, error) { return s.scim.Users().List(nil) }},
+		{"GET /Groups", func() (*scimclient.Response, error) { return s.scim.Groups().List(nil) }},
+		{"GET /ServiceProviderConfig", func() (*scimclient.Response, error) { return s.scim.Discovery().ServiceProviderConfig() }},
+		{"GET /ResourceTypes", func() (*scimclient.Response, error) { return s.scim.Discovery().ResourceTypes() }},
+		{"GET /Schemas", func() (*scimclient.Response, error) { return s.scim.Discovery().Schemas() }},
+	}
+	for _, ep := range endpoints {
+		resp, err := ep.call()
+		require.NoError(s.T(), err, "%s should not error", ep.name)
+		require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusNotFound, fmt.Sprintf("%s should return 404 when ConfigMap absent", ep.name)))
+		require.NoError(s.T(), scimactions.ValidateSCIMErrorBody(resp, http.StatusNotFound), "%s 404 body should match SCIM error schema", ep.name)
+	}
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMNoConfigMapRouteGatingBeforeAuth() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying invalid bearer token also returns 404 when ConfigMap absent (route gating before auth)")
+
+	defer s.restoreBaseline()
+	require.NoError(s.T(), scimactions.DeleteSCIMConfigMap(s.client, s.provider))
+	require.NoError(s.T(), scimactions.WaitForSCIMEndpointStatus(s.scim, http.StatusNotFound))
+
+	badClient := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, s.provider, "invalid-token")
+	resp, err := badClient.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusNotFound, "Invalid token should still return 404 when ConfigMap absent (not 401)"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMEnabledTrueReturns200() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying enabled=true returns 200 on /Users after being disabled")
+
+	defer s.restoreBaseline()
+	s.applyConfigMap(map[string]string{"enabled": "false"}, http.StatusNotFound)
+	s.applyConfigMap(scimactions.BaselineSCIMConfigMap(), http.StatusOK)
+
+	resp, err := s.scim.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "GET /Users should return 200 with enabled=true"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMEnabledFalseReturns404() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying enabled=false returns 404 on /Users")
+
+	defer s.restoreBaseline()
+	s.applyConfigMap(map[string]string{"enabled": "false"}, http.StatusNotFound)
+
+	resp, err := s.scim.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusNotFound, "GET /Users should return 404 with enabled=false"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMPausedReturns503() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying paused=true returns 503 on /Users")
+
+	defer s.restoreBaseline()
+	s.applyConfigMap(map[string]string{"enabled": "true", "paused": "true"}, http.StatusServiceUnavailable)
+
+	resp, err := s.scim.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusServiceUnavailable, "GET /Users should return 503 when paused"))
+	require.NoError(s.T(), scimactions.ValidateSCIMErrorBody(resp, http.StatusServiceUnavailable))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMUnpauseResumes() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying unpause (paused=false) resumes SCIM endpoints")
+
+	defer s.restoreBaseline()
+	s.applyConfigMap(map[string]string{"enabled": "true", "paused": "true"}, http.StatusServiceUnavailable)
+	s.applyConfigMap(map[string]string{"enabled": "true", "paused": "false"}, http.StatusOK)
+
+	resp, err := s.scim.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "GET /Users should return 200 after unpause"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMUserIdExternalIDPrincipal() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying userIdAttribute=externalId builds Rancher user principalID from externalId")
+
+	defer s.restoreBaseline()
+	s.applyConfigMap(map[string]string{"enabled": "true", "userIdAttribute": "externalId"}, http.StatusOK)
+
+	externalID := namegen.AppendRandomString("ext")
+	_, userID := s.createUserWithCleanup(externalID, true)
+
+	mgmtUser, err := s.client.Management.User.ByID(userID)
+	require.NoError(s.T(), err, "Should fetch Rancher user for SCIM user %s", userID)
+	require.NotEmpty(s.T(), mgmtUser.PrincipalIDs, "Rancher user should have principalIDs")
+
+	found := false
+	for _, pid := range mgmtUser.PrincipalIDs {
+		if strings.Contains(pid, externalID) {
+			found = true
+			break
+		}
+	}
+	require.True(s.T(), found, "At least one principalID should contain externalId %q (got %v)", externalID, mgmtUser.PrincipalIDs)
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMUserNameChangeAcceptedWithExternalIDPrincipal() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH userName succeeds when userIdAttribute=externalId")
+
+	defer s.restoreBaseline()
+	s.applyConfigMap(map[string]string{"enabled": "true", "userIdAttribute": "externalId"}, http.StatusOK)
+
+	_, userID := s.createUserWithCleanup(namegen.AppendRandomString("ext"), true)
+
+	newUserName := namegen.AppendRandomString("renamed") + "@example.com"
+	resp, err := s.scim.Users().Patch(userID, scimclient.PatchOp{
+		Schemas: []string{scimclient.SCIMSchemaPatchOp},
+		Operations: []scimclient.Operation{
+			{Op: "replace", Path: "userName", Value: newUserName},
+		},
+	})
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "PATCH userName should return 200 when externalId is principal"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMUserNameChangeRejectedWithUserNamePrincipal() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH userName returns 400 when userName is the principal (default)")
+
+	s.applyConfigMap(scimactions.BaselineSCIMConfigMap(), http.StatusOK)
+
+	_, userID := s.createUserWithCleanup("", true)
+
+	resp, err := s.scim.Users().Patch(userID, scimclient.PatchOp{
+		Schemas: []string{scimclient.SCIMSchemaPatchOp},
+		Operations: []scimclient.Operation{
+			{Op: "replace", Path: "userName", Value: "newname@example.com"},
+		},
+	})
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusBadRequest, "PATCH userName should return 400 when userName is principal"))
+	require.NoError(s.T(), scimactions.ValidateSCIMErrorBody(resp, http.StatusBadRequest))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMGroupIdExternalIDPrincipal() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying groupIdAttribute=externalId is accepted and group created with externalId")
+
+	defer s.restoreBaseline()
+	s.applyConfigMap(map[string]string{"enabled": "true", "groupIdAttribute": "externalId"}, http.StatusOK)
+
+	externalID := namegen.AppendRandomString("grp-ext")
+	_, groupID := s.createGroupWithCleanup(externalID)
+
+	getResp, err := s.scim.Groups().ByID(groupID)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(getResp, http.StatusOK, "GET /Groups/{id} should return 200"))
+
+	body := s.decodeJSONBody(getResp)
+	require.Equal(s.T(), externalID, body["externalId"], "externalId should be set on the group")
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMDisplayNameFallsBackToUserName() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying Rancher user.Name (displayName) falls back to userName when SCIM displayName is not set")
+
+	userName, userID := s.createUserWithCleanup("", true)
+
+	mgmtUser, err := s.client.Management.User.ByID(userID)
+	require.NoError(s.T(), err, "Should fetch Rancher user for SCIM user %s", userID)
+	require.Equal(s.T(), userName, mgmtUser.Name, "Rancher user.Name should fall back to userName when SCIM displayName is not provided")
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMPatchUserDisplayName() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH replace displayName on user succeeds and is reflected in Rancher user record")
+
+	_, userID := s.createUserWithCleanup("", true)
+
+	newDisplayName := namegen.AppendRandomString("display")
+	patchResp, err := s.scim.Users().Patch(userID, scimclient.PatchOp{
+		Schemas: []string{scimclient.SCIMSchemaPatchOp},
+		Operations: []scimclient.Operation{
+			{Op: "replace", Path: "displayName", Value: newDisplayName},
+		},
+	})
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH displayName should return 200"))
+
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+		mgmtUser, getErr := s.client.Management.User.ByID(userID)
+		if getErr != nil {
+			return false, nil
+		}
+		return mgmtUser.Name == newDisplayName, nil
+	})
+	require.NoError(s.T(), err, "Rancher user.Name should reflect SCIM displayName %q after PATCH", newDisplayName)
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMFilterUserByExternalID() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying GET /Users?filter=externalId eq returns matching user")
+
+	externalID := namegen.AppendRandomString("ext-filter")
+	s.createUserWithCleanup(externalID, true)
+
+	params := url.Values{}
+	params.Set("filter", fmt.Sprintf("externalId eq %q", externalID))
+
+	resp, err := s.scim.Users().List(params)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "Filtered GET /Users should return 200"))
+
+	body := s.decodeJSONBody(resp)
+	userResources, _ := body["Resources"].([]interface{})
+	require.Len(s.T(), userResources, 1, "Filter by externalId should return exactly 1 user")
+
+	firstUser, _ := userResources[0].(map[string]interface{})
+	require.Equal(s.T(), externalID, firstUser["externalId"], "Returned user externalId should match filter")
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMFilterGroupByExternalID() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying GET /Groups?filter=externalId eq returns matching group")
+
+	externalID := namegen.AppendRandomString("grp-ext-filter")
+	s.createGroupWithCleanup(externalID)
+
+	params := url.Values{}
+	params.Set("filter", fmt.Sprintf("externalId eq %q", externalID))
+
+	resp, err := s.scim.Groups().List(params)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "Filtered GET /Groups should return 200"))
+
+	body := s.decodeJSONBody(resp)
+	groupResources, _ := body["Resources"].([]interface{})
+	require.Len(s.T(), groupResources, 1, "Filter by externalId should return exactly 1 group")
+
+	firstGroup, _ := groupResources[0].(map[string]interface{})
+	require.Equal(s.T(), externalID, firstGroup["externalId"], "Returned group externalId should match filter")
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMInvalidUserIdAttributeFallsBack() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying invalid userIdAttribute value falls back to default and does not crash SCIM")
+
+	defer s.restoreBaseline()
+	s.applyConfigMap(map[string]string{"enabled": "true", "userIdAttribute": "badvalue"}, http.StatusOK)
+
+	_, userID := s.createUserWithCleanup("", true)
+	require.NotEmpty(s.T(), userID, "POST /Users should still succeed with invalid userIdAttribute (fallback to default)")
+
+	resp, err := s.scim.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "GET /Users should still return 200 with invalid userIdAttribute"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMURNPatchUserActive() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH user with URN-prefixed active path behaves like bare path")
+
+	_, userID := s.createUserWithCleanup("", true)
+
+	patchResp := s.patchUser(userID, "replace", "urn:ietf:params:scim:schemas:core:2.0:User:active", false)
+	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH URN-prefixed active should return 200"))
+
+	body := s.decodeJSONBody(patchResp)
+	require.Equal(s.T(), false, body["active"], "active should be false after URN-prefixed PATCH")
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMURNPatchUserDisplayName() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH user with URN-prefixed displayName path")
+
+	_, userID := s.createUserWithCleanup("", true)
+
+	newDisplayName := namegen.AppendRandomString("urn-display")
+	patchResp := s.patchUser(userID, "replace", "urn:ietf:params:scim:schemas:core:2.0:User:displayName", newDisplayName)
+	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH URN-prefixed displayName should return 200"))
+
+	require.NoError(s.T(), s.waitForRancherUserName(userID, newDisplayName), "Rancher user.Name should reflect URN-prefixed displayName %q after PATCH", newDisplayName)
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMURNPatchUserName() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH URN-prefixed userName succeeds when userIdAttribute=externalId")
+
+	defer s.restoreBaseline()
+	s.applyConfigMap(map[string]string{"enabled": "true", "userIdAttribute": "externalId"}, http.StatusOK)
+
+	_, userID := s.createUserWithCleanup(namegen.AppendRandomString("ext"), true)
+
+	newUserName := namegen.AppendRandomString("urn-rename") + "@example.com"
+	patchResp := s.patchUser(userID, "replace", "urn:ietf:params:scim:schemas:core:2.0:User:userName", newUserName)
+	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH URN-prefixed userName should return 200 with externalId principal"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMURNPatchGroupExternalID() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH group with URN-prefixed externalId path")
+
+	groupName, groupID := s.createGroupWithCleanup("")
+
+	newExternalID := "ext-urn-" + groupName
+	patchResp := s.patchGroup(groupID, "replace", "urn:ietf:params:scim:schemas:core:2.0:Group:externalId", newExternalID)
+	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH URN-prefixed group externalId should return 200"))
+
+	body := s.decodeJSONBody(patchResp)
+	require.Equal(s.T(), newExternalID, body["externalId"], "externalId should be updated")
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMURNPatchGroupAddMember() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH group op:add with URN-prefixed members path")
+
+	_, userID := s.createUserWithCleanup("", true)
+	_, groupID := s.createGroupWithCleanup("")
+
+	patchResp := s.patchGroup(groupID, "add", "urn:ietf:params:scim:schemas:core:2.0:Group:members", []scimclient.Member{{Value: userID}})
+	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH op:add URN-prefixed members should return 200"))
+	require.NoError(s.T(), scimactions.WaitForGroupMemberCount(s.scim, groupID, 1))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMURNPatchGroupRemoveMember() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH group op:remove with URN-prefixed members[value eq ...] path")
+
+	_, userID := s.createUserWithCleanup("", true)
+	_, groupID := s.createGroupWithCleanup("")
+
+	addResp := s.patchGroup(groupID, "add", "members", []scimclient.Member{{Value: userID}})
+	require.NoError(s.T(), scimactions.CheckStatus(addResp, http.StatusOK, "PATCH add member should return 200"))
+
+	removePath := fmt.Sprintf("urn:ietf:params:scim:schemas:core:2.0:Group:members[value eq %q]", userID)
+	removeResp := s.patchGroup(groupID, "remove", removePath, nil)
+	require.NoError(s.T(), scimactions.CheckStatus(removeResp, http.StatusOK, "PATCH op:remove URN-prefixed members should return 200"))
+	require.NoError(s.T(), scimactions.WaitForGroupMemberCount(s.scim, groupID, 0))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMURNFilterUser() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying GET /Users?filter with URN-prefixed attribute path")
+
+	userName, _ := s.createUserWithCleanup("", true)
+
+	params := url.Values{}
+	params.Set("filter", fmt.Sprintf("urn:ietf:params:scim:schemas:core:2.0:User:userName eq %q", userName))
+
+	resp, err := s.scim.Users().List(params)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "URN-prefixed filter on /Users should return 200"))
+
+	body := s.decodeJSONBody(resp)
+	userResources, _ := body["Resources"].([]interface{})
+	require.Len(s.T(), userResources, 1, "URN-prefixed filter should return exactly 1 user")
+	firstUser, _ := userResources[0].(map[string]interface{})
+	require.Equal(s.T(), userName, firstUser["userName"], "Returned user userName should match filter")
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMURNCrossResourceMismatchReturns400() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH group with User URN-prefixed path returns 400")
+
+	_, groupID := s.createGroupWithCleanup("")
+
+	patchResp := s.patchGroup(groupID, "replace", "urn:ietf:params:scim:schemas:core:2.0:User:displayName", "wrong")
+	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusBadRequest, "User URN on Group endpoint should return 400"))
+	require.NoError(s.T(), scimactions.ValidateSCIMErrorBody(patchResp, http.StatusBadRequest))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMURNUnknownURNReturns400() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH user with unknown URN path returns 400 and does not panic")
+
+	_, userID := s.createUserWithCleanup("", true)
+
+	patchResp := s.patchUser(userID, "replace", "urn:custom:extension:1.0:Custom:foo", "bar")
+	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusBadRequest, "Unknown URN should return 400"))
+	require.NoError(s.T(), scimactions.ValidateSCIMErrorBody(patchResp, http.StatusBadRequest))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMURNBareAttributesRegression() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying bare-path PATCH still works after URN-stripping addition (regression)")
+
+	_, userID := s.createUserWithCleanup("", false)
+
+	userPatchResp := s.patchUser(userID, "replace", "active", true)
+	require.NoError(s.T(), scimactions.CheckStatus(userPatchResp, http.StatusOK, "Bare-path PATCH active should still return 200"))
+
+	groupName, groupID := s.createGroupWithCleanup("")
+
+	groupPatchResp := s.patchGroup(groupID, "replace", "externalId", "ext-"+groupName)
+	require.NoError(s.T(), scimactions.CheckStatus(groupPatchResp, http.StatusOK, "Bare-path PATCH group externalId should still return 200"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMRLDisabledByDefault() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying rate limiting is disabled by default (no rate keys in ConfigMap)")
+
+	defer s.restoreBaseline()
+	s.applyConfigMap(scimactions.BaselineSCIMConfigMap(), http.StatusOK)
+
+	results, err := scimactions.BurstSCIMRequests(s.scim, 50)
+	require.NoError(s.T(), err)
+	for i, code := range results {
+		require.Equal(s.T(), http.StatusOK, code, "request %d should return 200 when rate limiting disabled", i)
+	}
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMRLEnabledReturns429AfterBurst() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying rate limit returns 429 when burst exceeded")
+
+	defer s.restoreBaseline()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, s.provider, scimactions.RateLimitSCIMConfigMap(2, 5)))
+
+	results, err := scimactions.BurstSCIMRequests(s.scim, 20)
+	require.NoError(s.T(), err)
+
+	ok, throttled := countSCIMCodes(results)
+	require.GreaterOrEqual(s.T(), ok, 1, "at least the burst capacity should return 200 (got ok=%d, 429=%d)", ok, throttled)
+	require.GreaterOrEqual(s.T(), throttled, 1, "at least one request should be throttled with 429 (got ok=%d, 429=%d)", ok, throttled)
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMRL429ResponseFormat() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying 429 response format (Retry-After header, scim+json content-type, SCIM error body)")
+
+	defer s.restoreBaseline()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, s.provider, scimactions.RateLimitSCIMConfigMap(1, 1)))
+
+	throttledResp := s.firstThrottledResponse(10)
+	require.NotNil(s.T(), throttledResp, "should observe at least one 429 within burst")
+
+	require.Equal(s.T(), "application/scim+json", throttledResp.Header.Get("Content-Type"), "429 must use SCIM JSON content type")
+	retryAfter, err := scimactions.GetRetryAfterSeconds(throttledResp)
+	require.NoError(s.T(), err, "429 must include Retry-After header")
+	require.Equal(s.T(), 1, retryAfter, "Retry-After should be 1 second")
+	require.NoError(s.T(), scimactions.ValidateSCIMErrorBody(throttledResp, http.StatusTooManyRequests))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMRLTokenBucketRefillAfterRetryAfter() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying token bucket refills after Retry-After period elapses")
+
+	defer s.restoreBaseline()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, s.provider, scimactions.RateLimitSCIMConfigMap(1, 1)))
+
+	throttledResp := s.firstThrottledResponse(10)
+	require.NotNil(s.T(), throttledResp, "should observe a 429 with Retry-After")
+	retryAfter, err := scimactions.GetRetryAfterSeconds(throttledResp)
+	require.NoError(s.T(), err)
+
+	var resp *scimclient.Response
+	err = kwait.PollUntilContextTimeout(context.Background(), time.Second, time.Duration(retryAfter+5)*time.Second, true, func(ctx context.Context) (bool, error) {
+		r, listErr := s.scim.Users().List(nil)
+		if listErr != nil {
+			return false, nil
+		}
+		resp = r
+		return r.StatusCode == http.StatusOK, nil
+	})
+	require.NoError(s.T(), err, "request after Retry-After window should eventually return 200")
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "request after Retry-After wait should return 200"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMRLAppliesToAllMethods() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying rate limit applies to PATCH (non-GET method)")
+
+	s.applyConfigMap(scimactions.BaselineSCIMConfigMap(), http.StatusOK)
+	_, userID := s.createUserWithCleanup("", true)
+
+	defer s.restoreBaseline()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, s.provider, scimactions.RateLimitSCIMConfigMap(1, 1)))
+
+	var ok, throttled int
+	for i := 0; i < 10; i++ {
+		resp, patchErr := s.scim.Users().Patch(userID, scimclient.PatchOp{
+			Schemas: []string{scimclient.SCIMSchemaPatchOp},
+			Operations: []scimclient.Operation{
+				{Op: "replace", Path: "active", Value: i%2 == 0},
+			},
+		})
+		require.NoError(s.T(), patchErr)
+		switch resp.StatusCode {
+		case http.StatusOK:
+			ok++
+		case http.StatusTooManyRequests:
+			throttled++
+		}
+	}
+	require.GreaterOrEqual(s.T(), throttled, 1, "rate limit should also apply to PATCH (got ok=%d, 429=%d)", ok, throttled)
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMRLDynamicConfigChange() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying ConfigMap rate-limit change takes effect on next request without restart")
+
+	defer s.restoreBaseline()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, s.provider, scimactions.RateLimitSCIMConfigMap(1, 1)))
+
+	require.True(s.T(), s.observeSCIMThrottle(10), "rate limit should engage at low rps before reconfig")
+
+	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, s.provider, scimactions.RateLimitSCIMConfigMap(1000, 1000)))
+	require.NoError(s.T(), scimactions.WaitForSCIMEndpointStatus(s.scim, http.StatusOK), "endpoint should serve 200 after raising rate limit (token bucket refill)")
+
+	results, err := scimactions.BurstSCIMRequests(s.scim, 20)
+	require.NoError(s.T(), err)
+	ok, _ := countSCIMCodes(results)
+	require.GreaterOrEqual(s.T(), ok, len(results)*8/10, "after raising rate limit to 1000 rps / burst 1000, the vast majority of a 20-request burst should return 200 (got ok=%d/%d)", ok, len(results))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMRLInvalidValuesFallback() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying invalid rate-limit values fall back to defaults and do not crash")
+
+	defer s.restoreBaseline()
+	s.applyConfigMap(map[string]string{
+		"enabled":                    "true",
+		"rateLimitRequestsPerSecond": "not-a-number",
+		"rateLimitBurst":             "-5",
+	}, http.StatusOK)
+
+	resp, err := s.scim.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "SCIM should still serve requests with invalid rate-limit values"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMRLReDisableRateLimit() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying rateLimitRequestsPerSecond=0 re-disables rate limiting")
+
+	defer s.restoreBaseline()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, s.provider, scimactions.RateLimitSCIMConfigMap(1, 1)))
+
+	require.True(s.T(), s.observeSCIMThrottle(10), "rate limit should engage with low rps")
+
+	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, s.provider, scimactions.RateLimitSCIMConfigMap(0, 0)))
+
+	results, err := scimactions.BurstSCIMRequests(s.scim, 50)
+	require.NoError(s.T(), err)
+	for i, code := range results {
+		require.Equal(s.T(), http.StatusOK, code, "after re-disabling rate limit, request %d should return 200", i)
+	}
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMGroupMemberMatchingUsesPrincipalName() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying group PATCH add member resolves via principal Name (not DisplayName)")
+
+	_, userID := s.createUserWithCleanup("", true)
+	_, groupID := s.createGroupWithCleanup("")
+
+	patchResp := s.patchGroup(groupID, "add", "members", []scimclient.Member{{Value: userID}})
+	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH add member by principal id should return 200"))
+	require.NoError(s.T(), scimactions.WaitForGroupMemberCount(s.scim, groupID, 1))
+
+	getResp, err := s.scim.Groups().ByID(groupID)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(getResp, http.StatusOK, "GET /Groups/{id} should return 200"))
+
+	body := s.decodeJSONBody(getResp)
+	members, _ := body["members"].([]interface{})
+	require.Len(s.T(), members, 1, "Group should have exactly 1 member after PATCH add")
+	member, _ := members[0].(map[string]interface{})
+	require.Equal(s.T(), userID, member["value"], "Member value should resolve to the user principal id")
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMZRegTokenRotation() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying SCIM token rotation: old token rejected, new token works")
+
+	oldToken, err := scimactions.FetchSCIMBearerToken(s.client, s.provider)
+	require.NoError(s.T(), err, "Should fetch existing SCIM token")
+	require.NotEmpty(s.T(), oldToken)
+
+	clusterContext, err := s.client.WranglerContext.Core.Secret().List(scimactions.SCIMSecretNamespace, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("cattle.io/kind=scim-auth-token,authn.management.cattle.io/provider=%s", s.provider),
+	})
+	require.NoError(s.T(), err)
+	require.NotEmpty(s.T(), clusterContext.Items, "Should find SCIM token secret")
+
+	for i := range clusterContext.Items {
+		err = s.client.WranglerContext.Core.Secret().Delete(scimactions.SCIMSecretNamespace, clusterContext.Items[i].Name, &metav1.DeleteOptions{})
+		require.NoError(s.T(), err, "Should delete old SCIM token secret")
+	}
+
+	newToken, err := scimactions.CreateSCIMTokenSecret(s.client, s.provider)
+	require.NoError(s.T(), err, "Should create a new SCIM token")
+	require.NotEqual(s.T(), oldToken, newToken, "New token must differ from old")
+
+	defer func() {
+		s.scim = scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, s.provider, newToken)
+	}()
+
+	oldClient := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, s.provider, oldToken)
+	oldResp, err := oldClient.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(oldResp, http.StatusUnauthorized, "old SCIM token should be rejected with 401"))
+
+	newClient := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, s.provider, newToken)
+	newResp, err := newClient.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(newResp, http.StatusOK, "new SCIM token should be accepted with 200"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMRegConfigMapKeyParsingNonInterference() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying rate-limit ConfigMap keys do not interfere with parsing of enabled/paused/userIdAttribute")
+
+	defer s.restoreBaseline()
+	s.applyConfigMap(map[string]string{
+		"enabled":                    "true",
+		"paused":                     "false",
+		"userIdAttribute":            "externalId",
+		"rateLimitRequestsPerSecond": "1000",
+		"rateLimitBurst":             "1000",
+	}, http.StatusOK)
+
+	externalID := namegen.AppendRandomString("ext-noninterference")
+	_, userID := s.createUserWithCleanup(externalID, true)
+
+	mgmtUser, err := s.client.Management.User.ByID(userID)
+	require.NoError(s.T(), err)
+	found := false
+	for _, pid := range mgmtUser.PrincipalIDs {
+		if strings.Contains(pid, externalID) {
+			found = true
+			break
+		}
+	}
+	require.True(s.T(), found, "userIdAttribute=externalId should still apply when rate-limit keys are also set")
 }
 
 func TestSCIMOpenLDAPSuite(t *testing.T) {
