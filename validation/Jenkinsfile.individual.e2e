@@ -10,10 +10,9 @@
  * Consumes shared functions from qa-jenkins-library:
  *   property.useWithProperties
  *
- * Go module dependencies are pre-downloaded into the test image at build time
- * (via `go mod download` in Dockerfile.airgap-go-tests). `go mod tidy` is also
- * run at test time to pick up any indirect dependencies missing from go.mod
- * (e.g. newly required transitive deps like sigs.k8s.io/yaml).
+ * Parameter names (CONFIG, REPO, BRANCH, TAGS, GOTEST_TESTCASE, etc.) match the
+ * existing go-automation-freeform-job pattern for compatibility with downstream
+ * triggers from both the new E2E pipeline and the legacy recurring pipeline.
  */
 
 def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
@@ -157,7 +156,7 @@ pipeline {
                                     -v ${workspace}:/workspace \
                                     -w /workspace \
                                     rancher-go-test:latest \
-                                    sh -c 'set -e; set -o pipefail; go mod tidy && ${testCmd} | tee validation/go-test.log'
+                                    sh -c 'set -e; set -o pipefail; ${testCmd} | tee validation/go-test.log'
                             """
                         }
                     }
