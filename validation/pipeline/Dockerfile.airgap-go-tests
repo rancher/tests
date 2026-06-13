@@ -44,6 +44,12 @@ ENV GOBIN=/usr/local/bin
 RUN go install gotest.tools/gotestsum@${GOTESTSUM_VERSION}
 ENV GOBIN=
 
+# Pre-populate the module cache so tests run without network access (airgap).
+# go.mod and go.sum are copied separately from source to maximise layer caching —
+# only a go.mod/go.sum change triggers a re-download, not a code change.
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+
 # Set Ansible config to the consolidated ansible.cfg in qa-infra-automation
 ENV ANSIBLE_CONFIG=/workspace/qa-infra-automation/ansible/ansible.cfg
 

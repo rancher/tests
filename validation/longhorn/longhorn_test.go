@@ -41,11 +41,6 @@ type LonghornTestSuite struct {
 }
 
 func (l *LonghornTestSuite) TearDownSuite() {
-	l.T().Log("Uninstalling Longhorn chart")
-	err := charts.UninstallLonghornChart(l.client, charts.LonghornNamespace, l.cluster.ID, l.client.RancherConfig.Host)
-	if err != nil {
-		l.T().Logf("Failed to uninstall Longhorn chart: %v", err)
-	}
 	l.session.Cleanup()
 }
 
