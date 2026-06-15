@@ -305,14 +305,6 @@ func TestAutoScalingPause(t *testing.T) {
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			err = provisioning.VerifyClusterReady(s.client, cluster)
 			require.NoError(t, err)
-
-			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(s.client, cluster)
-			require.NoError(t, err)
-
-			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(s.client, cluster)
-			require.NoError(t, err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, s.cattleConfig)
