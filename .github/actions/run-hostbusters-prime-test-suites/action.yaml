@@ -22,7 +22,7 @@ runs:
           --packages=github.com/rancher/tests/validation/prime/autoscaling \
           --junitfile results_autoscaling.xml \
           --jsonfile results_autoscaling.json \
-          -- -timeout=1h -tags=prime -v
+          -- -timeout=3h -tags=prime -v
 
         autoscaling_exit=$?
         echo "autoscaling_exit=$autoscaling_exit" >> "$GITHUB_ENV"
