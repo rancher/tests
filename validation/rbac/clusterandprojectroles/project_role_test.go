@@ -56,7 +56,7 @@ func (pr *ProjectRolesTestSuite) testSetupUserAndProject() (*rancher.Client, *v3
 	require.NoError(pr.T(), err)
 
 	log.Info("Adding a standard user as project owner in the admin project")
-	_, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(pr.client, newUser, adminProject, rbac.ProjectOwner.String())
+	_, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(pr.client, newUser.ID, adminProject, rbac.ProjectOwner.String())
 	require.NoError(pr.T(), errUserRole)
 	standardUserClient, err = standardUserClient.ReLogin()
 	require.NoError(pr.T(), err)
@@ -73,7 +73,7 @@ func (pr *ProjectRolesTestSuite) TestProjectOwnerAddsAndRemovesOtherProjectOwner
 	additionalUser, additionalUserClient, err := rbac.SetupUser(pr.client, rbac.StandardUser.String())
 	require.NoError(pr.T(), err)
 
-	createdPrtb, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, adminProject, rbac.ProjectOwner.String())
+	createdPrtb, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser.ID, adminProject, rbac.ProjectOwner.String())
 	require.NoError(pr.T(), errUserRole)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(pr.T(), err)
@@ -100,7 +100,7 @@ func (pr *ProjectRolesTestSuite) TestManageProjectUserRoleCannotAddProjectOwner(
 	additionalUser, additionalUserClient, err := rbac.SetupUser(pr.client, rbac.StandardUser.String())
 	require.NoError(pr.T(), err)
 
-	_, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, adminProject, rbac.CustomManageProjectMember.String())
+	_, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser.ID, adminProject, rbac.CustomManageProjectMember.String())
 	require.NoError(pr.T(), errUserRole)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(pr.T(), err)
@@ -108,7 +108,7 @@ func (pr *ProjectRolesTestSuite) TestManageProjectUserRoleCannotAddProjectOwner(
 	addNewUserAsProjectOwner, addNewUserAsPOClient, err := rbac.SetupUser(pr.client, rbac.StandardUser.String())
 	require.NoError(pr.T(), err)
 
-	_, errUserRole2 := rbacapi.CreateProjectRoleTemplateBinding(additionalUserClient, addNewUserAsProjectOwner, adminProject, rbac.ProjectOwner.String())
+	_, errUserRole2 := rbacapi.CreateProjectRoleTemplateBinding(additionalUserClient, addNewUserAsProjectOwner.ID, adminProject, rbac.ProjectOwner.String())
 	require.Error(pr.T(), errUserRole2)
 	addNewUserAsPOClient, err = addNewUserAsPOClient.ReLogin()
 	require.NoError(pr.T(), err)

@@ -12,7 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// GetProjectByName is a helper function that returns the project by name in a specific cluster.
+// GetProjectByName is a helper function that returns the project (norman) by name in a specific cluster.
 func GetProjectByName(client *rancher.Client, clusterID, projectName string) (*management.Project, error) {
 	var project *management.Project
 
@@ -40,7 +40,7 @@ func GetProjectByName(client *rancher.Client, clusterID, projectName string) (*m
 	return project, nil
 }
 
-// GetProjectList is a helper function that returns all the project in a specific cluster
+// GetProjectList is a helper function that returns all the projects (norman) in a specific cluster
 func GetProjectList(client *rancher.Client, clusterID string) (*management.ProjectCollection, error) {
 	var projectsList *management.ProjectCollection
 

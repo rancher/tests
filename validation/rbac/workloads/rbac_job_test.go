@@ -8,14 +8,14 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extjobapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/jobs"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	jobapi "github.com/rancher/tests/actions/kubeapi/workloads/jobs"
+	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads/job"
-	"github.com/rancher/tests/actions/workloads/pods"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,8 +77,8 @@ func (rj *RbacJobTestSuite) TestCreateJob() {
 			assert.NoError(rj.T(), err)
 
 			log.Infof("As a %v, creating a job", tt.role.String())
-			podTemplate := pods.CreateContainerAndPodTemplate()
-			_, err = job.CreateJob(userClient, rj.cluster.ID, namespace.Name, podTemplate, false)
+			podTemplate := podapi.CreateContainerAndPodTemplate("")
+			_, err = jobapi.CreateJob(userClient, rj.cluster.ID, namespace.Name, podTemplate, false)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rj.T(), err, "failed to create job")
@@ -116,14 +116,12 @@ func (rj *RbacJobTestSuite) TestListJob() {
 			assert.NoError(rj.T(), err)
 
 			log.Infof("As a %v, creating a job in the namespace %v", rbac.Admin, namespace.Name)
-			podTemplate := pods.CreateContainerAndPodTemplate()
-			createdJob, err := job.CreateJob(rj.client, rj.cluster.ID, namespace.Name, podTemplate, true)
+			podTemplate := podapi.CreateContainerAndPodTemplate("")
+			createdJob, err := jobapi.CreateJob(rj.client, rj.cluster.ID, namespace.Name, podTemplate, true)
 			assert.NoError(rj.T(), err, "failed to create job")
 
 			log.Infof("As a %v, listing the job", tt.role.String())
-			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rj.cluster.ID)
-			assert.NoError(rj.T(), err)
-			jobList, err := standardUserContext.Batch.Job().List(namespace.Name, metav1.ListOptions{})
+			jobList, err := extjobapi.ListJobs(userClient, rj.cluster.ID, namespace.Name, metav1.ListOptions{})
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
 				assert.NoError(rj.T(), err, "failed to list job")
@@ -163,17 +161,12 @@ func (rj *RbacJobTestSuite) TestUpdateJob() {
 			assert.NoError(rj.T(), err)
 
 			log.Infof("As a %v, creating a job in the namespace %v", rbac.Admin, namespace.Name)
-			podTemplate := pods.CreateContainerAndPodTemplate()
-			createdJob, err := job.CreateJob(rj.client, rj.cluster.ID, namespace.Name, podTemplate, true)
+			podTemplate := podapi.CreateContainerAndPodTemplate("")
+			createdJob, err := jobapi.CreateJob(rj.client, rj.cluster.ID, namespace.Name, podTemplate, true)
 			assert.NoError(rj.T(), err, "failed to create job")
 
 			log.Infof("As a %v, updating the job %s with a new label.", tt.role.String(), createdJob.Name)
-			adminContext, err := extclusterapi.GetClusterWranglerContext(rj.client, rj.cluster.ID)
-			assert.NoError(rj.T(), err)
-			standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rj.cluster.ID)
-			assert.NoError(rj.T(), err)
-
-			latestJob, err := adminContext.Batch.Job().Get(namespace.Name, createdJob.Name, metav1.GetOptions{})
+			latestJob, err := extjobapi.GetJobByName(rj.client, rj.cluster.ID, namespace.Name, createdJob.Name)
 			assert.NoError(rj.T(), err, "Failed to list job.")
 
 			if latestJob.Labels == nil {
@@ -181,11 +174,11 @@ func (rj *RbacJobTestSuite) TestUpdateJob() {
 			}
 			latestJob.Labels["updated"] = "true"
 
-			_, err = standardUserContext.Batch.Job().Update(latestJob)
+			_, err = extjobapi.UpdateJob(userClient, rj.cluster.ID, latestJob, false)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rj.T(), err, "failed to update job")
-				updatedJob, err := standardUserContext.Batch.Job().Get(namespace.Name, createdJob.Name, metav1.GetOptions{})
+				updatedJob, err := extjobapi.GetJobByName(userClient, rj.cluster.ID, namespace.Name, createdJob.Name)
 				assert.NoError(rj.T(), err, "Failed to list the job after updating labels.")
 				assert.Equal(rj.T(), "true", updatedJob.Labels["updated"], "job label update failed.")
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
@@ -222,16 +215,16 @@ func (rj *RbacJobTestSuite) TestDeleteJob() {
 			assert.NoError(rj.T(), err)
 
 			log.Infof("As a %v, creating a job in the namespace %v", rbac.Admin, namespace.Name)
-			podTemplate := pods.CreateContainerAndPodTemplate()
-			createdJob, err := job.CreateJob(rj.client, rj.cluster.ID, namespace.Name, podTemplate, true)
+			podTemplate := podapi.CreateContainerAndPodTemplate("")
+			createdJob, err := jobapi.CreateJob(rj.client, rj.cluster.ID, namespace.Name, podTemplate, true)
 			assert.NoError(rj.T(), err, "failed to create job")
 
 			log.Infof("As a %v, deleting the job", tt.role.String())
-			err = job.DeleteJob(userClient, rj.cluster.ID, createdJob, false)
+			err = extjobapi.DeleteJob(userClient, rj.cluster.ID, createdJob.Namespace, createdJob.Name, false)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rj.T(), err, "failed to delete job")
-				err = job.WaitForDeleteJob(userClient, rj.cluster.ID, createdJob)
+				err = extjobapi.WaitForJobDeleted(userClient, rj.cluster.ID, createdJob.Namespace, createdJob.Name)
 				assert.NoError(rj.T(), err)
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
 				assert.Error(rj.T(), err)
@@ -254,30 +247,25 @@ func (rj *RbacJobTestSuite) TestCrudJobAsClusterMember() {
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": user.ID,
 	}
-	createdProject, err := userClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
-	require.NoError(rj.T(), err)
-
-	err = projectapi.WaitForProjectFinalizerToUpdate(userClient, createdProject.Name, createdProject.Namespace, 2)
+	createdProject, err := projectapi.CreateProjectWithTemplate(userClient, rj.cluster.ID, projectTemplate)
 	require.NoError(rj.T(), err)
 
 	namespace, err := namespaceapi.CreateNamespace(userClient, rj.cluster.ID, createdProject.Name, namegen.AppendRandomString("ns-"), "", nil, nil)
 	require.NoError(rj.T(), err)
 
 	log.Infof("As a %v, creating a job in the namespace %v", role, namespace.Name)
-	podTemplate := pods.CreateContainerAndPodTemplate()
-	createdJob, err := job.CreateJob(userClient, rj.cluster.ID, namespace.Name, podTemplate, true)
+	podTemplate := podapi.CreateContainerAndPodTemplate("")
+	createdJob, err := jobapi.CreateJob(userClient, rj.cluster.ID, namespace.Name, podTemplate, true)
 	require.NoError(rj.T(), err, "failed to create job")
 
 	log.Infof("As a %v, list the job", role)
-	standardUserContext, err := extclusterapi.GetClusterWranglerContext(userClient, rj.cluster.ID)
-	assert.NoError(rj.T(), err)
-	jobList, err := standardUserContext.Batch.Job().List(namespace.Name, metav1.ListOptions{})
+	jobList, err := extjobapi.ListJobs(userClient, rj.cluster.ID, namespace.Name, metav1.ListOptions{})
 	require.NoError(rj.T(), err, "failed to list jobs")
 	require.Equal(rj.T(), len(jobList.Items), 1)
 	require.Equal(rj.T(), jobList.Items[0].Name, createdJob.Name)
 
 	log.Infof("As a %v, update the job %s with a new label.", role, createdJob.Name)
-	latestJob, err := standardUserContext.Batch.Job().Get(namespace.Name, createdJob.Name, metav1.GetOptions{})
+	latestJob, err := extjobapi.GetJobByName(userClient, rj.cluster.ID, namespace.Name, createdJob.Name)
 	assert.NoError(rj.T(), err, "Failed to get the latest job.")
 
 	if latestJob.Labels == nil {
@@ -285,14 +273,14 @@ func (rj *RbacJobTestSuite) TestCrudJobAsClusterMember() {
 	}
 	latestJob.Labels["updated"] = "true"
 
-	_, err = standardUserContext.Batch.Job().Update(latestJob)
+	_, err = extjobapi.UpdateJob(userClient, rj.cluster.ID, latestJob, true)
 	require.NoError(rj.T(), err, "failed to update job")
-	updatedJobList, err := standardUserContext.Batch.Job().List(namespace.Name, metav1.ListOptions{})
+	updatedJobList, err := extjobapi.ListJobs(userClient, rj.cluster.ID, namespace.Name, metav1.ListOptions{})
 	require.NoError(rj.T(), err, "Failed to list the job after updating labels.")
 	require.Equal(rj.T(), "true", updatedJobList.Items[0].Labels["updated"], "job label update failed.")
 
 	log.Infof("As a %v, delete the job", role)
-	err = job.DeleteJob(userClient, rj.cluster.ID, createdJob, true)
+	err = extjobapi.DeleteJob(userClient, rj.cluster.ID, createdJob.Namespace, createdJob.Name, true)
 	require.NoError(rj.T(), err, "failed to delete job")
 }
 

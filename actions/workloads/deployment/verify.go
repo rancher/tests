@@ -16,10 +16,10 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	extdeploymentsapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/deployments"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wrangler"
-	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
@@ -159,25 +159,14 @@ func VerifyDeploymentRolloutHistory(client *rancher.Client, clusterID, namespace
 }
 
 func VerifyOrchestrationStatus(client *rancher.Client, clusterID, namespaceName string, deploymentName string, isPaused bool) error {
-	var wranglerContext *wrangler.Context
-	var err error
-
-	err = charts.WatchAndWaitDeployments(client, clusterID, namespaceName, metav1.ListOptions{
+	err := charts.WatchAndWaitDeployments(client, clusterID, namespaceName, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + deploymentName,
 	})
 	if err != nil {
 		return err
 	}
 
-	wranglerContext = client.WranglerContext
-	if clusterID != "local" {
-		wranglerContext, err = client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
-		if err != nil {
-			return err
-		}
-	}
-
-	latestDeployment, err := wranglerContext.Apps.Deployment().Get(namespaceName, deploymentName, metav1.GetOptions{})
+	latestDeployment, err := extdeploymentsapi.GetDeploymentByName(client, clusterID, namespaceName, deploymentName)
 	if err != nil {
 		return err
 	}
@@ -218,7 +207,7 @@ func VerifyDeploymentSideKick(client *rancher.Client, clusterID, namespace, depl
 
 	deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers, sideKickContainer)
 
-	updatedDeployment, err := deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	updatedDeployment, err := extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
 	if err != nil {
 		return err
 	}
@@ -265,7 +254,7 @@ func VerifyDeploymentUpgradeRollback(client *rancher.Client, clusterID, namespac
 	deployment.Spec.Template.Spec.Containers = updatedContainers
 
 	logrus.Debugf("Updating deployment (%s) image: %s", deployment.Name, redisImageName)
-	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
 	if err != nil {
 		return err
 	}
@@ -288,7 +277,7 @@ func VerifyDeploymentUpgradeRollback(client *rancher.Client, clusterID, namespac
 	deployment.Spec.Template.Spec.Containers = updatedContainers
 
 	logrus.Debugf("Updating deployment (%s) TTY: %v stdin: %v", deployment.Name, true, true)
-	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
 	if err != nil {
 		return err
 	}
@@ -364,7 +353,7 @@ func VerifyDeploymentPodScaleUp(client *rancher.Client, clusterID, namespace, de
 	replicas := int32(*deployment.Spec.Replicas + 1)
 	deployment.Spec.Replicas = &replicas
 
-	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
 	if err != nil {
 		return err
 	}
@@ -401,7 +390,7 @@ func VerifyDeploymentPodScaleDown(client *rancher.Client, clusterID, namespace, 
 	}
 	deployment.Spec.Replicas = &replicas
 
-	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
 	if err != nil {
 		return err
 	}
@@ -436,7 +425,7 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 
 	logrus.Debugf("Pausing orchestration on deployment: %s", deployment.Name)
 	deployment.Spec.Paused = true
-	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, false)
 	if err != nil {
 		return err
 	}
@@ -461,7 +450,7 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 	deployment.Spec.Template.Spec.Containers = []corev1.Container{newContainerTemplate}
 
 	logrus.Debugf("Updating deployment (%s) image: %s replicas: %v", deployment.Name, redisImageName, replicas)
-	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, false)
 	if err != nil {
 		return err
 	}
@@ -484,7 +473,7 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 
 	logrus.Debug("Resuming orchestration")
 	deployment.Spec.Paused = false
-	deployment, err = deploymentapi.UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
 	if err != nil {
 		return err
 	}

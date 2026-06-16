@@ -8,11 +8,11 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
+	extclusterapi "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/session"
-	kubeconfigapi "github.com/rancher/tests/actions/kubeconfigs"
-	watchlistapi "github.com/rancher/tests/actions/watchlist"
+	kubeconfigapi "github.com/rancher/tests/actions/kubeapi/kubeconfigs"
+	watchlistapi "github.com/rancher/tests/actions/kubeapi/watchlist"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -40,7 +40,7 @@ func (w *ExtKubeconfigWatchListTestSuite) SetupSuite() {
 	log.Info("Getting cluster name from the config file and append cluster details in the struct.")
 	clusterName := client.RancherConfig.ClusterName
 	require.NotEmptyf(w.T(), clusterName, "Cluster name to install should be set")
-	clusterID, err := extensionscluster.GetClusterIDByName(w.client, clusterName)
+	clusterID, err := extclusterapi.GetClusterIDByName(w.client, clusterName)
 	require.NoError(w.T(), err, "Error getting cluster ID")
 	w.cluster, err = w.client.Management.Cluster.ByID(clusterID)
 	require.NoError(w.T(), err)

@@ -39,7 +39,6 @@ const (
 	DefaultNamespace                = "fleet-default"
 	RancherDeploymentName           = "rancher"
 	CattleResyncEnvVarName          = "CATTLE_RESYNC_DEFAULT"
-	ImageName                       = "nginx"
 	GrbOwnerLabel                   = "authz.management.cattle.io/grb-owner"
 	GlobalDataNS                    = "cattle-global-data"
 	PSALabelKey                     = "pod-security.kubernetes.io/"
@@ -62,7 +61,7 @@ func (r Role) String() string {
 	return string(r)
 }
 
-// AddUserWithRoleToCluster creates a user based on the global role and then adds the user to cluster with provided permissions.
+// AddUserWithRoleToCluster creates a user based on the global role and then adds the user to cluster with provided permissions and returns norman user object and user-scoped client
 func AddUserWithRoleToCluster(client *rancher.Client, globalRole, role string, cluster *management.Cluster, project *v3.Project) (*management.User, *rancher.Client, error) {
 	standardUser, standardUserClient, err := SetupUser(client, globalRole)
 	if err != nil {
@@ -79,7 +78,7 @@ func AddUserWithRoleToCluster(client *rancher.Client, globalRole, role string, c
 		if project == nil {
 			return nil, nil, fmt.Errorf("project is required for project-scoped role: %s", role)
 		}
-		_, err = rbacapi.CreateProjectRoleTemplateBinding(client, standardUser, project, role)
+		_, err = rbacapi.CreateProjectRoleTemplateBinding(client, standardUser.ID, project, role)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -87,7 +86,7 @@ func AddUserWithRoleToCluster(client *rancher.Client, globalRole, role string, c
 		if cluster == nil {
 			return nil, nil, fmt.Errorf("cluster is required for cluster-scoped role: %s", role)
 		}
-		_, err = rbacapi.CreateClusterRoleTemplateBinding(client, cluster.ID, standardUser, role)
+		_, err = rbacapi.CreateClusterRoleTemplateBinding(client, cluster.ID, standardUser.ID, role)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -103,7 +102,7 @@ func AddUserWithRoleToCluster(client *rancher.Client, globalRole, role string, c
 	return standardUser, standardUserClient, nil
 }
 
-// SetupUser is a helper to create a user with the specified global role and a client for the user.
+// SetupUser is a helper to create a user with the specified global role and a client for the norman user.
 func SetupUser(client *rancher.Client, globalRoles ...string) (user *management.User, userClient *rancher.Client, err error) {
 	user, err = users.CreateUserWithRole(client, users.UserConfig(), globalRoles...)
 	if err != nil {

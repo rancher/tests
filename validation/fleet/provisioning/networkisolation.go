@@ -13,14 +13,15 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
 	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
+	extpodapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/pods"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
 	"github.com/rancher/shepherd/extensions/unstructured"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
-	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
+	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/projects"
-	"github.com/rancher/tests/actions/workloads/pods"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -36,7 +37,7 @@ const defaultNamespace = "default"
 // Not designed to work with a deployment already in the default namespace!
 func testPNI(client *rancher.Client, clusterName, deploymentNamespace, deploymentName string) error {
 	// get one of the fleet deployment's pod IPs to use in the ping command later
-	fleetPodNames, err := pods.GetPodNamesFromDeployment(client, clusterName, deploymentNamespace, deploymentName)
+	fleetPodNames, err := podapi.GetPodNamesFromDeployment(client, clusterName, deploymentNamespace, deploymentName)
 	if err != nil {
 		return err
 	}
@@ -44,7 +45,7 @@ func testPNI(client *rancher.Client, clusterName, deploymentNamespace, deploymen
 		return errors.New("unable to find pod(s) in deployment")
 	}
 
-	firstPodObject, err := pods.GetPodByName(client, clusterName, deploymentNamespace, fleetPodNames[0])
+	firstPodObject, err := extpodapi.GetPodByName(client, clusterName, deploymentNamespace, fleetPodNames[0])
 	if err != nil {
 		return err
 	}
@@ -94,30 +95,23 @@ func testPNI(client *rancher.Client, clusterName, deploymentNamespace, deploymen
 		},
 	}
 
-	createdDeployment, err := deployments.CreateDeployment(client, clusterName, "test-d"+namegenerator.RandStringLower(3), defaultNamespace, podTemplate, 1) // jobs.CreateJob(tt.client, clusterName, "test-pni-d", defaultNamespace, podTemplate)
+	createdDeployment, err := deploymentapi.CreateDeploymentFromPodTemplate(client, clusterName, "test-d"+namegenerator.RandStringLower(3), defaultNamespace, podTemplate, 1, true)
 	if err != nil {
 		return err
 	}
 	// Begin Validation
-
-	err = deployments.WatchAndWaitDeployments(client, clusterName, defaultNamespace, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + createdDeployment.Name,
-	})
-	if err != nil {
-		return err
-	}
 
 	errList := extensionpods.StatusPods(client, clusterName)
 	if len(errList) > 0 {
 		return errors.New("error in pod(s) after created hardened deployment")
 	}
 
-	jobPodName, err := pods.GetPodNamesFromDeployment(client, clusterName, defaultNamespace, createdDeployment.Name)
+	jobPodName, err := podapi.GetPodNamesFromDeployment(client, clusterName, defaultNamespace, createdDeployment.Name)
 	if err != nil {
 		return err
 	}
 
-	jobPodObject, err := pods.GetPodByName(client, clusterName, defaultNamespace, jobPodName[0])
+	jobPodObject, err := extpodapi.GetPodByName(client, clusterName, defaultNamespace, jobPodName[0])
 	if err != nil {
 		return err
 	}

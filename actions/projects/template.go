@@ -7,7 +7,7 @@ import (
 
 const projectName = "testproject"
 
-// NewProjectConfig is a constructor that creates a project template
+// NewProjectConfig is a constructor that creates a project template (norman)
 func NewProjectConfig(clusterID string) *management.Project {
 	return &management.Project{
 		ClusterID: clusterID,

@@ -9,11 +9,9 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/shepherd/pkg/wrangler"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
@@ -51,22 +49,13 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) SetupSuite() {
 	require.NoError(perq.T(), err)
 }
 
-func (perq *ProjectsExtendedResourceQuotaTestSuite) setupUserForTest() (*rancher.Client, *wrangler.Context) {
-	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
-	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
-	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
-
-	standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, perq.cluster.ID)
-	require.NoError(perq.T(), err)
-
-	return standardUserClient, standardUserContext
-}
-
 func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExtendedResourceQuota() {
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with extended ephemeral storage quota limits.")
 	projectExtendedQuota := map[string]string{
@@ -148,7 +137,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExtendedPodC
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with extended project-level pod count quota.")
 	projectExtendedQuota := map[string]string{
@@ -188,7 +179,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExistingReso
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing pod count resource quota.")
 	projectPodLimit := "1"
@@ -227,7 +220,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectMixedQuotaExceedE
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with project-level pod count and extended ephemeral storage quota.")
 	projectPodCount := "2"
@@ -286,7 +281,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectMixedQuotaExceedE
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with project-level pod count and extended ephemeral storage quota.")
 	projectPodCount := "1"
@@ -337,7 +334,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExistingOver
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing and extended pod count resource quotas that conflict.")
 	projectPodCount := "1"
@@ -410,7 +409,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExtendedRe
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with extended ephemeral storage resource quota.")
 	projectExtendedQuota := map[string]string{
@@ -503,7 +504,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExtendedPo
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with extended pod count resource quota.")
 	projectExtendedQuota := map[string]string{
@@ -581,7 +584,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelShorthandE
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with shorthand extended ephemeral storage resource quota.")
 	projectExtendedQuota := map[string]string{
@@ -664,7 +669,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExistingRe
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing pod count resource quota.")
 	projectPodLimit := "10"
@@ -747,7 +754,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceMixedQuotaExcee
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing pod count quota and extended ephemeral storage quota.")
 	projectPodCount := "10"
@@ -838,7 +847,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceMixedQuotaExcee
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing pod count quota and extended ephemeral storage quota.")
 	projectPodCount := "10"
@@ -929,7 +940,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExistingOv
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing and extended pod count resource quotas that conflict.")
 	projectPodCount := "10"
@@ -1035,7 +1048,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectResourceQuotaUsed
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing and extended resource quotas.")
 	projectExistingQuota := &v3.ResourceQuotaLimit{
@@ -1116,7 +1131,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestMoveNamespaceWithoutQuot
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a Project without resource quota.")
 	projectWithoutQuota, ns, err := projectapi.CreateProjectAndNamespace(standardUserClient, perq.cluster.ID)
@@ -1205,7 +1222,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestMoveNamespaceWithExtende
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with extended ephemeral storage quota.")
 	projectExtendedQuota := map[string]string{
@@ -1279,7 +1298,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceOverrideExtende
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with extended ephemeral-storage quota.")
 	projectExtendedQuota := map[string]string{
@@ -1356,7 +1377,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectExtendedQuotaLess
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Attempting to create a project where project extended ephemeral-storage quota < namespace extended ephemeral-storage quota.")
 	projectExtendedQuota := map[string]string{
@@ -1369,7 +1392,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectExtendedQuotaLess
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, nil, projectExtendedQuota, nil, namespaceExtendedQuota)
-	_, _, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
+	_, _, err = projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.Error(perq.T(), err)
 	require.Contains(perq.T(), err.Error(), projectapi.NamespaceQuotaExceedsProjectQuotaErrorMessage)
 
@@ -1405,7 +1428,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectExistingQuotaLess
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Attempting to create a project where project existing pod quota < namespace existing pod quota.")
 	projectExistingQuota := &v3.ResourceQuotaLimit{
@@ -1416,7 +1441,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectExistingQuotaLess
 	}
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, projectExistingQuota, nil, namespaceExistingQuota, nil)
-	_, _, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
+	_, _, err = projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.Error(perq.T(), err)
 	require.Contains(perq.T(), err.Error(), projectapi.NamespaceQuotaExceedsProjectQuotaErrorMessage)
 }

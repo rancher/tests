@@ -11,17 +11,16 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
-	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
+	extprojectapi "github.com/rancher/shepherd/extensions/kubeapi/projects"
+	extquotaapi "github.com/rancher/shepherd/extensions/kubeapi/resourcequotas"
+	extdeploymentapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/deployments"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/shepherd/pkg/wrangler"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
-	quotaapi "github.com/rancher/tests/actions/kubeapi/resourcequotas"
 	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -56,28 +55,17 @@ func (prq *ProjectsResourceQuotaTestSuite) SetupSuite() {
 	require.NoError(prq.T(), err)
 }
 
-func (prq *ProjectsResourceQuotaTestSuite) setupUserForProject() (*rancher.Client, *wrangler.Context) {
-	log.Info("Create a standard user and add the user to the downstream cluster as cluster owner.")
-	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(prq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), prq.cluster, nil)
-	require.NoError(prq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
-
-	standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, prq.cluster.ID)
-	require.NoError(prq.T(), err)
-
-	return standardUserClient, standardUserContext
-}
-
 func (prq *ProjectsResourceQuotaTestSuite) TestProjectWithoutResourceQuota() {
 	subSession := prq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := prq.setupUserForProject()
+	log.Info("Create a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(prq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), prq.cluster, nil)
+	require.NoError(prq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Create a project (without any resource quota) and a namespace in the project.")
 	createdProject, createdNamespace, err := projectapi.CreateProjectAndNamespace(prq.client, prq.cluster.ID)
 	require.NoError(prq.T(), err)
-
-	log.Info("Verify that the namespace has the label and annotation referencing the project.")
 	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(prq.T(), err)
 
@@ -86,7 +74,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestProjectWithoutResourceQuota() {
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should not exist")
 
 	log.Info("Create a deployment in the namespace with ten replicas.")
-	_, err = deployment.CreateDeployment(standardUserClient, prq.cluster.ID, createdNamespace.Name, 10, "", "", false, false, false, true)
+	_, err = deploymentapi.CreateDeployment(standardUserClient, prq.cluster.ID, createdNamespace.Name, "", 10, "", "", false, false, false, true)
 	require.NoError(prq.T(), err)
 }
 
@@ -94,7 +82,9 @@ func (prq *ProjectsResourceQuotaTestSuite) TestProjectWithResourceQuota() {
 	subSession := prq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := prq.setupUserForProject()
+	log.Info("Create a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(prq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), prq.cluster, nil)
+	require.NoError(prq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Create a project (with resource quotas) and a namespace in the project.")
 	namespacePodLimit := "2"
@@ -132,27 +122,27 @@ func (prq *ProjectsResourceQuotaTestSuite) TestProjectWithResourceQuota() {
 	require.NoError(prq.T(), err)
 
 	log.Info("Create a deployment in the first namespace with two replicas and verify that the pods are created.")
-	createdFirstDeployment, err := deployment.CreateDeployment(standardUserClient, prq.cluster.ID, firstNamespace.Name, 2, "", "", false, false, false, true)
+	createdFirstDeployment, err := deploymentapi.CreateDeployment(standardUserClient, prq.cluster.ID, firstNamespace.Name, "", 2, "", "", false, false, false, true)
 	require.NoError(prq.T(), err)
 
 	log.Info("Create another deployment in the first namespace with one replica. Verify that the deployment fails to create replicas.")
-	createdSecondDeployment, err := deployment.CreateDeployment(standardUserClient, prq.cluster.ID, firstNamespace.Name, 1, "", "", false, false, false, false)
+	createdSecondDeployment, err := deploymentapi.CreateDeployment(standardUserClient, prq.cluster.ID, firstNamespace.Name, "", 1, "", "", false, false, false, false)
 	require.NoError(prq.T(), err)
 	err = deploymentapi.VerifyDeploymentStatus(standardUserClient, prq.cluster.ID, firstNamespace.Name, createdSecondDeployment.Name, "ReplicaFailure", "FailedCreate", "forbidden: exceeded quota", 0)
 	require.NoError(prq.T(), err)
 
 	log.Info("Create a deployment in the second namespace with two replicas. Verify that the deployment fails to create replicas.")
-	createdDeployment, err := deployment.CreateDeployment(standardUserClient, prq.cluster.ID, secondNamespace.Name, 2, "", "", false, false, false, false)
+	createdDeployment, err := deploymentapi.CreateDeployment(standardUserClient, prq.cluster.ID, secondNamespace.Name, "", 2, "", "", false, false, false, false)
 	require.NoError(prq.T(), err)
 	err = deploymentapi.VerifyDeploymentStatus(standardUserClient, prq.cluster.ID, secondNamespace.Name, createdDeployment.Name, "ReplicaFailure", "FailedCreate", "forbidden: exceeded quota", 0)
 	require.NoError(prq.T(), err)
 
 	log.Info("Delete the first deployment created in the first namespace.")
-	err = deployment.DeleteDeployment(standardUserClient, prq.cluster.ID, createdFirstDeployment)
+	err = extdeploymentapi.DeleteDeployment(standardUserClient, prq.cluster.ID, createdFirstDeployment.Namespace, createdFirstDeployment.Name, true)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the second deployment created in the first namespace transitions to Active state.")
-	err = deploymentapi.WaitForDeploymentActive(standardUserClient, prq.cluster.ID, firstNamespace.Name, createdSecondDeployment.Name)
+	err = extdeploymentapi.WaitForDeploymentActive(standardUserClient, prq.cluster.ID, firstNamespace.Name, createdSecondDeployment.Name)
 	require.NoError(prq.T(), err)
 }
 
@@ -160,7 +150,9 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaPropagationToExistingNamespa
 	subSession := prq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := prq.setupUserForProject()
+	log.Info("Create a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(prq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), prq.cluster, nil)
+	require.NoError(prq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Create a project (with resource quotas) and a namespace in the project.")
 	namespacePodLimit := "2"
@@ -191,11 +183,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaPropagationToExistingNamespa
 	log.Info("Update the resource quota in the Project with new values.")
 	namespacePodLimit = "5"
 	projectPodLimit = "10"
-	currentProject, err := projectapi.GetProjectByName(standardUserClient, createdProject.Namespace, createdProject.Name)
+	currentProject, err := extprojectapi.GetProjectByName(standardUserClient, createdProject.Namespace, createdProject.Name)
 	require.NoError(prq.T(), err, "Failed to get project.")
 	currentProject.Spec.NamespaceDefaultResourceQuota.Limit.Pods = namespacePodLimit
 	currentProject.Spec.ResourceQuota.Limit.Pods = projectPodLimit
-	updatedProject, err := projectapi.UpdateProject(standardUserClient, currentProject)
+	updatedProject, err := extprojectapi.UpdateProject(standardUserClient, currentProject)
 	require.NoError(prq.T(), err, "Failed to update resource quota.")
 
 	log.Info("Verify that the pod limits in the Project spec has the updated values for resource quota.")
@@ -227,7 +219,9 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaDeletionPropagationToExistin
 	subSession := prq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := prq.setupUserForProject()
+	log.Info("Create a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(prq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), prq.cluster, nil)
+	require.NoError(prq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Create a project (with resource quotas) and a namespace in the project.")
 	namespacePodLimit := "2"
@@ -259,11 +253,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaDeletionPropagationToExistin
 	namespacePodLimit = ""
 	projectPodLimit = ""
 
-	currentProject, err := projectapi.GetProjectByName(standardUserClient, createdProject.Namespace, createdProject.Name)
+	currentProject, err := extprojectapi.GetProjectByName(standardUserClient, createdProject.Namespace, createdProject.Name)
 	require.NoError(prq.T(), err, "Failed to get project.")
 	currentProject.Spec.NamespaceDefaultResourceQuota.Limit.Pods = namespacePodLimit
 	currentProject.Spec.ResourceQuota.Limit.Pods = projectPodLimit
-	updatedProject, err := projectapi.UpdateProject(standardUserClient, currentProject)
+	updatedProject, err := extprojectapi.UpdateProject(standardUserClient, currentProject)
 	require.NoError(prq.T(), err, "Failed to update resource quota.")
 
 	log.Info("Verify that the resource quota in the Project spec has been updated.")
@@ -275,12 +269,12 @@ func (prq *ProjectsResourceQuotaTestSuite) TestQuotaDeletionPropagationToExistin
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should not exist")
 
 	log.Info("Verify that the resource quota in the existing namespace is deleted.")
-	quotas, err := quotaapi.ListResourceQuotas(standardUserClient, prq.cluster.ID, createdNamespace.Name, metav1.ListOptions{})
+	quotas, err := extquotaapi.ListResourceQuotas(standardUserClient, prq.cluster.ID, createdNamespace.Name, metav1.ListOptions{})
 	require.NoError(prq.T(), err)
 	require.Empty(prq.T(), quotas)
 
 	log.Info("Create a deployment in the first namespace with ten replicas and verify that the pods are created.")
-	_, err = deployment.CreateDeployment(standardUserClient, prq.cluster.ID, createdNamespace.Name, 10, "", "", false, false, false, true)
+	_, err = deploymentapi.CreateDeployment(standardUserClient, prq.cluster.ID, createdNamespace.Name, "", 10, "", "", false, false, false, true)
 	require.NoError(prq.T(), err)
 }
 
@@ -288,7 +282,9 @@ func (prq *ProjectsResourceQuotaTestSuite) TestOverrideQuotaInNamespace() {
 	subSession := prq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := prq.setupUserForProject()
+	log.Info("Create a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(prq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), prq.cluster, nil)
+	require.NoError(prq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Create a project (with resource quotas) and a namespace in the project.")
 	namespacePodLimit := "2"
@@ -300,7 +296,6 @@ func (prq *ProjectsResourceQuotaTestSuite) TestOverrideQuotaInNamespace() {
 	require.Equal(prq.T(), namespacePodLimit, createdProject.Spec.NamespaceDefaultResourceQuota.Limit.Pods, "Namespace pod limit mismatch")
 	require.Equal(prq.T(), projectPodLimit, createdProject.Spec.ResourceQuota.Limit.Pods, "Project pod limit mismatch")
 
-	log.Info("Verify that the namespace has the label and annotation referencing the project.")
 	err = namespaceapi.WaitForProjectIDUpdate(standardUserClient, prq.cluster.ID, createdProject.Name, createdNamespace.Name)
 	require.NoError(prq.T(), err)
 
@@ -317,7 +312,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestOverrideQuotaInNamespace() {
 	require.NoError(prq.T(), err)
 
 	log.Info("Create a deployment in the namespace with two replicas.")
-	createdDeployment, err := deployment.CreateDeployment(standardUserClient, prq.cluster.ID, createdNamespace.Name, 2, "", "", false, false, false, true)
+	createdDeployment, err := deploymentapi.CreateDeployment(standardUserClient, prq.cluster.ID, createdNamespace.Name, "", 2, "", "", false, false, false, true)
 	require.NoError(prq.T(), err)
 
 	log.Info("Override the pod limit for the namespace and increase it from 2 to 3.")
@@ -339,13 +334,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestOverrideQuotaInNamespace() {
 	require.NoError(prq.T(), err)
 
 	log.Info("Increase the number of replicas in the deployment from 2 to 3. Verify that the deployment is in Active state.")
-	standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, prq.cluster.ID)
-	require.NoError(prq.T(), err)
-	currentDeployment, err := standardUserContext.Apps.Deployment().Get(updatedNamespace.Name, createdDeployment.Name, metav1.GetOptions{})
+	currentDeployment, err := extdeploymentapi.GetDeploymentByName(standardUserClient, prq.cluster.ID, updatedNamespace.Name, createdDeployment.Name)
 	require.NoError(prq.T(), err)
 	replicas := int32(3)
 	currentDeployment.Spec.Replicas = &replicas
-	_, err = deploymentapi.UpdateDeployment(standardUserClient, prq.cluster.ID, updatedNamespace.Name, currentDeployment, true)
+	_, err = extdeploymentapi.UpdateDeployment(standardUserClient, prq.cluster.ID, currentDeployment, true)
 	require.NoError(prq.T(), err)
 
 	log.Info("Increase the pod limit on the namespace from 3 to 4.")
@@ -365,7 +358,9 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromNoQuotaToQuotaPr
 	subSession := prq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := prq.setupUserForProject()
+	log.Info("Create a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(prq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), prq.cluster, nil)
+	require.NoError(prq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Create a project in the downstream cluster and a namespace in the project.")
 	namespacePodLimit := ""
@@ -382,7 +377,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromNoQuotaToQuotaPr
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should not exist")
 
 	log.Info("Create a deployment in the namespace with ten replicas.")
-	createdDeployment, err := deployment.CreateDeployment(standardUserClient, prq.cluster.ID, createdNamespace.Name, 2, "", "", false, false, false, true)
+	createdDeployment, err := deploymentapi.CreateDeployment(standardUserClient, prq.cluster.ID, createdNamespace.Name, "", 2, "", "", false, false, false, true)
 	require.NoError(prq.T(), err)
 
 	log.Info("Create another project in the downstream cluster with resource quota set.")
@@ -426,13 +421,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromNoQuotaToQuotaPr
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that increasing the replicas to 3 in the deployment fails with exceeded quota error.")
-	standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, prq.cluster.ID)
-	require.NoError(prq.T(), err)
-	currentDeployment, err := standardUserContext.Apps.Deployment().Get(updatedNamespace.Name, createdDeployment.Name, metav1.GetOptions{})
+	currentDeployment, err := extdeploymentapi.GetDeploymentByName(standardUserClient, prq.cluster.ID, updatedNamespace.Name, createdDeployment.Name)
 	require.NoError(prq.T(), err)
 	replicas := int32(3)
 	currentDeployment.Spec.Replicas = &replicas
-	updatedDeployment, err := deploymentapi.UpdateDeployment(standardUserClient, prq.cluster.ID, updatedNamespace.Name, currentDeployment, false)
+	updatedDeployment, err := extdeploymentapi.UpdateDeployment(standardUserClient, prq.cluster.ID, currentDeployment, false)
 	require.NoError(prq.T(), err)
 
 	err = deploymentapi.VerifyDeploymentStatus(standardUserClient, prq.cluster.ID, movedNamespace.Name, updatedDeployment.Name, "ReplicaFailure", "FailedCreate", "forbidden: exceeded quota", 2)
@@ -443,7 +436,9 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromQuotaToNoQuotaPr
 	subSession := prq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := prq.setupUserForProject()
+	log.Info("Create a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(prq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), prq.cluster, nil)
+	require.NoError(prq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Create a project (with resource quota) in the downstream cluster and a namespace in the project.")
 	namespacePodLimit := "2"
@@ -464,7 +459,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromQuotaToNoQuotaPr
 	require.NoError(prq.T(), err)
 
 	log.Info("Create a deployment in the namespace with two replicas.")
-	createdDeployment, err := deployment.CreateDeployment(standardUserClient, prq.cluster.ID, createdNamespace.Name, 2, "", "", false, false, false, true)
+	createdDeployment, err := deploymentapi.CreateDeployment(standardUserClient, prq.cluster.ID, createdNamespace.Name, "", 2, "", "", false, false, false, true)
 	require.NoError(prq.T(), err)
 
 	log.Info("Create another project in the downstream cluster without any resource quota set.")
@@ -493,13 +488,11 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceFromQuotaToNoQuotaPr
 	require.Error(prq.T(), err)
 
 	log.Info("Increase the replica count of deployment to 10. Verify that there are 10 pods created in the deployment and they are in Running state.")
-	standardUserContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, prq.cluster.ID)
-	require.NoError(prq.T(), err)
-	currentDeployment, err := standardUserContext.Apps.Deployment().Get(movedNamespace.Name, createdDeployment.Name, metav1.GetOptions{})
+	currentDeployment, err := extdeploymentapi.GetDeploymentByName(standardUserClient, prq.cluster.ID, movedNamespace.Name, createdDeployment.Name)
 	require.NoError(prq.T(), err)
 	replicas := int32(10)
 	currentDeployment.Spec.Replicas = &replicas
-	_, err = deploymentapi.UpdateDeployment(standardUserClient, prq.cluster.ID, movedNamespace.Name, currentDeployment, true)
+	_, err = extdeploymentapi.UpdateDeployment(standardUserClient, prq.cluster.ID, currentDeployment, true)
 	require.NoError(prq.T(), err)
 }
 
@@ -507,7 +500,9 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceWithDeploymentTransi
 	subSession := prq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := prq.setupUserForProject()
+	log.Info("Create a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(prq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), prq.cluster, nil)
+	require.NoError(prq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Create a project (with resource quota) in the downstream cluster and a namespace in the project.")
 	namespacePodLimit := "2"
@@ -528,7 +523,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceWithDeploymentTransi
 	require.NoError(prq.T(), err)
 
 	log.Info("Create a deployment in the second namespace with ten replicas.")
-	createdDeployment, err := deployment.CreateDeployment(standardUserClient, prq.cluster.ID, createdNamespace.Name, 10, "", "", false, false, false, false)
+	createdDeployment, err := deploymentapi.CreateDeployment(standardUserClient, prq.cluster.ID, createdNamespace.Name, "", 10, "", "", false, false, false, false)
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the deployment fails to create ten replicas.")
@@ -561,7 +556,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceWithDeploymentTransi
 	require.Error(prq.T(), err)
 
 	log.Info("Verify that there are 10 pods created in the deployment and they are in Running state.")
-	err = deploymentapi.WaitForDeploymentActive(standardUserClient, prq.cluster.ID, movedNamespace.Name, createdDeployment.Name)
+	err = extdeploymentapi.WaitForDeploymentActive(standardUserClient, prq.cluster.ID, movedNamespace.Name, createdDeployment.Name)
 	require.NoError(prq.T(), err)
 }
 
@@ -569,7 +564,9 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceBetweenProjectsWithN
 	subSession := prq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := prq.setupUserForProject()
+	log.Info("Create a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(prq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), prq.cluster, nil)
+	require.NoError(prq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Create a project in the downstream cluster and a namespace in the project.")
 	namespacePodLimit := ""
@@ -588,15 +585,13 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceBetweenProjectsWithN
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should not exist")
 
 	log.Info("Create a deployment in the namespace with ten replicas.")
-	deployment, err := deployment.CreateDeployment(standardUserClient, createdProject.Namespace, createdNamespace.Name, 10, "", "", false, false, false, true)
+	deployment, err := deploymentapi.CreateDeployment(standardUserClient, createdProject.Namespace, createdNamespace.Name, "", 10, "", "", false, false, false, true)
 	require.NoError(prq.T(), err)
 
 	log.Info("Create another project in the downstream cluster.")
 	projectTemplate := projectapi.NewProjectTemplate(prq.cluster.ID)
 	createdProject2, err := projectapi.CreateProjectWithTemplate(standardUserClient, prq.cluster.ID, projectTemplate)
 	require.NoError(prq.T(), err, "Failed to create project")
-	err = projectapi.WaitForProjectFinalizerToUpdate(prq.client, createdProject2.Name, createdProject2.Namespace, 2)
-	require.NoError(prq.T(), err)
 
 	log.Info("Move the namespace from the first project to the second project.")
 	currentNamespace, err := extnamespaceapi.GetNamespaceByName(standardUserClient, prq.cluster.ID, updatedNamespace.Name)
@@ -616,7 +611,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestMoveNamespaceBetweenProjectsWithN
 	require.NoError(prq.T(), err, "'field.cattle.io/resourceQuota' annotation should not exist")
 
 	log.Info("Verify that the deployment is in Active state and all pods in the deployment are in Running state.")
-	err = deploymentapi.WaitForDeploymentActive(standardUserClient, prq.cluster.ID, updatedNamespace.Name, deployment.Name)
+	err = extdeploymentapi.WaitForDeploymentActive(standardUserClient, prq.cluster.ID, deployment.Namespace, deployment.Name)
 	require.NoError(prq.T(), err)
 }
 

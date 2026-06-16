@@ -13,17 +13,18 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extstatefulsetapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/statefulsets"
 	shepherdPods "github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/kubeapi/volumes/persistentvolumeclaims"
+	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
+	statefulsetapi "github.com/rancher/tests/actions/kubeapi/workloads/statefulsets"
 	namespaceActions "github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/storage"
-	"github.com/rancher/tests/actions/workloads/pods"
-	"github.com/rancher/tests/actions/workloads/statefulset"
 	"github.com/rancher/tests/interoperability/longhorn"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -148,8 +149,8 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	require.NoError(l.T(), err)
 	l.T().Logf("Created namespace %s", namespaceName)
 
-	podTemplate := pods.CreateContainerAndPodTemplate()
-	statefulSet, err := statefulset.CreateStatefulSet(l.client, l.cluster.ID, namespace.Name, podTemplate, minStatefulSetReplicas, true, l.longhornTestConfig.LonghornTestStorageClass)
+	podTemplate := podapi.CreateContainerAndPodTemplate("")
+	statefulSet, err := statefulsetapi.CreateStatefulSet(l.client, l.cluster.ID, namespace.Name, podTemplate, minStatefulSetReplicas, true, l.longhornTestConfig.LonghornTestStorageClass)
 	require.NoError(l.T(), err)
 	l.T().Logf("Created StetefulSet %s on namespace %s", statefulSet.Name, namespaceName)
 
@@ -158,7 +159,7 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	storage.CheckVolumeAllocation(l.T(), l.client, l.cluster.ID, namespace.Name, l.longhornTestConfig.LonghornTestStorageClass, volumeSourceName, storage.MountPath)
 
 	statefulSet.Spec.Replicas = &maxStatefulSetReplicas
-	statefulSet, err = statefulset.UpdateStatefulSet(l.client, l.cluster.ID, namespace.Name, statefulSet, true)
+	statefulSet, err = extstatefulsetapi.UpdateStatefulSet(l.client, l.cluster.ID, statefulSet, true)
 	require.NoError(l.T(), err)
 
 	err = shepherdCharts.WatchAndWaitStatefulSets(l.client, l.cluster.ID, namespaceName, metav1.ListOptions{
@@ -173,7 +174,7 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	require.NotEmpty(l.T(), pvcBeforeScaling.Data)
 
 	statefulSet.Spec.Replicas = &minStatefulSetReplicas
-	statefulSet, err = statefulset.UpdateStatefulSet(l.client, l.cluster.ID, namespace.Name, statefulSet, true)
+	statefulSet, err = extstatefulsetapi.UpdateStatefulSet(l.client, l.cluster.ID, statefulSet, true)
 	require.NoError(l.T(), err)
 
 	l.T().Logf("Verifying old volumes still exist")

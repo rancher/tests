@@ -14,9 +14,9 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/providers"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	extsecretsapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
 	nodestat "github.com/rancher/shepherd/extensions/nodes"
 	"github.com/rancher/shepherd/pkg/config"
-	"github.com/rancher/tests/actions/kubeapi/secrets"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -423,7 +423,7 @@ func GetInitMachine(client *rancher.Client, clusterID string) (*v1.SteveAPIObjec
 
 	clusterID = strings.Replace(clusterID, "fleet-default/", "", 1)
 
-	secret, err := secrets.ListSecrets(client, local, fleetNamespace, metav1.ListOptions{
+	secret, err := extsecretsapi.ListSecrets(client, local, fleetNamespace, metav1.ListOptions{
 		LabelSelector: initNodeLabelKey + "=" + True + "," + clusterNameLabelKey + "=" + clusterID,
 	})
 	if err != nil {

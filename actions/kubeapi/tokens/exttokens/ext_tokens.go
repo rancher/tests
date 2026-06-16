@@ -9,8 +9,8 @@ import (
 	extapi "github.com/rancher/rancher/pkg/apis/ext.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
+	exttokenapi "github.com/rancher/shepherd/extensions/kubeapi/tokens"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
@@ -23,7 +23,7 @@ const (
 	FalseConditionStatus       metav1.ConditionStatus = "False"
 )
 
-// CreateExtToken creates an ext token with the TTL value provided using Public API
+// CreateExtToken creates an ext token with the TTL value provided using wrangler context and returns the created ext token object
 func CreateExtToken(client *rancher.Client, ttlValue int64) (*extapi.Token, error) {
 	name := namegen.AppendRandomString("test-exttoken")
 	extToken := &extapi.Token{
@@ -36,14 +36,15 @@ func CreateExtToken(client *rancher.Client, ttlValue int64) (*extapi.Token, erro
 		},
 	}
 
-	createdExtToken, err := client.WranglerContext.Ext.Token().Create(extToken)
+	createdExtToken, err := exttokenapi.CreateExtToken(client, extToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ext token: %w", err)
 	}
+
 	return createdExtToken, nil
 }
 
-// CreateExtSessionToken creates an ext session token using Public API
+// CreateExtSessionToken creates an ext session token using wrangler context and returns the created ext session token object
 func CreateExtSessionToken(client *rancher.Client) (*extapi.Token, error) {
 	name := namegen.AppendRandomString("test-extsessiontoken")
 	extSessionToken := &extapi.Token{
@@ -56,66 +57,12 @@ func CreateExtSessionToken(client *rancher.Client) (*extapi.Token, error) {
 		},
 	}
 
-	createdExtSessionToken, err := client.WranglerContext.Ext.Token().Create(extSessionToken)
+	createdExtSessionToken, err := exttokenapi.CreateExtToken(client, extSessionToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ext session token %w", err)
 	}
+
 	return createdExtSessionToken, nil
-}
-
-// GetExtToken retrieves an ext token by name using GET API
-func GetExtToken(client *rancher.Client, name string) (*extapi.Token, error) {
-	extToken, err := client.WranglerContext.Ext.Token().Get(name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get ext token %s: %w", name, err)
-	}
-	return extToken, nil
-}
-
-// ListExtToken retrieves ext tokens using LIST API
-func ListExtToken(client *rancher.Client) (*extapi.TokenList, error) {
-	extTokens, err := client.WranglerContext.Ext.Token().List(metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list ext token: %w", err)
-	}
-	return extTokens, nil
-}
-
-// UpdateExtToken updates an existing ext token using Public API
-func UpdateExtToken(client *rancher.Client, exttoken *extapi.Token) (*extapi.Token, error) {
-	updatedExtToken, err := client.WranglerContext.Ext.Token().Update(exttoken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update ext token: %w", err)
-	}
-	return updatedExtToken, nil
-}
-
-// DeleteExtToken deletes a ext token by name using Public API
-func DeleteExtToken(client *rancher.Client, exttokenname string) error {
-	err := client.WranglerContext.Ext.Token().Delete(exttokenname, &metav1.DeleteOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to delete ext token: %s: %w", exttokenname, err)
-	}
-
-	err = WaitForExtTokenDeletion(client, exttokenname)
-	if err != nil {
-		return fmt.Errorf("timed out waiting for kubeconfig %s to be deleted: %w", exttokenname, err)
-	}
-	return nil
-}
-
-// WaitForExtTokenDeletion polls until an ext token with the given name is deleted or the timeout is reached
-func WaitForExtTokenDeletion(client *rancher.Client, name string) error {
-	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
-		_, err := GetExtToken(client, name)
-		if err != nil {
-			if k8serrors.IsNotFound(err) {
-				return true, nil
-			}
-			return false, err
-		}
-		return false, nil
-	})
 }
 
 // WaitForExtTokenStatusExpired polls until an ext token with the given name has an expired status or the timeout is reached
@@ -123,7 +70,7 @@ func WaitForExtTokenStatusExpired(client *rancher.Client, name string, expiredSt
 	var expiredToken *extapi.Token
 
 	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
-		extToken, err := GetExtToken(client, name)
+		extToken, err := exttokenapi.GetExtTokenByName(client, name)
 		if err != nil {
 			return false, err
 		}
@@ -141,7 +88,7 @@ func WaitForExtTokenToDisable(client *rancher.Client, name string, expectedState
 	var disabledToken *extapi.Token
 
 	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
-		extToken, err := GetExtToken(client, name)
+		extToken, err := exttokenapi.GetExtTokenByName(client, name)
 		if err != nil {
 			return false, err
 		}

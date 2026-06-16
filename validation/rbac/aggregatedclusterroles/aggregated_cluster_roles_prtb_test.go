@@ -10,15 +10,17 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
-	"github.com/rancher/shepherd/extensions/users"
+	extfeaturesapi "github.com/rancher/shepherd/extensions/kubeapi/features"
+	extpodapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/pods"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
+	userapi "github.com/rancher/tests/actions/kubeapi/users"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -39,7 +41,7 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TearDownSuite() {
 	acrp.session.Cleanup()
 
 	log.Infof("Disabling the feature flag %s", rbacapi.AggregatedRoleTemplatesFeatureFlag)
-	err := rbacapi.SetAggregatedClusterRoleFeatureFlag(acrp.client, false)
+	err := extfeaturesapi.DisableFeatureFlag(acrp.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
 	if err != nil {
 		log.Warnf("Failed to disable the feature flag during teardown: %v", err)
 	}
@@ -61,23 +63,20 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) SetupSuite() {
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Enabling the feature flag %s", rbacapi.AggregatedRoleTemplatesFeatureFlag)
-	featureEnabled, err := rbacapi.IsFeatureEnabled(acrp.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
+	featureEnabled, err := extfeaturesapi.IsFeatureEnabled(acrp.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
 	require.NoError(acrp.T(), err, "Failed to check if feature flag is enabled")
 	if !featureEnabled {
-		err := rbacapi.SetAggregatedClusterRoleFeatureFlag(acrp.client, true)
+		err := extfeaturesapi.EnableFeatureFlag(acrp.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
 		require.NoError(acrp.T(), err, "Failed to enable the feature flag")
 	} else {
 		log.Infof("Feature flag %s is already enabled.", rbacapi.AggregatedRoleTemplatesFeatureFlag)
 	}
 }
 
-func (acrp *AggregatedClusterRolesPrtbTestSuite) acrCreateTestResourcesForPrtb(client *rancher.Client, cluster *management.Cluster) (*v3.Project, []*corev1.Namespace, *management.User, []*appsv1.Deployment, []string, []*corev1.Secret, error) {
+func (acrp *AggregatedClusterRolesPrtbTestSuite) acrCreateTestResourcesForPrtb(client *rancher.Client, cluster *management.Cluster) (*v3.Project, []*corev1.Namespace, *v3.User, string, []*appsv1.Deployment, []string, []*corev1.Secret, error) {
 	log.Info("Creating the required resources for the test.")
 	createdProject, err := projectapi.CreateProject(client, cluster.ID)
 	require.NoError(acrp.T(), err, "Failed to create project")
-
-	downstreamContext, err := extclusterapi.GetClusterWranglerContext(client, cluster.ID)
-	require.NoError(acrp.T(), err, "Failed to get downstream cluster context")
 
 	var createdNamespaces []*corev1.Namespace
 	var createdDeployments []*appsv1.Deployment
@@ -90,11 +89,11 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) acrCreateTestResourcesForPrtb(c
 		require.NoError(acrp.T(), err, "Failed to create namespace")
 		createdNamespaces = append(createdNamespaces, namespace)
 
-		createdDeployment, err := deployment.CreateDeployment(client, cluster.ID, namespace.Name, 2, "", "", false, false, false, true)
+		createdDeployment, err := deploymentapi.CreateDeployment(client, cluster.ID, namespace.Name, "", 2, "", "", false, false, false, true)
 		require.NoError(acrp.T(), err, "Failed to create deployment in namespace %s", namespace.Name)
 		createdDeployments = append(createdDeployments, createdDeployment)
 
-		podList, err := downstreamContext.Core.Pod().List(namespace.Name, metav1.ListOptions{})
+		podList, err := extpodapi.ListPods(client, cluster.ID, namespace.Name, metav1.ListOptions{})
 		require.NoError(acrp.T(), err, "Failed to list pods in namespace %s", namespace.Name)
 		require.Greater(acrp.T(), len(podList.Items), 0, "No pods found in namespace %s", namespace.Name)
 		podNames = append(podNames, podList.Items[0].Name)
@@ -107,17 +106,17 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) acrCreateTestResourcesForPrtb(c
 		createdSecrets = append(createdSecrets, createdSecret)
 	}
 
-	createdUser, err := users.CreateUserWithRole(client, users.UserConfig(), rbac.StandardUser.String())
+	createdUser, userPassword, err := userapi.CreateUserWithRoles(client, rbac.StandardUser.String())
 	require.NoError(acrp.T(), err, "Failed to create user")
 
-	return createdProject, createdNamespaces, createdUser, createdDeployments, podNames, createdSecrets, nil
+	return createdProject, createdNamespaces, createdUser, userPassword, createdDeployments, podNames, createdSecrets, nil
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithProjectMgmtResources() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, _, _, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, _, _, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	log.Info("Creating project role templates with project management plane resources.")
@@ -149,9 +148,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithProjectM
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 1)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -166,18 +165,20 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithProjectM
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithRegularResources() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, createdDeployment, podNames, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, createdDeployment, podNames, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	log.Info("Creating project role templates with regular resources.")
@@ -207,9 +208,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithRegularR
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 1)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -224,22 +225,24 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithRegularR
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "deployments", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "pods", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "deployments", namespaceName, createdDeployment[0].Name, false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projects", "", createdProject.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "deployments", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "pods", namespaceName, podNames[0], true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projects", "", createdProject.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithMgmtAndRegularResources() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, createdDeployment, podNames, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, createdDeployment, podNames, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	log.Info("Creating project role templates with project management and regular resources.")
@@ -271,9 +274,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithMgmtAndR
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 1)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -288,21 +291,23 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithMgmtAndR
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "pods", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "pods", namespaceName, podNames[0], true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithMultipleRules() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, createdDeployment, podNames, createdSecret, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, createdDeployment, podNames, createdSecret, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	log.Info("Creating project role templates with multiple rules.")
@@ -357,9 +362,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithMultiple
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 1)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -374,28 +379,30 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithMultiple
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "deployments", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "secrets", namespaceName, createdSecret[0].Name, true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "secrets", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "pods", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "deployments", namespaceName, createdDeployment[0].Name, false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "secrets", namespaceName, createdSecret[0].Name, false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "deployments", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "secrets", namespaceName, createdSecret[0].Name, true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "secrets", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "pods", namespaceName, podNames[0], true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "secrets", namespaceName, createdSecret[0].Name, false, false))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbWithNoInheritance() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, _, _, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, _, _, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	log.Info("Creating a project role template with no inheritance.")
@@ -422,9 +429,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbWithNoInheritance() {
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 1)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -439,19 +446,21 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbWithNoInheritance() {
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "pods", createdNamespaces[0].Name, "", false, false))
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "pods", createdNamespaces[0].Name, "", false, false))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritedRulesOnly() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, _, _, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, _, _, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	log.Info("Creating project role templates.")
@@ -483,9 +492,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritedRulesOnly() {
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 1)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -500,19 +509,21 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritedRulesOnly() {
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "pods", createdNamespaces[0].Name, "", false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "pods", createdNamespaces[0].Name, "", false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithTwoPrtbs() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, createdDeployment, podNames, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, createdDeployment, podNames, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	log.Info("Creating project role templates.")
@@ -562,15 +573,15 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithTwoPrtbs
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName1)
-	createdPrtb1, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName1)
+	createdPrtb1, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName1)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName2)
-	createdPrtb2, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName2)
+	createdPrtb2, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName2)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
 
 	log.Infof("Verifying project role template bindings are created for user %s", createdUser.Username)
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 2)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 2)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -595,30 +606,32 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbInheritanceWithTwoPrtbs
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "pods", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "deployments", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "deployments", namespaceName, createdDeployment[0].Name, false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb1.Namespace, createdPrtb1.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb1.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb1.Namespace, createdPrtb1.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projectroletemplatebindings", createdPrtb1.Namespace, createdPrtb1.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb1.Namespace, createdPrtb1.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb2.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "pods", namespaceName, podNames[0], true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "deployments", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb1.Namespace, createdPrtb1.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb1.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projectroletemplatebindings", createdPrtb1.Namespace, createdPrtb1.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "patch", "projectroletemplatebindings", createdPrtb1.Namespace, createdPrtb1.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb1.Namespace, createdPrtb1.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb2.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "patch", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, false, true))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbNestedInheritance() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, createdDeployment, podNames, createdSecret, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, createdDeployment, podNames, createdSecret, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	log.Info("Creating nested project role templates.")
@@ -672,9 +685,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbNestedInheritance() {
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR for child role 2")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName1)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName1)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName1)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 1)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -689,25 +702,27 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbNestedInheritance() {
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "pods", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "deployments", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "secrets", namespaceName, createdSecret[0].Name, true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "secrets", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "pods", namespaceName, podNames[0], true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "deployments", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "secrets", namespaceName, createdSecret[0].Name, true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "secrets", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbMultipleLevelsOfInheritance() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, createdDeployment, podNames, createdSecret, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, createdDeployment, podNames, createdSecret, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	log.Info("Creating multiple levels of nested project role templates.")
@@ -763,9 +778,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbMultipleLevelsOfInherit
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR for main role")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName1)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName1)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName1)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 1)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -780,28 +795,30 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbMultipleLevelsOfInherit
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "deployments", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "deployments", namespaceName, createdDeployment[0].Name, false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "pods", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "namespaces", "", namespaceName, true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "secrets", namespaceName, createdSecret[0].Name, true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "secrets", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "deployments", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "pods", namespaceName, podNames[0], true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "namespaces", "", namespaceName, true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "secrets", namespaceName, createdSecret[0].Name, true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "secrets", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToAddInheritance() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, _, podNames, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, _, podNames, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	log.Info("Creating a project role template with no inheritance.")
@@ -828,9 +845,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToAdd
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 1)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -845,12 +862,14 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToAdd
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "pods", namespaceName, "", false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "pods", namespaceName, "", false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "pods", namespaceName, podNames[0], false, false))
 
 	log.Info("Creating a new project role template.")
 	childRules := rbacapi.PolicyRules["readPods"]
@@ -886,18 +905,20 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToAdd
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "pods", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], true, false))
+	userClient, err = acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "pods", namespaceName, podNames[0], true, false))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToRemoveInheritance() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, _, podNames, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, _, podNames, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	log.Info("Creating project role templates with project management and regular resources.")
@@ -929,9 +950,9 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToRem
 	require.NoError(acrp.T(), err, "Failed to fetch downstream ACR")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 1)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -946,13 +967,15 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToRem
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "pods", namespaceName, "", true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "pods", namespaceName, podNames[0], true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
 
 	log.Info("Removing inheritance from the main role template.")
 	updatedMainRT, err := rbacapi.UpdateRoleTemplateInheritance(acrp.client, mainRTName, []*v3.RoleTemplate{})
@@ -973,19 +996,21 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbUpdateRoleTemplateToRem
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "pods", namespaceName, "", false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	userClient, err = acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "pods", namespaceName, "", false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbVerifyCrossClusterAndProjectAccessRestriction() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, _, _, createdSecret, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, _, _, createdSecret, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	createdProject2, err := projectapi.CreateProject(acrp.client, acrp.cluster.ID)
@@ -1012,17 +1037,17 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbVerifyCrossClusterAndPr
 
 	mainRTName := createdMainRT.Name
 	log.Infof("Adding user %s to a project %s in the downstream cluster %s with role %s", createdUser.Username, createdProject.Name, acrp.cluster.Name, mainRTName)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 1)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster %s with role %s", createdUser.Username, createdProject2.Name, acrp.cluster.Name, rbac.SecretsView.String())
-	createdPrtb2, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject2, rbac.SecretsView.String())
+	createdPrtb2, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject2, rbac.SecretsView.String())
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
 
 	log.Infof("Adding user %s to a project %s in the local cluster with role %s", createdUser.Username, createdProject3.Name, rbac.SecretsView.String())
-	createdPrtb3, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject3, rbac.SecretsView.String())
+	createdPrtb3, err := rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject3, rbac.SecretsView.String())
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -1037,29 +1062,31 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestPrtbVerifyCrossClusterAndPr
 	require.NoError(acrp.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "secrets", namespaceName, createdSecret[0].Name, false, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb2.Namespace, "", false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "secrets", createdNamespace2.Name, createdSecret2.Name, true, false))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, extclusterapi.LocalCluster, createdUser, "get", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, extclusterapi.LocalCluster, createdUser, "list", "projectroletemplatebindings", createdPrtb3.Namespace, "", false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, extclusterapi.LocalCluster, createdUser, "update", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, extclusterapi.LocalCluster, createdUser, "patch", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "patch", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "secrets", namespaceName, createdSecret[0].Name, false, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "list", "projectroletemplatebindings", createdPrtb2.Namespace, "", false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "patch", "projectroletemplatebindings", createdPrtb2.Namespace, createdPrtb2.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "secrets", createdNamespace2.Name, createdSecret2.Name, true, false))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, extclusterapi.LocalCluster, "get", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, extclusterapi.LocalCluster, "list", "projectroletemplatebindings", createdPrtb3.Namespace, "", false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, extclusterapi.LocalCluster, "update", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, extclusterapi.LocalCluster, "patch", "projectroletemplatebindings", createdPrtb3.Namespace, createdPrtb3.Name, false, true))
 }
 
 func (acrp *AggregatedClusterRolesPrtbTestSuite) TestProjectRoleTemplateInheritingProjectOwner() {
 	subSession := acrp.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, _, createdUser, _, _, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
+	createdProject, _, createdUser, userPassword, _, _, _, err := acrp.acrCreateTestResourcesForPrtb(acrp.client, acrp.cluster)
 	require.NoError(acrp.T(), err)
 
 	log.Info("Creating project role templates.")
@@ -1083,26 +1110,30 @@ func (acrp *AggregatedClusterRolesPrtbTestSuite) TestProjectRoleTemplateInheriti
 	require.Equal(acrp.T(), 7, len(downstreamCRs.Items))
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
-	_, err = rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser, createdProject, mainRTName)
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(acrp.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrp.T(), err, "Failed to assign role to user")
-	_, err = rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.ID, 1)
+	_, err = rbacapi.VerifyProjectRoleTemplateBindingForUser(acrp.client, createdUser.Username, 1)
 	require.NoError(acrp.T(), err, "prtb not found for user")
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "create", "projects", "", "", false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projects", "", createdProject.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projects", "", createdProject.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projects", "", createdProject.Name, true, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projects", "", createdProject.Name, true, true))
+	userClient, err := acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "create", "projects", "", "", false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projects", "", createdProject.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projects", "", createdProject.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "patch", "projects", "", createdProject.Name, true, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projects", "", createdProject.Name, true, true))
 
 	log.Info("Remove project-owner inheritance and verify that the user no longer has access to the project")
 	_, err = rbacapi.UpdateRoleTemplateInheritance(acrp.client, mainRTName, []*v3.RoleTemplate{})
 	require.NoError(acrp.T(), err, "Failed to update role template inheritance")
 
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "get", "projects", "", createdProject.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "update", "projects", "", createdProject.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "patch", "projects", "", createdProject.Name, false, true))
-	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(acrp.client, acrp.cluster.ID, createdUser, "delete", "projects", "", createdProject.Name, false, true))
+	userClient, err = acrp.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrp.T(), err)
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "get", "projects", "", createdProject.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "update", "projects", "", createdProject.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "patch", "projects", "", createdProject.Name, false, true))
+	require.NoError(acrp.T(), rbacapi.VerifyUserPermission(userClient, acrp.cluster.ID, "delete", "projects", "", createdProject.Name, false, true))
 }
 
 func TestAggregatedClusterRolesPrtbTestSuite(t *testing.T) {

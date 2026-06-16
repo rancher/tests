@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/tests/actions/workloads/pods"
+	extpodsapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/pods"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -15,7 +15,7 @@ import (
 func VerifyPodContainerResources(client *rancher.Client, clusterID, namespaceName, deploymentName, cpuLimit, cpuReservation, memoryLimit, memoryReservation string) error {
 	var errs []string
 
-	podNames, err := pods.GetPodNamesFromDeployment(client, clusterID, namespaceName, deploymentName)
+	podNames, err := GetPodNamesFromDeployment(client, clusterID, namespaceName, deploymentName)
 	if err != nil {
 		return fmt.Errorf("error fetching pod by deployment name: %w", err)
 	}
@@ -23,7 +23,7 @@ func VerifyPodContainerResources(client *rancher.Client, clusterID, namespaceNam
 		return errors.New("expected at least one pod, but got " + strconv.Itoa(len(podNames)))
 	}
 
-	pod, err := pods.GetPodByName(client, clusterID, namespaceName, podNames[0])
+	pod, err := extpodsapi.GetPodByName(client, clusterID, namespaceName, podNames[0])
 	if err != nil {
 		return err
 	}

@@ -19,6 +19,7 @@ import (
 
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
 	"github.com/rancher/shepherd/extensions/users"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/provisioning"
@@ -270,7 +271,7 @@ func (gr *GlobalRolesV2TestSuite) TestUserDeletionAndResourceCleanupWithInherite
 	listOpt := metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdGlobalRole.Name,
 	}
-	grList, err := rbacapi.ListGlobalRoles(gr.client, listOpt)
+	grList, err := gr.client.WranglerContext.Mgmt.GlobalRole().List(listOpt)
 	require.NoError(gr.T(), err)
 	require.NotEmpty(gr.T(), grList, "Global Role does not exist.")
 
@@ -333,14 +334,14 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromDel
 	require.Equal(gr.T(), expectedClusterCount, actualClusterCount, "Unexpected number of Clusters: Expected %d, Actual %d", expectedClusterCount, actualClusterCount)
 
 	log.Info("Delete Global Role Binding.")
-	err = rbacapi.DeleteGlobalRoleBinding(gr.client, grbName)
+	err = extrbacapi.DeleteGlobalRoleBinding(gr.client, grbName, true)
 	require.NoError(gr.T(), err)
 
 	log.Info("Verify that the global role is not deleted.")
 	listOpt := metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdGlobalRole.Name,
 	}
-	grList, err := rbacapi.ListGlobalRoles(gr.client, listOpt)
+	grList, err := gr.client.WranglerContext.Mgmt.GlobalRole().List(listOpt)
 	require.NoError(gr.T(), err)
 	require.NotEmpty(gr.T(), grList, "Global Role does not exist.")
 
@@ -413,7 +414,7 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromDel
 		},
 		InheritedClusterRoles: []string{},
 	}
-	_, err = rbacapi.UpdateGlobalRole(gr.client, &updateGlobalRole)
+	_, err = extrbacapi.UpdateGlobalRole(gr.client, &updateGlobalRole)
 	require.NoError(gr.T(), err)
 
 	for _, user := range users {
@@ -497,7 +498,7 @@ func (gr *GlobalRolesV2TestSuite) TestUserWithInheritedClusterRolesImpactFromClu
 	listOpt := metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdGlobalRole.Name,
 	}
-	grList, err := rbacapi.ListGlobalRoles(gr.client, listOpt)
+	grList, err := gr.client.WranglerContext.Mgmt.GlobalRole().List(listOpt)
 	require.NoError(gr.T(), err)
 	require.NotEmpty(gr.T(), grList, "Global Role does not exist.")
 
