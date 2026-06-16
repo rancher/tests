@@ -41,11 +41,6 @@ type LonghornTestSuite struct {
 }
 
 func (l *LonghornTestSuite) TearDownSuite() {
-	l.T().Log("Uninstalling Longhorn chart")
-	err := charts.UninstallLonghornChart(l.client, charts.LonghornNamespace, l.cluster.ID, l.client.RancherConfig.Host)
-	if err != nil {
-		l.T().Logf("Failed to uninstall Longhorn chart: %v", err)
-	}
 	l.session.Cleanup()
 }
 
@@ -141,6 +136,7 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 
 	nodeList, err := steveClient.SteveType("node").List(nil)
 	require.NoError(l.T(), err)
+	require.NotEmpty(l.T(), nodeList.Data)
 
 	nodeCount := len(nodeList.Data)
 
@@ -174,6 +170,7 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 
 	pvcBeforeScaling, err := steveClient.SteveType(persistentvolumeclaims.PersistentVolumeClaimType).NamespacedSteveClient(namespace.Name).List(nil)
 	require.NoError(l.T(), err)
+	require.NotEmpty(l.T(), pvcBeforeScaling.Data)
 
 	statefulSet.Spec.Replicas = &minStatefulSetReplicas
 	statefulSet, err = statefulset.UpdateStatefulSet(l.client, l.cluster.ID, namespace.Name, statefulSet, true)
@@ -182,6 +179,8 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	l.T().Logf("Verifying old volumes still exist")
 	volumesAfterScaling, err := steveClient.SteveType(storage.PersistentVolumeEntityType).List(nil)
 	require.NoError(l.T(), err)
+	require.NotEmpty(l.T(), volumesAfterScaling.Data)
+
 	var volumeNamesAfterScaling []string
 	for _, volume := range volumesAfterScaling.Data {
 		volumeNamesAfterScaling = append(volumeNamesAfterScaling, volume.Name)
@@ -199,14 +198,14 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	})
 	require.NoError(l.T(), err)
 
-	pods, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespace.Name).List(nil)
+	podList, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespace.Name).List(nil)
 	require.NoError(l.T(), err)
-	require.Equal(l.T(), int(minStatefulSetReplicas), len(pods.Data))
+	require.Equal(l.T(), int(minStatefulSetReplicas), len(podList.Data))
 
-	err = steveClient.SteveType(shepherdPods.PodResourceSteveType).Delete(&pods.Data[0])
+	err = steveClient.SteveType(shepherdPods.PodResourceSteveType).Delete(&podList.Data[0])
 	require.NoError(l.T(), err)
 
-	oldPodVolume, err := storage.GetTargetVolume(pods.Data[0], volumeSourceName)
+	oldPodVolume, err := storage.GetTargetVolume(podList.Data[0], volumeSourceName)
 	require.NoError(l.T(), err)
 	l.T().Logf("Deleting pod and checking if the volume bound to PVC %s is successfully reattached", oldPodVolume.PersistentVolumeClaim.ClaimName)
 
@@ -215,13 +214,13 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	})
 	require.NoError(l.T(), err)
 
-	newPods, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespace.Name).List(nil)
+	newPodList, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespace.Name).List(nil)
 	require.NoError(l.T(), err)
-	require.Equal(l.T(), int(minStatefulSetReplicas), len(newPods.Data))
+	require.Equal(l.T(), int(minStatefulSetReplicas), len(newPodList.Data))
 
-	for _, pod := range newPods.Data {
+	for _, pod := range newPodList.Data {
 		// We are interested in the pod that was created instead of the one that was deleted.
-		if pod.Name != pods.Data[0].Name {
+		if pod.Name != podList.Data[0].Name {
 			newPodVolume, err := storage.GetTargetVolume(pod, volumeSourceName)
 			require.NoError(l.T(), err)
 			require.Equal(l.T(), oldPodVolume.PersistentVolumeClaim.ClaimName, newPodVolume.PersistentVolumeClaim.ClaimName)
