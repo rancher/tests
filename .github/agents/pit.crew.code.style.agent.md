@@ -75,7 +75,8 @@ Workload upgrade test file:
 * If an error is intentionally ignored, add a comment explaining why.
 
 ### Logging and output
-* Use `logrus` for all logging — do not use `t.Log()` or `fmt.Print*`.
+* In test suite methods (`SetupSuite`, `TearDownSuite`, `SetupTest`, `TearDownTest`, and all `Test*` methods), always use `s.T().Log()` / `s.T().Logf()` — `t` is always available through the suite receiver.
+* Use `logrus` only in helper or non-test functions where `*testing.T` is not in scope (e.g., standalone helper files, actions).
 * Logs must clearly describe test steps to improve traceability.
 
 ### Constants and strings
