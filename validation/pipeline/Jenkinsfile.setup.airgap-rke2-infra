@@ -8,11 +8,14 @@
  * Consumes shared functions from qa-jenkins-library:
  *   airgap.standardCheckout, airgap.configureAnsible, airgap.deployRKE2,
  *   airgap.deployRancher, airgap.teardownInfrastructure,
- *   tofu.initBackend, tofu.createWorkspace, tofu.apply, tofu.getOutputs,
+ *   tofu.getOutputs,
  *   infrastructure.parseAndSubstituteVars, infrastructure.writeConfig,
  *   make.runTarget
  *
  * Make targets (run via make.runTarget in Docker):
+ *   backend-s3 — Initialize tofu S3 backend
+ *   workspace-new — Create tofu workspace
+ *   infra-up   — Apply infrastructure + generate airgap inventory
  *   cluster  — Deploy RKE2 via Ansible tarball playbook
  *   registry — Configure private registry on cluster nodes
  *   rancher  — Deploy Rancher via Helm
@@ -171,30 +174,6 @@ pipeline {
                         def ansiblePath   = "${env.INFRA_DIR}/ansible/rke2/airgap"
                         def workspaceName = ''
 
-                        // ── Tofu: init backend ─────────────────────────────
-                        stage('Initialize Tofu Backend') {
-                            tofu.initBackend(
-                                dir:               tofuModulePath,
-                                bucket:            env.S3_BUCKET_NAME,
-                                key:               env.S3_KEY_PREFIX,
-                                region:            env.S3_BUCKET_REGION,
-                                backendInitScript: '../../../scripts/init-backend.sh'
-                            )
-                        }
-
-                        // ── Tofu: create workspace ─────────────────────────
-                        stage('Create Workspace') {
-                            workspaceName = infrastructure.generateWorkspaceName(
-                                prefix:           'jenkins_airgap_ansible_workspace',
-                                suffix:           env.HOSTNAME_PREFIX,
-                                includeTimestamp: false
-                            )
-
-                            tofu.createWorkspace(dir: tofuModulePath, name: workspaceName)
-                            infrastructure.archiveWorkspaceName(workspaceName: workspaceName)
-                            env.WORKSPACE_NAME = workspaceName
-                        }
-
                         // ── SSH key setup ───────────────────────────────────
                         stage('Configure SSH Key') {
                             infrastructure.writeSshKey(
@@ -204,7 +183,7 @@ pipeline {
                             )
                         }
 
-                        // ── Tofu: configure variables ──────────────────────
+                        // ── Tofu: configure variables (tfvars must exist before backend/workspace) ──
                         stage('Configure Tofu Variables') {
                             def terraformConfig = infrastructure.parseAndSubstituteVars(
                                 content: env.TERRAFORM_CONFIG,
@@ -222,30 +201,44 @@ pipeline {
                             )
                         }
 
-                        // ── Tofu: apply ─────────────────────────────────────
-                        stage('Apply Tofu') {
-                            tofu.apply(
-                                dir:         tofuModulePath,
-                                varFile:     'terraform.tfvars',
-                                autoApprove: true
+                        // ── Tofu: init S3 backend (Makefile routes to centralized init-backend.sh via $(CURDIR)) ──
+                        stage('Initialize Tofu Backend') {
+                            make.runTarget(
+                                target:   'backend-s3',
+                                dir:      env.INFRA_DIR,
+                                makeArgs: [
+                                    'ENV=airgap',
+                                    "BUCKET=${env.S3_BUCKET_NAME}",
+                                    "KEY=${env.S3_KEY_PREFIX}",
+                                    "REGION=${env.S3_BUCKET_REGION}"
+                                ]
                             )
                         }
 
-                        // ── Inventory generation ────────────────────────────
-                        stage('Generate Inventory') {
-                            sh """
-                                docker run --rm --platform linux/amd64 \
-                                    -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
-                                    -v \$(pwd):/workspace -w /workspace \
-                                    rancher-infra-tools:latest sh -c '
-                                        tofu -chdir=${tofuModulePath} output -raw airgap_inventory_json > /tmp/airgap.json &&
-                                        python3 ./qa-infra-automation/scripts/generate_inventory.py \
-                                            --input /tmp/airgap.json \
-                                            --schema ./qa-infra-automation/ansible/_inventory-schema.yaml \
-                                            --distro rke2 --env airgap \
-                                            --output-dir ${ansiblePath}/inventory
-                                    '
-                            """
+                        // ── Tofu: create workspace ─────────────────────────
+                        stage('Create Workspace') {
+                            workspaceName = infrastructure.generateWorkspaceName(
+                                prefix:           'jenkins_airgap_ansible_workspace',
+                                suffix:           env.HOSTNAME_PREFIX,
+                                includeTimestamp: false
+                            )
+
+                            make.runTarget(
+                                target:   'workspace-new',
+                                dir:      env.INFRA_DIR,
+                                makeArgs: "ENV=airgap WORKSPACE=${workspaceName}"
+                            )
+                            infrastructure.archiveWorkspaceName(workspaceName: workspaceName)
+                            env.WORKSPACE_NAME = workspaceName
+                        }
+
+                        // ── Tofu: apply + generate inventory (make infra-up generates the airgap inventory) ──
+                        stage('Apply Tofu') {
+                            make.runTarget(
+                                target:   'infra-up',
+                                dir:      env.INFRA_DIR,
+                                makeArgs: "ENV=airgap WORKSPACE=${workspaceName}"
+                            )
                         }
 
                         // ── Ansible: configure variables ────────────────────

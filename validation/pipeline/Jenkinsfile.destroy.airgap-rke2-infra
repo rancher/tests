@@ -3,7 +3,10 @@
  * Airgap RKE2 infrastructure destroy pipeline.
  *
  * Tears down AWS infrastructure provisioned by the setup pipeline.
- * Uses the Jenkins library directly (NOT the Makefile) because:
+ *
+ * Backend initialization uses the Makefile (make backend-s3), which routes to
+ * the centralized init-backend.sh via $(CURDIR) — matching the setup pipeline.
+ * Teardown uses the Jenkins library directly (NOT make infra-down) because:
  *   - The Makefile's infra-down target has an interactive confirmation prompt
  *   - The Makefile has no workspace management (select/delete)
  *   - The Jenkins library's tofu.teardownInfrastructure handles the full
@@ -11,7 +14,7 @@
  *
  * Consumes shared functions from qa-jenkins-library:
  *   airgap.standardCheckout, airgap.teardownInfrastructure,
- *   tofu.initBackend, infrastructure.parseAndSubstituteVars,
+ *   make.runTarget, infrastructure.parseAndSubstituteVars,
  *   infrastructure.writeConfig, infrastructure.cleanupArtifacts
  */
 
@@ -121,14 +124,17 @@ pipeline {
                             echo "Target workspace for destruction: ${params.TARGET_WORKSPACE}"
                         }
 
-                        // ── Initialize Tofu backend ────────────────────────
+                        // ── Initialize Tofu backend (Makefile routes to centralized init-backend.sh via $(CURDIR)) ──
                         stage('Initialize Tofu Backend') {
-                            tofu.initBackend(
-                                dir:               tofuModulePath,
-                                bucket:            env.S3_BUCKET_NAME,
-                                key:               env.S3_KEY_PREFIX,
-                                region:            env.S3_BUCKET_REGION,
-                                backendInitScript: './scripts/init-backend.sh'
+                            make.runTarget(
+                                target:   'backend-s3',
+                                dir:      env.INFRA_DIR,
+                                makeArgs: [
+                                    'ENV=airgap',
+                                    "BUCKET=${env.S3_BUCKET_NAME}",
+                                    "KEY=${env.S3_KEY_PREFIX}",
+                                    "REGION=${env.S3_BUCKET_REGION}"
+                                ]
                             )
                         }
 
