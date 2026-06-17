@@ -174,7 +174,6 @@ node("harvester-vpn-1") {
                         else
                             jsonOutput=$(curl -s --insecure -H "Content-Type: application/json" -d '{"username":"admin","password":"password1234","responseType":"json"}' "https://$inode/v3-public/localproviders/local?action=login")
                         fi
-                        echo "$jsonOutput"
 
                         token=$(echo "$jsonOutput" | jq -cr '.token // empty' || true)
                         if [[ -z "$token" ]]; then
@@ -194,7 +193,7 @@ node("harvester-vpn-1") {
                         if [[ -z "${EXISTING_HARVESTER_IP:-}" ]]; then
                             jsonData=$(jq -n --arg password "password1234" '{"newPassword": $password}')
                             status=$(curl -s --insecure -o /dev/null -w "%{http_code}" -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -H "Authorization: Bearer $token" -d "$jsonData" "https://$inode/v3/users/$userID?action=setpassword")
-                            if [[ "$status" != "200" ]]; then
+                            if [[ ! "$status" =~ ^2[0-9]{2}$ ]]; then
                                 echo "ERROR: setpassword failed (HTTP $status)"; exit 1
                             fi
                             echo "Permanent password set"
