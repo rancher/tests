@@ -107,7 +107,8 @@ func watchAndwaitCreateFleetGitRepo(client *rancher.Client, clusterName string, 
 					ClusterName: clusterName,
 				},
 			},
-			HelmSecretName: secretName,
+			HelmSecretName:   secretName,
+			HelmRepoURLRegex: `oci://dp.apps.rancher.io`,
 		},
 	}
 
