@@ -83,11 +83,6 @@ pipeline {
             defaultValue: '',
             description: 'Additional KEY=VALUE line to append to the .env file before running tests'
         )
-        booleanParam(
-            name: 'CAPTURE_IMAGES',
-            defaultValue: true,
-            description: 'When true, captures Docker images used during the test run'
-        )
         // ── Library parameter ────────────────────────────────────
         string(
             name: 'QA_JENKINS_LIBRARY_BRANCH',
