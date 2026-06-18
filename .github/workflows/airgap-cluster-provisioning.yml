@@ -231,9 +231,6 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            registries:
-              rke2Registries:
-                configs: {}
 
           logging:
             level: "${{ vars.LOGGING_LEVEL }}"
@@ -551,9 +548,6 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            registries:
-              rke2Registries:
-                configs: {}
 
           logging:
             level: "${{ vars.LOGGING_LEVEL }}"
@@ -872,9 +866,6 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            registries:
-              rke2Registries:
-                configs: {}
 
           logging:
             level: "${{ vars.LOGGING_LEVEL }}"

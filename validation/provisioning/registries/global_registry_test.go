@@ -33,14 +33,13 @@ func TestGlobalRegistry(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                  string
-		client                *rancher.Client
-		clusterType           string
-		machinePools          []provisioninginput.MachinePools
-		systemDefaultRegistry string
+		name         string
+		client       *rancher.Client
+		clusterType  string
+		machinePools []provisioninginput.MachinePools
 	}{
-		{"Global_Registry_RKE2", r.standardUserClient, defaults.RKE2, nodeRolesDedicated, r.terraformConfig.StandaloneRegistry.GlobalRegistryFQDN},
-		{"Global_Registry_K3S", r.standardUserClient, defaults.K3S, nodeRolesAll, r.terraformConfig.StandaloneRegistry.GlobalRegistryFQDN},
+		{"Global_Registry_RKE2", r.standardUserClient, defaults.RKE2, nodeRolesDedicated},
+		{"Global_Registry_K3S", r.standardUserClient, defaults.K3S, nodeRolesAll},
 	}
 
 	for _, tt := range tests {

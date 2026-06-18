@@ -20,7 +20,6 @@ import (
 	"github.com/rancher/tfp-automation/defaults/keypath"
 	"github.com/rancher/tfp-automation/framework"
 	"github.com/rancher/tfp-automation/framework/set/resources/rancher2"
-
 	ranchersetup "github.com/rancher/tfp-automation/tests/infrastructure/ranchers/setup"
 	"github.com/stretchr/testify/require"
 )

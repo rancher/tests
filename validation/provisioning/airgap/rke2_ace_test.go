@@ -59,6 +59,16 @@ func TestAirgapRKE2ACE(t *testing.T) {
 		clusterConfig := new(clusters.ClusterConfig)
 		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
+		clusterConfig.Registries.RKE2Registries.Configs[r.terraformConfig.PrivateRegistries.SystemDefaultRegistry] = clusterConfig.Registries.RKE2Registries.Configs["<required>"]
+		delete(clusterConfig.Registries.RKE2Registries.Configs, "<required>")
+
+		registryConfig := clusterConfig.Registries.RKE2Registries.Configs[r.terraformConfig.PrivateRegistries.SystemDefaultRegistry]
+		registryConfig.InsecureSkipVerify = true
+		clusterConfig.Registries.RKE2Registries.Configs[r.terraformConfig.PrivateRegistries.SystemDefaultRegistry] = registryConfig
+
+		initializeRegistryMachineSelectors(t, clusterConfig)
+
+		(*clusterConfig.Advanced.MachineSelectors)[0].Config.Data["system-default-registry"] = r.terraformConfig.PrivateRegistries.SystemDefaultRegistry
 		clusterConfig.MachinePools = tt.machinePools
 
 		t.Run(tt.name, func(t *testing.T) {
