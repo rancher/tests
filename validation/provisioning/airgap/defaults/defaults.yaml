@@ -27,6 +27,10 @@ clusterConfig:
   cni: "calico"
   provider: "aws"
   nodeProvider: "ec2"
+  registries:
+    rke2Registries:
+      configs:
+        <required>:
 
 #Required for tests that utilize custom clusters
 awsEC2Configs:

@@ -64,8 +64,6 @@ func main() {
 		logrus.Fatalf("Failed to restore rancher host: %v", err)
 	}
 
-	infraConfig.UpdateRegistryVars(cattleConfig, registry)
-
 	cattleConfig, err = operations.ReplaceValue([]string{"rancher", "adminToken"}, client.RancherConfig.AdminToken, cattleConfig)
 	if err != nil {
 		logrus.Fatalf("Failed to replace admin token: %v", err)
