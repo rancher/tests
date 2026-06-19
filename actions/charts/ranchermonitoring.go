@@ -138,6 +138,9 @@ func InstallRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 		if state == string(catalogv1.StatusDeployed) {
 			return true, nil
 		}
+		if state == string(catalogv1.StatusFailed) {
+			return false, fmt.Errorf("monitoring chart installation failed: %s", app.Status.Summary.Error)
+		}
 		return false, nil
 	})
 	if err != nil {
@@ -236,6 +239,9 @@ func UpgradeRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 		if state == string(catalogv1.StatusPendingUpgrade) {
 			return true, nil
 		}
+		if state == string(catalogv1.StatusFailed) {
+			return false, fmt.Errorf("monitoring chart upgrade failed: %s", app.Status.Summary.Error)
+		}
 		return false, nil
 	})
 	if err != nil {
@@ -257,6 +263,9 @@ func UpgradeRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 		state := app.Status.Summary.State
 		if state == string(catalogv1.StatusDeployed) {
 			return true, nil
+		}
+		if state == string(catalogv1.StatusFailed) {
+			return false, fmt.Errorf("monitoring chart upgrade failed: %s", app.Status.Summary.Error)
 		}
 		return false, nil
 	})
