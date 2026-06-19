@@ -175,6 +175,9 @@ func newMonitoringChartInstallAction(p *PayloadOpts, rancherMonitoringOpts *Ranc
 	chartInstalls := []types.ChartInstall{*chartInstallCRD, *chartInstall}
 
 	chartInstallAction := NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	// Disable OpenAPI validation (server-side apply) to avoid schema-conflict failures
+	// on the monitoring CRDs which are large and frequently updated between versions.
+	chartInstallAction.DisableOpenAPIValidation = true
 
 	return chartInstallAction, nil
 }
@@ -302,6 +305,9 @@ func newMonitoringChartUpgradeAction(p *PayloadOpts, rancherMonitoringOpts *Ranc
 	chartUpgrades := []types.ChartUpgrade{*chartUpgradeCRD, *chartUpgrade}
 
 	chartUpgradeAction := NewChartUpgradeAction(p.Namespace, chartUpgrades)
+	// Disable OpenAPI validation (server-side apply) to avoid schema-conflict failures
+	// on the monitoring CRDs which are large and frequently updated between versions.
+	chartUpgradeAction.DisableOpenAPIValidation = true
 
 	return chartUpgradeAction, nil
 }
