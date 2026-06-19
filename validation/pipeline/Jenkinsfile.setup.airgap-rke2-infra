@@ -8,7 +8,7 @@
  * Consumes shared functions from qa-jenkins-library:
  *   airgap.standardCheckout, airgap.configureAnsible, airgap.deployRKE2,
  *   airgap.deployRancher, airgap.teardownInfrastructure,
- *   tofu.initBackend, tofu.createWorkspace, tofu.apply, tofu.getOutputs,
+ *   tofu.getOutputs,
  *   infrastructure.parseAndSubstituteVars, infrastructure.writeConfig,
  *   make.runTarget
  *
