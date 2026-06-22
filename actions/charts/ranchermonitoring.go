@@ -138,6 +138,9 @@ func InstallRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 		if state == string(catalogv1.StatusDeployed) {
 			return true, nil
 		}
+		if state == string(catalogv1.StatusFailed) {
+			return false, fmt.Errorf("monitoring chart installation failed: %s", app.Status.Summary.Error)
+		}
 		return false, nil
 	})
 	if err != nil {
@@ -172,6 +175,9 @@ func newMonitoringChartInstallAction(p *PayloadOpts, rancherMonitoringOpts *Ranc
 	chartInstalls := []types.ChartInstall{*chartInstallCRD, *chartInstall}
 
 	chartInstallAction := NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	// Disable OpenAPI validation (server-side apply) to avoid schema-conflict failures
+	// on the monitoring CRDs which are large and frequently updated between versions.
+	chartInstallAction.DisableOpenAPIValidation = true
 
 	return chartInstallAction, nil
 }
@@ -236,6 +242,9 @@ func UpgradeRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 		if state == string(catalogv1.StatusPendingUpgrade) {
 			return true, nil
 		}
+		if state == string(catalogv1.StatusFailed) {
+			return false, fmt.Errorf("monitoring chart upgrade failed: %s", app.Status.Summary.Error)
+		}
 		return false, nil
 	})
 	if err != nil {
@@ -257,6 +266,9 @@ func UpgradeRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 		state := app.Status.Summary.State
 		if state == string(catalogv1.StatusDeployed) {
 			return true, nil
+		}
+		if state == string(catalogv1.StatusFailed) {
+			return false, fmt.Errorf("monitoring chart upgrade failed: %s", app.Status.Summary.Error)
 		}
 		return false, nil
 	})
@@ -293,6 +305,9 @@ func newMonitoringChartUpgradeAction(p *PayloadOpts, rancherMonitoringOpts *Ranc
 	chartUpgrades := []types.ChartUpgrade{*chartUpgradeCRD, *chartUpgrade}
 
 	chartUpgradeAction := NewChartUpgradeAction(p.Namespace, chartUpgrades)
+	// Disable OpenAPI validation (server-side apply) to avoid schema-conflict failures
+	// on the monitoring CRDs which are large and frequently updated between versions.
+	chartUpgradeAction.DisableOpenAPIValidation = true
 
 	return chartUpgradeAction, nil
 }
