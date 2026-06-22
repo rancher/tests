@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
@@ -65,9 +66,11 @@ func TestCustomRKE2IPv6(t *testing.T) {
 
 	nodeRolesStandard := []tfpConfig.Nodepool{{Quantity: 3, Etcd: true}, {Quantity: 2, Controlplane: true}, {Quantity: 3, Worker: true}}
 
-	_, terraform, _, _ := tfpConfig.LoadTFPConfigs(r.cattleConfig)
-	cidrCluster := terraform.AWSConfig.ClusterCIDR
-	cidrService := terraform.AWSConfig.ServiceCIDR
+	clusterConfig := new(clusters.ClusterConfig)
+	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
+	cidrCluster := clusterConfig.Networking.ClusterCIDR
+	cidrService := clusterConfig.Networking.ServiceCIDR
 
 	tests := []struct {
 		name            string
