@@ -28,13 +28,8 @@ pipeline {
         // ── Multi-version parameters ─────────────────────────────
         string(
             name: 'RANCHER_IMAGE_TAGS',
-            defaultValue: 'v2.12.1',
+            defaultValue: 'head',
             description: 'Comma-separated list of Rancher image tags to test in parallel (e.g., head,v2.10-head,v2.9-head)'
-        )
-        string(
-            name: 'HOSTNAME_PREFIX',
-            defaultValue: 'recurringdaily',
-            description: 'Base hostname prefix — version suffix is appended automatically'
         )
 
         // ── Repository parameters ────────────────────────────────
