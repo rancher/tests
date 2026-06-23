@@ -135,7 +135,7 @@ pipeline {
         )
         string(
             name: 'RANCHER_CHART_REPO_URL',
-            defaultValue: 'https://releases.rancher.com/server-charts/latest',
+            defaultValue: 'https://releases.rancher.com/server-charts/stable',
             description: 'Rancher Helm chart repository URL'
         )
         string(
@@ -476,7 +476,7 @@ insecure = true'''
         // ── Downstream job parameters ─────────────────────────
         string(
             name: 'INDIVIDUAL_JOB',
-            defaultValue: 'go-pit-daily-individual-updated-job',
+            defaultValue: 'go-pit-daily-individual-job',
             description: 'Name of the downstream Jenkins job that runs individual Go test suites'
         )
         string(

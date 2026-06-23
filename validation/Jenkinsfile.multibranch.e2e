@@ -77,7 +77,7 @@ pipeline {
         )
         string(
             name: 'RANCHER_CHART_REPO_URL',
-            defaultValue: 'https://releases.rancher.com/server-charts/latest',
+            defaultValue: 'https://releases.rancher.com/server-charts/stable',
             description: 'Rancher Helm chart repository URL'
         )
         password(
