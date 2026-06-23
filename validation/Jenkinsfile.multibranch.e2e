@@ -424,7 +424,7 @@ insecure = true'''
                         'v2.10-head': '2.10.1',
                         'v2.11-head': '2.11.1',
                         'v2.12-head': '2.12.1',
-                        'head': '2.12.0'
+                        'head': 'latest'
                     ]
 
                     // Tags that should use the prime chart repo
@@ -437,19 +437,6 @@ insecure = true'''
                         def suffix = hostnameSuffixMap.get(tag, tag.replaceAll('[^a-zA-Z0-9]', ''))
                         def hostname = "${hostnamePrefix}${suffix}"
                         def rancherVersion = tagChartMap.get(tag, params.RANCHER_VERSION)
-
-                        // Determine chart repo URL
-                        def chartRepoUrl = params.RANCHER_CHART_REPO_URL
-                        if (primeChartTags.contains(tag)) {
-                            // Use prime repo credential if available
-                            try {
-                                withCredentials([string(credentialsId: 'PRIME_REPO', variable: 'PRIME_REPO_URL')]) {
-                                    chartRepoUrl = env.PRIME_REPO_URL
-                                }
-                            } catch (e) {
-                                echo "PRIME_REPO credential not available, using default chart repo for ${tag}"
-                            }
-                        }
 
                         // Update TERRAFORM_CONFIG with per-tag hostname
                         def tfConfig = params.TERRAFORM_CONFIG.replace(
@@ -473,7 +460,7 @@ insecure = true'''
                             string(name: 'RKE2_VERSION', value: params.RKE2_VERSION),
                             string(name: 'RANCHER_VERSION', value: rancherVersion),
                             string(name: 'RANCHER_IMAGE_TAG', value: tag),
-                            string(name: 'RANCHER_CHART_REPO_URL', value: chartRepoUrl),
+                            string(name: 'RANCHER_CHART_REPO_URL', value: params.RANCHER_CHART_REPO_URL),
                             password(name: 'RANCHER_BOOTSTRAP_PASSWORD', value: params.RANCHER_BOOTSTRAP_PASSWORD),
                             password(name: 'RANCHER_ADMIN_PASSWORD', value: params.RANCHER_ADMIN_PASSWORD),
                             booleanParam(name: 'DESTROY_ON_FAILURE', value: params.DESTROY_ON_FAILURE),
