@@ -166,7 +166,7 @@ pipeline {
 
                         // ── Build gotestsum command ────────────────────
                         def goPackage = params.TEST_PACKAGE ?: './validation/...'
-                        def testCmd = "gotestsum --format standard-verbose --packages=${goPackage} --junitfile results.xml --jsonfile results.json -- -tags=${params.TAGS}"
+                        def testCmd = "gotestsum --format standard-verbose --packages=${goPackage} --junitfile /workspace/results.xml --jsonfile /workspace/results.json -- -tags=${params.TAGS}"
 
                         def testCase = params.GOTEST_TESTCASE?.trim()
                         if (testCase) {
@@ -183,7 +183,7 @@ pipeline {
                                     -v ${workspace}:/workspace \
                                     -w /workspace \
                                     rancher-go-test:latest \
-                                    sh -c 'set -e; set -o pipefail; ${testCmd} | tee validation/go-test.log'
+                                    sh -c 'set -e; set -o pipefail; ${testCmd} | tee /workspace/validation/go-test.log'
                             """
                         }
                     }
@@ -195,12 +195,10 @@ pipeline {
             steps {
                 script {
                     // JUnit results
-                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                        junit allowEmptyResults: true, testResults: 'results.xml'
-                    }
+                    junit allowEmptyResults: true, testResults: '**/results.xml'
 
                     // Archive test artifacts
-                    archiveArtifacts allowEmptyArchive: true, artifacts: 'validation/go-test.log, results.xml, results.json, validation/image-report/**', fingerprint: true
+                    archiveArtifacts allowEmptyArchive: true, artifacts: 'validation/go-test.log, results.xml, results.json, validation/image-report/**'
 
                     // Qase reporting
                     property.useWithProperties(['QASE_AUTOMATION_TOKEN']) {
@@ -208,22 +206,26 @@ pipeline {
                             echo "Reporting results to Qase"
 
                             def workspace = pwd()
-                            sh """
-                                docker run --rm --platform linux/amd64 \
-                                    --env-file .go_test_env \
-                                    -v ${workspace}:/workspace \
-                                    -w /workspace \
-                                    rancher-go-test:latest \
-                                    sh -c '
-                                        set -e
-                                        validation/pipeline/scripts/${params.QASE_REPORTER_SCRIPT ?: 'build_qase_reporter_v2.sh'}
-                                        if [ -f ./validation/reporter ]; then
-                                            ./validation/reporter
-                                        else
-                                            echo "Reporter binary not found — reporter script may have skipped build"
-                                        fi
-                                    '
-                            """
+                            def reporterScript = params.QASE_REPORTER_SCRIPT ?: 'build_qase_reporter_v2.sh'
+                            catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                                sh """
+                                    docker run --rm --platform linux/amd64 \
+                                        --env-file .go_test_env \
+                                        -e BUILD_URL=${env.BUILD_URL} \
+                                        -v ${workspace}:/home/runner/tests \
+                                        -w /home/runner/tests \
+                                        rancher-go-test:latest \
+                                        sh -c '
+                                            set -e
+                                            validation/pipeline/scripts/${reporterScript}
+                                            if [ -f /home/runner/tests/validation/reporter ]; then
+                                                /home/runner/tests/validation/reporter
+                                            else
+                                                echo "Reporter binary not found — reporter script may have skipped build"
+                                            fi
+                                        '
+                                """
+                            }
                         } else {
                             echo 'Skipping Qase reporting: QASE_AUTOMATION_TOKEN not available'
                         }
