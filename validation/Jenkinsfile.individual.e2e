@@ -78,7 +78,7 @@ pipeline {
             defaultValue: 'build_qase_reporter_v2.sh',
             description: 'Qase reporter script name in validation/pipeline/scripts/'
         )
-        string(
+        text(
             name: 'ENV_VARIABLE',
             defaultValue: '',
             description: 'Additional KEY=VALUE line to append to the .env file before running tests'
@@ -155,6 +155,12 @@ pipeline {
                         }
                         if (params.ENV_VARIABLE?.trim()) {
                             envLines += params.ENV_VARIABLE.trim()
+                        }
+                        def isPitJob = env.JOB_NAME.contains('go-pit')
+                        if (isPitJob) {
+                            envLines += "QASE_PROJECT_ID=RANCHERINT"
+                            envLines += "TEST_RUN_NAME=${params.TAGS} Test Run"
+                            envLines += "QASE_TEST_RUN_COMPLETE=true"
                         }
                         writeFile file: '.go_test_env', text: envLines.join('\n') + '\n'
 
