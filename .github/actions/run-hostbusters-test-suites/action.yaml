@@ -88,6 +88,36 @@ runs:
             fi
 
             gotestsum --format standard-verbose \
+              --packages=github.com/rancher/tests/validation/encryptionkeyrotation/rke2 \
+              --junitfile results.xml \
+              --jsonfile results_rke2_encryption_key_rotation.json \
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
+
+            rke2_encryption_key_rotation_exit=$?
+            echo "rke2_encryption_key_rotation_exit=$rke2_encryption_key_rotation_exit" >> "$GITHUB_ENV"
+            cp results_rke2_encryption_key_rotation.json results.json
+
+            if [[ "${{ inputs.reporting }}" == "true" ]]; then
+              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+              ./validation/reporter
+            fi
+
+            gotestsum --format standard-verbose \
+              --packages=github.com/rancher/tests/validation/encryptionkeyrotation/k3s \
+              --junitfile results.xml \
+              --jsonfile results_k3s_encryption_key_rotation.json \
+              -- -timeout=5h -tags=${{ inputs.tags }} -v
+
+            k3s_encryption_key_rotation_exit=$?
+            echo "k3s_encryption_key_rotation_exit=$k3s_encryption_key_rotation_exit" >> "$GITHUB_ENV"
+            cp results_k3s_encryption_key_rotation.json results.json
+
+            if [[ "${{ inputs.reporting }}" == "true" ]]; then
+              ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+              ./validation/reporter
+            fi
+
+            gotestsum --format standard-verbose \
               --packages=github.com/rancher/tests/validation/nodescaling/rke2 \
               --junitfile results.xml \
               --jsonfile results_rke2_node_scale.json \
@@ -189,6 +219,8 @@ runs:
           [k3s_cert_exit]="K3S Cert Rotation:results_k3s_cert.json"
           [rke2_delete_exit]="Delete RKE2 Cluster:results_rke2_delete.json"
           [k3s_delete_exit]="Delete K3S Cluster:results_k3s_delete.json"
+          [rke2_encryption_key_rotation_exit]="RKE2 Encryption Key Rotation:results_rke2_encryption_key_rotation.json"
+          [k3s_encryption_key_rotation_exit]="K3S Encryption Key Rotation:results_k3s_encryption_key_rotation.json"
           [rke2_node_scale_exit]="RKE2 Node Scaling:results_rke2_node_scale.json"
           [k3s_node_scale_exit]="K3S Node Scaling:results_k3s_node_scale.json"
           [k3s_snapshot_exit]="K3S Snapshot Restore:results_k3s_snapshot.json"
