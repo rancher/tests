@@ -89,6 +89,11 @@ pipeline {
             defaultValue: 'main',
             description: 'Branch of qa-jenkins-library to use'
         )
+        booleanParam(
+            name: 'CAPTURE_IMAGES',
+            defaultValue: true,
+            description: 'When true, captures Docker images used during the test run'
+        )
     }
 
     stages {
@@ -164,6 +169,23 @@ pipeline {
                         }
                         writeFile file: '.go_test_env', text: envLines.join('\n') + '\n'
 
+                        // ── Start image capturer ──────────────────────
+                        if (params.CAPTURE_IMAGES) {
+                            catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                                sh 'mkdir -p ./validation/image-report'
+                                sh """
+                                    docker run -d --name imageCapturer \
+                                        -v ${workspace}:/workspace \
+                                        -v ${workspace}/validation/image-report:/app/image-report \
+                                        -v ${workspace}/validation/cattle-config.yaml:/app/config.yaml \
+                                        rancher-go-test:latest sh -c \
+                                        'go build -o /app/capturer /workspace/scripts/capture_images/capture_images.go && \
+                                        CATTLE_TEST_CONFIG=/app/config.yaml exec /app/capturer'
+                                """
+                                sh 'grep -qm 1 "Listening to events on cluster" <(docker logs -f imageCapturer)'
+                            }
+                        }
+
                         // ── Build gotestsum command ────────────────────
                         def goPackage = params.TEST_PACKAGE ?: './validation/...'
                         def testCmd = "gotestsum --format standard-verbose --packages=${goPackage} --junitfile /workspace/results.xml --jsonfile /workspace/results.json -- -tags=${params.TAGS}"
@@ -186,6 +208,15 @@ pipeline {
                                     sh -c 'set -e; set -o pipefail; ${testCmd} | tee /workspace/validation/go-test.log'
                             """
                         }
+
+                        // ── Stop image capturer ───────────────────────
+                        if (params.CAPTURE_IMAGES) {
+                            catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                                sh 'docker stop imageCapturer'
+                                echo readFile('./validation/image-report/image-report.txt')
+                                sh 'docker rm imageCapturer'
+                            }
+                        }
                     }
                 }
             }
@@ -207,12 +238,14 @@ pipeline {
 
                             def workspace = pwd()
                             def reporterScript = params.QASE_REPORTER_SCRIPT ?: 'build_qase_reporter_v2.sh'
+                            def imageReportMount = params.CAPTURE_IMAGES ? "-v ${workspace}/validation/image-report:/app/image-report" : ''
                             catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                                 sh """
                                     docker run --rm --platform linux/amd64 \
                                         --env-file .go_test_env \
                                         -e BUILD_URL=${env.BUILD_URL} \
                                         -v ${workspace}:/home/runner/tests \
+                                        ${imageReportMount} \
                                         -w /home/runner/tests \
                                         rancher-go-test:latest \
                                         sh -c '
@@ -237,6 +270,7 @@ pipeline {
 
     post {
         always {
+            sh 'docker rm -f imageCapturer || true'
             sh 'docker rmi -f rancher-go-test:latest || true'
             sh 'rm -f .go_test_env'
         }
