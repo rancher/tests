@@ -182,7 +182,12 @@ pipeline {
                                         'go build -o /app/capturer /workspace/scripts/capture_images/capture_images.go && \
                                         CATTLE_TEST_CONFIG=/app/config.yaml exec /app/capturer'
                                 """
-                                sh 'grep -qm 1 "Listening to events on cluster" <(docker logs -f imageCapturer)'
+                                timeout(time: 2, unit: 'MINUTES') {
+                                    waitUntil(initialRecurrencePeriod: 2000) {
+                                        def logs = sh(script: 'docker logs imageCapturer 2>&1 || true', returnStdout: true)
+                                        logs.contains('Listening to events on cluster')
+                                    }
+                                }
                             }
                         }
 
@@ -270,7 +275,6 @@ pipeline {
 
     post {
         always {
-            sh 'docker rm -f imageCapturer || true'
             sh 'docker rmi -f rancher-go-test:latest || true'
             sh 'rm -f .go_test_env'
         }
