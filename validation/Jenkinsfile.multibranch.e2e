@@ -399,10 +399,14 @@ insecure = true'''
                     def recurringJob = params.RECURRING_JOB
                     def individualJob = params.INDIVIDUAL_JOB
                     def hostnamePrefix = params.HOSTNAME_PREFIX
+                    def validationTags = params.VALIDATION_TEST_TAGS
                     if (isPitJob) {
                         recurringJob = 'go-pit-daily-job'
                         individualJob = 'go-pit-daily-individual-job'
                         hostnamePrefix = "pit-${hostnamePrefix}"
+                        if (env.JOB_NAME.contains('weekly')) {
+                            validationTags = "pit.weekly"
+                        }
                     }
 
                     def imageTags = params.RANCHER_IMAGE_TAGS.split(',').collect { it.trim() }
@@ -478,7 +482,7 @@ insecure = true'''
                             string(name: 'GOTEST_TESTCASE_PROVISIONING', value: params.GOTEST_TESTCASE_PROVISIONING),
                             string(name: 'GOTEST_TESTCASE_VALIDATION', value: params.GOTEST_TESTCASE_VALIDATION),
                             string(name: 'PROVISIONING_TAGS', value: params.PROVISIONING_TAGS),
-                            string(name: 'VALIDATION_TEST_TAGS', value: params.VALIDATION_TEST_TAGS),
+                            string(name: 'VALIDATION_TEST_TAGS', value: validationTags),
                             string(name: 'TEST_TIMEOUT', value: params.TEST_TIMEOUT),
                             string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
                         ]
