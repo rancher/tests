@@ -11,6 +11,7 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	snapshot "github.com/rancher/shepherd/extensions/etcdsnapshot"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -95,6 +96,10 @@ func (e *EncryptionKeyRotationTestSuite) TestEncryptionKeyRotation() {
 	for _, tt := range tests {
 		var err error
 		e.Run(tt.name, func() {
+			logrus.Infof("Creating snapshot on cluster (%s)", tt.cluster.Name)
+			_, err := snapshot.CreateRKE2K3SSnapshot(e.client, tt.cluster.Name)
+			require.NoError(e.T(), err)
+
 			logrus.Infof("Performing encryption key rotation on cluster (%s)", tt.cluster.Name)
 			err = encryptionkeyrotation.RotateEncryptionKey(e.client, tt.cluster.Name)
 			require.NoError(e.T(), err)
