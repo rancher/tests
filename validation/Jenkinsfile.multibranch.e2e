@@ -28,7 +28,7 @@ pipeline {
         // ── Multi-version parameters ─────────────────────────────
         string(
             name: 'RANCHER_IMAGE_TAGS',
-            defaultValue: 'v2.12.1',
+            defaultValue: 'head',
             description: 'Comma-separated list of Rancher image tags to test in parallel (e.g., head,v2.10-head,v2.9-head)'
         )
         string(
@@ -77,7 +77,7 @@ pipeline {
         )
         string(
             name: 'RANCHER_CHART_REPO_URL',
-            defaultValue: 'https://releases.rancher.com/server-charts/latest',
+            defaultValue: 'https://releases.rancher.com/server-charts/stable',
             description: 'Rancher Helm chart repository URL'
         )
         password(
@@ -395,6 +395,20 @@ insecure = true'''
         stage('Trigger Per-Version Jobs') {
             steps {
                 script {
+                    def isPitJob = env.JOB_NAME.contains('go-pit')
+                    def recurringJob = params.RECURRING_JOB
+                    def individualJob = params.INDIVIDUAL_JOB
+                    def hostnamePrefix = params.HOSTNAME_PREFIX
+                    def validationTags = params.VALIDATION_TEST_TAGS
+                    if (isPitJob) {
+                        recurringJob = 'go-pit-daily-job'
+                        individualJob = 'go-pit-daily-individual-job'
+                        hostnamePrefix = "pit-${hostnamePrefix}"
+                        if (env.JOB_NAME.contains('weekly')) {
+                            validationTags = "pit.weekly"
+                        }
+                    }
+
                     def imageTags = params.RANCHER_IMAGE_TAGS.split(',').collect { it.trim() }
 
                     // Map image tags to hostname suffixes for unique DNS entries
@@ -414,7 +428,7 @@ insecure = true'''
                         'v2.10-head': '2.10.1',
                         'v2.11-head': '2.11.1',
                         'v2.12-head': '2.12.1',
-                        'head': '2.12.0'
+                        'head': 'latest'
                     ]
 
                     // Tags that should use the prime chart repo
@@ -425,31 +439,18 @@ insecure = true'''
                     for (String imageTag : imageTags) {
                         def tag = imageTag // capture for closure
                         def suffix = hostnameSuffixMap.get(tag, tag.replaceAll('[^a-zA-Z0-9]', ''))
-                        def hostname = "${params.HOSTNAME_PREFIX}${suffix}"
+                        def hostname = "${hostnamePrefix}${suffix}"
                         def rancherVersion = tagChartMap.get(tag, params.RANCHER_VERSION)
-
-                        // Determine chart repo URL
-                        def chartRepoUrl = params.RANCHER_CHART_REPO_URL
-                        if (primeChartTags.contains(tag)) {
-                            // Use prime repo credential if available
-                            try {
-                                withCredentials([string(credentialsId: 'PRIME_REPO', variable: 'PRIME_REPO_URL')]) {
-                                    chartRepoUrl = env.PRIME_REPO_URL
-                                }
-                            } catch (e) {
-                                echo "PRIME_REPO credential not available, using default chart repo for ${tag}"
-                            }
-                        }
 
                         // Update TERRAFORM_CONFIG with per-tag hostname
                         def tfConfig = params.TERRAFORM_CONFIG.replace(
-                            "aws_hostname_prefix = \"${params.HOSTNAME_PREFIX}\"",
+                            "aws_hostname_prefix = \"${hostnamePrefix}\"",
                             "aws_hostname_prefix = \"${hostname}\""
                         )
 
                         // Update CATTLE_TEST_CONFIG with per-tag hostname
                         def cattleConfig = params.CATTLE_TEST_CONFIG.replace(
-                            "host: ${params.HOSTNAME_PREFIX}.qa.rancher.space",
+                            "host: ${hostnamePrefix}.qa.rancher.space",
                             "host: ${hostname}.qa.rancher.space"
                         )
 
@@ -463,7 +464,7 @@ insecure = true'''
                             string(name: 'RKE2_VERSION', value: params.RKE2_VERSION),
                             string(name: 'RANCHER_VERSION', value: rancherVersion),
                             string(name: 'RANCHER_IMAGE_TAG', value: tag),
-                            string(name: 'RANCHER_CHART_REPO_URL', value: chartRepoUrl),
+                            string(name: 'RANCHER_CHART_REPO_URL', value: params.RANCHER_CHART_REPO_URL),
                             password(name: 'RANCHER_BOOTSTRAP_PASSWORD', value: params.RANCHER_BOOTSTRAP_PASSWORD),
                             password(name: 'RANCHER_ADMIN_PASSWORD', value: params.RANCHER_ADMIN_PASSWORD),
                             booleanParam(name: 'DESTROY_ON_FAILURE', value: params.DESTROY_ON_FAILURE),
@@ -476,23 +477,23 @@ insecure = true'''
                             text(name: 'CATTLE_TEST_CONFIG', value: cattleConfig),
                             booleanParam(name: 'BUILD_DOWNSTREAM_CLUSTER', value: params.BUILD_DOWNSTREAM_CLUSTER),
                             text(name: 'DOWNSTREAM_CLUSTER_CONFIG', value: params.DOWNSTREAM_CLUSTER_CONFIG),
-                            string(name: 'INDIVIDUAL_JOB', value: params.INDIVIDUAL_JOB),
+                            string(name: 'INDIVIDUAL_JOB', value: individualJob),
                             string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
                             string(name: 'GOTEST_TESTCASE_PROVISIONING', value: params.GOTEST_TESTCASE_PROVISIONING),
                             string(name: 'GOTEST_TESTCASE_VALIDATION', value: params.GOTEST_TESTCASE_VALIDATION),
                             string(name: 'PROVISIONING_TAGS', value: params.PROVISIONING_TAGS),
-                            string(name: 'VALIDATION_TEST_TAGS', value: params.VALIDATION_TEST_TAGS),
+                            string(name: 'VALIDATION_TEST_TAGS', value: validationTags),
                             string(name: 'TEST_TIMEOUT', value: params.TEST_TIMEOUT),
                             string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
                         ]
 
                         jobs["${tag}"] = {
-                            build job: params.RECURRING_JOB, parameters: jobParams, propagate: false
+                            build job: recurringJob, parameters: jobParams, propagate: false
                         }
                     }
 
                     currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.RANCHER_IMAGE_TAGS}"
-                    currentBuild.description = "Testing: ${imageTags.join(', ')} on ${params.HOSTNAME_PREFIX}"
+                    currentBuild.description = "Testing: ${imageTags.join(', ')} on ${hostnamePrefix}"
 
                     parallel jobs
                 }

@@ -161,7 +161,11 @@ func main() {
 	reportFile.WriteString(fmt.Sprintf("is-prime:%t\n", config.IsPrime))
 
 	for _, cluster := range targetClusters {
-		reportFile.WriteString("Kubernetes version on " + cluster.Name + " cluster: " + cluster.Version.GitVersion + "\n")
+		k8sVersion := ""
+		if cluster.Version != nil {
+			k8sVersion = cluster.Version.GitVersion
+		}
+		reportFile.WriteString("Kubernetes version on " + cluster.Name + " cluster: " + k8sVersion + "\n")
 
 		downstreamClient, err := client.Steve.ProxyDownstream(cluster.ID)
 		if err != nil {

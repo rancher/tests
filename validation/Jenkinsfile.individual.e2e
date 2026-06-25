@@ -78,7 +78,7 @@ pipeline {
             defaultValue: 'build_qase_reporter_v2.sh',
             description: 'Qase reporter script name in validation/pipeline/scripts/'
         )
-        string(
+        text(
             name: 'ENV_VARIABLE',
             defaultValue: '',
             description: 'Additional KEY=VALUE line to append to the .env file before running tests'
@@ -88,6 +88,11 @@ pipeline {
             name: 'QA_JENKINS_LIBRARY_BRANCH',
             defaultValue: 'main',
             description: 'Branch of qa-jenkins-library to use'
+        )
+        booleanParam(
+            name: 'CAPTURE_IMAGES',
+            defaultValue: true,
+            description: 'When true, captures Docker images used during the test run'
         )
     }
 
@@ -147,14 +152,48 @@ pipeline {
                         if (env.APPCO_ACCESS_TOKEN) {
                             envLines += "APPCO_ACCESS_TOKEN=${env.APPCO_ACCESS_TOKEN}"
                         }
+                        if (env.QASE_AUTOMATION_TOKEN?.trim()) {
+                            envLines += "QASE_AUTOMATION_TOKEN=${env.QASE_AUTOMATION_TOKEN}"
+                        }
+                        if (params.QASE_TEST_RUN_ID?.trim()) {
+                            envLines += "QASE_TEST_RUN_ID=${params.QASE_TEST_RUN_ID}"
+                        }
                         if (params.ENV_VARIABLE?.trim()) {
                             envLines += params.ENV_VARIABLE.trim()
                         }
+                        def isPitJob = env.JOB_NAME.contains('go-pit')
+                        if (isPitJob) {
+                            envLines += "QASE_PROJECT_ID=RANCHERINT"
+                            envLines += "TEST_RUN_NAME=${params.TAGS} Test Run"
+                            envLines += "QASE_TEST_RUN_COMPLETE=true"
+                        }
                         writeFile file: '.go_test_env', text: envLines.join('\n') + '\n'
+
+                        // ── Start image capturer ──────────────────────
+                        if (params.CAPTURE_IMAGES) {
+                            catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                                sh 'mkdir -p ./validation/image-report'
+                                sh """
+                                    docker run -d --name imageCapturer \
+                                        -v ${workspace}:/workspace \
+                                        -v ${workspace}/validation/image-report:/app/image-report \
+                                        -v ${workspace}/validation/cattle-config.yaml:/app/config.yaml \
+                                        rancher-go-test:latest sh -c \
+                                        'go build -o /app/capturer /workspace/scripts/capture_images/capture_images.go && \
+                                        CATTLE_TEST_CONFIG=/app/config.yaml exec /app/capturer'
+                                """
+                                timeout(time: 2, unit: 'MINUTES') {
+                                    waitUntil(initialRecurrencePeriod: 2000) {
+                                        def logs = sh(script: 'docker logs imageCapturer 2>&1 || true', returnStdout: true)
+                                        logs.contains('Listening to events on cluster')
+                                    }
+                                }
+                            }
+                        }
 
                         // ── Build gotestsum command ────────────────────
                         def goPackage = params.TEST_PACKAGE ?: './validation/...'
-                        def testCmd = "gotestsum --format standard-verbose --packages=${goPackage} --junitfile results.xml --jsonfile results.json -- -tags=${params.TAGS}"
+                        def testCmd = "gotestsum --format standard-verbose --packages=${goPackage} --junitfile /workspace/results.xml --jsonfile /workspace/results.json -- -tags=${params.TAGS}"
 
                         def testCase = params.GOTEST_TESTCASE?.trim()
                         if (testCase) {
@@ -171,8 +210,17 @@ pipeline {
                                     -v ${workspace}:/workspace \
                                     -w /workspace \
                                     rancher-go-test:latest \
-                                    sh -c 'set -e; set -o pipefail; ${testCmd} | tee validation/go-test.log'
+                                    sh -c 'set -e; set -o pipefail; ${testCmd} | tee /workspace/validation/go-test.log'
                             """
+                        }
+
+                        // ── Stop image capturer ───────────────────────
+                        if (params.CAPTURE_IMAGES) {
+                            catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                                sh 'docker stop imageCapturer'
+                                echo readFile('./validation/image-report/image-report.txt')
+                                sh 'docker rm imageCapturer'
+                            }
                         }
                     }
                 }
@@ -183,12 +231,10 @@ pipeline {
             steps {
                 script {
                     // JUnit results
-                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                        junit allowEmptyResults: true, testResults: 'results.xml'
-                    }
+                    junit allowEmptyResults: true, testResults: '**/results.xml'
 
                     // Archive test artifacts
-                    archiveArtifacts allowEmptyArchive: true, artifacts: 'validation/go-test.log, results.xml, results.json, validation/image-report/**', fingerprint: true
+                    archiveArtifacts allowEmptyArchive: true, artifacts: 'validation/go-test.log, results.xml, results.json, validation/image-report/**'
 
                     // Qase reporting
                     property.useWithProperties(['QASE_AUTOMATION_TOKEN']) {
@@ -196,26 +242,28 @@ pipeline {
                             echo "Reporting results to Qase"
 
                             def workspace = pwd()
-                            def qaseEnvFlags = "-e QASE_AUTOMATION_TOKEN=\${QASE_AUTOMATION_TOKEN}"
-                            if (params.QASE_TEST_RUN_ID?.trim()) {
-                                qaseEnvFlags += " -e QASE_TEST_RUN_ID=${params.QASE_TEST_RUN_ID}"
+                            def reporterScript = params.QASE_REPORTER_SCRIPT ?: 'build_qase_reporter_v2.sh'
+                            def imageReportMount = params.CAPTURE_IMAGES ? "-v ${workspace}/validation/image-report:/app/image-report" : ''
+                            catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                                sh """
+                                    docker run --rm --platform linux/amd64 \
+                                        --env-file .go_test_env \
+                                        -e BUILD_URL=${env.BUILD_URL} \
+                                        -v ${workspace}:/home/runner/tests \
+                                        ${imageReportMount} \
+                                        -w /home/runner/tests \
+                                        rancher-go-test:latest \
+                                        sh -c '
+                                            set -e
+                                            validation/pipeline/scripts/${reporterScript}
+                                            if [ -f /home/runner/tests/validation/reporter ]; then
+                                                /home/runner/tests/validation/reporter
+                                            else
+                                                echo "Reporter binary not found — reporter script may have skipped build"
+                                            fi
+                                        '
+                                """
                             }
-                            sh """
-                                docker run --rm --platform linux/amd64 \
-                                    ${qaseEnvFlags} \
-                                    -v ${workspace}:/workspace \
-                                    -w /workspace \
-                                    rancher-go-test:latest \
-                                    sh -c '
-                                        set -e
-                                        validation/pipeline/scripts/${params.QASE_REPORTER_SCRIPT ?: 'build_qase_reporter_v2.sh'}
-                                        if [ -f ./validation/reporter ]; then
-                                            ./validation/reporter
-                                        else
-                                            echo "Reporter binary not found — reporter script may have skipped build"
-                                        fi
-                                    '
-                            """
                         } else {
                             echo 'Skipping Qase reporting: QASE_AUTOMATION_TOKEN not available'
                         }
