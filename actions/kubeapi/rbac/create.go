@@ -204,3 +204,41 @@ func CreateGlobalRoleWithInheritedClusterRoles(client *rancher.Client, inherited
 
 	return createdGlobalRole, nil
 }
+
+// CreateGlobalRoleWithInheritedNamespacedRules creates a global role with inherited namespaced rules using wrangler context
+func CreateGlobalRoleWithInheritedNamespacedRules(client *rancher.Client, inheritedClusterRole []string, inheritedNamespacedRules map[string][]rbacv1.PolicyRule) (*v3.GlobalRole, error) {
+	globalRole := &v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namegen.AppendRandomString("test-inr"),
+		},
+		InheritedClusterRoles:    inheritedClusterRole,
+		InheritedNamespacedRules: inheritedNamespacedRules,
+	}
+
+	createdGlobalRole, err := extrbacapi.CreateGlobalRole(client, globalRole)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create global role with inherited namespaced rules: %w", err)
+	}
+
+	return createdGlobalRole, nil
+}
+
+// CreateGlobalRoleWithAllRules creates a global role with rules, inherited cluster roles, and inherited namespaced rules using wrangler context
+func CreateGlobalRoleWithAllRules(client *rancher.Client, inheritedClusterRole []string, rules []rbacv1.PolicyRule, namespacedRules map[string][]rbacv1.PolicyRule, inheritedNamespacedRules map[string][]rbacv1.PolicyRule) (*v3.GlobalRole, error) {
+	globalRole := &v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namegen.AppendRandomString("test-gr"),
+		},
+		Rules:                    rules,
+		InheritedClusterRoles:    inheritedClusterRole,
+		NamespacedRules:          namespacedRules,
+		InheritedNamespacedRules: inheritedNamespacedRules,
+	}
+
+	createdGlobalRole, err := extrbacapi.CreateGlobalRole(client, globalRole)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create global role: %w", err)
+	}
+
+	return createdGlobalRole, nil
+}
