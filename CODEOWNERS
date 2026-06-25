@@ -11,3 +11,13 @@
 /actions/provisioninginput @rancher/rancher-team-2-hostbusters-qa
 
 /validation/provisioning @rancher/rancher-team-2-hostbusters-qa
+
+/actions/auth @rancher/team-collie-qa
+/actions/projects @rancher/team-collie-qa
+/actions/rbac @rancher/team-collie-qa
+/actions/kubeapi/projects @rancher/team-collie-qa
+/actions/kubeapi/rbac @rancher/team-collie-qa
+
+/validation/auth @rancher/team-collie-qa
+/validation/projects @rancher/team-collie-qa
+/validation/rbac @rancher/team-collie-qa
