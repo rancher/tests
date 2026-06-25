@@ -119,6 +119,15 @@ jobs:
           windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
           windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
 
+      - name: Set up certificates
+        id: setup-certs
+        uses: ./.github/actions/setup-certs
+        with:
+          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
+          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
+          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
+          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
 
@@ -188,6 +197,8 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
+            privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsCredentials:
               awsAccessKey: "$AWS_ACCESS_KEY"
@@ -220,7 +231,6 @@ jobs:
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
-              certType: "${{ vars.CERT_TYPE }}"
               chartVersion: "${{ vars.RELEASED_RANCHER_CHART_VERSION_2_14 }}"
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
@@ -500,6 +510,15 @@ jobs:
           windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
           windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
 
+      - name: Set up certificates
+        id: setup-certs
+        uses: ./.github/actions/setup-certs
+        with:
+          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
+          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
+          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
+          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
 
@@ -569,6 +588,8 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
+            privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsCredentials:
               awsAccessKey: "$AWS_ACCESS_KEY"
@@ -601,7 +622,6 @@ jobs:
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
-              certType: "${{ vars.CERT_TYPE }}"
               chartVersion: "${{ vars.RELEASED_RANCHER_CHART_VERSION_2_14 }}"
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
@@ -881,6 +901,15 @@ jobs:
           windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
           windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
 
+      - name: Set up certificates
+        id: setup-certs
+        uses: ./.github/actions/setup-certs
+        with:
+          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
+          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
+          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
+          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
 
@@ -950,6 +979,8 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
+            privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsCredentials:
               awsAccessKey: "$AWS_ACCESS_KEY"
@@ -982,7 +1013,6 @@ jobs:
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
-              certType: "${{ vars.CERT_TYPE }}"
               chartVersion: "${{ vars.RELEASED_RANCHER_CHART_VERSION_2_13 }}"
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
