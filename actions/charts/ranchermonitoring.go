@@ -170,8 +170,11 @@ func newMonitoringChartInstallAction(p *PayloadOpts, rancherMonitoringOpts *Ranc
 		monitoringValues[k] = v
 	}
 
+	// On recent versions of Rancher, serverSide defaults to true and that breaks the installation of the monitoring chart on these versions.
 	chartInstall := NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, monitoringValues)
+	chartInstall.Values["serverSide"] = false
 	chartInstallCRD := NewChartInstall(p.Name+"-crd", p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherChartsName, p.ProjectID, p.DefaultRegistry, nil)
+	chartInstallCRD.Values["serverSide"] = false
 	chartInstalls := []types.ChartInstall{*chartInstallCRD, *chartInstall}
 
 	chartInstallAction := NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
