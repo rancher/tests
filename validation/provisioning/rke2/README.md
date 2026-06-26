@@ -181,6 +181,29 @@ Hardened test verifies that a cluster can deploy the rancher-compliance chart on
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestHardened -timeout=1h -v`
 
 
+### Imported Test
+
+#### Description: 
+Imported test verfies that various custom cluster configurations provision properly.
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Terraform Config](#terraform-config)
+3. [Cluster Config](#cluster-config)
+4. [Custom Cluster Config](#custom-cluster)
+
+#### Table Tests
+1. `RKE2_Imported|etcd_cp_worker`
+2. `RKE2_Imported|etcd_cp|worker`
+3. `RKE2_Imported|etcd|cp|worker`
+4. `RKE2_Custom|etcd|cp|worker|windows_2019`
+5. `RKE2_Custom|etcd|cp|worker|windows_2022`
+4. `RKE2_Imported|3_etcd|2_cp|3_worker`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestImported -timeout=1h -v`
+
+
 ### Ingress Test
 
 #### Description: 
@@ -296,7 +319,7 @@ All table tests listed above except the dynamic tests
 ## Configurations
 
 ### Terraform Config
-terraform config is needed when running the custom clusters as rancher/tfp-automation is utilized to create the clusters.
+terraform config is needed when running the custom clusters and imported clusters as rancher/tfp-automation is utilized to create the clusters.
 
 ```yaml
 terraform:
@@ -640,6 +663,19 @@ Custom clusters are only supported on AWS.
         awsUser: "Administrator"
         volumeSize: 50
         roles: ["windows"]
+```
+
+#### Imported Cluster Config
+Imported clusters are supported on AWS and vSphere. Use the terraform config along with defining the desired nodepools:
+```yaml
+terratest:
+  nodepools:
+    - quantity: 3
+      etcd: true
+    - quantity: 2
+      controlplane: true
+    - quantity: 3
+      worker: true
 ```
 
 ### Template Config
