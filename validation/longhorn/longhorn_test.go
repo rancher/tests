@@ -159,7 +159,10 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	storage.CheckVolumeAllocation(l.T(), l.client, l.cluster.ID, namespace.Name, l.longhornTestConfig.LonghornTestStorageClass, volumeSourceName, storage.MountPath)
 
 	statefulSet.Spec.Replicas = &maxStatefulSetReplicas
-	statefulSet, err = extstatefulsetapi.UpdateStatefulSet(l.client, l.cluster.ID, statefulSet, true)
+	err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+		statefulSet, err = extstatefulsetapi.UpdateStatefulSet(l.client, l.cluster.ID, statefulSet, true)
+		return err
+	})
 	require.NoError(l.T(), err)
 
 	err = shepherdCharts.WatchAndWaitStatefulSets(l.client, l.cluster.ID, namespaceName, metav1.ListOptions{
