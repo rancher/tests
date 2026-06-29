@@ -18,9 +18,15 @@ import (
 
 const (
 	TokenKind                                           = "Token"
+	SecretKind                                          = "Secret"
+	ExtTokenPrefix                                      = "ext/"
 	StatusConditionType                                 = "TokenCreated"
 	UserIDLabel                                         = "cattle.io/user-id"
 	KubeconfigIDLabel                                   = "authn.management.cattle.io/kubeconfig-id"
+	KindLabel                                           = "authn.management.cattle.io/kind"
+	KindLabelKubeconfigValue                            = "kubeconfig"
+	CattleKindLabel                                     = "cattle.io/kind"
+	CattleKindTokenValue                                = "token"
 	KubeconfigConfigmapNamespace                        = "cattle-tokens"
 	KubeconfigFile                                      = "kc_kubeconfig.yaml"
 	DummyFinalizer                                      = "cleanup.rancher.io/dummy"
@@ -124,10 +130,10 @@ func GetCurrentContext(kubeconfigFile string) (string, error) {
 	return config.CurrentContext, nil
 }
 
-// WaitForBackingConfigMapDeletion polls until the backing ConfigMap with the given name is deleted or the timeout is reached.
-func WaitForBackingConfigMapDeletion(client *rancher.Client, name string) error {
+// WaitForBackingConfigMapDeletion polls until the backing ConfigMap with the given name is deleted
+func WaitForBackingConfigMapDeletion(client *rancher.Client, kubeconfigName string) error {
 	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
-		_, err := client.WranglerContext.Core.ConfigMap().Get(KubeconfigConfigmapNamespace, name, metav1.GetOptions{})
+		_, err := client.WranglerContext.Core.ConfigMap().Get(KubeconfigConfigmapNamespace, kubeconfigName, metav1.GetOptions{})
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
 				return true, nil
@@ -150,12 +156,77 @@ func WaitForBackingV3TokenDeletion(client *rancher.Client, name string) error {
 }
 
 // WaitForBackingExtTokenDeletion polls until the backing ext Token with the given name is deleted or the timeout is reached.
-func WaitForBackingExtTokenDeletion(client *rancher.Client, name string) error {
+func WaitForBackingExtTokenDeletion(client *rancher.Client, kubeconfigName string) error {
 	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
-		tokens, err := GetBackingExtTokensForKubeconfig(client, name)
+		tokens, err := GetBackingExtTokensForKubeconfig(client, kubeconfigName)
 		if err != nil {
 			return false, err
 		}
 		return len(tokens.Items) == 0, nil
 	})
+}
+
+// WaitForBackingSecretDeletion polls until the v1.Secret for each given backing token in the cattle-tokens namespace is deleted or the timeout is reached.
+func WaitForBackingSecretDeletion(client *rancher.Client, tokens *extapi.TokenList) error {
+	for _, token := range tokens.Items {
+		err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+			_, err := client.WranglerContext.Core.Secret().Get(KubeconfigConfigmapNamespace, token.Name, metav1.GetOptions{})
+			if err != nil {
+				if k8serrors.IsNotFound(err) {
+					return true, nil
+				}
+				return false, err
+			}
+			return false, nil
+		})
+		if err != nil {
+			return fmt.Errorf("backing secret %s was not deleted: %w", token.Name, err)
+		}
+	}
+	return nil
+}
+
+// WaitForBackingExtTokenCreation polls until at least one backing ext Token for the given kubeconfig name is created
+func WaitForBackingExtTokenCreation(client *rancher.Client, kubeconfigName string) error {
+	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+		tokens, err := GetBackingExtTokensForKubeconfig(client, kubeconfigName)
+		if err != nil {
+			return false, err
+		}
+		return len(tokens.Items) > 0, nil
+	})
+}
+
+// WaitForBackingConfigMapCreation polls until the backing ConfigMap with the given name is created
+func WaitForBackingConfigMapCreation(client *rancher.Client, kubeconfigName string) error {
+	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+		_, err := client.WranglerContext.Core.ConfigMap().Get(KubeconfigConfigmapNamespace, kubeconfigName, metav1.GetOptions{})
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return true, nil
+	})
+}
+
+// WaitForBackingSecretCreation polls until the v1.Secret for each given backing token in the cattle-tokens namespace is created or the timeout is reached.
+func WaitForBackingSecretCreation(client *rancher.Client, tokens *extapi.TokenList) error {
+	for _, token := range tokens.Items {
+		err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+			_, err := client.WranglerContext.Core.Secret().Get(KubeconfigConfigmapNamespace, token.Name, metav1.GetOptions{})
+			if err != nil {
+				if k8serrors.IsNotFound(err) {
+					return false, nil
+				}
+				return false, err
+			}
+			return true, nil
+		})
+		if err != nil {
+			return fmt.Errorf("backing secret %s was not created: %w", token.Name, err)
+		}
+	}
+	return nil
 }
