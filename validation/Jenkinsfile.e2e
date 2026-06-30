@@ -541,10 +541,31 @@ insecure = true'''
 
         stage('Build Docker Images') {
             steps {
-                // rancher-infra-tools:latest — used by make.groovy / infra.* for all make targets
-                sh "docker build --no-cache --platform linux/amd64 -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.infra ."
-                // rancher-go-test:latest — used for qase binary build and admin-token playbook
-                sh "docker build --no-cache --platform linux/amd64 -t rancher-go-test:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.airgap-go-tests ."
+                script {
+                    // rancher2 provider releases are signed with a key that does not match the
+                    // signing key published in the registry, so OpenTofu refuses them. Mirror the
+                    // exact version pinned by qa-infra-automation's lockfile into the image to
+                    // bypass signature verification (hash still checked in the Dockerfile).
+                    // Remove when upstream fixes provider signing.
+                    def rancher2Version = ''
+                    def lockfilePath = "${env.INFRA_DIR}/tofu/rancher/cluster/.terraform.lock.hcl"
+                    if (env.INFRA_DIR && fileExists(lockfilePath)) {
+                        rancher2Version = sh(
+                            script: "grep -A5 'rancher/rancher2' '${lockfilePath}' | grep -m1 version | sed -E 's/.*\"([^\"]+)\".*/\\1/'",
+                            returnStdout: true
+                        ).trim()
+                        if (rancher2Version) {
+                            echo "rancher2 provider ${rancher2Version} will be mirrored into rancher-go-test (signature bypass)"
+                        } else {
+                            echo 'WARNING: could not parse rancher2 version from lockfile; provider mirror will be empty'
+                        }
+                    }
+
+                    // rancher-infra-tools:latest — used by make.groovy / infra.* for all make targets
+                    sh "docker build --no-cache --platform linux/amd64 -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.infra ."
+                    // rancher-go-test:latest — used for qase binary build, admin-token playbook, and tofu
+                    sh "docker build --no-cache --platform linux/amd64 --build-arg RANCHER2_PROVIDER_VERSION='${rancher2Version}' -t rancher-go-test:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.airgap-go-tests ."
+                }
             }
         }
 

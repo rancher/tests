@@ -5,6 +5,11 @@ ARG TOFU_VERSION=1.10.7
 ARG GOTESTSUM_VERSION=v1.13.0
 ARG ANSIBLE_VERSION=12.3.0
 ARG AWSCLI_VERSION=1.44.44
+# Pinned version of rancher2 provider to mirror into the image. Required because
+# the provider's release artifacts are signed with a key that does not match the
+# signing key published in the registry, so OpenTofu refuses registry installs.
+# Passed from Jenkinsfile.e2e (read from qa-infra-automation's lockfile).
+ARG RANCHER2_PROVIDER_VERSION=
 
 FROM --platform=linux/amd64 golang:1.26-alpine3.22@sha256:457d8584db11412777c4196146b8060fdaabe0b0ba7b62c553d08e07d8c22bd3
 
@@ -12,6 +17,7 @@ ARG TOFU_VERSION
 ARG GOTESTSUM_VERSION
 ARG ANSIBLE_VERSION
 ARG AWSCLI_VERSION
+ARG RANCHER2_PROVIDER_VERSION
 
 # Install runtime dependencies
 RUN apk add --no-cache \
@@ -38,6 +44,30 @@ RUN curl -Lo /tmp/tofu_${TOFU_VERSION}_linux_amd64.tar.gz "https://github.com/op
     && tar -xzf /tmp/tofu_${TOFU_VERSION}_linux_amd64.tar.gz -C /usr/local/bin/ \
     && rm /tmp/tofu_${TOFU_VERSION}_linux_amd64.tar.gz /tmp/tofu_SHA256SUMS \
     && chmod +x /usr/local/bin/tofu
+
+# Temporary: mirror the rancher2 provider into the image to bypass its broken
+# release signature. The provider's artifacts are signed by a key that does not
+# match the signing key published in the registry ("authentication signature
+# from unknown issuer"), so OpenTofu refuses registry installs for it. Serving
+# the zip from a filesystem mirror skips signature verification entirely, while
+# the SHA-256 is still checked against the registry's published shasum below.
+# Remove this block when upstream fixes provider signing.
+# https://opentofu.org/docs/cli/plugins/signing/
+RUN if [ -n "${RANCHER2_PROVIDER_VERSION}" ]; then \
+      set -e; \
+      META=$(curl -fsSL "https://registry.opentofu.org/v1/providers/rancher/rancher2/${RANCHER2_PROVIDER_VERSION}/download/linux/amd64"); \
+      ZIP_URL=$(printf '%s' "$META" | python3 -c 'import sys,json;print(json.load(sys.stdin)["download_url"])'); \
+      SHA=$(printf '%s' "$META" | python3 -c 'import sys,json;print(json.load(sys.stdin)["shasum"])'); \
+      FNAME=$(printf '%s' "$META" | python3 -c 'import sys,json;print(json.load(sys.stdin)["filename"])'); \
+      MIRROR="/usr/local/share/terraform/mirror/registry.opentofu.org/rancher/rancher2/${RANCHER2_PROVIDER_VERSION}/linux_amd64"; \
+      mkdir -p "$MIRROR"; \
+      curl -fsSL "$ZIP_URL" -o "$MIRROR/$FNAME"; \
+      printf '%s  %s/%s\n' "$SHA" "$MIRROR" "$FNAME" | sha256sum -c -; \
+      printf 'provider_installation {\n  filesystem_mirror {\n    path = "/usr/local/share/terraform/mirror"\n  }\n  direct {\n    exclude = ["rancher/rancher2"]\n  }\n}\n' > /root/.terraformrc; \
+      echo "Mirrored rancher2 ${RANCHER2_PROVIDER_VERSION} ($SHA)"; \
+    else \
+      echo "RANCHER2_PROVIDER_VERSION not set; skipping provider mirror"; \
+    fi
 
 # Install gotestsum (pinned version for reproducible builds)
 ENV GOBIN=/usr/local/bin
