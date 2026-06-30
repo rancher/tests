@@ -15,6 +15,8 @@
 def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
 library "qa-jenkins-library@${libraryBranch}"
 
+def DEFAULT_RANCHER_PASSWORD = 'XRi&Vfw8_Qr7*YVh1DE'
+
 pipeline {
     agent any
 
@@ -82,12 +84,12 @@ pipeline {
         )
         password(
             name: 'RANCHER_BOOTSTRAP_PASSWORD',
-            defaultValue: 'rancherrocks',
+            defaultValue: DEFAULT_RANCHER_PASSWORD,
             description: 'Rancher bootstrap password for initial setup'
         )
         password(
             name: 'RANCHER_ADMIN_PASSWORD',
-            defaultValue: 'rancherrocks',
+            defaultValue: DEFAULT_RANCHER_PASSWORD,
             description: 'Rancher admin password after bootstrap'
         )
         booleanParam(
