@@ -166,8 +166,8 @@ func CreateCloudProviderAddOns(client *rancher.Client, clustersConfig *clusters.
 
 	case provisioninginput.HarvesterProviderName.String():
 
-		data := map[string][]byte{
-			"credential": []byte(credentials.HarvesterCredentialConfig.KubeconfigContent),
+		data := map[string]string{
+			"credential": credentials.HarvesterCredentialConfig.KubeconfigContent,
 		}
 
 		annotations := map[string]string{

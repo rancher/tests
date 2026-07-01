@@ -12,7 +12,7 @@ import (
 )
 
 // CreateSecret is a helper to create a secret using wrangler context with generated name and provided data
-func CreateSecret(client *rancher.Client, clusterID, namespaceName string, data map[string][]byte, secretType corev1.SecretType, labels, annotations map[string]string) (*corev1.Secret, error) {
+func CreateSecret(client *rancher.Client, clusterID, namespaceName string, data map[string]string, secretType corev1.SecretType, labels, annotations map[string]string) (*corev1.Secret, error) {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
@@ -32,7 +32,7 @@ func CreateSecret(client *rancher.Client, clusterID, namespaceName string, data 
 }
 
 // CreateProjectScopedSecret creates a project-scoped secret in the project's backing namespace in the local cluster
-func CreateProjectScopedSecret(client *rancher.Client, clusterID, projectID string, data map[string][]byte, secretType corev1.SecretType) (*corev1.Secret, error) {
+func CreateProjectScopedSecret(client *rancher.Client, clusterID, projectID string, data map[string]string, secretType corev1.SecretType) (*corev1.Secret, error) {
 	backingNamespace := fmt.Sprintf("%s-%s", clusterID, projectID)
 
 	labels := map[string]string{
