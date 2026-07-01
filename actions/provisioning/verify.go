@@ -44,16 +44,12 @@ import (
 )
 
 const (
-	local                       = "local"
 	logMessageKubernetesVersion = "Validating the current version is the upgraded one"
 	hostnameLimit               = 63
-	etcdSnapshotAnnotation      = "etcdsnapshot.rke.io/storage"
 	machineNameAnnotation       = "cluster.x-k8s.io/machine"
 	deploymentNameLabel         = "cluster.x-k8s.io/deployment-name"
 	capiRoleLabel               = "cluster.x-k8s.io/role"
 	rancherRoleLabel            = "rke.cattle.io/role"
-	onDemandPrefix              = "on-demand-"
-	s3                          = "s3"
 	DefaultRancherDataDir       = "/var/lib/rancher"
 	oneSecondInterval           = time.Duration(1 * time.Second)
 	notFound                    = "404 Not Found"
@@ -544,7 +540,7 @@ func VerifyACELocalUnavailable(t *testing.T, rancherClient *rancher.Client, clus
 		"-i", pemFilePath,
 		"-o", "StrictHostKeyChecking=no",
 		fmt.Sprintf("%s@%s", sshUser, controlPlaneIP),
-		fmt.Sprintf("sudo cat /etc/rancher/rke2/rke2.yaml || sudo cat /etc/rancher/k3s/k3s.yaml"),
+		"sudo cat /etc/rancher/rke2/rke2.yaml || sudo cat /etc/rancher/k3s/k3s.yaml",
 	)
 
 	scpOutput, err := scpCmd.Output()
