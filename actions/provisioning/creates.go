@@ -35,10 +35,10 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	k3sHardening "github.com/rancher/tests/actions/hardening/k3s"
 	rke2Hardening "github.com/rancher/tests/actions/hardening/rke2"
+	"github.com/rancher/tests/actions/kubeapi/secrets"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/pipeline"
 	"github.com/rancher/tests/actions/provisioninginput"
-	"github.com/rancher/tests/actions/secrets"
 	"github.com/rancher/tests/actions/ssh"
 
 	corev1 "k8s.io/api/core/v1"
@@ -49,7 +49,6 @@ import (
 )
 
 const (
-	active     = "active"
 	internalIP = "alpha.kubernetes.io/provided-node-ip"
 )
 
@@ -101,9 +100,9 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 				}
 
 				secretName := fmt.Sprintf("priv-reg-sec-%s", clusterName)
-				secretTemplate := secrets.NewSecretTemplate(secretName, namespaces.FleetDefault, map[string][]byte{
-					"password": []byte(clustersConfig.Registries.RKE2Password),
-					"username": []byte(clustersConfig.Registries.RKE2Username),
+				secretTemplate := secrets.NewSecretTemplate(secretName, namespaces.FleetDefault, map[string]string{
+					"password": clustersConfig.Registries.RKE2Password,
+					"username": clustersConfig.Registries.RKE2Username,
 				},
 					corev1.SecretTypeBasicAuth,
 					nil,

@@ -99,8 +99,8 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) acrCreateTestResourcesForCle
 		require.Greater(acrd.T(), len(podList.Items), 0, "No pods found in namespace %s", namespace.Name)
 		podNames = append(podNames, podList.Items[0].Name)
 
-		secretData := map[string][]byte{
-			"hello": []byte("world"),
+		secretData := map[string]string{
+			"hello": "world",
 		}
 		createdSecret, err := secretapi.CreateSecret(client, cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 		require.NoError(acrd.T(), err, "Failed to create secret in namespace %s", namespace.Name)

@@ -19,10 +19,10 @@ import (
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/rancher/tests/actions/charts"
+	"github.com/rancher/tests/actions/kubeapi/secrets"
 	servicesapi "github.com/rancher/tests/actions/kubeapi/services"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/projects"
-	"github.com/rancher/tests/actions/secrets"
 	"github.com/rancher/tests/actions/services"
 	"github.com/rancher/tests/actions/upgradeinput"
 	"github.com/rancher/tests/actions/workloads"
@@ -108,7 +108,7 @@ func createPreUpgradeWorkloads(t *testing.T, client *rancher.Client, clusterName
 	err = extensionscharts.WatchAndWaitDaemonSets(client, project.ClusterID, namespace.Name, metav1.ListOptions{})
 	require.NoError(t, err)
 
-	secretTemplate := secrets.NewSecretTemplate(names.random[secretName], namespace.Name, map[string][]byte{"test": []byte("test")}, corev1.SecretTypeOpaque, nil, nil)
+	secretTemplate := secrets.NewSecretTemplate(names.random[secretName], namespace.Name, map[string]string{"test": "test"}, corev1.SecretTypeOpaque, nil, nil)
 
 	logrus.Infof("Creating secret: %v", names.random[secretName])
 	createdSecret, err := steveClient.SteveType(secrets.SecretSteveType).Create(secretTemplate)

@@ -106,8 +106,8 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithNamespacedRules() {
 	require.Equal(ns.T(), len(listSecretsAsAdmin.Items), len(listSecretsAsUser.Items))
 
 	log.Info("Verify user cannot create secrets in the namespace from the namespaced rules")
-	secretData := map[string][]byte{
-		"key": []byte(namegen.RandStringLower(5)),
+	secretData := map[string]string{
+		"key": namegen.RandStringLower(5),
 	}
 	_, err = secretapi.CreateSecret(userClient, localcluster, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.Error(ns.T(), err)
@@ -148,8 +148,8 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarAsKeyInNamespacedRules
 	require.True(ns.T(), k8sError.IsForbidden(err))
 
 	log.Info("Verify user cannot create secrets in other namespaces as well")
-	secretData := map[string][]byte{
-		"key": []byte(namegen.RandStringLower(5)),
+	secretData := map[string]string{
+		"key": namegen.RandStringLower(5),
 	}
 	_, err = secretapi.CreateSecret(userClient, localcluster, "default", secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.Error(ns.T(), err)
@@ -185,8 +185,8 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarForResourcesAndGroups(
 
 	log.Info("Create secrets as an admin in the customNS and verify user can list the secret.")
 
-	secretData := map[string][]byte{
-		"key": []byte(namegen.RandStringLower(5)),
+	secretData := map[string]string{
+		"key": namegen.RandStringLower(5),
 	}
 	createAdminSecret, err := secretapi.CreateSecret(ns.client, localcluster, customNS, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.NoError(ns.T(), err)
@@ -201,8 +201,8 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarForResourcesAndGroups(
 	require.True(ns.T(), k8sError.IsForbidden(err))
 
 	log.Info("Verify user cannot create secrets in other namespaces as well")
-	nonCreatedSecretData := map[string][]byte{
-		"key": []byte(namegen.RandStringLower(5)),
+	nonCreatedSecretData := map[string]string{
+		"key": namegen.RandStringLower(5),
 	}
 	_, err = secretapi.CreateSecret(userClient, localcluster, "default", nonCreatedSecretData, corev1.SecretTypeOpaque, nil, nil)
 	require.Error(ns.T(), err)

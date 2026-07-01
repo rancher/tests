@@ -86,9 +86,9 @@ func (cert *CertificateRBACTestSuite) TestCreateCertificateSecret() {
 			cert.T().Logf("Created user: %v", user.Username)
 
 			log.Infof("As a %v, create a TLS secret in the namespace %v", tt.role.String(), namespace.Name)
-			secretData := map[string][]byte{
-				corev1.TLSCertKey:       []byte(cert.certData),
-				corev1.TLSPrivateKeyKey: []byte(cert.keyData),
+			secretData := map[string]string{
+				corev1.TLSCertKey:       cert.certData,
+				corev1.TLSPrivateKeyKey: cert.keyData,
 			}
 
 			createdCert, err := secretapi.CreateSecret(userClient, cert.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS, nil, nil)
@@ -135,9 +135,9 @@ func (cert *CertificateRBACTestSuite) TestListCertificateSecret() {
 			cert.T().Logf("Created user: %v", user.Username)
 
 			log.Infof("As admin, create a TLS secret in the namespace %v", namespace.Name)
-			secretData := map[string][]byte{
-				corev1.TLSCertKey:       []byte(cert.certData),
-				corev1.TLSPrivateKeyKey: []byte(cert.keyData),
+			secretData := map[string]string{
+				corev1.TLSCertKey:       cert.certData,
+				corev1.TLSPrivateKeyKey: cert.keyData,
 			}
 
 			createdCert, err := secretapi.CreateSecret(cert.client, cert.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS, nil, nil)
@@ -191,9 +191,9 @@ func (cert *CertificateRBACTestSuite) TestUpdateCertificateSecret() {
 			cert.T().Logf("Created user: %v", user.Username)
 
 			log.Infof("As admin, create a TLS secret in the namespace %v", namespace.Name)
-			secretData := map[string][]byte{
-				corev1.TLSCertKey:       []byte(cert.certData),
-				corev1.TLSPrivateKeyKey: []byte(cert.keyData),
+			secretData := map[string]string{
+				corev1.TLSCertKey:       cert.certData,
+				corev1.TLSPrivateKeyKey: cert.keyData,
 			}
 
 			createdCert, err := secretapi.CreateSecret(cert.client, cert.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS, nil, nil)
@@ -203,10 +203,10 @@ func (cert *CertificateRBACTestSuite) TestUpdateCertificateSecret() {
 			userContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, cert.cluster.ID)
 			assert.NoError(cert.T(), err)
 
-			newSecretData := map[string][]byte{
-				corev1.TLSCertKey:       []byte(cert.certData),
-				corev1.TLSPrivateKeyKey: []byte(cert.keyData),
-				"updated-key":           []byte("updated-value"),
+			newSecretData := map[string]string{
+				corev1.TLSCertKey:       cert.certData,
+				corev1.TLSPrivateKeyKey: cert.keyData,
+				"updated-key":           "updated-value",
 			}
 
 			updatedSecretObj := secretapi.SecretCopyWithNewData(createdCert, newSecretData)
@@ -255,9 +255,9 @@ func (cert *CertificateRBACTestSuite) TestDeleteCertificateSecret() {
 			cert.T().Logf("Created user: %v", user.Username)
 
 			log.Infof("As admin, create a TLS secret in the namespace %v", namespace.Name)
-			secretData := map[string][]byte{
-				corev1.TLSCertKey:       []byte(cert.certData),
-				corev1.TLSPrivateKeyKey: []byte(cert.keyData),
+			secretData := map[string]string{
+				corev1.TLSCertKey:       cert.certData,
+				corev1.TLSPrivateKeyKey: cert.keyData,
 			}
 
 			createdCert, err := secretapi.CreateSecret(cert.client, cert.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS, nil, nil)
