@@ -29,11 +29,10 @@ import (
 )
 
 const (
-	externalProviderString = "external"
-	clusterIPPrefix        = "cip"
-	loadBalancerPrefix     = "lb"
-	portName               = "port"
-	nginxName              = "nginx"
+	clusterIPPrefix    = "cip"
+	loadBalancerPrefix = "lb"
+	portName           = "port"
+	nginxName          = "nginx"
 
 	awsUpstreamCloudProviderRepo = "https://github.com/kubernetes/cloud-provider-aws.git"
 	masterBranch                 = "master"
