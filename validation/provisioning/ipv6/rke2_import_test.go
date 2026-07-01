@@ -1,6 +1,6 @@
-//go:build validation || recurring
+//go:build validation || (recurring && ipv6) || ipv6
 
-package rke2
+package ipv6
 
 import (
 	"os"
@@ -10,7 +10,6 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
@@ -25,15 +24,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type importedTest struct {
+type importRKE2IPv6Test struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
 }
 
-func importedSetup(t *testing.T) importedTest {
-	var r importedTest
+func importRKE2IPv6Setup(t *testing.T) importRKE2IPv6Test {
+	var r importRKE2IPv6Test
+
 	testSession := session.NewSession()
 	r.session = testSession
 
@@ -53,35 +53,35 @@ func importedSetup(t *testing.T) importedTest {
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(t, err)
 
+	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.RKE2, r.cattleConfig)
+	require.NoError(t, err)
+
 	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
 	require.NoError(t, err)
 
 	return r
 }
 
-func TestImported(t *testing.T) {
+func TestImportRKE2IPv6(t *testing.T) {
 	t.Parallel()
-	r := importedSetup(t)
+	r := importRKE2IPv6Setup(t)
 
 	nodeRolesAll := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true, Controlplane: true, Worker: true}}
 	nodeRolesShared := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true, Controlplane: true}, {Quantity: 1, Worker: true}}
 	nodeRolesDedicated := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true}, {Quantity: 1, Controlplane: true}, {Quantity: 1, Worker: true}}
-	nodeRolesDedicatedWindows := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true}, {Quantity: 1, Controlplane: true}, {Quantity: 1, Worker: true}, {Quantity: 1, Windows: true}}
 	nodeRolesStandard := []tfpConfig.Nodepool{{Quantity: 3, Etcd: true}, {Quantity: 2, Controlplane: true}, {Quantity: 3, Worker: true}}
 
 	tests := []struct {
-		name        string
-		client      *rancher.Client
-		clusterType string
-		nodePools   []tfpConfig.Nodepool
+		name      string
+		client    *rancher.Client
+		nodePools []tfpConfig.Nodepool
 	}{
-		{"RKE2_Imported|etcd_cp_worker", r.standardUserClient, defaults.RKE2, nodeRolesAll},
-		{"RKE2_Imported|etcd_cp|worker", r.standardUserClient, defaults.RKE2, nodeRolesShared},
-		{"RKE2_Imported|etcd|cp|worker", r.standardUserClient, defaults.RKE2, nodeRolesDedicated},
-		{"RKE2_Imported|etcd|cp|worker|windows_2019", r.standardUserClient, "rke2_windows_2019", nodeRolesDedicatedWindows},
-		{"RKE2_Imported|etcd|cp|worker|windows_2022", r.standardUserClient, "rke2_windows_2022", nodeRolesDedicatedWindows},
-		{"RKE2_Imported|3_etcd|2_cp|3_worker", r.standardUserClient, defaults.RKE2, nodeRolesStandard},
+		{"RKE2_IPv6_Imported|etcd_cp_worker", r.standardUserClient, nodeRolesAll},
+		{"RKE2_IPv6_Imported|etcd_cp|worker", r.standardUserClient, nodeRolesShared},
+		{"RKE2_IPv6_Imported|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated},
+		{"RKE2_IPv6_Imported|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard},
 	}
+
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
@@ -97,7 +97,7 @@ func TestImported(t *testing.T) {
 			terratestConfig.Nodepools = tt.nodePools
 
 			logrus.Info("Provisioning imported cluster")
-			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpImported.CreateImportedCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, tt.clusterType, "validation/provisioning/rke2")
+			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpImported.CreateImportedCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.RKE2, "validation/provisioning/ipv6")
 			defer os.RemoveAll(nestedRancherModuleDir)
 			defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
 
@@ -112,13 +112,9 @@ func TestImported(t *testing.T) {
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(r.client, cluster)
 			require.NoError(t, err)
-
-			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
-			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
-			require.NoError(t, err)
 		})
 
-		params := provisioning.GetCustomSchemaParams(r.client, r.cattleConfig)
+		params := provisioning.GetCustomSchemaParams(tt.client, r.cattleConfig)
 		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
