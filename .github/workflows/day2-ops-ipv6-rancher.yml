@@ -1,5 +1,5 @@
 ---
-name: Dualstack Recurring Runs
+name: Day 2 Operations - IPv6 Rancher
 
 on:
   schedule:
@@ -54,7 +54,7 @@ jobs:
           - rancher-server-one
           - rancher-server-two
     env:
-      HOSTNAME_PREFIX: "gha-ds-r215"
+      HOSTNAME_PREFIX: "gha6-r215"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
@@ -196,7 +196,7 @@ jobs:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
             awsConfig:
-              ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
+              ami: "${{ secrets.AWS_IPV6_AMI }}"
               awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
@@ -208,20 +208,22 @@ jobs:
               awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ secrets.DUAL_STACK_AWS_USER }}"
-              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
+              awsUser: "${{ secrets.IPV6_AWS_USER }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
+              enablePrimaryIPv6: true
+              httpProtocolIPv6: "enabled"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
               timeout: "${{ vars.TIMEOUT }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
+              ipAddressType: "${{ vars.IPV6_ADDRESS_TYPE }}"
               loadBalancerType: "${{ vars.LOAD_BALANCER_DUALSTACK_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+              targetType: "${{ vars.TARGET_IPV6_TYPE }}"
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              osUser: "${{ vars.DUAL_STACK_OS_USER }}"
-              osGroup: "${{ vars.DUAL_STACK_OS_GROUP }}"
+              osUser: "${{ vars.IPV6_OS_USER }}"
+              osGroup: "${{ vars.IPV6_OS_GROUP }}"
               rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
@@ -244,9 +246,9 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             networking:
-              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
-              stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
+              stackPreference: "${{ vars.STACK_PREFERENCE_IPV6 }}"
             advanced:
               machineGlobalConfig:
                 flannel-ipv6-masq: true
@@ -276,16 +278,15 @@ jobs:
             region: "${{ secrets.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
-              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
+              ami: "${{ secrets.AWS_IPV6_AMI }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.AWS_ZONE_LETTER }}"
+              zone: "${{ vars.IPV6_AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
-              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+              subnetId: "${{ secrets.AWS_IPV6_SUBNET_ID }}"
               enablePrimaryIPv6: true
               httpProtocolIpv6: "enabled"
               ipv6AddressOnly: true
@@ -297,7 +298,7 @@ jobs:
             awsAccessKeyID: "$AWS_ACCESS_KEY"
             awsEC2Config:
               - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_DUALSTACK_AMI }}"
+                awsAMI: "${{ secrets.AWS_IPV6_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
@@ -332,7 +333,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/dualstack/main.go
+        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/ipv6/main.go
 
       - name: Run Test Suites
         env:
@@ -343,12 +344,12 @@ jobs:
         with:
           suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: dualstack
+          tags: ipv6
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/dualstack/aws
+        working-directory: tfp-automation/modules/ipv6/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
@@ -402,15 +403,15 @@ jobs:
       - name: Save test result as artifact for weekly summary
         if: always() && github.event_name == 'schedule'
         run: |
-          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"recurring-dualstack-test\", \"job\": \"v2-15\" }" > test-result-recurring-dualstack-test-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"day2-ops-ipv6-rancher\", \"job\": \"v2-15\" }" > test-result-day2-ops-ipv6-rancher-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
         shell: bash
 
       - name: Upload test result weekly summary
         if: always() && github.event_name == 'schedule'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
         with:
-          name: test-result-recurring-dualstack-test-v2-15-${{ github.run_id }}
-          path: test-result-recurring-dualstack-test-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
+          name: test-result-day2-ops-ipv6-rancher-v2-15-${{ github.run_id }}
+          path: test-result-day2-ops-ipv6-rancher-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
   
   v2-14:
     if: |
@@ -427,7 +428,7 @@ jobs:
           - rancher-server-one
           - rancher-server-two
     env:
-      HOSTNAME_PREFIX: "gha-ds-r214"
+      HOSTNAME_PREFIX: "gha6-r214"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
@@ -569,7 +570,7 @@ jobs:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
             awsConfig:
-              ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
+              ami: "${{ secrets.AWS_IPV6_AMI }}"
               awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
@@ -581,20 +582,22 @@ jobs:
               awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ secrets.DUAL_STACK_AWS_USER }}"
-              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
+              awsUser: "${{ secrets.IPV6_AWS_USER }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
+              enablePrimaryIPv6: true
+              httpProtocolIPv6: "enabled"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
               timeout: "${{ vars.TIMEOUT }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
+              ipAddressType: "${{ vars.IPV6_ADDRESS_TYPE }}"
               loadBalancerType: "${{ vars.LOAD_BALANCER_DUALSTACK_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+              targetType: "${{ vars.TARGET_IPV6_TYPE }}"
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              osUser: "${{ vars.DUAL_STACK_OS_USER }}"
-              osGroup: "${{ vars.DUAL_STACK_OS_GROUP }}"
+              osUser: "${{ vars.IPV6_OS_USER }}"
+              osGroup: "${{ vars.IPV6_OS_GROUP }}"
               rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
@@ -617,9 +620,9 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             networking:
-              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
-              stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
+              stackPreference: "${{ vars.STACK_PREFERENCE_IPV6 }}"
             advanced:
               machineGlobalConfig:
                 flannel-ipv6-masq: true
@@ -649,16 +652,15 @@ jobs:
             region: "${{ secrets.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
-              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
+              ami: "${{ secrets.AWS_IPV6_AMI }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.AWS_ZONE_LETTER }}"
+              zone: "${{ vars.IPV6_AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
-              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+              subnetId: "${{ secrets.AWS_IPV6_SUBNET_ID }}"
               enablePrimaryIPv6: true
               httpProtocolIpv6: "enabled"
               ipv6AddressOnly: true
@@ -670,7 +672,7 @@ jobs:
             awsAccessKeyID: "$AWS_ACCESS_KEY"
             awsEC2Config:
               - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_DUALSTACK_AMI }}"
+                awsAMI: "${{ secrets.AWS_IPV6_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
@@ -705,7 +707,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/dualstack/main.go
+        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/ipv6/main.go
 
       - name: Run Test Suites
         env:
@@ -716,12 +718,12 @@ jobs:
         with:
           suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: dualstack
+          tags: ipv6
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/dualstack/aws
+        working-directory: tfp-automation/modules/ipv6/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
@@ -775,15 +777,15 @@ jobs:
       - name: Save test result as artifact for weekly summary
         if: always() && github.event_name == 'schedule'
         run: |
-          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"recurring-dualstack-test\", \"job\": \"v2-14\" }" > test-result-recurring-dualstack-test-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"day2-ops-ipv6-rancher\", \"job\": \"v2-14\" }" > test-result-day2-ops-ipv6-rancher-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
         shell: bash
 
       - name: Upload test result weekly summary
         if: always() && github.event_name == 'schedule'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
         with:
-          name: test-result-recurring-dualstack-test-v2-14-${{ github.run_id }}
-          path: test-result-recurring-dualstack-test-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
+          name: test-result-day2-ops-ipv6-rancher-v2-14-${{ github.run_id }}
+          path: test-result-day2-ops-ipv6-rancher-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
 
   v2-13:
     if: |
@@ -791,7 +793,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: staging-latest
+    environment: latest
     strategy:
       fail-fast: false
       matrix:
@@ -799,7 +801,7 @@ jobs:
           - rancher-server-one
           - rancher-server-two
     env:
-      HOSTNAME_PREFIX: "gha-ds-r213"
+      HOSTNAME_PREFIX: "gha6-r213"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
@@ -941,7 +943,7 @@ jobs:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
             awsConfig:
-              ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
+              ami: "${{ secrets.AWS_IPV6_AMI }}"
               awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
@@ -953,20 +955,22 @@ jobs:
               awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ secrets.DUAL_STACK_AWS_USER }}"
-              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
+              awsUser: "${{ secrets.IPV6_AWS_USER }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
+              enablePrimaryIPv6: true
+              httpProtocolIPv6: "enabled"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
               timeout: "${{ vars.TIMEOUT }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
+              ipAddressType: "${{ vars.IPV6_ADDRESS_TYPE }}"
               loadBalancerType: "${{ vars.LOAD_BALANCER_DUALSTACK_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+              targetType: "${{ vars.TARGET_IPV6_TYPE }}"
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              osUser: "${{ vars.DUAL_STACK_OS_USER }}"
-              osGroup: "${{ vars.DUAL_STACK_OS_GROUP }}"
+              osUser: "${{ vars.IPV6_OS_USER }}"
+              osGroup: "${{ vars.IPV6_OS_GROUP }}"
               rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
               rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
@@ -990,9 +994,9 @@ jobs:
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             networking:
-              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
-              stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
+              clusterCIDR: "${{ vars.IPV6_CLUSTER_CIDR }}"
+              serviceCIDR: "${{ vars.IPV6_SERVICE_CIDR }}"
+              stackPreference: "${{ vars.STACK_PREFERENCE_IPV6 }}"
             advanced:
               machineGlobalConfig:
                 flannel-ipv6-masq: true
@@ -1012,7 +1016,7 @@ jobs:
 
           logging:
             level: "${{ vars.LOGGING_LEVEL }}"
-          
+
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
@@ -1022,16 +1026,15 @@ jobs:
             region: "${{ secrets.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
-              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
+              ami: "${{ secrets.AWS_IPV6_AMI }}"
               sshUser: "${{ secrets.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.AWS_ZONE_LETTER }}"
+              zone: "${{ vars.IPV6_AWS_ZONE_LETTER }}"
               retries: "5"
               rootSize: "${{ vars.AWS_ROOT_SIZE }}"
               securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES_PRIME }}]
-              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+              subnetId: "${{ secrets.AWS_IPV6_SUBNET_ID }}"
               enablePrimaryIPv6: true
               httpProtocolIpv6: "enabled"
               ipv6AddressOnly: true
@@ -1043,7 +1046,7 @@ jobs:
             awsAccessKeyID: "$AWS_ACCESS_KEY"
             awsEC2Config:
               - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_DUALSTACK_AMI }}"
+                awsAMI: "${{ secrets.AWS_IPV6_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
@@ -1078,7 +1081,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/dualstack/main.go
+        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/ipv6/main.go
 
       - name: Run Test Suites
         env:
@@ -1089,12 +1092,12 @@ jobs:
         with:
           suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: dualstack
+          tags: ipv6
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/dualstack/aws
+        working-directory: tfp-automation/modules/ipv6/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
@@ -1148,12 +1151,12 @@ jobs:
       - name: Save test result as artifact for weekly summary
         if: always() && github.event_name == 'schedule'
         run: |
-          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"recurring-dualstack-test\", \"job\": \"v2-13\" }" > test-result-recurring-dualstack-test-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"day2-ops-ipv6-rancher\", \"job\": \"v2-13\" }" > test-result-day2-ops-ipv6-rancher-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
         shell: bash
 
       - name: Upload test result weekly summary
         if: always() && github.event_name == 'schedule'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
         with:
-          name: test-result-recurring-dualstack-test-v2-13-${{ github.run_id }}
-          path: test-result-recurring-dualstack-test-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
+          name: test-result-day2-ops-ipv6-rancher-v2-13-${{ github.run_id }}
+          path: test-result-day2-ops-ipv6-rancher-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json

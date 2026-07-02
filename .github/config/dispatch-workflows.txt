@@ -1,4 +1,5 @@
 airgap-cluster-provisioning.yml
+day2-ops-rancher.yml
 cluster-provisioning.yml
 post-release-prime.yml
 prime-recurring-tests.yml
@@ -6,5 +7,4 @@ proxy-cluster-provisioning.yml
 rancher-upgrade-cluster-provisioning.yml
 rancher-upgrade-airgap-cluster-provisioning.yml
 rancher-upgrade-proxy-cluster-provisioning.yml
-recurring-tests.yml
 registries-cluster-provisioning.yml
