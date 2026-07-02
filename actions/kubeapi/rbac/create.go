@@ -242,3 +242,60 @@ func CreateGlobalRoleWithAllRules(client *rancher.Client, inheritedClusterRole [
 
 	return createdGlobalRole, nil
 }
+
+// GrantUserCRDUpdatePermissions creates a ClusterRole and ClusterRoleBinding
+// to grant a specific user Kubernetes API permissions to get, patch, and update User CRDs.
+// This allows the user's requests to bypass the Kubernetes API server's RBAC checks
+// so they can be evaluated directly by the admission webhook. Returns a cleanup function.
+func GrantUserCRDUpdatePermissions(client *rancher.Client, clusterID, username string) (error) {
+    testerRoleName := namegen.AppendRandomString("webhook-tester-role-")
+    testerRole := &rbacv1.ClusterRole{
+        TypeMeta: metav1.TypeMeta{
+            APIVersion: "rbac.authorization.k8s.io/v1",
+            Kind:       "ClusterRole",
+        },
+        ObjectMeta: metav1.ObjectMeta{
+            Name: testerRoleName,
+        },
+        Rules: []rbacv1.PolicyRule{
+            {
+                APIGroups: []string{"management.cattle.io"},
+                Resources: []string{"users"},
+                Verbs:     []string{"get", "patch", "update"},
+            },
+        },
+    }
+    _, err := extrbacapi.CreateClusterRole(client, clusterID, testerRole)
+    if err != nil {
+        return fmt.Errorf("failed to create webhook-tester-role: %w", err)
+    }
+
+    testerBindingName := namegen.AppendRandomString("binding-")
+    testerBinding := &rbacv1.ClusterRoleBinding{
+        TypeMeta: metav1.TypeMeta{
+            APIVersion: "rbac.authorization.k8s.io/v1",
+            Kind:       "ClusterRoleBinding",
+        },
+        ObjectMeta: metav1.ObjectMeta{
+            Name: testerBindingName,
+        },
+        Subjects: []rbacv1.Subject{
+            {
+                Kind:     "User",
+                Name:     username,
+                APIGroup: "rbac.authorization.k8s.io",
+            },
+        },
+        RoleRef: rbacv1.RoleRef{
+            Kind:     "ClusterRole",
+            Name:     testerRoleName,
+            APIGroup: "rbac.authorization.k8s.io",
+        },
+    }
+    _, err = extrbacapi.CreateClusterRoleBinding(client, clusterID, testerBinding)
+    if err != nil {
+        return fmt.Errorf("failed to create webhook-tester-binding: %w", err)
+    }
+
+    return nil
+}
