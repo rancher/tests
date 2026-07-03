@@ -67,7 +67,7 @@ require (
 	github.com/rancher/norman v0.9.6
 	github.com/rancher/qa-infra-automation v0.0.0-20260514152023-976143409dc3
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20260610155525-6d926c75d49a
+	github.com/rancher/shepherd v0.0.0-20260616224945-d2cbef93a360
 	github.com/rancher/tests/actions v0.0.0-20260610140123-a36d05641397
 	github.com/rancher/tfp-automation v0.0.0-20260701185620-64a4ef67d69a
 	github.com/sirupsen/logrus v1.9.4
