@@ -79,6 +79,11 @@ pipeline {
             defaultValue: true,
             description: 'Destroy infrastructure after tests complete'
         )
+        booleanParam(
+            name: 'PROVISION_DOWNSTREAM_CLUSTER',
+            defaultValue: true,
+            description: 'Provision a downstream RKE2 cluster and import it into Rancher before running tests (requires a downstream node group in TERRAFORM_CONFIG)'
+        )
 
         // ── Version pins ───────────────────────────────────────────
         string(
@@ -200,7 +205,11 @@ aws_vpc = "vpc-bfccf4d7"
 user_id = "ubuntu"
 ssh_key = "/root/.ssh/jenkins-elliptic-validation.pem"
 ssh_key_name = "jenkins-elliptic-validation"
-provision_registry = false'''
+provision_registry = false
+node_groups = {
+  rancher    = 3
+  downstream = 3
+}'''
         )
 
         // ── Ansible variables ──────────────────────────────────────
@@ -534,6 +543,62 @@ rancher_use_bundled_system_charts: true'''
 
                     // ── Store hostname for test execution ────────────────
                     env.RANCHER_HOSTNAME = rancherHostname
+                }
+            }
+        }
+
+        stage('Provision Downstream Cluster') {
+            when {
+                expression { params.PROVISION_DOWNSTREAM_CLUSTER }
+            }
+            steps {
+                script {
+                    // Best-effort guard: the downstream make/playbook targets require
+                    // a 'downstream' inventory group, which only exists when tofu
+                    // provisions downstream nodes via node_groups in TERRAFORM_CONFIG.
+                    if (!(env.TERRAFORM_CONFIG =~ /(?m)^\s*downstream\s*=/)) {
+                        echo 'WARNING: PROVISION_DOWNSTREAM_CLUSTER is enabled but no downstream entry was found in TERRAFORM_CONFIG. ' +
+                             'Add "node_groups = { rancher = 3, downstream = 3 }" or the downstream cluster will not be provisioned.'
+                    }
+
+                    def ansiblePath = "${env.INFRA_DIR}/ansible/rke2/airgap"
+
+                    // ── Install RKE2 on the downstream node group ────────
+                    stage('Deploy Downstream RKE2') {
+                        make.runTarget(
+                            target:       'cluster',
+                            dir:          env.INFRA_DIR,
+                            makeArgs:     ['ENV=airgap', 'TARGET_GROUP=downstream'],
+                            passAwsCreds: false
+                        )
+                    }
+
+                    // ── Configure private registry on downstream nodes ──
+                    // 'make registry' has no TARGET_GROUP support, so invoke the
+                    // playbook directly with target=downstream (mirrors the
+                    // airgap-downstream combined make target).
+                    stage('Configure Downstream Registry') {
+                        if (env.PRIVATE_REGISTRY_URL?.trim()) {
+                            ansible.runPlaybook(
+                                dir:       ansiblePath,
+                                inventory: 'inventory/inventory.yml',
+                                playbook:  'playbooks/deploy/rke2-registry-config-playbook.yml',
+                                extraVars: [target: 'downstream']
+                            )
+                        } else {
+                            echo 'Skipping downstream registry configuration (PRIVATE_REGISTRY_URL not set)'
+                        }
+                    }
+
+                    // ── Register the downstream cluster into Rancher ─────
+                    stage('Register Downstream Cluster') {
+                        make.runTarget(
+                            target:       'downstream',
+                            dir:          env.INFRA_DIR,
+                            makeArgs:     ['ENV=airgap', 'TARGET_GROUP=downstream'],
+                            passAwsCreds: false
+                        )
+                    }
                 }
             }
         }
