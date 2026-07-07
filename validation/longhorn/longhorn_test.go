@@ -55,7 +55,7 @@ func (l *LonghornTestSuite) SetupSuite() {
 	l.cluster, err = clusters.NewClusterMeta(client, client.RancherConfig.ClusterName)
 	require.NoError(l.T(), err)
 
-	l.longhornTestConfig = *longhorn.GetLonghornTestConfig()
+	l.longhornTestConfig = longhorn.GetLonghornTestConfig()
 
 	projectConfig := &management.Project{
 		ClusterID: l.cluster.ID,
