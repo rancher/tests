@@ -20,7 +20,6 @@ import (
 )
 
 var (
-	LonghornStorageClasses     = []string{"longhorn", "longhorn-static"}
 	PersistentVolumeEntityType = "persistentvolume"
 )
 
