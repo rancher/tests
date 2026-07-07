@@ -16,19 +16,24 @@ var StorageClassGroupVersionResource = schema.GroupVersionResource{
 }
 
 // NewStorageClass is a constructor for a *PersistentVolume object `mountOptions` is an optional parameter and can be nil.
-func NewStorageClass(storageClassName, description string, mountOptions []string, reclaimPolicy corev1.PersistentVolumeReclaimPolicy, volumeBindingMode storagev1.VolumeBindingMode) *storagev1.StorageClass {
-	annotations := map[string]string{
-		"field.cattle.io/description": description,
+func NewStorageClass(storageClassName, description string, provisioner string, allowVolumeExpansion bool, parameters map[string]string, mountOptions []string, reclaimPolicy corev1.PersistentVolumeReclaimPolicy, volumeBindingMode storagev1.VolumeBindingMode) *storagev1.StorageClass {
+	annotations := make(map[string]string)
+	if description != "" {
+		annotations["field.cattle.io/description"] = description
 	}
+
 	// StorageClass object
 	storageClass := &storagev1.StorageClass{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        storageClassName,
 			Annotations: annotations,
 		},
-		MountOptions:      mountOptions,
-		ReclaimPolicy:     &reclaimPolicy,
-		VolumeBindingMode: &volumeBindingMode,
+		Provisioner:          provisioner,
+		AllowVolumeExpansion: &allowVolumeExpansion,
+		Parameters:           parameters,
+		MountOptions:         mountOptions,
+		ReclaimPolicy:        &reclaimPolicy,
+		VolumeBindingMode:    &volumeBindingMode,
 	}
 
 	return storageClass
