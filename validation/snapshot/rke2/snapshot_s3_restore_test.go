@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/tests/actions/etcdsnapshot"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/storage/s3"
 	"github.com/rancher/tests/validation/snapshot"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -48,7 +49,7 @@ func TestS3SnapshotRestore(t *testing.T) {
 			require.NoError(t, err)
 
 			if s.CreatedTestBucket && s.S3BucketName != "" {
-				err := etcdsnapshot.DeleteS3Bucket(s.S3BucketName, s.S3Region, s.AWSAccessKey, s.AWSSecretKey)
+				err := s3.DeleteS3Bucket(s.S3BucketName, s.S3Region, s.AWSAccessKey, s.AWSSecretKey)
 				assert.NoError(t, err)
 			}
 		})

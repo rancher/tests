@@ -1,6 +1,7 @@
-package etcdsnapshot
+package s3
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -9,9 +10,17 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	manager "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
+)
+
+var (
+	s3StorageType     = "s3"
+	s3SchemePrefix    = "s3://"
+	storageAnnotation = "etcdsnapshot.rke.io/storage"
 )
 
 // awsS3Config builds AWS config using static credentials and region
@@ -51,6 +60,65 @@ func CreateS3Bucket(bucketName, region, accessKey, secretKey string) error {
 
 	waiter := s3.NewBucketExistsWaiter(client)
 	return waiter.Wait(ctx, &s3.HeadBucketInput{Bucket: &bucketName}, 2*time.Minute)
+}
+
+// FindBackupS3ObjectKey searches for the S3 object key matching your volume's backup.
+func FindBackupS3ObjectKey(awsCreds cloudcredentials.AmazonEC2CredentialConfig, region string, bucket string, volumeName string) (string, error) {
+	cfg, err := awsconfig.LoadDefaultConfig(context.Background(), awsconfig.WithRegion(region), awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(awsCreds.AccessKey, awsCreds.SecretKey, "")))
+	if err != nil {
+		return "", err
+	}
+
+	s3Client := s3.NewFromConfig(cfg)
+
+	prefix := "backupstore/volumes/"
+
+	paginator := s3.NewListObjectsV2Paginator(s3Client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucket),
+		Prefix: aws.String(prefix),
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return "", err
+		}
+
+		for _, obj := range page.Contents {
+			// Longhorn paths look like: backupstore/volumes/xx/yy/volumeName/
+			if strings.Contains(*obj.Key, "/"+volumeName+"/") {
+				return *obj.Key, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("backup path for volume %s not found", volumeName)
+}
+
+// ReadS3Object reads and returns the block bytes for a specific object on S3.
+func ReadS3Object(awsCreds cloudcredentials.AmazonEC2CredentialConfig, region string, bucketName string, bucketKey string) ([]byte, error) {
+	cfg, err := awsconfig.LoadDefaultConfig(context.Background(), awsconfig.WithRegion(region), awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(awsCreds.AccessKey, awsCreds.SecretKey, "")))
+	if err != nil {
+		return nil, err
+	}
+
+	s3Client := s3.NewFromConfig(cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	thing, err := manager.New(s3Client).GetObject(ctx, &manager.GetObjectInput{
+		Bucket: &bucketName,
+		Key:    &bucketKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	buf := new(bytes.Buffer)
+	_, err = buf.ReadFrom(thing.Body)
+
+	return buf.Bytes(), err
 }
 
 // DeleteS3Bucket deletes all objects in the bucket and then deletes the bucket

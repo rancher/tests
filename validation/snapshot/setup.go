@@ -18,10 +18,10 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
-	"github.com/rancher/tests/actions/etcdsnapshot"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/storage/s3"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
@@ -115,7 +115,7 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 			s.S3Endpoint = fmt.Sprintf("s3.%s.amazonaws.com", s.S3Region)
 			s.S3BucketName = fmt.Sprintf("snapshot-restore-s3-%d-%s", time.Now().Unix(), namegenerator.RandStringLower(5))
 
-			err = etcdsnapshot.CreateS3Bucket(s.S3BucketName, s.S3Region, awsCredsConfig.AccessKey, awsCredsConfig.SecretKey)
+			err = s3.CreateS3Bucket(s.S3BucketName, s.S3Region, awsCredsConfig.AccessKey, awsCredsConfig.SecretKey)
 			require.NoError(t, err)
 
 			s.CreatedTestBucket = true
