@@ -119,24 +119,6 @@ func CheckVolumeAllocation(t *testing.T, client *rancher.Client, clusterID strin
 	}
 }
 
-// GetTargetVolume gets a volume that is attached to the given pod that has the specified name.
-// This name will typically point to the template that is used as a source to the volume instead of the volume name itself.
-func GetTargetVolume(pod steveV1.SteveAPIObject, volumeSourceName string) (corev1.Volume, error) {
-	podSpec := &corev1.PodSpec{}
-	err := steveV1.ConvertToK8sType(pod.Spec, podSpec)
-	if err != nil {
-		return corev1.Volume{}, err
-	}
-
-	for _, volume := range podSpec.Volumes {
-		if volume.Name == volumeSourceName {
-			return volume, nil
-		}
-	}
-
-	return corev1.Volume{}, fmt.Errorf("No volumes on pod %s sourced by %s", pod.Name, volumeSourceName)
-}
-
 // generateResourceName generates a unique resource name using the provided parts while avoiding that the name is longer than 63 characters.
 func generateResourceName(prefix string, parts ...string) string {
 	basename := prefix
