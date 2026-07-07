@@ -271,8 +271,8 @@ private_registry_configs:
     tls:
       insecure_skip_verify: true
 
-# Whether to enable private registry configuration
-enable_private_registry: true
+# Whether to enable private registry configuration (driven by whether PRIVATE_REGISTRY_URL is set)
+enable_private_registry: ${ENABLE_PRIVATE_REGISTRY}
 
 # Deploy Rancher
 deploy_rancher: true
