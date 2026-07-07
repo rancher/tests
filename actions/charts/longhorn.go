@@ -17,9 +17,11 @@ import (
 )
 
 var (
-	LonghornNamespace     = "longhorn-system"
-	LonghornChartName     = "longhorn"
-	enableDeletionSetting = map[string]any{
+	LonghornStorageClass       = "longhorn"
+	LonghornStaticStorageClass = "longhorn-static"
+	LonghornNamespace          = "longhorn-system"
+	LonghornChartName          = "longhorn"
+	enableDeletionSetting      = map[string]any{
 		"defaultSettings": map[string]any{
 			"deletingConfirmationFlag": true,
 		},
