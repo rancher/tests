@@ -109,9 +109,6 @@ func (l *LonghornChartTestSuite) TestChartInstall() {
 	l.T().Logf("Create nginx deployment with %s PVC on default namespace", charts.LonghornStorageClass)
 	nginxResponse := storage.CreatePVCWorkload(l.T(), l.client, l.cluster.ID, charts.LonghornStorageClass)
 
-	err = shepherdCharts.WatchAndWaitDeployments(l.client, l.cluster.ID, namespaces.Default, metav1.ListOptions{})
-	require.NoError(l.T(), err)
-
 	steveClient, err := l.client.Steve.ProxyDownstream(l.cluster.ID)
 	require.NoError(l.T(), err)
 

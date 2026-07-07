@@ -138,7 +138,7 @@ func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string, s
 }
 
 // createNginxDeploymentWithPVC is a helper function that creates a nginx deployment in a cluster's default namespace
-func createNginxDeploymentWithPVC(steveclient *steveV1.Client, containerNamePrefix, pvcName, volName string) (*steveV1.SteveAPIObject, error) {
+func createNginxDeploymentWithPVC(client *rancher.Client, clusterID string, pvcName, volName string) (*steveV1.SteveAPIObject, error) {
 	logrus.Tracef("Vol: %s", volName)
 	logrus.Tracef("Pod: %s", pvcName)
 
@@ -157,14 +157,23 @@ func createNginxDeploymentWithPVC(steveclient *steveV1.Client, containerNamePref
 		},
 	}
 
+	steveclient, err := client.Steve.ProxyDownstream(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
 	containerTemplate := wloads.NewContainer(nginxName, nginxName, corev1.PullAlways, []corev1.VolumeMount{*volMount}, []corev1.EnvFromSource{}, nil, nil, nil)
-	podTemplate := wloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{podVol}, []corev1.LocalObjectReference{}, nil, nil)
+	podTemplate := wloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{podVol}, []corev1.LocalObjectReference{}, map[string]string{DeploymentIdentifierLabel: containerName}, nil)
 	deployment := wloads.NewDeploymentTemplate(containerName, namespaces.Default, podTemplate, true, nil)
 
 	deploymentResp, err := steveclient.SteveType(stevetypes.Deployment).Create(deployment)
 	if err != nil {
 		return nil, err
 	}
+
+	err = charts.WatchAndWaitDeployments(client, clusterID, namespaces.Default, metav1.ListOptions{
+		FieldSelector: "metadata.name=" + containerName,
+	})
 
 	return deploymentResp, err
 }
