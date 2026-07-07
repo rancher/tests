@@ -14,9 +14,11 @@ import (
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/kubeapi/volumes/persistentvolumeclaims"
 	namespaceActions "github.com/rancher/tests/actions/namespaces"
+	podActions "github.com/rancher/tests/actions/workloads/pods"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var (
@@ -62,28 +64,25 @@ func CheckNodeFilesystem(t *testing.T, client *rancher.Client, clusterID string,
 
 // CheckMountedVolume Checks writes to a specific path inside the specified pod and checks if it succeeded.
 // The goal of this function is to test whether mounted volumes are working as expected.
-func CheckMountedVolume(t *testing.T, client *rancher.Client, clusterID string, namespace string, podName string, mountpoint string) {
-	kubeConfig, err := kubeconfig.GetKubeconfig(client, clusterID)
-	require.NoError(t, err)
-
+func CheckMountedVolume(t *testing.T, kubeConfig *clientcmd.ClientConfig, clusterID string, namespace string, podName string, mountpoint string) {
 	var restConfig *rest.Config
-	restConfig, err = (*kubeConfig).ClientConfig()
+	restConfig, err := (*kubeConfig).ClientConfig()
 	require.NoError(t, err)
 
-	testFileName := generateResourceName("test-volume", clusterID, podName)
+	testFileName := generateResourceName("test-file", clusterID, podName)
 
-	t.Logf("Write to mounted volume under the path [%v] on pod [%v]", mountpoint, podName)
+	t.Logf("Write to mounted volume under the path [%v] on pod [%v]", mountpoint+"/"+testFileName, podName)
 	writeToMountedVolume := []string{"touch", mountpoint + "/" + testFileName}
 	output, err := kubeconfig.KubectlExec(restConfig, podName, namespace, writeToMountedVolume)
 	if err != nil {
-		t.Logf("Command failed with: %s", output)
+		t.Logf("Command failed on pod %s: %s", podName, output)
 	}
 	require.NoError(t, err)
 
 	checkFileOnVolume := []string{"stat", mountpoint + "/" + testFileName}
 	output, err = kubeconfig.KubectlExec(restConfig, podName, namespace, checkFileOnVolume)
 	if err != nil {
-		t.Logf("Command failed with: %s", output)
+		t.Logf("Command failed on pod %s: %s", podName, output)
 	}
 	require.NoError(t, err)
 }
@@ -100,6 +99,9 @@ func CheckVolumeAllocation(t *testing.T, client *rancher.Client, clusterID strin
 	pvcs, err := steveClient.SteveType(persistentvolumeclaims.PersistentVolumeClaimType).NamespacedSteveClient(namespace).List(nil)
 	require.NoError(t, err)
 
+	kubeConfig, err := kubeconfig.GetKubeconfig(client, clusterID)
+	require.NoError(t, err)
+
 	for _, pod := range pods.Data {
 		targetVolume, err := GetTargetVolume(pod, volumeSourceName)
 		require.NoError(t, err)
@@ -114,7 +116,7 @@ func CheckVolumeAllocation(t *testing.T, client *rancher.Client, clusterID strin
 		}
 		require.Equal(t, storageClass, *pvcSpec.StorageClassName)
 
-		CheckMountedVolume(t, client, clusterID, namespace, pod.Name, mountpoint)
+		CheckMountedVolume(t, kubeConfig, clusterID, namespace, pod.Name, mountpoint)
 	}
 }
 
