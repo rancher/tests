@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	client "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
@@ -14,9 +15,9 @@ import (
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/kubeapi/volumes/persistentvolumeclaims"
 	namespaceActions "github.com/rancher/tests/actions/namespaces"
-	podActions "github.com/rancher/tests/actions/workloads/pods"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -48,17 +49,35 @@ func CheckNodeFilesystem(t *testing.T, client *rancher.Client, clusterID string,
 	_, err = kubectl.Command(client, nil, clusterID, checkDataPathCommand, "")
 	require.NoError(t, err)
 
-	err = podActions.WatchAndWaitPodContainerRunning(client, clusterID, debugNamespace)
-	require.NoError(t, err)
+	// This polling strategy was chosen because some operations done through this command can take a long time while most should take very little.
+	// The total wait time amounts to roughly 34 minutes.
+	backoff := kwait.Backoff{
+		Duration: 1 * time.Second,
+		Factor:   1.4,
+		Jitter:   0,
+		Steps:    20,
+	}
 
-	debugPods, err := steveClient.SteveType(pods.PodResourceSteveType).NamespacedSteveClient(debugNamespace).List(nil)
-	require.NotEmpty(t, debugPods)
-	require.NoError(t, err)
+	err = kwait.ExponentialBackoff(backoff, func() (bool, error) {
+		debugPods, err := steveClient.SteveType(pods.PodResourceSteveType).NamespacedSteveClient(debugNamespace).List(nil)
+		require.NotEmpty(t, debugPods)
+		require.NoError(t, err)
 
-	podStatus := &corev1.PodStatus{}
-	err = steveV1.ConvertToK8sType(debugPods.Data[0].Status, podStatus)
+		podStatus := &corev1.PodStatus{}
+		err = steveV1.ConvertToK8sType(debugPods.Data[0].Status, podStatus)
+		require.NoError(t, err)
+
+		switch podStatus.Phase {
+		case "Failed":
+			return true, fmt.Errorf("Failed running command on node %s", nodeName)
+		case "Succeeded":
+			return true, nil
+		default:
+			return false, nil
+		}
+	})
+
 	require.NoError(t, err)
-	require.Equal(t, "Succeeded", string(podStatus.Phase))
 }
 
 // CheckMountedVolume Checks writes to a specific path inside the specified pod and checks if it succeeded.
