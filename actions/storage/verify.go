@@ -48,8 +48,7 @@ func CheckNodeFilesystem(t *testing.T, client *rancher.Client, clusterID string,
 	_, err = kubectl.Command(client, nil, clusterID, checkDataPathCommand, "")
 	require.NoError(t, err)
 
-	waitForPodCommand := []string{"kubectl", "wait", "--for=jsonpath='{.status.phase}'=Succeeded", "-n", debugNamespace, "pod", "--all"}
-	_, err = kubectl.Command(client, nil, clusterID, waitForPodCommand, "")
+	err = podActions.WatchAndWaitPodContainerRunning(client, clusterID, debugNamespace)
 	require.NoError(t, err)
 
 	debugPods, err := steveClient.SteveType(pods.PodResourceSteveType).NamespacedSteveClient(debugNamespace).List(nil)
