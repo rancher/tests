@@ -55,8 +55,8 @@ Import test verfies that various imported cluster configurations provision prope
 8. `K3S_IPv6_Imported|3_etcd|2_cp|3_worker`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/dualstack --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestImportK3SIPv6 -timeout=1h -v`
-2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/dualstack --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestImportRKE2IPv6 -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestImportK3SIPv6 -timeout=1h -v`
+2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestImportRKE2IPv6 -timeout=1h -v`
 
 ### Node Driver Test
 

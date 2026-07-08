@@ -4,6 +4,7 @@ package ipv6
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -53,9 +54,6 @@ func importK3SIPv6Setup(t *testing.T) importK3SIPv6Test {
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(t, err)
 
-	k.cattleConfig, err = defaults.SetK8sDefault(k.client, defaults.K3S, k.cattleConfig)
-	require.NoError(t, err)
-
 	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
 	require.NoError(t, err)
 
@@ -96,6 +94,10 @@ func TestImportK3SIPv6(t *testing.T) {
 			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(k.cattleConfig)
 			terratestConfig.Nodepools = tt.nodePools
 
+			if containsIPv4(terraformConfig.AWSConfig.ClusterCIDR) || containsIPv4(terraformConfig.AWSConfig.ServiceCIDR) {
+				t.Skipf("Skipping test %s: cluster/service CIDR must be IPv6 only, found IPv4 CIDR.", tt.name)
+			}
+
 			logrus.Info("Provisioning imported cluster")
 			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpImported.CreateImportedCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.K3S, "validation/provisioning/ipv6")
 			defer os.RemoveAll(nestedRancherModuleDir)
@@ -120,4 +122,8 @@ func TestImportK3SIPv6(t *testing.T) {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
 		}
 	}
+}
+
+func containsIPv4(cidr string) bool {
+	return strings.Contains(cidr, ".")
 }

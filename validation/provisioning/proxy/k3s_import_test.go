@@ -1,6 +1,6 @@
-//go:build validation || (recurring && ipv6) || ipv6
+//go:build validation || (recurring && proxy) || proxy
 
-package ipv6
+package proxy
 
 import (
 	"os"
@@ -24,44 +24,48 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type importRKE2IPv6Test struct {
+type importK3SProxyTest struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
+	terraformConfig    *tfpConfig.TerraformConfig
 }
 
-func importRKE2IPv6Setup(t *testing.T) importRKE2IPv6Test {
-	var r importRKE2IPv6Test
+func importK3SProxySetup(t *testing.T) importK3SProxyTest {
+	var k importK3SProxyTest
 
 	testSession := session.NewSession()
-	r.session = testSession
+	k.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(t, err)
 
-	r.client = client
+	k.client = client
 
-	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
-	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
+	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
 
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(t, err)
 
-	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
+	k.terraformConfig = new(tfpConfig.TerraformConfig)
+	operations.LoadObjectFromMap(tfpConfig.TerraformConfigurationFileKey, k.cattleConfig, k.terraformConfig)
+
+	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
 	require.NoError(t, err)
 
-	return r
+	return k
 }
 
-func TestImportRKE2IPv6(t *testing.T) {
+func TestImportK3SProxy(t *testing.T) {
 	t.Parallel()
-	r := importRKE2IPv6Setup(t)
+	k := importK3SProxySetup(t)
 
 	nodeRolesAll := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true, Controlplane: true, Worker: true}}
 	nodeRolesShared := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true, Controlplane: true}, {Quantity: 1, Worker: true}}
@@ -73,16 +77,16 @@ func TestImportRKE2IPv6(t *testing.T) {
 		client    *rancher.Client
 		nodePools []tfpConfig.Nodepool
 	}{
-		{"RKE2_IPv6_Imported|etcd_cp_worker", r.standardUserClient, nodeRolesAll},
-		{"RKE2_IPv6_Imported|etcd_cp|worker", r.standardUserClient, nodeRolesShared},
-		{"RKE2_IPv6_Imported|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated},
-		{"RKE2_IPv6_Imported|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard},
+		{"K3S_Proxy_Imported|etcd_cp_worker", k.standardUserClient, nodeRolesAll},
+		{"K3S_Proxy_Imported|etcd_cp|worker", k.standardUserClient, nodeRolesShared},
+		{"K3S_Proxy_Imported|etcd|cp|worker", k.standardUserClient, nodeRolesDedicated},
+		{"K3S_Proxy_Imported|3_etcd|2_cp|3_worker", k.standardUserClient, nodeRolesStandard},
 	}
 
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
+			k.session.Cleanup()
 		})
 
 		t.Run(tt.name, func(t *testing.T) {
@@ -90,32 +94,28 @@ func TestImportRKE2IPv6(t *testing.T) {
 
 			var err error
 
-			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(r.cattleConfig)
+			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(k.cattleConfig)
 			terratestConfig.Nodepools = tt.nodePools
 
-			if containsIPv4(terraformConfig.AWSConfig.ClusterCIDR) || containsIPv4(terraformConfig.AWSConfig.ServiceCIDR) {
-				t.Skipf("Skipping test %s: cluster/service CIDR must be IPv6 only, found IPv4 CIDR.", tt.name)
-			}
-
 			logrus.Info("Provisioning imported cluster")
-			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpImported.CreateImportedCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.RKE2, "validation/provisioning/ipv6")
+			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpImported.CreateImportedCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.K3S, "validation/provisioning/proxy")
 			defer os.RemoveAll(nestedRancherModuleDir)
 			defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			err = provisioning.VerifyClusterReadyV3(r.client, cluster.Name)
+			err = provisioning.VerifyClusterReadyV3(k.client, cluster.Name)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(r.client, cluster)
+			err = deployment.VerifyClusterDeployments(k.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(r.client, cluster)
+			err = pods.VerifyClusterPods(k.client, cluster)
 			require.NoError(t, err)
 		})
 
-		params := provisioning.GetCustomSchemaParams(tt.client, r.cattleConfig)
+		params := provisioning.GetCustomSchemaParams(tt.client, k.cattleConfig)
 		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
