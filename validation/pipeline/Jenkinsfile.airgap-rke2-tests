@@ -591,11 +591,20 @@ rancher_use_bundled_system_charts: true'''
                     }
 
                     // ── Register the downstream cluster into Rancher ─────
+                    // Pass rancher_cattle_config_file through to add-downstream-cluster.yml
+                    // (via make downstream → ANSIBLE_EXTRA_VARS) so the playbook injects the
+                    // registered cluster name as rancher.clusterName — mirroring how
+                    // generate-admin-token.yml injects rancher.adminToken.
                     stage('Register Downstream Cluster') {
+                        def downstreamCattleConfig = "/workspace/${env.TESTS_DIR}/cattle-config.yaml"
                         make.runTarget(
                             target:       'downstream',
                             dir:          env.INFRA_DIR,
-                            makeArgs:     ['ENV=airgap', 'TARGET_GROUP=downstream'],
+                            makeArgs:     [
+                                'ENV=airgap',
+                                'TARGET_GROUP=downstream',
+                                "EXTRA_VARS=rancher_cattle_config_file=${downstreamCattleConfig}"
+                            ],
                             passAwsCreds: false
                         )
                     }
