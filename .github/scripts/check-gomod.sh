@@ -17,7 +17,7 @@ go mod tidy
 go mod verify
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
-  echo "actions Go mod isn't up to date. Please run `cd actions && go mod tidy`"
+  echo "actions Go mod isn't up to date. Please run 'cd actions && go mod tidy'"
   echo "The following go files did differ after tidying them:"
   git status --porcelain
   exit 1
@@ -30,7 +30,7 @@ go mod tidy
 go mod verify
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
-  echo "interoperability Go mod isn't up to date. Please run `cd interoperability && go mod tidy`"
+  echo "interoperability Go mod isn't up to date. Please run 'cd interoperability && go mod tidy'"
   echo "The following go files did differ after tidying them:"
   git status --porcelain
   exit 1
