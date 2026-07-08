@@ -45,7 +45,7 @@ pipeline {
         string(
             name: 'GO_TEST_CASE',
             defaultValue: '',
-            description: 'Optional go test -run pattern (e.g. ^TestProvisioningTestSuite$)'
+            description: 'Optional go test -run expression, including the -run flag (e.g. -run TestClusterRoleTestSuite). Empty = all tests in GO_TEST_PACKAGE.'
         )
         string(
             name: 'GO_TAGS',
