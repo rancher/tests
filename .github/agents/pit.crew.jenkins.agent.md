@@ -20,7 +20,7 @@ Upgrade pipelines:
 * [Jenkinsfile.upgrade.e2e](../../validation/Jenkinsfile.upgrade.e2e)
 
 Airgap pipelines:
-* [Jenkinsfile.airgap.go-tests](../../validation/pipeline/Jenkinsfile.airgap.go-tests)
+* [Jenkinsfile.airgap-rke2-tests](../../validation/pipeline/Jenkinsfile.airgap-rke2-tests)
 * [Jenkinsfile.setup.airgap.rke2](../../validation/pipeline/Jenkinsfile.setup.airgap.rke2)
 * [Jenkinsfile.destroy.airgap.rke2](../../validation/pipeline/Jenkinsfile.destroy.airgap.rke2)
 
