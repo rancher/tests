@@ -65,7 +65,7 @@ pipeline {
         booleanParam(
             name: 'REPORT_ARTIFACTS',
             defaultValue: false,
-            description: 'Archive junit.xml and go-test.log artifacts'
+            description: 'Archive junit.xml, go-test.log, and the final cattle-config.yaml artifacts'
         )
 
         // ── Infrastructure behavior ────────────────────────────────
@@ -679,7 +679,7 @@ rancher_use_bundled_system_charts: true'''
                     }
 
                     if (params.REPORT_ARTIFACTS) {
-                        archiveArtifacts allowEmptyArchive: true, artifacts: "tests/go-test.log,tests/${testConfig.resultsXML},tests/${testConfig.resultsJSON}"
+                        archiveArtifacts allowEmptyArchive: true, artifacts: "tests/cattle-config.yaml,tests/go-test.log,tests/${testConfig.resultsXML},tests/${testConfig.resultsJSON}"
                     }
                 }
             }
