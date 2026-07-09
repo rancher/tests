@@ -78,6 +78,11 @@ pipeline {
             defaultValue: 'build_qase_reporter_v2.sh',
             description: 'Qase reporter script name in validation/pipeline/scripts/'
         )
+        string(
+            name: 'QASE_SCHEMA_PREFIX',
+            defaultValue: '',
+            description: 'Schema file prefix for Qase operations, for example hostbusters or pit'
+        )
         text(
             name: 'ENV_VARIABLE',
             defaultValue: '',
@@ -157,6 +162,9 @@ pipeline {
                         }
                         if (params.QASE_TEST_RUN_ID?.trim()) {
                             envLines += "QASE_TEST_RUN_ID=${params.QASE_TEST_RUN_ID}"
+                        }
+                        if (params.QASE_SCHEMA_PREFIX?.trim()) {
+                            envLines += "QASE_SCHEMA_PREFIX=${params.QASE_SCHEMA_PREFIX.trim()}"
                         }
                         if (params.ENV_VARIABLE?.trim()) {
                             envLines += params.ENV_VARIABLE.trim()
