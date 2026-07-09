@@ -29,17 +29,17 @@ permissions:
   contents: read
 
 env:
-  CLOUD_PROVIDER_VERSION: "6.34.0"
+  CLOUD_PROVIDER_VERSION: "6.50.0"
 
 jobs:
   create-qase-run:
     if: |
-      ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
-      (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
-      ((github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-alpha') &&
-      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-head'))
+      ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
+      (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
+      (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
+      ((github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-alpha') &&
+      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-rc') &&
+      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-head'))
     runs-on: ubuntu-latest
     outputs:
       run_id: ${{ steps.create-qase-run.outputs.id }}
@@ -307,19 +307,6 @@ jobs:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: Save test result as artifact for weekly summary
-        if: always() && github.event_name == 'schedule'
-        run: |
-          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"post-release-prime-test\", \"job\": \"v2-14\" }" > test-result-post-release-prime-test-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
-        shell: bash
-
-      - name: Upload test result weekly summary
-        if: always() && github.event_name == 'schedule'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
-        with:
-          name: test-result-post-release-prime-test-v2-14-${{ github.run_id }}
-          path: test-result-post-release-prime-test-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
   
   v2-13:
     needs: [create-qase-run]
@@ -572,28 +559,15 @@ jobs:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-      - name: Save test result as artifact for weekly summary
-        if: always() && github.event_name == 'schedule'
-        run: |
-          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"post-release-prime-test\", \"job\": \"v2-13\" }" > test-result-post-release-prime-test-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
-        shell: bash
-
-      - name: Upload test result weekly summary
-        if: always() && github.event_name == 'schedule'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
-        with:
-          name: test-result-post-release-prime-test-v2-13-${{ github.run_id }}
-          path: test-result-post-release-prime-test-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
-
   close-qase-run:
     needs: [create-qase-run, v2-14, v2-13]
     if: always() && (
-        ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
-        (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
-        (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
-        ((github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-alpha') &&
-        (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-rc') &&
-        (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-head'))
+        ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
+        (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
+        (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
+        ((github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-alpha') &&
+        (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-rc') &&
+        (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.1') || startsWith(inputs.rancher_version, 'v2.13'))) && !contains(inputs.rancher_version, '-head'))
       )
     runs-on: ubuntu-latest
     steps:
