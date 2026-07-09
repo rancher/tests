@@ -1,6 +1,6 @@
-//go:build validation || (recurring && ipv6) || ipv6
+//go:build validation || (recurring && proxy) || proxy
 
-package ipv6
+package proxy
 
 import (
 	"os"
@@ -24,15 +24,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type importRKE2IPv6Test struct {
+type importRKE2ProxyTest struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
+	terraformConfig    *tfpConfig.TerraformConfig
 }
 
-func importRKE2IPv6Setup(t *testing.T) importRKE2IPv6Test {
-	var r importRKE2IPv6Test
+func importRKE2ProxySetup(t *testing.T) importRKE2ProxyTest {
+	var r importRKE2ProxyTest
 
 	testSession := session.NewSession()
 	r.session = testSession
@@ -53,15 +54,18 @@ func importRKE2IPv6Setup(t *testing.T) importRKE2IPv6Test {
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(t, err)
 
+	r.terraformConfig = new(tfpConfig.TerraformConfig)
+	operations.LoadObjectFromMap(tfpConfig.TerraformConfigurationFileKey, r.cattleConfig, r.terraformConfig)
+
 	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
 	require.NoError(t, err)
 
 	return r
 }
 
-func TestImportRKE2IPv6(t *testing.T) {
+func TestImportRKE2Proxy(t *testing.T) {
 	t.Parallel()
-	r := importRKE2IPv6Setup(t)
+	r := importRKE2ProxySetup(t)
 
 	nodeRolesAll := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true, Controlplane: true, Worker: true}}
 	nodeRolesShared := []tfpConfig.Nodepool{{Quantity: 1, Etcd: true, Controlplane: true}, {Quantity: 1, Worker: true}}
@@ -73,10 +77,10 @@ func TestImportRKE2IPv6(t *testing.T) {
 		client    *rancher.Client
 		nodePools []tfpConfig.Nodepool
 	}{
-		{"RKE2_IPv6_Imported|etcd_cp_worker", r.standardUserClient, nodeRolesAll},
-		{"RKE2_IPv6_Imported|etcd_cp|worker", r.standardUserClient, nodeRolesShared},
-		{"RKE2_IPv6_Imported|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated},
-		{"RKE2_IPv6_Imported|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard},
+		{"RKE2_Proxy_Imported|etcd_cp_worker", r.standardUserClient, nodeRolesAll},
+		{"RKE2_Proxy_Imported|etcd_cp|worker", r.standardUserClient, nodeRolesShared},
+		{"RKE2_Proxy_Imported|etcd|cp|worker", r.standardUserClient, nodeRolesDedicated},
+		{"RKE2_Proxy_Imported|3_etcd|2_cp|3_worker", r.standardUserClient, nodeRolesStandard},
 	}
 
 	for _, tt := range tests {
@@ -93,12 +97,8 @@ func TestImportRKE2IPv6(t *testing.T) {
 			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(r.cattleConfig)
 			terratestConfig.Nodepools = tt.nodePools
 
-			if containsIPv4(terraformConfig.AWSConfig.ClusterCIDR) || containsIPv4(terraformConfig.AWSConfig.ServiceCIDR) {
-				t.Skipf("Skipping test %s: cluster/service CIDR must be IPv6 only, found IPv4 CIDR.", tt.name)
-			}
-
 			logrus.Info("Provisioning imported cluster")
-			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpImported.CreateImportedCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.RKE2, "validation/provisioning/ipv6")
+			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpImported.CreateImportedCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.RKE2, "validation/provisioning/proxy")
 			defer os.RemoveAll(nestedRancherModuleDir)
 			defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
 
