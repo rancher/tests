@@ -37,6 +37,7 @@ permissions:
 
 env:
   CLOUD_PROVIDER_VERSION: "6.50.0"
+  LOCALS_PROVIDER_VERSION: "${{ vars.LOCALS_PROVIDER_VERSION }}"
 
 jobs:
   v2-15:

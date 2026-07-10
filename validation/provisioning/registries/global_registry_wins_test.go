@@ -49,6 +49,10 @@ func TestGlobalRegistryWindows(t *testing.T) {
 		})
 
 		t.Run(tt.name, func(t *testing.T) {
+			if r.terraformConfig.StandaloneRegistry.UseAuthGlobalRegistry {
+				t.Skip("Skipping test - only unauthenticated global registry tests are supported")
+			}
+
 			t.Parallel()
 
 			clusterConfig := new(clusters.ClusterConfig)
