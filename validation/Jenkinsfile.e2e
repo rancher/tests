@@ -516,6 +516,11 @@ insecure = true'''
             defaultValue: 'build_qase_reporter_v2.sh',
             description: 'Qase reporter script name in pipeline/scripts/'
         )
+        string(
+            name: 'QASE_SCHEMA_PREFIX',
+            defaultValue: '',
+            description: 'Schema file prefix for Qase operations, for example hostbusters or pit'
+        )
     }
 
     environment {
@@ -1038,6 +1043,7 @@ except Exception as e:
                             string(name: 'REPO', value: params.TESTS_REPO_URL),
                             string(name: 'BRANCH', value: params.TESTS_BRANCH),
                             string(name: 'QASE_TEST_RUN_ID', value: testRunID),
+                            string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
                             string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
                             string(name: 'GOTEST_TESTCASE', value: params.GOTEST_TESTCASE_PROVISIONING),
                             string(name: 'TAGS', value: params.PROVISIONING_TAGS),
@@ -1052,6 +1058,7 @@ except Exception as e:
                             string(name: 'REPO', value: params.TESTS_REPO_URL),
                             string(name: 'BRANCH', value: params.TESTS_BRANCH),
                             string(name: 'QASE_TEST_RUN_ID', value: testRunID),
+                            string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
                             string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
                             string(name: 'GOTEST_TESTCASE', value: "${params.GOTEST_TESTCASE_VALIDATION} -p 1"),
                             string(name: 'TAGS', value: params.VALIDATION_TEST_TAGS),

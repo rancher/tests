@@ -88,6 +88,11 @@ pipeline {
             defaultValue: '',
             description: 'Script in validation/pipeline/scripts/ that runs the Qase reporter'
         )
+        string(
+            name: 'QASE_SCHEMA_PREFIX',
+            defaultValue: '',
+            description: 'Schema file prefix for Qase operations, for example hostbusters or pit'
+        )
 
         // ── Library parameter ────────────────────────────────────
         string(
@@ -195,6 +200,10 @@ pipeline {
                         if (params.ENV_VARIABLE?.trim()) {
                             def envText = readFile(env.ENV_FILE)
                             writeFile file: env.ENV_FILE, text: envText + params.ENV_VARIABLE
+                        }
+                        if (params.QASE_SCHEMA_PREFIX?.trim()) {
+                            def envText = readFile(env.ENV_FILE)
+                            writeFile file: env.ENV_FILE, text: envText + "QASE_SCHEMA_PREFIX=${params.QASE_SCHEMA_PREFIX.trim()}\n"
                         }
                     }
                 }

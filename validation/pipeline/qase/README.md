@@ -12,8 +12,12 @@ The package contains three main.go files, that use the qase-go client to perform
 ## Reporter
 Reporter retreives all test cases inorder to determine if said automation test exists or not. If it does not it will create the test case. There is a custom field for automation test name, so we can update results for existing tests. This is to determine if a pre-existing manual test case has been automated. This value should be the package and test name, ex: TestTokenTestSuite/TestPatchTokenTest1. It will then update the status of the test case, for a specifc test run provided. 
 
+When a package contains multiple schema files under its `schemas` folder, set `QASE_SCHEMA_PREFIX` so the reporter only loads the intended file set. For example, `QASE_SCHEMA_PREFIX=hostbusters` selects files such as `hostbusters_schemas.yaml`.
+
 ## Schema Upload
 schemaupload searches for yaml files within a "schemas" folder on any package. These files should be named "[team_name or feature]_schemas.md" and use yaml keys that correspond to values within Qase. See below example for the structure and some common field values:
+
+When multiple schema files exist in the same package, use the `-schema-prefix` flag or the `QASE_SCHEMA_PREFIX` environment variable to target one family of schema files. This same prefix should also be passed to test jobs and the reporter so parameter updates and result reporting use the same schema source.
 
 ```yaml
 - projects: [RRT, RM] # Normally this will probably be one project, but this can upload to multiple Qase projects as defined here.

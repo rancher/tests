@@ -387,6 +387,11 @@ insecure = true'''
             description: 'Qase reporter script name in pipeline/scripts/'
         )
         string(
+            name: 'QASE_SCHEMA_PREFIX',
+            defaultValue: '',
+            description: 'Schema file prefix for Qase operations, for example hostbusters or pit'
+        )
+        string(
             name: 'TEST_RUN_NAME',
             defaultValue: 'Recurring Test Run',
             description: 'Test run name for Qase reporting'
@@ -487,6 +492,7 @@ insecure = true'''
                             string(name: 'VALIDATION_TEST_TAGS', value: validationTags),
                             string(name: 'TEST_TIMEOUT', value: params.TEST_TIMEOUT),
                             string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
+                            string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
                         ]
 
                         jobs["${tag}"] = {

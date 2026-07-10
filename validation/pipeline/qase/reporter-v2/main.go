@@ -24,6 +24,7 @@ var (
 	projectIDEnvVar         = os.Getenv(qase.ProjectIDEnvVar)
 	testRunName             = os.Getenv(qase.TestRunNameEnvVar)
 	testRunComplete         = os.Getenv(qase.TestRunCompleteEnvVar)
+	schemaPrefixEnvVar      = os.Getenv(qase.SchemaPrefixEnvVar)
 	customFieldFilterEnvVar = os.Getenv("QASE_CUSTOM_FIELD_FILTER")
 	buildUrl                = os.Getenv(qase.BuildUrl)
 	_, callerFilePath, _, _ = runtime.Caller(0)
@@ -217,7 +218,7 @@ func reportTestQases(qaseService *qase.Service, testRunID int32) error {
 			}
 
 			fullPackagePath := filepath.Join(basepath, packagePath[1])
-			qaseProjects, err := qase.GetSchemas(fullPackagePath)
+			qaseProjects, err := qase.GetSchemasByPrefix(fullPackagePath, schemaPrefixEnvVar)
 			if err != nil {
 				logrus.Warning(err)
 				continue
