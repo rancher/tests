@@ -26,6 +26,8 @@
 def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
 library "qa-jenkins-library@${libraryBranch}"
 
+def DEFAULT_RANCHER_PASSWORD = 'X%S3bPyg@n8kWcRs675l#fH0'
+
 /**
  * Shared teardown helper: re-renders tfvars from params, tears down tofu workspace
  * via make infra-down AUTO_APPROVE=yes.
@@ -135,7 +137,7 @@ pipeline {
         )
         string(
             name: 'RANCHER_CHART_REPO_URL',
-            defaultValue: 'https://releases.rancher.com/server-charts/latest',
+            defaultValue: 'https://releases.rancher.com/server-charts/stable',
             description: 'Rancher Helm chart repository URL'
         )
         string(
@@ -155,12 +157,12 @@ pipeline {
         )
         password(
             name: 'RANCHER_BOOTSTRAP_PASSWORD',
-            defaultValue: 'rancherrocks',
+            defaultValue: DEFAULT_RANCHER_PASSWORD,
             description: 'Rancher bootstrap password for initial setup'
         )
         password(
             name: 'RANCHER_ADMIN_PASSWORD',
-            defaultValue: 'rancherrocks',
+            defaultValue: DEFAULT_RANCHER_PASSWORD,
             description: 'Rancher admin password after bootstrap'
         )
         booleanParam(
@@ -476,7 +478,7 @@ insecure = true'''
         // ── Downstream job parameters ─────────────────────────
         string(
             name: 'INDIVIDUAL_JOB',
-            defaultValue: 'go-pit-daily-individual-updated-job',
+            defaultValue: 'go-pit-daily-individual-job',
             description: 'Name of the downstream Jenkins job that runs individual Go test suites'
         )
         string(
@@ -513,6 +515,11 @@ insecure = true'''
             name: 'QASE_REPORTER_SCRIPT',
             defaultValue: 'build_qase_reporter_v2.sh',
             description: 'Qase reporter script name in pipeline/scripts/'
+        )
+        string(
+            name: 'QASE_SCHEMA_PREFIX',
+            defaultValue: '',
+            description: 'Schema file prefix for Qase operations, for example hostbusters or pit'
         )
     }
 
@@ -622,8 +629,8 @@ insecure = true'''
                                 content: params.ANSIBLE_VARIABLES,
                                 envVars: [
                                     'RKE2_VERSION':              params.RKE2_VERSION,
-                                    'RANCHER_BOOTSTRAP_PASSWORD': params.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks',
-                                    'RANCHER_ADMIN_PASSWORD':     params.RANCHER_ADMIN_PASSWORD ?: 'rancherrocks',
+                                    'RANCHER_BOOTSTRAP_PASSWORD': params.RANCHER_BOOTSTRAP_PASSWORD ?: DEFAULT_RANCHER_PASSWORD,
+                                    'RANCHER_ADMIN_PASSWORD':     params.RANCHER_ADMIN_PASSWORD ?: DEFAULT_RANCHER_PASSWORD,
                                     'RANCHER_VERSION':           params.RANCHER_VERSION,
                                     'RANCHER_IMAGE_TAG':         params.RANCHER_IMAGE_TAG ?: 'head',
                                     'RANCHER_CHART_REPO_URL':    rancherChartRepoUrlParam
@@ -642,8 +649,8 @@ rancher_use_bundled_system_charts: true
                                 envVars: [
                                     'DEPLOY_RANCHER_ANSIBLE':      params.DEPLOY_RANCHER ? 'true' : 'false',
                                     'HOSTNAME_PREFIX':            params.HOSTNAME_PREFIX,
-                                    'RANCHER_BOOTSTRAP_PASSWORD':  params.RANCHER_BOOTSTRAP_PASSWORD ?: 'rancherrocks',
-                                    'RANCHER_ADMIN_PASSWORD':      params.RANCHER_ADMIN_PASSWORD ?: 'rancherrocks',
+                                    'RANCHER_BOOTSTRAP_PASSWORD':  params.RANCHER_BOOTSTRAP_PASSWORD ?: DEFAULT_RANCHER_PASSWORD,
+                                    'RANCHER_ADMIN_PASSWORD':      params.RANCHER_ADMIN_PASSWORD ?: DEFAULT_RANCHER_PASSWORD,
                                     'RANCHER_IMAGE_TAG':           params.RANCHER_IMAGE_TAG ?: 'head'
                                 ]
                             )
@@ -751,7 +758,7 @@ rancher_use_bundled_system_charts: true
                                     'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
                                     'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
                                     'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
-                                    'ADMIN_PASSWORD':        params.RANCHER_ADMIN_PASSWORD ?: 'rancherrocks'
+                                    'ADMIN_PASSWORD':        params.RANCHER_ADMIN_PASSWORD ?: DEFAULT_RANCHER_PASSWORD
                                 ]
                             )
                             writeFile file: "${env.TESTS_DIR}/cattle-config.yaml", text: resolvedConfig.trim() + '\n'
@@ -864,7 +871,7 @@ rancher_use_bundled_system_charts: true
                         }
                         if (!adminToken) {
                             echo 'WARNING: No admin token available — using RANCHER_ADMIN_PASSWORD as fallback'
-                            adminToken = params.RANCHER_ADMIN_PASSWORD ?: 'rancherrocks'
+                            adminToken = params.RANCHER_ADMIN_PASSWORD ?: DEFAULT_RANCHER_PASSWORD
                         }
 
                         def rancherUrl = "https://${params.HOSTNAME_PREFIX}.qa.rancher.space"
@@ -1036,6 +1043,7 @@ except Exception as e:
                             string(name: 'REPO', value: params.TESTS_REPO_URL),
                             string(name: 'BRANCH', value: params.TESTS_BRANCH),
                             string(name: 'QASE_TEST_RUN_ID', value: testRunID),
+                            string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
                             string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
                             string(name: 'GOTEST_TESTCASE', value: params.GOTEST_TESTCASE_PROVISIONING),
                             string(name: 'TAGS', value: params.PROVISIONING_TAGS),
@@ -1050,6 +1058,7 @@ except Exception as e:
                             string(name: 'REPO', value: params.TESTS_REPO_URL),
                             string(name: 'BRANCH', value: params.TESTS_BRANCH),
                             string(name: 'QASE_TEST_RUN_ID', value: testRunID),
+                            string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
                             string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
                             string(name: 'GOTEST_TESTCASE', value: "${params.GOTEST_TESTCASE_VALIDATION} -p 1"),
                             string(name: 'TAGS', value: params.VALIDATION_TEST_TAGS),

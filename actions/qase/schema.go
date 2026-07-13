@@ -14,46 +14,99 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// GetSchemas retrieves the tests from schemas.yaml files defined within each Go package.
-func GetSchemas(basePath string) ([]TestSuiteSchema, error) {
-	var suiteSchemas []TestSuiteSchema
-	err := filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
-		if strings.Contains(info.Name(), schemas) {
-			var fileSuiteSchemas []TestSuiteSchema
+type schemaFile struct {
+	path   string
+	suites []TestSuiteSchema
+}
 
-			fileContent, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
+func shouldIncludeSchemaFile(fileName, prefix string) bool {
+	if !strings.Contains(fileName, schemas) {
+		return false
+	}
 
-			fileContentString := string(fileContent)
-			fileContentString = strings.ReplaceAll(fileContentString, "custom_field", "customfield")
-			fileContent = []byte(fileContentString)
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return true
+	}
 
-			err = yaml.Unmarshal(fileContent, &fileSuiteSchemas)
-			if err != nil {
-				return err
-			}
+	return strings.HasPrefix(fileName, prefix+"_")
+}
 
-			suiteSchemas = append(suiteSchemas, fileSuiteSchemas...)
-		}
+func readSchemaFile(path string) ([]TestSuiteSchema, error) {
+	var fileSuiteSchemas []TestSuiteSchema
 
-		return nil
-	})
-
+	fileContent, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
+	}
+
+	fileContentString := string(fileContent)
+	fileContentString = strings.ReplaceAll(fileContentString, "custom_field", "customfield")
+	fileContent = []byte(fileContentString)
+
+	err = yaml.Unmarshal(fileContent, &fileSuiteSchemas)
+	if err != nil {
+		return nil, err
+	}
+
+	return fileSuiteSchemas, nil
+}
+
+func getSchemaFiles(basePath, prefix string) ([]schemaFile, error) {
+	var files []schemaFile
+
+	err := filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info == nil || info.IsDir() {
+			return nil
+		}
+		if !shouldIncludeSchemaFile(info.Name(), prefix) {
+			return nil
+		}
+
+		suites, readErr := readSchemaFile(path)
+		if readErr != nil {
+			return readErr
+		}
+
+		files = append(files, schemaFile{path: path, suites: suites})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return files, nil
+}
+
+// GetSchemasByPrefix retrieves tests from schema files matching the provided prefix.
+func GetSchemasByPrefix(basePath, prefix string) ([]TestSuiteSchema, error) {
+	var suiteSchemas []TestSuiteSchema
+	files, err := getSchemaFiles(basePath, prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, file := range files {
+		suiteSchemas = append(suiteSchemas, file.suites...)
 	}
 
 	return suiteSchemas, nil
 }
 
-// getSchemaPath retrieves the schema file path from a test case
-func getSchemaPath(basePath string) (string, error) {
+func getSchemaPathByPrefix(basePath, prefix string) (string, error) {
 	var schemaPath string
 
 	err := filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
-		if strings.Contains(info.Name(), schemas) {
+		if err != nil {
+			return err
+		}
+		if info == nil || info.IsDir() {
+			return nil
+		}
+		if shouldIncludeSchemaFile(info.Name(), prefix) {
 			schemaPath = path
 			return nil
 		}
@@ -72,8 +125,21 @@ func getSchemaPath(basePath string) (string, error) {
 func UpdateSchemaParameters(testName string, params []upstream.TestCaseParameterCreate) error {
 	_, schemaFilepath, _, _ := runtime.Caller(1)
 	packagePath := filepath.Dir(schemaFilepath)
+	schemaPrefix := os.Getenv(SchemaPrefixEnvVar)
+	if strings.TrimSpace(schemaPrefix) == "" {
+		logrus.Warnf("QASE schema prefix not provided; skipping parameter reporting for test %s", testName)
+		return nil
+	}
 
-	qaseSuiteSchemas, err := GetSchemas(packagePath)
+	schemaFiles, err := getSchemaFiles(packagePath, schemaPrefix)
+	if err != nil {
+		return err
+	}
+	if len(schemaFiles) > 1 {
+		return fmt.Errorf("multiple schema files found under %s for prefix %q", packagePath, strings.TrimSpace(schemaPrefix))
+	}
+
+	qaseSuiteSchemas, err := GetSchemasByPrefix(packagePath, schemaPrefix)
 	if err != nil {
 		return err
 	}
@@ -91,9 +157,12 @@ func UpdateSchemaParameters(testName string, params []upstream.TestCaseParameter
 		return err
 	}
 
-	schemaFile, err := getSchemaPath(packagePath)
+	schemaFile, err := getSchemaPathByPrefix(packagePath, schemaPrefix)
 	if err != nil {
 		return err
+	}
+	if schemaFile == "" {
+		return fmt.Errorf("no schema file found under %s for prefix %q", packagePath, strings.TrimSpace(schemaPrefix))
 	}
 
 	err = os.WriteFile(schemaFile, outputContent, os.ModePerm)
@@ -127,7 +196,7 @@ func GetTestSchema(testName string, suiteSchemas []TestSuiteSchema) (*upstream.T
 
 // UploadSchema uploads all schema files on a path to qase
 func UploadSchemas(client *Service, basePath string) error {
-	caseSuiteSchemas, err := GetSchemas(basePath)
+	caseSuiteSchemas, err := GetSchemasByPrefix(basePath, os.Getenv(SchemaPrefixEnvVar))
 	if err != nil {
 		logrus.Error("Error retrieving test schemas: ", err)
 		return err

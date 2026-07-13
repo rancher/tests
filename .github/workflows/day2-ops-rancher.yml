@@ -1,9 +1,9 @@
 ---
-name: Recurring Proxy Runs
+name: Day 2 Operations - Rancher
 
 on:
   schedule:
-    - cron: "0 5 * * 2"
+    - cron: "0 9 * * 2"
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -20,6 +20,14 @@ on:
         required: false
         default: false
         type: boolean
+      local_cluster_type:
+        description: "Local cluster type to setup Rancher"
+        required: true
+        default: "rke2"
+        type: choice
+        options:
+          - k3s
+          - rke2
   workflow_call:
     inputs:
       rancher_version:
@@ -36,14 +44,14 @@ permissions:
   contents: read
 
 env:
-  CLOUD_PROVIDER_VERSION: "6.34.0"
+  CLOUD_PROVIDER_VERSION: "6.50.0"
 
 jobs:
   v2-15:
     if: |
-      github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head'))
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && contains(github.event.inputs.rancher_version, '-alpha') ||
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: head
@@ -54,7 +62,7 @@ jobs:
           - rancher-server-one
           - rancher-server-two
     env:
-      HOSTNAME_PREFIX: "ghap-r215"
+      HOSTNAME_PREFIX: "gha-r215"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
@@ -113,6 +121,15 @@ jobs:
           ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
           windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
           windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+
+      - name: Set up certificates
+        id: setup-certs
+        uses: ./.github/actions/setup-certs
+        with:
+          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
+          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
+          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
+          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -178,11 +195,12 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
+            localCluster: "${{ github.event.inputs.local_cluster_type }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
+            privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            proxy:
-              proxyBastion: ""
             awsCredentials:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
@@ -208,8 +226,8 @@ jobs:
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
-              certType: "${{ vars.CERT_TYPE }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
+              k3sVersion: "${{ vars.K3S_VERSION_2_15 }}${{ vars.K3S_VERSION_SUFFIX }}"
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
               rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
@@ -233,13 +251,6 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            agentEnvVars:
-            - name: HTTP_PROXY
-              value: http://<replace me>:3228
-            - name: HTTPS_PROXY
-              value: http://<replace me>:3228
-            - name: NO_PROXY
-              value: localhost,127.0.0.0/8,10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,.svc,.cluster.local,cattle-system.svc,169.254.169.254
             registries:
               rke2Registries:
                 mirrors:
@@ -334,23 +345,24 @@ jobs:
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/proxy/main.go
+        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
 
       - name: Run Test Suites
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
+          QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: proxy
+          tags: recurring
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/proxy/aws
+        working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
@@ -404,21 +416,22 @@ jobs:
       - name: Save test result as artifact for weekly summary
         if: always() && github.event_name == 'schedule'
         run: |
-          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"recurring-proxy-test\", \"job\": \"v2-15\" }" > test-result-recurring-proxy-test-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"day2-ops-rancher\", \"job\": \"v2-15\" }" > test-result-day2-ops-rancher-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
         shell: bash
 
       - name: Upload test result weekly summary
         if: always() && github.event_name == 'schedule'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
         with:
-          name: test-result-recurring-proxy-test-v2-15-${{ github.run_id }}
-          path: test-result-recurring-proxy-test-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
+          name: test-result-day2-ops-rancher-v2-15-${{ github.run_id }}
+          path: test-result-day2-ops-rancher-v2-15-${{ github.run_id }}-${{ github.run_attempt }}.json
   
   v2-14:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14'))
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && contains(github.event.inputs.rancher_version, '-alpha') ||
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: head
@@ -429,7 +442,7 @@ jobs:
           - rancher-server-one
           - rancher-server-two
     env:
-      HOSTNAME_PREFIX: "ghap-r214"
+      HOSTNAME_PREFIX: "gha-r214"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
@@ -488,6 +501,15 @@ jobs:
           ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
           windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
           windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+
+      - name: Set up certificates
+        id: setup-certs
+        uses: ./.github/actions/setup-certs
+        with:
+          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
+          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
+          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
+          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -553,11 +575,12 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
+            localCluster: "${{ github.event.inputs.local_cluster_type }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
+            privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            proxy:
-              proxyBastion: ""
             awsCredentials:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
@@ -583,8 +606,8 @@ jobs:
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
-              certType: "${{ vars.CERT_TYPE }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
+              k3sVersion: "${{ vars.K3S_VERSION_2_14 }}${{ vars.K3S_VERSION_SUFFIX }}"
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
               rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
@@ -608,13 +631,6 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            agentEnvVars:
-            - name: HTTP_PROXY
-              value: http://<replace me>:3228
-            - name: HTTPS_PROXY
-              value: http://<replace me>:3228
-            - name: NO_PROXY
-              value: localhost,127.0.0.0/8,10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,.svc,.cluster.local,cattle-system.svc,169.254.169.254
             registries:
               rke2Registries:
                 mirrors:
@@ -709,23 +725,24 @@ jobs:
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/proxy/main.go
+        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
 
       - name: Run Test Suites
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
+          QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: proxy
+          tags: recurring
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/proxy/aws
+        working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
@@ -779,21 +796,22 @@ jobs:
       - name: Save test result as artifact for weekly summary
         if: always() && github.event_name == 'schedule'
         run: |
-          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"recurring-proxy-test\", \"job\": \"v2-14\" }" > test-result-recurring-proxy-test-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"day2-ops-rancher\", \"job\": \"v2-14\" }" > test-result-day2-ops-rancher-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
         shell: bash
 
       - name: Upload test result weekly summary
         if: always() && github.event_name == 'schedule'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
         with:
-          name: test-result-recurring-proxy-test-v2-14-${{ github.run_id }}
-          path: test-result-recurring-proxy-test-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
+          name: test-result-day2-ops-rancher-v2-14-${{ github.run_id }}
+          path: test-result-day2-ops-rancher-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
 
   v2-13:
     if: |
       github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13'))
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && contains(github.event.inputs.rancher_version, '-alpha') ||
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: staging-latest
@@ -804,7 +822,7 @@ jobs:
           - rancher-server-one
           - rancher-server-two
     env:
-      HOSTNAME_PREFIX: "ghap-r213"
+      HOSTNAME_PREFIX: "gha-r213"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
@@ -863,6 +881,15 @@ jobs:
           ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
           windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
           windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+
+      - name: Set up certificates
+        id: setup-certs
+        uses: ./.github/actions/setup-certs
+        with:
+          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
+          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
+          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
+          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -928,11 +955,12 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
+            localCluster: "${{ github.event.inputs.local_cluster_type }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
+            privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            proxy:
-              proxyBastion: ""
             awsCredentials:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
@@ -958,8 +986,8 @@ jobs:
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
-              certType: "${{ vars.CERT_TYPE }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
+              k3sVersion: "${{ vars.K3S_VERSION_2_13 }}${{ vars.K3S_VERSION_SUFFIX }}"
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
               rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
@@ -984,13 +1012,6 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            agentEnvVars:
-            - name: HTTP_PROXY
-              value: http://<replace me>:3228
-            - name: HTTPS_PROXY
-              value: http://<replace me>:3228
-            - name: NO_PROXY
-              value: localhost,127.0.0.0/8,10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,.svc,.cluster.local,cattle-system.svc,169.254.169.254
             registries:
               rke2Registries:
                 mirrors:
@@ -1004,7 +1025,7 @@ jobs:
 
           logging:
             level: "${{ vars.LOGGING_LEVEL }}"
-          
+
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
@@ -1085,23 +1106,24 @@ jobs:
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/proxy/main.go
+        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
 
       - name: Run Test Suites
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
+          QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: proxy
+          tags: recurring
         uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/proxy/aws
+        working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
@@ -1155,12 +1177,12 @@ jobs:
       - name: Save test result as artifact for weekly summary
         if: always() && github.event_name == 'schedule'
         run: |
-          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"recurring-proxy-test\", \"job\": \"v2-13\" }" > test-result-recurring-proxy-test-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"day2-ops-rancher\", \"job\": \"v2-13\" }" > test-result-day2-ops-rancher-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
         shell: bash
 
       - name: Upload test result weekly summary
         if: always() && github.event_name == 'schedule'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
         with:
-          name: test-result-recurring-proxy-test-v2-13-${{ github.run_id }}
-          path: test-result-recurring-proxy-test-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
+          name: test-result-day2-ops-rancher-v2-13-${{ github.run_id }}
+          path: test-result-day2-ops-rancher-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json

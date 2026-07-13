@@ -119,6 +119,27 @@ Hardened test verfies that a cluster can deploy the rancher-compliance chart on 
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestHardened -timeout=1h -v`
 
 
+### Imported Test
+
+#### Description: 
+Imported test verfies that various custom cluster configurations provision properly.
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Terraform Config](#terraform-config)
+3. [Cluster Config](#cluster-config)
+4. [Custom Cluster Config](#custom-cluster)
+
+#### Table Tests
+1. `K3S_Imported|etcd_cp_worker`
+2. `K3S_Imported|etcd_cp|worker`
+3. `K3S_Imported|etcd|cp|worker`
+4. `K3S_Imported|3_etcd|2_cp|3_worker`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestImported -timeout=1h -v`
+
+
 ### Node Driver Test
 
 #### Description: 
@@ -214,7 +235,7 @@ All table tests listed above except the dynamic tests
 ## Configurations
 
 ### Terraform Config
-terraform config is needed when running the custom clusters as rancher/tfp-automation is utilized to create the clusters.
+terraform config is needed when running the custom clusters and imported clusters as rancher/tfp-automation is utilized to create the clusters.
 
 ```yaml
 terraform:
@@ -557,6 +578,22 @@ Custom clusters are only supported on AWS.
         awsUser: "Administrator"
         volumeSize: 50
         roles: ["windows"]
+```
+
+
+#### Imported Cluster Config
+Imported clusters are supported on AWS and vSphere. Use the terraform config along with defining the desired nodepools:
+```yaml
+terraform:
+  k3sVersion: "v<version>+k3s1"   # Extra param needed in the terraform config for k3s clusters
+terratest:
+  nodepools:
+    - quantity: 3
+      etcd: true
+    - quantity: 2
+      controlplane: true
+    - quantity: 3
+      worker: true
 ```
 
 ### Template Config

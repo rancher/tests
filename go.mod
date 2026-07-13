@@ -15,7 +15,7 @@ replace (
 
 	github.com/rancher/tests/actions => ./actions
 	github.com/rancher/tests/interoperability => ./interoperability
-	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260618231211-c0c47fc8be1b
+	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260713183231-af9eabd815e5
 
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
@@ -70,10 +70,10 @@ require (
 	github.com/qase-tms/qase-go/pkg/qase-go v1.0.7
 	github.com/qase-tms/qase-go/qase-api-client v1.2.1
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
-	github.com/rancher/shepherd v0.0.0-20260610155525-6d926c75d49a
+	github.com/rancher/shepherd v0.0.0-20260616224945-d2cbef93a360
 	github.com/rancher/tests/actions v0.0.0-20260610140123-a36d05641397
 	github.com/rancher/tests/interoperability v0.0.0
-	github.com/rancher/tfp-automation v0.0.0-20260618231211-c0c47fc8be1b
+	github.com/rancher/tfp-automation v0.0.0-20260713183231-af9eabd815e5
 )
 
 require (
@@ -123,7 +123,7 @@ require (
 	k8s.io/kubectl v0.36.1 // indirect
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
 	sigs.k8s.io/cluster-api v1.12.2 // indirect
-	sigs.k8s.io/yaml v1.6.0 // indirect
+	sigs.k8s.io/yaml v1.6.0
 )
 
 require (

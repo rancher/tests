@@ -84,6 +84,260 @@
 - projects:
   - RRT
   - RM
+  suite: Go Automation/Provisioning/Proxy/Imported
+  cases:
+  - description: Provisions a 1 node all roles imported cluster
+    title: RKE2_Proxy_Imported|etcd_cp_worker
+    priority: 4
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a RKE2 imported cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 2 node stacked roles imported cluster
+    title: RKE2_Proxy_Imported|etcd_cp|worker
+    priority: 4
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a RKE2 imported cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3 node split roles imported cluster
+    title: RKE2_Proxy_Imported|etcd|cp|worker
+    priority: 4
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a RKE2 imported cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 8 node 3etcd/2cp/3worker imported cluster
+    title: RKE2_Proxy_Imported|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a RKE2 imported cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 1 node all roles imported cluster
+    title: K3S_Proxy_Imported|etcd_cp_worker
+    priority: 4
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a K3S imported cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 2 node stacked roles imported cluster
+    title: K3S_Proxy_Imported|etcd_cp|worker
+    priority: 4
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a K3S imported cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3 node split roles imported cluster
+    title: K3S_Proxy_Imported|etcd|cp|worker
+    priority: 4
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a K3S imported cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 8 node 3etcd/2cp/3worker imported cluster
+    title: K3S_Proxy_Imported|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a K3S imported cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+
+- projects:
+  - RRT
+  - RM
   suite: Go Automation/Provisioning/Proxy/NodeDriver
   cases:
   - description: Provisions an 8 node 3etcd/2cp/3worker node driver cluster with proxy environment variables defined

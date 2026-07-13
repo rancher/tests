@@ -140,6 +140,11 @@ pipeline {
             choices: ['build_qase_reporter_v2.sh', 'build_qase_reporter.sh'],
             description: 'Qase reporter build script to use'
         )
+        string(
+            name: 'QASE_SCHEMA_PREFIX',
+            defaultValue: '',
+            description: 'Qase schema prefix for multi-schema test reporting (leave empty for default)'
+        )
 
         // ── Repositories and branches ──────────────────────────────
         string(
@@ -690,6 +695,7 @@ rancher_use_bundled_system_charts: true'''
                 script {
                     def qaseTestRunId = params.QASE_TEST_RUN_ID?.trim()
                     def qaseProjectId = params.QASE_PROJECT_ID?.trim()
+                    def qaseSchemaPrefix = params.QASE_SCHEMA_PREFIX?.trim()
 
                     if (!qaseTestRunId || !qaseProjectId) {
                         echo 'Skipping Qase reporting: QASE_TEST_RUN_ID or QASE_PROJECT_ID not provided'
@@ -713,6 +719,7 @@ rancher_use_bundled_system_charts: true'''
                             -e QASE_TEST_RUN_ID=${qaseTestRunId} \
                             -e QASE_PROJECT_ID=${qaseProjectId} \
                             -e QASE_AUTOMATION_TOKEN=${env.QASE_AUTOMATION_TOKEN} \
+                            -e QASE_SCHEMA_PREFIX=${qaseSchemaPrefix} \
                             -v \$(pwd):/workspace \
                             -w /workspace/tests \
                             ${infraToolsImage} \

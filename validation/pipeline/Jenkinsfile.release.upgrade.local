@@ -431,6 +431,7 @@ node {
                         string(name: 'TAGS', value: "${defaultTag}"),
                         string(name: 'GOTEST_TESTCASE', value: "${testCase}"),
                         string(name: 'QASE_TEST_RUN_ID', value: "${testRunID}"),
+                        string(name: 'QASE_SCHEMA_PREFIX', value: "${env.QASE_SCHEMA_PREFIX}"),
                         string(name: 'RKE_VERSION', value: "${env.RKE_VERSION}")
                       ]
 
@@ -470,6 +471,7 @@ node {
                         string(name: 'TAGS', value: "${defaultTag}"),
                         string(name: 'GOTEST_TESTCASE', value: "${testCase}" ),
                         string(name: 'QASE_TEST_RUN_ID', value: "${testRunID}"),
+                        string(name: 'QASE_SCHEMA_PREFIX', value: "${env.QASE_SCHEMA_PREFIX}"),
                         string(name: 'RKE_VERSION', value: "${env.RKE_VERSION}")
                       ]
 
@@ -506,6 +508,7 @@ node {
                         string(name: 'TAGS', value: "${defaultTag}"),
                         string(name: 'GOTEST_TESTCASE', value: "${testCase}"),
                         string(name: 'QASE_TEST_RUN_ID', value: "${testRunID}"),
+                        string(name: 'QASE_SCHEMA_PREFIX', value: "${env.QASE_SCHEMA_PREFIX}"),
                         string(name: 'RKE_VERSION', value: "${env.RKE_VERSION}")
                       ]
 

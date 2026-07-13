@@ -544,10 +544,10 @@ func VerifyACELocalUnavailable(t *testing.T, rancherClient *rancher.Client, clus
 		"-i", pemFilePath,
 		"-o", "StrictHostKeyChecking=no",
 		fmt.Sprintf("%s@%s", sshUser, controlPlaneIP),
-		fmt.Sprintf("sudo cat /etc/rancher/rke2/rke2.yaml"),
+		fmt.Sprintf("sudo cat /etc/rancher/rke2/rke2.yaml || sudo cat /etc/rancher/k3s/k3s.yaml"),
 	)
 
-	scpOutput, err := scpCmd.CombinedOutput()
+	scpOutput, err := scpCmd.Output()
 	require.NoErrorf(t, err, "failed to fetch kubeconfig: %s", string(scpOutput))
 	err = os.WriteFile(localKubeconfigPath, scpOutput, 0600)
 	require.NoError(t, err)

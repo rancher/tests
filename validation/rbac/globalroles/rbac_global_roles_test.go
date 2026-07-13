@@ -142,11 +142,11 @@ func (rgr *RbacGlobalRolesTestSuite) TestUpdateGlobalRole() {
 		role   rbac.Role
 		member string
 	}{
-		// {rbac.Admin, rbac.Admin.String()},
-		// {rbac.ClusterOwner, rbac.StandardUser.String()},
-		// {rbac.ClusterMember, rbac.StandardUser.String()},
-		// {rbac.ProjectOwner, rbac.StandardUser.String()},
-		// {rbac.ProjectMember, rbac.StandardUser.String()},
+		{rbac.Admin, rbac.Admin.String()},
+		{rbac.ClusterOwner, rbac.StandardUser.String()},
+		{rbac.ClusterMember, rbac.StandardUser.String()},
+		{rbac.ProjectOwner, rbac.StandardUser.String()},
+		{rbac.ProjectMember, rbac.StandardUser.String()},
 		{rbac.ReadOnly, rbac.StandardUser.String()},
 	}
 

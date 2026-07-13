@@ -10,8 +10,11 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	podsapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -144,6 +147,8 @@ func CheckUserAccess(userClient *rancher.Client, clusterID string, verb, resourc
 		return CheckPrtbAccess(userContext, verb, namespaceName, resourceName)
 	case "configmaps":
 		return CheckConfigMapAccess(userContext, verb, namespaceName, resourceName)
+	case "statefulsets":
+		return CheckStatefulSetAccess(userContext, verb, namespaceName, resourceName)
 	default:
 		return false, fmt.Errorf("checks for resource type '%s' not added", resourceType)
 	}
@@ -211,6 +216,17 @@ func CheckPodAccess(userContext *wrangler.Context, verb, namespaceName, podName 
 	case "list":
 		_, err := userContext.Core.Pod().List(namespaceName, metav1.ListOptions{})
 		return err == nil, err
+	case "create":
+		podTemplate := podsapi.CreateContainerAndPodTemplate("")
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      namegen.AppendRandomString("testpod-"),
+				Namespace: namespaceName,
+			},
+			Spec: podTemplate.Spec,
+		}
+		_, err := userContext.Core.Pod().Create(pod)
+		return err == nil, err
 	case "delete":
 		err := userContext.Core.Pod().Delete(namespaceName, podName, &metav1.DeleteOptions{})
 		return err == nil, err
@@ -227,6 +243,34 @@ func CheckDeploymentAccess(userContext *wrangler.Context, verb, namespaceName, d
 		return err == nil, err
 	case "list":
 		_, err := userContext.Apps.Deployment().List(namespaceName, metav1.ListOptions{})
+		return err == nil, err
+	case "create":
+		deploymentName := namegen.AppendRandomString("testdeployment-")
+		podTemplate := podsapi.CreateContainerAndPodTemplate("")
+		selectorLabels := map[string]string{
+			"workload.user.cattle.io/workloadselector": fmt.Sprintf("apps.deployment-%v-%v", namespaceName, deploymentName),
+		}
+		if podTemplate.ObjectMeta.Labels == nil {
+			podTemplate.ObjectMeta.Labels = make(map[string]string)
+		}
+		for k, v := range selectorLabels {
+			podTemplate.ObjectMeta.Labels[k] = v
+		}
+		replicas := int32(1)
+		deployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      deploymentName,
+				Namespace: namespaceName,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: selectorLabels,
+				},
+				Template: podTemplate,
+			},
+		}
+		_, err := userContext.Apps.Deployment().Create(deployment)
 		return err == nil, err
 	case "delete":
 		err := userContext.Apps.Deployment().Delete(namespaceName, deploymentName, &metav1.DeleteOptions{})
@@ -299,6 +343,23 @@ func CheckConfigMapAccess(userContext *wrangler.Context, verb, namespaceName, co
 		return err == nil, err
 	default:
 		return false, fmt.Errorf("verb '%s' not available in checks for resource 'configmaps'", verb)
+	}
+}
+
+// CheckStatefulSetAccess checks if a user has the specified access to a StatefulSet in a namespace. It returns true if the user has access, false otherwise.
+func CheckStatefulSetAccess(userContext *wrangler.Context, verb, namespaceName, statefulSetName string) (bool, error) {
+	switch verb {
+	case "get":
+		_, err := userContext.Apps.StatefulSet().Get(namespaceName, statefulSetName, metav1.GetOptions{})
+		return err == nil, err
+	case "list":
+		_, err := userContext.Apps.StatefulSet().List(namespaceName, metav1.ListOptions{})
+		return err == nil, err
+	case "delete":
+		err := userContext.Apps.StatefulSet().Delete(namespaceName, statefulSetName, &metav1.DeleteOptions{})
+		return err == nil, err
+	default:
+		return false, fmt.Errorf("verb '%s' not available in checks for resource 'statefulsets'", verb)
 	}
 }
 

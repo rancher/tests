@@ -18,6 +18,14 @@ on:
         required: false
         default: false
         type: boolean
+      local_cluster_type:
+        description: "Local cluster type to setup Rancher"
+        required: true
+        default: "rke2"
+        type: choice
+        options:
+          - k3s
+          - rke2
   workflow_call:
     inputs:
       rancher_version:
@@ -34,7 +42,7 @@ permissions:
   contents: read
 
 env:
-  CLOUD_PROVIDER_VERSION: "6.34.0"
+  CLOUD_PROVIDER_VERSION: "6.50.0"
 
 jobs:
   v2-15:
@@ -110,9 +118,9 @@ jobs:
         uses: ./.github/actions/setup-certs
         with:
           private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ secrets.PRIVATE_FULL_CHAIN_NAME }}
+          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
           private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ secrets.PRIVATE_CERT_KEY_NAME }}
+          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -169,6 +177,7 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
+            localCluster: "${{ github.event.inputs.local_cluster_type }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
@@ -204,7 +213,7 @@ jobs:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              certType: "${{ vars.CERT_TYPE }}"
+              k3sVersion: "${{ vars.K3S_VERSION_2_15 }}${{ vars.K3S_VERSION_SUFFIX }}"
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
               rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
@@ -293,6 +302,7 @@ jobs:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
+          QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
@@ -427,9 +437,9 @@ jobs:
         uses: ./.github/actions/setup-certs
         with:
           private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ secrets.PRIVATE_FULL_CHAIN_NAME }}
+          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
           private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ secrets.PRIVATE_CERT_KEY_NAME }}
+          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -486,6 +496,7 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
+            localCluster: "${{ github.event.inputs.local_cluster_type }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
@@ -521,7 +532,7 @@ jobs:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              certType: "${{ vars.CERT_TYPE }}"
+              k3sVersion: "${{ vars.K3S_VERSION_2_14 }}${{ vars.K3S_VERSION_SUFFIX }}"
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
               rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
@@ -610,6 +621,7 @@ jobs:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
+          QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
@@ -744,9 +756,9 @@ jobs:
         uses: ./.github/actions/setup-certs
         with:
           private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ secrets.PRIVATE_FULL_CHAIN_NAME }}
+          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
           private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ secrets.PRIVATE_CERT_KEY_NAME }}
+          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -803,6 +815,7 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
+            localCluster: "${{ github.event.inputs.local_cluster_type }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
@@ -838,7 +851,7 @@ jobs:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              certType: "${{ vars.CERT_TYPE }}"
+              k3sVersion: "${{ vars.K3S_VERSION_2_13 }}${{ vars.K3S_VERSION_SUFFIX }}"
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
               rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
@@ -928,6 +941,7 @@ jobs:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
+          QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
