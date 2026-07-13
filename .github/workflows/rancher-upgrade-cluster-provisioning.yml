@@ -20,6 +20,14 @@ on:
         required: false
         default: false
         type: boolean
+      local_cluster_type:
+        description: "Local cluster type to setup Rancher"
+        required: true
+        default: "rke2"
+        type: choice
+        options:
+          - k3s
+          - rke2
   workflow_call:
     inputs:
       rancher_version:
@@ -194,6 +202,7 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
+            localCluster: "${{ github.event.inputs.local_cluster_type }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
@@ -587,6 +596,7 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
+            localCluster: "${{ github.event.inputs.local_cluster_type }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
@@ -980,6 +990,7 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
+            localCluster: "${{ github.event.inputs.local_cluster_type }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
