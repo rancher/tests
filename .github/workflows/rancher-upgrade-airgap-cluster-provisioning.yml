@@ -43,6 +43,11 @@ permissions:
 
 env:
   CLOUD_PROVIDER_VERSION: "6.50.0"
+  LOCAL_CLUSTER_TYPE: >-
+    ${{ 
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.local_cluster_type) || 
+      (github.event_name == 'schedule' && 'rke2') || 'rke2' 
+    }}
 
 jobs:
   v2-15:
@@ -178,7 +183,7 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
-            localCluster: "${{ github.event.inputs.local_cluster_type }}"
+            localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
@@ -504,7 +509,7 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
-            localCluster: "${{ github.event.inputs.local_cluster_type }}"
+            localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
@@ -830,7 +835,7 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
-            localCluster: "${{ github.event.inputs.local_cluster_type }}"
+            localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
