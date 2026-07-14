@@ -3,7 +3,6 @@ day2-ops-rancher.yml
 day2-ops-rancher-prime.yml
 cluster-provisioning.yml
 post-release-prime.yml
-prime-recurring-tests.yml
 rancher-upgrade-cluster-provisioning.yml
 rancher-upgrade-airgap-cluster-provisioning.yml
 registries-cluster-provisioning.yml
