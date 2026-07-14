@@ -158,7 +158,7 @@ node("harvester-vpn-1") {
               if ("${env.CLEANUP_RANCHER}" == "True" || "${env.CLEANUP_RANCHER}" == "true") {
                 try {
                     sh "docker run --volumes-from ${buildTestContainer} --name ${cleanupTestContainer} -t --env-file ${envFile} " +
-                    "${imageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh"
+                    "${imageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh\""
                 } catch(err) {
                   container.remove([[name: buildTestContainer, image: imageName], [name: cleanupTestContainer, image: imageName]])
                   sh "docker volume rm -f ${validationVolume}"
