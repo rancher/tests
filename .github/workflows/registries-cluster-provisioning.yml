@@ -24,7 +24,6 @@ on:
         default: "rke2"
         type: choice
         options:
-          - k3s
           - rke2
   workflow_call:
     inputs:

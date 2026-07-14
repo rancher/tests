@@ -8,6 +8,8 @@ inputs:
     required: true
   cached-tag-v213:
     required: true
+  latest-tag-v215:
+    required: true
   latest-tag-v214:
     required: true
   latest-tag-v213:
