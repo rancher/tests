@@ -787,7 +787,7 @@
       position: 12
   - title: "Volume Encryption Integration"
     description: "Test encrypted volume functionality with proper key management and data protection through Rancher interface."
-    automation: 0
+    automation: 2
     steps:
     - action: "Create encryption secret with AES-256 key in longhorn-system namespace"
       data: ""
@@ -833,6 +833,8 @@
       data: ""
       expectedresult: "Old and new keys coexist properly"
       position: 11
+    custom_field:
+      "15": "TestVolumeEncryption"
   - title: "Network Security and MTLS"
     description: "Test Longhorn network security features including MTLS configuration and network policy enforcement."
     automation: 0
