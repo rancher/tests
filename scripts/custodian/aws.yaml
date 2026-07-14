@@ -497,3 +497,36 @@ policies:
       op: eq
   actions:
     - type: delete
+
+# Security Groups
+- name: schedule-delete-securitygroup
+  resource: security-group
+  description: |
+    Mark unused, non-default security groups for deletion.
+  filters:
+    - 'tag:DoNotDelete': absent
+    - 'tag:doNotDelete': absent
+    - 'tag:ec2_known_user': absent
+    - type: unused
+    - GroupName: {op: ne, value: default}
+  actions:
+    - type: mark-for-op
+      tag: ec2_known_user
+      op: delete
+      days: 3
+
+- name: ec2-delete-securitygroup
+  resource: security-group
+  description: |
+    Delete unused, non-default security groups that were previously
+    marked for deletion.
+  filters:
+    - 'tag:DoNotDelete': absent
+    - 'tag:doNotDelete': absent
+    - type: unused
+    - GroupName: {op: ne, value: default}
+    - type: marked-for-op
+      tag: ec2_known_user
+      op: delete
+  actions:
+    - delete
