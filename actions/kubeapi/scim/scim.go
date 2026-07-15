@@ -223,6 +223,35 @@ func CreateSCIMUser(scimClient *scimclient.Client, ts *session.Session, external
 	return name, id, nil
 }
 
+// ProvisionSCIMUserWithoutAttribute creates an active SCIM user with the given externalID, deletes its
+// UserAttribute, and waits until the attribute is absent, returning the SCIM userName and Rancher user
+// ID. It reproduces the state of a user provisioned but not yet logged in (no UserAttribute), used to
+// exercise the SCIM handlers' missing-attribute recovery path.
+func ProvisionSCIMUserWithoutAttribute(client *rancher.Client, scimClient *scimclient.Client, ts *session.Session, externalID string) (string, string, error) {
+	userName, userID, err := CreateSCIMUser(scimClient, ts, externalID, true)
+	if err != nil {
+		return "", "", err
+	}
+
+	err = client.WranglerContext.Mgmt.UserAttribute().Delete(userID, &metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return "", "", fmt.Errorf("failed to delete UserAttribute for user %s: %w", userID, err)
+	}
+
+	err = WaitForSCIMResourceDeletion(func() (int, error) {
+		_, getErr := client.WranglerContext.Mgmt.UserAttribute().Get(userID, metav1.GetOptions{})
+		if apierrors.IsNotFound(getErr) {
+			return http.StatusNotFound, nil
+		}
+		return http.StatusOK, nil
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("UserAttribute for user %s was not deleted: %w", userID, err)
+	}
+
+	return userName, userID, nil
+}
+
 // CreateSCIMGroup builds a SCIM group with a random displayName and the given test-specific options
 func CreateSCIMGroup(scimClient *scimclient.Client, ts *session.Session, externalID string) (string, string, error) {
 	groupName := namegen.AppendRandomString("scim-group")
