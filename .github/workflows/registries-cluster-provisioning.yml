@@ -229,7 +229,6 @@ jobs:
             standaloneRegistry:
               assetsPath: "${{ secrets.ASSETS_PATH }}"
               createAuthGlobalRegistry: true
-              createUnauthGlobalRegistry: true
               registryName: "${{ env.HOSTNAME_PREFIX }}"
               registryPassword: "${{ env.HOSTNAME_PREFIX }}-pass"
               registryUsername: "${{ env.HOSTNAME_PREFIX }}-user"
@@ -568,9 +567,8 @@ jobs:
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_14 }}"
             standaloneRegistry:
-              createAuthGlobalRegistry: true
-              createUnauthGlobalRegistry: true
               assetsPath: "${{ secrets.ASSETS_PATH }}"
+              createUnauthGlobalRegistry: true
               registryName: "${{ env.HOSTNAME_PREFIX }}"
               registryPassword: "${{ env.HOSTNAME_PREFIX }}-pass"
               registryUsername: "${{ env.HOSTNAME_PREFIX }}-user"
@@ -909,9 +907,8 @@ jobs:
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
             standaloneRegistry:
-              createAuthGlobalRegistry: true
-              createUnauthGlobalRegistry: true
               assetsPath: "${{ secrets.ASSETS_PATH }}"
+              createUnauthGlobalRegistry: true
               registryName: "${{ env.HOSTNAME_PREFIX }}"
               registryPassword: "${{ env.HOSTNAME_PREFIX }}-pass"
               registryUsername: "${{ env.HOSTNAME_PREFIX }}-user"
