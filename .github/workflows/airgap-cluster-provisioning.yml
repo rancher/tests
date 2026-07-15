@@ -376,7 +376,7 @@ jobs:
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: alpha
+    environment: staging-alpha
     env:
       HOSTNAME_PREFIX: "ag-214"
       REPORTING_ENABLED: >-
@@ -426,7 +426,7 @@ jobs:
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AIRGAP_AWS_MANAGED_PREFIX_LIST_ID }}
+          prefix-list-id: ${{ secrets.AIRGAP_AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
           region: "${{ secrets.AWS_REGION }}"
 
       - name: Set up SSH Keys
@@ -540,6 +540,7 @@ jobs:
               k3sVersion: "${{ vars.K3S_VERSION_2_14 }}${{ vars.K3S_VERSION_SUFFIX }}"
               osUser: "${{ secrets.OS_USER }}"
               osGroup: "${{ secrets.OS_GROUP }}"
+              rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
               rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}-internal.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
@@ -672,7 +673,7 @@ jobs:
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AIRGAP_AWS_MANAGED_PREFIX_LIST_ID }}
+          prefix-list-id: ${{ secrets.AIRGAP_AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
           region: "${{ secrets.AWS_REGION }}"
 
       - name: Set job status output
