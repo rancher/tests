@@ -1,4 +1,4 @@
-//go:build (validation || infra.rke1 || cluster.any || stress || pit.daily) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke2k3s && !sanity && !extended
+//go:build (validation || infra.rke1 || cluster.any || stress || pit.daily || pit.elemental || pit.harvester.daily) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke2k3s && !sanity && !extended
 
 package charts
 
@@ -122,19 +122,32 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 
 	if !initialMonitoringChart.IsAlreadyInstalled {
 		m.T().Log("Installing monitoring chart")
-		err = charts.InstallRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			// Check if chart was already installed by a previous retry attempt
+			status, statusErr := extencharts.GetChartStatus(client, m.project.ClusterID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
+			if statusErr == nil && status.IsAlreadyInstalled {
+				return nil
+			}
+			return charts.InstallRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
+		})
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart deployments to have expected number of available replicas")
-		err = extencharts.WatchAndWaitDeployments(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			return extencharts.WatchAndWaitDeployments(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+		})
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart DaemonSets to have expected number of available nodes")
-		err = extencharts.WatchAndWaitDaemonSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			return extencharts.WatchAndWaitDaemonSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+		})
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart StatefulSets to have expected number of ready replicas")
-		err = extencharts.WatchAndWaitStatefulSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			return extencharts.WatchAndWaitStatefulSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+		})
 		require.NoError(m.T(), err)
 	}
 
@@ -148,8 +161,8 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 
 	m.T().Log("Validating all Prometheus active targets are up")
 	prometheusTargetsResult, err := checkPrometheusTargets(client)
-	assert.NoError(m.T(), err)
-	assert.True(m.T(), prometheusTargetsResult)
+	require.NoError(m.T(), err)
+	require.True(m.T(), prometheusTargetsResult)
 
 	m.T().Log("Creating webhook receiver's namespace")
 	webhookReceiverNamespace, err := namespaces.CreateNamespace(client, webhookReceiverNamespaceName, "{}", map[string]string{}, map[string]string{}, m.project)
@@ -301,19 +314,31 @@ func (m *MonitoringTestSuite) TestUpgradeMonitoringChart() {
 
 	if !initialMonitoringChart.IsAlreadyInstalled {
 		m.T().Log("Installing monitoring chart with the last but one version")
-		err = charts.InstallRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			status, statusErr := extencharts.GetChartStatus(client, m.project.ClusterID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
+			if statusErr == nil && status.IsAlreadyInstalled {
+				return nil
+			}
+			return charts.InstallRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
+		})
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart deployments to have expected number of available replicas")
-		err = extencharts.WatchAndWaitDeployments(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			return extencharts.WatchAndWaitDeployments(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+		})
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart DaemonSets to have expected number of available nodes")
-		err = extencharts.WatchAndWaitDaemonSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			return extencharts.WatchAndWaitDaemonSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+		})
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart StatefulSets to have expected number of ready replicas")
-		err = extencharts.WatchAndWaitStatefulSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+			return extencharts.WatchAndWaitStatefulSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
+		})
 		require.NoError(m.T(), err)
 	}
 
@@ -328,7 +353,9 @@ func (m *MonitoringTestSuite) TestUpgradeMonitoringChart() {
 	require.NoError(m.T(), err)
 
 	m.T().Log("Upgrading monitoring chart with the latest version")
-	err = charts.UpgradeRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
+	err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+		return charts.UpgradeRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
+	})
 	require.NoError(m.T(), err)
 
 	monitoringChartPostUpgrade, err := extencharts.GetChartStatus(client, m.project.ClusterID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)

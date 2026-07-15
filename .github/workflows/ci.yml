@@ -69,6 +69,6 @@ jobs:
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
           # Patch version isn't needed; https://github.com/golangci/golangci-lint-action?tab=readme-ov-file#internals
-          version: v2.7.2
+          version: v2.12.1
           # only run on changed files in this PR / push
           only-new-issues: true

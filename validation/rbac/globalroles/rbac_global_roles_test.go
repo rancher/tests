@@ -8,9 +8,10 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
 	"github.com/rancher/shepherd/pkg/session"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -64,22 +65,22 @@ func (rgr *RbacGlobalRolesTestSuite) TestCreateGlobalRole() {
 
 	for _, tt := range tests {
 		rgr.Run("Validate global role creation with role "+tt.role.String(), func() {
+			log.Info("Create a project and a namespace in the project.")
+			adminProject, _, err := projectapi.CreateProjectAndNamespace(rgr.client, rgr.cluster.ID)
+			assert.NoError(rgr.T(), err)
+
 			switch tt.role.String() {
 			case rbac.Admin.String():
 				log.Infof("As a %v, create a global role", tt.role.String())
-				_, err := createCustomGlobalRole(rgr.client, &customGlobalRole)
+				_, err := extrbacapi.CreateGlobalRole(rgr.client, customGlobalRole())
 				assert.NoError(rgr.T(), err)
 			case rbac.ClusterOwner.String(), rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
-				log.Info("Create a project and a namespace in the project.")
-				adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(rgr.client, rgr.cluster.ID)
-				assert.NoError(rgr.T(), err)
-
 				log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
 				_, userClient, err := rbac.AddUserWithRoleToCluster(rgr.client, tt.member, tt.role.String(), rgr.cluster, adminProject)
 				assert.NoError(rgr.T(), err)
 
 				log.Infof("As a %v, create a global role", tt.role.String())
-				_, err = createCustomGlobalRole(userClient, &customGlobalRole)
+				_, err = userClient.WranglerContext.Mgmt.GlobalRole().Create(customGlobalRole())
 				assert.Error(rgr.T(), err)
 				assert.True(rgr.T(), errors.IsForbidden(err))
 			}
@@ -106,7 +107,11 @@ func (rgr *RbacGlobalRolesTestSuite) TestGetGlobalRole() {
 	for _, tt := range tests {
 		rgr.Run("Validate getting global role with role "+tt.role.String(), func() {
 			log.Infof("As a admin, create a global role")
-			createdGlobalRole, err := createCustomGlobalRole(rgr.client, &customGlobalRole)
+			createdGlobalRole, err := extrbacapi.CreateGlobalRole(rgr.client, customGlobalRole())
+			assert.NoError(rgr.T(), err)
+
+			log.Info("Create a project and a namespace in the project.")
+			adminProject, _, err := projectapi.CreateProjectAndNamespace(rgr.client, rgr.cluster.ID)
 			assert.NoError(rgr.T(), err)
 
 			switch tt.role.String() {
@@ -116,10 +121,6 @@ func (rgr *RbacGlobalRolesTestSuite) TestGetGlobalRole() {
 				assert.NoError(rgr.T(), err)
 				assert.Equal(rgr.T(), grole.Name, createdGlobalRole.Name)
 			case rbac.ClusterOwner.String(), rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
-				log.Info("Create a project and a namespace in the project.")
-				adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(rgr.client, rgr.cluster.ID)
-				assert.NoError(rgr.T(), err)
-
 				log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
 				_, userClient, err := rbac.AddUserWithRoleToCluster(rgr.client, tt.member, tt.role.String(), rgr.cluster, adminProject)
 				assert.NoError(rgr.T(), err)
@@ -152,7 +153,7 @@ func (rgr *RbacGlobalRolesTestSuite) TestUpdateGlobalRole() {
 	for _, tt := range tests {
 		rgr.Run("Validate updating a global role with role "+tt.role.String(), func() {
 			log.Infof("As a admin, create a global role")
-			createdGlobalRole, err := createCustomGlobalRole(rgr.client, &customGlobalRole)
+			createdGlobalRole, err := extrbacapi.CreateGlobalRole(rgr.client, customGlobalRole())
 			assert.NoError(rgr.T(), err)
 
 			globalRole, err := rbacapi.GetGlobalRoleByName(rgr.client, createdGlobalRole.Name)
@@ -163,26 +164,26 @@ func (rgr *RbacGlobalRolesTestSuite) TestUpdateGlobalRole() {
 			}
 			globalRole.Labels["test-label"] = "true"
 
+			log.Info("Create a project and a namespace in the project.")
+			adminProject, _, err := projectapi.CreateProjectAndNamespace(rgr.client, rgr.cluster.ID)
+			assert.NoError(rgr.T(), err)
+
 			switch tt.role.String() {
 			case rbac.Admin.String():
 				log.Infof("As a %v, update the global role", tt.role.String())
-				_, err = rbacapi.UpdateGlobalRole(rgr.client, globalRole)
+				_, err = extrbacapi.UpdateGlobalRole(rgr.client, globalRole)
 				assert.NoError(rgr.T(), err)
 
 				updatedGlobalRole, err := rbacapi.GetGlobalRoleByName(rgr.client, createdGlobalRole.Name)
 				assert.NoError(rgr.T(), err)
 				assert.Equal(rgr.T(), "true", updatedGlobalRole.Labels["test-label"], "Label not updated as expected")
 			case rbac.ClusterOwner.String(), rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
-				log.Info("Create a project and a namespace in the project.")
-				adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(rgr.client, rgr.cluster.ID)
-				assert.NoError(rgr.T(), err)
-
 				log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
 				_, userClient, err := rbac.AddUserWithRoleToCluster(rgr.client, tt.member, tt.role.String(), rgr.cluster, adminProject)
 				assert.NoError(rgr.T(), err)
 
 				log.Infof("As a %v, update the global role", tt.role.String())
-				_, err = rbacapi.UpdateGlobalRole(userClient, globalRole)
+				_, err = userClient.WranglerContext.Mgmt.GlobalRole().Update(globalRole)
 				assert.Error(rgr.T(), err)
 				assert.True(rgr.T(), errors.IsForbidden(err))
 			}
@@ -209,25 +210,25 @@ func (rgr *RbacGlobalRolesTestSuite) TestDeleteGlobalRole() {
 	for _, tt := range tests {
 		rgr.Run("Validate deleting a global role with role "+tt.role.String(), func() {
 			log.Infof("As a admin, create a global role")
-			createdGlobalRole, err := createCustomGlobalRole(rgr.client, &customGlobalRole)
+			createdGlobalRole, err := extrbacapi.CreateGlobalRole(rgr.client, customGlobalRole())
+			assert.NoError(rgr.T(), err)
+
+			log.Info("Create a project and a namespace in the project.")
+			adminProject, _, err := projectapi.CreateProjectAndNamespace(rgr.client, rgr.cluster.ID)
 			assert.NoError(rgr.T(), err)
 
 			switch tt.role.String() {
 			case rbac.Admin.String():
 				log.Infof("As a %v, delete the global role", tt.role.String())
-				err = rbacapi.DeleteGlobalRole(rgr.client, createdGlobalRole.Name)
+				err = extrbacapi.DeleteGlobalRole(rgr.client, createdGlobalRole.Name, true)
 				assert.NoError(rgr.T(), err)
 			case rbac.ClusterOwner.String(), rbac.ClusterMember.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String(), rbac.ReadOnly.String():
-				log.Info("Create a project and a namespace in the project.")
-				adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(rgr.client, rgr.cluster.ID)
-				assert.NoError(rgr.T(), err)
-
 				log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
 				_, userClient, err := rbac.AddUserWithRoleToCluster(rgr.client, tt.member, tt.role.String(), rgr.cluster, adminProject)
 				assert.NoError(rgr.T(), err)
 
 				log.Infof("As a %v, delete the global role", tt.role.String())
-				err = rbacapi.DeleteGlobalRole(userClient, createdGlobalRole.Name)
+				err = extrbacapi.DeleteGlobalRole(userClient, createdGlobalRole.Name, false)
 				assert.Error(rgr.T(), err)
 				assert.True(rgr.T(), errors.IsForbidden(err))
 			}

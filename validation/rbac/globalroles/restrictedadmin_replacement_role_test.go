@@ -17,11 +17,11 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/kubeapi/settings"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
 	rbac "github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/settings"
 	"github.com/rancher/tests/actions/users"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -122,9 +122,9 @@ func (ra *RestrictedAdminReplacementTestSuite) TestRestrictedAdminReplacementLis
 	createdRaReplacementRole, createdRaReplacementUser, createdRaReplacementUserClient := ra.createRestrictedAdminReplacementRoleAndUser(false)
 
 	log.Infof("Verifying user %s with role %s can list global settings", createdRaReplacementUser.Name, createdRaReplacementRole.Name)
-	raReplacementUserSettingsList, err := settings.GetGlobalSettingNames(createdRaReplacementUserClient, ra.cluster.ID)
+	raReplacementUserSettingsList, err := settings.GetGlobalSettingNamesForCluster(createdRaReplacementUserClient, ra.cluster.ID)
 	require.NoError(ra.T(), err)
-	adminGlobalSettingsList, err := settings.GetGlobalSettingNames(ra.client, ra.cluster.ID)
+	adminGlobalSettingsList, err := settings.GetGlobalSettingNamesForCluster(ra.client, ra.cluster.ID)
 	require.NoError(ra.T(), err)
 
 	require.Equal(ra.T(), adminGlobalSettingsList, raReplacementUserSettingsList)

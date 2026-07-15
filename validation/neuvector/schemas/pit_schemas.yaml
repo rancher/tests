@@ -1,0 +1,53 @@
+- projects: [RANCHERINT]
+  suite: Charts
+  cases:
+  - title: "NeuVector Hardened Chart Installation"
+    description: "Verify NeuVector chart installs successfully on a hardened custom cluster with UI extension and service proxy accessibility"
+    automation: 2
+    steps:
+    - action: "Provision a hardened custom cluster via QA infra automation"
+      data: "Harden: true, KubernetesVersion: as configured"
+      expectedresult: "Hardened custom cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Ensure NeuVector UI extension repo is registered"
+      data: "Repo name: rancher-ui-plugins, URL: https://github.com/rancher/ui-plugin-charts, Branch: main"
+      expectedresult: "UI plugin chart repo is present in the local cluster"
+      position: 2
+    - action: "Install NeuVector UI extension on local cluster if not already installed"
+      data: "Chart: neuvector-ui-ext, Version: latest from rancher-ui-plugins repo"
+      expectedresult: "NeuVector UI extension is installed successfully"
+      position: 3
+    - action: "Verify cluster deployments and pods are healthy"
+      data: "Cluster: provisioned hardened cluster"
+      expectedresult: "All cluster deployments and pods are in a healthy state"
+      position: 4
+    - action: "Retrieve System project from the cluster"
+      data: "Project name: System"
+      expectedresult: "System project is found successfully"
+      position: 5
+    - action: "Fetch latest NeuVector chart version"
+      data: "Chart: neuvector, Repo: rancher chart repository"
+      expectedresult: "Latest NeuVector chart version is retrieved"
+      position: 6
+    - action: "Install NeuVector chart with hardened configuration"
+      data: "Namespace: neuvector-system, Hardened: true, K3s: based on cluster Kubernetes version"
+      expectedresult: "NeuVector chart installation starts successfully"
+      position: 7
+    - action: "Wait for NeuVector chart installation to complete"
+      data: "Namespace: neuvector-system"
+      expectedresult: "NeuVector chart reports successful installation"
+      position: 8
+    - action: "Verify NeuVector deployments readiness"
+      data: "Watch and wait for all deployments in neuvector-system namespace"
+      expectedresult: "All NeuVector deployments are in Ready state"
+      position: 9
+    - action: "Verify NeuVector daemonsets readiness"
+      data: "Watch and wait for all daemonsets in neuvector-system namespace"
+      expectedresult: "All NeuVector daemonsets are in Ready state"
+      position: 10
+    - action: "Verify NeuVector manager UI is reachable via service proxy"
+      data: "Service: neuvector-service-webui, Port: 8443, Namespace: neuvector-system"
+      expectedresult: "NeuVector manager UI returns a successful response via the Rancher service proxy"
+      position: 11
+    custom_field:
+      "15": "TestNeuVectorInstallation"

@@ -79,8 +79,7 @@ func (rb *PSATestSuite) ValidatePSARA(role string, customRole bool) {
 }
 
 func (rb *PSATestSuite) ValidateEditPsactClusterRA(role string, psact string) {
-	_, err := editPsactCluster(rb.nonAdminUserClient, rb.clusterName, rbac.DefaultNamespace, psact)
-
+	err := editPsactCluster(rb.nonAdminUserClient, rb.clusterName, rbac.DefaultNamespace, psact)
 	require.NoError(rb.T(), err)
 	err = psadeploy.CreateNginxDeployment(rb.nonAdminUserClient, rb.clusterID, psact)
 	require.NoError(rb.T(), err)

@@ -9,9 +9,9 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/shepherd/pkg/wrangler"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
@@ -49,22 +49,13 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) SetupSuite() {
 	require.NoError(perq.T(), err)
 }
 
-func (perq *ProjectsExtendedResourceQuotaTestSuite) setupUserForTest() (*rancher.Client, *wrangler.Context) {
-	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
-	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
-	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
-
-	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, perq.cluster.ID)
-	require.NoError(perq.T(), err)
-
-	return standardUserClient, standardUserContext
-}
-
 func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExtendedResourceQuota() {
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with extended ephemeral storage quota limits.")
 	projectExtendedQuota := map[string]string{
@@ -79,9 +70,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExtendedReso
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, nil, projectExtendedQuota, nil, namespaceExtendedQuota)
-	createdProject, firstNamespace, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, firstNamespace, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
-	err = namespaceapi.VerifyAnnotationInNamespace(standardUserClient, perq.cluster.ID, firstNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, perq.cluster.ID, firstNamespace.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(perq.T(), err, "%s annotation should exist", projectapi.ResourceQuotaAnnotation)
 
 	log.Info("Verifying that the resource quota object is created for the namespace and the quota limits and requests in the resource quota are accurate.")
@@ -113,7 +104,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExtendedReso
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating a second namespace in the same project.")
-	secondNamespace, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	secondNamespace, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Verifying that the resource quota validation for the second namespace %s fails.", secondNamespace.Name)
@@ -146,7 +137,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExtendedPodC
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with extended project-level pod count quota.")
 	projectExtendedQuota := map[string]string{
@@ -159,9 +152,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExtendedPodC
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, nil, projectExtendedQuota, nil, namespaceExtendedQuota)
-	createdProject, ns1, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, ns1, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
-	err = namespaceapi.VerifyAnnotationInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(perq.T(), err, "%s annotation should exist", projectapi.ResourceQuotaAnnotation)
 
 	log.Infof("Verifying that the resource quota object is created for the namespace %s and the quota limits and requests in the resource quota are accurate.", ns1.Name)
@@ -173,7 +166,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExtendedPodC
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating a second namespace in the same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Attempting to create a pod in the second namespace %s, exceeding the project-level extended pod count quota", ns2.Name)
@@ -186,7 +179,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExistingReso
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing pod count resource quota.")
 	projectPodLimit := "1"
@@ -201,7 +196,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExistingReso
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, projectExistingQuota, nil, namespaceExistingQuota, nil)
-	createdProject, firstNamespace, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, firstNamespace, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Creating a pod in the first namespace %s", firstNamespace.Name)
@@ -210,7 +205,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExistingReso
 
 	log.Info("Creating a second namespace in the same project.")
 	existingLimits := map[string]string{"pods": namespacePodLimit}
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 	err = namespaceapi.VerifyNamespaceResourceQuotaValidationStatus(standardUserClient, perq.cluster.ID, ns2.Name, existingLimits, nil, false, "exceeds project limit")
 	require.NoError(perq.T(), err)
@@ -225,7 +220,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectMixedQuotaExceedE
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with project-level pod count and extended ephemeral storage quota.")
 	projectPodCount := "2"
@@ -248,7 +245,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectMixedQuotaExceedE
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, projectExistingQuota, projectExtendedQuota, namespaceExistingQuota, namespaceExtendedQuota)
-	createdProject, ns1, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, ns1, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Creating a pod in the namespace %s within the extended project limits.", ns1.Name)
@@ -263,7 +260,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectMixedQuotaExceedE
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating a second namespace in same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Attempting to create a pod in the second namespace %s, exceeding the project-level extended ephemeral storage quota", ns2.Name)
@@ -284,7 +281,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectMixedQuotaExceedE
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with project-level pod count and extended ephemeral storage quota.")
 	projectPodCount := "1"
@@ -307,7 +306,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectMixedQuotaExceedE
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, projectExistingQuota, projectExtendedQuota, namespaceExistingQuota, namespaceExtendedQuota)
-	createdProject, ns1, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, ns1, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Creating a pod in the namespace %s within the existing project limits.", ns1.Name)
@@ -315,7 +314,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectMixedQuotaExceedE
 	require.NoError(perq.T(), err)
 
 	log.Infof("Creating a second namespace in the same project")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Attempting to create a pod in the second namespace %s, exceeding existing project pod count limit.", ns2.Name)
@@ -335,7 +334,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExistingOver
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing and extended pod count resource quotas that conflict.")
 	projectPodCount := "1"
@@ -363,7 +364,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExistingOver
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, projectExistingQuota, projectExtendedQuota, namespaceExistingQuota, namespaceExtendedQuota)
-	createdProject, ns1, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, ns1, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 	require.Equal(perq.T(), projectPodCount, createdProject.Spec.ResourceQuota.Limit.Pods)
 	require.Equal(perq.T(), namespacePodCount, createdProject.Spec.NamespaceDefaultResourceQuota.Limit.Pods)
@@ -385,7 +386,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExistingOver
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating a second namespace in same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Creating a pod in the first namespace %s within existing project pod count limit.", ns1.Name)
@@ -408,7 +409,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExtendedRe
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with extended ephemeral storage resource quota.")
 	projectExtendedQuota := map[string]string{
@@ -422,13 +425,13 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExtendedRe
 	}
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, nil, projectExtendedQuota, nil, namespaceExtendedQuota)
-	createdProject, ns1, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, ns1, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 	require.Equal(perq.T(), projectExtendedQuota, createdProject.Spec.ResourceQuota.Limit.Extended, "Project extended quota mismatch")
 	require.Equal(perq.T(), namespaceExtendedQuota, createdProject.Spec.NamespaceDefaultResourceQuota.Limit.Extended, "Namespace extended quota mismatch")
 
 	log.Infof("Verifying that the namespace has the annotation: %s.", projectapi.ResourceQuotaAnnotation)
-	err = namespaceapi.VerifyAnnotationInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(perq.T(), err, "%s annotation should exist", projectapi.ResourceQuotaAnnotation)
 
 	log.Info("Verifying the resource quota object created for the namespace has the correct hard and used limits.")
@@ -473,7 +476,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExtendedRe
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating another namespace in the same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying that the resource quota usage in the project is accurate.")
@@ -501,7 +504,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExtendedPo
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with extended pod count resource quota.")
 	projectExtendedQuota := map[string]string{
@@ -514,13 +519,13 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExtendedPo
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, nil, projectExtendedQuota, nil, namespaceExtendedQuota)
-	createdProject, ns1, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, ns1, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 	require.Equal(perq.T(), projectExtendedQuota, createdProject.Spec.ResourceQuota.Limit.Extended, "Project extended quota mismatch")
 	require.Equal(perq.T(), namespaceExtendedQuota, createdProject.Spec.NamespaceDefaultResourceQuota.Limit.Extended, "Namespace extended quota mismatch")
 
 	log.Infof("Verifying that the namespace has the annotation: %s.", projectapi.ResourceQuotaAnnotation)
-	err = namespaceapi.VerifyAnnotationInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(perq.T(), err, "%s annotation should exist", projectapi.ResourceQuotaAnnotation)
 
 	log.Info("Verifying the resource quota object created for the namespace has the correct hard and used limits.")
@@ -553,7 +558,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExtendedPo
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating another namespace in the same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying that the resource quota usage in the project is accurate.")
@@ -579,7 +584,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelShorthandE
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with shorthand extended ephemeral storage resource quota.")
 	projectExtendedQuota := map[string]string{
@@ -591,7 +598,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelShorthandE
 	}
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, nil, projectExtendedQuota, nil, namespaceExtendedQuota)
-	createdProject, ns1, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, ns1, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 	require.Equal(perq.T(), projectExtendedQuota, createdProject.Spec.ResourceQuota.Limit.Extended, "Project extended quota mismatch")
 	require.Equal(perq.T(), namespaceExtendedQuota, createdProject.Spec.NamespaceDefaultResourceQuota.Limit.Extended, "Namespace extended quota mismatch")
@@ -636,7 +643,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelShorthandE
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating another namespace in the same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying that the resource quota usage in the project is accurate.")
@@ -662,7 +669,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExistingRe
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing pod count resource quota.")
 	projectPodLimit := "10"
@@ -677,13 +686,13 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExistingRe
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, projectExistingQuota, nil, namespaceExistingQuota, nil)
-	createdProject, ns1, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, ns1, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 	require.Equal(perq.T(), projectPodLimit, createdProject.Spec.ResourceQuota.Limit.Pods, "Project existing quota mismatch")
 	require.Equal(perq.T(), namespacePodLimit, createdProject.Spec.NamespaceDefaultResourceQuota.Limit.Pods, "Namespace existing quota mismatch")
 
 	log.Infof("Verifying that the namespace has the annotation: %s.", projectapi.ResourceQuotaAnnotation)
-	err = namespaceapi.VerifyAnnotationInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(perq.T(), err, "%s annotation should exist", projectapi.ResourceQuotaAnnotation)
 
 	log.Info("Verifying the resource quota object created for the namespace has the correct hard and used limits.")
@@ -719,7 +728,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExistingRe
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating another namespace in the same project.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying that the resource quota usage in the project is accurate.")
@@ -745,7 +754,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceMixedQuotaExcee
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing pod count quota and extended ephemeral storage quota.")
 	projectPodCount := "10"
@@ -767,7 +778,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceMixedQuotaExcee
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, projectExistingQuota, projectExtendedQuota, namespaceExistingQuota, namespaceExtendedQuota)
-	createdProject, ns1, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, ns1, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 	require.Equal(perq.T(), projectPodCount, createdProject.Spec.ResourceQuota.Limit.Pods)
 	require.Equal(perq.T(), projectExtendedQuota, createdProject.Spec.ResourceQuota.Limit.Extended)
@@ -775,7 +786,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceMixedQuotaExcee
 	require.Equal(perq.T(), namespaceExtendedQuota, createdProject.Spec.NamespaceDefaultResourceQuota.Limit.Extended)
 
 	log.Infof("Verifying namespace %s has resource quota annotation.", ns1.Name)
-	err = namespaceapi.VerifyAnnotationInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying initial hard and used limits in namespace.")
@@ -836,7 +847,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceMixedQuotaExcee
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing pod count quota and extended ephemeral storage quota.")
 	projectPodCount := "10"
@@ -858,7 +871,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceMixedQuotaExcee
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, projectExistingQuota, projectExtendedQuota, namespaceExistingQuota, namespaceExtendedQuota)
-	createdProject, ns1, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, ns1, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 	require.Equal(perq.T(), projectPodCount, createdProject.Spec.ResourceQuota.Limit.Pods)
 	require.Equal(perq.T(), projectExtendedQuota, createdProject.Spec.ResourceQuota.Limit.Extended)
@@ -866,7 +879,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceMixedQuotaExcee
 	require.Equal(perq.T(), namespaceExtendedQuota, createdProject.Spec.NamespaceDefaultResourceQuota.Limit.Extended)
 
 	log.Infof("Verifying namespace %s has resource quota annotation.", ns1.Name)
-	err = namespaceapi.VerifyAnnotationInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying initial hard and used limits in namespace.")
@@ -927,7 +940,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExistingOv
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing and extended pod count resource quotas that conflict.")
 	projectPodCount := "10"
@@ -955,7 +970,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExistingOv
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, projectExistingQuota, projectExtendedQuota, namespaceExistingQuota, namespaceExtendedQuota)
-	createdProject, ns1, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, ns1, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 	require.Equal(perq.T(), projectPodCount, createdProject.Spec.ResourceQuota.Limit.Pods)
 	require.Equal(perq.T(), namespacePodCount, createdProject.Spec.NamespaceDefaultResourceQuota.Limit.Pods)
@@ -963,7 +978,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceLevelExistingOv
 	require.Equal(perq.T(), namespaceExtendedQuota, createdProject.Spec.NamespaceDefaultResourceQuota.Limit.Extended)
 
 	log.Infof("Verifying namespace %s has resource quota annotation.", ns1.Name)
-	err = namespaceapi.VerifyAnnotationInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, perq.cluster.ID, ns1.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying initial hard and used limits in namespace.")
@@ -1033,7 +1048,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectResourceQuotaUsed
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with existing and extended resource quotas.")
 	projectExistingQuota := &v3.ResourceQuotaLimit{
@@ -1056,7 +1073,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectResourceQuotaUsed
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, projectExistingQuota, projectExtendedQuota, namespaceExistingQuota, namespaceExtendedQuota)
-	createdProject, _, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	createdProject, _, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying initial project UsedLimit after first namespace creation.")
@@ -1074,7 +1091,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectResourceQuotaUsed
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating a second namespace in the same project and verifying project used quota increases.")
-	ns2, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, perq.cluster.ID, createdProject.Name, nil)
+	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying project UsedLimit is updated after namespace creation.")
@@ -1092,7 +1109,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectResourceQuotaUsed
 	require.NoError(perq.T(), err)
 
 	log.Infof("Deleting namespace %s and verifying project used quota decreases.", ns2.Name)
-	err = namespaceapi.DeleteNamespace(standardUserClient, perq.cluster.ID, ns2.Name)
+	err = extnamespaceapi.DeleteNamespace(standardUserClient, perq.cluster.ID, ns2.Name, true)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying project UsedLimit is updated after namespace deletion.")
@@ -1114,7 +1131,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestMoveNamespaceWithoutQuot
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a Project without resource quota.")
 	projectWithoutQuota, ns, err := projectapi.CreateProjectAndNamespace(standardUserClient, perq.cluster.ID)
@@ -1123,7 +1142,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestMoveNamespaceWithoutQuot
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying namespace initially has no resource quota annotation.")
-	err = namespaceapi.VerifyAnnotationInNamespace(standardUserClient, perq.cluster.ID, ns.Name, projectapi.ResourceQuotaAnnotation, false)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, perq.cluster.ID, ns.Name, projectapi.ResourceQuotaAnnotation, false)
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating another project with extended ephemeral storage quota.")
@@ -1139,7 +1158,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestMoveNamespaceWithoutQuot
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, nil, projectExtendedQuota, nil, namespaceExtendedQuota)
-	projectWithQuota, _, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	projectWithQuota, _, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 
 	log.Infof("Verifying used limit for project %s before namespace move.", projectWithQuota.Name)
@@ -1151,7 +1170,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestMoveNamespaceWithoutQuot
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying resource quota annotation exists in the moved namespace.")
-	err = namespaceapi.VerifyAnnotationInNamespace(standardUserClient, perq.cluster.ID, ns.Name, projectapi.ResourceQuotaAnnotation, true)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, perq.cluster.ID, ns.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying ResourceQuota hard limits in the moved namespace.")
@@ -1203,7 +1222,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestMoveNamespaceWithExtende
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with extended ephemeral storage quota.")
 	projectExtendedQuota := map[string]string{
@@ -1218,13 +1239,13 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestMoveNamespaceWithExtende
 
 	projectWithQuotaTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectWithQuotaTemplate, nil, projectExtendedQuota, nil, namespaceExtendedQuota)
-	projectWithQuota, ns, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectWithQuotaTemplate)
+	projectWithQuota, ns, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectWithQuotaTemplate)
 	require.NoError(perq.T(), err)
 	err = projectapi.VerifyUsedProjectExtendedResourceQuota(standardUserClient, perq.cluster.ID, projectWithQuota.Name, namespaceExtendedQuota)
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying namespace has the resource quota annotation.")
-	err = namespaceapi.VerifyAnnotationInNamespace(standardUserClient, perq.cluster.ID, ns.Name, projectapi.ResourceQuotaAnnotation, true)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, perq.cluster.ID, ns.Name, projectapi.ResourceQuotaAnnotation, true)
 	require.NoError(perq.T(), err)
 
 	log.Info("Creating a pod within extended quota limits.")
@@ -1258,7 +1279,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestMoveNamespaceWithExtende
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying resource quota is removed from the moved namespace.")
-	err = namespaceapi.VerifyAnnotationInNamespace(standardUserClient, perq.cluster.ID, ns.Name, projectapi.ResourceQuotaAnnotation, false)
+	err = namespaceapi.VerifyAnnotationExistsInNamespace(standardUserClient, perq.cluster.ID, ns.Name, projectapi.ResourceQuotaAnnotation, false)
 	require.NoError(perq.T(), err)
 	err = namespaceapi.VerifyNamespaceHasNoResourceQuota(standardUserClient, perq.cluster.ID, ns.Name)
 	require.NoError(perq.T(), err)
@@ -1277,7 +1298,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceOverrideExtende
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Creating a project with extended ephemeral-storage quota.")
 	projectExtendedQuota := map[string]string{
@@ -1292,7 +1315,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceOverrideExtende
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, nil, projectExtendedQuota, nil, namespaceExtendedQuota)
-	_, ns, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	_, ns, err := projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.NoError(perq.T(), err)
 	err = namespaceapi.VerifyNamespaceResourceQuota(standardUserClient, perq.cluster.ID, ns.Name, namespaceExtendedQuota)
 	require.NoError(perq.T(), err)
@@ -1354,7 +1377,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectExtendedQuotaLess
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Attempting to create a project where project extended ephemeral-storage quota < namespace extended ephemeral-storage quota.")
 	projectExtendedQuota := map[string]string{
@@ -1367,7 +1392,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectExtendedQuotaLess
 
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, nil, projectExtendedQuota, nil, namespaceExtendedQuota)
-	_, _, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	_, _, err = projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.Error(perq.T(), err)
 	require.Contains(perq.T(), err.Error(), projectapi.NamespaceQuotaExceedsProjectQuotaErrorMessage)
 
@@ -1381,7 +1406,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectExtendedQuotaLess
 
 	projectTemplate = projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, nil, projectExtendedQuota, nil, namespaceExtendedQuota)
-	_, _, err = projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	_, _, err = projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.Error(perq.T(), err)
 	require.Contains(perq.T(), err.Error(), projectapi.NamespaceQuotaExceedsProjectQuotaErrorMessage)
 
@@ -1394,7 +1419,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectExtendedQuotaLess
 	}
 	projectTemplate = projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, nil, projectExtendedQuota, nil, namespaceExtendedQuota)
-	_, _, err = projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	_, _, err = projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.Error(perq.T(), err)
 	require.Contains(perq.T(), err.Error(), projectapi.NamespaceQuotaExceedsProjectQuotaErrorMessage)
 }
@@ -1403,7 +1428,9 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectExistingQuotaLess
 	subSession := perq.session.NewSession()
 	defer subSession.Cleanup()
 
-	standardUserClient, _ := perq.setupUserForTest()
+	log.Info("Creating a standard user and add the user to the downstream cluster as cluster owner.")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(perq.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), perq.cluster, nil)
+	require.NoError(perq.T(), err, "Failed to add the user as a cluster owner to the downstream cluster")
 
 	log.Info("Attempting to create a project where project existing pod quota < namespace existing pod quota.")
 	projectExistingQuota := &v3.ResourceQuotaLimit{
@@ -1414,7 +1441,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectExistingQuotaLess
 	}
 	projectTemplate := projectapi.NewProjectTemplate(perq.cluster.ID)
 	projectapi.ApplyProjectAndNamespaceResourceQuotas(projectTemplate, projectExistingQuota, nil, namespaceExistingQuota, nil)
-	_, _, err := projectapi.CreateProjectAndNamespaceWithTemplate(standardUserClient, perq.cluster.ID, projectTemplate)
+	_, _, err = projectapi.CreateProjectWithTemplateAndNamespace(standardUserClient, perq.cluster.ID, projectTemplate)
 	require.Error(perq.T(), err)
 	require.Contains(perq.T(), err.Error(), projectapi.NamespaceQuotaExceedsProjectQuotaErrorMessage)
 }

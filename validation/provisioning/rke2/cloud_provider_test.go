@@ -1,4 +1,4 @@
-//go:build validation || recurring
+//go:build validation || recurring || pit.weekly || pit.elemental
 
 package rke2
 
@@ -30,6 +30,7 @@ type cloudProviderTest struct {
 	session            *session.Session
 	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
+	rancherConfig      *rancher.Config
 }
 
 func cloudProviderSetup(t *testing.T) cloudProviderTest {
@@ -55,6 +56,9 @@ func cloudProviderSetup(t *testing.T) cloudProviderTest {
 
 	r.cattleConfig, err = defaults.SetK8sDefault(client, defaults.RKE2, r.cattleConfig)
 	require.NoError(t, err)
+
+	r.rancherConfig = new(rancher.Config)
+	operations.LoadObjectFromMap(defaults.RancherConfigKey, r.cattleConfig, r.rancherConfig)
 
 	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
 	require.NoError(t, err)
@@ -95,6 +99,10 @@ func TestAWSCloudProvider(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			if *r.rancherConfig.Insecure {
+				t.Skip("Known issue: https://github.com/rancher/rancher/issues/54617")
+			}
+
 			clusterConfig.CloudProvider = providers.AWS
 			clusterConfig.MachinePools = tt.machinePools
 
@@ -116,6 +124,10 @@ func TestAWSCloudProvider(t *testing.T) {
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(r.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cloud provider (%s)", cluster.Name)
@@ -185,6 +197,10 @@ func TestVSphereCloudProvider(t *testing.T) {
 			err = pods.VerifyClusterPods(r.client, cluster)
 			require.NoError(t, err)
 
+			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
+			require.NoError(t, err)
+
 			logrus.Infof("Verifying cloud provider (%s)", cluster.Name)
 			provider.VerifyCloudProviderFunc(t, r.client, cluster)
 		})
@@ -251,6 +267,10 @@ func TestHarvesterCloudProvider(t *testing.T) {
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(r.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cloud provider (%s)", cluster.Name)

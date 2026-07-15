@@ -10,7 +10,6 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
-	kubenamespaces "github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/namespaces"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -19,8 +18,6 @@ import (
 const (
 	CISBenchmarkNamespace = "cis-operator-system"
 	CISBenchmarkName      = "rancher-cis-benchmark"
-	ComplianceNamespace   = "compliance-operator-system"
-	ComplianceName        = "rancher-compliance"
 )
 
 // InstallHardenedChart is a helper function that installs the cis-benchmark chart.
@@ -121,7 +118,7 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 			return err
 		}
 
-		adminNamespaceResource := adminDynamicClient.Resource(kubenamespaces.NamespaceGroupVersionResource).Namespace("")
+		adminNamespaceResource := adminDynamicClient.Resource(namespaces.NamespaceGroupVersionResource).Namespace("")
 
 		watchNamespaceInterface, err := adminNamespaceResource.Watch(context.TODO(), metav1.ListOptions{
 			FieldSelector:  "metadata.name=" + ChartInstallActionPayload.Namespace,

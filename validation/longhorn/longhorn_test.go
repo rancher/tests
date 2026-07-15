@@ -1,9 +1,10 @@
-//go:build validation || pit.daily || pit.harvester.daily
+//go:build validation || pit.daily || pit.elemental || pit.harvester.daily
 
 package longhorn
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -12,17 +13,18 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extstatefulsetapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/statefulsets"
 	shepherdPods "github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/actions/kubeapi/volumes/persistentvolumeclaims"
+	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
+	statefulsetapi "github.com/rancher/tests/actions/kubeapi/workloads/statefulsets"
 	namespaceActions "github.com/rancher/tests/actions/namespaces"
-	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/storage"
-	"github.com/rancher/tests/actions/workloads/pods"
-	"github.com/rancher/tests/actions/workloads/statefulset"
 	"github.com/rancher/tests/interoperability/longhorn"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -63,6 +65,16 @@ func (l *LonghornTestSuite) SetupSuite() {
 	l.project, err = client.Management.Project.Create(projectConfig)
 	require.NoError(l.T(), err)
 
+	l.T().Logf("Creating %s namespace", charts.LonghornNamespace)
+	_, err = namespaceActions.CreateNamespace(client, charts.LonghornNamespace, "{}", map[string]string{}, map[string]string{}, l.project)
+	if err != nil {
+		if strings.Contains(err.Error(), "409") || strings.Contains(err.Error(), "AlreadyExists") {
+			l.T().Logf("Namespace %s already exists, continuing with existing namespace: %v", charts.LonghornNamespace, err)
+		} else {
+			require.NoError(l.T(), err)
+		}
+	}
+
 	chart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(l.T(), err)
 
@@ -91,7 +103,7 @@ func (l *LonghornTestSuite) TestRBACIntegration() {
 	cluster, err := l.client.Management.Cluster.ByID(l.cluster.ID)
 	require.NoError(l.T(), err)
 
-	project, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(l.client, l.cluster.ID)
+	project, namespace, err := projectapi.CreateProjectAndNamespace(l.client, l.cluster.ID)
 	require.NoError(l.T(), err)
 	l.T().Logf("Created project: %v", project.Name)
 
@@ -120,13 +132,25 @@ func (l *LonghornTestSuite) TestRBACIntegration() {
 }
 
 func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
+	steveClient, err := l.client.Steve.ProxyDownstream(l.cluster.ID)
+	require.NoError(l.T(), err)
+
+	nodeList, err := steveClient.SteveType("node").List(nil)
+	require.NoError(l.T(), err)
+	require.NotEmpty(l.T(), nodeList.Data)
+
+	nodeCount := len(nodeList.Data)
+
+	minStatefulSetReplicas := int32(1)
+	maxStatefulSetReplicas := int32(nodeCount + 1)
+
 	namespaceName := namegenerator.AppendRandomString("lhsts")
 	namespace, err := namespaceActions.CreateNamespace(l.client, namespaceName, "{}", map[string]string{}, map[string]string{}, l.project)
 	require.NoError(l.T(), err)
 	l.T().Logf("Created namespace %s", namespaceName)
 
-	podTemplate := pods.CreateContainerAndPodTemplate()
-	statefulSet, err := statefulset.CreateStatefulSet(l.client, l.cluster.ID, namespace.Name, podTemplate, 3, true, l.longhornTestConfig.LonghornTestStorageClass)
+	podTemplate := podapi.CreateContainerAndPodTemplate("")
+	statefulSet, err := statefulsetapi.CreateStatefulSet(l.client, l.cluster.ID, namespace.Name, podTemplate, minStatefulSetReplicas, true, l.longhornTestConfig.LonghornTestStorageClass)
 	require.NoError(l.T(), err)
 	l.T().Logf("Created StetefulSet %s on namespace %s", statefulSet.Name, namespaceName)
 
@@ -134,27 +158,33 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	volumeSourceName := statefulSet.Spec.VolumeClaimTemplates[len(statefulSet.Spec.VolumeClaimTemplates)-1].Name
 	storage.CheckVolumeAllocation(l.T(), l.client, l.cluster.ID, namespace.Name, l.longhornTestConfig.LonghornTestStorageClass, volumeSourceName, storage.MountPath)
 
-	var stetefulSetPodReplicas int32 = 5
-	statefulSet.Spec.Replicas = &stetefulSetPodReplicas
-	statefulSet, err = statefulset.UpdateStatefulSet(l.client, l.cluster.ID, namespace.Name, statefulSet, true)
+	statefulSet.Spec.Replicas = &maxStatefulSetReplicas
+	err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+		statefulSet, err = extstatefulsetapi.UpdateStatefulSet(l.client, l.cluster.ID, statefulSet, true)
+		return err
+	})
+	require.NoError(l.T(), err)
+
+	err = shepherdCharts.WatchAndWaitStatefulSets(l.client, l.cluster.ID, namespaceName, metav1.ListOptions{
+		FieldSelector: "metadata.name=" + statefulSet.Name,
+	})
 	require.NoError(l.T(), err)
 
 	storage.CheckVolumeAllocation(l.T(), l.client, l.cluster.ID, namespace.Name, l.longhornTestConfig.LonghornTestStorageClass, volumeSourceName, storage.MountPath)
 
-	steveClient, err := l.client.Steve.ProxyDownstream(l.cluster.ID)
-	require.NoError(l.T(), err)
-
 	pvcBeforeScaling, err := steveClient.SteveType(persistentvolumeclaims.PersistentVolumeClaimType).NamespacedSteveClient(namespace.Name).List(nil)
 	require.NoError(l.T(), err)
+	require.NotEmpty(l.T(), pvcBeforeScaling.Data)
 
-	stetefulSetPodReplicas = 2
-	statefulSet.Spec.Replicas = &stetefulSetPodReplicas
-	statefulSet, err = statefulset.UpdateStatefulSet(l.client, l.cluster.ID, namespace.Name, statefulSet, true)
+	statefulSet.Spec.Replicas = &minStatefulSetReplicas
+	statefulSet, err = extstatefulsetapi.UpdateStatefulSet(l.client, l.cluster.ID, statefulSet, true)
 	require.NoError(l.T(), err)
 
 	l.T().Logf("Verifying old volumes still exist")
 	volumesAfterScaling, err := steveClient.SteveType(storage.PersistentVolumeEntityType).List(nil)
 	require.NoError(l.T(), err)
+	require.NotEmpty(l.T(), volumesAfterScaling.Data)
+
 	var volumeNamesAfterScaling []string
 	for _, volume := range volumesAfterScaling.Data {
 		volumeNamesAfterScaling = append(volumeNamesAfterScaling, volume.Name)
@@ -167,14 +197,19 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 		require.True(l.T(), slices.Contains(volumeNamesAfterScaling, pvcSpec.VolumeName))
 	}
 
-	pods, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespace.Name).List(nil)
-	require.NoError(l.T(), err)
-	require.Equal(l.T(), 2, len(pods.Data))
-
-	err = steveClient.SteveType(shepherdPods.PodResourceSteveType).Delete(&pods.Data[0])
+	err = shepherdCharts.WatchAndWaitStatefulSets(l.client, l.cluster.ID, namespaceName, metav1.ListOptions{
+		FieldSelector: "metadata.name=" + statefulSet.Name,
+	})
 	require.NoError(l.T(), err)
 
-	oldPodVolume, err := storage.GetTargetVolume(pods.Data[0], volumeSourceName)
+	podList, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespace.Name).List(nil)
+	require.NoError(l.T(), err)
+	require.Equal(l.T(), int(minStatefulSetReplicas), len(podList.Data))
+
+	err = steveClient.SteveType(shepherdPods.PodResourceSteveType).Delete(&podList.Data[0])
+	require.NoError(l.T(), err)
+
+	oldPodVolume, err := storage.GetTargetVolume(podList.Data[0], volumeSourceName)
 	require.NoError(l.T(), err)
 	l.T().Logf("Deleting pod and checking if the volume bound to PVC %s is successfully reattached", oldPodVolume.PersistentVolumeClaim.ClaimName)
 
@@ -183,13 +218,13 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	})
 	require.NoError(l.T(), err)
 
-	newPods, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespace.Name).List(nil)
+	newPodList, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespace.Name).List(nil)
 	require.NoError(l.T(), err)
-	require.Equal(l.T(), 2, len(newPods.Data))
+	require.Equal(l.T(), int(minStatefulSetReplicas), len(newPodList.Data))
 
-	for _, pod := range newPods.Data {
+	for _, pod := range newPodList.Data {
 		// We are interested in the pod that was created instead of the one that was deleted.
-		if pod.Name != pods.Data[1].Name {
+		if pod.Name != podList.Data[0].Name {
 			newPodVolume, err := storage.GetTargetVolume(pod, volumeSourceName)
 			require.NoError(l.T(), err)
 			require.Equal(l.T(), oldPodVolume.PersistentVolumeClaim.ClaimName, newPodVolume.PersistentVolumeClaim.ClaimName)

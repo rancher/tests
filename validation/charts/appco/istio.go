@@ -21,6 +21,7 @@ import (
 const (
 	expectedDeployLog                                  = "deployed"
 	istioCanaryRevisionApp                             = "istiod-canary"
+	appCoRegistry                               string = `oci://dp.apps.rancher.io/`
 	rancherIstioSecretName                      string = `application-collection`
 	istioAmbientModeSet                         string = `--set cni.enabled=false,ztunnel.enabled=true --set istiod.cni.enabled=false --set cni.profile=ambient,istiod.profile=ambient,ztunnel.profile=ambient`
 	istioGatewayModeSet                         string = `--set base.enabled=false,istiod.enabled=false --set gateway.enabled=true,gateway.namespaceOverride=%s`
@@ -107,7 +108,8 @@ func watchAndwaitCreateFleetGitRepo(client *rancher.Client, clusterName string, 
 					ClusterName: clusterName,
 				},
 			},
-			HelmSecretName: secretName,
+			HelmSecretName:   secretName,
+			HelmRepoURLRegex: appCoRegistry,
 		},
 	}
 

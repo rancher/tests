@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -19,10 +18,12 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
-	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	tfpConfig "github.com/rancher/tfp-automation/config"
+	"github.com/rancher/tfp-automation/framework/cleanup"
+	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -90,39 +91,47 @@ func TestDynamicCustom(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			var err error
 
 			for _, cattleConfig := range r.cattleConfigs {
 				clusterConfig := new(clusters.ClusterConfig)
 				operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
+				rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(cattleConfig)
 
-				if len(clusterConfig.MachinePools) == 0 {
+				if len(terratestConfig.Nodepools) == 0 {
 					t.Skip()
 				}
 
-				externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
+				var isWindows bool
+				if terraformConfig.AWSConfig.WindowsInstanceType != "" {
+					isWindows = true
+				} else {
+					isWindows = false
+				}
 
-				awsEC2Configs := new(ec2.AWSEC2Configs)
-				config.LoadConfig(ec2.ConfigurationFileKey, awsEC2Configs)
-
-				logrus.Info("Provisioning cluster")
-				cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
-				reports.TimeoutClusterReport(cluster, err)
-				require.NoError(t, err)
+				logrus.Info("Provisioning custom cluster")
+				nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.RKE2, "validation/provisioning/rke2", isWindows)
+				defer os.RemoveAll(nestedRancherModuleDir)
+				defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
 
 				logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 				err = provisioning.VerifyClusterReady(r.client, cluster)
 				require.NoError(t, err)
 
 				logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-				err = deployment.VerifyClusterDeployments(tt.client, cluster)
+				err = deployment.VerifyClusterDeployments(r.client, cluster)
 				require.NoError(t, err)
 
 				logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 				err = pods.VerifyClusterPods(r.client, cluster)
 				require.NoError(t, err)
 
+				logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+				err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
+				require.NoError(t, err)
+
 				logrus.Infof("Verifying cloud provider on cluster (%s)", cluster.Name)
-				cloudprovider.VerifyCloudProvider(t, tt.client, defaults.RKE2, clusterConfig, cluster, nil)
+				cloudprovider.VerifyCloudProvider(t, tt.client, defaults.RKE2, clusterConfig, cluster)
 
 				logrus.Infof("Verifying cluster features (%s)", cluster.Name)
 				provisioning.VerifyDynamicCluster(t, r.client, cluster)

@@ -95,7 +95,7 @@ func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string, s
 	storageClass, err := GetStorageClass(client, clusterID, storageClassName)
 	require.NoError(t, err)
 
-	logrus.Infof("creating PVC")
+	logrus.Debugf("Creating PVC")
 
 	accessModes := []corev1.PersistentVolumeAccessMode{
 		"ReadWriteOnce",

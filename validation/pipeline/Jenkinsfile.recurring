@@ -1,11 +1,18 @@
 #!groovy
+/**
+ * DEPRECATED: This pipeline is superseded by validation/Jenkinsfile.e2e.
+ * The new pipeline uses the qa-jenkins-library shared library for modular
+ * infrastructure provisioning (tofu + ansible) and supports the same
+ * downstream job triggering pattern. Reconfigure Jenkins jobs to use
+ * validation/Jenkinsfile.e2e instead.
+ */
 node {
     def rootPath = "/root/go/src/github.com/rancher/tests/"
     def workPath = "/root/go/src/github.com/rancher/tests/validation/"
     def qaInfraWorkPath = "/root/go/src/github.com/rancher/qa-infra-automation"
     def jobName = "${JOB_NAME}"
     if (jobName.contains('/')) { 
-      jobNames = jobName.split('/')
+      def jobNames = jobName.split('/')
       jobName = jobNames[jobNames.size() - 1] 
     }
     def golangTestContainer = "${jobName}${env.BUILD_NUMBER}-golangtest"
@@ -25,16 +32,17 @@ node {
     def branch = "main"
     def qaInfraBranch = "main"
     def qaInfraRepo = "https://github.com/rancher/qa-infra-automation"
-    def config = env.CONFIG
-    def ansibleConfig = env.ANSIBLE_CONFIG
-    def terraformConfig = env.TERRAFORM_CONFIG 
-    def downstreamClusterTerraformConfig = env.DOWNSTREAM_CLUSTERTERRAFORM_CONFIG 
+    def config = env.CATTLE_TEST_CONFIG ?: ""
+    def ansibleConfig = env.ANSIBLE_VARIABLES ?: ""
+    def terraformConfig = env.TERRAFORM_CONFIG ?: ""
+    def downstreamClusterTerraformConfig = env.DOWNSTREAM_CLUSTER_CONFIG ?: ""
     def rancherToken = ""
     def filename = "config.yaml"
     def ansibleVarsFilename = "vars.yaml"
     def terraformVarsfilename = "cluster.tfvars"
     def downstreamTerraformVarsfilename = "downstream-cluster.tfvars"
     // def individualJob = (jobName =~ /(go-recurring-[a-z]+)/)[0][1]
+    def yqVersion = "v4.47.2"
     def individualJob = "go-recurring-daily"
     individualJob = "${individualJob}-individual-job"
     if ("${env.INDIVIDUAL_JOB}" != "null" && "${env.INDIVIDUAL_JOB}" != "") {
@@ -45,6 +53,7 @@ node {
       branch = "${env.BRANCH}"
     }
 
+    def rancherRepo = "https://github.com/rancher/tests"
     if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
       rancherRepo = "${env.REPO}"
     }
@@ -65,10 +74,11 @@ node {
     def configFiles = []
     wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
       withFolderProperties {
-        paramsMap = []
+        def paramsMap = []
         params.each {
-          if (it.value && it.value.trim() != "") {
-              paramsMap << "$it.key=$it.value"
+          def value = it.value?.toString()
+          if (value && value.trim() != "") {
+              paramsMap << "$it.key=$value"
           }
         }
         withCredentials([ string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
@@ -161,7 +171,7 @@ node {
               }
             }
             stage('Setup') {
-                sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
+                sh returnStdout: true, script: "wget -qO ./yq https://github.com/mikefarah/yq/releases/download/${yqVersion}/yq_linux_amd64 && wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/${yqVersion}/checksums && grep -q '^yq_linux_amd64 ' ./yq_checksums && awk '/^yq_linux_amd64 / {print \$19 \"  ./yq\"}' ./yq_checksums | sha256sum -c - && rm -f ./yq_checksums"
                 sh returnStdout:true, script: 'chmod a+x ./yq'
             }
             stage("Build Environment") {
@@ -178,7 +188,7 @@ node {
             try {
               stage('Run Test Validations') {
                   try {
-                    jobs = [:]
+                    def jobs = [:]
                     
                     // copy updated config file from the build test container
                     sh "docker cp ${buildTestContainer}:${workPath}${filename} ./"
@@ -206,6 +216,7 @@ node {
                       string(name: 'REPO', value: "${rancherRepo}"),
                       string(name: 'BRANCH', value: "${branch}"),
                       string(name: 'QASE_TEST_RUN_ID', value: "${testRunID}"),
+                      string(name: 'QASE_SCHEMA_PREFIX', value: "${env.QASE_SCHEMA_PREFIX}"),
                       string(name: 'TEST_PACKAGE', value: "${env.TEST_PACKAGE}"),
                       string(name: 'GOTEST_TESTCASE', value: "${env.GOTEST_TESTCASE_PROVISIONING}"),
                       string(name: 'TAGS', value: "${env.PROVISIONING_TAGS}"),
@@ -217,6 +228,7 @@ node {
                       string(name: 'REPO', value: "${rancherRepo}"),
                       string(name: 'BRANCH', value: "${branch}"),
                       string(name: 'QASE_TEST_RUN_ID', value: "${testRunID}"),
+                      string(name: 'QASE_SCHEMA_PREFIX', value: "${env.QASE_SCHEMA_PREFIX}"),
                       string(name: 'TEST_PACKAGE', value: "${env.TEST_PACKAGE}"),
                       string(name: 'GOTEST_TESTCASE', value: "${env.GOTEST_TESTCASE_VALIDATION} -p 1"),
                       string(name: 'TAGS', value: "${env.VALIDATION_TEST_TAGS}"),

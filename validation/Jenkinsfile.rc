@@ -28,6 +28,7 @@ node {
     def filename = "config.yaml"
     def individualJob = "go-recurring-daily"
     def corralJob = "corral-go-job"
+    def yqVersion = "v4.47.2"
     individualJob = "${individualJob}-individual-job"
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
@@ -128,10 +129,6 @@ node {
                   def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
                   writeFile file: AWS_SSH_KEY_NAME, text: decoded
                 }
-                dir("./validation/.ssh") {
-                  def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
-                  writeFile file: JENKINS_RKE_VALIDATION, text: decodedRsa
-                }
               }
               dir("./tests/validation") {
                 writeFile file: filename, text: config
@@ -144,7 +141,7 @@ node {
               }
             }
             stage('Setup') {
-                sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
+                sh returnStdout: true, script: "wget -qO ./yq https://github.com/mikefarah/yq/releases/download/${yqVersion}/yq_linux_amd64 && wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/${yqVersion}/checksums && grep -q '^yq_linux_amd64 ' ./yq_checksums && awk '/^yq_linux_amd64 / {print \$19 \"  ./yq\"}' ./yq_checksums | sha256sum -c - && rm -f ./yq_checksums"
                 sh returnStdout:true, script: 'chmod a+x ./yq'
             }
             stage("Build Environment") {

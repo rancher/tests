@@ -64,6 +64,3 @@ awsEC2Configs:
       awsUser: "<required>"
       volumeSize: 100
       roles: ["etcd", "controlplane", "worker"]
-
-logging:
-   level: "info"

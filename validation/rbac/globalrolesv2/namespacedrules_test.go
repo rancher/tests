@@ -12,13 +12,13 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
+	extsecretapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/session"
-	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/kubeapi/secrets"
-	"github.com/rancher/tests/actions/projects"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
 	"github.com/rancher/tests/actions/rbac"
-	actionssecrets "github.com/rancher/tests/actions/secrets"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -58,7 +58,7 @@ func (ns *NamespacedRulesTestSuite) validateNSRulesRBACResources(user *managemen
 
 	for namespace := range namespacedRules {
 		nameSelector := fmt.Sprintf("metadata.name=%s-%s", grbOwner, namespace)
-		rbs, err := rbacapi.ListRoleBindings(ns.client, localcluster, namespace, metav1.ListOptions{FieldSelector: nameSelector})
+		rbs, err := extrbacapi.ListRoleBindings(ns.client, localcluster, namespace, metav1.ListOptions{FieldSelector: nameSelector})
 		if namespace == "*" {
 			require.Empty(ns.T(), rbs.Items, "Unexpected number of RoleBindings: Expected %d, Actual %d", 0, len(rbs.Items))
 			return
@@ -76,7 +76,7 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithNamespacedRules() {
 	defer subSession.Cleanup()
 
 	log.Info("Validate creating a global role with namespacedRules and assign it to a user.")
-	_, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(ns.client, localcluster)
+	_, namespace, err := projectapi.CreateProjectAndNamespace(ns.client, localcluster)
 	require.NoError(ns.T(), err)
 
 	log.Info("Create a global role with namespacedRules.")
@@ -98,9 +98,9 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithNamespacedRules() {
 	userClient, err := ns.client.AsUser(createdUser)
 	require.NoError(ns.T(), err)
 
-	listSecretsAsUser, err := secrets.ListSecrets(userClient, localcluster, namespace.Name, metav1.ListOptions{})
+	listSecretsAsUser, err := extsecretapi.ListSecrets(userClient, localcluster, namespace.Name, metav1.ListOptions{})
 	require.NoError(ns.T(), err)
-	listSecretsAsAdmin, err := secrets.ListSecrets(ns.client, localcluster, namespace.Name, metav1.ListOptions{})
+	listSecretsAsAdmin, err := extsecretapi.ListSecrets(ns.client, localcluster, namespace.Name, metav1.ListOptions{})
 	require.NoError(ns.T(), err)
 	require.Equal(ns.T(), listSecretsAsAdmin.Items, listSecretsAsUser.Items)
 	require.Equal(ns.T(), len(listSecretsAsAdmin.Items), len(listSecretsAsUser.Items))
@@ -109,12 +109,12 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithNamespacedRules() {
 	secretData := map[string][]byte{
 		"key": []byte(namegen.RandStringLower(5)),
 	}
-	_, err = actionssecrets.CreateSecret(userClient, localcluster, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
+	_, err = secretapi.CreateSecret(userClient, localcluster, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 
 	log.Info("Verify user cannot create secrets in other namespaces as well")
-	_, err = secrets.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
+	_, err = extsecretapi.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 }
@@ -143,7 +143,7 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarAsKeyInNamespacedRules
 	userClient, err := ns.client.AsUser(createdUser)
 	require.NoError(ns.T(), err)
 
-	_, err = secrets.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
+	_, err = extsecretapi.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 
@@ -151,7 +151,7 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarAsKeyInNamespacedRules
 	secretData := map[string][]byte{
 		"key": []byte(namegen.RandStringLower(5)),
 	}
-	_, err = actionssecrets.CreateSecret(userClient, localcluster, "default", secretData, corev1.SecretTypeOpaque, nil, nil)
+	_, err = secretapi.CreateSecret(userClient, localcluster, "default", secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 }
@@ -188,15 +188,15 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarForResourcesAndGroups(
 	secretData := map[string][]byte{
 		"key": []byte(namegen.RandStringLower(5)),
 	}
-	createAdminSecret, err := actionssecrets.CreateSecret(ns.client, localcluster, customNS, secretData, corev1.SecretTypeOpaque, nil, nil)
+	createAdminSecret, err := secretapi.CreateSecret(ns.client, localcluster, customNS, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.NoError(ns.T(), err)
-	listSecretsCustomNS, err := secrets.ListSecrets(userClient, localcluster, customNS, metav1.ListOptions{})
+	listSecretsCustomNS, err := extsecretapi.ListSecrets(userClient, localcluster, customNS, metav1.ListOptions{})
 	require.NoError(ns.T(), err)
 	require.Equal(ns.T(), 1, len(listSecretsCustomNS.Items))
 	require.Equal(ns.T(), createAdminSecret.Name, listSecretsCustomNS.Items[0].Name)
 
 	log.Info("Verify user cannot list secrets in any other namespace than the defined from the namespaced rules")
-	_, err = secrets.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
+	_, err = extsecretapi.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 
@@ -204,7 +204,7 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithStarForResourcesAndGroups(
 	nonCreatedSecretData := map[string][]byte{
 		"key": []byte(namegen.RandStringLower(5)),
 	}
-	_, err = actionssecrets.CreateSecret(userClient, localcluster, "default", nonCreatedSecretData, corev1.SecretTypeOpaque, nil, nil)
+	_, err = secretapi.CreateSecret(userClient, localcluster, "default", nonCreatedSecretData, corev1.SecretTypeOpaque, nil, nil)
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 }
@@ -235,19 +235,19 @@ func (ns *NamespacedRulesTestSuite) TestCreateUserWithMultipleNSInNamespacedRule
 
 	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
 
-	log.Info("Verify user can list secrets in the provided namespace from the namespaced rules for secrets. ")
+	log.Info("Verify user can list secrets in the provided namespace from the namespaced rules for secretapi. ")
 	userClient, err := ns.client.AsUser(createdUser)
 	require.NoError(ns.T(), err)
 
-	listSecretsAsUser, err := secrets.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
+	listSecretsAsUser, err := extsecretapi.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
 	require.NoError(ns.T(), err)
-	listSecretsAsAdmin, err := secrets.ListSecrets(ns.client, localcluster, globalDataNamespace, metav1.ListOptions{})
+	listSecretsAsAdmin, err := extsecretapi.ListSecrets(ns.client, localcluster, globalDataNamespace, metav1.ListOptions{})
 	require.NoError(ns.T(), err)
 	require.Equal(ns.T(), listSecretsAsAdmin.Items, listSecretsAsUser.Items)
 	require.Equal(ns.T(), len(listSecretsAsAdmin.Items), len(listSecretsAsUser.Items))
 
-	log.Info("Verify user cannot list secrets in the custom namespace from the namespaced rules for secrets. ")
-	_, err = secrets.ListSecrets(userClient, localcluster, customNS, metav1.ListOptions{})
+	log.Info("Verify user cannot list secrets in the custom namespace from the namespaced rules for secretapi. ")
+	_, err = extsecretapi.ListSecrets(userClient, localcluster, customNS, metav1.ListOptions{})
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 
@@ -291,7 +291,7 @@ func (ns *NamespacedRulesTestSuite) TestUpdateGlobalRoleWithNamespacedRules() {
 	}
 
 	log.Info("Updating global role with namespaced rules.")
-	_, err = rbacapi.UpdateGlobalRole(ns.client, &updatedGlobalRole)
+	_, err = extrbacapi.UpdateGlobalRole(ns.client, &updatedGlobalRole)
 	require.NoError(ns.T(), err)
 	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
 
@@ -299,9 +299,9 @@ func (ns *NamespacedRulesTestSuite) TestUpdateGlobalRoleWithNamespacedRules() {
 	userClient, err := ns.client.AsUser(createdUser)
 	require.NoError(ns.T(), err)
 
-	listSecretsAsUser, err := secrets.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
+	listSecretsAsUser, err := extsecretapi.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
 	require.NoError(ns.T(), err)
-	listSecretsAsAdmin, err := secrets.ListSecrets(ns.client, localcluster, globalDataNamespace, metav1.ListOptions{})
+	listSecretsAsAdmin, err := extsecretapi.ListSecrets(ns.client, localcluster, globalDataNamespace, metav1.ListOptions{})
 	require.NoError(ns.T(), err)
 	require.Equal(ns.T(), listSecretsAsAdmin.Items, listSecretsAsUser.Items)
 	require.Equal(ns.T(), len(listSecretsAsAdmin.Items), len(listSecretsAsUser.Items))
@@ -318,13 +318,13 @@ func (ns *NamespacedRulesTestSuite) TestUpdateGlobalRoleWithNamespacedRules() {
 		NamespacedRules: namespacedRules,
 	}
 
-	_, err = rbacapi.UpdateGlobalRole(ns.client, &updatedGlobalRoleWithMultiNamespacedRules)
+	_, err = extrbacapi.UpdateGlobalRole(ns.client, &updatedGlobalRoleWithMultiNamespacedRules)
 	require.NoError(ns.T(), err)
 
 	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
 
-	log.Info("Verify user cannot list secrets in the custom namespace from the namespaced rules for secrets. ")
-	_, err = secrets.ListSecrets(userClient, localcluster, customNS, metav1.ListOptions{})
+	log.Info("Verify user cannot list secrets in the custom namespace from the namespaced rules for secretapi. ")
+	_, err = extsecretapi.ListSecrets(userClient, localcluster, customNS, metav1.ListOptions{})
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 
@@ -371,10 +371,10 @@ func (ns *NamespacedRulesTestSuite) TestDeleteNamespacedRulesFromGlobalRole() {
 	}
 
 	log.Info("Delete the namespace in the namespaced rules.")
-	_, err = rbacapi.UpdateGlobalRole(ns.client, &deleteNamespacedRules)
+	_, err = extrbacapi.UpdateGlobalRole(ns.client, &deleteNamespacedRules)
 	require.NoError(ns.T(), err)
 
-	rbs, err := rbacapi.ListRoleBindings(ns.client, localcluster, namespace, metav1.ListOptions{FieldSelector: nameSelector})
+	rbs, err := extrbacapi.ListRoleBindings(ns.client, localcluster, namespace, metav1.ListOptions{FieldSelector: nameSelector})
 	require.NoError(ns.T(), err)
 	require.Empty(ns.T(), rbs.Items)
 }
@@ -421,7 +421,7 @@ func (ns *NamespacedRulesTestSuite) TestDeleteANamespaceFromNamespacedRules() {
 		NamespacedRules: namespacedRules,
 	}
 
-	_, err = rbacapi.UpdateGlobalRole(ns.client, &deleteANamespace)
+	_, err = extrbacapi.UpdateGlobalRole(ns.client, &deleteANamespace)
 	require.NoError(ns.T(), err)
 
 	ns.validateNSRulesRBACResources(createdUser, createdGlobalRole, namespacedRules)
@@ -473,7 +473,7 @@ func (ns *NamespacedRulesTestSuite) TestDeleteUserDeletesRolebindingsForNamespac
 	err = ns.client.WranglerContext.Mgmt.User().Delete(createdUser.ID, &metav1.DeleteOptions{})
 	require.NoError(ns.T(), err)
 
-	rbs, err := rbacapi.ListRoleBindings(ns.client, localcluster, namespace, metav1.ListOptions{FieldSelector: nameSelector})
+	rbs, err := extrbacapi.ListRoleBindings(ns.client, localcluster, namespace, metav1.ListOptions{FieldSelector: nameSelector})
 	require.NoError(ns.T(), err)
 	require.Empty(ns.T(), rbs.Items)
 }
@@ -524,7 +524,7 @@ func (ns *NamespacedRulesTestSuite) TestWebhookIncorrectVerbsNotRejected() {
 	userClient, err := ns.client.AsUser(createdUser)
 	require.NoError(ns.T(), err)
 
-	_, err = secrets.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
+	_, err = extsecretapi.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 }
@@ -555,7 +555,7 @@ func (ns *NamespacedRulesTestSuite) TestWebhookIncorrectResourcesNotRejected() {
 	userClient, err := ns.client.AsUser(createdUser)
 	require.NoError(ns.T(), err)
 
-	_, err = secrets.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
+	_, err = extsecretapi.ListSecrets(userClient, localcluster, globalDataNamespace, metav1.ListOptions{})
 	require.Error(ns.T(), err)
 	require.True(ns.T(), k8sError.IsForbidden(err))
 }

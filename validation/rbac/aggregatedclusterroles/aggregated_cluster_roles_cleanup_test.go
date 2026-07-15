@@ -9,16 +9,20 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/users"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extfeaturesapi "github.com/rancher/shepherd/extensions/kubeapi/features"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
+	extuserapi "github.com/rancher/shepherd/extensions/kubeapi/users"
+	extpodapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/pods"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
+	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
+	userapi "github.com/rancher/tests/actions/kubeapi/users"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/secrets"
-	userapi "github.com/rancher/tests/actions/users"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -38,7 +42,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TearDownSuite() {
 	acrd.session.Cleanup()
 
 	log.Infof("Disabling the feature flag %s", rbacapi.AggregatedRoleTemplatesFeatureFlag)
-	err := rbacapi.SetAggregatedClusterRoleFeatureFlag(acrd.client, false)
+	err := extfeaturesapi.DisableFeatureFlag(acrd.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
 	if err != nil {
 		log.Warnf("Failed to disable the feature flag during teardown: %v", err)
 	}
@@ -60,23 +64,20 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) SetupSuite() {
 	require.NoError(acrd.T(), err)
 
 	log.Infof("Enabling the feature flag %s", rbacapi.AggregatedRoleTemplatesFeatureFlag)
-	featureEnabled, err := rbacapi.IsFeatureEnabled(acrd.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
+	featureEnabled, err := extfeaturesapi.IsFeatureEnabled(acrd.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
 	require.NoError(acrd.T(), err, "Failed to check if feature flag is enabled")
 	if !featureEnabled {
-		err := rbacapi.SetAggregatedClusterRoleFeatureFlag(acrd.client, true)
+		err := extfeaturesapi.EnableFeatureFlag(acrd.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
 		require.NoError(acrd.T(), err, "Failed to enable the feature flag")
 	} else {
 		log.Infof("Feature flag %s is already enabled.", rbacapi.AggregatedRoleTemplatesFeatureFlag)
 	}
 }
 
-func (acrd *AggregatedClusterRolesCleanupTestSuite) acrCreateTestResourcesForCleanup(client *rancher.Client, cluster *management.Cluster) (*v3.Project, []*corev1.Namespace, *management.User, []*appsv1.Deployment, []string, []*corev1.Secret, error) {
+func (acrd *AggregatedClusterRolesCleanupTestSuite) acrCreateTestResourcesForCleanup(client *rancher.Client, cluster *management.Cluster) (*v3.Project, []*corev1.Namespace, *v3.User, string, []*appsv1.Deployment, []string, []*corev1.Secret, error) {
 	log.Info("Creating the required resources for the test.")
 	createdProject, err := projectapi.CreateProject(client, cluster.ID)
 	require.NoError(acrd.T(), err, "Failed to create project")
-
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(client, cluster.ID)
-	require.NoError(acrd.T(), err, "Failed to get downstream cluster context")
 
 	var createdNamespaces []*corev1.Namespace
 	var createdDeployments []*appsv1.Deployment
@@ -85,15 +86,15 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) acrCreateTestResourcesForCle
 
 	numNamespaces := 2
 	for i := 0; i < numNamespaces; i++ {
-		namespace, err := namespaceapi.CreateNamespaceUsingWrangler(client, cluster.ID, createdProject.Name, nil)
+		namespace, err := namespaceapi.CreateNamespace(client, cluster.ID, createdProject.Name, namegen.AppendRandomString("testns-"), "", nil, nil)
 		require.NoError(acrd.T(), err, "Failed to create namespace")
 		createdNamespaces = append(createdNamespaces, namespace)
 
-		createdDeployment, err := deployment.CreateDeployment(client, cluster.ID, namespace.Name, 2, "", "", false, false, false, true)
+		createdDeployment, err := deploymentapi.CreateDeployment(client, cluster.ID, namespace.Name, "", 2, "", "", false, false, false, true)
 		require.NoError(acrd.T(), err, "Failed to create deployment in namespace %s", namespace.Name)
 		createdDeployments = append(createdDeployments, createdDeployment)
 
-		podList, err := downstreamContext.Core.Pod().List(namespace.Name, metav1.ListOptions{})
+		podList, err := extpodapi.ListPods(client, cluster.ID, namespace.Name, metav1.ListOptions{})
 		require.NoError(acrd.T(), err, "Failed to list pods in namespace %s", namespace.Name)
 		require.Greater(acrd.T(), len(podList.Items), 0, "No pods found in namespace %s", namespace.Name)
 		podNames = append(podNames, podList.Items[0].Name)
@@ -101,15 +102,15 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) acrCreateTestResourcesForCle
 		secretData := map[string][]byte{
 			"hello": []byte("world"),
 		}
-		createdSecret, err := secrets.CreateSecret(client, cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
+		createdSecret, err := secretapi.CreateSecret(client, cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 		require.NoError(acrd.T(), err, "Failed to create secret in namespace %s", namespace.Name)
 		createdSecrets = append(createdSecrets, createdSecret)
 	}
 
-	createdUser, err := users.CreateUserWithRole(client, users.UserConfig(), rbac.StandardUser.String())
+	createdUser, userPassword, err := userapi.CreateUserWithRoles(client, rbac.StandardUser.String())
 	require.NoError(acrd.T(), err, "Failed to create user")
 
-	return createdProject, createdNamespaces, createdUser, createdDeployments, podNames, createdSecrets, nil
+	return createdProject, createdNamespaces, createdUser, userPassword, createdDeployments, podNames, createdSecrets, nil
 }
 
 func (acrd *AggregatedClusterRolesCleanupTestSuite) TestDeleteRoleTemplateRemovesClusterRoles() {
@@ -124,7 +125,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestDeleteRoleTemplateRemove
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 4, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, mainRTName)
@@ -132,11 +133,11 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestDeleteRoleTemplateRemove
 	require.Equal(acrd.T(), 2, len(downstreamCRs.Items))
 
 	log.Infof("Deleting the role template %s.", mainRTName)
-	err = rbacapi.DeleteRoleTemplate(acrd.client, mainRTName)
+	err = extrbacapi.DeleteRoleTemplate(acrd.client, mainRTName, true)
 	require.NoError(acrd.T(), err, "Failed to delete role template")
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 0, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, mainRTName)
@@ -148,7 +149,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbDeleteRoleTemplateWi
 	subSession := acrd.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, createdDeployment, podNames, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, createdDeployment, podNames, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
 	require.NoError(acrd.T(), err)
 
 	log.Info("Creating cluster role templates with cluster management and regular resources.")
@@ -164,7 +165,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbDeleteRoleTemplateWi
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -172,33 +173,35 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbDeleteRoleTemplateWi
 	require.Equal(acrd.T(), 4, len(downstreamCRs.Items))
 
 	log.Infof("Adding user %s to the downstream cluster with role %s", createdUser.Username, mainRTName)
-	_, err = rbacapi.CreateClusterRoleTemplateBinding(acrd.client, acrd.cluster.ID, createdUser, mainRTName)
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(acrd.client, acrd.cluster.ID, createdUser.Username, mainRTName)
 	require.NoError(acrd.T(), err, "Failed to assign role to user")
-	crtbs, err := rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.ID, 1)
+	crtbs, err := rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.Username, 1)
 	require.NoError(acrd.T(), err, "CRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 1, 0)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 1)
 	require.NoError(acrd.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrd.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrd.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "projects", "", createdProject.Name, true, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "projects", "", "", true, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], true, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "pods", namespaceName, "", true, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "projects", "", createdProject.Name, false, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "projects", "", createdProject.Name, true, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "projects", "", "", true, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "pods", namespaceName, podNames[0], true, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "projects", "", createdProject.Name, false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
 
 	log.Infof("Deleting the role template %s.", mainRTName)
-	err = rbacapi.DeleteRoleTemplate(acrd.client, mainRTName)
+	err = extrbacapi.DeleteRoleTemplate(acrd.client, mainRTName, true)
 	require.NoError(acrd.T(), err, "Failed to delete role template")
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 4, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -206,20 +209,22 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbDeleteRoleTemplateWi
 	require.Equal(acrd.T(), 2, len(downstreamCRs.Items))
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "projects", "", createdProject.Name, false, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "projects", "", "", false, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "pods", namespaceName, "", false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "projects", "", createdProject.Name, false, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	userClient, err = acrd.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrd.T(), err)
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "projects", "", createdProject.Name, false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "projects", "", "", false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "pods", namespaceName, "", false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "projects", "", createdProject.Name, false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
 
 	log.Infof("Deleting the role template %s.", childRTName)
-	err = rbacapi.DeleteRoleTemplate(acrd.client, childRTName)
+	err = extrbacapi.DeleteRoleTemplate(acrd.client, childRTName, true)
 	require.NoError(acrd.T(), err, "Failed to delete role template")
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 0, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -231,7 +236,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbDeleteRoleTemplateWi
 	subSession := acrd.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, createdDeployment, podNames, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, createdDeployment, podNames, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
 	require.NoError(acrd.T(), err)
 
 	log.Info("Creating project role templates with project management and regular resources.")
@@ -247,7 +252,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbDeleteRoleTemplateWi
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -255,9 +260,9 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbDeleteRoleTemplateWi
 	require.Equal(acrd.T(), 4, len(downstreamCRs.Items))
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrd.client, createdUser, createdProject, mainRTName)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrd.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrd.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.Username, 1)
 	require.NoError(acrd.T(), err, "PRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -266,27 +271,29 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbDeleteRoleTemplateWi
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrd.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrd.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrd.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrd.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], true, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "pods", namespaceName, "", true, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "pods", namespaceName, podNames[0], true, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
 
 	log.Infof("Deleting the role template %s.", mainRTName)
-	err = rbacapi.DeleteRoleTemplate(acrd.client, mainRTName)
+	err = extrbacapi.DeleteRoleTemplate(acrd.client, mainRTName, true)
 	require.NoError(acrd.T(), err, "Failed to delete role template")
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 4, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -294,20 +301,22 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbDeleteRoleTemplateWi
 	require.Equal(acrd.T(), 2, len(downstreamCRs.Items))
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", false, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "pods", namespaceName, "", false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	userClient, err = acrd.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrd.T(), err)
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "pods", namespaceName, "", false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
 
 	log.Infof("Deleting the role template %s.", childRTName)
-	err = rbacapi.DeleteRoleTemplate(acrd.client, childRTName)
+	err = extrbacapi.DeleteRoleTemplate(acrd.client, childRTName, true)
 	require.NoError(acrd.T(), err, "Failed to delete role template")
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 0, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -319,7 +328,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbRemoveUserFromCluste
 	subSession := acrd.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, createdDeployment, podNames, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, createdDeployment, podNames, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
 	require.NoError(acrd.T(), err)
 
 	log.Info("Creating cluster role templates with cluster management and regular resources.")
@@ -335,41 +344,43 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbRemoveUserFromCluste
 	mainRTName := createdMainRT.Name
 
 	log.Infof("Adding user %s to the downstream cluster with role %s", createdUser.Username, mainRTName)
-	_, err = rbacapi.CreateClusterRoleTemplateBinding(acrd.client, acrd.cluster.ID, createdUser, mainRTName)
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(acrd.client, acrd.cluster.ID, createdUser.Username, mainRTName)
 	require.NoError(acrd.T(), err, "Failed to assign role to user")
-	crtbs, err := rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.ID, 1)
+	crtbs, err := rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.Username, 1)
 	require.NoError(acrd.T(), err, "CRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 1, 0)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 1)
 	require.NoError(acrd.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrd.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrd.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "projects", "", createdProject.Name, true, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "projects", "", "", true, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], true, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "pods", namespaceName, "", true, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "projects", "", createdProject.Name, false, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "projects", "", createdProject.Name, true, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "projects", "", "", true, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "pods", namespaceName, podNames[0], true, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "projects", "", createdProject.Name, false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
 
-	log.Infof("Removing user %s from the downstream cluster.", createdUser.ID)
-	err = rbacapi.DeleteClusterRoleTemplateBinding(acrd.client, acrd.cluster.ID, crtbs[0].Name)
+	log.Infof("Removing user %s from the downstream cluster.", createdUser.Username)
+	err = extrbacapi.DeleteClusterRoleTemplateBinding(acrd.client, acrd.cluster.ID, crtbs[0].Name, true)
 	require.NoError(acrd.T(), err, "Failed to delete role template")
-	_, err = rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.ID, 0)
+	_, err = rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.Username, 0)
 	require.NoError(acrd.T(), err, "CRTB still exists for the user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 0, 0)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 0, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 0)
 	require.NoError(acrd.T(), err)
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -377,20 +388,22 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbRemoveUserFromCluste
 	require.Equal(acrd.T(), 4, len(downstreamCRs.Items))
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "projects", "", createdProject.Name, false, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "projects", "", "", false, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "pods", namespaceName, "", false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "projects", "", createdProject.Name, false, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	userClient, err = acrd.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrd.T(), err)
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "projects", "", createdProject.Name, false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "projects", "", "", false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "pods", namespaceName, "", false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "projects", "", createdProject.Name, false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
 }
 
 func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbRemoveUserFromProject() {
 	subSession := acrd.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, createdDeployment, podNames, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
+	createdProject, createdNamespaces, createdUser, userPassword, createdDeployment, podNames, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
 	require.NoError(acrd.T(), err)
 
 	log.Info("Creating project role templates with project management and regular resources.")
@@ -406,9 +419,9 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbRemoveUserFromProjec
 	mainRTName := createdMainRT.Name
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrd.client, createdUser, createdProject, mainRTName)
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(acrd.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrd.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.Username, 1)
 	require.NoError(acrd.T(), err, "PRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -417,35 +430,37 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbRemoveUserFromProjec
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrd.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrd.T(), err)
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
+	userClient, err := acrd.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrd.T(), err)
 	namespaceName := createdNamespaces[0].Name
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], true, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "pods", namespaceName, "", true, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, true, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", true, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "pods", namespaceName, podNames[0], true, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
 
-	log.Infof("Removing user %s from the project %s in the downstream cluster.", createdUser.ID, createdProject.Name)
-	err = rbacapi.DeleteProjectRoleTemplateBinding(acrd.client, createdPrtb.Namespace, createdPrtb.Name)
+	log.Infof("Removing user %s from the project %s in the downstream cluster.", createdUser.Username, createdProject.Name)
+	err = extrbacapi.DeleteProjectRoleTemplateBinding(acrd.client, createdPrtb.Namespace, createdPrtb.Name, true)
 	require.NoError(acrd.T(), err, "Failed to delete project role template binding")
-	_, err = rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.ID, 0)
+	_, err = rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.Username, 0)
 	require.NoError(acrd.T(), err, "PRTB still exists for the user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForPrtb(acrd.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 0, 0)
 	require.NoError(acrd.T(), err)
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -453,19 +468,21 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbRemoveUserFromProjec
 	require.Equal(acrd.T(), 4, len(downstreamCRs.Items))
 
 	log.Infof("Verifying user permissions for user %s are correct.", createdUser.Username)
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", false, true))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "list", "pods", namespaceName, "", false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "delete", "pods", namespaceName, podNames[0], false, false))
-	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(acrd.client, acrd.cluster.ID, createdUser, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
+	userClient, err = acrd.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(acrd.T(), err)
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "projectroletemplatebindings", createdPrtb.Namespace, createdPrtb.Name, false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "projectroletemplatebindings", createdPrtb.Namespace, "", false, true))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "list", "pods", namespaceName, "", false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "delete", "pods", namespaceName, podNames[0], false, false))
+	require.NoError(acrd.T(), rbacapi.VerifyUserPermission(userClient, acrd.cluster.ID, "get", "deployments", namespaceName, createdDeployment[0].Name, false, false))
 }
 
 func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbUserDeletionCleansUpAllBindings() {
 	subSession := acrd.session.NewSession()
 	defer subSession.Cleanup()
 
-	_, _, createdUser, _, _, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
+	_, _, createdUser, _, _, _, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
 	require.NoError(acrd.T(), err)
 
 	log.Info("Creating cluster role templates with cluster management and regular resources.")
@@ -481,7 +498,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbUserDeletionCleansUp
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -489,31 +506,31 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbUserDeletionCleansUp
 	require.Equal(acrd.T(), 4, len(downstreamCRs.Items))
 
 	log.Infof("Adding user %s to the downstream cluster with role %s", createdUser.Username, mainRTName)
-	_, err = rbacapi.CreateClusterRoleTemplateBinding(acrd.client, acrd.cluster.ID, createdUser, mainRTName)
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(acrd.client, acrd.cluster.ID, createdUser.Username, mainRTName)
 	require.NoError(acrd.T(), err, "Failed to assign role to user")
-	crtbs, err := rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.ID, 1)
+	crtbs, err := rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.Username, 1)
 	require.NoError(acrd.T(), err, "CRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 1, 0)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 1)
 	require.NoError(acrd.T(), err)
 
-	log.Infof("Deleting user %s", createdUser.ID)
-	err = userapi.DeleteUser(acrd.client, createdUser.ID)
+	log.Infof("Deleting user %s", createdUser.Username)
+	err = extuserapi.DeleteUser(acrd.client, createdUser.Username, true)
 	require.NoError(acrd.T(), err, "Failed to delete user")
 
 	log.Infof("Verifying that the cluster role template binding for user %s is automatically deleted.", createdUser.Username)
-	_, err = rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.ID, 0)
+	_, err = rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.Username, 0)
 	require.NoError(acrd.T(), err, "CRTB still exists for the deleted user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, clusterapi.LocalCluster, &crtbs[0], 0, 0))
+	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 0, 0))
 	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 0))
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -525,7 +542,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbUserDeletionCleansUp
 	subSession := acrd.session.NewSession()
 	defer subSession.Cleanup()
 
-	createdProject, createdNamespaces, createdUser, _, _, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
+	createdProject, createdNamespaces, createdUser, _, _, _, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
 	require.NoError(acrd.T(), err)
 
 	log.Info("Creating project role templates with project management and regular resources.")
@@ -541,7 +558,7 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbUserDeletionCleansUp
 	mainRTName := createdMainRT.Name
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err := rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
@@ -549,9 +566,9 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbUserDeletionCleansUp
 	require.Equal(acrd.T(), 4, len(downstreamCRs.Items))
 
 	log.Infof("Adding user %s to a project %s in the downstream cluster with role %s", createdUser.Username, createdProject.Name, mainRTName)
-	_, err = rbacapi.CreateProjectRoleTemplateBinding(acrd.client, createdUser, createdProject, mainRTName)
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(acrd.client, createdUser.Username, createdProject, mainRTName)
 	require.NoError(acrd.T(), err, "Failed to assign role to user")
-	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.ID, 1)
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.Username, 1)
 	require.NoError(acrd.T(), err, "PRTB not found for user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
@@ -560,32 +577,97 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbUserDeletionCleansUp
 			Name: prtbs[0].Namespace,
 		},
 	}
-	err = rbacapi.VerifyBindingsForPrtb(acrd.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 1, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 1, 0)
 	require.NoError(acrd.T(), err)
 
-	log.Infof("Deleting user %s", createdUser.ID)
-	err = userapi.DeleteUser(acrd.client, createdUser.ID)
+	log.Infof("Deleting user %s", createdUser.Username)
+	err = extuserapi.DeleteUser(acrd.client, createdUser.Username, true)
 	require.NoError(acrd.T(), err, "Failed to delete user")
 
 	log.Infof("Verifying that the project role template binding for user %s is automatically deleted.", createdUser.Username)
-	_, err = rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.ID, 0)
+	_, err = rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.Username, 0)
 	require.NoError(acrd.T(), err, "PRTB still exists for the deleted user")
 
 	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
-	err = rbacapi.VerifyBindingsForPrtb(acrd.client, clusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
 	require.NoError(acrd.T(), err)
 	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 0, 0)
 	require.NoError(acrd.T(), err)
 
 	log.Info("Verifying the cluster roles in the local and downstream clusters.")
-	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, clusterapi.LocalCluster, childRTName, mainRTName)
+	localCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, extclusterapi.LocalCluster, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 7, len(localCRs.Items))
 	downstreamCRs, err = rbacapi.GetClusterRolesForRoleTemplates(acrd.client, acrd.cluster.ID, childRTName, mainRTName)
 	require.NoError(acrd.T(), err)
 	require.Equal(acrd.T(), 4, len(downstreamCRs.Items))
+}
+
+func (acrd *AggregatedClusterRolesCleanupTestSuite) TestCrtbClusterOwnerUserDeletionCleansUpAllBindings() {
+	subSession := acrd.session.NewSession()
+	defer subSession.Cleanup()
+
+	_, _, createdUser, _, _, _, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
+	require.NoError(acrd.T(), err)
+
+	log.Infof("Adding user %s to the downstream cluster as cluster-owner", createdUser.Username)
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(acrd.client, acrd.cluster.ID, createdUser.Username, rbac.ClusterOwner.String())
+	require.NoError(acrd.T(), err, "Failed to assign cluster-owner role to user")
+	crtbs, err := rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.Username, 1)
+	require.NoError(acrd.T(), err, "CRTB not found for user")
+
+	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 1, 0)
+	require.NoError(acrd.T(), err)
+	err = rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 1)
+	require.NoError(acrd.T(), err)
+
+	log.Infof("Deleting user %s", createdUser.Username)
+	err = extuserapi.DeleteUser(acrd.client, createdUser.Username, true)
+	require.NoError(acrd.T(), err, "Failed to delete user")
+
+	log.Infof("Verifying that the cluster role template binding for user %s is automatically deleted.", createdUser.Username)
+	_, err = rbacapi.VerifyClusterRoleTemplateBindingForUser(acrd.client, createdUser.Username, 0)
+	require.NoError(acrd.T(), err, "CRTB still exists for the deleted user")
+
+	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
+	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, extclusterapi.LocalCluster, &crtbs[0], 0, 0))
+	require.NoError(acrd.T(), rbacapi.VerifyBindingsForCrtb(acrd.client, acrd.cluster.ID, &crtbs[0], 0, 0))
+}
+
+func (acrd *AggregatedClusterRolesCleanupTestSuite) TestPrtbProjectOwnerUserDeletionCleansUpAllBindings() {
+	subSession := acrd.session.NewSession()
+	defer subSession.Cleanup()
+
+	createdProject, createdNamespaces, createdUser, _, _, _, _, err := acrd.acrCreateTestResourcesForCleanup(acrd.client, acrd.cluster)
+	require.NoError(acrd.T(), err)
+
+	log.Infof("Adding user %s to a project %s in the downstream cluster as project-owner", createdUser.Username, createdProject.Name)
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(acrd.client, createdUser.Username, createdProject, rbac.ProjectOwner.String())
+	require.NoError(acrd.T(), err, "Failed to assign project-owner role to user")
+	prtbs, err := rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.Username, 1)
+	require.NoError(acrd.T(), err, "PRTB not found for user")
+
+	log.Infof("Deleting user %s", createdUser.Username)
+	err = extuserapi.DeleteUser(acrd.client, createdUser.Username, true)
+	require.NoError(acrd.T(), err, "Failed to delete user")
+
+	log.Infof("Verifying that the project role template binding for user %s is automatically deleted.", createdUser.Username)
+	_, err = rbacapi.VerifyProjectRoleTemplateBindingForUser(acrd.client, createdUser.Username, 0)
+	require.NoError(acrd.T(), err, "PRTB still exists for the deleted user")
+
+	log.Infof("Verifying role bindings and cluster role bindings for user %s in the local and downstream clusters.", createdUser.Username)
+	prtbNamespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: prtbs[0].Namespace,
+		},
+	}
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, extclusterapi.LocalCluster, &prtbs[0], []*corev1.Namespace{prtbNamespace}, 0, 0)
+	require.NoError(acrd.T(), err)
+	err = rbacapi.VerifyBindingsForPrtb(acrd.client, acrd.cluster.ID, &prtbs[0], createdNamespaces, 0, 0)
+	require.NoError(acrd.T(), err)
 }
 
 func TestAggregatedClusterRolesCleanupTestSuite(t *testing.T) {

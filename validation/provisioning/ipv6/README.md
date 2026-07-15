@@ -34,6 +34,30 @@ Custom test verfies that various custom cluster configurations provision properl
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCustomRKE2IPv6 -timeout=1h -v`
 2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCustomK3SIPv6 -timeout=1h -v`
 
+### Import Test
+
+#### Description: 
+Import test verfies that various imported cluster configurations provision properly.
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Custom Cluster Config](#custom-cluster)
+
+#### Table Tests
+1. `RKE2_IPv6_Imported|etcd_cp_worker`
+2. `RKE2_IPv6_Imported|etcd_cp|worker`
+3. `RKE2_IPv6_Imported|etcd|cp|worker`
+4. `RKE2_IPv6_Imported|3_etcd|2_cp|3_worker`
+5. `K3S_IPv6_Imported|etcd_cp_worker`
+6. `K3S_IPv6_Imported|etcd_cp|worker`
+7. `K3S_IPv6_Imported|etcd|cp|worker`
+8. `K3S_IPv6_Imported|3_etcd|2_cp|3_worker`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestImportK3SIPv6 -timeout=1h -v`
+2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestImportRKE2IPv6 -timeout=1h -v`
+
 ### Node Driver Test
 
 #### Description: 
@@ -57,6 +81,47 @@ Node driver test verfies that various node driver cluster configurations provisi
 2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/ipv6 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestNodeDriverK3SIPv6 -timeout=1h -v`
 
 ## Configurations
+
+### Terraform Config
+terraform config is needed when running the custom clusters and imported clusters as rancher/tfp-automation is utilized to create the clusters.
+
+```yaml
+terraform:
+  downstreamClusterProvider: "aws"
+  privateKeyPath: ""
+  resourcePrefix: ""
+  windowsPrivateKeyPath: ""
+  awsConfig:
+    ami: ""
+    awsKeyName: ""
+    awsInstanceType: "t"
+    awsVolumeType: ""
+    region: ""
+    awsSecurityGroups: ["sg-"]
+    awsSecurityGroupNames: [""]
+    awsSubnetID: ""
+    awsVpcID: ""
+    awsZoneLetter: "a"
+    awsRootSize: 100
+    awsUser: "ubuntu"
+    sshConnectionType: "ssh"
+    timeout: "5m"
+    windows2019AMI: ""
+    windows2022AMI: ""
+    windowsAWSUser: ""
+    windows2019Password: ""
+    windows2022Password: ""
+    windowsInstanceType: ""
+    windowsKeyName: ""
+```
+
+Also, be sure to export the following variables:
+
+```
+export RANCHER2_PROVIDER_VERSION=""                                     # Required
+export CLOUD_PROVIDER_VERSION=""                                        # Required for custom cluster / infrastructure building
+export LOCALS_PROVIDER_VERSION=""                                       # Required for custom cluster / infrastructure building
+```
 
 ### Cluster Config
 clusterConfig is needed to the run the all RKE2 tests. If no cluster config is provided all values have defaults.

@@ -153,7 +153,7 @@ func VerifyClusterPods(client *rancher.Client, cluster *v1.SteveAPIObject) error
 	)
 
 	for _, pod := range badPodsMap {
-		images := getPodImages(pod)
+		images := GetPodImages(pod)
 		podState := "NotReady"
 		if state, ok := pod.Annotations["podState"]; ok {
 			podState = state
@@ -174,8 +174,8 @@ func VerifyClusterPods(client *rancher.Client, cluster *v1.SteveAPIObject) error
 	return err
 }
 
-// getPodImages grabs all container images from a pod.
-func getPodImages(pod *v1.SteveAPIObject) []string {
+// GetPodImages grabs all container images from a pod.
+func GetPodImages(pod *v1.SteveAPIObject) []string {
 	var images []string
 
 	statusMap, ok := pod.Status.(map[string]interface{})

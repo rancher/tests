@@ -13,10 +13,10 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/providers"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	extsecretsapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
 	nodestat "github.com/rancher/shepherd/extensions/nodes"
 	"github.com/rancher/shepherd/pkg/config"
-	"github.com/rancher/tests/actions/kubeapi/secrets"
-	"github.com/rancher/tfp-automation/defaults/stevetypes"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -114,8 +114,12 @@ func LoadMachineConfigs(provider string) MachineConfigs {
 }
 
 // MatchNodeRolesToMachinePool matches the role of machinePools to the nodeRoles.
+// It first tries an exact role match. If no exact match is found, it falls back to a
+// subset match: the pool must have all requested true roles, but may also have additional roles.
 func MatchNodeRolesToMachinePool(nodeRoles NodeRoles, machinePools []apisV1.RKEMachinePool) (int, int32) {
 	count := int32(0)
+
+	// First pass: exact match on all three roles.
 	for index, machinePoolConfig := range machinePools {
 		if nodeRoles.ControlPlane != machinePoolConfig.ControlPlaneRole {
 			continue
@@ -126,6 +130,25 @@ func MatchNodeRolesToMachinePool(nodeRoles NodeRoles, machinePools []apisV1.RKEM
 		}
 
 		if nodeRoles.Worker != machinePoolConfig.WorkerRole {
+			continue
+		}
+
+		count += *machinePoolConfig.Quantity
+
+		return index, count
+	}
+
+	// Second pass: subset match — pool must include all requested roles (combined-role pools).
+	for index, machinePoolConfig := range machinePools {
+		if nodeRoles.ControlPlane && !machinePoolConfig.ControlPlaneRole {
+			continue
+		}
+
+		if nodeRoles.Etcd && !machinePoolConfig.EtcdRole {
+			continue
+		}
+
+		if nodeRoles.Worker && !machinePoolConfig.WorkerRole {
 			continue
 		}
 
@@ -163,6 +186,9 @@ func ScaleMachinePool(client *rancher.Client, cluster *v1.SteveAPIObject, nodeRo
 
 	updatedCluster.ObjectMeta.ResourceVersion = updateCluster.ObjectMeta.ResourceVersion
 	poolIndex, quantity := MatchNodeRolesToMachinePool(nodeRoles, updatedCluster.Spec.RKEConfig.MachinePools)
+	if poolIndex < 0 {
+		return nil, fmt.Errorf("no machine pool found matching the requested node roles: %+v", nodeRoles)
+	}
 
 	quantity += nodeRoles.Quantity
 	updatedCluster.Spec.RKEConfig.MachinePools[poolIndex].Quantity = &quantity
@@ -343,21 +369,34 @@ func (n NodeRoles) String() string {
 }
 
 // CreateAllMachinePools will setup multiple node pools from a given config.
-func CreateAllMachinePools(machineConfigs []MachinePoolConfig, pools []Pools, machineObjects []v1.SteveAPIObject, objectRoles []Roles, hostnameLengthLimits []HostnameTruncation) []apisV1.RKEMachinePool {
+func CreateAllMachinePools(machineConfigs []MachinePoolConfig, pools []Pools, machineObjects []v1.SteveAPIObject, objectRoles []Roles, hostnameLengthLimits []HostnameTruncation) ([]apisV1.RKEMachinePool, error) {
 	machinePools := make([]apisV1.RKEMachinePool, 0, len(machineConfigs))
 
 	for index, machineConfig := range machineConfigs {
 		machineConfig.Name = pool + strconv.Itoa(index)
-		if hostnameLengthLimits != nil && len(hostnameLengthLimits) >= index {
+		if hostnameLengthLimits != nil && len(hostnameLengthLimits) > index {
 			machineConfig.HostnameLengthLimit = hostnameLengthLimits[index].PoolNameLengthLimit
 			machineConfig.Name = hostnameLengthLimits[index].Name
 		}
 		objectIndex := MatchMachineConfigToRolesIndex(&machineConfig, objectRoles)
+		if objectIndex == -1 {
+			if len(machineObjects) == 1 && len(objectRoles) == 1 {
+				logrus.Warnf("unable to match machine pool role (%s); defaulting to the only available machine config", machineConfig.String())
+				objectIndex = 0
+			} else {
+				return nil, fmt.Errorf("unable to match machine pool role (%s) to configured machine config roles", machineConfig.String())
+			}
+		}
+
+		if objectIndex >= len(machineObjects) || objectIndex >= len(pools) {
+			return nil, fmt.Errorf("matched machine config index %d out of range (machineObjects=%d, pools=%d)", objectIndex, len(machineObjects), len(pools))
+		}
+
 		machinePool := NewRKEMachinePool(machineObjects[objectIndex], pools[objectIndex], &machineConfig)
 		machinePools = append(machinePools, machinePool)
 	}
 
-	return machinePools
+	return machinePools, nil
 }
 
 // MatchRoleToPool matches the role of a pool to the Roles of a machine. Returns the index of the matching Roles.
@@ -384,7 +423,7 @@ func GetInitMachine(client *rancher.Client, clusterID string) (*v1.SteveAPIObjec
 
 	clusterID = strings.Replace(clusterID, "fleet-default/", "", 1)
 
-	secret, err := secrets.ListSecrets(client, local, fleetNamespace, metav1.ListOptions{
+	secret, err := extsecretsapi.ListSecrets(client, local, fleetNamespace, metav1.ListOptions{
 		LabelSelector: initNodeLabelKey + "=" + True + "," + clusterNameLabelKey + "=" + clusterID,
 	})
 	if err != nil {

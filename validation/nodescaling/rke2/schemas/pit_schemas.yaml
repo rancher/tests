@@ -1,0 +1,207 @@
+- projects: [RANCHERINT]
+  suite: Node Scaling
+  cases:
+  - title: "RKE2 Scale Control Plane Node Pool"
+    description: "Verify RKE2 control plane node pool can be scaled up and down, and cluster remains healthy after each operation"
+    automation: 2
+    steps:
+    - action: "Config an RKE2 cluster running in rancher"
+      data: ""
+      expectedresult: "An RKE2 cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Scale up the control plane node pool by 1"
+      data: "Node role: ControlPlane, Scale quantity: +1"
+      expectedresult: "Control plane node pool is scaled up successfully"
+      position: 2
+    - action: "Verify cluster is ready after scale up"
+      data: ""
+      expectedresult: "Cluster reaches active/ready state"
+      position: 3
+    - action: "Verify cluster deployments after scale up"
+      data: ""
+      expectedresult: "All cluster deployments are in Ready state"
+      position: 4
+    - action: "Verify cluster pods after scale up"
+      data: ""
+      expectedresult: "All cluster pods are in Running state"
+      position: 5
+    - action: "Verify service account token secret after scale up"
+      data: ""
+      expectedresult: "Service account token secret is present and valid"
+      position: 6
+    - action: "Scale down the control plane node pool by 1"
+      data: "Node role: ControlPlane, Scale quantity: -1"
+      expectedresult: "Control plane node pool is scaled down successfully"
+      position: 7
+    - action: "Verify cluster is ready after scale down"
+      data: ""
+      expectedresult: "Cluster reaches active/ready state"
+      position: 8
+    - action: "Verify cluster deployments after scale down"
+      data: ""
+      expectedresult: "All cluster deployments are in Ready state"
+      position: 9
+    - action: "Verify cluster pods after scale down"
+      data: ""
+      expectedresult: "All cluster pods are in Running state"
+      position: 10
+    - action: "Verify service account token secret after scale down"
+      data: ""
+      expectedresult: "Service account token secret is present and valid"
+      position: 11
+    custom_field:
+      "15": "RKE2_Scale_Control_Plane"
+  - title: "RKE2 Scale ETCD Node Pool"
+    description: "Verify RKE2 etcd node pool can be scaled up and down, and cluster remains healthy after each operation"
+    automation: 2
+    steps:
+    - action: "Config an RKE2 cluster running in rancher"
+      data: ""
+      expectedresult: "An RKE2 cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Scale up the etcd node pool by 1"
+      data: "Node role: Etcd, Scale quantity: +1"
+      expectedresult: "Etcd node pool is scaled up successfully"
+      position: 2
+    - action: "Verify cluster is ready after scale up"
+      data: ""
+      expectedresult: "Cluster reaches active/ready state"
+      position: 3
+    - action: "Verify cluster deployments after scale up"
+      data: ""
+      expectedresult: "All cluster deployments are in Ready state"
+      position: 4
+    - action: "Verify cluster pods after scale up"
+      data: ""
+      expectedresult: "All cluster pods are in Running state"
+      position: 5
+    - action: "Verify service account token secret after scale up"
+      data: ""
+      expectedresult: "Service account token secret is present and valid"
+      position: 6
+    - action: "Scale down the etcd node pool by 1"
+      data: "Node role: Etcd, Scale quantity: -1"
+      expectedresult: "Etcd node pool is scaled down successfully"
+      position: 7
+    - action: "Verify cluster is ready after scale down"
+      data: ""
+      expectedresult: "Cluster reaches active/ready state"
+      position: 8
+    - action: "Verify cluster deployments after scale down"
+      data: ""
+      expectedresult: "All cluster deployments are in Ready state"
+      position: 9
+    - action: "Verify cluster pods after scale down"
+      data: ""
+      expectedresult: "All cluster pods are in Running state"
+      position: 10
+    - action: "Verify service account token secret after scale down"
+      data: ""
+      expectedresult: "Service account token secret is present and valid"
+      position: 11
+    custom_field:
+      "15": "RKE2_Scale_ETCD"
+  - title: "RKE2 Scale Worker Node Pool"
+    description: "Verify RKE2 worker node pool can be scaled up and down, and cluster remains healthy after each operation"
+    automation: 2
+    steps:
+    - action: "Config an RKE2 cluster running in rancher"
+      data: ""
+      expectedresult: "An RKE2 cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Scale up the worker node pool by 1"
+      data: "Node role: Worker, Scale quantity: +1"
+      expectedresult: "Worker node pool is scaled up successfully"
+      position: 2
+    - action: "Verify cluster is ready after scale up"
+      data: ""
+      expectedresult: "Cluster reaches active/ready state"
+      position: 3
+    - action: "Verify cluster deployments after scale up"
+      data: ""
+      expectedresult: "All cluster deployments are in Ready state"
+      position: 4
+    - action: "Verify cluster pods after scale up"
+      data: ""
+      expectedresult: "All cluster pods are in Running state"
+      position: 5
+    - action: "Verify service account token secret after scale up"
+      data: ""
+      expectedresult: "Service account token secret is present and valid"
+      position: 6
+    - action: "Scale down the worker node pool by 1"
+      data: "Node role: Worker, Scale quantity: -1"
+      expectedresult: "Worker node pool is scaled down successfully"
+      position: 7
+    - action: "Verify cluster is ready after scale down"
+      data: ""
+      expectedresult: "Cluster reaches active/ready state"
+      position: 8
+    - action: "Verify cluster deployments after scale down"
+      data: ""
+      expectedresult: "All cluster deployments are in Ready state"
+      position: 9
+    - action: "Verify cluster pods after scale down"
+      data: ""
+      expectedresult: "All cluster pods are in Running state"
+      position: 10
+    - action: "Verify service account token secret after scale down"
+      data: ""
+      expectedresult: "Service account token secret is present and valid"
+      position: 11
+    custom_field:
+      "15": "RKE2_Scale_Worker"
+  - title: "RKE2 Scale Windows Node Pool"
+    description: "Verify RKE2 Windows node pool can be scaled up and down on vSphere, and cluster remains healthy after each operation"
+    automation: 2
+    steps:
+    - action: "Config an RKE2 cluster on vSphere with a Windows machine config"
+      data: "Provider: vsphere, OS: windows"
+      expectedresult: "An RKE2 vSphere cluster with Windows machine config is active and ready"
+      position: 1
+    - action: "Verify Windows machine image is present in machine configs"
+      data: ""
+      expectedresult: "Windows OS image is found in vSphere machine configs; test is skipped otherwise"
+      position: 2
+    - action: "Scale up the Windows node pool by 1"
+      data: "Node role: Windows, Scale quantity: +1"
+      expectedresult: "Windows node pool is scaled up successfully"
+      position: 3
+    - action: "Verify cluster is ready after scale up"
+      data: ""
+      expectedresult: "Cluster reaches active/ready state"
+      position: 4
+    - action: "Verify cluster deployments after scale up"
+      data: ""
+      expectedresult: "All cluster deployments are in Ready state"
+      position: 5
+    - action: "Verify cluster pods after scale up"
+      data: ""
+      expectedresult: "All cluster pods are in Running state"
+      position: 6
+    - action: "Verify service account token secret after scale up"
+      data: ""
+      expectedresult: "Service account token secret is present and valid"
+      position: 7
+    - action: "Scale down the Windows node pool by 1"
+      data: "Node role: Windows, Scale quantity: -1"
+      expectedresult: "Windows node pool is scaled down successfully"
+      position: 8
+    - action: "Verify cluster is ready after scale down"
+      data: ""
+      expectedresult: "Cluster reaches active/ready state"
+      position: 9
+    - action: "Verify cluster deployments after scale down"
+      data: ""
+      expectedresult: "All cluster deployments are in Ready state"
+      position: 10
+    - action: "Verify cluster pods after scale down"
+      data: ""
+      expectedresult: "All cluster pods are in Running state"
+      position: 11
+    - action: "Verify service account token secret after scale down"
+      data: ""
+      expectedresult: "Service account token secret is present and valid"
+      position: 12
+    custom_field:
+      "15": "RKE2_Scale_Windows"

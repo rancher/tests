@@ -1,0 +1,37 @@
+- projects: [ RANCHERINT ]
+  suite: Certificates
+  cases:
+  - title: "RKE2 Certificate Rotation"
+    description: "Verify that certificates can be rotated on an RKE2 cluster and that the cluster remains healthy with new certificates applied"
+    automation: 2
+    steps:
+    - action: "Provision an RKE2 downstream cluster or use an existing one"
+      data: ""
+      expectedresult: "An RKE2 downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Retrieve existing cluster certificates"
+      data: ""
+      expectedresult: "Cluster certificates are successfully retrieved"
+      position: 2
+    - action: "Rotate certificates on the cluster"
+      data: ""
+      expectedresult: "Certificate rotation is triggered without error"
+      position: 3
+    - action: "Verify the cluster is ready after rotation"
+      data: ""
+      expectedresult: "Cluster returns to active/ready state"
+      position: 4
+    - action: "Verify cluster deployments are healthy"
+      data: ""
+      expectedresult: "All deployments are running and healthy"
+      position: 5
+    - action: "Verify cluster pods are healthy"
+      data: ""
+      expectedresult: "All pods are running and healthy"
+      position: 6
+    - action: "Retrieve new cluster certificates and compare with old certificates"
+      data: ""
+      expectedresult: "New certificates differ from the old certificates, confirming successful rotation"
+      position: 7
+    custom_field:
+      "15": "TestCertRotation"

@@ -4,6 +4,7 @@ package dualstack
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -73,25 +74,21 @@ func TestNodeDriverRKE2(t *testing.T) {
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
-	cidr := &provisioninginput.Networking{
-		ClusterCIDR: clusterConfig.Networking.ClusterCIDR,
-		ServiceCIDR: clusterConfig.Networking.ServiceCIDR,
-	}
-
-	cidrDualStackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
-		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
-		StackPreference: "dual",
-	}
+	networking := clusterConfig.Networking
 
 	tests := []struct {
-		name         string
-		client       *rancher.Client
-		machinePools []provisioninginput.MachinePools
-		networking   *provisioninginput.Networking
+		name            string
+		client          *rancher.Client
+		machinePools    []provisioninginput.MachinePools
+		clusterCIDR     string
+		serviceCIDR     string
+		stackPreference string
 	}{
-		{"RKE2_Dual_Stack_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, cidr},
-		{"RKE2_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrDualStackPreference},
+		{"RKE2_Dual_Stack_Node_Driver_CIDR", r.standardUserClient, nodeRolesStandard, networking.ClusterCIDR, networking.ServiceCIDR, ""},
+		{"RKE2_Dual_Stack_Node_Driver_CIDR_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, networking.ClusterCIDR, networking.ServiceCIDR, "dual"},
+		{"RKE2_Dual_Stack_Node_Driver_CIDR_IPv6_First_Dual_Stack_Preference", r.standardUserClient, nodeRolesStandard, SetCIDROrder(networking.ClusterCIDR, true), SetCIDROrder(networking.ServiceCIDR, true), "dual"},
+		{"RKE2_Dual_Stack_Node_Driver_CIDR_IPv6_Address_Only", r.standardUserClient, nodeRolesStandard, networking.ClusterCIDR, networking.ServiceCIDR, "dual"},
+		{"RKE2_Dual_Stack_Node_Driver_CIDR_IPv6_Address_Only_IPv6_First", r.standardUserClient, nodeRolesStandard, SetCIDROrder(networking.ClusterCIDR, true), SetCIDROrder(networking.ServiceCIDR, true), "dual"},
 	}
 
 	for _, tt := range tests {
@@ -108,11 +105,20 @@ func TestNodeDriverRKE2(t *testing.T) {
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 
 			clusterConfig.MachinePools = tt.machinePools
-			clusterConfig.Networking = tt.networking
+			clusterConfig.Networking = &provisioninginput.Networking{
+				ClusterCIDR:     tt.clusterCIDR,
+				ServiceCIDR:     tt.serviceCIDR,
+				StackPreference: tt.stackPreference,
+			}
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
+
+			// Needed to ensure we are testing use-case with IPv6 address only set and without it set in the other test cases.
+			if strings.Contains(tt.name, "IPv6_Address_Only") || strings.Contains(tt.name, "IPv6_First") {
+				machineConfigSpec.AmazonEC2MachineConfigs.AWSMachineConfig[0].Ipv6AddressOnly = true
+			}
 
 			logrus.Info("Provisioning cluster")
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)

@@ -11,16 +11,18 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extdaemonsetsapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/daemonsets"
+	extdeploymentapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/deployments"
+	extpodapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/pods"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/projects"
+	daemonsetapi "github.com/rancher/tests/actions/kubeapi/workloads/daemonsets"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads/daemonset"
-	"github.com/rancher/tests/actions/workloads/deployment"
-	"github.com/rancher/tests/actions/workloads/pods"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -62,11 +64,11 @@ func (mw *ManageWorkloadsRoleTestSuite) testSetupUserAndProject() (*rancher.Clie
 	require.NoError(mw.T(), err)
 
 	log.Info("Create a project and a namespace")
-	createdProject, createdNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(mw.client, mw.cluster.ID)
+	createdProject, createdNamespace, err := projectapi.CreateProjectAndNamespace(mw.client, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 
 	log.Infof("Add the user %s as Project Owner to the project %s", newUser.Name, createdProject.Name)
-	_, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(mw.client, newUser, createdProject, rbac.ProjectOwner.String())
+	_, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(mw.client, newUser.ID, createdProject, rbac.ProjectOwner.String())
 	require.NoError(mw.T(), errUserRole)
 	standardUserClient, err = standardUserClient.ReLogin()
 	require.NoError(mw.T(), err)
@@ -80,7 +82,7 @@ func (mw *ManageWorkloadsRoleTestSuite) testSetupWorkloadUserAndAddToProject(adm
 	require.NoError(mw.T(), err, "Failed to create a new standard user.")
 
 	log.Infof("Verify that the project owner is able to add the new user %s to the project %s with 'Manage Workloads' role.", workloadUser.Username, adminProject.Name)
-	_, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(mw.client, workloadUser, adminProject, rbac.ManageWorkloads.String())
+	_, errUserRole := rbacapi.CreateProjectRoleTemplateBinding(mw.client, workloadUser.ID, adminProject, rbac.ManageWorkloads.String())
 	require.NoError(mw.T(), errUserRole, "Project owner failed to add the new user to the project with 'Manage Workloads' role.")
 	workloadUserClient, err = workloadUserClient.ReLogin()
 	require.NoError(mw.T(), err)
@@ -125,7 +127,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsPermissions() {
 		"jobs":                         expectedVerbs,
 	}
 
-	roleTemplate, err := mw.client.Management.RoleTemplate.ByID(rbac.ManageWorkloads.String())
+	roleTemplate, err := rbacapi.GetRoleTemplateByName(mw.client, rbac.ManageWorkloads.String())
 	require.NoError(mw.T(), err, "failed to fetch role template")
 
 	actualRules := make(map[string][]string)
@@ -162,7 +164,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForPods() {
 
 	containerTemplate := workloads.NewContainer(
 		containerName,
-		rbac.ImageName,
+		deploymentapi.NginxImageName,
 		pullPolicy,
 		[]corev1.VolumeMount{},
 		[]corev1.EnvFromSource{},
@@ -185,22 +187,18 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForPods() {
 		Spec: podTemplate.Spec,
 	}
 
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
-	require.NoError(mw.T(), err)
-	createdPod, err := downstreamContext.Core.Pod().Create(pod)
+	createdPod, err := extpodapi.CreatePodWithTemplate(workloadUserClient, mw.cluster.ID, pod, true)
 	require.NoError(mw.T(), err, "Failed to create the pod.")
-	err = pods.WatchAndWaitPodContainerRunning(workloadUserClient, mw.cluster.ID, adminNamespace.Name)
-	require.NoError(mw.T(), err)
 
 	log.Infof("As user %s, list the pod %s.", workloadUser.Username, createdPod.Name)
-	listPod, err := downstreamContext.Core.Pod().List(adminNamespace.Name, metav1.ListOptions{
+	listPod, err := extpodapi.ListPods(workloadUserClient, mw.cluster.ID, adminNamespace.Name, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdPod.Name,
 	})
 	require.NoError(mw.T(), err, "Failed to list pods.")
 	require.Len(mw.T(), listPod.Items, 1, "Expected exactly one pod to be listed.")
 
 	log.Infof("As user %s, get the pod %s.", workloadUser.Username, createdPod.Name)
-	getPod, err := downstreamContext.Core.Pod().Get(adminNamespace.Name, createdPod.Name, metav1.GetOptions{})
+	getPod, err := extpodapi.GetPodByName(workloadUserClient, mw.cluster.ID, adminNamespace.Name, createdPod.Name)
 	require.NoError(mw.T(), err, "Failed to get the pod.")
 	log.Infof("Pod %s has status %s.", getPod.Name, getPod.Status.Phase)
 
@@ -209,12 +207,12 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForPods() {
 		getPod.Labels = make(map[string]string)
 	}
 	getPod.Labels["updated"] = "true"
-	updatedPod, err := downstreamContext.Core.Pod().Update(getPod)
+	updatedPod, err := extpodapi.UpdatePod(workloadUserClient, mw.cluster.ID, getPod, true)
 	require.NoError(mw.T(), err, "Failed to update the pod.")
 	require.Equal(mw.T(), "true", updatedPod.Labels["updated"], "Pod label update failed.")
 
 	log.Infof("As user %s, delete the pod %s.", workloadUser.Username, createdPod.Name)
-	err = downstreamContext.Core.Pod().Delete(adminNamespace.Name, updatedPod.Name, nil)
+	err = extpodapi.DeletePod(workloadUserClient, mw.cluster.ID, adminNamespace.Name, updatedPod.Name, true)
 	require.NoError(mw.T(), err, "Failed to delete the pod.")
 }
 
@@ -227,34 +225,32 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForDeployments() 
 	workloadUser, workloadUserClient := mw.testSetupWorkloadUserAndAddToProject(adminProject)
 
 	log.Infof("As user %s, create a new deployment in the namespace within the project %s.", workloadUser.Name, adminProject.Name)
-	createdDeployment, err := deployment.CreateDeployment(workloadUserClient, mw.cluster.ID, adminNamespace.Name, 1, "", "", false, false, false, true)
+	createdDeployment, err := deploymentapi.CreateDeployment(workloadUserClient, mw.cluster.ID, adminNamespace.Name, "", 1, "", "", false, false, false, true)
 	require.NoError(mw.T(), err, "Failed to create the deployment.")
 
 	log.Infof("As user %s, list the deployment %s.", workloadUser.Username, createdDeployment.Name)
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
-	require.NoError(mw.T(), err)
-	listDeployment, err := downstreamContext.Apps.Deployment().List(adminNamespace.Name, metav1.ListOptions{
+	listDeployment, err := extdeploymentapi.ListDeployments(workloadUserClient, mw.cluster.ID, adminNamespace.Name, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdDeployment.Name,
 	})
 	require.NoError(mw.T(), err, "Failed to list deployments.")
 	require.Len(mw.T(), listDeployment.Items, 1, "Expected exactly one deployment to be listed.")
 
 	log.Infof("As user %s, get the deployment %s.", workloadUser.Username, createdDeployment.Name)
-	getDeployment, err := downstreamContext.Apps.Deployment().Get(adminNamespace.Name, createdDeployment.Name, metav1.GetOptions{})
+	getDeployment, err := extdeploymentapi.GetDeploymentByName(workloadUserClient, mw.cluster.ID, adminNamespace.Name, createdDeployment.Name)
 	require.NoError(mw.T(), err, "Failed to get the deployment.")
 
 	log.Infof("As user %s, update the deployment %s and scale up the replicas.", workloadUser.Username, createdDeployment.Name)
 	replicas := int32(2)
 	getDeployment.Spec.Replicas = &replicas
-	updatedDeployment, err := deployment.UpdateDeployment(workloadUserClient, mw.cluster.ID, adminNamespace.Name, getDeployment, true)
+	updatedDeployment, err := extdeploymentapi.UpdateDeployment(workloadUserClient, mw.cluster.ID, getDeployment, true)
 	require.NoError(mw.T(), err)
 
-	updatedDeployment, err = downstreamContext.Apps.Deployment().Get(adminNamespace.Name, updatedDeployment.Name, metav1.GetOptions{})
+	updatedDeployment, err = extdeploymentapi.GetDeploymentByName(workloadUserClient, mw.cluster.ID, adminNamespace.Name, updatedDeployment.Name)
 	require.NoError(mw.T(), err, "Failed to get the updated deployment after scaling.")
 	require.Equal(mw.T(), replicas, *updatedDeployment.Spec.Replicas, "Replica count did not match after scaling up.")
 
 	log.Infof("As user %s, delete the deployment %s.", workloadUser.Username, createdDeployment.Name)
-	err = deployment.DeleteDeployment(workloadUserClient, mw.cluster.ID, updatedDeployment)
+	err = extdeploymentapi.DeleteDeployment(workloadUserClient, mw.cluster.ID, updatedDeployment.Namespace, updatedDeployment.Name, true)
 	require.NoError(mw.T(), err, "Failed to delete the deployment.")
 }
 
@@ -267,20 +263,18 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForDaemonSets() {
 	workloadUser, workloadUserClient := mw.testSetupWorkloadUserAndAddToProject(adminProject)
 
 	log.Infof("As user %s, create a new DaemonSet in the namespace within the project %s.", workloadUser.Name, adminProject.Name)
-	createdDaemonSet, err := daemonset.CreateDaemonset(workloadUserClient, mw.cluster.ID, adminNamespace.Name, 1, "", "", false, false, true)
+	createdDaemonSet, err := daemonsetapi.CreateDaemonset(workloadUserClient, mw.cluster.ID, adminNamespace.Name, "", 1, "", "", false, false, true)
 	require.NoError(mw.T(), err, "Failed to create the DaemonSet.")
 
 	log.Infof("As user %s, list the DaemonSet %s.", workloadUser.Username, createdDaemonSet.Name)
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
-	require.NoError(mw.T(), err)
-	listDaemonSet, err := downstreamContext.Apps.DaemonSet().List(adminNamespace.Name, metav1.ListOptions{
+	listDaemonSet, err := extdaemonsetsapi.ListDaemonSets(workloadUserClient, mw.cluster.ID, adminNamespace.Name, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + createdDaemonSet.Name,
 	})
 	require.NoError(mw.T(), err, "Failed to list DaemonSets.")
 	require.Len(mw.T(), listDaemonSet.Items, 1, "Expected exactly one DaemonSet to be listed.")
 
 	log.Infof("As user %s, get the DaemonSet %s.", workloadUser.Username, createdDaemonSet.Name)
-	getDaemonSet, err := downstreamContext.Apps.DaemonSet().Get(adminNamespace.Name, createdDaemonSet.Name, metav1.GetOptions{})
+	getDaemonSet, err := extdaemonsetsapi.GetDaemonSetByName(workloadUserClient, mw.cluster.ID, adminNamespace.Name, createdDaemonSet.Name)
 	require.NoError(mw.T(), err, "Failed to get the DaemonSet.")
 
 	log.Infof("As user %s, update the DaemonSet %s with a new label.", workloadUser.Username, createdDaemonSet.Name)
@@ -288,15 +282,15 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForDaemonSets() {
 		getDaemonSet.Labels = make(map[string]string)
 	}
 	getDaemonSet.Labels["updated"] = "true"
-	updatedDaemonSet, err := daemonset.UpdateDaemonset(workloadUserClient, mw.cluster.ID, adminNamespace.Name, getDaemonSet, true)
+	updatedDaemonSet, err := extdaemonsetsapi.UpdateDaemonSet(workloadUserClient, mw.cluster.ID, getDaemonSet, true)
 	require.NoError(mw.T(), err)
 
-	updatedDaemonSet, err = downstreamContext.Apps.DaemonSet().Get(adminNamespace.Name, updatedDaemonSet.Name, metav1.GetOptions{})
+	updatedDaemonSet, err = extdaemonsetsapi.GetDaemonSetByName(workloadUserClient, mw.cluster.ID, adminNamespace.Name, updatedDaemonSet.Name)
 	require.NoError(mw.T(), err, "Failed to get the updated DaemonSet after updating labels.")
 	require.Equal(mw.T(), "true", updatedDaemonSet.Labels["updated"], "DaemonSet label update failed.")
 
 	log.Infof("As user %s, delete the DaemonSet %s.", workloadUser.Username, updatedDaemonSet.Name)
-	err = daemonset.DeleteDaemonset(workloadUserClient, mw.cluster.ID, updatedDaemonSet)
+	err = extdaemonsetsapi.DeleteDaemonSet(workloadUserClient, mw.cluster.ID, updatedDaemonSet.Namespace, updatedDaemonSet.Name, true)
 	require.NoError(mw.T(), err, "Failed to delete the DaemonSet.")
 }
 
@@ -314,7 +308,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForStatefulSets()
 	replicas := int32(1)
 	containerTemplate := workloads.NewContainer(
 		containerName,
-		rbac.ImageName,
+		deploymentapi.NginxImageName,
 		pullPolicy,
 		[]corev1.VolumeMount{},
 		[]corev1.EnvFromSource{},
@@ -357,7 +351,7 @@ func (mw *ManageWorkloadsRoleTestSuite) TestManageWorkloadsRoleForStatefulSets()
 		},
 	}
 
-	downstreamContext, err := clusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
+	downstreamContext, err := extclusterapi.GetClusterWranglerContext(workloadUserClient, mw.cluster.ID)
 	require.NoError(mw.T(), err)
 	createdStatefulset, err := downstreamContext.Apps.StatefulSet().Create(statefulset)
 	require.NoError(mw.T(), err, "Failed to create the StatefulSet.")

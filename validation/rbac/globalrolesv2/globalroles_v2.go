@@ -7,13 +7,14 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 
 	"github.com/rancher/shepherd/pkg/config"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 
 	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/kubeapi/projects"
@@ -139,7 +140,7 @@ func crtbStatus(client *rancher.Client, crtbName string, selector labels.Selecto
 	defer cancel()
 
 	err := kwait.PollUntilContextCancel(ctx, defaults.FiveHundredMillisecondTimeout, false, func(ctx context.Context) (done bool, err error) {
-		crtbs, err := rbacapi.ListClusterRoleTemplateBindings(client, metav1.ListOptions{
+		crtbs, err := client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().List("", metav1.ListOptions{
 			LabelSelector: selector.String(),
 		})
 		if err != nil {
@@ -165,7 +166,7 @@ func createGlobalRoleWithNamespacedRules(client *rancher.Client, namespacedRules
 		InheritedClusterRoles: []string{},
 		NamespacedRules:       namespacedRules,
 	}
-	createdGR, err := rbacapi.CreateGlobalRole(client, &gr)
+	createdGR, err := extrbacapi.CreateGlobalRole(client, &gr)
 	if err != nil {
 		return nil, err
 	}
@@ -178,6 +179,6 @@ func createProjectAndAddANamespace(client *rancher.Client, nsPrefix string) (str
 	if err != nil {
 		return "", err
 	}
-	customNS1, err := namespaces.CreateNamespaceUsingWrangler(client, localcluster, customProject.Name, nil)
+	customNS1, err := namespaces.CreateNamespace(client, localcluster, customProject.Name, namegen.AppendRandomString(nsPrefix), "", nil, nil)
 	return customNS1.Name, err
 }

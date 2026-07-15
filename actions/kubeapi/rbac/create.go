@@ -1,51 +1,19 @@
 package rbac
 
 import (
-	"context"
 	"fmt"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	"github.com/rancher/shepherd/extensions/defaults"
-	extauthz "github.com/rancher/shepherd/extensions/kubeapi/authorization"
-	"github.com/rancher/shepherd/extensions/unstructured"
-	"github.com/rancher/shepherd/pkg/api/scheme"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
-// CreateRole is a helper function that uses the dynamic client to create a role on a namespace for a specific cluster.
-func CreateRole(client *rancher.Client, clusterName string, role *rbacv1.Role) (*rbacv1.Role, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterName)
-	if err != nil {
-		return nil, err
-	}
-
-	roleResource := dynamicClient.Resource(RoleGroupVersionResource).Namespace(role.Namespace)
-
-	unstructuredResp, err := roleResource.Create(context.Background(), unstructured.MustToUnstructured(role), metav1.CreateOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	newRole := &rbacv1.Role{}
-	err = scheme.Scheme.Convert(unstructuredResp, newRole, unstructuredResp.GroupVersionKind())
-	if err != nil {
-		return nil, err
-	}
-
-	return newRole, nil
-}
-
-// CreateRoleBinding is a helper function that uses the dynamic client to create a rolebinding on a namespace for a specific cluster.
-func CreateRoleBinding(client *rancher.Client, clusterName, roleBindingName, namespace, roleName string, subject rbacv1.Subject) (*rbacv1.RoleBinding, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterName)
-	if err != nil {
-		return nil, err
-	}
+// CreateRoleBinding is a helper function that uses the wrangler context to create a rolebinding on a namespace for a specific cluster.
+func CreateRoleBinding(client *rancher.Client, clusterID, namespace, roleName string, subject rbacv1.Subject) (*rbacv1.RoleBinding, error) {
+	roleBindingName := namegen.AppendRandomString("rolebinding-")
 
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -60,15 +28,7 @@ func CreateRoleBinding(client *rancher.Client, clusterName, roleBindingName, nam
 		},
 	}
 
-	roleBindingResource := dynamicClient.Resource(RoleBindingGroupVersionResource).Namespace(namespace)
-
-	unstructuredResp, err := roleBindingResource.Create(context.Background(), unstructured.MustToUnstructured(roleBinding), metav1.CreateOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	newRoleBinding := &rbacv1.RoleBinding{}
-	err = scheme.Scheme.Convert(unstructuredResp, newRoleBinding, unstructuredResp.GroupVersionKind())
+	newRoleBinding, err := extrbacapi.CreateRoleBinding(client, clusterID, roleBinding)
 	if err != nil {
 		return nil, err
 	}
@@ -76,33 +36,7 @@ func CreateRoleBinding(client *rancher.Client, clusterName, roleBindingName, nam
 	return newRoleBinding, nil
 }
 
-// CreateGlobalRole is a helper function that uses wrangler context to create a Global Role
-func CreateGlobalRole(client *rancher.Client, globalRole *v3.GlobalRole) (*v3.GlobalRole, error) {
-	newGlobalRole, err := client.WranglerContext.Mgmt.GlobalRole().Create(globalRole)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create global role binding for global role %s: %w", globalRole.Name, err)
-	}
-
-	err = WaitForGlobalRoleExistence(client, newGlobalRole.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	return newGlobalRole, nil
-}
-
-// WaitForGlobalRoleExistence waits until the GlobalRole exists based on the provided name using wrangler context
-func WaitForGlobalRoleExistence(client *rancher.Client, globalRoleName string) error {
-	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
-		_, err := client.WranglerContext.Mgmt.GlobalRole().Get(globalRoleName, metav1.GetOptions{})
-		if err != nil {
-			return false, nil
-		}
-		return true, nil
-	})
-}
-
-// CreateGlobalRoleBinding creates a global role binding for the user with the provided global role using wrangler context
+// CreateGlobalRoleBinding is a helper function that uses the wrangler context to create a global role binding for the user with the provided global role
 func CreateGlobalRoleBinding(client *rancher.Client, globalRoleName, userName, groupPrincipalName, userPrincipalName string) (*v3.GlobalRoleBinding, error) {
 	grbObj := &v3.GlobalRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -114,28 +48,12 @@ func CreateGlobalRoleBinding(client *rancher.Client, globalRoleName, userName, g
 		GlobalRoleName:     globalRoleName,
 	}
 
-	grb, err := client.WranglerContext.Mgmt.GlobalRoleBinding().Create(grbObj)
+	grb, err := extrbacapi.CreateGlobalRoleBinding(client, grbObj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create global role binding for global role %s: %w", globalRoleName, err)
 	}
 
-	err = WaitForGrbExistence(client, grb.Name)
-	if err != nil {
-		return nil, err
-	}
-
 	return grb, nil
-}
-
-// WaitForGrbExistence waits until the GlobalRoleBinding exists based on the provided field (User, UserPrincipal, or Group) using wrangler context
-func WaitForGrbExistence(client *rancher.Client, grbName string) error {
-	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
-		_, err := client.WranglerContext.Mgmt.GlobalRoleBinding().Get(grbName, metav1.GetOptions{})
-		if err != nil {
-			return false, nil
-		}
-		return true, nil
-	})
 }
 
 // CreateRoleTemplate creates a cluster or project role template with the provided rules using wrangler context
@@ -162,51 +80,41 @@ func CreateRoleTemplate(client *rancher.Client, context string, rules []rbacv1.P
 		Locked:            locked,
 	}
 
-	createdRoleTemplate, err := client.WranglerContext.Mgmt.RoleTemplate().Create(roleTemplate)
+	createdRoleTemplate, err := extrbacapi.CreateRoleTemplate(client, roleTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RoleTemplate: %w", err)
 	}
 
-	return GetRoleTemplateByName(client, createdRoleTemplate.Name)
+	return createdRoleTemplate, nil
 }
 
 // CreateClusterRoleTemplateBinding creates a cluster role template binding for the user with the provided role template using wrangler context
-func CreateClusterRoleTemplateBinding(client *rancher.Client, clusterID string, user *management.User, roleTemplateID string) (*v3.ClusterRoleTemplateBinding, error) {
+func CreateClusterRoleTemplateBinding(client *rancher.Client, clusterID string, userName string, roleTemplateID string) (*v3.ClusterRoleTemplateBinding, error) {
 	crtbObj := &v3.ClusterRoleTemplateBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    clusterID,
 			GenerateName: "crtb-",
 		},
 		ClusterName:      clusterID,
-		UserName:         user.ID,
+		UserName:         userName,
 		RoleTemplateName: roleTemplateID,
 	}
 
-	crtb, err := client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Create(crtbObj)
+	createdCrtb, err := extrbacapi.CreateClusterRoleTemplateBinding(client, crtbObj)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create ClusterRoleTemplateBinding for cluster %s: %w", clusterID, err)
 	}
 
-	err = WaitForCrtbStatus(client, crtb.Namespace, crtb.Name)
+	crtb, err := extrbacapi.WaitForClusterRoleTemplateBindingToExist(client, createdCrtb.Namespace, createdCrtb.Name)
 	if err != nil {
-		return nil, err
-	}
-
-	userClient, err := client.AsUser(user)
-	if err != nil {
-		return nil, fmt.Errorf("client as user %s: %w", user.Name, err)
-	}
-
-	err = extauthz.WaitForAllowed(userClient, clusterID, nil)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error waiting for ClusterRoleTemplateBinding %s to exist: %w", createdCrtb.Name, err)
 	}
 
 	return crtb, nil
 }
 
 // CreateProjectRoleTemplateBinding creates a project role template binding for the user with the provided role template using wrangler context
-func CreateProjectRoleTemplateBinding(client *rancher.Client, user *management.User, project *v3.Project, roleTemplateID string) (*v3.ProjectRoleTemplateBinding, error) {
+func CreateProjectRoleTemplateBinding(client *rancher.Client, userName string, project *v3.Project, roleTemplateID string) (*v3.ProjectRoleTemplateBinding, error) {
 	projectName := fmt.Sprintf("%s:%s", project.Namespace, project.Name)
 
 	prtbNamespace := project.Name
@@ -220,29 +128,18 @@ func CreateProjectRoleTemplateBinding(client *rancher.Client, user *management.U
 			Namespace: prtbNamespace,
 		},
 		ProjectName:      projectName,
-		UserName:         user.ID,
+		UserName:         userName,
 		RoleTemplateName: roleTemplateID,
 	}
 
-	prtbObj, err := client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Create(prtbObj)
+	createdPrtb, err := extrbacapi.CreateProjectRoleTemplateBinding(client, prtbObj)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create ProjectRoleTemplateBinding for project %s: %w", projectName, err)
 	}
 
-	prtb, err := WaitForPrtbExistence(client, project, prtbObj, user)
-
+	prtb, err := extrbacapi.WaitForProjectRoleTemplateBindingToExist(client, projectName, createdPrtb.Namespace, createdPrtb.Name, userName)
 	if err != nil {
-		return nil, err
-	}
-
-	userClient, err := client.AsUser(user)
-	if err != nil {
-		return nil, fmt.Errorf("client as user %s: %w", user.Name, err)
-	}
-
-	err = extauthz.WaitForAllowed(userClient, project.Namespace, nil)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error waiting for ProjectRoleTemplateBinding %s to exist: %w", createdPrtb.Name, err)
 	}
 
 	return prtb, nil
@@ -263,14 +160,9 @@ func CreateGroupClusterRoleTemplateBinding(client *rancher.Client, clusterID str
 		RoleTemplateName:   roleTemplateID,
 	}
 
-	crtb, err := client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Create(crtbObj)
+	crtb, err := extrbacapi.CreateClusterRoleTemplateBinding(client, crtbObj)
 	if err != nil {
-		return nil, err
-	}
-
-	err = WaitForCrtbStatus(client, crtb.Namespace, crtb.Name)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create ClusterRoleTemplateBinding for cluster %s: %w", clusterID, err)
 	}
 
 	return crtb, nil
@@ -288,9 +180,9 @@ func CreateGroupProjectRoleTemplateBinding(client *rancher.Client, projectID str
 		RoleTemplateName:   roleTemplateID,
 	}
 
-	prtb, err := client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Create(prtbObj)
+	prtb, err := extrbacapi.CreateProjectRoleTemplateBinding(client, prtbObj)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create ProjectRoleTemplateBinding for project %s: %w", projectID, err)
 	}
 
 	return prtb, nil
@@ -305,10 +197,105 @@ func CreateGlobalRoleWithInheritedClusterRoles(client *rancher.Client, inherited
 		InheritedClusterRoles: inheritedRoles,
 	}
 
-	createdGlobalRole, err := client.WranglerContext.Mgmt.GlobalRole().Create(&globalRole)
+	createdGlobalRole, err := extrbacapi.CreateGlobalRole(client, &globalRole)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create global role with inherited cluster roles: %w", err)
 	}
 
 	return createdGlobalRole, nil
+}
+
+// CreateGlobalRoleWithInheritedNamespacedRules creates a global role with inherited namespaced rules using wrangler context
+func CreateGlobalRoleWithInheritedNamespacedRules(client *rancher.Client, inheritedClusterRole []string, inheritedNamespacedRules map[string][]rbacv1.PolicyRule) (*v3.GlobalRole, error) {
+	globalRole := &v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namegen.AppendRandomString("test-inr"),
+		},
+		InheritedClusterRoles:    inheritedClusterRole,
+		InheritedNamespacedRules: inheritedNamespacedRules,
+	}
+
+	createdGlobalRole, err := extrbacapi.CreateGlobalRole(client, globalRole)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create global role with inherited namespaced rules: %w", err)
+	}
+
+	return createdGlobalRole, nil
+}
+
+// CreateGlobalRoleWithAllRules creates a global role with rules, inherited cluster roles, and inherited namespaced rules using wrangler context
+func CreateGlobalRoleWithAllRules(client *rancher.Client, inheritedClusterRole []string, rules []rbacv1.PolicyRule, namespacedRules map[string][]rbacv1.PolicyRule, inheritedNamespacedRules map[string][]rbacv1.PolicyRule) (*v3.GlobalRole, error) {
+	globalRole := &v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namegen.AppendRandomString("test-gr"),
+		},
+		Rules:                    rules,
+		InheritedClusterRoles:    inheritedClusterRole,
+		NamespacedRules:          namespacedRules,
+		InheritedNamespacedRules: inheritedNamespacedRules,
+	}
+
+	createdGlobalRole, err := extrbacapi.CreateGlobalRole(client, globalRole)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create global role: %w", err)
+	}
+
+	return createdGlobalRole, nil
+}
+
+// GrantUserCRDUpdatePermissions creates a ClusterRole and ClusterRoleBinding
+// to grant a specific user Kubernetes API permissions to get, patch, and update User CRDs.
+// This allows the user's requests to bypass the Kubernetes API server's RBAC checks
+// so they can be evaluated directly by the admission webhook. Returns a cleanup function.
+func GrantUserCRDUpdatePermissions(client *rancher.Client, clusterID, username string) (error) {
+    testerRoleName := namegen.AppendRandomString("webhook-tester-role-")
+    testerRole := &rbacv1.ClusterRole{
+        TypeMeta: metav1.TypeMeta{
+            APIVersion: "rbac.authorization.k8s.io/v1",
+            Kind:       "ClusterRole",
+        },
+        ObjectMeta: metav1.ObjectMeta{
+            Name: testerRoleName,
+        },
+        Rules: []rbacv1.PolicyRule{
+            {
+                APIGroups: []string{"management.cattle.io"},
+                Resources: []string{"users"},
+                Verbs:     []string{"get", "patch", "update"},
+            },
+        },
+    }
+    _, err := extrbacapi.CreateClusterRole(client, clusterID, testerRole)
+    if err != nil {
+        return fmt.Errorf("failed to create webhook-tester-role: %w", err)
+    }
+
+    testerBindingName := namegen.AppendRandomString("binding-")
+    testerBinding := &rbacv1.ClusterRoleBinding{
+        TypeMeta: metav1.TypeMeta{
+            APIVersion: "rbac.authorization.k8s.io/v1",
+            Kind:       "ClusterRoleBinding",
+        },
+        ObjectMeta: metav1.ObjectMeta{
+            Name: testerBindingName,
+        },
+        Subjects: []rbacv1.Subject{
+            {
+                Kind:     "User",
+                Name:     username,
+                APIGroup: "rbac.authorization.k8s.io",
+            },
+        },
+        RoleRef: rbacv1.RoleRef{
+            Kind:     "ClusterRole",
+            Name:     testerRoleName,
+            APIGroup: "rbac.authorization.k8s.io",
+        },
+    }
+    _, err = extrbacapi.CreateClusterRoleBinding(client, clusterID, testerBinding)
+    if err != nil {
+        return fmt.Errorf("failed to create webhook-tester-binding: %w", err)
+    }
+
+    return nil
 }

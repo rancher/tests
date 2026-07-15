@@ -1,41 +1,29 @@
 package daemonsets
 
 import (
-	"context"
-
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/pkg/api/scheme"
+	extdaemonsetsapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/daemonsets"
+	extworkloads "github.com/rancher/shepherd/extensions/workloads"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	appv1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// DaemonSetGroupVersionResource is the required Group Version Resource for accessing daemon sets in a cluster,
-// using the dynamic client.
-var DaemonSetGroupVersionResource = schema.GroupVersionResource{
-	Group:    "apps",
-	Version:  "v1",
-	Resource: "daemonsets",
-}
+// CreateDaemonset is a helper to create a daemonset using wrangler context with the specified parameters. If waitForReady is true, it will wait for the DaemonSet to be ready after creation.
+func CreateDaemonset(client *rancher.Client, clusterID, namespaceName string, imageName string, replicaCount int, secretName, configMapName string, useEnvVars, useVolumes, waitForReady bool) (*appv1.DaemonSet, error) {
+	if imageName == "" {
+		imageName = deploymentapi.NginxImageName
+	}
 
-// GetDaemonsetByName is a helper function that uses the dynamic client to get a specific daemonset on a namespace for a specific cluster.
-func GetDaemonsetByName(client *rancher.Client, clusterID, namespace, daemonsetName string) (*appv1.DaemonSet, error) {
-	dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
+	deploymentTemplate, err := deploymentapi.CreateDeployment(client, clusterID, namespaceName, imageName, replicaCount, secretName, configMapName, useEnvVars, useVolumes, false, true)
 	if err != nil {
 		return nil, err
 	}
 
-	daemonsetResource := dynamicClient.Resource(DaemonSetGroupVersionResource).Namespace(namespace)
-	unstructuredResp, err := daemonsetResource.Get(context.TODO(), daemonsetName, metav1.GetOptions{})
+	daemonsetTemplate := extworkloads.NewDaemonSetTemplate(deploymentTemplate.Name, namespaceName, deploymentTemplate.Spec.Template, true, nil)
+	createdDaemonset, err := extdaemonsetsapi.CreateDaemonSetWithTemplate(client, clusterID, daemonsetTemplate, waitForReady)
 	if err != nil {
 		return nil, err
 	}
 
-	newDaemonset := &appv1.DaemonSet{}
-	err = scheme.Scheme.Convert(unstructuredResp, newDaemonset, unstructuredResp.GroupVersionKind())
-	if err != nil {
-		return nil, err
-	}
-
-	return newDaemonset, nil
+	return createdDaemonset, nil
 }

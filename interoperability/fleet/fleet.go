@@ -14,7 +14,6 @@ import (
 
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
-	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/config"
 	appsv1 "k8s.io/api/apps/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -147,15 +146,12 @@ func VerifyGitRepo(client *rancher.Client, gitRepoID, k8sClusterID, steveCluster
 		return err
 	}
 
-	// validate all resources on the cluster are actually in a good state, regardless of what fleet is reporting
-	podErrors := pods.StatusPods(client, k8sClusterID)
-	if len(podErrors) > 0 {
-		for _, err := range podErrors {
-			logrus.Error(err.Error())
-		}
-		return errors.New("pods are not healthy in " + steveClusterID)
-	}
-	return err
+	// NOTE: The previous implementation checked ALL pods cluster-wide via pods.StatusPods(),
+	// which caused false failures when unrelated test suites (e.g., chart installs) left
+	// Error-state helm job pods on the cluster. Fleet's own status reporting (checked above)
+	// is authoritative for determining if the git repo deployment succeeded.
+	// See: https://github.com/rancher/shepherd/issues/574
+	return nil
 }
 
 // AddWindowsPathsToGitRepo adds paths to a Fleet GitRepo when needed, considering the presence of windows nodes on the target cluster.

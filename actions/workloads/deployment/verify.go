@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	extdeploymentsapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/deployments"
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wrangler"
@@ -31,7 +33,9 @@ const (
 	SUC                = "system-upgrade-controller"
 	Fleet              = "fleet-agent"
 	ClusterAgent       = "cattle-cluster-agent"
+	Rancher            = "rancher"
 	revisionAnnotation = "deployment.kubernetes.io/revision"
+	v3IDRegex          = "^c-[a-z0-9]{5}$"
 )
 
 // VerifyDeployment waits for a deployment to be ready in the downstream cluster
@@ -155,25 +159,14 @@ func VerifyDeploymentRolloutHistory(client *rancher.Client, clusterID, namespace
 }
 
 func VerifyOrchestrationStatus(client *rancher.Client, clusterID, namespaceName string, deploymentName string, isPaused bool) error {
-	var wranglerContext *wrangler.Context
-	var err error
-
-	err = charts.WatchAndWaitDeployments(client, clusterID, namespaceName, metav1.ListOptions{
+	err := charts.WatchAndWaitDeployments(client, clusterID, namespaceName, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + deploymentName,
 	})
 	if err != nil {
 		return err
 	}
 
-	wranglerContext = client.WranglerContext
-	if clusterID != "local" {
-		wranglerContext, err = client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
-		if err != nil {
-			return err
-		}
-	}
-
-	latestDeployment, err := wranglerContext.Apps.Deployment().Get(namespaceName, deploymentName, metav1.GetOptions{})
+	latestDeployment, err := extdeploymentsapi.GetDeploymentByName(client, clusterID, namespaceName, deploymentName)
 	if err != nil {
 		return err
 	}
@@ -214,7 +207,7 @@ func VerifyDeploymentSideKick(client *rancher.Client, clusterID, namespace, depl
 
 	deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers, sideKickContainer)
 
-	updatedDeployment, err := UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	updatedDeployment, err := extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
 	if err != nil {
 		return err
 	}
@@ -261,7 +254,7 @@ func VerifyDeploymentUpgradeRollback(client *rancher.Client, clusterID, namespac
 	deployment.Spec.Template.Spec.Containers = updatedContainers
 
 	logrus.Debugf("Updating deployment (%s) image: %s", deployment.Name, redisImageName)
-	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
 	if err != nil {
 		return err
 	}
@@ -284,7 +277,7 @@ func VerifyDeploymentUpgradeRollback(client *rancher.Client, clusterID, namespac
 	deployment.Spec.Template.Spec.Containers = updatedContainers
 
 	logrus.Debugf("Updating deployment (%s) TTY: %v stdin: %v", deployment.Name, true, true)
-	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
 	if err != nil {
 		return err
 	}
@@ -360,7 +353,7 @@ func VerifyDeploymentPodScaleUp(client *rancher.Client, clusterID, namespace, de
 	replicas := int32(*deployment.Spec.Replicas + 1)
 	deployment.Spec.Replicas = &replicas
 
-	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
 	if err != nil {
 		return err
 	}
@@ -397,7 +390,7 @@ func VerifyDeploymentPodScaleDown(client *rancher.Client, clusterID, namespace, 
 	}
 	deployment.Spec.Replicas = &replicas
 
-	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
 	if err != nil {
 		return err
 	}
@@ -432,7 +425,7 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 
 	logrus.Debugf("Pausing orchestration on deployment: %s", deployment.Name)
 	deployment.Spec.Paused = true
-	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, false)
 	if err != nil {
 		return err
 	}
@@ -457,7 +450,7 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 	deployment.Spec.Template.Spec.Containers = []corev1.Container{newContainerTemplate}
 
 	logrus.Debugf("Updating deployment (%s) image: %s replicas: %v", deployment.Name, redisImageName, replicas)
-	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, false)
 	if err != nil {
 		return err
 	}
@@ -480,7 +473,10 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 
 	logrus.Debug("Resuming orchestration")
 	deployment.Spec.Paused = false
-	deployment, err = UpdateDeployment(client, clusterID, deployment.Namespace, deployment, true)
+	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
+	if err != nil {
+		return err
+	}
 
 	logrus.Debugf("Verifying that the deployment image was updated to %s", redisImageName)
 	err = VerifyDeploymentScale(client, clusterID, deployment.Namespace, deployment, redisImageName, int(replicas))
@@ -508,30 +504,39 @@ func VerifyDeploymentOrchestration(client *rancher.Client, clusterID, namespace,
 
 // VerifyClusterDeployments verifies that all required deployments are present and available in the cluster
 func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject) error {
-	clusterID, err := clusters.GetClusterIDByName(client, cluster.Name)
+	clusterID := cluster.Name
+	isV3ID, err := regexp.MatchString(v3IDRegex, cluster.Name)
 	if err != nil {
 		return err
 	}
 
-	var downstreamClient *v1.Client
-	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
-		downstreamClient, err = client.Steve.ProxyDownstream(clusterID)
+	if !isV3ID {
+		clusterID, err = clusters.GetClusterIDByName(client, cluster.Name)
 		if err != nil {
-			return false, nil
+			return err
 		}
-
-		return true, nil
-	})
-
-	if downstreamClient == nil {
-		return fmt.Errorf("failed to get downstream steve client for cluster (%s)", cluster.Name)
 	}
 
-	deploymentClient := downstreamClient.SteveType(stevetypes.Deployment)
+	var downstreamClient *v1.Client
 	requiredDeployments := []string{ClusterAgent, Webhook, Fleet, SUC}
+	if cluster.Name == "local" {
+		clusterID = "local"
+		requiredDeployments = []string{Rancher, Webhook, Fleet}
+	}
 	logrus.Debugf("Verifying all required deployments exist: %v", requiredDeployments)
-	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		clusterDeployments, err := deploymentClient.List(nil)
+	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		if slices.Contains(requiredDeployments, ClusterAgent) || slices.Contains(requiredDeployments, Rancher) {
+			downstreamClient, err = client.Steve.ProxyDownstream(clusterID)
+			if err != nil {
+				return false, nil
+			}
+
+			client, err = client.ReLogin()
+			if err != nil {
+				return false, nil
+			}
+		}
+		clusterDeployments, err := downstreamClient.SteveType(stevetypes.Deployment).List(nil)
 		if err != nil {
 			return false, nil
 		}
@@ -561,7 +566,7 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 	logrus.Debug("Verifying all deployments")
 	var failedDeployments []appv1.Deployment
 	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.TenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		clusterDeployments, err := deploymentClient.List(nil)
+		clusterDeployments, err := downstreamClient.SteveType(stevetypes.Deployment).List(nil)
 		if err != nil {
 			return false, nil
 		}

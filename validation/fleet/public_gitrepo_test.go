@@ -1,4 +1,4 @@
-//go:build validation || sanity || pit.daily || pit.harvester.daily
+//go:build validation || sanity || pit.daily || pit.elemental || pit.harvester.daily
 
 package fleet
 
@@ -11,7 +11,6 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
-	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
@@ -57,8 +56,11 @@ func (f *FleetPublicRepoTestSuite) SetupSuite() {
 		require.NoError(f.T(), err)
 	}
 
-	podErrors := pods.StatusPods(f.client, f.clusterID)
-	require.Empty(f.T(), podErrors)
+	// NOTE: Skipped cluster-wide StatusPods check here. When running the full pit.daily
+	// suite, chart tests (monitoring, istio, longhorn) leave Error-state helm job pods
+	// that cause false failures. Individual test methods verify fleet deployment health
+	// via fleet.VerifyGitRepo() which checks fleet status directly.
+	// See: https://github.com/rancher/shepherd/issues/574
 }
 
 func (f *FleetPublicRepoTestSuite) TestGitRepoDeployment() {
@@ -79,7 +81,7 @@ func (f *FleetPublicRepoTestSuite) TestGitRepoDeployment() {
 			TargetNamespace: namegenerator.AppendRandomString("fleet-test-namespace"),
 			CorrectDrift:    &v1alpha1.CorrectDrift{},
 			ImageScanCommit: &v1alpha1.CommitSpec{AuthorName: "", AuthorEmail: ""},
-			Targets:         []v1alpha1.GitTarget{{ClusterName: f.clusterID}}, // This actually refers to the cluster ID.
+			Targets:         []v1alpha1.GitTarget{{ClusterName: f.client.RancherConfig.ClusterName}},
 		},
 	}
 
@@ -116,7 +118,7 @@ func (f *FleetPublicRepoTestSuite) TestPublicGitRepoOnLocalCluster() {
 			TargetNamespace: namegenerator.AppendRandomString("fleet-test-namespace"),
 			CorrectDrift:    &v1alpha1.CorrectDrift{},
 			ImageScanCommit: &v1alpha1.CommitSpec{AuthorName: "", AuthorEmail: ""},
-			Targets:         []v1alpha1.GitTarget{{ClusterName: fleet.LocalName}}, // This actually refers to the cluster ID.
+			Targets:         []v1alpha1.GitTarget{{ClusterName: fleet.LocalName}},
 		},
 	}
 
@@ -153,7 +155,7 @@ func (f *FleetPublicRepoTestSuite) TestDynamicGitRepoDeployment() {
 	if len(dynamicGitRepo.Spec.Targets) < 1 {
 		dynamicGitRepo.Spec.Targets = []v1alpha1.GitTarget{
 			{
-				ClusterName: f.clusterID,
+				ClusterName: f.client.RancherConfig.ClusterName,
 			},
 		}
 	}

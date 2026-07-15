@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
 	"github.com/rancher/shepherd/extensions/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
@@ -76,7 +77,6 @@ func (grw *GlobalRolesV2WebhookTestSuite) TestRemoveOwnerLabelRejectedByWebhook(
 	require.NoError(grw.T(), err)
 
 	for _, crtb := range crtbList.Items {
-		existingCRTB := crtb.DeepCopy()
 		newLabels := crtb.Labels
 		if newLabels == nil {
 			newLabels = make(map[string]string)
@@ -95,7 +95,7 @@ func (grw *GlobalRolesV2WebhookTestSuite) TestRemoveOwnerLabelRejectedByWebhook(
 			UserPrincipalName: crtb.UserPrincipalName,
 		}
 
-		_, err = rbacapi.UpdateClusterRoleTemplateBindings(grw.client, existingCRTB, crtbWithUpdatedLabels)
+		_, err = extrbacapi.UpdateClusterRoleTemplateBinding(grw.client, crtbWithUpdatedLabels)
 		require.Error(grw.T(), err)
 
 		expectedErrMessage := "admission webhook \"rancher.cattle.io.clusterroletemplatebindings.management.cattle.io\" denied the request: clusterroletemplatebinding.labels: Forbidden: label authz.management.cattle.io/grb-owner is immutable after creation"
@@ -139,7 +139,7 @@ func (grw *GlobalRolesV2WebhookTestSuite) TestAddGlobalRoleWithCustomTemplateAnd
 	customRoleTemplate, err = rbacapi.GetRoleTemplateByName(grw.client, customRoleTemplate.Name)
 	require.NoError(grw.T(), err)
 	customRoleTemplate.Locked = true
-	lockCustomRoleTemplate, err := rbacapi.UpdateRoleTemplate(grw.client, customRoleTemplate)
+	lockCustomRoleTemplate, err := extrbacapi.UpdateRoleTemplate(grw.client, customRoleTemplate)
 	require.NoError(grw.T(), err)
 	assert.Equal(grw.T(), lockCustomRoleTemplate.Locked, true)
 
@@ -158,7 +158,7 @@ func (grw *GlobalRolesV2WebhookTestSuite) TestDeleteCustomRoleTemplateInInherite
 	gr, err := rbacapi.CreateGlobalRoleWithInheritedClusterRoles(grw.client, []string{inheritedRoleTemplate.ID})
 	require.NoError(grw.T(), err)
 
-	err = rbacapi.DeleteRoleTemplate(grw.client, inheritedRoleTemplate.ID)
+	err = extrbacapi.DeleteRoleTemplate(grw.client, inheritedRoleTemplate.ID, false)
 	require.Error(grw.T(), err)
 
 	pattern := "admission webhook .*" + regexp.QuoteMeta("cannot be deleted because it is inherited by globalRole(s) \"") + regexp.QuoteMeta(gr.Name) + "\"$"

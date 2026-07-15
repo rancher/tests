@@ -32,7 +32,6 @@ func GetProvisioningSchemaParams(client *rancher.Client, cattleConfig map[string
 		getProviderParam(clusterConfig),
 		getK8sParam(clusterConfig),
 		getCNIParam(clusterConfig),
-		getTurtlesParam(terraformConfig),
 	)
 
 	return params
@@ -55,7 +54,6 @@ func GetCustomSchemaParams(client *rancher.Client, cattleConfig map[string]any) 
 		getProviderParam(clusterConfig),
 		getK8sParam(clusterConfig),
 		getCNIParam(clusterConfig),
-		getTurtlesParam(terraformConfig),
 	)
 
 	return params
@@ -163,12 +161,36 @@ func getOSNameParam(client *rancher.Client, clusterConfig *clusters.ClusterConfi
 }
 
 func getOSNameCustomParam(client *rancher.Client, cattleConfig map[string]any, clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
-	customConfig := new(rancherEc2.AWSEC2Configs)
-	operations.LoadObjectFromMap(defaults.AWSEC2Configs, cattleConfig, customConfig)
+	terraformConfig := new(config.TerraformConfig)
+	operations.LoadObjectFromMap(config.TerraformConfigurationFileKey, cattleConfig, terraformConfig)
+
+	customConfig := rancherEc2.AWSEC2Configs{
+		AWSAccessKeyID:     terraformConfig.AWSCredentials.AWSAccessKey,
+		AWSSecretAccessKey: terraformConfig.AWSCredentials.AWSSecretKey,
+		Region:             terraformConfig.AWSConfig.Region,
+	}
+
+	if terraformConfig.AWSConfig.AMI != "" {
+		customConfig.AWSEC2Config = append(customConfig.AWSEC2Config, rancherEc2.AWSEC2Config{AWSAMI: terraformConfig.AWSConfig.AMI})
+	}
+
+	if terraformConfig.AWSConfig.Windows2019AMI != "" {
+		customConfig.AWSEC2Config = append(customConfig.AWSEC2Config, rancherEc2.AWSEC2Config{AWSAMI: terraformConfig.AWSConfig.Windows2019AMI})
+	}
+
+	if terraformConfig.AWSConfig.Windows2022AMI != "" {
+		customConfig.AWSEC2Config = append(customConfig.AWSEC2Config, rancherEc2.AWSEC2Config{AWSAMI: terraformConfig.AWSConfig.Windows2022AMI})
+	}
+
+	if len(customConfig.AWSEC2Config) == 0 {
+		logrus.Warning("No AMI values found in terraform awsConfig for custom OS parameter")
+		return upstream.TestCaseParameterCreate{}
+	}
+
 	externalNodeProvider := ExternalNodeProviderSetup(clusterConfig.NodeProvider)
 
 	if strings.Contains(clusterConfig.Provider, "aws") {
-		osNames, err := externalNodeProvider.GetOSNamesFunc(client, *customConfig)
+		osNames, err := externalNodeProvider.GetOSNamesFunc(client, customConfig)
 		if err != nil {
 			logrus.Warningf("Error getting OS Name %s", err)
 			return upstream.TestCaseParameterCreate{}
@@ -190,29 +212,4 @@ func getProviderParam(clusterConfig *clusters.ClusterConfig) upstream.TestCasePa
 
 func getCNIParam(clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
 	return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "CNI", Values: []string{clusterConfig.CNI}}}
-}
-
-func getTurtlesParam(terraform *config.TerraformConfig) upstream.TestCaseParameterCreate {
-	var prevTurtles, turtles, upgradedTurtles, title, value string
-
-	if terraform.Standalone != nil && terraform.Standalone.FeatureFlags != nil {
-		if terraform.Standalone.FeatureFlags.UpgradedTurtles == "" {
-			turtles = terraform.Standalone.FeatureFlags.Turtles
-
-			title = "Turtles status: "
-			value = turtles
-
-			return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: title, Values: []string{value}}}
-		} else if terraform.Standalone.FeatureFlags.UpgradedTurtles != "" {
-			upgradedTurtles = terraform.Standalone.FeatureFlags.UpgradedTurtles
-			prevTurtles = terraform.Standalone.FeatureFlags.Turtles
-
-			title = "Turtles status pre-upgrade: " + prevTurtles + " to Turtles status post-upgrade: "
-			value = upgradedTurtles
-
-			return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: title, Values: []string{value}}}
-		}
-	}
-
-	return upstream.TestCaseParameterCreate{}
 }

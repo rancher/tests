@@ -2,13 +2,18 @@ package clusters
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
+	"regexp"
 
+	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/sirupsen/logrus"
 )
 
 const (
+	v3IDPattern             = `^c-[a-z0-9]{5}$`
 	LabelWorker             = "labelSelector=node-role.kubernetes.io/worker=true"
 	SmallerPoolMessageError = "Machine pool cluster size is smaller than expected pool size"
 )
@@ -30,6 +35,34 @@ func VerifyNodePoolSize(steveClient *steveV1.Client, labelSelector string, poolS
 
 	if len(nodeList.Data) < poolSize {
 		return errors.New(SmallerPoolMessageError)
+	}
+
+	return nil
+}
+
+// VerifyServiceAccountTokenSecret is a helper function that checks if the ServiceAccountTokenSecret exists on the cluster
+func VerifyServiceAccountTokenSecret(client *rancher.Client, clusterName string) error {
+	clusterID := clusterName
+
+	matchesClusterIDPattern, err := regexp.MatchString(v3IDPattern, clusterName)
+	if err != nil {
+		return err
+	}
+
+	if !matchesClusterIDPattern {
+		clusterID, err = clusters.GetClusterIDByName(client, clusterName)
+		if err != nil {
+			return err
+		}
+	}
+
+	cluster, err := client.Management.Cluster.ByID(clusterID)
+	if err != nil {
+		return err
+	}
+
+	if cluster.ServiceAccountTokenSecret == "" {
+		return fmt.Errorf("ServiceAccountTokenSecret does not exist on cluster (%s)", clusterName)
 	}
 
 	return nil

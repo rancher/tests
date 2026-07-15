@@ -22,6 +22,8 @@ ACE(Authorized Cluster Endpoint) test verifies that a node driver cluster can be
 2. [Cluster Config](#cluster-config)
 3. [Machine Config](#machine-config)
 
+NOTE - ACE tests are only supported with RKE2 local clusters
+
 #### Table Tests:
 1. `K3S_ACE`
 
@@ -35,8 +37,9 @@ Custom test verfies that various custom cluster configurations provision properl
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config)
-3. [Custom Cluster Config](#custom-cluster)
+2. [Terraform Config](#terraform-config)
+3. [Cluster Config](#cluster-config)
+4. [Custom Cluster Config](#custom-cluster)
 
 #### Table Tests
 1. `K3S_Custom|etcd_cp_worker`
@@ -71,8 +74,9 @@ Dynamic custom test verfies that a user defined custom cluster provisions proper
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config)
-3. [Custom Cluster Config](#custom-cluster)
+2. [Terraform Config](#terraform-config)
+3. [Cluster Config](#cluster-config)
+4. [Custom Cluster Config](#custom-cluster)
 
 #### Table Tests
 Dynamic tests do not have a static name
@@ -101,7 +105,7 @@ Dynamic tests do not have a static name
 ### Hardened Test
 
 #### Description: 
-Hardened test verfies that a cluster can deploy the cis-benchmark(2.11<=)/compliance(2.12+) chart on a custom cluster
+Hardened test verfies that a cluster can deploy the rancher-compliance chart on a custom cluster
 
 #### Required Configurations: 
 1. [Cloud Credential](#cloud-credential-config)
@@ -109,10 +113,31 @@ Hardened test verfies that a cluster can deploy the cis-benchmark(2.11<=)/compli
 3. [Custom Cluster Config](#custom-cluster)
 
 #### Table Tests
-1. `K3S_CIS_1.9_Profile|3_etcd|2_cp|3_worker`
+1. `K3S_Rancher_Compliance`
 
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestHardened -timeout=1h -v`
+
+
+### Imported Test
+
+#### Description: 
+Imported test verfies that various custom cluster configurations provision properly.
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credential-config)
+2. [Terraform Config](#terraform-config)
+3. [Cluster Config](#cluster-config)
+4. [Custom Cluster Config](#custom-cluster)
+
+#### Table Tests
+1. `K3S_Imported|etcd_cp_worker`
+2. `K3S_Imported|etcd_cp|worker`
+3. `K3S_Imported|etcd|cp|worker`
+4. `K3S_Imported|3_etcd|2_cp|3_worker`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestImported -timeout=1h -v`
 
 
 ### Node Driver Test
@@ -205,11 +230,50 @@ Template Test verfies that an K3S template can be used to provision a cluster.
 All table tests listed above except the dynamic tests
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s --junitfile results.xml --jsonfile results.json -- -tags=recurring -timeout=3h -v`
-
-
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestTemplate -timeout=1h -v`
 
 ## Configurations
+
+### Terraform Config
+terraform config is needed when running the custom clusters and imported clusters as rancher/tfp-automation is utilized to create the clusters.
+
+```yaml
+terraform:
+  downstreamClusterProvider: "aws"
+  privateKeyPath: ""
+  resourcePrefix: ""
+  windowsPrivateKeyPath: ""
+  awsConfig:
+    ami: ""
+    awsKeyName: ""
+    awsInstanceType: "t"
+    awsVolumeType: ""
+    region: ""
+    awsSecurityGroups: ["sg-"]
+    awsSecurityGroupNames: [""]
+    awsSubnetID: ""
+    awsVpcID: ""
+    awsZoneLetter: "a"
+    awsRootSize: 100
+    awsUser: "ubuntu"
+    sshConnectionType: "ssh"
+    timeout: "5m"
+    windows2019AMI: ""
+    windows2022AMI: ""
+    windowsAWSUser: ""
+    windows2019Password: ""
+    windows2022Password: ""
+    windowsInstanceType: ""
+    windowsKeyName: ""
+```
+
+Also, be sure to export the following variables:
+
+```
+export RANCHER2_PROVIDER_VERSION=""                                     # Required
+export CLOUD_PROVIDER_VERSION=""                                        # Required for custom cluster / infrastructure building
+export LOCALS_PROVIDER_VERSION=""                                       # Required for custom cluster / infrastructure building
+```
 
 ### Cluster Config
 clusterConfig is needed to the run the all K3S tests. If no cluster config is provided all values have defaults.
@@ -514,6 +578,22 @@ Custom clusters are only supported on AWS.
         awsUser: "Administrator"
         volumeSize: 50
         roles: ["windows"]
+```
+
+
+#### Imported Cluster Config
+Imported clusters are supported on AWS and vSphere. Use the terraform config along with defining the desired nodepools:
+```yaml
+terraform:
+  k3sVersion: "v<version>+k3s1"   # Extra param needed in the terraform config for k3s clusters
+terratest:
+  nodepools:
+    - quantity: 3
+      etcd: true
+    - quantity: 2
+      controlplane: true
+    - quantity: 3
+      worker: true
 ```
 
 ### Template Config

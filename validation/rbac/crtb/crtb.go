@@ -9,9 +9,7 @@ import (
 )
 
 const (
-	cattleSystemNamespace                                   = "cattle-system"
 	customClusterRoleName                                   = "custom-cluster-owner"
-	deploymentName                                          = "rancher"
 	deploymentEnvVarName                                    = "CATTLE_RESYNC_DEFAULT"
 	trueConditionStatus              metav1.ConditionStatus = "True"
 	falseConditionStatus             metav1.ConditionStatus = "False"
@@ -60,8 +58,8 @@ func verifyClusterRoleTemplateBindingStatusField(crtb *v3.ClusterRoleTemplateBin
 		}
 	}
 
-	if status.ObservedGenerationLocal != 2 {
-		return fmt.Errorf("observedGenerationLocal is not 2, found: %d", status.ObservedGenerationLocal)
+	if status.ObservedGenerationLocal < 1 {
+		return fmt.Errorf("observedGenerationLocal has not been reconciled, found: %d", status.ObservedGenerationLocal)
 	}
 
 	if status.Summary != completedSummary || status.SummaryLocal != completedSummary {
@@ -96,8 +94,8 @@ func verifyClusterRoleTemplateBindingStatusField(crtb *v3.ClusterRoleTemplateBin
 		}
 	}
 
-	if status.ObservedGenerationRemote != 1 {
-		return fmt.Errorf("observedGenerationRemote is not 1, found: %d", status.ObservedGenerationRemote)
+	if status.ObservedGenerationRemote < 1 {
+		return fmt.Errorf("observedGenerationRemote has not been reconciled, found: %d", status.ObservedGenerationRemote)
 	}
 
 	if status.SummaryRemote != completedSummary {

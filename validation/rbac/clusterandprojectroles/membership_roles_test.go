@@ -3,17 +3,24 @@
 package clusterandprojectroles
 
 import (
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
+	configDefaults "github.com/rancher/tests/actions/config/defaults"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	kubeconfigapi "github.com/rancher/tests/actions/kubeconfigs"
+	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	log "github.com/sirupsen/logrus"
@@ -51,10 +58,25 @@ func (mr *MembershipRolesTestSuite) SetupSuite() {
 
 func (mr *MembershipRolesTestSuite) TestClusterRolesOnClusterCreationAndDeletion() {
 	log.Info("Creating a downstream cluster to verify membership roles on cluster creation and deletion")
-	clusterObj, clusterConfig2, err := kubeconfigapi.CreateDownstreamCluster(mr.client, false)
+	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	cattleConfig, err := configDefaults.SetK8sDefault(mr.client, configDefaults.K3S, cattleConfig)
+	require.NoError(mr.T(), err)
+
+	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
+
+	clusterConfig := new(actionsClusters.ClusterConfig)
+	operations.LoadObjectFromMap(configDefaults.ClusterConfigKey, cattleConfig, clusterConfig)
+
+	clusterConfig.MachinePools = nodeRolesAll
+
+	provider := provisioning.CreateProvider(clusterConfig.Provider)
+	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
+
+	clusterObj, err := provisioning.CreateProvisioningCluster(mr.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 	require.NoError(mr.T(), err)
 	require.NotNil(mr.T(), clusterObj)
-	require.NotNil(mr.T(), clusterConfig2)
+	require.NotNil(mr.T(), clusterConfig)
 	createdClusterID, err := clusters.GetClusterIDByName(mr.client, clusterObj.Name)
 	require.NoError(mr.T(), err)
 
@@ -69,10 +91,10 @@ func (mr *MembershipRolesTestSuite) TestClusterRolesOnClusterCreationAndDeletion
 	memberRoleName := createdClusterID + "-" + rbacapi.ClusterMemberRoleSuffix
 
 	log.Infof("Verifying membership roles %s and %s exist on cluster creation", ownerRoleName, memberRoleName)
-	err = rbacapi.WaitForClusterRoleExistence(mr.client, clusterapi.LocalCluster, ownerRoleName, true)
+	err = rbacapi.WaitForClusterRoleExistence(mr.client, extclusterapi.LocalCluster, ownerRoleName, true)
 	require.NoErrorf(mr.T(), err, "Cluster role %s should exist", ownerRoleName)
 
-	err = rbacapi.WaitForClusterRoleExistence(mr.client, clusterapi.LocalCluster, memberRoleName, true)
+	err = rbacapi.WaitForClusterRoleExistence(mr.client, extclusterapi.LocalCluster, memberRoleName, true)
 	require.NoErrorf(mr.T(), err, "Cluster role %s should exist", memberRoleName)
 
 	log.Infof("Deleting the created downstream cluster %s", createdClusterID)
@@ -80,10 +102,10 @@ func (mr *MembershipRolesTestSuite) TestClusterRolesOnClusterCreationAndDeletion
 	require.NoError(mr.T(), err)
 
 	log.Infof("Verifying membership roles %s and %s do not exist on cluster deletion", ownerRoleName, memberRoleName)
-	err = rbacapi.WaitForClusterRoleExistence(mr.client, clusterapi.LocalCluster, ownerRoleName, false)
+	err = rbacapi.WaitForClusterRoleExistence(mr.client, extclusterapi.LocalCluster, ownerRoleName, false)
 	require.NoErrorf(mr.T(), err, "Cluster role %s should not exist", ownerRoleName)
 
-	err = rbacapi.WaitForClusterRoleExistence(mr.client, clusterapi.LocalCluster, memberRoleName, false)
+	err = rbacapi.WaitForClusterRoleExistence(mr.client, extclusterapi.LocalCluster, memberRoleName, false)
 	require.NoErrorf(mr.T(), err, "Cluster role %s should not exist", memberRoleName)
 }
 
@@ -98,10 +120,10 @@ func (mr *MembershipRolesTestSuite) TestRolesOnProjectCreationAndDeletion() {
 	memberRoleName := createdProjectID + "-" + rbacapi.ProjectMemberRoleSuffix
 
 	log.Infof("Verifying membership roles %s and %s exist on project creation", ownerRoleName, memberRoleName)
-	err = rbacapi.WaitForRoleExistence(mr.client, clusterapi.LocalCluster, createdProjectNamespace, ownerRoleName, true)
+	err = rbacapi.WaitForRoleExistence(mr.client, extclusterapi.LocalCluster, createdProjectNamespace, ownerRoleName, true)
 	require.NoErrorf(mr.T(), err, "Role %s should exist", ownerRoleName)
 
-	err = rbacapi.WaitForRoleExistence(mr.client, clusterapi.LocalCluster, createdProjectNamespace, memberRoleName, true)
+	err = rbacapi.WaitForRoleExistence(mr.client, extclusterapi.LocalCluster, createdProjectNamespace, memberRoleName, true)
 	require.NoErrorf(mr.T(), err, "Role %s should exist", memberRoleName)
 
 	log.Infof("Deleting the created project %s in downstream cluster", createdProjectID)
@@ -109,10 +131,10 @@ func (mr *MembershipRolesTestSuite) TestRolesOnProjectCreationAndDeletion() {
 	require.NoError(mr.T(), err)
 
 	log.Infof("Verifying membership roles %s and %s do not exist on project deletion", ownerRoleName, memberRoleName)
-	err = rbacapi.WaitForRoleExistence(mr.client, clusterapi.LocalCluster, createdProjectNamespace, ownerRoleName, false)
+	err = rbacapi.WaitForRoleExistence(mr.client, extclusterapi.LocalCluster, createdProjectNamespace, ownerRoleName, false)
 	require.NoErrorf(mr.T(), err, "Role %s should not exist", ownerRoleName)
 
-	err = rbacapi.WaitForRoleExistence(mr.client, clusterapi.LocalCluster, createdProjectNamespace, memberRoleName, false)
+	err = rbacapi.WaitForRoleExistence(mr.client, extclusterapi.LocalCluster, createdProjectNamespace, memberRoleName, false)
 	require.NoErrorf(mr.T(), err, "Role %s should not exist", memberRoleName)
 }
 

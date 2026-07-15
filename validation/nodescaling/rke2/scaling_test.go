@@ -1,4 +1,4 @@
-//go:build (validation || recurring || ipv6 || dualstack || infra.rke2k3s || cluster.custom || stress) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke1 && !cluster.any && !cluster.nodedriver && !sanity && !extended
+//go:build (validation || recurring || proxy || ipv6 || dualstack || infra.rke2k3s || cluster.custom || stress || pit.weekly || pit.elemental) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !cluster.any && !cluster.nodedriver && !sanity && !extended
 
 package rke2
 
@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -34,6 +35,7 @@ type NodeScalingTestSuite struct {
 	scalingConfig *scalinginput.Config
 	cattleConfig  map[string]any
 	clusterConfig *clusters.ClusterConfig
+	machineConfig machinepools.MachineConfigs
 	cluster       *v1.SteveAPIObject
 }
 
@@ -70,12 +72,21 @@ func (s *NodeScalingTestSuite) SetupSuite() {
 	s.scalingConfig = new(scalinginput.Config)
 	config.LoadConfig(scalinginput.ConfigurationFileKey, s.scalingConfig)
 
-	provider := provisioning.CreateProvider(s.clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
+	rancherConfig := new(rancher.Config)
+	operations.LoadObjectFromMap(defaults.RancherConfigKey, s.cattleConfig, rancherConfig)
 
-	logrus.Info("Provisioning RKE2 cluster")
-	s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, defaults.RKE2, provider, *s.clusterConfig, machineConfigSpec, nil, true, false)
-	require.NoError(s.T(), err)
+	if rancherConfig.ClusterName == "" {
+		provider := provisioning.CreateProvider(s.clusterConfig.Provider)
+		s.machineConfig = provider.LoadMachineConfigFunc(s.cattleConfig)
+
+		logrus.Info("Provisioning RKE2 cluster")
+		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, defaults.RKE2, provider, *s.clusterConfig, s.machineConfig, nil, true, false)
+		require.NoError(s.T(), err)
+	} else {
+		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
+		s.cluster, err = s.client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + rancherConfig.ClusterName)
+		require.NoError(s.T(), err)
+	}
 }
 
 func (s *NodeScalingTestSuite) TestScalingNodePools() {
@@ -115,8 +126,21 @@ func (s *NodeScalingTestSuite) TestScalingNodePools() {
 	for _, tt := range tests {
 		var err error
 		s.Run(tt.name, func() {
-			if s.clusterConfig.Provider != "vsphere" && tt.isWindows {
-				s.T().Skip("Windows test requires access to vSphere")
+			if s.clusterConfig.Provider == "vsphere" && tt.isWindows {
+				windowsImage := false
+				for _, vmConfig := range s.machineConfig.VmwareMachineConfigs.VmwarevsphereMachineConfig {
+					if vmConfig.OS == "windows" {
+						logrus.Info("Windows image found in machine configs")
+						windowsImage = true
+						break
+					}
+				}
+
+				if !windowsImage {
+					s.T().Skip("No windows image provided")
+				}
+			} else if s.clusterConfig.Provider != "vsphere" && tt.isWindows {
+				s.T().Skip("Windows test requires access to vsphere")
 			}
 
 			tt.nodeRoles.Quantity = tt.scaleQuantity
@@ -136,7 +160,11 @@ func (s *NodeScalingTestSuite) TestScalingNodePools() {
 			err = pods.VerifyClusterPods(s.client, tt.cluster)
 			require.NoError(s.T(), err)
 
-			tt.nodeRoles.Quantity = -1
+			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(s.client, tt.cluster.Name)
+			require.NoError(s.T(), err)
+
+			tt.nodeRoles.Quantity = -tt.scaleQuantity
 			logrus.Infof("Scaling down the node pool (%s)", tt.cluster.Name)
 			_, err = machinepools.ScaleMachinePool(s.client, tt.cluster, tt.nodeRoles)
 			require.NoError(s.T(), err)
@@ -151,6 +179,10 @@ func (s *NodeScalingTestSuite) TestScalingNodePools() {
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
 			err = pods.VerifyClusterPods(s.client, tt.cluster)
+			require.NoError(s.T(), err)
+
+			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(s.client, tt.cluster.Name)
 			require.NoError(s.T(), err)
 		})
 

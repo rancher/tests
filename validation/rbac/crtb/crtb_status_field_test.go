@@ -9,16 +9,17 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
-	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
 	"github.com/rancher/shepherd/extensions/kubectl"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/projects"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -59,7 +60,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldCreateAndVerify() {
 	defer subSession.Cleanup()
 
 	log.Info("Create a project and a namespace in the project")
-	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(crtbs.client, crtbs.cluster.ID)
+	adminProject, _, err := projectapi.CreateProjectAndNamespace(crtbs.client, crtbs.cluster.ID)
 	require.NoError(crtbs.T(), err)
 
 	log.Infof("Create and add a standard user to downstream cluster with role Cluster Owner")
@@ -79,7 +80,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldVerifyReconciliation()
 	defer subSession.Cleanup()
 
 	log.Info("Create a project and a namespace in the project")
-	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(crtbs.client, crtbs.cluster.ID)
+	adminProject, _, err := projectapi.CreateProjectAndNamespace(crtbs.client, crtbs.cluster.ID)
 	require.NoError(crtbs.T(), err)
 
 	log.Infof("Create and add a standard user to downstream cluster with role Cluster Owner")
@@ -89,7 +90,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldVerifyReconciliation()
 	require.NoError(crtbs.T(), err)
 
 	log.Info("Add environment variable CATTLE_RESYNC_DEFAULT and set it to 1 minute")
-	err = deployment.UpdateOrRemoveEnvVarForDeployment(crtbs.client, cattleSystemNamespace, deploymentName, deploymentEnvVarName, "1")
+	err = deploymentapi.UpdateOrRemoveEnvVarForDeployment(crtbs.client, extclusterapi.LocalCluster, deploymentapi.RancherDeploymentNamespace, deploymentapi.RancherDeploymentName, deploymentEnvVarName, "1")
 	require.NoError(crtbs.T(), err, "Failed to add environment variable")
 
 	log.Info("Verify that CRTB resourceVersion and generation have not been updated upon reconciliation")
@@ -112,14 +113,8 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldVerifyReconciliation()
 	require.Equal(crtbs.T(), initialGeneration, updatedCRTB.Generation)
 
 	log.Info("Remove environment variable CATTLE_RESYNC_DEFAULT")
-	err = deployment.UpdateOrRemoveEnvVarForDeployment(crtbs.client, cattleSystemNamespace, deploymentName, deploymentEnvVarName, "")
+	err = deploymentapi.UpdateOrRemoveEnvVarForDeployment(crtbs.client, extclusterapi.LocalCluster, deploymentapi.RancherDeploymentNamespace, deploymentapi.RancherDeploymentName, deploymentEnvVarName, "")
 	require.NoError(crtbs.T(), err, "Failed to remove environment variable")
-
-	log.Info("Wait for Rancher deployment to be ready after removing environment variable")
-	err = charts.WatchAndWaitDeployments(crtbs.client, crtbs.cluster.ID, cattleSystemNamespace, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + deploymentName,
-	})
-	require.NoError(crtbs.T(), err)
 }
 
 func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldUpdateAndVerify() {
@@ -151,11 +146,11 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldUpdateAndVerify() {
 		},
 	}
 	customClusterRole.Name = namegen.AppendRandomString("test")
-	createdCustomClusterRoleTemplate, err := crtbs.client.WranglerContext.Mgmt.RoleTemplate().Create(customClusterRole)
+	createdCustomClusterRoleTemplate, err := extrbacapi.CreateRoleTemplate(crtbs.client, customClusterRole)
 	require.NoError(crtbs.T(), err)
 
 	log.Info("Create a project and a namespace in the project")
-	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(crtbs.client, crtbs.cluster.ID)
+	adminProject, _, err := projectapi.CreateProjectAndNamespace(crtbs.client, crtbs.cluster.ID)
 	require.NoError(crtbs.T(), err)
 
 	log.Infof("Create and add a standard user to downstream cluster with custom cluster role template")
@@ -175,11 +170,11 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldUpdateAndVerify() {
 	updatedUserCRTB.Labels = map[string]string{
 		"dummy": "dummy-label",
 	}
-	_, err = rbacapi.UpdateClusterRoleTemplateBindings(crtbs.client, userCRTB, updatedUserCRTB)
+	_, err = extrbacapi.UpdateClusterRoleTemplateBinding(crtbs.client, updatedUserCRTB)
 	require.NoError(crtbs.T(), err)
 
 	log.Info("Deleting custom cluster role template")
-	err = rbacapi.DeleteRoleTemplate(crtbs.client, createdCustomClusterRoleTemplate.Name)
+	err = extrbacapi.DeleteRoleTemplate(crtbs.client, createdCustomClusterRoleTemplate.Name, true)
 	require.NoError(crtbs.T(), err)
 
 	log.Info("Verifying CRTB Status field after deleting custom cluster role template")
@@ -216,7 +211,7 @@ func (crtbs *CRTBStatusFieldTestSuite) TestCRTBStatusFieldKubectlDescribe() {
 	defer subSession.Cleanup()
 
 	log.Info("Create a project and a namespace in the project")
-	adminProject, _, err := projects.CreateProjectAndNamespaceUsingWrangler(crtbs.client, crtbs.cluster.ID)
+	adminProject, _, err := projectapi.CreateProjectAndNamespace(crtbs.client, crtbs.cluster.ID)
 	require.NoError(crtbs.T(), err)
 
 	log.Infof("Create and add a standard user to downstream cluster with role Cluster Owner")
