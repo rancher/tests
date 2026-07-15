@@ -1,4 +1,4 @@
-//go:build (validation || recurring || ipv6 || dualstack || infra.rke2k3s || cluster.custom || stress) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke1 && !cluster.any && !cluster.nodedriver && !sanity && !extended
+//go:build (validation || recurring || proxy || ipv6 || dualstack || infra.rke2k3s || cluster.custom || stress) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !cluster.any && !cluster.nodedriver && !sanity && !extended
 
 package k3s
 
@@ -8,7 +8,6 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -80,7 +79,7 @@ func (s *NodeScalingTestSuite) SetupSuite() {
 		machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
 
 		logrus.Info("Provisioning K3S cluster")
-		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, extClusters.K3SClusterType.String(), provider, *s.clusterConfig, machineConfigSpec, nil, true, false)
+		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, defaults.K3S, provider, *s.clusterConfig, machineConfigSpec, nil, true, false)
 		require.NoError(s.T(), err)
 	} else {
 		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
@@ -136,6 +135,10 @@ func (s *NodeScalingTestSuite) TestScalingNodePools() {
 			err = pods.VerifyClusterPods(s.client, tt.cluster)
 			require.NoError(s.T(), err)
 
+			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(s.client, tt.cluster.Name)
+			require.NoError(s.T(), err)
+
 			tt.nodeRoles.Quantity = -tt.scaleQuantity
 			logrus.Infof("Scaling down the node pool (%s)", tt.cluster.Name)
 			_, err = machinepools.ScaleMachinePool(s.client, tt.cluster, tt.nodeRoles)
@@ -151,6 +154,10 @@ func (s *NodeScalingTestSuite) TestScalingNodePools() {
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
 			err = pods.VerifyClusterPods(s.client, tt.cluster)
+			require.NoError(s.T(), err)
+
+			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(s.client, tt.cluster.Name)
 			require.NoError(s.T(), err)
 		})
 

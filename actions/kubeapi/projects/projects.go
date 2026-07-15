@@ -6,6 +6,7 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extprojectapi "github.com/rancher/shepherd/extensions/kubeapi/projects"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -28,6 +29,10 @@ const (
 	NamespaceQuotaExceedsProjectQuotaErrorMessage = "namespace default quota limit exceeds project limit"
 	GroupName                                     = "management.cattle.io"
 	Version                                       = "v3"
+	PSAEnforceLabelKey                            = "pod-security.kubernetes.io/enforce"
+	PSAWarnLabelKey                               = "pod-security.kubernetes.io/warn"
+	PSAAuditLabelKey                              = "pod-security.kubernetes.io/audit"
+	PSAPrivilegedPolicy                           = "privileged"
 )
 
 // NewProjectTemplate is a constructor that creates a public API project template
@@ -63,24 +68,16 @@ func NewProjectTemplate(clusterID string) *v3.Project {
 }
 
 // WaitForProjectFinalizerToUpdate is a helper to wait for project finalizer to update to match the expected finalizer count
-func WaitForProjectFinalizerToUpdate(client *rancher.Client, projectName string, projectNamespace string, finalizerCount int) error {
-	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, false, func(ctx context.Context) (done bool, pollErr error) {
-		project, pollErr := client.WranglerContext.Mgmt.Project().Get(projectNamespace, projectName, metav1.GetOptions{})
-		if pollErr != nil {
-			return false, pollErr
+func WaitForProjectFinalizerToUpdate(client *rancher.Client, projectName, projectNamespace string, finalizerCount int) error {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, false, func(ctx context.Context) (bool, error) {
+		project, err := extprojectapi.GetProjectByName(client, projectNamespace, projectName)
+		if err != nil {
+			return false, err
 		}
-
-		if len(project.Finalizers) == finalizerCount {
-			return true, nil
-		}
-		return false, pollErr
+		return len(project.Finalizers) == finalizerCount, nil
 	})
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // ApplyProjectAndNamespaceResourceQuotas applies quotas for project and namespace

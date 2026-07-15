@@ -168,7 +168,7 @@ func (f *FleetWithProvisioningTestSuite) TestHardenedAfterAddedGitRepo() {
 			logrus.Info("Deploying Custom Cluster")
 			testClusterConfig := clusters.ConvertConfigToClusterConfig(&provisioningConfig)
 
-			_, _, customProvider, _ := permutations.GetClusterProvider(permutations.RKE2CustomCluster, f.provisioningConfig.NodeProviders[0], &provisioningConfig)
+			_, customProvider, _ := permutations.GetClusterProvider(permutations.RKE2CustomCluster, f.provisioningConfig.NodeProviders[0], &provisioningConfig)
 
 			testClusterConfig.KubernetesVersion = f.provisioningConfig.RKE2KubernetesVersions[0]
 			testClusterConfig.CNI = f.provisioningConfig.CNIs[0]
@@ -268,7 +268,7 @@ func (f *FleetWithProvisioningTestSuite) TestWindowsAfterAddedGitRepo() {
 			logrus.Info("Deploying Custom Cluster")
 			testClusterConfig := clusters.ConvertConfigToClusterConfig(&provisioningConfig)
 
-			_, _, customProvider, _ := permutations.GetClusterProvider(permutations.RKE2CustomCluster, f.provisioningConfig.NodeProviders[0], &provisioningConfig)
+			_, customProvider, _ := permutations.GetClusterProvider(permutations.RKE2CustomCluster, f.provisioningConfig.NodeProviders[0], &provisioningConfig)
 
 			testClusterConfig.KubernetesVersion = f.provisioningConfig.RKE2KubernetesVersions[0]
 			testClusterConfig.CNI = f.provisioningConfig.CNIs[0]

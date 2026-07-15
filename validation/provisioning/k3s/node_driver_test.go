@@ -118,6 +118,10 @@ func TestNodeDriver(t *testing.T) {
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(tt.client, cluster)
 			require.NoError(t, err)
+
+			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(tt.client, cluster.Name)
+			require.NoError(t, err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, k.cattleConfig)

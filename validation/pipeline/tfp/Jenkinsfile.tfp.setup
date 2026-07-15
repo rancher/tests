@@ -32,7 +32,7 @@ node {
         timeout = "${env.TIMEOUT}"
   }
   def s3Config = env.AWS_S3_BUCKET_CONFIG
-
+  def yqVersion = "v4.47.2"
 
   withCredentials([ string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
                     string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
@@ -61,9 +61,6 @@ node {
           dir(".ssh") {
               def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
               writeFile file: AWS_SSH_KEY_NAME, text: decoded
-
-              def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
-              writeFile file: JENKINS_RKE_VALIDATION, text: decodedRsa
           }
 
           env.CATTLE_TEST_CONFIG=rootPath+'config.yml'
@@ -72,7 +69,7 @@ node {
           sh "./build.sh"
         }
         stage('Setup'){
-            sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
+            sh returnStdout: true, script: "wget -qO ./yq https://github.com/mikefarah/yq/releases/download/${yqVersion}/yq_linux_amd64 && wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/${yqVersion}/checksums && grep -q '^yq_linux_amd64 ' ./yq_checksums && awk '/^yq_linux_amd64 / {print \$19 \"  ./yq\"}' ./yq_checksums | sha256sum -c - && rm -f ./yq_checksums"
             sh returnStdout:true, script: 'chmod a+x ./yq'
 
             AWS_S3_BUCKET = sh (

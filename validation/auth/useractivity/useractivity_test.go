@@ -8,10 +8,11 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extsettingsapi "github.com/rancher/shepherd/extensions/kubeapi/settings"
+	exttokenapi "github.com/rancher/shepherd/extensions/kubeapi/tokens"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/settings"
-	"github.com/rancher/tests/actions/tokens/exttokens"
-	"github.com/rancher/tests/actions/useractivity"
+	tokenapi "github.com/rancher/tests/actions/kubeapi/tokens/exttokens"
+	useractivityapi "github.com/rancher/tests/actions/kubeapi/useractivity"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -42,24 +43,30 @@ func (ua *UserActivityTestSuite) TestGetUserActivity() {
 	defer subSession.Cleanup()
 
 	log.Info("Create a session token for the user")
-	createdExtSessionToken, err := exttokens.CreateExtSessionToken(ua.client)
+	createdExtSessionToken, err := tokenapi.CreateExtSessionToken(ua.client)
 	require.NoError(ua.T(), err)
 
 	log.Info("Get the useractivity for the ext session token")
-	extUserActivity, err := useractivity.GetUserActivity(ua.client, createdExtSessionToken.Name)
+	extUserActivity, err := useractivityapi.GetUserActivity(ua.client, createdExtSessionToken.Name)
 	require.NoError(ua.T(), err)
 
 	log.Info("Verify useractivity and ext session token resourceVersion match")
 	require.NotEmpty(ua.T(), extUserActivity.ResourceVersion)
-	require.Equal(ua.T(), createdExtSessionToken.ResourceVersion, extUserActivity.ResourceVersion)
+	currentExtSessionToken, err := exttokenapi.GetExtTokenByName(ua.client, createdExtSessionToken.Name)
+	require.NoError(ua.T(), err)
+	require.Equal(ua.T(), currentExtSessionToken.ResourceVersion, extUserActivity.ResourceVersion)
 }
 
 func (ua *UserActivityTestSuite) TestUserActivityIdleSessionTimeout() {
 	subSession := ua.session.NewSession()
 	defer subSession.Cleanup()
 
+	log.Info("Ensure auth-token-max-ttl-minutes is at its default so the token does not expire by max-ttl during the idle wait")
+	err := extsettingsapi.ResetGlobalSettingToDefaultValue(ua.client, extsettingsapi.AuthTokenMaxTTLMinutesSetting)
+	require.NoError(ua.T(), err)
+
 	log.Info("Set auth-user-session-idle-ttl-minutes to 2 minutes")
-	authUserSessionIdleTTLMinutes, err := ua.client.WranglerContext.Mgmt.Setting().Get(settings.AuthUserSessionIdleTTlMinutesSetting, metav1.GetOptions{})
+	authUserSessionIdleTTLMinutes, err := ua.client.WranglerContext.Mgmt.Setting().Get(extsettingsapi.AuthUserSessionIdleTTlMinutesSetting, metav1.GetOptions{})
 	require.NoError(ua.T(), err)
 	authUserSessionIdleTTLMinutes.Value = "2"
 	_, err = ua.client.WranglerContext.Mgmt.Setting().Update(authUserSessionIdleTTLMinutes)
@@ -67,16 +74,18 @@ func (ua *UserActivityTestSuite) TestUserActivityIdleSessionTimeout() {
 	require.Equal(ua.T(), "2", authUserSessionIdleTTLMinutes.Value, "Expected value to be 2")
 
 	log.Info("Create ext session token")
-	createdExtSessionToken, err := exttokens.CreateExtSessionToken(ua.client)
+	createdExtSessionToken, err := tokenapi.CreateExtSessionToken(ua.client)
 	require.NoError(ua.T(), err)
 
 	log.Info("Get the useractivity for the ext session token")
-	extUserActivity, err := useractivity.GetUserActivity(ua.client, createdExtSessionToken.Name)
+	extUserActivity, err := useractivityapi.GetUserActivity(ua.client, createdExtSessionToken.Name)
 	require.NoError(ua.T(), err)
 
 	log.Info("Verify useractivity and ext session token resourceVersion match")
 	require.NotEmpty(ua.T(), extUserActivity.ResourceVersion)
-	require.Equal(ua.T(), createdExtSessionToken.ResourceVersion, extUserActivity.ResourceVersion)
+	currentExtSessionToken, err := exttokenapi.GetExtTokenByName(ua.client, createdExtSessionToken.Name)
+	require.NoError(ua.T(), err)
+	require.Equal(ua.T(), currentExtSessionToken.ResourceVersion, extUserActivity.ResourceVersion)
 
 	log.Info("Update the useractivity to trigger usage of ext session token")
 	extUserActivityToUpdate := extUserActivity.DeepCopy()
@@ -84,11 +93,11 @@ func (ua *UserActivityTestSuite) TestUserActivityIdleSessionTimeout() {
 		extUserActivityToUpdate.ObjectMeta.Labels = make(map[string]string)
 	}
 	extUserActivityToUpdate.ObjectMeta.Labels["foo"] = "bar"
-	updatedUserActivity, err := useractivity.UpdateUserActivity(ua.client, extUserActivityToUpdate)
+	updatedUserActivity, err := useractivityapi.UpdateUserActivity(ua.client, extUserActivityToUpdate)
 	require.NoError(ua.T(), err)
 	require.NotNil(ua.T(), updatedUserActivity.Spec.SeenAt)
 
-	log.Infof("Verify useractivity status.ExpiresAt has the correct value based on the current time + %s value", settings.AuthUserSessionIdleTTlMinutesSetting)
+	log.Infof("Verify useractivity status.ExpiresAt has the correct value based on the current time + %s value", extsettingsapi.AuthUserSessionIdleTTlMinutesSetting)
 	idleTimeoutDuration := defaults.TwoMinuteTimeout
 	expectedExpiration := time.Now().UTC().Add(idleTimeoutDuration)
 	actualExpiresAt := updatedUserActivity.Status.ExpiresAt
@@ -98,13 +107,13 @@ func (ua *UserActivityTestSuite) TestUserActivityIdleSessionTimeout() {
 	require.WithinDuration(ua.T(), expectedExpiration, actualExpriesAtTime, defaults.TenSecondTimeout)
 
 	log.Info("Polling until session idle timeout expires...")
-	err = useractivity.WaitForUserActivityError(ua.client, extUserActivityToUpdate.Name)
+	err = useractivityapi.WaitForUserActivityError(ua.client, extUserActivityToUpdate.Name)
 	require.Error(ua.T(), err, "Expected error to be thrown during polling")
 	require.True(ua.T(), k8serrors.IsForbidden(err), "Expected a 'Forbidden' error, but got: %v", err)
 	require.Contains(ua.T(), err.Error(), "session idle timeout expired")
 
 	log.Info("Resetting auth-user-session-idle-ttl-minutes to default value")
-	err = settings.ResetGlobalSettingToDefaultValue(ua.client, settings.AuthUserSessionIdleTTlMinutesSetting)
+	err = extsettingsapi.ResetGlobalSettingToDefaultValue(ua.client, extsettingsapi.AuthUserSessionIdleTTlMinutesSetting)
 	require.NoError(ua.T(), err)
 }
 
@@ -113,7 +122,7 @@ func (ua *UserActivityTestSuite) TestUserActivitySessionTokenExpired() {
 	defer subSession.Cleanup()
 
 	log.Info("Set auth-token-max-ttl-minutes to 2 minutes")
-	authTokenMaxTTLMinutes, err := ua.client.WranglerContext.Mgmt.Setting().Get(settings.AuthTokenMaxTTLMinutesSetting, metav1.GetOptions{})
+	authTokenMaxTTLMinutes, err := ua.client.WranglerContext.Mgmt.Setting().Get(extsettingsapi.AuthTokenMaxTTLMinutesSetting, metav1.GetOptions{})
 	require.NoError(ua.T(), err)
 	authTokenMaxTTLMinutes.Value = "2"
 	updatedAuthTokenMaxTTLMinutes, err := ua.client.WranglerContext.Mgmt.Setting().Update(authTokenMaxTTLMinutes)
@@ -121,25 +130,27 @@ func (ua *UserActivityTestSuite) TestUserActivitySessionTokenExpired() {
 	require.Equal(ua.T(), "2", updatedAuthTokenMaxTTLMinutes.Value, "Expected value to be 2")
 
 	log.Info("Create a ext session token for the user")
-	createdExtSessionToken, err := exttokens.CreateExtSessionToken(ua.client)
+	createdExtSessionToken, err := tokenapi.CreateExtSessionToken(ua.client)
 	require.NoError(ua.T(), err)
 
 	log.Info("Get the useractivity for the ext session token")
-	extUserActivity, err := useractivity.GetUserActivity(ua.client, createdExtSessionToken.Name)
+	extUserActivity, err := useractivityapi.GetUserActivity(ua.client, createdExtSessionToken.Name)
 	require.NoError(ua.T(), err)
 
 	log.Info("Verify useractivity and session token resourceVersion match")
 	require.NotEmpty(ua.T(), extUserActivity.ResourceVersion)
-	require.Equal(ua.T(), createdExtSessionToken.ResourceVersion, extUserActivity.ResourceVersion)
+	currentExtSessionToken, err := exttokenapi.GetExtTokenByName(ua.client, createdExtSessionToken.Name)
+	require.NoError(ua.T(), err)
+	require.Equal(ua.T(), currentExtSessionToken.ResourceVersion, extUserActivity.ResourceVersion)
 
 	log.Info("Polling until ext session token expires...")
-	err = useractivity.WaitForUserActivityError(ua.client, createdExtSessionToken.Name)
+	err = useractivityapi.WaitForUserActivityError(ua.client, createdExtSessionToken.Name)
 	require.Error(ua.T(), err, "Expected error to be thrown during polling")
 	require.True(ua.T(), k8serrors.IsForbidden(err), "Expected a 'Forbidden' error, but got: %v", err)
 	require.Contains(ua.T(), err.Error(), "token is expired")
 
 	log.Info("Resetting auth-token-max-ttl-minutes to default value")
-	err = settings.ResetGlobalSettingToDefaultValue(ua.client, settings.AuthTokenMaxTTLMinutesSetting)
+	err = extsettingsapi.ResetGlobalSettingToDefaultValue(ua.client, extsettingsapi.AuthTokenMaxTTLMinutesSetting)
 	require.NoError(ua.T(), err)
 }
 
@@ -148,18 +159,18 @@ func (ua *UserActivityTestSuite) TestUpdateUserActivitySeenAtFieldToFutureDate()
 	defer subSession.Cleanup()
 
 	log.Info("Create ext session token")
-	createdExtSessionToken, err := exttokens.CreateExtSessionToken(ua.client)
+	createdExtSessionToken, err := tokenapi.CreateExtSessionToken(ua.client)
 	require.NoError(ua.T(), err)
 
 	log.Info("Get the useractivity")
-	extUserActivity, err := useractivity.GetUserActivity(ua.client, createdExtSessionToken.Name)
+	extUserActivity, err := useractivityapi.GetUserActivity(ua.client, createdExtSessionToken.Name)
 	require.NoError(ua.T(), err)
 
 	log.Info("Update useractivity spec.seenAt field to future date")
 	futureDate := time.Now().UTC().Add(defaults.TenMinuteTimeout)
 	metaV1FutureDate := metav1.NewTime(futureDate)
 	extUserActivity.Spec.SeenAt = &metaV1FutureDate
-	updatedExtUserActivity, err := useractivity.UpdateUserActivity(ua.client, extUserActivity)
+	updatedExtUserActivity, err := useractivityapi.UpdateUserActivity(ua.client, extUserActivity)
 	require.NoError(ua.T(), err)
 
 	log.Info("Verify useractivity spec.seenAt field set to current time instead of future date")
@@ -173,16 +184,16 @@ func (ua *UserActivityTestSuite) TestUpdateUserActivitySeenAtFieldToNil() {
 	defer subSession.Cleanup()
 
 	log.Info("Create ext session token")
-	createdExtSessionToken, err := exttokens.CreateExtSessionToken(ua.client)
+	createdExtSessionToken, err := tokenapi.CreateExtSessionToken(ua.client)
 	require.NoError(ua.T(), err)
 
 	log.Info("Get the useractivity")
-	extUserActivity, err := useractivity.GetUserActivity(ua.client, createdExtSessionToken.Name)
+	extUserActivity, err := useractivityapi.GetUserActivity(ua.client, createdExtSessionToken.Name)
 	require.NoError(ua.T(), err)
 
-	log.Info("Verify updating useractivity.spec.seenAt field to nil sets field to current time instead of nil")
+	log.Info("Verify updating useractivityapi.spec.seenAt field to nil sets field to current time instead of nil")
 	extUserActivity.Spec.SeenAt = nil
-	updatedExtUserActivity, err := useractivity.UpdateUserActivity(ua.client, extUserActivity)
+	updatedExtUserActivity, err := useractivityapi.UpdateUserActivity(ua.client, extUserActivity)
 	require.NoError(ua.T(), err)
 	require.NotNil(ua.T(), updatedExtUserActivity.Spec.SeenAt)
 }

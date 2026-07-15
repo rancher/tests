@@ -2,7 +2,6 @@ package machines
 
 import (
 	"fmt"
-	"net/url"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
@@ -14,15 +13,13 @@ const (
 	etcdLabel    = "rke.cattle.io/etcd-role"
 	controlLabel = "rke.cattle.io/control-plane-role"
 	workerLabel  = "rke.cattle.io/worker-role"
+	clusterLabel = "cluster.x-k8s.io/cluster-name"
 )
 
 // GetMachinesByRole retrieves all machines from a cluster based on the specified role.
 // Returns a slice of machines with the matching role label.
 func GetMachinesByRole(client *rancher.Client, cluster *v1.SteveAPIObject, role machinepools.NodeRoles) ([]v1.SteveAPIObject, error) {
-	query := url.Values{}
-	query.Add("filter", fmt.Sprintf("spec.clusterName=%s", cluster.Name))
-
-	machines, err := client.Steve.SteveType(stevetypes.Machine).List(query)
+	machines, err := client.Steve.SteveType(stevetypes.Machine).List(nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list machines: %w", err)
 	}
@@ -31,6 +28,10 @@ func GetMachinesByRole(client *rancher.Client, cluster *v1.SteveAPIObject, role 
 	for _, machine := range machines.Data {
 		labels := machine.ObjectMeta.Labels
 		if labels == nil {
+			continue
+		}
+
+		if labels[clusterLabel] != cluster.Name {
 			continue
 		}
 

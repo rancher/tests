@@ -73,10 +73,6 @@ func (b *BackupTestSuite) TestS3InPlaceRestore() {
 	userList, projList, roleList, err := createRancherResources(b.client, project.ClusterID, "cluster")
 	require.NoError(b.T(), err)
 
-	logrus.Info("Provisioning a downstream RKE1 cluster...")
-	rke1ClusterObj, rke1ClusterConfig, err := createRKE1dsCluster(b.T(), b.client)
-	require.NoError(b.T(), err)
-
 	logrus.Info("Provisioning a downstream RKE2 cluster...")
 	rke2SteveObj, _, err := createRKE2dsCluster(b.T(), b.client)
 	require.NoError(b.T(), err)
@@ -112,9 +108,6 @@ func (b *BackupTestSuite) TestS3InPlaceRestore() {
 
 	err = verifyRancherResources(b.client, userListPostBackup, projListPostBackup, roleListPostBackup)
 	assert.Error(b.T(), err)
-
-	logrus.Info("Validating downstream clusters are in an Active status...")
-	provisioning.VerifyRKE1Cluster(b.T(), b.client, rke1ClusterConfig, rke1ClusterObj)
 
 	logrus.Infof("Verifying the cluster is ready (%s)", rke2SteveObj.Name)
 	err = provisioning.VerifyClusterReady(b.client, rke2SteveObj)

@@ -78,6 +78,7 @@ fi
 
 : "${ANSIBLE_CONFIG:=ansible/rke2/default/ansible.cfg}"
 : "${RANCHER_PLAYBOOK_PATH:=ansible/rancher/default-ha/rancher-playbook.yml}"
+: "${DOWNSTREAM_UPGRADE_PLAYBOOK_PATH:=ansible/rancher/downstream/downstream-upgrade-playbook.yml}"
 
 : "${TFVARS_FILE:=cluster.tfvars}"
 : "${DOWNSTREAM_TFVARS_FILE:=downstream-cluster.tfvars}"
@@ -111,8 +112,18 @@ export ANSIBLE_CONFIG="$ANSIBLE_CONFIG"
 # Export the ANSIBLE_CONFIG environment variable
 export ANSIBLE_PRIVATE_KEY_FILE="$PRIVATE_KEY_FILE"
 
+# Expand shell environment variables in tfvars files before applying.
+# OpenTofu does not support ${VAR} shell interpolation inside .tfvars files.
+if [[ "$TFVARS_FILE" = /* ]]; then
+    TFVARS_FULL_PATH="$TFVARS_FILE"
+else
+    TFVARS_FULL_PATH="$REPO_ROOT/$TERRAFORM_DIR/$TFVARS_FILE"
+fi
+EXPANDED_TFVARS_FILE="$(mktemp /tmp/cluster_XXXXXX.tfvars)"
+envsubst < "$TFVARS_FULL_PATH" > "$EXPANDED_TFVARS_FILE"
+
 # Apply the Terraform configuration
-tofu -chdir="$TERRAFORM_DIR" apply -auto-approve -var-file="$TFVARS_FILE"
+tofu -chdir="$TERRAFORM_DIR" apply -auto-approve -var-file="$EXPANDED_TFVARS_FILE"
 if [ $? -ne 0 ]; then
     echo "Error: Terraform apply failed."
     exit 1
@@ -147,7 +158,7 @@ if [ $attempt -eq $max_attempts ] && [ $rke2_exit_code -ne 0 ] && [[ $CLEANUP ==
     echo "Error: RKE2 playbook failed after $max_attempts attempts."
     echo "destroy the tofu"
     # Destroy the Terraform infrastructure
-    tofu -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$TFVARS_FILE"
+    tofu -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$EXPANDED_TFVARS_FILE"
     if [ $? -ne 0 ]; then
         echo "Error: Terraform destroy failed."
         exit 1
@@ -165,7 +176,7 @@ export KUBECONFIG="$KUBECONFIG_FILE"
 ansible-playbook "$RANCHER_PLAYBOOK_PATH" -e "@$VARS_FILE"
 if [ $? -ne 0 ] && [[ $CLEANUP == "true" ]]; then
     echo "Error: Rancher playbook failed."
-    tofu -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$TFVARS_FILE"
+    tofu -chdir="$TERRAFORM_DIR" destroy -auto-approve -var-file="$EXPANDED_TFVARS_FILE"
     if [ $? -ne 0 ]; then
         echo "Error: Terraform destroy failed."
         exit 1
@@ -204,6 +215,7 @@ if [[ "$BUILD_DOWNSTREAM_CLUSTER" == "true" ]]; then
         exit 1
     fi
     yq e ".rancher.clusterName = \"$DOWNSTREAM_CLUSTER_NAME\"" -i "$CONFIG_FILE"
+    ansible-playbook "$DOWNSTREAM_UPGRADE_PLAYBOOK_PATH" -e "@$VARS_FILE" -e "k8s_downstream_cluster_name=$DOWNSTREAM_CLUSTER_NAME"
 fi
 
 

@@ -1,4 +1,4 @@
-//go:build validation || recurring
+//go:build validation || template
 
 package rke2
 
@@ -10,7 +10,6 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
-	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
@@ -22,15 +21,14 @@ import (
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
+	"github.com/rancher/tests/actions/clusters"
 	actionsDefaults "github.com/rancher/tests/actions/config/defaults"
 	configDefaults "github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
-	"github.com/rancher/tests/actions/reports"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
-	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -41,12 +39,11 @@ const (
 )
 
 type templateTest struct {
-	client             *rancher.Client
-	standardUserClient *rancher.Client
-	session            *session.Session
-	templateConfig     *provisioninginput.TemplateConfig
-	cloudCredentials   *v1.SteveAPIObject
-	cattleConfig       map[string]any
+	client           *rancher.Client
+	session          *session.Session
+	templateConfig   *provisioninginput.TemplateConfig
+	cloudCredentials *v1.SteveAPIObject
+	cattleConfig     map[string]any
 }
 
 func templateSetup(t *testing.T) templateTest {
@@ -78,9 +75,6 @@ func templateSetup(t *testing.T) templateTest {
 	r.cloudCredentials, err = provider.CloudCredFunc(client, cloudCredentialConfig)
 	require.NoError(t, err)
 
-	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
-	require.NoError(t, err)
-
 	return r
 }
 
@@ -89,10 +83,9 @@ func TestTemplate(t *testing.T) {
 	r := templateSetup(t)
 
 	tests := []struct {
-		name   string
-		client *rancher.Client
+		name string
 	}{
-		{"RKE2_Template|etcd|cp|worker", r.standardUserClient},
+		{"RKE2_Template|etcd|cp|worker"},
 	}
 
 	for _, tt := range tests {
@@ -104,20 +97,22 @@ func TestTemplate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			templateName := namegenerator.AppendRandomString(actionsDefaults.RKE2 + "-template")
+			r.templateConfig.Repo.ObjectMeta.Name = templateName
+
 			_, err := steve.CreateAndWaitForResource(r.client, namespaces.FleetLocal+"/"+localCluster, stevetypes.ClusterRepo, r.templateConfig.Repo, stevestates.Active, 5*time.Second, defaults.FiveMinuteTimeout)
 			require.NoError(t, err)
 
 			k8sversions, err := kubernetesversions.Default(r.client, actionsDefaults.RKE2, nil)
 			require.NoError(t, err)
 
-			clusterName := namegenerator.AppendRandomString(actionsDefaults.RKE2 + "-template")
+			templateClusterName := namegenerator.AppendRandomString(actionsDefaults.RKE2 + "-template")
 
-			logrus.Infof("Provisioning template cluster (%s)", clusterName)
-			err = charts.InstallTemplateChart(r.client, r.templateConfig.Repo.ObjectMeta.Name, r.templateConfig.TemplateName, clusterName, k8sversions[0], r.cloudCredentials)
+			logrus.Infof("Provisioning template cluster (%s)", templateClusterName)
+			err = charts.InstallTemplateChart(r.client, r.templateConfig.Repo.ObjectMeta.Name, r.templateConfig.TemplateName, templateClusterName, k8sversions[0], r.cloudCredentials)
 			require.NoError(t, err)
 
-			_, cluster, err := clusters.GetProvisioningClusterByName(r.client, clusterName, namespaces.FleetDefault)
-			reports.TimeoutClusterReport(cluster, err)
+			cluster, err := clusters.GetClusterByName(r.client, templateClusterName)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
@@ -125,13 +120,17 @@ func TestTemplate(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(tt.client, cluster)
+			err = deployment.VerifyClusterDeployments(r.client, cluster)
 			if err != nil {
 				logrus.Warningf("Deployment verification received an error: %v", err)
 			}
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(r.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
 			require.NoError(t, err)
 		})
 	}

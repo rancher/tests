@@ -117,8 +117,12 @@ func TestDynamicNodeDriver(t *testing.T) {
 				err = pods.VerifyClusterPods(r.client, cluster)
 				require.NoError(t, err)
 
+				logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+				err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
+				require.NoError(t, err)
+
 				logrus.Infof("Verifying cloud provider on cluster (%s)", cluster.Name)
-				cloudprovider.VerifyCloudProvider(t, tt.client, defaults.RKE2, clusterConfig, cluster, nil)
+				cloudprovider.VerifyCloudProvider(t, tt.client, defaults.RKE2, clusterConfig, cluster)
 
 				logrus.Infof("Verifying cluster features (%s)", cluster.Name)
 				provisioning.VerifyDynamicCluster(t, r.client, cluster)

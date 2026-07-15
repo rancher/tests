@@ -32,8 +32,6 @@ backupRestoreInput:
   secretKey: ""
 
 provisioningInput:
-  rke1KubernetesVersion:
-    - ""
   rke2KubernetesVersion:
     - ""
   k3sKubernetesVersion:

@@ -1,0 +1,517 @@
+#!groovy
+/**
+ * Multi-branch E2E pipeline for recurring validation runs.
+ *
+ * Iterates over RANCHER_IMAGE_TAGS and triggers a separate orchestrator job
+ * (validation/Jenkinsfile.e2e) for each Rancher version in parallel.
+ *
+ * Each parallel branch deploys its own infrastructure with a unique hostname
+ * prefix, deploys the specified Rancher version, and runs tests.
+ *
+ * Consumes shared functions from qa-jenkins-library:
+ *   property.useWithProperties
+ */
+
+def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
+library "qa-jenkins-library@${libraryBranch}"
+
+def DEFAULT_RANCHER_PASSWORD = 'X%S3bPyg@n8kWcRs675l#fH0'
+
+pipeline {
+    agent any
+
+    options {
+        ansiColor('xterm')
+        timeout(time: 240, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '50'))
+    }
+
+    parameters {
+        // ── Multi-version parameters ─────────────────────────────
+        string(
+            name: 'RANCHER_IMAGE_TAGS',
+            defaultValue: 'head',
+            description: 'Comma-separated list of Rancher image tags to test in parallel (e.g., head,v2.10-head,v2.9-head)'
+        )
+        string(
+            name: 'HOSTNAME_PREFIX',
+            defaultValue: 'recurringdaily',
+            description: 'Base hostname prefix — version suffix is appended automatically'
+        )
+
+        // ── Repository parameters ────────────────────────────────
+        string(
+            name: 'QA_JENKINS_LIBRARY_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-jenkins-library to use'
+        )
+        string(
+            name: 'TESTS_REPO_URL',
+            defaultValue: 'https://github.com/rancher/tests',
+            description: 'URL of rancher/tests repository'
+        )
+        string(
+            name: 'TESTS_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of rancher/tests repository'
+        )
+        string(
+            name: 'QA_INFRA_REPO_URL',
+            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            description: 'URL of qa-infra-automation repository'
+        )
+        string(
+            name: 'QA_INFRA_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-infra-automation repository'
+        )
+
+        // ── Infrastructure parameters ────────────────────────────
+        string(
+            name: 'RKE2_VERSION',
+            defaultValue: 'v1.35.1+rke2r1',
+            description: 'RKE2 version to deploy'
+        )
+        string(
+            name: 'RANCHER_VERSION',
+            defaultValue: 'latest',
+            description: 'Default Rancher chart version (overridden per-tag when TAG_CHART_MAP applies)'
+        )
+        string(
+            name: 'RANCHER_CHART_REPO_URL',
+            defaultValue: 'https://releases.rancher.com/server-charts/stable',
+            description: 'Rancher Helm chart repository URL'
+        )
+        password(
+            name: 'RANCHER_BOOTSTRAP_PASSWORD',
+            defaultValue: DEFAULT_RANCHER_PASSWORD,
+            description: 'Rancher bootstrap password for initial setup'
+        )
+        password(
+            name: 'RANCHER_ADMIN_PASSWORD',
+            defaultValue: DEFAULT_RANCHER_PASSWORD,
+            description: 'Rancher admin password after bootstrap'
+        )
+        booleanParam(
+            name: 'DESTROY_ON_FAILURE',
+            defaultValue: true,
+            description: 'Tear down infrastructure if pipeline fails'
+        )
+        booleanParam(
+            name: 'DESTROY_AFTER_TESTS',
+            defaultValue: true,
+            description: 'Tear down infrastructure after tests complete'
+        )
+
+        // ── Terraform parameters ─────────────────────────────────
+        string(
+            name: 'S3_BUCKET_NAME',
+            defaultValue: 'jenkins-terraform-state-storage',
+            description: 'S3 bucket name where Terraform state is stored'
+        )
+        string(
+            name: 'S3_BUCKET_REGION',
+            defaultValue: 'us-east-2',
+            description: 'AWS region where the S3 bucket is located'
+        )
+        string(
+            name: 'S3_KEY_PREFIX',
+            defaultValue: 'terraform.tfstate',
+            description: 'S3 key prefix for the Terraform state files'
+        )
+        text(
+            name: 'TERRAFORM_CONFIG',
+            description: 'Terraform tfvars for the cluster_nodes module',
+            defaultValue: '''aws_access_key = "${AWS_ACCESS_KEY_ID}"
+aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
+aws_ami = "ami-01b0ef1ab7898646f"
+instance_type = "t3a.2xlarge"
+aws_security_group = ["sg-07a98dc3474d4eb9f"]
+aws_subnet = "subnet-0377a1ca391d51cae"
+airgap_setup = false
+proxy_setup = false
+aws_volume_size = 500
+aws_volume_type = "gp3"
+aws_hostname_prefix = "${HOSTNAME_PREFIX}"
+aws_region = "us-west-1"
+aws_route53_zone = "qa.rancher.space"
+aws_ssh_user = "ec2-user"
+aws_vpc = "vpc-081cec85dbe35e9bd"
+public_ssh_key = "ssh_public_key.pub"
+private_ssh_key = "~/.ssh/${AWS_SSH_PEM_KEY_NAME}"
+nodes = [
+    {
+        count = 3
+        role  = ["etcd", "cp", "worker"]
+    },
+    {
+        count = 1
+        role  = ["worker"]
+    }
+]'''
+        )
+        text(
+            name: 'ANSIBLE_VARIABLES',
+            description: 'Ansible group_vars for RKE2 install + Rancher Helm deploy',
+            defaultValue: '''---
+kubernetes_version: ${RKE2_VERSION}
+cni: calico
+kubeconfig_file: "/workspace/qa-infra-automation/ansible/rke2/default/kubeconfig.yaml"
+cert_manager_version: "1.17.4"
+bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
+password: "${RANCHER_ADMIN_PASSWORD}"
+rancher_version: ${RANCHER_VERSION}
+rancher_image_tag: ${RANCHER_IMAGE_TAG}
+rancher_chart_repo_url: ${RANCHER_CHART_REPO_URL}
+upgrade_mode: false
+rancher_version_upgrade: ">=0.0.0-0"
+rancher_image_tag_upgrade: "latest"
+rancher_chart_repo_upgrade: "rancher-upgrade"
+rancher_chart_upgrade_repo_url: "https://releases.rancher.com/server-charts/alpha"
+k8s_upgrade_mode: false
+kubernetes_version_upgrade: v1.35.2+rke2r1
+server_flags: |
+    ingress-controller: traefik'''
+        )
+
+        // ── Test parameters ──────────────────────────────────────
+        text(
+            name: 'CATTLE_TEST_CONFIG',
+            description: 'Test configuration YAML (cattle-config). Token will be injected automatically.',
+            defaultValue: '''awsNodeTemplate:
+    accessKey: ${AWS_ACCESS_KEY_ID}
+    ami: ami-0b8e245d9e93c05fa
+    blockDurationMinutes: 0
+    encryptEbsVolume: false
+    httpEndpoint: enabled
+    httpTokens: optional
+    iamInstanceProfile: EngineeringUsersUS
+    insecureTransport: false
+    instanceType: t3.xlarge
+    keypairName: jenkins-elliptic-validation.pem
+    monitoring: false
+    privateAddressOnly: false
+    region: us-east-2
+    requestSpotInstance: true
+    retries: 5
+    rootSize: 16
+    secretKey: ${AWS_SECRET_ACCESS_KEY}
+    securityGroup:
+    - qa_default_ipv4
+    securityGroupReadonly: false
+    spotPrice: 0.5
+    sshUser: ubuntu
+    subnetId: subnet-ee8cac86
+    type: amazonec2Config
+    useEbsOptimizedInstance: false
+    usePrivateAddress: false
+    volumeType: gp3
+    vpcId: vpc-bfccf4d7
+    zone: a
+awsMachineConfigs:
+    region: us-east-2
+    awsMachineConfig:
+    - ami: ami-0b8e245d9e93c05fa
+      roles: ["etcd","controlplane","worker"]
+      instanceType: t3a.xlarge
+      retries: "5"
+      rootSize: "100"
+      securityGroup:
+      - qa_default_ipv4
+      sshUser: ubuntu
+      volumeType: gp3
+      vpcId: vpc-bfccf4d7
+      zone: a
+awsCredentials:
+    accessKey: ${AWS_ACCESS_KEY_ID}
+    defaultRegion: us-east-2
+    secretKey: ${AWS_SECRET_ACCESS_KEY}
+awsEC2Configs:
+    awsAMI: ami-02ec473a7c3a2db48
+    awsAccessKeyID: ${AWS_ACCESS_KEY_ID}
+    awsSecretAccessKey: ${AWS_SECRET_ACCESS_KEY}
+    region: us-east-2
+    awsEC2Config:
+    - awsAMI: ami-053835e36b16f97d0
+      awsCICDInstanceTag: rancher-validation
+      awsIAMProfile: EngineeringUsersUS
+      awsSSHKeyName: jenkins-elliptic-validation.pem
+      awsSecurityGroups:
+      - sg-08e8243a8cfbea8a0
+      awsUser: ec2-user
+      instanceType: t3a.2xlarge
+      isWindows: false
+      volumeSize: 50
+      roles: [etcd, controlplane, worker]
+provisioningInput:
+    psact: "rancher-privileged"
+    cni:
+    - calico
+    nodeProviders:
+    - ec2
+    machinePools:
+    - machinePoolConfig:
+        etcd: true
+        controlplane: false
+        worker: false
+        quantity: 1
+    - machinePoolConfig:
+        etcd: false
+        controlplane: true
+        worker: false
+        quantity: 1
+    - machinePoolConfig:
+        etcd: false
+        controlplane: false
+        worker: true
+        quantity: 1
+    nodePools:
+    - nodeRoles:
+        etcd: true
+        controlplane: false
+        worker: false
+        quantity: 1
+    - nodeRoles:
+        etcd: false
+        controlplane: true
+        worker: false
+        quantity: 1
+    - nodeRoles:
+        etcd: false
+        controlplane: false
+        worker: true
+        quantity: 1
+    providers:
+    - aws
+corralRancherHA:
+    name: rancherha
+sshPath:
+    sshPath: "/root/go/src/github.com/rancher/tests/validation/.ssh"
+flags:
+    desiredflags: InstallRancher|Short
+rancher:
+    host: ${HOSTNAME_PREFIX}.qa.rancher.space
+    adminPassword: ${ADMIN_PASSWORD}
+    insecure: true
+    cleanup: false'''
+        )
+        booleanParam(
+            name: 'BUILD_DOWNSTREAM_CLUSTER',
+            defaultValue: true,
+            description: 'Provision a downstream Kubernetes cluster through Rancher'
+        )
+        text(
+            name: 'DOWNSTREAM_CLUSTER_CONFIG',
+            description: 'Terraform tfvars for the downstream cluster created through Rancher',
+            defaultValue: '''kubernetes_version = "v1.35.1+rke2r1"
+is_network_policy = false
+machine_pools = [ {
+control_plane_role = true
+worker_role = true
+etcd_role = true
+quantity = 1
+} ]
+create_new = true
+generate_name = "recurring-tf"
+machine_global_config = {
+cni = "calico"
+ingress-controller = "traefik"
+}
+node_config = {
+aws_access_key = "${AWS_ACCESS_KEY_ID}"
+aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
+access_key     = "${AWS_ACCESS_KEY_ID}"
+secret_key     = "${AWS_SECRET_ACCESS_KEY}"
+
+aws_ami = "ami-01b0ef1ab7898646f"
+aws_ssh_user = "ec2-user"
+aws_instance_type = "t3a.2xlarge"
+aws_security_group = ["allopen-dualstack"]
+
+aws_subnet = "subnet-0377a1ca391d51cae"
+aws_availability_zone = "b"
+aws_vpc = "vpc-081cec85dbe35e9bd"
+aws_region    = "us-west-1"
+aws_volume_size   = 50
+aws_volume_type   = "gp3"
+}
+
+cloud_provider = "aws"
+insecure = true'''
+        )
+
+        // ── Downstream job parameters ────────────────────────────
+        string(
+            name: 'RECURRING_JOB',
+            defaultValue: 'go-recurring-daily-job',
+            description: 'Name of the orchestrator job (Jenkinsfile.e2e) to trigger for each image tag'
+        )
+        string(
+            name: 'INDIVIDUAL_JOB',
+            defaultValue: 'go-recurring-daily-individual-job',
+            description: 'Name of the individual test job passed to the orchestrator'
+        )
+        string(
+            name: 'TEST_PACKAGE',
+            defaultValue: './validation/...',
+            description: 'Go test package path passed to the downstream job'
+        )
+        string(
+            name: 'GOTEST_TESTCASE_PROVISIONING',
+            defaultValue: '',
+            description: 'Go test case regex for provisioning tests (-run flag)'
+        )
+        string(
+            name: 'GOTEST_TESTCASE_VALIDATION',
+            defaultValue: '',
+            description: 'Go test case regex for validation tests (-run flag)'
+        )
+        string(
+            name: 'PROVISIONING_TAGS',
+            defaultValue: '',
+            description: 'Go build tags for provisioning tests'
+        )
+        string(
+            name: 'VALIDATION_TEST_TAGS',
+            defaultValue: 'pit.daily',
+            description: 'Go build tags for validation tests'
+        )
+        string(
+            name: 'TEST_TIMEOUT',
+            defaultValue: '3h',
+            description: 'Timeout for downstream test jobs'
+        )
+        string(
+            name: 'QASE_REPORTER_SCRIPT',
+            defaultValue: 'build_qase_reporter_v2.sh',
+            description: 'Qase reporter script name in pipeline/scripts/'
+        )
+        string(
+            name: 'QASE_SCHEMA_PREFIX',
+            defaultValue: '',
+            description: 'Schema file prefix for Qase operations, for example hostbusters or pit'
+        )
+        string(
+            name: 'TEST_RUN_NAME',
+            defaultValue: 'Recurring Test Run',
+            description: 'Test run name for Qase reporting'
+        )
+    }
+
+    stages {
+        stage('Trigger Per-Version Jobs') {
+            steps {
+                script {
+                    def isPitJob = env.JOB_NAME.contains('go-pit')
+                    def recurringJob = params.RECURRING_JOB
+                    def individualJob = params.INDIVIDUAL_JOB
+                    def hostnamePrefix = params.HOSTNAME_PREFIX
+                    def validationTags = params.VALIDATION_TEST_TAGS
+                    if (isPitJob) {
+                        recurringJob = 'go-pit-daily-job'
+                        individualJob = 'go-pit-daily-individual-job'
+                        hostnamePrefix = "pit-${hostnamePrefix}"
+                        if (env.JOB_NAME.contains('weekly')) {
+                            validationTags = "pit.weekly"
+                        }
+                    }
+
+                    def imageTags = params.RANCHER_IMAGE_TAGS.split(',').collect { it.trim() }
+
+                    // Map image tags to hostname suffixes for unique DNS entries
+                    def hostnameSuffixMap = [
+                        'v2.8-head': 'v28',
+                        'v2.9-head': 'v29',
+                        'v2.10-head': 'v210',
+                        'v2.11-head': 'v211',
+                        'v2.12-head': 'v212',
+                        'head': 'main'
+                    ]
+
+                    // Map image tags to Rancher chart versions
+                    def tagChartMap = [
+                        'v2.8-head': '2.8.11',
+                        'v2.9-head': '2.9.5',
+                        'v2.10-head': '2.10.1',
+                        'v2.11-head': '2.11.1',
+                        'v2.12-head': '2.12.1',
+                        'head': 'latest'
+                    ]
+
+                    // Tags that should use the prime chart repo
+                    def primeChartTags = ['head', 'v2.9-head']
+
+                    def jobs = [:]
+
+                    for (String imageTag : imageTags) {
+                        def tag = imageTag // capture for closure
+                        def suffix = hostnameSuffixMap.get(tag, tag.replaceAll('[^a-zA-Z0-9]', ''))
+                        def hostname = "${hostnamePrefix}${suffix}"
+                        def rancherVersion = tagChartMap.get(tag, params.RANCHER_VERSION)
+
+                        // Update TERRAFORM_CONFIG with per-tag hostname
+                        def tfConfig = params.TERRAFORM_CONFIG.replace(
+                            "aws_hostname_prefix = \"${hostnamePrefix}\"",
+                            "aws_hostname_prefix = \"${hostname}\""
+                        )
+
+                        // Update CATTLE_TEST_CONFIG with per-tag hostname
+                        def cattleConfig = params.CATTLE_TEST_CONFIG.replace(
+                            "host: ${hostnamePrefix}.qa.rancher.space",
+                            "host: ${hostname}.qa.rancher.space"
+                        )
+
+                        def jobParams = [
+                            string(name: 'QA_JENKINS_LIBRARY_BRANCH', value: params.QA_JENKINS_LIBRARY_BRANCH),
+                            string(name: 'TESTS_REPO_URL', value: params.TESTS_REPO_URL),
+                            string(name: 'TESTS_BRANCH', value: params.TESTS_BRANCH),
+                            string(name: 'QA_INFRA_REPO_URL', value: params.QA_INFRA_REPO_URL),
+                            string(name: 'QA_INFRA_BRANCH', value: params.QA_INFRA_BRANCH),
+                            string(name: 'HOSTNAME_PREFIX', value: hostname),
+                            string(name: 'RKE2_VERSION', value: params.RKE2_VERSION),
+                            string(name: 'RANCHER_VERSION', value: rancherVersion),
+                            string(name: 'RANCHER_IMAGE_TAG', value: tag),
+                            string(name: 'RANCHER_CHART_REPO_URL', value: params.RANCHER_CHART_REPO_URL),
+                            password(name: 'RANCHER_BOOTSTRAP_PASSWORD', value: params.RANCHER_BOOTSTRAP_PASSWORD),
+                            password(name: 'RANCHER_ADMIN_PASSWORD', value: params.RANCHER_ADMIN_PASSWORD),
+                            booleanParam(name: 'DESTROY_ON_FAILURE', value: params.DESTROY_ON_FAILURE),
+                            booleanParam(name: 'DESTROY_AFTER_TESTS', value: params.DESTROY_AFTER_TESTS),
+                            string(name: 'S3_BUCKET_NAME', value: params.S3_BUCKET_NAME),
+                            string(name: 'S3_BUCKET_REGION', value: params.S3_BUCKET_REGION),
+                            string(name: 'S3_KEY_PREFIX', value: params.S3_KEY_PREFIX),
+                            text(name: 'TERRAFORM_CONFIG', value: tfConfig),
+                            text(name: 'ANSIBLE_VARIABLES', value: params.ANSIBLE_VARIABLES),
+                            text(name: 'CATTLE_TEST_CONFIG', value: cattleConfig),
+                            booleanParam(name: 'BUILD_DOWNSTREAM_CLUSTER', value: params.BUILD_DOWNSTREAM_CLUSTER),
+                            text(name: 'DOWNSTREAM_CLUSTER_CONFIG', value: params.DOWNSTREAM_CLUSTER_CONFIG),
+                            string(name: 'INDIVIDUAL_JOB', value: individualJob),
+                            string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
+                            string(name: 'GOTEST_TESTCASE_PROVISIONING', value: params.GOTEST_TESTCASE_PROVISIONING),
+                            string(name: 'GOTEST_TESTCASE_VALIDATION', value: params.GOTEST_TESTCASE_VALIDATION),
+                            string(name: 'PROVISIONING_TAGS', value: params.PROVISIONING_TAGS),
+                            string(name: 'VALIDATION_TEST_TAGS', value: validationTags),
+                            string(name: 'TEST_TIMEOUT', value: params.TEST_TIMEOUT),
+                            string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
+                            string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
+                        ]
+
+                        jobs["${tag}"] = {
+                            build job: recurringJob, parameters: jobParams, propagate: false
+                        }
+                    }
+
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.RANCHER_IMAGE_TAGS}"
+                    currentBuild.description = "Testing: ${imageTags.join(', ')} on ${hostnamePrefix}"
+
+                    parallel jobs
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo 'One or more per-version jobs failed. Check individual job logs for details.'
+        }
+    }
+}

@@ -38,6 +38,8 @@ node {
     def filename = "config.yaml"
     def testRunID
 
+    def yqVersion = "v4.47.2"
+  
     // rancher
     def rancherRepo = scm.getUserRemoteConfigs()[0].getUrl()
     if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
@@ -271,7 +273,7 @@ node {
                 }
               }
               stage('Setup') {
-                sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
+                sh returnStdout: true, script: "wget -qO ./yq https://github.com/mikefarah/yq/releases/download/${yqVersion}/yq_linux_amd64 && wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/${yqVersion}/checksums && awk '/^yq_linux_amd64 / {print \$19 \"  ./yq\"}' ./yq_checksums > ./yq.sha256 && test -s ./yq.sha256 && sha256sum -c ./yq.sha256 | grep -q ': OK$' && rm -f ./yq_checksums ./yq.sha256"
                 sh returnStdout:true, script: 'chmod a+x ./yq'
               }
               stage("Build Environment") {
@@ -429,6 +431,7 @@ node {
                         string(name: 'TAGS', value: "${defaultTag}"),
                         string(name: 'GOTEST_TESTCASE', value: "${testCase}"),
                         string(name: 'QASE_TEST_RUN_ID', value: "${testRunID}"),
+                        string(name: 'QASE_SCHEMA_PREFIX', value: "${env.QASE_SCHEMA_PREFIX}"),
                         string(name: 'RKE_VERSION', value: "${env.RKE_VERSION}")
                       ]
 
@@ -468,6 +471,7 @@ node {
                         string(name: 'TAGS', value: "${defaultTag}"),
                         string(name: 'GOTEST_TESTCASE', value: "${testCase}" ),
                         string(name: 'QASE_TEST_RUN_ID', value: "${testRunID}"),
+                        string(name: 'QASE_SCHEMA_PREFIX', value: "${env.QASE_SCHEMA_PREFIX}"),
                         string(name: 'RKE_VERSION', value: "${env.RKE_VERSION}")
                       ]
 
@@ -504,6 +508,7 @@ node {
                         string(name: 'TAGS', value: "${defaultTag}"),
                         string(name: 'GOTEST_TESTCASE', value: "${testCase}"),
                         string(name: 'QASE_TEST_RUN_ID', value: "${testRunID}"),
+                        string(name: 'QASE_SCHEMA_PREFIX', value: "${env.QASE_SCHEMA_PREFIX}"),
                         string(name: 'RKE_VERSION', value: "${env.RKE_VERSION}")
                       ]
 

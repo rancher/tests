@@ -1,4 +1,4 @@
-//go:build validation || recurring || pit.daily
+//go:build validation || recurring || pit.weekly
 
 package rke2
 
@@ -102,13 +102,27 @@ func TestNodeDriver(t *testing.T) {
 			clusterConfig.MachinePools = tt.machinePools
 
 			require.NotNil(t, clusterConfig.Provider)
-			if clusterConfig.Provider != "vsphere" && tt.isWindows {
-				t.Skip("Windows test requires access to vsphere")
-			}
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
+
+			if clusterConfig.Provider == "vsphere" && tt.isWindows {
+				windowsImage := false
+				for _, vmConfig := range machineConfigSpec.VmwareMachineConfigs.VmwarevsphereMachineConfig {
+					if vmConfig.OS == "windows" {
+						logrus.Info("Windows image found in machine configs")
+						windowsImage = true
+						break
+					}
+				}
+
+				if !windowsImage {
+					t.Skip("No windows image provided")
+				}
+			} else if clusterConfig.Provider != "vsphere" && tt.isWindows {
+				t.Skip("Windows test requires access to vsphere")
+			}
 
 			logrus.Info("Provisioning cluster")
 			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
@@ -124,6 +138,10 @@ func TestNodeDriver(t *testing.T) {
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(r.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
 			require.NoError(t, err)
 		})
 

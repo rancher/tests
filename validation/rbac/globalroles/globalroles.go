@@ -6,9 +6,9 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
 	"github.com/rancher/shepherd/extensions/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,34 +19,21 @@ const (
 )
 
 var (
-	customGlobalRole = v3.GlobalRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "",
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				Verbs:     []string{"get", "list", "watch"},
-				APIGroups: []string{"*"},
-				Resources: []string{"*"},
+	customGlobalRole = func() *v3.GlobalRole {
+		return &v3.GlobalRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namegen.AppendRandomString("custom-global-role-"),
 			},
-		},
+			Rules: []rbacv1.PolicyRule{
+				{
+					Verbs:     []string{"get", "list", "watch"},
+					APIGroups: []string{"*"},
+					Resources: []string{"*"},
+				},
+			},
+		}
 	}
 )
-
-func createCustomGlobalRole(client *rancher.Client, globalRole *v3.GlobalRole) (*v3.GlobalRole, error) {
-	globalRole.Name = namegen.AppendRandomString("testgr")
-	createdGlobalRole, err := client.WranglerContext.Mgmt.GlobalRole().Create(globalRole)
-	if err != nil {
-		return nil, err
-	}
-
-	createdGlobalRole, err = rbacapi.GetGlobalRoleByName(client, createdGlobalRole.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	return createdGlobalRole, err
-}
 
 func createUserWithBuiltinRole(client *rancher.Client, builtinGlobalRole rbac.Role) (*management.User, error) {
 	createdUser, err := users.CreateUserWithRole(client, users.UserConfig(), builtinGlobalRole.String())
@@ -58,7 +45,7 @@ func createUserWithBuiltinRole(client *rancher.Client, builtinGlobalRole rbac.Ro
 }
 
 func createCustomGlobalRoleAndUser(client *rancher.Client, globalRole *v3.GlobalRole) (*v3.GlobalRole, *management.User, error) {
-	createdGlobalRole, err := createCustomGlobalRole(client, globalRole)
+	createdGlobalRole, err := extrbacapi.CreateGlobalRole(client, globalRole)
 	if err != nil {
 		return nil, nil, err
 	}

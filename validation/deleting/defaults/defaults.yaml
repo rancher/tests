@@ -44,6 +44,3 @@ awsMachineConfigs:
     sshUser: "<required>"
     vpcId: "<required>"
     retries: "5"
-
-logging:
-   level: "info"

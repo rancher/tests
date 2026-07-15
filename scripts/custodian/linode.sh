@@ -1,8 +1,10 @@
 #!/bin/bash
 
+LINODE_CLI_VERSION="${LINODE_CLI_VERSION:-5.56.0}"
+
 if ! command -v linode-cli &> /dev/null; then
   echo "linode-cli not found, installing..."
-  pip3 install linode-cli --upgrade --break-system-packages
+  pip3 install linode-cli==${LINODE_CLI_VERSION} --break-system-packages
 fi
 
 if [ ! -f "$HOME/.config/linode-cli" ]; then

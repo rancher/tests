@@ -1,0 +1,23 @@
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/Registries/Auth
+  cases:
+  - description: Provisions an 3 node 1etcd/1cp/1worker node driver with an authenticated private registry
+    title: Auth_RKE2
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision an rke2 node driver with an authenticated private registry
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state

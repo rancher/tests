@@ -5,10 +5,10 @@ import (
 )
 
 const (
-    harvesterExtensionsName     = "harvester"
-	stackstateExtensionsName	= "observability"
-	stackstatePluginName		= "rancher-ui-plugins"
-	local						= "local"
+	harvesterExtensionsName  = "harvester"
+	stackstateExtensionsName = "observability"
+	stackstatePluginName     = "rancher-ui-plugins"
+	local                    = "local"
 )
 
 var (

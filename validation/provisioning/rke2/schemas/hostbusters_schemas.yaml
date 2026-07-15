@@ -128,6 +128,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -208,8 +209,33 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
-  - description: Provisions a 4 node etcd/cp/worker/windows custom cluster
-    title: RKE2_Custom|etcd|cp|worker|windows
+  - description: Provisions a 4 node etcd/cp/worker/windows 2019 custom cluster
+    title: RKE2_Custom|etcd|cp|worker|windows_2019
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision a rke2 custom cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 4 node etcd/cp/worker/windows 2022 custom cluster
+    title: RKE2_Custom|etcd|cp|worker|windows_2022
     priority: 4
     type: 8
     is_flaky: 0
@@ -258,6 +284,137 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/RKE2/Imported
+  cases:
+  - description: Provisions a 1 node all roles imported cluster
+    title: RKE2_Imported|etcd_cp_worker
+    priority: 4
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a RKE2 imported cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 2 node stacked roles imported cluster
+    title: RKE2_Imported|etcd_cp|worker
+    priority: 4
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a RKE2 imported cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3 node split roles imported cluster
+    title: RKE2_Imported|etcd|cp|worker
+    priority: 4
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a RKE2 imported cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 8 node 3etcd/2cp/3worker imported cluster
+    title: RKE2_Imported|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a RKE2 imported cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -338,13 +495,14 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
   suite: Go Automation/Provisioning/RKE2/Hardened
   cases:
   - description: Provisions a hardened 3etcd/2cp/3worker custom cluster
-    title: RKE2_CIS_1.9_Profile|3_etcd|2_cp|3_worker
+    title: RKE2_Rancher_Compliance
     priority: 4
     type: 8
     is_flaky: 0
@@ -373,6 +531,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -428,6 +587,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -537,6 +697,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -567,6 +728,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -597,6 +759,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects:
   - RRT
   - RM
@@ -692,6 +855,7 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
 - projects: [RRT, RM]
   suite: Go Automation/Provisioning/RKE2/HostnameTruncation
   cases:
@@ -770,6 +934,10 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
+- projects: [RRT, RM]
+  suite: Go Automation/Provisioning/RKE2/CNI
+  cases:
   - description: Provisions a 3 node split roles node driver cluster
     title: RKE2_Node_Driver|Calico
     priority: 4

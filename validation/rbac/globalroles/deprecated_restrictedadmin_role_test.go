@@ -15,11 +15,11 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
-	"github.com/rancher/tests/actions/machinepools"
 	rbac "github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/users"
+	"github.com/rancher/tests/actions/kubeapi/users"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,10 +28,10 @@ import (
 
 type RestrictedAdminTestSuite struct {
 	suite.Suite
-	client             *rancher.Client
-	session            *session.Session
-	cluster            *management.Cluster
-	clusterConfig      *clusters.ClusterConfig
+	client        *rancher.Client
+	session       *session.Session
+	cluster       *management.Cluster
+	clusterConfig *clusters.ClusterConfig
 }
 
 const (

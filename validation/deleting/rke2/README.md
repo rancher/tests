@@ -27,7 +27,6 @@ Verifies that a cluster can be deleted.
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeleteClusterTestSuite/TestDeletingCluster -timeout=1h -v`
 
-
 ### Delete cluster init machine test
 
 #### Description:

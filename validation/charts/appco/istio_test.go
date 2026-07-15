@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || extended || pit.daily) && !sanity && !stress
+//go:build (validation || infra.any || cluster.any || extended || pit.daily || pit.elemental || pit.harvester.daily) && !sanity && !stress
 
 package appco
 
@@ -13,13 +13,11 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
-	extensionClusters "github.com/rancher/shepherd/extensions/clusters"
-	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
+	"github.com/rancher/shepherd/extensions/fleet"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
-	namespaces "github.com/rancher/tests/actions/namespaces"
-	log "github.com/sirupsen/logrus"
+	"github.com/rancher/tests/actions/namespaces"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -33,6 +31,21 @@ type IstioTestSuite struct {
 }
 
 func (i *IstioTestSuite) TearDownSuite() {
+	i.T().Log("Deleting Istio resources")
+	// Create a fresh session and client for cleanup since the test sessions
+	// were already closed by TearDownTest. Without this, kubectl.Command
+	// fails with "attempted to register cleanup function to closed test session".
+	cleanupSession := session.NewSession()
+	cleanupClient, err := rancher.NewClient("", cleanupSession)
+	if err != nil {
+		i.T().Logf("Failed to create cleanup client: %v", err)
+	} else {
+		_, err := charts.DeleteIstioResources(cleanupClient, i.cluster.ID)
+		if err != nil {
+			i.T().Logf("Failed to delete Istio resources: %v", err)
+		}
+	}
+	cleanupSession.Cleanup()
 	i.session.Cleanup()
 }
 
@@ -53,10 +66,10 @@ func (i *IstioTestSuite) SetupSuite() {
 
 	i.cluster = cluster
 
-	provisioningClusterID, err := extensionClusters.GetV1ProvisioningClusterByName(client, clusterName)
+	provisioningClusterID, err := clusters.GetV1ProvisioningClusterByName(client, clusterName)
 	require.NoError(i.T(), err)
 
-	steveCluster, err := client.Steve.SteveType(extensionClusters.ProvisioningSteveResourceType).ByID(provisioningClusterID)
+	steveCluster, err := client.Steve.SteveType(clusters.ProvisioningSteveResourceType).ByID(provisioningClusterID)
 	require.NoError(i.T(), err)
 
 	newCluster := &provv1.Cluster{}
@@ -90,7 +103,7 @@ func (i *IstioTestSuite) SetupTest() {
 	}
 	project, err := client.Management.Project.Create(projectConfig)
 	require.NoError(i.T(), err)
-	require.Equal(i.T(), project.Name, exampleAppProjectName)
+	require.Equal(i.T(), exampleAppProjectName, project.Name)
 
 	i.T().Logf("Creating %s namespace", charts.RancherIstioNamespace)
 	_, err = namespaces.CreateNamespace(client, charts.RancherIstioNamespace, "{}", map[string]string{}, map[string]string{}, project)
@@ -114,7 +127,7 @@ func (i *IstioTestSuite) TestAmbientInstallation() {
 	i.T().Log("Installing Ambient Istio AppCo")
 	istioChart, logCmd, err := watchAndwaitInstallIstioAppCo(i.client, i.cluster.ID, *AppCoUsername, *AppCoAccessToken, istioAmbientModeSet)
 	require.NoError(i.T(), err)
-	require.True(i.T(), strings.Contains(logCmd, "deployed"))
+	require.True(i.T(), strings.Contains(logCmd, expectedDeployLog))
 	require.True(i.T(), istioChart.IsAlreadyInstalled)
 }
 
@@ -126,7 +139,7 @@ func (i *IstioTestSuite) TestGatewayStandaloneInstallation() {
 	}
 	project, err := i.client.Management.Project.Create(projectConfig)
 	require.NoError(i.T(), err)
-	require.Equal(i.T(), project.Name, projectName)
+	require.Equal(i.T(), projectName, project.Name)
 
 	diffNamespace := namegenerator.AppendRandomString("diff-namespace")
 	i.T().Logf("Creating %s namespace", diffNamespace)
@@ -148,7 +161,7 @@ func (i *IstioTestSuite) TestGatewayDiffNamespaceInstallation() {
 	}
 	project, err := i.client.Management.Project.Create(projectConfig)
 	require.NoError(i.T(), err)
-	require.Equal(i.T(), project.Name, projectName)
+	require.Equal(i.T(), projectName, project.Name)
 
 	diffNamespace := namegenerator.AppendRandomString("diff-namespace")
 	i.T().Logf("Creating %s namespace", diffNamespace)
@@ -170,7 +183,7 @@ func (i *IstioTestSuite) TestInstallWithCanaryUpgrade() {
 	}
 	project, err := i.client.Management.Project.Create(projectConfig)
 	require.NoError(i.T(), err)
-	require.Equal(i.T(), project.Name, projectName)
+	require.Equal(i.T(), projectName, project.Name)
 
 	diffNamespace := namegenerator.AppendRandomString("diff-namespace")
 	i.T().Logf("Creating %s namespace", diffNamespace)
@@ -214,8 +227,8 @@ func (i *IstioTestSuite) TestFleetInstallation() {
 	repoObject, err := watchAndwaitCreateFleetGitRepo(i.client, i.clusterName, i.cluster.ID)
 	require.NoError(i.T(), err)
 
-	log.Info("Getting GitRepoStatus")
-	gitRepo, err := i.client.Steve.SteveType(extensionsfleet.FleetGitRepoResourceType).ByID(repoObject.ID)
+	i.T().Log("Getting GitRepoStatus")
+	gitRepo, err := i.client.Steve.SteveType(fleet.FleetGitRepoResourceType).ByID(repoObject.ID)
 	require.NoError(i.T(), err)
 
 	gitStatus := &v1alpha1.GitRepoStatus{}

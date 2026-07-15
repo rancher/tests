@@ -1,0 +1,34 @@
+workloadConfigs:
+  deployment:
+    metadata:
+      generateName: "testdeployment-"
+    spec:
+      selector:
+        matchLabels:
+          "workload.user.cattle.io/workloadselector": "testdeployment"
+      template:
+        metadata:
+          labels:
+            "workload.user.cattle.io/workloadselector": "testdeployment"
+        spec:
+          containers:
+            - name: "testdeployment"
+              image: "ranchertest/mytestcontainer"
+              imagePullPolicy: "Always"
+  
+  daemonset:
+    metadata:
+      generateName: "testdaemonset-"
+    spec:
+      selector:
+        matchLabels:
+          "workload.user.cattle.io/workloadselector": "testdaemonset"
+      template:
+        metadata:
+          labels:
+            "workload.user.cattle.io/workloadselector": "testdaemonset"
+        spec:
+          containers:
+            - name: "test1"
+              image: "ranchertest/mytestcontainer"
+              imagePullPolicy: "Always"

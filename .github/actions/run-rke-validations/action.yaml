@@ -1,0 +1,44 @@
+---
+name: Run RKE Validations
+description: "Runs RKE validations based on the specified RKE version"
+
+inputs:
+  qase-id:
+    description: "Qase Test Run ID"
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Run RKE Validations
+      shell: bash
+      run: |
+        set +e
+
+        gotestsum --format standard-verbose \
+          --packages=github.com/rancher/tests/validation/standalone/rke \
+          --junitfile results.xml \
+          --jsonfile results.json \
+          -- -timeout=3h -tags=validation -v
+
+        rke_exit=$?
+        echo "rke_exit=$rke_exit" >> "$GITHUB_ENV"
+
+        if [[ "${{ inputs.qase-id }}" ]]; then
+          ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
+          ./validation/reporter
+        fi
+
+    - name: Show failed tests
+      run: |
+        failed=0
+        if [ "$rke_exit" -ne 0 ]; then
+          echo "Failed RKE validations:"
+          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
+          failed=1
+        fi
+
+        if [ "$failed" -eq 1 ]; then
+          exit 1
+        fi
+      shell: bash

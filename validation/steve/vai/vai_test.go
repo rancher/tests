@@ -17,7 +17,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/projects"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	"github.com/rancher/tests/interoperability/vai/database"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -844,7 +844,7 @@ func (v *VaiTestSuite) runSecretPageSizeTestCases(testCases []secretPageSizeTest
 
 			secrets, _ := createPageSizeTestSecrets(tc.numSecrets)
 
-			_, ns, err := projects.CreateProjectAndNamespaceUsingWrangler(v.client, v.cluster.ID)
+			_, ns, err := projectapi.CreateProjectAndNamespace(v.client, v.cluster.ID)
 			require.NoError(v.T(), err)
 
 			for i := range secrets {

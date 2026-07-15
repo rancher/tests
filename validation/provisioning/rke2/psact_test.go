@@ -133,6 +133,10 @@ func TestPSACT(t *testing.T) {
 			err = pods.VerifyClusterPods(r.client, cluster)
 			require.NoError(t, err)
 
+			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
+			require.NoError(t, err)
+
 			logrus.Infof("Verifying PSACT (%s)", cluster.Name)
 			provisioning.VerifyPSACT(t, r.client, cluster)
 

@@ -8,14 +8,14 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extsecretapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
-	"github.com/rancher/tests/actions/projects"
+	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
+	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/secrets"
-	"github.com/rancher/tests/actions/workloads/deployment"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,7 +70,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCreateSecretAsEnvVar() {
 	for _, tt := range tests {
 		rbos.Run("Validate secret creation for user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbos.client, rbos.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rbos.client, rbos.cluster.ID)
 			assert.NoError(rbos.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -82,12 +82,12 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCreateSecretAsEnvVar() {
 			secretData := map[string][]byte{
 				"hello": []byte("world"),
 			}
-			createdSecret, err := secrets.CreateSecret(standardUserClient, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
+			createdSecret, err := secretapi.CreateSecret(standardUserClient, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rbos.T(), err, "failed to create secret")
 				log.Infof("As a %v, create a deployment using the secret as an environment variable.", tt.role.String())
-				_, err = deployment.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, 1, createdSecret.Name, "", true, false, false, true)
+				_, err = deploymentapi.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, "", 1, createdSecret.Name, "", true, false, false, true)
 				assert.NoError(rbos.T(), err, "failed to create deployment with secret")
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
 				assert.Error(rbos.T(), err)
@@ -115,7 +115,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCreateSecretAsVolume() {
 	for _, tt := range tests {
 		rbos.Run("Validate secret creation for user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbos.client, rbos.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rbos.client, rbos.cluster.ID)
 			assert.NoError(rbos.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -127,12 +127,12 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCreateSecretAsVolume() {
 			secretData := map[string][]byte{
 				"hello": []byte("world"),
 			}
-			createdSecret, err := secrets.CreateSecret(standardUserClient, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
+			createdSecret, err := secretapi.CreateSecret(standardUserClient, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rbos.T(), err, "failed to create secret")
 				log.Infof("As a %v, create a deployment using the secret as an environment variable.", tt.role.String())
-				_, err = deployment.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, 1, createdSecret.Name, "", false, true, false, true)
+				_, err = deploymentapi.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, "", 1, createdSecret.Name, "", false, true, false, true)
 				assert.NoError(rbos.T(), err, "failed to create deployment with secret")
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
 				assert.Error(rbos.T(), err)
@@ -160,7 +160,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestListSecret() {
 	for _, tt := range tests {
 		rbos.Run("Validate listing secret for user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbos.client, rbos.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rbos.client, rbos.cluster.ID)
 			assert.NoError(rbos.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -172,13 +172,11 @@ func (rbos *RbacOpaqueSecretTestSuite) TestListSecret() {
 			secretData := map[string][]byte{
 				"hello": []byte("world"),
 			}
-			createdSecret, err := secrets.CreateSecret(rbos.client, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
+			createdSecret, err := secretapi.CreateSecret(rbos.client, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 			assert.NoError(rbos.T(), err, "failed to create secret")
 
-			log.Infof("As a %v, list the secrets.", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbos.cluster.ID)
-			assert.NoError(rbos.T(), err)
-			secretList, err := standardUserContext.Core.Secret().List(namespace.Name, metav1.ListOptions{})
+			log.Infof("As a %v, list the secret.", tt.role.String())
+			secretList, err := extsecretapi.ListSecrets(standardUserClient, rbos.cluster.ID, namespace.Name, metav1.ListOptions{})
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rbos.T(), err, "failed to list secret")
@@ -210,7 +208,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestUpdateSecret() {
 	for _, tt := range tests {
 		rbos.Run("Validate updating secret as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbos.client, rbos.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rbos.client, rbos.cluster.ID)
 			assert.NoError(rbos.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -222,18 +220,15 @@ func (rbos *RbacOpaqueSecretTestSuite) TestUpdateSecret() {
 			secretData := map[string][]byte{
 				"hello": []byte("world"),
 			}
-			createdSecret, err := secrets.CreateSecret(rbos.client, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
+			createdSecret, err := secretapi.CreateSecret(rbos.client, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 			assert.NoError(rbos.T(), err, "failed to create secret")
 
-			log.Infof("As a %v, update the secrets.", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbos.cluster.ID)
-			assert.NoError(rbos.T(), err)
-
+			log.Infof("As a %v, update the secret.", tt.role.String())
 			newData := map[string][]byte{
 				"foo": []byte("bar"),
 			}
-			updatedSecretObj := secrets.SecretCopyWithNewData(createdSecret, newData)
-			updatedSecret, err := standardUserContext.Core.Secret().Update(updatedSecretObj)
+			updatedSecretObj := secretapi.SecretCopyWithNewData(createdSecret, newData)
+			updatedSecret, err := extsecretapi.UpdateSecret(standardUserClient, rbos.cluster.ID, updatedSecretObj)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rbos.T(), err, "failed to update secret")
@@ -241,8 +236,8 @@ func (rbos *RbacOpaqueSecretTestSuite) TestUpdateSecret() {
 				assert.Contains(rbos.T(), updatedSecret.Data, "foo")
 				assert.Equal(rbos.T(), updatedSecret.Data["foo"], []byte("bar"))
 
-				log.Infof("As a %v, create a deployment using the updated secrets.", tt.role.String())
-				_, err = deployment.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, 1, updatedSecret.Name, "", true, false, false, true)
+				log.Infof("As a %v, create a deployment using the updated secret.", tt.role.String())
+				_, err = deploymentapi.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, "", 1, updatedSecret.Name, "", true, false, false, true)
 				assert.NoError(rbos.T(), err, "failed to create deployment with secret")
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
 				assert.Error(rbos.T(), err)
@@ -270,7 +265,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestDeleteSecret() {
 	for _, tt := range tests {
 		rbos.Run("Validate deleting secret as user with role "+tt.role.String(), func() {
 			log.Info("Create a project and a namespace in the project.")
-			adminProject, namespace, err := projects.CreateProjectAndNamespaceUsingWrangler(rbos.client, rbos.cluster.ID)
+			adminProject, namespace, err := projectapi.CreateProjectAndNamespace(rbos.client, rbos.cluster.ID)
 			assert.NoError(rbos.T(), err)
 
 			log.Infof("Create a standard user and add the user to a cluster/project role %s", tt.role)
@@ -282,20 +277,16 @@ func (rbos *RbacOpaqueSecretTestSuite) TestDeleteSecret() {
 			secretData := map[string][]byte{
 				"hello": []byte("world"),
 			}
-			createdSecret, err := secrets.CreateSecret(rbos.client, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
+			createdSecret, err := secretapi.CreateSecret(rbos.client, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 			assert.NoError(rbos.T(), err, "failed to create secret")
 
-			log.Infof("As a %v, delete the secrets.", tt.role.String())
-			standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbos.cluster.ID)
-			assert.NoError(rbos.T(), err)
-
-			err = standardUserContext.Core.Secret().Delete(namespace.Name, createdSecret.Name, &metav1.DeleteOptions{})
+			log.Infof("As a %v, delete the secret.", tt.role.String())
+			err = extsecretapi.DeleteSecret(standardUserClient, rbos.cluster.ID, namespace.Name, createdSecret.Name, false)
 			switch tt.role.String() {
 			case rbac.ClusterOwner.String(), rbac.ProjectOwner.String(), rbac.ProjectMember.String():
 				assert.NoError(rbos.T(), err, "failed to delete secret")
-				secretList, err := rbos.client.WranglerContext.Core.Secret().List(namespace.Name, metav1.ListOptions{})
-				assert.NoError(rbos.T(), err)
-				assert.Equal(rbos.T(), len(secretList.Items), 0)
+				err = extsecretapi.WaitForSecretDeletion(standardUserClient, rbos.cluster.ID, namespace.Name, createdSecret.Name)
+				assert.NoError(rbos.T(), err, "failed waiting for secret to be deleted")
 			case rbac.ClusterMember.String(), rbac.ReadOnly.String():
 				assert.Error(rbos.T(), err)
 				assert.True(rbos.T(), errors.IsForbidden(err))
@@ -317,52 +308,50 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCrudSecretAsClusterMember() {
 	projectTemplate.Annotations = map[string]string{
 		"field.cattle.io/creatorId": standardUser.ID,
 	}
-	createdProject, err := standardUserClient.WranglerContext.Mgmt.Project().Create(projectTemplate)
+	createdProject, err := projectapi.CreateProjectWithTemplate(standardUserClient, rbos.cluster.ID, projectTemplate)
 	require.NoError(rbos.T(), err)
 	err = projectapi.WaitForProjectFinalizerToUpdate(standardUserClient, createdProject.Name, createdProject.Namespace, 2)
 	require.NoError(rbos.T(), err)
 
-	namespace, err := namespaceapi.CreateNamespaceUsingWrangler(standardUserClient, rbos.cluster.ID, createdProject.Name, nil)
+	namespace, err := namespaceapi.CreateNamespace(standardUserClient, rbos.cluster.ID, createdProject.Name, namegen.AppendRandomString("ns-"), "", nil, nil)
 	require.NoError(rbos.T(), err)
 
 	log.Infof("As a %v, create a secret in the project %v", role, createdProject.Name)
 	secretData := map[string][]byte{
 		"hello": []byte("world"),
 	}
-	createdSecret, err := secrets.CreateSecret(standardUserClient, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
+	createdSecret, err := secretapi.CreateSecret(standardUserClient, rbos.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.NoError(rbos.T(), err, "failed to create secret")
 
 	log.Infof("As a %v, create a deployment using the secret as an environment variable.", role)
-	_, err = deployment.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, 1, createdSecret.Name, "", true, false, false, true)
+	_, err = deploymentapi.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, "", 1, createdSecret.Name, "", true, false, false, true)
 	require.NoError(rbos.T(), err, "failed to create deployment with secret")
 
-	log.Infof("As a %v, list the secrets.", role)
-	standardUserContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rbos.cluster.ID)
-	require.NoError(rbos.T(), err)
-	secretList, err := standardUserContext.Core.Secret().List(namespace.Name, metav1.ListOptions{})
+	log.Infof("As a %v, list the secret.", role)
+	secretList, err := extsecretapi.ListSecrets(standardUserClient, rbos.cluster.ID, namespace.Name, metav1.ListOptions{})
 	require.NoError(rbos.T(), err, "failed to list secret")
 	require.Equal(rbos.T(), len(secretList.Items), 1)
 	require.Equal(rbos.T(), secretList.Items[0].Name, createdSecret.Name)
 
-	log.Infof("As a %v, update the secrets.", role)
+	log.Infof("As a %v, update the secret.", role)
 	newData := map[string][]byte{
 		"foo": []byte("bar"),
 	}
-	updatedSecretObj := secrets.SecretCopyWithNewData(&secretList.Items[0], newData)
-	updatedSecret, err := standardUserContext.Core.Secret().Update(updatedSecretObj)
+	updatedSecretObj := secretapi.SecretCopyWithNewData(&secretList.Items[0], newData)
+	updatedSecret, err := extsecretapi.UpdateSecret(standardUserClient, rbos.cluster.ID, updatedSecretObj)
 	require.NoError(rbos.T(), err, "failed to update secret")
 	require.NotNil(rbos.T(), updatedSecret)
 	require.Contains(rbos.T(), updatedSecret.Data, "foo")
 	require.Equal(rbos.T(), updatedSecret.Data["foo"], []byte("bar"))
 
 	log.Infof("As a %v, create a deployment using the secret as an environment variable.", role)
-	_, err = deployment.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, 1, updatedSecret.Name, "", true, false, false, true)
+	_, err = deploymentapi.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, "", 1, updatedSecret.Name, "", true, false, false, true)
 	require.NoError(rbos.T(), err, "failed to create deployment with secret")
 
-	log.Infof("As a %v, delete the secrets.", role)
-	err = standardUserContext.Core.Secret().Delete(namespace.Name, updatedSecret.Name, &metav1.DeleteOptions{})
+	log.Infof("As a %v, delete the secret.", role)
+	err = extsecretapi.DeleteSecret(standardUserClient, rbos.cluster.ID, namespace.Name, updatedSecret.Name, true)
 	require.NoError(rbos.T(), err, "failed to delete secret")
-	secretList, err = standardUserContext.Core.Secret().List(namespace.Name, metav1.ListOptions{})
+	secretList, err = extsecretapi.ListSecrets(standardUserClient, rbos.cluster.ID, namespace.Name, metav1.ListOptions{})
 	require.NoError(rbos.T(), err)
 	require.Equal(rbos.T(), len(secretList.Items), 0)
 }

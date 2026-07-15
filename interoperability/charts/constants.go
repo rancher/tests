@@ -3,6 +3,7 @@ package charts
 const (
 	ExtensionNamespace        = "cattle-ui-plugin-system"
 	HarvesterExtensionName    = "harvester"
+	NeuVectorUIExtensionName  = "neuvector-ui-ext"
 	StackstateExtensionsName  = "observability"
 	UIPluginRepoName          = "rancher-ui-plugins"
 	StackstateK8sAgent        = "stackstate-k8s-agent"

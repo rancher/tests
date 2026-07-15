@@ -4,10 +4,10 @@ node {
     def workPath = "/root/go/src/github.com/rancher/tests/validation/"
     def rancherImageTags = "${env.RANCHER_IMAGE_TAGS}".split(',')
     def jobName = "${JOB_NAME}"
-    def config = env.CONFIG
-    def ansibleConfig = env.ANSIBLE_CONFIG
-    def terraformConfig = env.TERRAFORM_CONFIG
-    def downstreamClusterTerraformConfig = env.DOWNSTREAM_CLUSTERTERRAFORM_CONFIG 
+    def config = env.CATTLE_TEST_CONFIG ?: ""
+    def ansibleConfig = env.ANSIBLE_VARIABLES ?: ""
+    def terraformConfig = env.TERRAFORM_CONFIG ?: ""
+    def downstreamClusterTerraformConfig = env.DOWNSTREAM_CLUSTER_CONFIG ?: ""
     def filename = "config.yaml"
     def ansibleVarsFilename = "vars.yaml"
     def terraformVarsfilename = "cluster.tfvars"
@@ -22,21 +22,23 @@ node {
     def branch = "main"
     def recurringRunJob = ""
 
+    def yqVersion = "v4.47.2"
+
     if ("${env.RECURRING_JOB}" != "null" && "${env.RECURRING_JOB}" != "") {
       recurringRunJob = "${env.RECURRING_JOB}"
     } else {
       if (jobName.contains('/')) { 
-        jobNames = jobName.split('/')
+        def jobNames = jobName.split('/')
         jobName = jobNames[jobNames.size() - 1] 
       }
-      recurringRunJob = (jobName =~ /(go-recurring-[a-z]+)/)[0][1]
-      recurringRunJob = "${recurringRunJob}-job"
+      recurringRunJob = jobName.replace('-multibranch', '')
     }
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"
     }
 
+    def rancherRepo = "https://github.com/rancher/tests"
     if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
       rancherRepo = "${env.REPO}"
     }
@@ -49,9 +51,9 @@ node {
     def configFiles = []
     wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
       withFolderProperties {
-        paramsMap = []
+        def paramsMap = []
         params.each {
-          if (it.value && it.value.trim() != "") {
+          if (it.value != null && it.value.toString().trim() != "") {
               paramsMap << "$it.key=$it.value"
           }
         }
@@ -95,12 +97,12 @@ node {
                   ansibleConfigPath = "./tests/validation/${ansibleVarsFilename}"
                   terraformConfigPath = "./tests/validation/${terraformVarsfilename}"
                 }
-                sh returnStdout: true, script: 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64'
+                sh returnStdout: true, script: "wget -qO ./yq https://github.com/mikefarah/yq/releases/download/${yqVersion}/yq_linux_amd64 && wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/${yqVersion}/checksums && grep -q '^yq_linux_amd64 ' ./yq_checksums && awk '/^yq_linux_amd64 / {print \$19 \"  ./yq\"}' ./yq_checksums | sha256sum -c - && rm -f ./yq_checksums"
                 sh returnStdout:true, script: 'chmod a+x ./yq'
             }
             stage('Run Different Release Branches Testing') {
               try {
-                  jobs = [:]
+                  def jobs = [:]
                   def hostnamePrefix = sh ( // Read from the correct terraform config file
                     script: "sed -n 's|^aws_hostname_prefix = \\\"\\(.*\\)\\\"|\\1|p' ${terraformConfigPath}",
                     returnStdout: true
@@ -131,12 +133,13 @@ node {
                     def ansibleConfigYaml = readFile(file: "${ansibleConfigPath}")
                     def terraformConfigYaml = readFile(file: "${terraformConfigPath}")
                     def goValidationParams = [
-                        text(name: 'CONFIG', value: configYaml),
-                        text(name: 'ANSIBLE_CONFIG', value: ansibleConfigYaml),
+                        text(name: 'CATTLE_TEST_CONFIG', value: configYaml),
+                        text(name: 'ANSIBLE_VARIABLES', value: ansibleConfigYaml),
                         text(name: 'TERRAFORM_CONFIG', value: terraformConfigYaml),
-                        text(name: 'DOWNSTREAM_CLUSTERTERRAFORM_CONFIG', value: downstreamClusterTerraformConfig),
+                        text(name: 'DOWNSTREAM_CLUSTER_CONFIG', value: downstreamClusterTerraformConfig),
                         string(name: 'BRANCH', value: "${branch}"),
                         string(name: 'TEST_RUN_NAME', value: "${testTag}-${env.TEST_RUN_NAME}"),
+                        string(name: 'VALIDATION_TEST_TAGS', value: "${env.VALIDATION_TEST_TAGS}"),
                       ]
 
                       jobs["$testTag-test-validation"] = { build job: recurringRunJob, parameters: goValidationParams }

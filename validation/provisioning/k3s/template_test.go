@@ -1,4 +1,4 @@
-//go:build validation || recurring
+//go:build validation || template
 
 package k3s
 
@@ -10,7 +10,6 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
-	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
@@ -22,6 +21,7 @@ import (
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
+	"github.com/rancher/tests/actions/clusters"
 	actionsDefaults "github.com/rancher/tests/actions/config/defaults"
 	configDefaults "github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
@@ -29,7 +29,6 @@ import (
 	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
-	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -40,12 +39,11 @@ const (
 )
 
 type templateTest struct {
-	client             *rancher.Client
-	standardUserClient *rancher.Client
-	session            *session.Session
-	templateConfig     *provisioninginput.TemplateConfig
-	cloudCredentials   *v1.SteveAPIObject
-	cattleConfig       map[string]any
+	client           *rancher.Client
+	session          *session.Session
+	templateConfig   *provisioninginput.TemplateConfig
+	cloudCredentials *v1.SteveAPIObject
+	cattleConfig     map[string]any
 }
 
 func templateSetup(t *testing.T) templateTest {
@@ -77,9 +75,6 @@ func templateSetup(t *testing.T) templateTest {
 	k.cloudCredentials, err = provider.CloudCredFunc(client, cloudCredentialConfig)
 	require.NoError(t, err)
 
-	k.standardUserClient, _, _, err = standard.CreateStandardUser(k.client)
-	require.NoError(t, err)
-
 	return k
 }
 
@@ -88,10 +83,9 @@ func TestTemplate(t *testing.T) {
 	k := templateSetup(t)
 
 	tests := []struct {
-		name   string
-		client *rancher.Client
+		name string
 	}{
-		{"K3S_Template|etcd|cp|worker", k.standardUserClient},
+		{"K3S_Template|etcd|cp|worker"},
 	}
 
 	for _, tt := range tests {
@@ -103,19 +97,22 @@ func TestTemplate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			templateName := namegenerator.AppendRandomString(actionsDefaults.K3S + "-template")
+			k.templateConfig.Repo.ObjectMeta.Name = templateName
+
 			_, err := steve.CreateAndWaitForResource(k.client, namespaces.FleetLocal+"/"+localCluster, stevetypes.ClusterRepo, k.templateConfig.Repo, stevestates.Active, 5*time.Second, defaults.FiveMinuteTimeout)
 			require.NoError(t, err)
 
 			k8sversions, err := kubernetesversions.Default(k.client, actionsDefaults.K3S, nil)
 			require.NoError(t, err)
 
-			clusterName := namegenerator.AppendRandomString(actionsDefaults.K3S + "-template")
+			templateClusterName := namegenerator.AppendRandomString(actionsDefaults.K3S + "-template")
 
-			logrus.Infof("Provisioning template cluster (%s)", clusterName)
-			err = charts.InstallTemplateChart(k.client, k.templateConfig.Repo.ObjectMeta.Name, k.templateConfig.TemplateName, clusterName, k8sversions[0], k.cloudCredentials)
+			logrus.Infof("Provisioning template cluster (%s)", templateClusterName)
+			err = charts.InstallTemplateChart(k.client, k.templateConfig.Repo.ObjectMeta.Name, k.templateConfig.TemplateName, templateClusterName, k8sversions[0], k.cloudCredentials)
 			require.NoError(t, err)
 
-			_, cluster, err := clusters.GetProvisioningClusterByName(k.client, clusterName, namespaces.FleetDefault)
+			cluster, err := clusters.GetClusterByName(k.client, templateClusterName)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
@@ -130,6 +127,10 @@ func TestTemplate(t *testing.T) {
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 			err = pods.VerifyClusterPods(k.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(k.client, cluster.Name)
 			require.NoError(t, err)
 		})
 	}

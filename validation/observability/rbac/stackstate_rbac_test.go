@@ -14,6 +14,7 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extencharts "github.com/rancher/shepherd/extensions/charts"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
+	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/config"
@@ -81,7 +82,7 @@ func (rb *StackStateRBACTestSuite) SetupSuite() {
 	require.NoError(rb.T(), err)
 	rb.projectID = project.ID
 
-	ssNamespaceExists, err := namespaces.GetNamespaceByName(client, cluster.ID, interoperability.StackstateNamespace)
+	ssNamespaceExists, err := extnamespaceapi.GetNamespaceByName(client, cluster.ID, interoperability.StackstateNamespace)
 	if ssNamespaceExists == nil && k8sErrors.IsNotFound(err) {
 		_, err = namespaces.CreateNamespace(client, cluster.ID, project.Name, interoperability.StackstateNamespace, "", map[string]string{}, map[string]string{})
 	}

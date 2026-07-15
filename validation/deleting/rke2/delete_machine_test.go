@@ -1,4 +1,4 @@
-//go:build (validation || recurring || ipv6 || dualstack || infra.rke2k3s) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke1 && !stress && !sanity && !extended
+//go:build (validation || recurring || ipv6 || dualstack || infra.rke2k3s) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !stress && !sanity && !extended
 
 package rke2
 
@@ -138,6 +138,10 @@ func (d *DeleteMachineTestSuite) TestDeleteMachine() {
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
 			err = pods.VerifyClusterPods(d.client, tt.cluster)
+			require.NoError(d.T(), err)
+
+			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(d.client, tt.cluster.Name)
 			require.NoError(d.T(), err)
 		})
 

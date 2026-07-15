@@ -9,12 +9,12 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/session"
-	clusterapi "github.com/rancher/tests/actions/kubeapi/clusters"
+	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
-	"github.com/rancher/tests/actions/projects"
+	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
 	"github.com/rancher/tests/actions/rbac"
-	"github.com/rancher/tests/actions/secrets"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -59,7 +59,7 @@ func (rb *ClusterRoleTestSuite) testSetupUserAndProject(role string) (*managemen
 	require.NoError(rb.T(), err)
 
 	log.Infof("Adding a standard user to the downstream cluster as %s", role)
-	_, errUserRole := rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, role)
+	_, errUserRole := rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser.ID, role)
 	require.NoError(rb.T(), errUserRole)
 	standardUserClient, err = standardUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -70,10 +70,10 @@ func (rb *ClusterRoleTestSuite) testSetupUserAndProject(role string) (*managemen
 	} else {
 		userClient = standardUserClient
 	}
-	createdProject, createdNamespace, err := projects.CreateProjectAndNamespaceUsingWrangler(userClient, rb.cluster.ID)
+	createdProject, createdNamespace, err := projectapi.CreateProjectAndNamespace(userClient, rb.cluster.ID)
 	require.NoError(rb.T(), err)
 
-	_, errProjectOwnerRole := rbacapi.CreateProjectRoleTemplateBinding(rb.client, standardUser, createdProject, rbac.CustomManageProjectMember.String())
+	_, errProjectOwnerRole := rbacapi.CreateProjectRoleTemplateBinding(rb.client, standardUser.ID, createdProject, rbac.CustomManageProjectMember.String())
 	require.NoError(rb.T(), errProjectOwnerRole)
 	standardUserClient, err = standardUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -90,7 +90,7 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsUserAsProjectOwner() {
 	additionalUser, additionalUserClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
 	require.NoError(rb.T(), err)
 
-	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, clusterOwnerProject, rbac.ProjectOwner.String())
+	createdPrtb, err := rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser.ID, clusterOwnerProject, rbac.ProjectOwner.String())
 	require.NoError(rb.T(), err)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -118,7 +118,7 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsUserAsClusterOwner() {
 	additionalUser, additionalUserClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
 	require.NoError(rb.T(), err)
 
-	crtb, err := rbacapi.CreateClusterRoleTemplateBinding(standardUserClient, rb.cluster.ID, additionalUser, rbac.ClusterOwner.String())
+	crtb, err := rbacapi.CreateClusterRoleTemplateBinding(standardUserClient, rb.cluster.ID, additionalUser.ID, rbac.ClusterOwner.String())
 	require.NoError(rb.T(), err)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -146,7 +146,7 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsClusterMemberAsProjectOwner(
 	additionalUser, additionalUserClient, err := rbac.SetupUser(rb.client, rbac.StandardUser.String())
 	require.NoError(rb.T(), err)
 
-	_, err = rbacapi.CreateClusterRoleTemplateBinding(standardUserClient, rb.cluster.ID, additionalUser, rbac.ClusterMember.String())
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(standardUserClient, rb.cluster.ID, additionalUser.ID, rbac.ClusterMember.String())
 	require.NoError(rb.T(), err)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -155,7 +155,7 @@ func (rb *ClusterRoleTestSuite) TestClusterOwnerAddsClusterMemberAsProjectOwner(
 	require.NoError(rb.T(), err)
 	assert.Equal(rb.T(), 1, len(clusterList.Data))
 
-	_, err = rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, clusterOwnerProject, rbac.ProjectOwner.String())
+	_, err = rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser.ID, clusterOwnerProject, rbac.ProjectOwner.String())
 	require.NoError(rb.T(), err)
 	additionalUserClient, err = additionalUserClient.ReLogin()
 	require.NoError(rb.T(), err)
@@ -184,16 +184,16 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithPrtbAccess() {
 	require.NoError(rb.T(), err, "Failed to create main role template")
 
 	log.Info("Adding the user to the downstream cluster with the cluster role template")
-	_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, createdRoleTemplate.Name)
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser.ID, createdRoleTemplate.Name)
 	require.NoError(rb.T(), err)
-	_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, rbac.ProjectsView.String())
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser.ID, rbac.ProjectsView.String())
 	require.NoError(rb.T(), err)
 
 	log.Info("As cluster member with PRTB permissions, verifying CRUD projectroletemplatebindings")
-	prtb, err := rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser, adminProject, rbac.PrtbView.String())
+	prtb, err := rbacapi.CreateProjectRoleTemplateBinding(standardUserClient, additionalUser.ID, adminProject, rbac.PrtbView.String())
 	require.NoError(rb.T(), err)
 
-	userContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, clusterapi.LocalCluster)
+	userContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, extclusterapi.LocalCluster)
 	require.NoError(rb.T(), err)
 	prtb, err = userContext.Mgmt.ProjectRoleTemplateBinding().Get(prtb.Namespace, prtb.Name, metav1.GetOptions{})
 	require.NoError(rb.T(), err)
@@ -225,19 +225,19 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithSecretAccess() {
 	require.NoError(rb.T(), err, "Failed to create main role template")
 
 	log.Info("Adding the user to the downstream cluster with the cluster role template")
-	_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, createdRoleTemplate.Name)
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser.ID, createdRoleTemplate.Name)
 	require.NoError(rb.T(), err)
-	_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser, rbac.ProjectsView.String())
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(rb.client, rb.cluster.ID, standardUser.ID, rbac.ProjectsView.String())
 	require.NoError(rb.T(), err)
 
 	log.Info("As cluster member with secrets permissions, verifying CRUD secrets")
 	secretData := map[string][]byte{
 		"hello": []byte("world"),
 	}
-	createdSecret, err := secrets.CreateSecret(standardUserClient, rb.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
+	createdSecret, err := secretapi.CreateSecret(standardUserClient, rb.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.NoError(rb.T(), err, "failed to create secret")
 
-	userContext, err := clusterapi.GetClusterWranglerContext(standardUserClient, rb.cluster.ID)
+	userContext, err := extclusterapi.GetClusterWranglerContext(standardUserClient, rb.cluster.ID)
 	require.NoError(rb.T(), err)
 	_, err = userContext.Core.Secret().Get(createdSecret.Namespace, createdSecret.Name, metav1.GetOptions{})
 	require.NoError(rb.T(), err)
@@ -245,7 +245,7 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithSecretAccess() {
 	newData := map[string][]byte{
 		"foo": []byte("bar"),
 	}
-	updatedSecretObj := secrets.SecretCopyWithNewData(createdSecret, newData)
+	updatedSecretObj := secretapi.SecretCopyWithNewData(createdSecret, newData)
 	updatedSecret, err := userContext.Core.Secret().Update(updatedSecretObj)
 	require.NoError(rb.T(), err)
 

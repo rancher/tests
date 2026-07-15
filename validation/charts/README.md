@@ -19,8 +19,8 @@ From there, please use one of the following links to check charts tests:
 2. [Gatekeeper Chart](gatekeeper_test.go)
 3. [Istio Chart](istio_test.go)
 4. [Webhook Chart](webhook_test.go)
+5. [Webhook Security Settings](webhook_security_settings_test.go)
 
 
 ## Note
 * For webhook charts, validations are run on the local cluster and the cluster name provided in the config.yaml. Please make sure to provide a downstream cluster name in the config.yaml instead of local cluster, so the validations are not run on the local cluster twice.
-

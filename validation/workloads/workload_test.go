@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || sanity || pit.daily || pit.harvester.daily) && !stress && !extended
+//go:build (validation || infra.any || cluster.any || sanity || pit.daily || pit.elemental || pit.harvester.daily) && !stress && !extended
 
 package workloads
 
@@ -11,6 +11,8 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extcronjobsapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/cronjobs"
+	extdaemonsetapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/daemonsets"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -123,7 +125,7 @@ func (w *WorkloadTestSuite) TestCronjobs() {
 		createFunc   func(client *v1.Client, clusterID string, cronjob *batchv1.CronJob) (*batchv1.CronJob, error)
 		verifyFunc   func(client *rancher.Client, clusterID, namespace, cronJobName string) error
 	}{
-		{"WorkloadCronjobTest", "* * * * *", cronjob.CreateCronJobFromConfig, cronjob.VerifyCronJob},
+		{"WorkloadCronjobTest", "* * * * *", cronjob.CreateCronJobFromConfig, extcronjobsapi.WaitForCronJobActive},
 	}
 
 	for _, workloadTest := range workloadTests {
@@ -155,7 +157,7 @@ func (w *WorkloadTestSuite) TestDaemonsets() {
 		createFunc func(client *v1.Client, clusterID string, daemonset *appv1.DaemonSet) (*appv1.DaemonSet, error)
 		verifyFunc func(client *rancher.Client, clusterID, namespace, daemonsetName string) error
 	}{
-		{"WorkloadDaemonSetTest", daemonset.CreateDaemonSetFromConfig, daemonset.VerifyDaemonset},
+		{"WorkloadDaemonSetTest", daemonset.CreateDaemonSetFromConfig, extdaemonsetapi.WaitForDaemonSetReady},
 	}
 
 	for _, workloadTest := range workloadTests {

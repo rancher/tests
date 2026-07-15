@@ -1,0 +1,174 @@
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Networking/Connectivity
+  cases:
+  - title: "Network_Policy_Connectivity"
+    description: "Validate that pods deployed in a namespace can be pinged from a control-plane node"
+    automation: 2
+    steps:
+    - action: "Deploy DaemonSet with test container"
+      expectedresult: "DaemonSet created successfully"
+      position: 1
+    - action: "Wait for DaemonSet to be ready"
+      expectedresult: "DaemonSet pods available"
+      position: 2
+    - action: "Run ping command in all nodes"
+      data: "ping -c 1 <podIP>"
+      expectedresult: "Each ping should return '0% packet loss'"
+      position: 3
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - title: "Host_Port_Connectivity"
+    description: "Deploy DaemonSet with HostPort mapping and verify connectivity from nodes"
+    automation: 2
+    steps:
+    - action: "Deploy DaemonSet with HostPort mapping"
+      expectedresult: "DaemonSet created and pods running with HostPort"
+      position: 1
+    - action: "Wait for DaemonSet replicas to be ready"
+      expectedresult: "All replicas available"
+      position: 2
+    - action: "Validate DaemonSet HostPort connectivity via SSH"
+      expectedresult: "DaemonSet HostPort accessible from nodes"
+      position: 3
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - title: "Node_Port_Connectivity"
+    description: "Deploy DaemonSet with NodePort service and verify connectivity"
+    automation: 2
+    steps:
+    - action: "Deploy DaemonSet"
+      expectedresult: "DaemonSet created successfully"
+      position: 1
+    - action: "Create Service with NodePort for DaemonSet"
+      expectedresult: "Service created with NodePort assigned"
+      position: 2
+    - action: "Validate Service NodePort connectivity via SSH"
+      expectedresult: "Service NodePort accessible from nodes"
+      position: 3
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - title: "Cluster_IP_Connectivity"
+    description: "Deploy DaemonSet with ClusterIP service and verify internal connectivity"
+    automation: 2
+    steps:
+    - action: "Deploy DaemonSet"
+      expectedresult: "DaemonSet created successfully"
+      position: 1
+    - action: "Create ClusterIP service"
+      expectedresult: "ClusterIP service created successfully"
+      position: 2
+    - action: "Validate ClusterIP service connectivity via SSH"
+      expectedresult: "Service NodePort accessible from nodes"
+      position: 3
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - title: "Load_Balancer_Connectivity"
+    description: "Deploy DaemonSet with LoadBalancer service and verify external connectivity"
+    automation: 2
+    steps:
+    - action: "Deploy DaemonSet"
+      expectedresult: "DaemonSet created successfully"
+      position: 1
+    - action: "Create LoadBalancer service"
+      expectedresult: "LoadBalancer provisioned by cloud provider"
+      position: 2
+    - action: "Verify LoadBalancer connectivity"
+      expectedresult: "Service accessible via LoadBalancer endpoint"
+      position: 3
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - title: "Cluster_IP_Scale_And_Upgrade"
+    description: "Verify that ClusterIP services remain functional during workload scaling and upgrade"
+    automation: 2
+    steps:
+    - action: "Deploy initial Deployment with 2 replicas and ClusterIP service"
+      expectedresult: "Deployment created and service available"
+      position: 1
+    - action: "Scale up Deployment to 3 replicas"
+      expectedresult: "Workload scaled successfully, service still accessible"
+      position: 2
+    - action: "Scale down Deployment to 2 replicas"
+      expectedresult: "Workload scaled successfully, service still accessible"
+      position: 3
+    - action: "Upgrade Deployment container"
+      expectedresult: "Deployment updated, service remains functional"
+      position: 4
+    - action: "Validate ClusterIP service connectivity after upgrade"
+      expectedresult: "Service NodePort accessible from nodes"
+      position: 5
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - title: "Host_Port_Scale_And_Upgrade"
+    description: "Verify that HostPort remains functional during Deployment scaling and upgrade"
+    automation: 2
+    steps:
+    - action: "Deploy Deployment with HostPort mapping and 2 replicas"
+      expectedresult: "Deployment created and reachable on HostPort"
+      position: 1
+    - action: "Scale up Deployment to 3 replicas"
+      expectedresult: "All pods reachable on HostPort"
+      position: 2
+    - action: "Scale down Deployment to 2 replicas"
+      expectedresult: "Remaining pods reachable on HostPort"
+      position: 3
+    - action: "Upgrade Deployment container"
+      expectedresult: "Deployment updated, HostPort connectivity remains"
+      position: 4
+    - action: "Verify HostPort connectivity after upgrade"
+      expectedresult: "HostPort still accessible from nodes"
+      position: 5
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - title: "Node_Port_Scale_And_Upgrade"
+    description: "Verify NodePort service functionality during workload scaling and upgrade"
+    automation: 2
+    steps:
+    - action: "Deploy Deployment with 2 replicas and NodePort service"
+      expectedresult: "Deployment and service created successfully"
+      position: 1
+    - action: "Scale up Deployment to 3 replicas"
+      expectedresult: "NodePort service continues to work"
+      position: 2
+    - action: "Scale down Deployment to 2 replicas"
+      expectedresult: "NodePort service continues to work"
+      position: 3
+    - action: "Upgrade Deployment container"
+      expectedresult: "Deployment updated, NodePort connectivity remains"
+      position: 4
+    - action: "Verify NodePort connectivity after upgrade"
+      expectedresult: "Service NodePort accessible from nodes"
+      position: 5
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - title: "Load_Balance_Scale_And_Upgrade"
+    description: "Verify LoadBalancer service functionality during workload scaling and upgrade"
+    automation: 2
+    steps:
+    - action: "Deploy Deployment with 2 replicas and LoadBalancer service"
+      expectedresult: "Deployment and service created successfully"
+      position: 1
+    - action: "Scale up Deployment to 3 replicas"
+      expectedresult: "LoadBalancer connectivity remains functional"
+      position: 2
+    - action: "Scale down Deployment to 2 replicas"
+      expectedresult: "LoadBalancer connectivity remains functional"
+      position: 3
+    - action: "Upgrade Deployment container"
+      expectedresult: "Deployment updated, LoadBalancer connectivity remains"
+      position: 4
+    - action: "Verify LoadBalancer connectivity after upgrade"
+      expectedresult: "Service accessible via LoadBalancer endpoint"
+      position: 5
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

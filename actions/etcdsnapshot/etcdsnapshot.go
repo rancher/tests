@@ -41,67 +41,6 @@ func MatchNodeToAnyEtcdRole(client *rancher.Client, clusterID string) (int, *man
 	return numOfNodes, lastMatchingNode
 }
 
-// RKE1RetentionLimitCheck is a check that validates that the number of automatic snapshots on the cluster is under the retention limit
-func RKE1RetentionLimitCheck(client *rancher.Client, clusterName string) error {
-	clusterID, err := clusters.GetClusterIDByName(client, clusterName)
-	if err != nil {
-		return err
-	}
-
-	clusterResp, err := client.Management.Cluster.ByID(clusterID)
-	if err != nil {
-		return err
-	}
-
-	retentionLimit := clusterResp.RancherKubernetesEngineConfig.Services.Etcd.BackupConfig.Retention
-	s3Config := clusterResp.RancherKubernetesEngineConfig.Services.Etcd.BackupConfig.S3BackupConfig
-
-	isS3 := false
-	if s3Config != nil {
-		isS3 = true
-	}
-
-	snapshotManagementObjList, err := client.Management.EtcdBackup.ListAll(&types.ListOpts{
-		Filters: map[string]interface{}{
-			"clusterId": clusterID,
-		},
-	})
-	if err != nil {
-		return err
-	}
-
-	automaticSnapshots := []management.EtcdBackup{}
-
-	for _, snapshot := range snapshotManagementObjList.Data {
-		if !snapshot.Manual {
-			automaticSnapshots = append(automaticSnapshots, snapshot)
-		}
-	}
-
-	listOpts := metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/etcd=true"}
-	etcdNodes, err := nodes.GetNodes(client, clusterID, listOpts)
-	if err != nil {
-		return err
-	}
-
-	expectedSnapshotsNum := int(retentionLimit) * len(etcdNodes)
-	if isS3 {
-		expectedSnapshotsNum = expectedSnapshotsNum * 2
-	}
-
-	if len(automaticSnapshots) > expectedSnapshotsNum {
-		errMsg := fmt.Sprintf("retention limit exceeded: expected %d snapshots, found %d snapshots",
-			expectedSnapshotsNum, len(automaticSnapshots))
-
-		return errors.New(errMsg)
-	}
-
-	logrus.Infof("Snapshot retention limit respected, Snapshots Expected: %v Snapshots Found: %v",
-		expectedSnapshotsNum, len(automaticSnapshots))
-
-	return nil
-}
-
 // RKE2K3SRetentionLimitCheck is a check that validates that the number of automatic snapshots
 // on the cluster is under the retention limit.
 func RKE2K3SRetentionLimitCheck(client *rancher.Client, clusterName string) error {
