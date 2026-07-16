@@ -34,7 +34,7 @@ runs:
           --packages=github.com/rancher/tests/validation/provisioning/... \
           --junitfile results.xml \
           --jsonfile results_provisioning.json \
-          -- -timeout=3h -tags=${{ inputs.tags }} -v
+          -- -parallel 4 -timeout=3h -tags=${{ inputs.tags }} -v
 
         provisioning_exit=$?
         echo "provisioning_exit=$provisioning_exit" >> "$GITHUB_ENV"

@@ -45,8 +45,9 @@ func VerifyDeployment(client *rancher.Client, clusterID, namespace, name string)
 		return err
 	}
 
+	// When creating an initial deployment on Windows, it by design takes a bit longer. Need a longer timeout to accomodate.
 	var deploymentConditions []appv1.DeploymentCondition
-	err = kwait.PollUntilContextTimeout(context.TODO(), 1*time.Second, defaults.TenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+	err = kwait.PollUntilContextTimeout(context.TODO(), 1*time.Second, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		deployment, err := GetDeploymentByName(steveclient, clusterID, namespace, name)
 		if err != nil {
 			return false, err

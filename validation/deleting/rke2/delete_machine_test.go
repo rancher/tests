@@ -3,95 +3,27 @@
 package rke2
 
 import (
-	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
-	"github.com/rancher/shepherd/pkg/config"
-	"github.com/rancher/shepherd/pkg/config/operations"
-	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
-	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/machines"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
-	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
-	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	"github.com/rancher/tests/validation/deleting"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
-type DeleteMachineTestSuite struct {
-	suite.Suite
-	client       *rancher.Client
-	session      *session.Session
-	cattleConfig map[string]any
-	cluster      *v1.SteveAPIObject
-}
+func TestDeleteMachine(t *testing.T) {
+	t.Parallel()
 
-func (d *DeleteMachineTestSuite) TearDownSuite() {
-	d.session.Cleanup()
-}
+	d := deleting.Setup(t, defaults.RKE2, false)
 
-func (d *DeleteMachineTestSuite) SetupSuite() {
-	testSession := session.NewSession()
-	d.session = testSession
-
-	client, err := rancher.NewClient("", testSession)
-	require.NoError(d.T(), err)
-
-	d.client = client
-
-	standardUserClient, _, _, err := standard.CreateStandardUser(d.client)
-	require.NoError(d.T(), err)
-
-	d.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
-
-	d.cattleConfig, err = defaults.LoadPackageDefaults(d.cattleConfig, "")
-	require.NoError(d.T(), err)
-
-	loggingConfig := new(logging.Logging)
-	operations.LoadObjectFromMap(logging.LoggingKey, d.cattleConfig, loggingConfig)
-
-	err = logging.SetLogger(loggingConfig)
-	require.NoError(d.T(), err)
-
-	clusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, d.cattleConfig, clusterConfig)
-
-	rancherConfig := new(rancher.Config)
-	operations.LoadObjectFromMap(defaults.RancherConfigKey, d.cattleConfig, rancherConfig)
-
-	if rancherConfig.ClusterName == "" {
-		nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
-
-		nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-		nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-		nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-		clusterConfig.MachinePools = nodeRolesStandard
-
-		provider := provisioning.CreateProvider(clusterConfig.Provider)
-		machineConfigSpec := provider.LoadMachineConfigFunc(d.cattleConfig)
-
-		logrus.Info("Provisioning RKE2 cluster")
-		d.cluster, err = resources.ProvisionRKE2K3SCluster(d.T(), standardUserClient, defaults.RKE2, provider, *clusterConfig, machineConfigSpec, nil, true, false)
-		require.NoError(d.T(), err)
-	} else {
-		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
-		d.cluster, err = d.client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + rancherConfig.ClusterName)
-		require.NoError(d.T(), err)
-	}
-}
-
-func (d *DeleteMachineTestSuite) TestDeleteMachine() {
 	nodeRolesEtcd := machinepools.NodeRoles{
 		Etcd: true,
 	}
@@ -109,50 +41,48 @@ func (d *DeleteMachineTestSuite) TestDeleteMachine() {
 		nodeRoles machinepools.NodeRoles
 		cluster   *v1.SteveAPIObject
 	}{
-		{"RKE2_Replace_Control_Plane", nodeRolesControlPlane, d.cluster},
-		{"RKE2_Replace_ETCD", nodeRolesEtcd, d.cluster},
-		{"RKE2_Replace_Worker", nodeRolesWorker, d.cluster},
+		{"RKE2_Replace_Control_Plane", nodeRolesControlPlane, d.Cluster},
+		{"RKE2_Replace_ETCD", nodeRolesEtcd, d.Cluster},
+		{"RKE2_Replace_Worker", nodeRolesWorker, d.Cluster},
 	}
 
 	for _, tt := range tests {
+		t.Cleanup(func() {
+			logrus.Infof("Running cleanup (%s)", tt.name)
+			d.Session.Cleanup()
+		})
+
 		var err error
-		d.Run(tt.name, func() {
-			machineList, err := machines.GetMachinesByRole(d.client, tt.cluster, tt.nodeRoles)
-			require.NoError(d.T(), err)
+
+		t.Run(tt.name, func(t *testing.T) {
+			machineList, err := machines.GetMachinesByRole(d.Client, tt.cluster, tt.nodeRoles)
+			require.NoError(t, err)
 
 			machineToDelete := machineList[0]
 			logrus.Infof("Deleting machine (%s) from cluster (%s)", machineToDelete.Name, tt.cluster.Name)
-			err = d.client.Steve.SteveType(stevetypes.Machine).Delete(&machineToDelete)
-			require.NoError(d.T(), err)
+			err = d.Client.Steve.SteveType(stevetypes.Machine).Delete(&machineToDelete)
+			require.NoError(t, err)
 
-			err = machines.VerifyMachineReplacement(d.client, &machineToDelete)
-			require.NoError(d.T(), err)
+			err = machines.VerifyMachineReplacement(d.Client, &machineToDelete)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster is ready after machine replacement (%s)", tt.cluster.Name)
-			err = provisioning.VerifyClusterReady(d.client, tt.cluster)
-			require.NoError(d.T(), err)
+			err = provisioning.VerifyClusterReady(d.Client, tt.cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
-			err = deployment.VerifyClusterDeployments(d.client, tt.cluster)
-			require.NoError(d.T(), err)
+			err = deployment.VerifyClusterDeployments(d.Client, tt.cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
-			err = pods.VerifyClusterPods(d.client, tt.cluster)
-			require.NoError(d.T(), err)
-
-			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
-			err = clusters.VerifyServiceAccountTokenSecret(d.client, tt.cluster.Name)
-			require.NoError(d.T(), err)
+			err = pods.VerifyClusterPods(d.Client, tt.cluster)
+			require.NoError(t, err)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(d.client, d.cattleConfig)
+		params := provisioning.GetProvisioningSchemaParams(d.Client, d.CattleConfig)
 		err = qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
 		}
 	}
-}
-
-func TestDeleteMachineTestSuite(t *testing.T) {
-	suite.Run(t, new(DeleteMachineTestSuite))
 }

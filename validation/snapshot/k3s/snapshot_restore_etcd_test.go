@@ -1,4 +1,4 @@
-//go:build validation || recurring
+//go:build (validation || recurring || proxy || ipv6 || dualstack || extended || infra.any || cluster.any || pit.weekly || pit.elemental) && !sanity && !stress
 
 package k3s
 
@@ -12,16 +12,15 @@ import (
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/validation/snapshot"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestS3SnapshotRestore(t *testing.T) {
+func TestSnapshotRestoreEtcd(t *testing.T) {
 	t.Parallel()
 
-	s := snapshot.Setup(t, defaults.K3S, true, false)
+	s := snapshot.Setup(t, defaults.K3S, false, false)
 
-	snapshotRestore := &etcdsnapshot.Config{
+	snapshotRestoreNone := &etcdsnapshot.Config{
 		UpgradeKubernetesVersion: "",
 		SnapshotRestore:          "none",
 		RecurringRestores:        1,
@@ -32,7 +31,7 @@ func TestS3SnapshotRestore(t *testing.T) {
 		etcdSnapshot *etcdsnapshot.Config
 		cluster      *v1.SteveAPIObject
 	}{
-		{"K3S_S3_Restore", snapshotRestore, s.Cluster},
+		{"K3S_Restore_ETCD", snapshotRestoreNone, s.Cluster},
 	}
 
 	for _, tt := range tests {
@@ -46,11 +45,6 @@ func TestS3SnapshotRestore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err = etcdsnapshot.CreateAndValidateSnapshotRestore(s.Client, tt.cluster.Name, tt.etcdSnapshot, snapshot.ContainerImage)
 			require.NoError(t, err)
-
-			if s.CreatedTestBucket && s.S3BucketName != "" {
-				err := etcdsnapshot.DeleteS3Bucket(s.S3BucketName, s.S3Region, s.AWSAccessKey, s.AWSSecretKey)
-				assert.NoError(t, err)
-			}
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(s.Client, s.CattleConfig)

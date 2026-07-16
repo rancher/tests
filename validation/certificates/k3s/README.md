@@ -25,7 +25,7 @@ The certificate test verifies that a cluster can rotate certificates.
 1. `K3S_Certificate_Rotation`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCertRotationTestSuite/TestCertRotation$ -timeout=2h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCertRotation -timeout=2h -v`
 
 ## Configurations
 

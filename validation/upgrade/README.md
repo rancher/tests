@@ -86,10 +86,11 @@ See below how to run the test:
 ### Kubernetes Upgrade
 
 #### RKE2/K3S
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeKubernetesTestSuite/TestUpgradeKubernetes"`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeKubernetes"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeKubernetes"`
 
 #### Windows
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestWindowsKubernetesUpgradeTestSuite/TestUpgradeWindowsKubernetes"`
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeWindowsKubernetes"`
 
 ## Cloud Provider Migration
 Migrates a cluster's cloud provider from in-tree to out-of-tree
