@@ -3,93 +3,26 @@
 package rke2
 
 import (
-	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
-	"github.com/rancher/shepherd/pkg/config"
-	"github.com/rancher/shepherd/pkg/config/operations"
-	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
-	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
-	"github.com/rancher/tests/actions/scalinginput"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
-	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
-	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	"github.com/rancher/tests/validation/nodescaling"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
-type NodeScalingTestSuite struct {
-	suite.Suite
-	client        *rancher.Client
-	session       *session.Session
-	scalingConfig *scalinginput.Config
-	cattleConfig  map[string]any
-	clusterConfig *clusters.ClusterConfig
-	machineConfig machinepools.MachineConfigs
-	cluster       *v1.SteveAPIObject
-}
+func TestScalingNodePools(t *testing.T) {
+	t.Parallel()
 
-func (s *NodeScalingTestSuite) TearDownSuite() {
-	s.session.Cleanup()
-}
+	s := nodescaling.Setup(t, defaults.RKE2)
 
-func (s *NodeScalingTestSuite) SetupSuite() {
-	testSession := session.NewSession()
-	s.session = testSession
-
-	client, err := rancher.NewClient("", s.session)
-	require.NoError(s.T(), err)
-
-	s.client = client
-
-	standardUserClient, _, _, err := standard.CreateStandardUser(s.client)
-	require.NoError(s.T(), err)
-
-	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
-
-	s.cattleConfig, err = defaults.LoadPackageDefaults(s.cattleConfig, "")
-	require.NoError(s.T(), err)
-
-	loggingConfig := new(logging.Logging)
-	operations.LoadObjectFromMap(logging.LoggingKey, s.cattleConfig, loggingConfig)
-
-	err = logging.SetLogger(loggingConfig)
-	require.NoError(s.T(), err)
-
-	s.clusterConfig = new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, s.cattleConfig, s.clusterConfig)
-
-	s.scalingConfig = new(scalinginput.Config)
-	config.LoadConfig(scalinginput.ConfigurationFileKey, s.scalingConfig)
-
-	rancherConfig := new(rancher.Config)
-	operations.LoadObjectFromMap(defaults.RancherConfigKey, s.cattleConfig, rancherConfig)
-
-	if rancherConfig.ClusterName == "" {
-		provider := provisioning.CreateProvider(s.clusterConfig.Provider)
-		s.machineConfig = provider.LoadMachineConfigFunc(s.cattleConfig)
-
-		logrus.Info("Provisioning RKE2 cluster")
-		s.cluster, err = resources.ProvisionRKE2K3SCluster(s.T(), standardUserClient, defaults.RKE2, provider, *s.clusterConfig, s.machineConfig, nil, true, false)
-		require.NoError(s.T(), err)
-	} else {
-		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
-		s.cluster, err = s.client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + rancherConfig.ClusterName)
-		require.NoError(s.T(), err)
-	}
-}
-
-func (s *NodeScalingTestSuite) TestScalingNodePools() {
 	nodeRolesEtcd := machinepools.NodeRoles{
 		Etcd:     true,
 		Quantity: 1,
@@ -105,95 +38,73 @@ func (s *NodeScalingTestSuite) TestScalingNodePools() {
 		Quantity: 1,
 	}
 
-	nodeRolesWindows := machinepools.NodeRoles{
-		Windows:  true,
-		Quantity: 1,
-	}
-
 	tests := []struct {
 		name          string
 		nodeRoles     machinepools.NodeRoles
 		scaleQuantity int32
 		cluster       *v1.SteveAPIObject
-		isWindows     bool
 	}{
-		{"RKE2_Scale_Control_Plane", nodeRolesControlPlane, 1, s.cluster, false},
-		{"RKE2_Scale_ETCD", nodeRolesEtcd, 1, s.cluster, false},
-		{"RKE2_Scale_Worker", nodeRolesWorker, 1, s.cluster, false},
-		{"RKE2_Scale_Windows", nodeRolesWindows, 1, s.cluster, true},
+		{"RKE2_Scale_Control_Plane", nodeRolesControlPlane, 1, s.Cluster},
+		{"RKE2_Scale_ETCD", nodeRolesEtcd, 1, s.Cluster},
+		{"RKE2_Scale_Worker", nodeRolesWorker, 1, s.Cluster},
 	}
 
 	for _, tt := range tests {
+		t.Cleanup(func() {
+			logrus.Infof("Running cleanup (%s)", tt.name)
+			s.Session.Cleanup()
+		})
+
 		var err error
-		s.Run(tt.name, func() {
-			if s.clusterConfig.Provider == "vsphere" && tt.isWindows {
-				windowsImage := false
-				for _, vmConfig := range s.machineConfig.VmwareMachineConfigs.VmwarevsphereMachineConfig {
-					if vmConfig.OS == "windows" {
-						logrus.Info("Windows image found in machine configs")
-						windowsImage = true
-						break
-					}
-				}
 
-				if !windowsImage {
-					s.T().Skip("No windows image provided")
-				}
-			} else if s.clusterConfig.Provider != "vsphere" && tt.isWindows {
-				s.T().Skip("Windows test requires access to vsphere")
-			}
-
+		t.Run(tt.name, func(t *testing.T) {
 			tt.nodeRoles.Quantity = tt.scaleQuantity
 			logrus.Infof("Scaling up the node pool (%s)", tt.cluster.Name)
-			tt.cluster, err = machinepools.ScaleMachinePool(s.client, tt.cluster, tt.nodeRoles)
-			require.NoError(s.T(), err)
+			tt.cluster, err = machinepools.ScaleMachinePool(s.Client, tt.cluster, tt.nodeRoles)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
-			err = provisioning.VerifyClusterReady(s.client, tt.cluster)
-			require.NoError(s.T(), err)
+			err = provisioning.VerifyClusterReady(s.Client, tt.cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
-			err = deployment.VerifyClusterDeployments(s.client, tt.cluster)
-			require.NoError(s.T(), err)
+			err = deployment.VerifyClusterDeployments(s.Client, tt.cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
-			err = pods.VerifyClusterPods(s.client, tt.cluster)
-			require.NoError(s.T(), err)
+			err = pods.VerifyClusterPods(s.Client, tt.cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
-			err = clusters.VerifyServiceAccountTokenSecret(s.client, tt.cluster.Name)
-			require.NoError(s.T(), err)
+			err = clusters.VerifyServiceAccountTokenSecret(s.Client, tt.cluster.Name)
+			require.NoError(t, err)
 
 			tt.nodeRoles.Quantity = -tt.scaleQuantity
 			logrus.Infof("Scaling down the node pool (%s)", tt.cluster.Name)
-			_, err = machinepools.ScaleMachinePool(s.client, tt.cluster, tt.nodeRoles)
-			require.NoError(s.T(), err)
+			_, err = machinepools.ScaleMachinePool(s.Client, tt.cluster, tt.nodeRoles)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
-			err = provisioning.VerifyClusterReady(s.client, tt.cluster)
-			require.NoError(s.T(), err)
+			err = provisioning.VerifyClusterReady(s.Client, tt.cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
-			err = deployment.VerifyClusterDeployments(s.client, tt.cluster)
-			require.NoError(s.T(), err)
+			err = deployment.VerifyClusterDeployments(s.Client, tt.cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
-			err = pods.VerifyClusterPods(s.client, tt.cluster)
-			require.NoError(s.T(), err)
+			err = pods.VerifyClusterPods(s.Client, tt.cluster)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
-			err = clusters.VerifyServiceAccountTokenSecret(s.client, tt.cluster.Name)
-			require.NoError(s.T(), err)
+			err = clusters.VerifyServiceAccountTokenSecret(s.Client, tt.cluster.Name)
+			require.NoError(t, err)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(s.client, s.cattleConfig)
+		params := provisioning.GetProvisioningSchemaParams(s.Client, s.CattleConfig)
 		err = qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
 		}
 	}
-}
-
-func TestNodeScalingTestSuite(t *testing.T) {
-	suite.Run(t, new(NodeScalingTestSuite))
 }

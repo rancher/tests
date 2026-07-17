@@ -60,12 +60,6 @@ jobs:
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: head
-    strategy:
-      fail-fast: false
-      matrix:
-        suite:
-          - rancher-server-one
-          - rancher-server-two
     env:
       HOSTNAME_PREFIX: "gha-ds-r215"
       REPORTING_ENABLED: >-
@@ -357,7 +351,6 @@ jobs:
           QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
-          suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: dualstack
         uses: ./.github/actions/run-hostbusters-test-suites
@@ -436,12 +429,6 @@ jobs:
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: head
-    strategy:
-      fail-fast: false
-      matrix:
-        suite:
-          - rancher-server-one
-          - rancher-server-two
     env:
       HOSTNAME_PREFIX: "gha-ds-r214"
       REPORTING_ENABLED: >-
@@ -733,7 +720,6 @@ jobs:
           QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
-          suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: dualstack
         uses: ./.github/actions/run-hostbusters-test-suites
@@ -811,12 +797,6 @@ jobs:
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: staging-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        suite:
-          - rancher-server-one
-          - rancher-server-two
     env:
       HOSTNAME_PREFIX: "gha-ds-r213"
       REPORTING_ENABLED: >-
@@ -1109,7 +1089,6 @@ jobs:
           QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
-          suite: ${{ matrix.suite }}
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: dualstack
         uses: ./.github/actions/run-hostbusters-test-suites

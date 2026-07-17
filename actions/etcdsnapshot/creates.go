@@ -3,7 +3,6 @@ package etcdsnapshot
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -11,24 +10,15 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
-	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	shepherdsnapshot "github.com/rancher/shepherd/extensions/etcdsnapshot"
-	extensionsingress "github.com/rancher/shepherd/extensions/ingresses"
-	"github.com/rancher/shepherd/extensions/workloads"
-	namegen "github.com/rancher/shepherd/pkg/namegenerator"
-	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/services"
 	"github.com/rancher/tests/actions/workloads/deployment"
-	deploy "github.com/rancher/tests/actions/workloads/deployment"
 	actionspods "github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networking "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -43,6 +33,9 @@ const (
 	port              = "port"
 	postWorkload      = "wload-after-backup"
 	serviceAppendName = "service-"
+	s3StorageType     = "s3"
+	s3SchemePrefix    = "s3://"
+	storageAnnotation = "etcdsnapshot.rke.io/storage"
 )
 
 // CreateAndValidateSnapshotRestore is an e2e helper that determines the engine type of the cluster, then takes a snapshot, and finally restores the cluster to the original snapshot
@@ -55,14 +48,6 @@ func CreateAndValidateSnapshotRestore(client *rancher.Client, clusterName string
 	steveclient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return err
-	}
-
-	clusterObject, _, _ := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
-	if clusterObject == nil {
-		_, err := client.Management.Cluster.ByID(clusterID)
-		if err != nil {
-			return err
-		}
 	}
 
 	podTemplate, deploymentTemplate, deploymentResp, serviceResp, ingressResp, err := createAndVerifyResources(client, clusterID, containerImage)
@@ -118,32 +103,17 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 		return nil, "", nil, nil, err
 	}
 
-	snapshotToRestore := createdSnapshots[0].ID
+	selectedSnapshot := createdSnapshots[0]
+	snapshotToRestore := selectedSnapshot.Name
 	createdSnapshotIDs := []string{}
-	// prioritize s3 snapshots over local.
-	s3Found := false
 
 	for _, snapshot := range createdSnapshots {
-		store, ok := snapshot.Annotations["etcdsnapshot.rke.io/storage"]
-		if ok && store == "s3" {
-			snapshotToRestore = snapshot.ID
-			s3Found = true
+		if CheckS3SnapshotLocation(snapshot) {
+			selectedSnapshot = snapshot
+			snapshotToRestore = snapshot.Name
 		}
+
 		createdSnapshotIDs = append(createdSnapshotIDs, snapshot.ID)
-	}
-
-	cluster, _, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
-	if err != nil {
-		return nil, "", nil, nil, err
-	}
-
-	if cluster.Spec.RKEConfig.ETCD.S3 != nil && !s3Found {
-		return nil, "", nil, nil, fmt.Errorf("s3 is enabled for the cluster, but selected snapshot is not from s3")
-	}
-
-	postDeploymentResp, postServiceResp, err := createPostBackupWorkloads(client, clusterID, *podTemplate, deployment)
-	if err != nil {
-		return nil, "", nil, nil, err
 	}
 
 	err = VerifyV2ProvSnapshots(client, clusterName, createdSnapshotIDs)
@@ -151,101 +121,24 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 		return nil, "", nil, nil, err
 	}
 
+	cluster, _, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
+	if err != nil {
+		return nil, "", nil, nil, err
+	}
+
+	postDeploymentResp, postServiceResp, err := createPostBackupWorkloads(client, clusterID, *podTemplate, deployment)
+	if err != nil {
+		return nil, "", nil, nil, err
+	}
+
 	if etcdRestore.SnapshotRestore == kubernetesVersion || etcdRestore.SnapshotRestore == all {
-		clusterObject, clusterResponse, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
+		err = upgradeClusterAndSnapshotSettings(client, clusterName, clusterID, etcdRestore)
 		if err != nil {
 			return nil, "", nil, nil, err
-		}
-
-		initialKubernetesVersion := clusterObject.Spec.KubernetesVersion
-		var upgradeKubernetesVersion string
-		if etcdRestore.UpgradeKubernetesVersion == "" {
-			if strings.Contains(initialKubernetesVersion, defaults.RKE2) {
-				defaultVersion, err := kubernetesversions.Default(client, defaults.RKE2, nil)
-				upgradeKubernetesVersion = defaultVersion[0]
-				if err != nil {
-					return nil, "", nil, nil, err
-				}
-			} else if strings.Contains(initialKubernetesVersion, defaults.K3S) {
-				defaultVersion, err := kubernetesversions.Default(client, defaults.K3S, nil)
-				upgradeKubernetesVersion = defaultVersion[0]
-				if err != nil {
-					return nil, "", nil, nil, err
-				}
-			}
-		}
-
-		clusterObject.Spec.KubernetesVersion = upgradeKubernetesVersion
-
-		if etcdRestore.SnapshotRestore == all && etcdRestore.ControlPlaneConcurrencyValue != "" && etcdRestore.WorkerConcurrencyValue != "" {
-			clusterObject.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency = etcdRestore.ControlPlaneConcurrencyValue
-			clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency = etcdRestore.WorkerConcurrencyValue
-		}
-
-		logrus.Infof("Upgrading K8s version to %s on cluster: %s", clusterObject.Spec.KubernetesVersion, clusterObject.Name)
-		steveCluster, err := client.Steve.SteveType(stevetypes.Provisioning).Update(clusterResponse, clusterObject)
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
-
-		err = clusters.WaitClusterToBeUpgraded(client, clusterID)
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
-
-		err = actionspods.VerifyClusterPods(client, steveCluster)
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
-
-		if upgradeKubernetesVersion != clusterObject.Spec.KubernetesVersion {
-			return nil, "", nil, nil, fmt.Errorf("K8s Version after upgrade %s does not match expected version %s", clusterObject.Spec.KubernetesVersion, etcdRestore.UpgradeKubernetesVersion)
-		}
-
-		if etcdRestore.SnapshotRestore == all && etcdRestore.ControlPlaneConcurrencyValue != "" && etcdRestore.WorkerConcurrencyValue != "" {
-			logrus.Infof("Control plane concurrency value is set to: %s", clusterObject.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency)
-			logrus.Infof("Worker concurrency value is set to: %s", clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency)
-
-			if etcdRestore.ControlPlaneConcurrencyValue != clusterObject.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency {
-				return nil, "", nil, nil, fmt.Errorf("controlPlaneConcurrency after upgrade %s does not match expected version %s", clusterObject.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency, etcdRestore.ControlPlaneConcurrencyValue)
-			}
-
-			if etcdRestore.WorkerConcurrencyValue != clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency {
-				return nil, "", nil, nil, fmt.Errorf("wokerConcurrency after upgrade %s does not match expected version %s", clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency, etcdRestore.WorkerUnavailableValue)
-			}
-		}
-
-		// sometimes we get a false positive on the cluster's state where it briefly goes 'active'. This is a way to mitigate that.
-		clusterSteveObject, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(clusterID)
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
-
-		if clusterSteveObject.State == nil {
-			err = clusters.WaitClusterUntilUpgrade(client, clusterID)
-			if err != nil {
-				return nil, "", nil, nil, err
-			}
 		}
 	}
 
 	return cluster, snapshotToRestore, postDeploymentResp, postServiceResp, err
-}
-
-// This function validates that spec.rkeConfig.etcd.s3 is not null for S3-specific snapshot tests.
-func VerifyS3Config(client *rancher.Client, clusterName string) error {
-	cluster, _, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
-	if err != nil {
-		return err
-	}
-
-	if cluster.Spec.RKEConfig.ETCD.S3 == nil {
-		return fmt.Errorf("expected S3 configuration for cluster %s but spec.rkeConfig.etcd.s3 is empty", clusterName)
-	}
-
-	logrus.Infof("Verified S3 configuration exists for cluster %s", clusterName)
-
-	return nil
 }
 
 // RestoreAndValidateSnapshotV2Prov restores a given snapshot for a v2prov cluster and validates its resources
@@ -259,15 +152,14 @@ func RestoreAndValidateSnapshotV2Prov(client *rancher.Client, snapshotID string,
 	// Give the option to restore the same snapshot multiple times. By default, it is set to 1.
 	for i := 0; i < etcdRestore.RecurringRestores; i++ {
 		generation := int(1)
+
 		if clusterObject.Spec.RKEConfig.ETCDSnapshotRestore != nil {
 			generation = clusterObject.Spec.RKEConfig.ETCDSnapshotRestore.Generation + 1
 		}
 
-		splitSnapshot := strings.Split(snapshotID, "/")
-		snapshotID = splitSnapshot[0]
-
-		if len(splitSnapshot) > 1 {
-			snapshotID = splitSnapshot[1]
+		err = VerifySnapshotReadyForRestore(client, clusterObject.Name, snapshotID)
+		if err != nil {
+			return err
 		}
 
 		snapshotRKE2K3SRestore := &rkev1.ETCDSnapshotRestore{
@@ -282,12 +174,6 @@ func RestoreAndValidateSnapshotV2Prov(client *rancher.Client, snapshotID string,
 		}
 
 		steveCluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + clusterObject.Name)
-		if err != nil {
-			return err
-		}
-
-		logrus.Tracef("Waiting for cluster %s to be upgraded", cluster.Name)
-		err = clusters.WaitClusterToBeInUpgrade(client, clusterID)
 		if err != nil {
 			return err
 		}
@@ -368,151 +254,4 @@ func CreateSnapshotsUntilRetentionLimit(client *rancher.Client, clusterName stri
 	}
 
 	return nil
-}
-
-func createPostBackupWorkloads(client *rancher.Client, clusterID string, podTemplate corev1.PodTemplateSpec, deployment *v1.Deployment) (*steveV1.SteveAPIObject, *steveV1.SteveAPIObject, error) {
-	workloadNamePostBackup := namegen.AppendRandomString(postWorkload)
-
-	postBackupDeployment := workloads.NewDeploymentTemplate(workloadNamePostBackup, namespaces.Default, podTemplate, isCattleLabeled, nil)
-	postBackupService := corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      serviceAppendName + workloadNamePostBackup,
-			Namespace: namespaces.Default,
-		},
-		Spec: corev1.ServiceSpec{
-			Type: corev1.ServiceTypeClusterIP,
-			Ports: []corev1.ServicePort{
-				{
-					Name: port,
-					Port: 80,
-				},
-			},
-			Selector: deployment.Spec.Template.Labels,
-		},
-	}
-
-	steveclient, err := client.Steve.ProxyDownstream(clusterID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	postDeploymentResp, err := createDeployment(steveclient, workloadNamePostBackup, postBackupDeployment)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = deploy.VerifyDeployment(client, clusterID, postDeploymentResp.Namespace, postDeploymentResp.Name)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if workloadNamePostBackup != postDeploymentResp.ObjectMeta.Name {
-		return nil, nil, fmt.Errorf("PostBackup deployment name %s does not match created deployment %s ", workloadNamePostBackup, postDeploymentResp.ObjectMeta.Name)
-	}
-
-	postServiceResp, err := services.CreateService(steveclient, postBackupService)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = services.VerifyService(steveclient, postServiceResp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if serviceAppendName+workloadNamePostBackup != postServiceResp.ObjectMeta.Name {
-		return nil, nil, fmt.Errorf("PostBackup service name %s does not match created deployment %s ", serviceAppendName+workloadNamePostBackup, postServiceResp.ObjectMeta.Name)
-	}
-
-	return postDeploymentResp, postServiceResp, nil
-}
-
-func createAndVerifyResources(client *rancher.Client, clusterID, containerImage string) (*corev1.PodTemplateSpec, *v1.Deployment, *steveV1.SteveAPIObject, *steveV1.SteveAPIObject, *steveV1.SteveAPIObject, error) {
-	var containerTemplate corev1.Container
-	initialIngressName := namegen.AppendRandomString(InitialIngress)
-	initialWorkloadName := namegen.AppendRandomString(InitialWorkload)
-
-	containerTemplate = workloads.NewContainer(containerName, containerImage, corev1.PullAlways, []corev1.VolumeMount{}, []corev1.EnvFromSource{}, nil, nil, nil)
-
-	podTemplate := workloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{}, []corev1.LocalObjectReference{}, nil, map[string]string{})
-	deploymentTemplate := workloads.NewDeploymentTemplate(initialWorkloadName, namespaces.Default, podTemplate, isCattleLabeled, nil)
-
-	service := corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      serviceAppendName + initialWorkloadName,
-			Namespace: namespaces.Default,
-		},
-		Spec: corev1.ServiceSpec{
-			Type: corev1.ServiceTypeClusterIP,
-			Ports: []corev1.ServicePort{
-				{
-					Name: port,
-					Port: 80,
-				},
-			},
-			Selector: deploymentTemplate.Spec.Template.Labels,
-		},
-	}
-
-	steveclient, err := client.Steve.ProxyDownstream(clusterID)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	deploymentResp, err := createDeployment(steveclient, initialWorkloadName, deploymentTemplate)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	err = deploy.VerifyDeployment(client, clusterID, deploymentResp.Namespace, deploymentResp.Name)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	if initialWorkloadName != deploymentResp.ObjectMeta.Name {
-		return nil, nil, nil, nil, nil, errors.New("deployment name doesn't match spec")
-	}
-
-	serviceResp, err := services.CreateService(steveclient, service)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	err = services.VerifyService(steveclient, serviceResp)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	if serviceAppendName+initialWorkloadName != serviceResp.ObjectMeta.Name {
-		return nil, nil, nil, nil, nil, errors.New("service name doesn't match spec")
-	}
-
-	path := extensionsingress.NewIngressPathTemplate(networking.PathTypeImplementationSpecific, ingressPath, serviceAppendName+initialWorkloadName, 80)
-	ingressTemplate := extensionsingress.NewIngressTemplate(initialIngressName, namespaces.Default, "", []networking.HTTPIngressPath{path})
-
-	ingressResp, err := extensionsingress.CreateIngress(steveclient, initialIngressName, ingressTemplate)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	err = extensionsingress.WaitIngress(steveclient, ingressResp, initialIngressName)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	if initialIngressName != ingressResp.ObjectMeta.Name {
-		return nil, nil, nil, nil, nil, errors.New("ingress name doesn't match spec")
-	}
-
-	return &podTemplate, deploymentTemplate, deploymentResp, serviceResp, ingressResp, nil
-}
-
-func createDeployment(steveclient *steveV1.Client, wlName string, deployment *v1.Deployment) (*steveV1.SteveAPIObject, error) {
-	logrus.Infof("Creating deployment: %s", wlName)
-	deploymentResp, err := steveclient.SteveType(stevetypes.Deployment).Create(deployment)
-	if err != nil {
-		return nil, err
-	}
-
-	return deploymentResp, err
 }

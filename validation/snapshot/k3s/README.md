@@ -25,9 +25,9 @@ The recurring snapshot test verifies that a cluster can create a series of snaps
 1. `K3S_Recurring_Restores`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRecurringTestSuite/TestSnapshotRecurringRestores -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRecurringRestores -timeout=1h -v`
 
-### Snapshot Restore Test
+### Snapshot Restore Etcd Test
 
 #### Description:
 The snapshot restore test validates that snapshots can be created and restored without any failures or longterm disruption to workloads.
@@ -39,11 +39,44 @@ The snapshot restore test validates that snapshots can be created and restored w
 
 #### Table Tests:
 1. `K3S_Restore_ETCD`
-2. `K3S_Restore_ETCD_K8sVersion`
-3. `K3S_Restore_ETCD`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreTestSuite/TestSnapshotRestore -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreEtcd -timeout=1h -v`
+
+
+### Snapshot Restore K8s Upgrade Test
+
+#### Description:
+The snapshot restore test validates that snapshots can be created and restored without any failures or longterm disruption to workloads.
+
+#### Required Configurations:
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Machine Config](#machine-config)
+
+#### Table Tests:
+1. `K3S_Restore_ETCD_K8sVersion`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreK8sUpgrade -timeout=1h -v`
+
+
+### Snapshot Restore Upgrade Strategy Test
+
+#### Description:
+The snapshot restore test validates that snapshots can be created and restored without any failures or longterm disruption to workloads.
+
+#### Required Configurations:
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Machine Config](#machine-config)
+
+#### Table Tests:
+1. `K3S_Restore_Upgrade_Strategy`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreUpgradeStrategy -timeout=1h -v`
+
 
 ### Snapshot Retention Test
 
@@ -59,7 +92,7 @@ The snapshot retention test validates that the configured number of snapshots ar
 1. `K3S_Snapshot_Retention`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRetentionTestSuite/TestSnapshotRetention -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRetention -timeout=1h -v`
 
 ### Snapshot S3 Test
 
@@ -76,7 +109,7 @@ The snapshot S3 test validates that snapshots can be stored and restored from an
 1. `K3S_S3_Snapshot`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestS3SnapshotRestoreTestSuite/TestS3SnapshotRestore -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestS3SnapshotRestore -timeout=1h -v`
 
 ## Configurations
 

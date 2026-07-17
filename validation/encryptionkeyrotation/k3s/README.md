@@ -25,7 +25,7 @@ The encryption key rotation test verifies that a cluster can successfully perfor
 1. `K3S_Encryption_Key_Rotation`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/encryptionkeyrotation/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestEncryptionKeyRotationTestSuite/TestEncryptionKeyRotation$ -timeout=2h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/encryptionkeyrotation/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestEncryptionKeyRotation -timeout=2h -v`
 
 ## Configurations
 

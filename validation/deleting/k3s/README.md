@@ -25,7 +25,7 @@ Verifies that a cluster can be deleted.
 1. `K3S_Delete_Cluster`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeleteClusterTestSuite/TestDeletingCluster -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeletingCluster -timeout=1h -v`
 
 
 ### Delete cluster init machine test
@@ -42,7 +42,7 @@ Verifies that a cluster is able to recover from deleting the init machine.
 1. `K3S_Delete_Init_Machine`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeleteInitMachineTestSuite/TestDeleteInitMachine -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeleteMachine -timeout=1h -v`
 
 
 ### Delete machine test
@@ -61,7 +61,7 @@ Verifies that machines can be deleted and replaced by role (control plane, etcd,
 3. `K3S_Replace_Worker`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeleteMachineTestSuite/TestDeleteMachine -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeleteMachine -timeout=1h -v`
 
 ## Configurations
 

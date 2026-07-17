@@ -25,7 +25,7 @@ The windows certificate test verifies that a windows cluster can rotate certific
 1. `RKE2_Windows_Certificate_Rotation`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCertRotationWindowsTestSuite/TestCertRotationWindows$ -timeout=2h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificatesrke2 --junitfile results.xml --jsonfile results.json -- -tags=valdation -run TestCertRotationWindows -timeout=2h -v`
 
 
 ### Certificate Tests
@@ -42,7 +42,7 @@ The certificate test verifies that a cluster can rotate certificates.
 1. `RKE2_Certificate_Rotation`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCertRotationTestSuite/TestCertRotation$ -timeout=2h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/rke2 --junitfile results.xml --jsonfile results.json -- -tags=valdation -run TestCertRotation -timeout=2h -v`
 
 ## Configurations
 
