@@ -508,7 +508,10 @@ policies:
     - 'tag:doNotDelete': absent
     - 'tag:ec2_known_user': absent
     - type: unused
-    - GroupName: {op: ne, value: default}
+    - type: value
+      key: GroupName
+      op: ne
+      value: default
   actions:
     - type: mark-for-op
       tag: ec2_known_user
@@ -524,7 +527,10 @@ policies:
     - 'tag:DoNotDelete': absent
     - 'tag:doNotDelete': absent
     - type: unused
-    - GroupName: {op: ne, value: default}
+    - type: value
+      key: GroupName
+      op: ne
+      value: default
     - type: marked-for-op
       tag: ec2_known_user
       op: delete
