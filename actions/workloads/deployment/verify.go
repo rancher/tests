@@ -384,11 +384,12 @@ func VerifyDeploymentPodScaleDown(client *rancher.Client, clusterID, namespace, 
 		return err
 	}
 
-	logrus.Debugf("Updating deployment (%s) replicas from %v to %v", deployment.Name, *deployment.Spec.Replicas, *deployment.Spec.Replicas-1)
 	replicas := int32(*deployment.Spec.Replicas - 1)
 	if replicas < 0 {
 		return errors.New("Can't scale down a deployment with 0 replicas")
 	}
+
+	logrus.Debugf("Updating deployment (%s) replicas from %v to %v", deployment.Name, *deployment.Spec.Replicas, replicas)
 	deployment.Spec.Replicas = &replicas
 
 	deployment, err = extdeploymentsapi.UpdateDeployment(client, clusterID, deployment, true)
