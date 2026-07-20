@@ -1,4 +1,4 @@
-//go:build (validation || infra.rke2k3s || cluster.any || sanity || pit.daily || pit.elemental || pit.harvester.daily) && !stress && !extended
+//go:build (validation || infra.rke2k3s || cluster.any || sanity || pit.daily || pit.elemental || pit.harvester.daily) && !stress && !extended && !airgap.daily
 
 package connectivity
 
