@@ -3,6 +3,7 @@ package longhorn
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	longhorn "github.com/longhorn/longhorn-manager/k8s/pkg/apis/longhorn/v1beta2"
 	longhornTypes "github.com/longhorn/longhorn-manager/types"
@@ -111,7 +112,7 @@ func CreateS3LonghornBackupTarget(client *rancher.Client, clusterID string, awsC
 }
 
 // CreateLonghornVolumeBackup creates a snapshot for a Longhorn Volume and then creates a backup from this snapshot.
-// This waits until the backuṕ is succesfully created and returns the URL for that backup in S3.
+// This waits until the backup is succesfully created and returns the URL for that backup in S3.
 func CreateLonghornVolumeBackup(client *rancher.Client, clusterID string, namespace string, volumeName string, backupTargetName string) (*longhorn.Backup, error) {
 	wrangler, err := cluster.GetClusterWranglerContext(client, clusterID)
 	if err != nil {
@@ -243,6 +244,11 @@ func RestoreLonghornVolumeFromBackup(client *rancher.Client, clusterID string, b
 		return err
 	}
 
+	volumeSize, err := strconv.Atoi(backup.Status.VolumeSize)
+	if err != nil {
+		return fmt.Errorf("Failed to convert volume size %s to integer: %w", backup.Status.VolumeSize, err)
+	}
+
 	// This volume is based on the docs: https://longhorn.io/docs/1.11.1/snapshots-and-backups/backup-and-restore/restore-from-a-backup/
 	volume := &longhorn.Volume{
 		TypeMeta: metav1.TypeMeta{
@@ -254,7 +260,7 @@ func RestoreLonghornVolumeFromBackup(client *rancher.Client, clusterID string, b
 			Namespace: backup.Namespace,
 		},
 		Spec: longhorn.VolumeSpec{
-			Size:       backup.Spec.BackupBlockSize,
+			Size:       int64(volumeSize),
 			FromBackup: backup.Status.URL,
 			Frontend:   "blockdev",
 			DataEngine: "v1",

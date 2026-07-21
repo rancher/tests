@@ -141,7 +141,7 @@ func InstallRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 			return true, nil
 		}
 		if state == string(catalogv1.StatusFailed) {
-			return false, fmt.Errorf("monitoring chart installation failed: %t", app.Status.Summary.Error)
+			return false, fmt.Errorf("monitoring chart installation failed with %s status", app.Status.Summary.State)
 		}
 		return false, nil
 	})

@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	wloads "github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/pkg/namegenerator"
+	"github.com/rancher/tests/actions/kubeapi/longhorn"
 	"github.com/rancher/tests/actions/kubeapi/storageclasses"
 	"github.com/rancher/tests/actions/kubeapi/volumes/persistentvolumeclaims"
 	"github.com/sirupsen/logrus"
@@ -23,7 +24,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -62,7 +62,7 @@ func GetPersistentVolumeByName(client *rancher.Client, clusterID string, volumeN
 		return nil, err
 	}
 
-	return wrangler.Core.PersistentVolume().Get(volumeName, v1.GetOptions{})
+	return wrangler.Core.PersistentVolume().Get(volumeName, metav1.GetOptions{})
 }
 
 // GetStorageClass gets a storage class with the provided name on the provided cluster.
@@ -166,6 +166,13 @@ func CreatePVC(client *rancher.Client, clusterID string, storageClassName string
 	client.Session.RegisterCleanupFunc(func() error {
 		return wrangler.Core.PersistentVolume().Delete(pvc.Spec.VolumeName, &metav1.DeleteOptions{})
 	})
+
+	// If this is a Longhorn Storage class, remember to clean up Longhorn's Volume resource.
+	if storageClass.Provisioner == longhorn.LonghornStorageClassProvisioner {
+		client.Session.RegisterCleanupFunc(func() error {
+			return longhorn.DeleteLonghornVolume(client, clusterID, "longhorn-system", pvc.Spec.VolumeName)
+		})
+	}
 
 	return persistentVolumeClaim, pvc.Spec.VolumeName, err
 }
