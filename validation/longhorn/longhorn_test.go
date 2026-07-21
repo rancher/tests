@@ -302,10 +302,6 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 
 	volumeName := nginxSpec.Template.Spec.Volumes[0].Name
 
-	l.client.Session.RegisterCleanupFunc(func() error {
-		return longhornActions.DeleteLonghornVolume(l.client, l.cluster.ID, charts.LonghornNamespace, volumeName)
-	})
-
 	l.T().Logf("Check 'encrypted' parameter on volume %s is set to 'true'", volumeName)
 	volume, err := storage.GetPersistentVolumeByName(l.client, l.cluster.ID, volumeName)
 	require.NoError(l.T(), err)
@@ -407,10 +403,6 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 	require.Equal(l.T(), len(secondNginxSpec.Template.Spec.Volumes), 1)
 
 	secondVolumeName := secondNginxSpec.Template.Spec.Volumes[0].Name
-
-	l.client.Session.RegisterCleanupFunc(func() error {
-		return longhornActions.DeleteLonghornVolume(l.client, l.cluster.ID, charts.LonghornNamespace, secondVolumeName)
-	})
 
 	l.T().Logf("Validating that the new volume %s is marked as 'encrypted'", secondVolumeName)
 	secondVolume, err := storage.GetPersistentVolumeByName(l.client, l.cluster.ID, secondVolumeName)
