@@ -286,7 +286,8 @@ install_helm: true
 rancher_hostname: "${HOSTNAME_PREFIX}.qa.rancher.space"
 rancher_bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
 rancher_image_tag: ${RANCHER_VERSION}
-rancher_use_bundled_system_charts: true'''
+rancher_use_bundled_system_charts: true
+rancher_system_default_registry: "${PRIVATE_REGISTRY_URL}"'''
         )
     }
 
