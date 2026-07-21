@@ -51,6 +51,8 @@ import (
 const (
 	active     = "active"
 	internalIP = "alpha.kubernetes.io/provided-node-ip"
+	updating   = "updating"
+	upgrading  = "upgrading"
 )
 
 // CreateProvisioningCluster provisions a non-rke1 cluster, then runs verify checks

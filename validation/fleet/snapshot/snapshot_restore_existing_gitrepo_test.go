@@ -13,9 +13,7 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
-	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	extensionsfleet "github.com/rancher/shepherd/extensions/fleet"
-	"github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
@@ -25,7 +23,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -129,8 +126,6 @@ func (f *FleetWithSnapshotTestSuite) TestSnapshotThenFleetRestore() {
 		winsNodeList, err := steveClient.SteveType("node").List(urlQuery)
 		require.NoError(f.T(), err)
 
-		image := containerImage
-
 		if len(winsNodeList.Data) > 0 {
 			urlQuery, err = url.ParseQuery(fmt.Sprintf("labelSelector=%s=%s", "kubernetes.io/os", "linux"))
 			require.NoError(f.T(), err)
@@ -142,7 +137,6 @@ func (f *FleetWithSnapshotTestSuite) TestSnapshotThenFleetRestore() {
 				f.fleetGitRepo.Spec.Paths = []string{fleet.GitRepoPathWindows}
 				f.fleetGitRepo.Name += "windows"
 				tt.name += "windows"
-				image = windowsContainerImage
 			}
 		}
 
@@ -150,16 +144,11 @@ func (f *FleetWithSnapshotTestSuite) TestSnapshotThenFleetRestore() {
 		require.NoError(f.T(), err)
 
 		f.Run(fleet.FleetName+" "+fleetVersion+tt.name, func() {
-			containerTemplate := workloads.NewContainer(containerImage, image, corev1.PullAlways, []corev1.VolumeMount{}, []corev1.EnvFromSource{}, nil, nil, nil)
-
-			podTemplate := workloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{}, []corev1.LocalObjectReference{}, nil, map[string]string{})
-			deploymentTemplate := workloads.NewDeploymentTemplate(etcdsnapshot.InitialWorkload, "default", podTemplate, true, nil)
-
 			var gitRepoObject *steveV1.SteveAPIObject
 
 			logrus.Info("deploying fleet post-snapshot to test persistence after restore is complete")
 
-			cluster, snapshotName, postDeploymentResp, postServiceResp, err := etcdsnapshot.CreateAndValidateSnapshotV2Prov(client, &podTemplate, deploymentTemplate, client.RancherConfig.ClusterName, f.clusterID, tt.etcdSnapshot)
+			cluster, snapshotName, err := etcdsnapshot.CreateAndValidateSnapshotV2Prov(client, client.RancherConfig.ClusterName, f.clusterID, tt.etcdSnapshot)
 			require.NoError(f.T(), err)
 
 			logrus.Info("Deploying public fleet gitRepo")
@@ -169,14 +158,8 @@ func (f *FleetWithSnapshotTestSuite) TestSnapshotThenFleetRestore() {
 			err = fleet.VerifyGitRepo(client, gitRepoObject.ID, f.clusterID, namespaces.FleetDefault+"/"+client.RancherConfig.ClusterName)
 			require.NoError(f.T(), err)
 
-			err = etcdsnapshot.RestoreAndValidateSnapshotV2Prov(client, snapshotName, tt.etcdSnapshot, cluster, f.clusterID)
+			_, err = etcdsnapshot.RestoreAndValidateSnapshotV2Prov(client, snapshotName, tt.etcdSnapshot, cluster, f.clusterID)
 			require.NoError(f.T(), err)
-
-			_, err = steveClient.SteveType(stevetypes.Deployment).ByID(postDeploymentResp.ID)
-			require.Error(f.T(), err)
-
-			_, err = steveClient.SteveType("service").ByID(postServiceResp.ID)
-			require.Error(f.T(), err)
 
 			err = fleet.VerifyGitRepo(client, gitRepoObject.ID, f.clusterID, fleet.Namespace+"/"+client.RancherConfig.ClusterName)
 			require.NoError(f.T(), err)
@@ -221,12 +204,10 @@ func (f *FleetWithSnapshotTestSuite) TestFleetThenSnapshotRestore() {
 		winsNodeList, err := steveClient.SteveType("node").List(urlQuery)
 		require.NoError(f.T(), err)
 
-		image := containerImage
 		if len(winsNodeList.Data) > 0 {
 			f.fleetGitRepo.Spec.Paths = []string{fleet.GitRepoPathWindows}
 			f.fleetGitRepo.Name += "windows"
 			tt.name += "windows"
-			image = windowsContainerImage
 		}
 
 		client, err = client.ReLogin()
@@ -243,7 +224,10 @@ func (f *FleetWithSnapshotTestSuite) TestFleetThenSnapshotRestore() {
 			require.NoError(f.T(), err)
 
 			logrus.Info("having fleet deployed pre-snapshot to test fleet as a pre-snapshot resource")
-			err = etcdsnapshot.CreateAndValidateSnapshotRestore(client, client.RancherConfig.ClusterName, tt.etcdSnapshot, image)
+			cluster, snapshotName, err := etcdsnapshot.CreateAndValidateSnapshotV2Prov(client, client.RancherConfig.ClusterName, f.clusterID, tt.etcdSnapshot)
+			require.NoError(f.T(), err)
+
+			_, err = etcdsnapshot.RestoreAndValidateSnapshotV2Prov(client, snapshotName, tt.etcdSnapshot, cluster, f.clusterID)
 			require.NoError(f.T(), err)
 
 			err = fleet.VerifyGitRepo(client, gitRepoObject.ID, f.clusterID, fleet.Namespace+"/"+client.RancherConfig.ClusterName)

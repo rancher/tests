@@ -808,12 +808,6 @@ func DeleteInitMachine(client *rancher.Client, clusterID string) error {
 		return err
 	}
 
-	logrus.Debugf("Waiting for the init machine to be replaced on cluster (%s)", clusterID)
-	err = clusters.WatchAndWaitForCluster(client, clusterID)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

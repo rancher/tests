@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
@@ -20,8 +21,11 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/etcdsnapshot"
 	"github.com/rancher/tests/actions/logging"
+	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/provisioninginput"
+	"github.com/rancher/tests/actions/workloads"
+	"github.com/rancher/tests/actions/workloads/deployment"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
@@ -41,6 +45,8 @@ type snapshotTest struct {
 	CattleConfig      map[string]any
 	ClusterConfig     *clusters.ClusterConfig
 	rancherConfig     *rancher.Config
+	WorkloadsConfig   *workloads.Workloads
+	WorkloadClient    *v1.Client
 	Cluster           *v1.SteveAPIObject
 	S3BucketName      string
 	S3Region          string
@@ -101,6 +107,11 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 	s.AWSAccessKey = awsCredsConfig.AccessKey
 	s.AWSSecretKey = awsCredsConfig.SecretKey
 
+	workloadConfigs := new(workloads.Workloads)
+	operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, s.CattleConfig, workloadConfigs)
+
+	s.WorkloadsConfig = workloadConfigs
+
 	if rancherConfig.ClusterName == "" {
 		provider := provisioning.CreateProvider(clusterConfig.Provider)
 		machineConfigSpec := provider.LoadMachineConfigFunc(s.CattleConfig)
@@ -160,5 +171,43 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 		require.NoError(t, err)
 	}
 
+	clusterStatus := &provv1.ClusterStatus{}
+	err = v1.ConvertToK8sType(s.Cluster.Status, clusterStatus)
+	require.NoError(t, err)
+
+	s.WorkloadClient, err = s.Client.Steve.ProxyDownstream(clusterStatus.ClusterName)
+	require.NoError(t, err)
+
 	return s
+}
+
+// CreateSnapshotDeployment is a helper function to create a deployment on a downstream cluster.
+func CreateSnapshotDeployment(client *rancher.Client, workloadClient *v1.Client, clusterID, deploymentName string, workloadsConfig *workloads.Workloads) error {
+	_, namespace, err := projectsapi.CreateProjectAndNamespace(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	deploymentConfig := workloadsConfig.Deployment.DeepCopy()
+	deploymentConfig.ObjectMeta.Namespace = namespace.Name
+	deploymentConfig.ObjectMeta.Name = deploymentName
+	deploymentConfig.ObjectMeta.GenerateName = ""
+
+	if workloadsConfig.IsWindows {
+		deploymentConfig.Spec.Template.Spec.Containers[0].Image = WindowsContainerImage
+	} else {
+		deploymentConfig.Spec.Template.Spec.Containers[0].Image = ContainerImage
+	}
+
+	createdDeployment, err := deployment.CreateDeploymentFromConfig(workloadClient, clusterID, deploymentConfig)
+	if err != nil {
+		return err
+	}
+
+	err = deployment.VerifyDeployment(client, clusterID, createdDeployment.Namespace, createdDeployment.Name)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
