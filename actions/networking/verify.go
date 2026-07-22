@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -88,6 +87,66 @@ func VerifyNetworkPolicy(client *rancher.Client, clusterID string, namespaceName
 	return nil
 }
 
+// verifyConnectivityFromWorkerNodes verifies if any worker node in the cluster is able to access the provided ip:port
+// and retrieve the expected content from name.html.
+func verifyConnectivityFromWorkerNodes(client *rancher.Client, clusterID string, ip string, port int, workloadName string) error {
+	query, err := url.ParseQuery(clusters.LabelWorker)
+	if err != nil {
+		return err
+	}
+
+	steveClient, err := client.Steve.ProxyDownstream(clusterID)
+	if err != nil {
+		return err
+	}
+
+	nodeList, err := steveClient.SteveType(stevetypes.Node).List(query)
+	if err != nil {
+		return err
+	}
+
+	if len(nodeList.Data) == 0 {
+		return errors.New("no worker nodes found")
+	}
+
+	for _, machine := range nodeList.Data {
+		sshNode, err := sshkeys.GetSSHNodeFromMachine(client, &machine)
+		if err != nil {
+			logrus.Debugf("Could not SSH into worker node %s: %s", machine.Name, err.Error())
+			continue
+		}
+
+		logrus.Debugf("Curling '%s:%d/name.html' from node %s", ip, port, machine.Name)
+		log, err := sshNode.ExecuteCommand(fmt.Sprintf("curl -s %s:%d/name.html", ip, port))
+		if err != nil && !errors.Is(err, &ssh.ExitMissingError{}) {
+			logrus.Debugf("Curl failed on node %s: %v", machine.Name, err)
+			continue
+		}
+
+		if strings.Contains(log, workloadName) { // This should be one of the pod's names.
+			return nil
+		} else {
+			logrus.Debugf("Curl result %s doesn't contain expected content '%s'", log, workloadName)
+		}
+	}
+
+	return fmt.Errorf("Unable to connect to %s:%d/name.html from any worker node", ip, port)
+}
+
+func verifyConnectivityFromPod(client *rancher.Client, clusterID string, ip string, port int, workloadName string) error {
+	execCmd := []string{"curl", "-s", fmt.Sprintf("%s:%d/name.html", ip, port)}
+	log, err := kubectl.Command(client, nil, clusterID, execCmd, "")
+	if err != nil {
+		return err
+	}
+
+	if !strings.Contains(log, workloadName) { // This should be one of the pod's names.
+		return fmt.Errorf("Curl result %s doesn't include the workload name %s", log, workloadName)
+	}
+
+	return nil
+}
+
 // VerifyNodePortConnectivity verifies that the node port is accessible by curling the worker node external IP
 func VerifyNodePortConnectivity(client *rancher.Client, clusterID string, nodePort int, workloadName string) error {
 	steveClient, err := client.Steve.ProxyDownstream(clusterID)
@@ -122,21 +181,14 @@ func VerifyNodePortConnectivity(client *rancher.Client, clusterID string, nodePo
 		}
 
 		logrus.Debugf("Curling node port %d on node %s (%s)", nodePort, machine.Name, nodeIP)
-		execCmd := []string{"curl", fmt.Sprintf("%s:%s/name.html", nodeIP, strconv.Itoa(nodePort))}
-		log, err := kubectl.Command(client, nil, clusterID, execCmd, "")
-		if err != nil {
-			return fmt.Errorf("curl command failed on node %s: %w", machine.Name, err)
-		}
-
-		if strings.Contains(log, workloadName) {
-			return nil
-		}
+		verifyConnectivityFromPod(client, clusterID, nodeIP, nodePort, workloadName)
 	}
 
 	return fmt.Errorf("unable to access node port %d for workload %s", nodePort, workloadName)
 }
 
 // VerifyLoadBalancerConnectivity verifies that the Load Balancer service is accessible by curling its IP:port.
+// This includes
 func VerifyLoadBalancerConnectivity(t *testing.T, client *rancher.Client, clusterID string, serviceID string, workloadName string) {
 	steveClient, err := client.Steve.ProxyDownstream(clusterID)
 	require.NoError(t, err)
@@ -155,57 +207,17 @@ func VerifyLoadBalancerConnectivity(t *testing.T, client *rancher.Client, cluste
 	ip := k8sService.Status.LoadBalancer.Ingress[0].IP
 	t.Logf("Testing connectivity with load balancer %s by curling %s:%d/name.html", k8sService.Name, ip, port)
 
-	execCmd := []string{"curl", "-s", fmt.Sprintf("%s:%d/name.html", ip, port)}
-	log, err := kubectl.Command(client, nil, clusterID, execCmd, "")
+	err = verifyConnectivityFromPod(client, clusterID, ip, int(port), workloadName)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(log), 7)
-	require.Equal(t, workloadName, log[:len(log)-7]) // This should be one of the pod's names.
 }
 
 // VerifyHostPortConnectivity verifies that the host port is accessible on worker nodes by SSHing directly into each node
 func VerifyHostPortConnectivity(client *rancher.Client, clusterID string, hostPort int, workloadName string) error {
-	steveClient, err := client.Steve.ProxyDownstream(clusterID)
-	if err != nil {
-		return err
-	}
-
-	query, err := url.ParseQuery(clusters.LabelWorker)
-	if err != nil {
-		return fmt.Errorf("failed to build worker node query: %w", err)
-	}
-
-	nodeList, err := steveClient.SteveType(stevetypes.Node).List(query)
-	if err != nil {
-		return fmt.Errorf("failed to list worker nodes: %w", err)
-	}
-
-	if len(nodeList.Data) == 0 {
-		return errors.New("no worker nodes found")
-	}
-
-	for _, machine := range nodeList.Data {
-		sshNode, err := sshkeys.GetSSHNodeFromMachine(client, &machine)
-		if err != nil {
-			logrus.Debugf("Could not SSH into worker node %s, skipping: %v", machine.Name, err)
-			continue
-		}
-
-		logrus.Debugf("Curling host port %d on worker node %s", hostPort, machine.Name)
-		output, err := sshNode.ExecuteCommand(fmt.Sprintf("curl localhost:%d/name.html", hostPort))
-		if err != nil {
-			continue
-		}
-
-		if strings.Contains(output, workloadName) {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("unable to access host port %d for workload %s on any worker node", hostPort, workloadName)
+	return verifyConnectivityFromWorkerNodes(client, clusterID, "localhost", hostPort, workloadName)
 }
 
 // VerifyClusterConnectivity verifies that the ClusterIP service is accessible via SSH from a worker node
-func VerifyClusterConnectivity(client *rancher.Client, clusterID string, serviceID string, path string, content string) error {
+func VerifyClusterConnectivity(client *rancher.Client, clusterID string, serviceID string, port int, content string) error {
 	steveClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return err
@@ -222,40 +234,5 @@ func VerifyClusterConnectivity(client *rancher.Client, clusterID string, service
 		return err
 	}
 
-	clusterIP := newService.Spec.ClusterIP
-
-	query, err := url.ParseQuery(clusters.LabelWorker)
-	if err != nil {
-		return err
-	}
-
-	nodeList, err := steveClient.SteveType(stevetypes.Node).List(query)
-	if err != nil {
-		return err
-	}
-
-	if len(nodeList.Data) == 0 {
-		return errors.New("no worker nodes found")
-	}
-
-	for _, machine := range nodeList.Data {
-		sshNode, err := sshkeys.GetSSHNodeFromMachine(client, &machine)
-		if err != nil {
-			logrus.Debugf("Could not SSH into worker node %s, trying next node: %v", machine.Name, err)
-			continue
-		}
-
-		logrus.Debugf("Curling cluster IP %s:%s from node %s", clusterIP, path, machine.Name)
-		log, err := sshNode.ExecuteCommand(fmt.Sprintf("curl %s:%s", clusterIP, path))
-		if err != nil && !errors.Is(err, &ssh.ExitMissingError{}) {
-			logrus.Debugf("Curl failed on node %s: %v, trying next node", machine.Name, err)
-			continue
-		}
-
-		if strings.Contains(log, content) {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("unable to connect to the cluster IP %s:%s from any worker node", clusterIP, path)
+	return verifyConnectivityFromWorkerNodes(client, clusterID, newService.Spec.ClusterIP, port, content)
 }

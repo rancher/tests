@@ -3,7 +3,6 @@
 package connectivity
 
 import (
-	"fmt"
 	"math/rand"
 	"os"
 	"strings"
@@ -215,7 +214,7 @@ func (p *PortTestSuite) TestClusterIP() {
 			require.NoError(p.T(), err)
 
 			logrus.Infof("Verifying Cluster connectivity for daemonset %s on port %d", testDaemonset.Name, port)
-			err = networking.VerifyClusterConnectivity(p.client, p.cluster.ID, serviceResp.ID, fmt.Sprintf("%d/name.html", port), testDaemonset.Name)
+			err = networking.VerifyClusterConnectivity(p.client, p.cluster.ID, serviceResp.ID, port, testDaemonset.Name)
 			require.NoError(p.T(), err)
 		})
 	}
@@ -320,7 +319,7 @@ func (p *PortTestSuite) TestClusterIPScaleAndUpgrade() {
 			require.NoError(p.T(), err)
 
 			logrus.Infof("Verifying cluster IP connectivity after scale up for deployment %s", testDeployment.Name)
-			err = networking.VerifyClusterConnectivity(p.client, p.cluster.ID, serviceResp.ID, fmt.Sprintf("%d/name.html", port), testDeployment.Name)
+			err = networking.VerifyClusterConnectivity(p.client, p.cluster.ID, serviceResp.ID, port, testDeployment.Name)
 			require.NoError(p.T(), err)
 
 			logrus.Infof("Scaling down deployment %s to 2 replicas", testDeployment.Name)
@@ -330,7 +329,7 @@ func (p *PortTestSuite) TestClusterIPScaleAndUpgrade() {
 			require.NoError(p.T(), err)
 
 			logrus.Infof("Verifying cluster IP connectivity after scale down for deployment %s", testDeployment.Name)
-			err = networking.VerifyClusterConnectivity(p.client, p.cluster.ID, serviceResp.ID, fmt.Sprintf("%d/name.html", port), testDeployment.Name)
+			err = networking.VerifyClusterConnectivity(p.client, p.cluster.ID, serviceResp.ID, port, testDeployment.Name)
 			require.NoError(p.T(), err)
 
 			logrus.Infof("Upgrading deployment %s container", testDeployment.Name)
@@ -339,7 +338,7 @@ func (p *PortTestSuite) TestClusterIPScaleAndUpgrade() {
 			require.NoError(p.T(), err)
 
 			logrus.Infof("Verifying cluster IP connectivity after upgrade for deployment %s", testDeployment.Name)
-			err = networking.VerifyClusterConnectivity(p.client, p.cluster.ID, serviceResp.ID, fmt.Sprintf("%d/name.html", port), testDeployment.Name)
+			err = networking.VerifyClusterConnectivity(p.client, p.cluster.ID, serviceResp.ID, port, testDeployment.Name)
 			require.NoError(p.T(), err)
 		})
 	}
