@@ -24,8 +24,17 @@ func newCustomGlobalRole(verbs []string) v3.GlobalRole {
 	}
 }
 
-var (
-	customGlobalRoleDelete      = newCustomGlobalRole([]string{"delete", "get", "list"})
-	customGlobalRoleEdit        = newCustomGlobalRole([]string{"patch", "update", "get", "list"})
-	customGlobalRoleManageUsers = newCustomGlobalRole([]string{rbacapi.ManageUsersVerb, "patch", "update", "delete", "get", "list"})
-)
+func customGlobalRoleDelete() *v3.GlobalRole {
+	globalRole := newCustomGlobalRole([]string{"delete", "get", "list"})
+	return &globalRole
+}
+
+func customGlobalRoleEdit() *v3.GlobalRole {
+	globalRole := newCustomGlobalRole([]string{"patch", "update", "get", "list"})
+	return &globalRole
+}
+
+func customGlobalRoleManageUsers() *v3.GlobalRole {
+	globalRole := newCustomGlobalRole([]string{rbacapi.ManageUsersVerb, "patch", "update", "delete", "get", "list"})
+	return &globalRole
+}

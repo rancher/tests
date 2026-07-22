@@ -9,6 +9,7 @@ import (
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
 	password "github.com/rancher/shepherd/extensions/users/passwordgenerator"
+
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/users"
@@ -22,10 +23,6 @@ type StandardUserManageUsersTestSuite struct {
 	client  *rancher.Client
 	session *session.Session
 	cluster *management.Cluster
-}
-
-func (su *StandardUserManageUsersTestSuite) TearDownSuite() {
-	su.session.Cleanup()
 }
 
 func (su *StandardUserManageUsersTestSuite) SetupSuite() {
@@ -44,12 +41,16 @@ func (su *StandardUserManageUsersTestSuite) SetupSuite() {
 	require.NoError(su.T(), err)
 }
 
+func (su *StandardUserManageUsersTestSuite) TearDownSuite() {
+	su.session.Cleanup()
+}
+
 func (su *StandardUserManageUsersTestSuite) TestStandardUserWithoutManageUsersDelete() {
 	subSession := su.session.NewSession()
 	defer subSession.Cleanup()
 
 	log.Info("Creating a standard user with delete custom global role")
-	_, standardUser, err := createCustomGlobalRoleAndUser(su.client, &customGlobalRoleDelete)
+	_, standardUser, err := createCustomGlobalRoleAndUser(su.client, customGlobalRoleDelete())
 	require.NoError(su.T(), err, "failed to create global role and user")
 
 	standardUserClient, err := su.client.AsUser(standardUser)
@@ -76,7 +77,7 @@ func (su *StandardUserManageUsersTestSuite) TestStandardUserWithoutManageUsersEd
 	defer subSession.Cleanup()
 
 	log.Info("Creating a standard user with edit custom global role")
-	_, standardUser, err := createCustomGlobalRoleAndUser(su.client, &customGlobalRoleEdit)
+	_, standardUser, err := createCustomGlobalRoleAndUser(su.client, customGlobalRoleEdit())
 	require.NoError(su.T(), err, "failed to create global role and user")
 
 	standardUserClient, err := su.client.AsUser(standardUser)
@@ -104,7 +105,7 @@ func (su *StandardUserManageUsersTestSuite) TestStandardUserWithManageUsersDelet
 	defer subSession.Cleanup()
 
 	log.Info("Creating a standard user with manage-users verb on users resource")
-	_, standardUser, err := createCustomGlobalRoleAndUser(su.client, &customGlobalRoleManageUsers)
+	_, standardUser, err := createCustomGlobalRoleAndUser(su.client, customGlobalRoleManageUsers())
 	require.NoError(su.T(), err, "failed to create global role and user")
 
 	standardUserClient, err := su.client.AsUser(standardUser)
@@ -131,7 +132,7 @@ func (su *StandardUserManageUsersTestSuite) TestStandardUserWithManageUsersEdit(
 	defer subSession.Cleanup()
 
 	log.Info("Creating a standard user with manage-users verb on users resource")
-	_, standardUser, err := createCustomGlobalRoleAndUser(su.client, &customGlobalRoleManageUsers)
+	_, standardUser, err := createCustomGlobalRoleAndUser(su.client, customGlobalRoleManageUsers())
 	require.NoError(su.T(), err, "failed to create global role and user")
 
 	standardUserClient, err := su.client.AsUser(standardUser)
