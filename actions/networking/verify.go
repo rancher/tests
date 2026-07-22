@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
@@ -15,6 +16,7 @@ import (
 	"github.com/rancher/shepherd/extensions/sshkeys"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -132,6 +134,32 @@ func VerifyNodePortConnectivity(client *rancher.Client, clusterID string, nodePo
 	}
 
 	return fmt.Errorf("unable to access node port %d for workload %s", nodePort, workloadName)
+}
+
+// VerifyLoadBalancerConnectivity verifies that the Load Balancer service is accessible by curling its IP:port.
+func VerifyLoadBalancerConnectivity(t *testing.T, client *rancher.Client, clusterID string, serviceID string, workloadName string) {
+	steveClient, err := client.Steve.ProxyDownstream(clusterID)
+	require.NoError(t, err)
+
+	service, err := steveClient.SteveType(stevetypes.Service).ByID(serviceID)
+	require.NoError(t, err)
+
+	k8sService := &corev1.Service{}
+	err = v1.ConvertToK8sType(service, k8sService)
+	require.NoError(t, err)
+	require.Equal(t, corev1.ServiceTypeLoadBalancer, k8sService.Spec.Type)
+	require.NotEmpty(t, k8sService.Spec.Ports)
+	require.NotEmpty(t, k8sService.Status.LoadBalancer.Ingress)
+
+	port := k8sService.Spec.Ports[0].Port
+	ip := k8sService.Status.LoadBalancer.Ingress[0].IP
+	t.Logf("Testing connectivity with load balancer %s by curling %s:%d/name.html", k8sService.Name, ip, port)
+
+	execCmd := []string{"curl", "-s", fmt.Sprintf("%s:%d/name.html", ip, port)}
+	log, err := kubectl.Command(client, nil, clusterID, execCmd, "")
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(log), 7)
+	require.Equal(t, workloadName, log[:len(log)-7]) // This should be one of the pod's names.
 }
 
 // VerifyHostPortConnectivity verifies that the host port is accessible on worker nodes by SSHing directly into each node
