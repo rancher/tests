@@ -32,3 +32,5 @@ workloadConfigs:
             - name: "test1"
               image: "ranchertest/mytestcontainer"
               imagePullPolicy: "Always"
+logging:
+  level: "<HB_LOGGING_LEVEL>"

@@ -180,8 +180,7 @@ jobs:
             cleanup: true
           terraform:
             cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
+            defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
@@ -234,7 +233,7 @@ jobs:
               registryName: "${{ env.HOSTNAME_PREFIX }}"
               useAuthGlobalRegistry: false
           terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
+            pathToRepo: "${{ secrets.HB_PATH_TO_TFP_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:
@@ -499,8 +498,7 @@ jobs:
             cleanup: true
           terraform:
             cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
+            defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
@@ -554,7 +552,7 @@ jobs:
               registryName: "${{ env.HOSTNAME_PREFIX }}"
               useAuthGlobalRegistry: false
           terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
+            pathToRepo: "${{ secrets.HB_PATH_TO_TFP_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:
@@ -819,8 +817,7 @@ jobs:
             cleanup: true
           terraform:
             cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
+            defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
@@ -874,7 +871,7 @@ jobs:
               registryName: "${{ env.HOSTNAME_PREFIX }}"
               useAuthGlobalRegistry: false
           terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
+            pathToRepo: "${{ secrets.HB_PATH_TO_TFP_REPO }}"
             standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:

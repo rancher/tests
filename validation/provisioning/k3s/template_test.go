@@ -60,6 +60,9 @@ func templateSetup(t *testing.T) templateTest {
 
 	k.cattleConfig, err = configDefaults.LoadPackageDefaults(k.cattleConfig, "")
 	require.NoError(t, err)
+	
+	k.cattleConfig, err = configDefaults.LoadSecretsManagerDefaults(k.cattleConfig)
+	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)
