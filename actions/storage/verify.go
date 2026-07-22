@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	client "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
@@ -16,11 +17,12 @@ import (
 	namespaceActions "github.com/rancher/tests/actions/namespaces"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var (
-	LonghornStorageClasses     = []string{"longhorn", "longhorn-static"}
 	PersistentVolumeEntityType = "persistentvolume"
 )
 
@@ -47,44 +49,58 @@ func CheckNodeFilesystem(t *testing.T, client *rancher.Client, clusterID string,
 	_, err = kubectl.Command(client, nil, clusterID, checkDataPathCommand, "")
 	require.NoError(t, err)
 
-	waitForPodCommand := []string{"kubectl", "wait", "--for=jsonpath='{.status.phase}'=Succeeded", "-n", debugNamespace, "pod", "--all"}
-	_, err = kubectl.Command(client, nil, clusterID, waitForPodCommand, "")
-	require.NoError(t, err)
+	// This polling strategy was chosen because some operations done through this command can take a long time while most should take very little.
+	// The total wait time amounts to roughly 34 minutes.
+	backoff := kwait.Backoff{
+		Duration: 1 * time.Second,
+		Factor:   1.4,
+		Jitter:   0,
+		Steps:    20,
+	}
 
-	debugPods, err := steveClient.SteveType(pods.PodResourceSteveType).NamespacedSteveClient(debugNamespace).List(nil)
-	require.NotEmpty(t, debugPods)
-	require.NoError(t, err)
+	err = kwait.ExponentialBackoff(backoff, func() (bool, error) {
+		debugPods, err := steveClient.SteveType(pods.PodResourceSteveType).NamespacedSteveClient(debugNamespace).List(nil)
+		require.NotEmpty(t, debugPods)
+		require.NoError(t, err)
 
-	podStatus := &corev1.PodStatus{}
-	err = steveV1.ConvertToK8sType(debugPods.Data[0].Status, podStatus)
+		podStatus := &corev1.PodStatus{}
+		err = steveV1.ConvertToK8sType(debugPods.Data[0].Status, podStatus)
+		require.NoError(t, err)
+
+		switch podStatus.Phase {
+		case "Failed":
+			return true, fmt.Errorf("Failed running command on node %s", nodeName)
+		case "Succeeded":
+			return true, nil
+		default:
+			return false, nil
+		}
+	})
+
 	require.NoError(t, err)
-	require.Equal(t, "Succeeded", string(podStatus.Phase))
 }
 
 // CheckMountedVolume Checks writes to a specific path inside the specified pod and checks if it succeeded.
 // The goal of this function is to test whether mounted volumes are working as expected.
-func CheckMountedVolume(t *testing.T, client *rancher.Client, clusterID string, namespace string, podName string, mountpoint string) {
-	kubeConfig, err := kubeconfig.GetKubeconfig(client, clusterID)
-	require.NoError(t, err)
-
+func CheckMountedVolume(t *testing.T, kubeConfig *clientcmd.ClientConfig, clusterID string, namespace string, podName string, mountpoint string) {
 	var restConfig *rest.Config
-	restConfig, err = (*kubeConfig).ClientConfig()
+	restConfig, err := (*kubeConfig).ClientConfig()
 	require.NoError(t, err)
 
-	testFileName := generateResourceName("test-volume", clusterID, podName)
+	testFileName := generateResourceName("test-file", clusterID, podName)
 
-	t.Logf("Write to mounted volume under the path [%v] on pod [%v]", mountpoint, podName)
+	t.Logf("Write to mounted volume under the path [%v] on pod [%v]", mountpoint+"/"+testFileName, podName)
 	writeToMountedVolume := []string{"touch", mountpoint + "/" + testFileName}
 	output, err := kubeconfig.KubectlExec(restConfig, podName, namespace, writeToMountedVolume)
 	if err != nil {
-		t.Logf("Command failed with: %s", output)
+		t.Logf("Command failed on pod %s: %s", podName, output)
 	}
 	require.NoError(t, err)
 
 	checkFileOnVolume := []string{"stat", mountpoint + "/" + testFileName}
 	output, err = kubeconfig.KubectlExec(restConfig, podName, namespace, checkFileOnVolume)
 	if err != nil {
-		t.Logf("Command failed with: %s", output)
+		t.Logf("Command failed on pod %s: %s", podName, output)
 	}
 	require.NoError(t, err)
 }
@@ -101,6 +117,9 @@ func CheckVolumeAllocation(t *testing.T, client *rancher.Client, clusterID strin
 	pvcs, err := steveClient.SteveType(persistentvolumeclaims.PersistentVolumeClaimType).NamespacedSteveClient(namespace).List(nil)
 	require.NoError(t, err)
 
+	kubeConfig, err := kubeconfig.GetKubeconfig(client, clusterID)
+	require.NoError(t, err)
+
 	for _, pod := range pods.Data {
 		targetVolume, err := GetTargetVolume(pod, volumeSourceName)
 		require.NoError(t, err)
@@ -115,26 +134,8 @@ func CheckVolumeAllocation(t *testing.T, client *rancher.Client, clusterID strin
 		}
 		require.Equal(t, storageClass, *pvcSpec.StorageClassName)
 
-		CheckMountedVolume(t, client, clusterID, namespace, pod.Name, mountpoint)
+		CheckMountedVolume(t, kubeConfig, clusterID, namespace, pod.Name, mountpoint)
 	}
-}
-
-// GetTargetVolume gets a volume that is attached to the given pod that has the specified name.
-// This name will typically point to the template that is used as a source to the volume instead of the volume name itself.
-func GetTargetVolume(pod steveV1.SteveAPIObject, volumeSourceName string) (corev1.Volume, error) {
-	podSpec := &corev1.PodSpec{}
-	err := steveV1.ConvertToK8sType(pod.Spec, podSpec)
-	if err != nil {
-		return corev1.Volume{}, err
-	}
-
-	for _, volume := range podSpec.Volumes {
-		if volume.Name == volumeSourceName {
-			return volume, nil
-		}
-	}
-
-	return corev1.Volume{}, fmt.Errorf("No volumes on pod %s sourced by %s", pod.Name, volumeSourceName)
 }
 
 // generateResourceName generates a unique resource name using the provided parts while avoiding that the name is longer than 63 characters.

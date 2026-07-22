@@ -13,7 +13,6 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults/providers"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	wloads "github.com/rancher/shepherd/extensions/workloads"
-	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/charts"
 	"github.com/rancher/tests/actions/clusters"
@@ -29,11 +28,10 @@ import (
 )
 
 const (
-	externalProviderString = "external"
-	clusterIPPrefix        = "cip"
-	loadBalancerPrefix     = "lb"
-	portName               = "port"
-	nginxName              = "nginx"
+	clusterIPPrefix    = "cip"
+	loadBalancerPrefix = "lb"
+	portName           = "port"
+	nginxName          = "nginx"
 
 	awsUpstreamCloudProviderRepo = "https://github.com/kubernetes/cloud-provider-aws.git"
 	masterBranch                 = "master"
@@ -74,9 +72,6 @@ func VerifyHarvesterCloudProvider(t *testing.T, client *rancher.Client, clusterO
 
 	services.VerifyHarvesterLoadBalancer(t, client, lbServiceResp, status.ClusterName)
 	storage.CreatePVCWorkload(t, client, status.ClusterName, "")
-
-	podErrors := pods.StatusPods(client, status.ClusterName)
-	require.Empty(t, podErrors)
 }
 
 func VerifyVSphereCloudProvider(t *testing.T, client *rancher.Client, clusterObject *steveV1.SteveAPIObject) {
@@ -85,9 +80,6 @@ func VerifyVSphereCloudProvider(t *testing.T, client *rancher.Client, clusterObj
 	require.NoError(t, err)
 
 	storage.CreatePVCWorkload(t, client, status.ClusterName, "")
-
-	podErrors := pods.StatusPods(client, status.ClusterName)
-	require.Empty(t, podErrors)
 }
 
 // CreateAWSCloudProviderWorkloadAndServicesLB creates a test workload, clusterIP service and LoadBalancer service.

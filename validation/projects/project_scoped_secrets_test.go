@@ -29,8 +29,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var opaqueSecretData = map[string][]byte{
-	"hello": []byte("world"),
+var opaqueSecretData = map[string]string{
+	"hello": "world",
 }
 
 type ProjectScopedSecretTestSuite struct {
@@ -64,7 +64,7 @@ func (pss *ProjectScopedSecretTestSuite) SetupSuite() {
 	config.LoadConfig(secretapi.ConfigurationFileKey, pss.registryConfig)
 }
 
-func (pss *ProjectScopedSecretTestSuite) testProjectScopedSecret(clusterID string, secretType corev1.SecretType, secretData map[string][]byte) (*v3.Project, []*corev1.Namespace, *corev1.Secret) {
+func (pss *ProjectScopedSecretTestSuite) testProjectScopedSecret(clusterID string, secretType corev1.SecretType, secretData map[string]string) (*v3.Project, []*corev1.Namespace, *corev1.Secret) {
 	log.Info("Create a project in the cluster.")
 	createdProject, err := projectapi.CreateProject(pss.client, clusterID)
 	require.NoError(pss.T(), err)
@@ -109,8 +109,8 @@ func (pss *ProjectScopedSecretTestSuite) TestCreateProjectScopedRegistrySecret()
 	dockerConfigJSON, err := secretapi.CreateRegistrySecretDockerConfigJSON(pss.registryConfig)
 	require.NoError(pss.T(), err)
 
-	registrySecretData := map[string][]byte{
-		".dockerconfigjson": []byte(dockerConfigJSON),
+	registrySecretData := map[string]string{
+		".dockerconfigjson": dockerConfigJSON,
 	}
 	pss.testProjectScopedSecret(pss.cluster.ID, corev1.SecretTypeDockerConfigJson, registrySecretData)
 }
@@ -122,9 +122,9 @@ func (pss *ProjectScopedSecretTestSuite) TestCreateProjectScopedTlsSecret() {
 	certData, keyData, err := secrets.GenerateSelfSignedCert()
 	require.NoError(pss.T(), err)
 
-	tlsSecretData := map[string][]byte{
-		corev1.TLSCertKey:       []byte(certData),
-		corev1.TLSPrivateKeyKey: []byte(keyData),
+	tlsSecretData := map[string]string{
+		corev1.TLSCertKey:       certData,
+		corev1.TLSPrivateKeyKey: keyData,
 	}
 	pss.testProjectScopedSecret(pss.cluster.ID, corev1.SecretTypeTLS, tlsSecretData)
 }
@@ -481,8 +481,8 @@ func (pss *ProjectScopedSecretTestSuite) TestProjectScopedSecrettPropagatedToNam
 
 	targetNamespace := namespaceList[0]
 	log.Infof("Create a secret in one of the namespaces '%s'", targetNamespace.Name)
-	nsData := map[string][]byte{
-		"foo": []byte("bar"),
+	nsData := map[string]string{
+		"foo": "bar",
 	}
 	nsSecret, err := secretapi.CreateSecret(pss.client, pss.cluster.ID, targetNamespace.Name, nsData, corev1.SecretTypeOpaque, nil, nil)
 	require.NoError(pss.T(), err)

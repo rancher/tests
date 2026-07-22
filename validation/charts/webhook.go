@@ -14,7 +14,6 @@ import (
 
 const (
 	resourceName = "rancher.cattle.io"
-	admin        = "admin"
 	localCluster = "local"
 )
 

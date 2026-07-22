@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	shepherdsnapshot "github.com/rancher/shepherd/extensions/etcdsnapshot"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/storage/s3"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	actionspods "github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
@@ -33,9 +34,6 @@ const (
 	port              = "port"
 	postWorkload      = "wload-after-backup"
 	serviceAppendName = "service-"
-	s3StorageType     = "s3"
-	s3SchemePrefix    = "s3://"
-	storageAnnotation = "etcdsnapshot.rke.io/storage"
 )
 
 // CreateAndValidateSnapshotRestore is an e2e helper that determines the engine type of the cluster, then takes a snapshot, and finally restores the cluster to the original snapshot
@@ -108,7 +106,7 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, podTemplate *corev1
 	createdSnapshotIDs := []string{}
 
 	for _, snapshot := range createdSnapshots {
-		if CheckS3SnapshotLocation(snapshot) {
+		if s3.CheckS3SnapshotLocation(snapshot) {
 			selectedSnapshot = snapshot
 			snapshotToRestore = snapshot.Name
 		}

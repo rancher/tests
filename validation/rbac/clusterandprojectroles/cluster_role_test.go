@@ -231,8 +231,8 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithSecretAccess() {
 	require.NoError(rb.T(), err)
 
 	log.Info("As cluster member with secrets permissions, verifying CRUD secrets")
-	secretData := map[string][]byte{
-		"hello": []byte("world"),
+	secretData := map[string]string{
+		"hello": "world",
 	}
 	createdSecret, err := secretapi.CreateSecret(standardUserClient, rb.cluster.ID, namespace.Name, secretData, corev1.SecretTypeOpaque, nil, nil)
 	require.NoError(rb.T(), err, "failed to create secret")
@@ -242,8 +242,8 @@ func (rb *ClusterRoleTestSuite) TestClusterMemberWithSecretAccess() {
 	_, err = userContext.Core.Secret().Get(createdSecret.Namespace, createdSecret.Name, metav1.GetOptions{})
 	require.NoError(rb.T(), err)
 
-	newData := map[string][]byte{
-		"foo": []byte("bar"),
+	newData := map[string]string{
+		"foo": "bar",
 	}
 	updatedSecretObj := secretapi.SecretCopyWithNewData(createdSecret, newData)
 	updatedSecret, err := userContext.Core.Secret().Update(updatedSecretObj)

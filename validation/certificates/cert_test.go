@@ -88,9 +88,9 @@ func (c *CertificateTestSuite) createTestCertAndNamespace(certData, keyData stri
 }
 
 func (c *CertificateTestSuite) createCertWithData(namespace *corev1.Namespace, certData, keyData string) (*corev1.Secret, error) {
-	secretData := map[string][]byte{
-		corev1.TLSCertKey:       []byte(certData),
-		corev1.TLSPrivateKeyKey: []byte(keyData),
+	secretData := map[string]string{
+		corev1.TLSCertKey:       certData,
+		corev1.TLSPrivateKeyKey: keyData,
 	}
 	return secretapi.CreateSecret(c.client, c.cluster.ID, namespace.Name, secretData, corev1.SecretTypeTLS, nil, nil)
 }
