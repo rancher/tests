@@ -10,8 +10,13 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/provisioning"
 	actionspods "github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	active = "active"
 )
 
 func upgradeClusterAndSnapshotSettings(client *rancher.Client, clusterName, clusterID string, etcdRestore *Config) error {
@@ -56,7 +61,7 @@ func upgradeClusterAndSnapshotSettings(client *rancher.Client, clusterName, clus
 		return err
 	}
 
-	err = clusters.WaitClusterToBeUpgraded(client, clusterID)
+	err = provisioning.WaitClusterToBeUpgradedWithRetry(client, clusterID)
 	if err != nil {
 		return err
 	}
@@ -89,8 +94,8 @@ func upgradeClusterAndSnapshotSettings(client *rancher.Client, clusterName, clus
 		return err
 	}
 
-	if clusterSteveObject.State == nil {
-		err = clusters.WaitClusterUntilUpgrade(client, clusterID)
+	if clusterSteveObject.ObjectMeta.State.Name != active {
+		err = provisioning.WaitClusterToBeUpgradedWithRetry(client, clusterID)
 		if err != nil {
 			return err
 		}

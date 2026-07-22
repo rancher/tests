@@ -42,7 +42,7 @@ Verifies that a cluster is able to recover from deleting the init machine.
 1. `K3S_Delete_Init_Machine`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeleteMachine -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/deleting/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDeleteInitMachine -timeout=1h -v`
 
 
 ### Delete machine test

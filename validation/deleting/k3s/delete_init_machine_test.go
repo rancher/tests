@@ -42,6 +42,9 @@ func TestDeleteInitMachine(t *testing.T) {
 			err := clusters.DeleteInitMachine(d.Client, tt.cluster.ID)
 			require.NoError(t, err)
 
+			err = provisioning.WaitClusterToBeUpgradedWithRetry(d.Client, tt.cluster.ID)
+			require.NoError(t, err)
+
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
 			err = provisioning.VerifyClusterReady(d.Client, tt.cluster)
 			require.NoError(t, err)

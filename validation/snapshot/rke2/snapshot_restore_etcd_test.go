@@ -5,11 +5,14 @@ package rke2
 import (
 	"testing"
 
+	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/etcdsnapshot"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads/deployment"
+	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/validation/snapshot"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -43,7 +46,31 @@ func TestSnapshotRestoreEtcd(t *testing.T) {
 		var err error
 
 		t.Run(tt.name, func(t *testing.T) {
-			err = etcdsnapshot.CreateAndValidateSnapshotRestore(s.Client, tt.cluster.Name, tt.etcdSnapshot, snapshot.ContainerImage)
+			logrus.Infof("Creating snapshot on cluster %s", tt.cluster.Name)
+			clusterObject, snapshotName, err := etcdsnapshot.CreateAndValidateSnapshotV2Prov(s.Client, tt.cluster.Name, tt.cluster.ID, tt.etcdSnapshot)
+			require.NoError(t, err)
+
+			clusterStatus := &provv1.ClusterStatus{}
+			err = v1.ConvertToK8sType(tt.cluster.Status, clusterStatus)
+			require.NoError(t, err)
+
+			err = snapshot.CreateSnapshotDeployment(s.Client, s.WorkloadClient, clusterStatus.ClusterName, tt.cluster.Name, s.WorkloadsConfig)
+			require.NoError(t, err)
+
+			logrus.Infof("Restoring snapshot %s on cluster %s", snapshotName, tt.cluster.Name)
+			_, err = etcdsnapshot.RestoreAndValidateSnapshotV2Prov(s.Client, snapshotName, tt.etcdSnapshot, clusterObject, tt.cluster.ID)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
+			err = provisioning.VerifyClusterReady(s.Client, tt.cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
+			err = deployment.VerifyClusterDeployments(s.Client, tt.cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
+			err = pods.VerifyClusterPods(s.Client, tt.cluster)
 			require.NoError(t, err)
 		})
 

@@ -30,6 +30,7 @@ type Workloads struct {
 	Job         *batchv1.Job       `json:"job,omitempty" yaml:"job,omitempty"`
 	StatefulSet *appv1.StatefulSet `json:"statefulset,omitempty" yaml:"statefulset,omitempty"`
 	Pod         *corev1.Pod        `json:"pod,omitempty" yaml:"pod,omitempty"`
+	IsWindows   bool               `json:"isWindows,omitempty" yaml:"isWindows,omitempty"`
 }
 
 // CreateWorkloads creates a variety of workloads on a cluster

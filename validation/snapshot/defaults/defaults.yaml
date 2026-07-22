@@ -85,3 +85,19 @@ awsEC2Configs:
       awsUser: "<required>"
       volumeSize: 100
       roles: ["windows"]
+
+workloadConfigs:
+  deployment:
+    metadata: {}
+    spec:
+      selector:
+        matchLabels:
+          "workload.user.cattle.io/workloadselector": "testdeployment"
+      template:
+        metadata:
+          labels:
+            "workload.user.cattle.io/workloadselector": "testdeployment"
+        spec:
+          containers:
+            - name: "testdeployment"
+              replicas: 3
