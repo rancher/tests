@@ -20,6 +20,7 @@ import (
 	"github.com/rancher/shepherd/extensions/workloads"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wrangler"
+	actionClusters "github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
@@ -29,13 +30,14 @@ import (
 )
 
 const (
-	Webhook            = "rancher-webhook"
-	SUC                = "system-upgrade-controller"
-	Fleet              = "fleet-agent"
-	ClusterAgent       = "cattle-cluster-agent"
-	Rancher            = "rancher"
-	revisionAnnotation = "deployment.kubernetes.io/revision"
-	v3IDRegex          = "^c-[a-z0-9]{5}$"
+	Webhook               = "rancher-webhook"
+	SUC                   = "system-upgrade-controller"
+	Fleet                 = "fleet-agent"
+	ClusterAgent          = "cattle-cluster-agent"
+	Rancher               = "rancher"
+	CapiControllerManager = "capi-controller-manager"
+	revisionAnnotation    = "deployment.kubernetes.io/revision"
+	v3IDRegex             = "^c-[a-z0-9]{5}$"
 )
 
 // VerifyDeployment waits for a deployment to be ready in the downstream cluster
@@ -522,7 +524,11 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 	requiredDeployments := []string{ClusterAgent, Webhook, Fleet, SUC}
 	if cluster.Name == "local" {
 		clusterID = "local"
-		requiredDeployments = []string{Rancher, Webhook, Fleet}
+		requiredDeployments = []string{Rancher, Webhook, Fleet, CapiControllerManager}
+		if ok, err := actionClusters.IsRancherVersionAbove(client, "v2.13.0"); err == nil && ok {
+			logrus.Info("Version is above 2.13 verifying CapiControllerManager")
+			requiredDeployments = append(requiredDeployments, CapiControllerManager)
+		}
 	}
 	logrus.Debugf("Verifying all required deployments exist: %v", requiredDeployments)
 	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
