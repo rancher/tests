@@ -222,61 +222,49 @@ func (p *PortTestSuite) TestClusterIP() {
 }
 
 func (p *PortTestSuite) TestLoadBalancer() {
-	loadBalancerTests := []struct {
-		name string
-	}{
-		{"Load_Balancer_Connectivity"},
+	isEnabled, err := cloudprovider.IsCloudProviderEnabled(p.client, p.cluster.ID)
+	require.NoError(p.T(), err)
+
+	if !isEnabled {
+		p.T().Skip("Load Balance test requires access to cloud provider.")
 	}
 
-	for _, loadBalancerTest := range loadBalancerTests {
-		p.Suite.Run(loadBalancerTest.name, func() {
-			isEnabled, err := cloudprovider.IsCloudProviderEnabled(p.client, p.cluster.ID)
-			require.NoError(p.T(), err)
+	workloadConfigs := new(workloads.Workloads)
+	operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, p.cattleConfig, workloadConfigs)
 
-			if !isEnabled {
-				p.T().Skip("Load Balance test requires access to cloud provider.")
-			}
+	port := rand.Intn(55283) + 10251
+	nodePort := rand.Intn(2767) + 30000
 
-			workloadConfigs := new(workloads.Workloads)
-			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, p.cattleConfig, workloadConfigs)
+	workloadConfigs.DaemonSet.ObjectMeta.Namespace = p.namespace.Name
+	workloadConfigs.DaemonSet.ObjectMeta.GenerateName = "load-balancer-connectivity-"
 
-			port := rand.Intn(55283) + 10251
-			nodePort := rand.Intn(2767) + 30000
+	logrus.Infof("Creating daemonset with name prefix: %s", workloadConfigs.DaemonSet.ObjectMeta.GenerateName)
+	testDaemonset, err := daemonset.CreateDaemonSetFromConfig(p.downstreamClient, p.cluster.ID, workloadConfigs.DaemonSet)
+	require.NoError(p.T(), err)
 
-			workloadConfigs.DaemonSet.ObjectMeta.Namespace = p.namespace.Name
-			workloadConfigs.DaemonSet.ObjectMeta.GenerateName = "load-balancer-connectivity-"
+	logrus.Infof("Verifying daemonset %s is running", testDaemonset.Name)
+	err = extdaemonsetapi.WaitForDaemonSetReady(p.client, p.cluster.ID, p.namespace.Name, testDaemonset.Name)
+	require.NoError(p.T(), err)
 
-			logrus.Infof("Creating daemonset with name prefix: %s", workloadConfigs.DaemonSet.ObjectMeta.GenerateName)
-			testDaemonset, err := daemonset.CreateDaemonSetFromConfig(p.downstreamClient, p.cluster.ID, workloadConfigs.DaemonSet)
-			require.NoError(p.T(), err)
-
-			logrus.Infof("Verifying daemonset %s is running", testDaemonset.Name)
-			err = extdaemonsetapi.WaitForDaemonSetReady(p.client, p.cluster.ID, p.namespace.Name, testDaemonset.Name)
-			require.NoError(p.T(), err)
-
-			serviceName := namegen.AppendRandomString("test-service")
-			logrus.Infof("Creating LoadBalancer service %s on ports %d/%d", serviceName, port, nodePort)
-			ports := []corev1.ServicePort{
-				{
-					Protocol:   corev1.ProtocolTCP,
-					Port:       int32(port),
-					TargetPort: intstr.FromInt(defaultPort),
-					NodePort:   int32(nodePort),
-				},
-			}
-			lbService := servicesapi.NewServiceTemplate(serviceName, p.namespace.Name, corev1.ServiceTypeLoadBalancer, ports, workloadConfigs.DaemonSet.Spec.Template.Labels)
-			serviceResp, err := services.CreateService(p.downstreamClient, lbService)
-			require.NoError(p.T(), err)
-
-			logrus.Infof("Verifying service %s is ready", serviceResp.Name)
-			err = services.VerifyService(p.downstreamClient, serviceResp)
-			require.NoError(p.T(), err)
-
-			logrus.Infof("Verifying load balancer connectivity for daemonset %s on node port %d", testDaemonset.Name, nodePort)
-			err = networking.VerifyNodePortConnectivity(p.client, p.cluster.ID, nodePort, testDaemonset.Name)
-			require.NoError(p.T(), err)
-		})
+	serviceName := namegen.AppendRandomString("test-service")
+	logrus.Infof("Creating LoadBalancer service %s on ports %d/%d", serviceName, port, nodePort)
+	ports := []corev1.ServicePort{
+		{
+			Protocol:   corev1.ProtocolTCP,
+			Port:       int32(port),
+			TargetPort: intstr.FromInt(defaultPort),
+			NodePort:   int32(nodePort),
+		},
 	}
+	lbService := servicesapi.NewServiceTemplate(serviceName, p.namespace.Name, corev1.ServiceTypeLoadBalancer, ports, workloadConfigs.DaemonSet.Spec.Template.Labels)
+	serviceResp, err := services.CreateService(p.downstreamClient, lbService)
+	require.NoError(p.T(), err)
+
+	logrus.Infof("Verifying service %s is ready", serviceResp.Name)
+	err = services.VerifyService(p.downstreamClient, serviceResp)
+	require.NoError(p.T(), err)
+
+	networking.VerifyLoadBalancerConnectivity(p.T(), p.client, p.cluster.ID, serviceResp.ID, testDaemonset.Name)
 }
 
 func (p *PortTestSuite) TestClusterIPScaleAndUpgrade() {
@@ -508,90 +496,77 @@ func (p *PortTestSuite) TestNodePortScaleAndUpgrade() {
 }
 
 func (p *PortTestSuite) TestLoadBalanceScaleAndUpgrade() {
-	lbScaleTests := []struct {
-		name string
-	}{
-		{"Load_Balance_Scale_And_Upgrade"},
+	isEnabled, err := cloudprovider.IsCloudProviderEnabled(p.client, p.cluster.ID)
+	require.NoError(p.T(), err)
+
+	if !isEnabled {
+		p.T().Skip("Load Balance test requires access to cloud provider.")
 	}
 
-	for _, tt := range lbScaleTests {
-		p.Suite.Run(tt.name, func() {
-			isEnabled, err := cloudprovider.IsCloudProviderEnabled(p.client, p.cluster.ID)
-			require.NoError(p.T(), err)
+	_, namespace, err := projectsapi.CreateProjectAndNamespace(p.client, p.cluster.ID)
+	require.NoError(p.T(), err)
 
-			if !isEnabled {
-				p.T().Skip("Load Balance test requires access to cloud provider.")
-			}
+	workloadConfigs := new(workloads.Workloads)
+	operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, p.cattleConfig, workloadConfigs)
 
-			_, namespace, err := projectsapi.CreateProjectAndNamespace(p.client, p.cluster.ID)
-			require.NoError(p.T(), err)
+	port := rand.Intn(55283) + 10251
+	nodePort := rand.Intn(2767) + 30000
+	replicas := int32(2)
+	workloadConfigs.Deployment.ObjectMeta.Namespace = namespace.Name
+	workloadConfigs.Deployment.ObjectMeta.GenerateName = "load-balance-scale-"
+	workloadConfigs.Deployment.Spec.Replicas = &replicas
 
-			workloadConfigs := new(workloads.Workloads)
-			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, p.cattleConfig, workloadConfigs)
+	logrus.Infof("Creating deployment with prefix: %s", workloadConfigs.Deployment.ObjectMeta.GenerateName)
+	testDeployment, err := deployment.CreateDeploymentFromConfig(p.downstreamClient, p.cluster.ID, workloadConfigs.Deployment)
+	require.NoError(p.T(), err)
 
-			port := rand.Intn(55283) + 10251
-			nodePort := rand.Intn(2767) + 30000
-			replicas := int32(2)
-			workloadConfigs.Deployment.ObjectMeta.Namespace = namespace.Name
-			workloadConfigs.Deployment.ObjectMeta.GenerateName = "load-balance-scale-"
-			workloadConfigs.Deployment.Spec.Replicas = &replicas
+	logrus.Infof("Verifying deployment %s is running", testDeployment.Name)
+	err = deployment.VerifyDeployment(p.client, p.cluster.ID, testDeployment.Namespace, testDeployment.Name)
+	require.NoError(p.T(), err)
 
-			logrus.Infof("Creating deployment with prefix: %s", workloadConfigs.Deployment.ObjectMeta.GenerateName)
-			testDeployment, err := deployment.CreateDeploymentFromConfig(p.downstreamClient, p.cluster.ID, workloadConfigs.Deployment)
-			require.NoError(p.T(), err)
-
-			logrus.Infof("Verifying deployment %s is running", testDeployment.Name)
-			err = deployment.VerifyDeployment(p.client, p.cluster.ID, testDeployment.Namespace, testDeployment.Name)
-			require.NoError(p.T(), err)
-
-			serviceName := namegen.AppendRandomString("test-service")
-			logrus.Infof("Creating LoadBalancer service %s on ports %d/%d", serviceName, port, nodePort)
-			ports := []corev1.ServicePort{
-				{
-					Protocol:   corev1.ProtocolTCP,
-					Port:       int32(port),
-					TargetPort: intstr.FromInt(defaultPort),
-					NodePort:   int32(nodePort),
-				},
-			}
-			lbService := servicesapi.NewServiceTemplate(serviceName, namespace.Name, corev1.ServiceTypeLoadBalancer, ports, testDeployment.Spec.Template.Labels)
-			serviceResp, err := services.CreateService(p.downstreamClient, lbService)
-			require.NoError(p.T(), err)
-
-			logrus.Infof("Verifying service %s is ready", serviceResp.Name)
-			err = services.VerifyService(p.downstreamClient, serviceResp)
-			require.NoError(p.T(), err)
-
-			logrus.Infof("Scaling up deployment %s to 3 replicas", testDeployment.Name)
-			replicas = 3
-			testDeployment.Spec.Replicas = &replicas
-			testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
-			require.NoError(p.T(), err)
-
-			logrus.Infof("Verifying load balancer connectivity after scale up for deployment %s", testDeployment.Name)
-			err = networking.VerifyNodePortConnectivity(p.client, p.cluster.ID, nodePort, testDeployment.Name)
-			require.NoError(p.T(), err)
-
-			logrus.Infof("Scaling down deployment %s to 2 replicas", testDeployment.Name)
-			replicas = 2
-			testDeployment.Spec.Replicas = &replicas
-			testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
-			require.NoError(p.T(), err)
-
-			logrus.Infof("Verifying load balancer connectivity after scale down for deployment %s", testDeployment.Name)
-			err = networking.VerifyNodePortConnectivity(p.client, p.cluster.ID, nodePort, testDeployment.Name)
-			require.NoError(p.T(), err)
-
-			logrus.Infof("Upgrading deployment %s container", testDeployment.Name)
-			testDeployment.Spec.Template.Spec.Containers[0].Name = namegen.AppendRandomString("test-upgrade")
-			testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
-			require.NoError(p.T(), err)
-
-			logrus.Infof("Verifying load balancer connectivity after upgrade for deployment %s", testDeployment.Name)
-			err = networking.VerifyNodePortConnectivity(p.client, p.cluster.ID, nodePort, testDeployment.Name)
-			require.NoError(p.T(), err)
-		})
+	serviceName := namegen.AppendRandomString("test-service")
+	logrus.Infof("Creating LoadBalancer service %s on ports %d/%d", serviceName, port, nodePort)
+	ports := []corev1.ServicePort{
+		{
+			Protocol:   corev1.ProtocolTCP,
+			Port:       int32(port),
+			TargetPort: intstr.FromInt(defaultPort),
+			NodePort:   int32(nodePort),
+		},
 	}
+	lbService := servicesapi.NewServiceTemplate(serviceName, namespace.Name, corev1.ServiceTypeLoadBalancer, ports, testDeployment.Spec.Template.Labels)
+	serviceResp, err := services.CreateService(p.downstreamClient, lbService)
+	require.NoError(p.T(), err)
+
+	logrus.Infof("Verifying service %s is ready", serviceResp.Name)
+	err = services.VerifyService(p.downstreamClient, serviceResp)
+	require.NoError(p.T(), err)
+
+	logrus.Infof("Scaling up deployment %s to 3 replicas", testDeployment.Name)
+	replicas = 3
+	testDeployment.Spec.Replicas = &replicas
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	require.NoError(p.T(), err)
+
+	logrus.Infof("Verifying load balancer connectivity after scale up for deployment %s", testDeployment.Name)
+	networking.VerifyLoadBalancerConnectivity(p.T(), p.client, p.cluster.ID, serviceResp.ID, testDeployment.Name)
+
+	logrus.Infof("Scaling down deployment %s to 2 replicas", testDeployment.Name)
+	replicas = 2
+	testDeployment.Spec.Replicas = &replicas
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	require.NoError(p.T(), err)
+
+	logrus.Infof("Verifying load balancer connectivity after scale down for deployment %s", testDeployment.Name)
+	networking.VerifyLoadBalancerConnectivity(p.T(), p.client, p.cluster.ID, serviceResp.ID, testDeployment.Name)
+
+	logrus.Infof("Upgrading deployment %s container", testDeployment.Name)
+	testDeployment.Spec.Template.Spec.Containers[0].Name = namegen.AppendRandomString("test-upgrade")
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	require.NoError(p.T(), err)
+
+	logrus.Infof("Verifying load balancer connectivity after upgrade for deployment %s", testDeployment.Name)
+	networking.VerifyLoadBalancerConnectivity(p.T(), p.client, p.cluster.ID, serviceResp.ID, testDeployment.Name)
 }
 
 func TestPortTestSuite(t *testing.T) {
