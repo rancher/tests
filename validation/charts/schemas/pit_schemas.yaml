@@ -1,4 +1,4 @@
-- projects: [RANCHERINT]
+- projects: [ RANCHERINT ]
   suite: Charts
   cases:
   - title: "CIS Benchmark Chart Installation and Scan"
@@ -36,7 +36,7 @@
       expectedresult: "The 'System' project is successfully created"
       position: 2
     - action: "Install Rancher Alerting chart"
-      data: "helm install rancher-alerting-drivers --namespace=default"
+      data: "helm install rancher-alerting-drivers --namespace=cattle-monitoring-system"
       expectedresult: "Alerting chart installation starts successfully"
       position: 3
     - action: "Wait for Alerting deployments"
@@ -107,10 +107,10 @@
       expectedresult: "Install payload prepared successfully"
       position: 5
     - action: "Install NeuVector charts"
-      data: "Install neuvector, neuvector-monitor, and neuvector-crd charts"
+      data: "Install neuvector and neuvector-crd charts"
       expectedresult: "All NeuVector charts installed successfully"
       position: 6
-    - action: "Wait for neuvector, neuvector-monitor, and neuvector-crd charts installations to complete"
+    - action: "Wait for neuvector and neuvector-crd charts installations to complete"
       expectedresult: "Charts reports successful installations"
       position: 7
     - action: "Verify NeuVector deployments readiness"

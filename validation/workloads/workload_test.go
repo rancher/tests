@@ -83,15 +83,14 @@ func (w *WorkloadTestSuite) TestDeployments() {
 		name       string
 		replicas   int32
 		image      string
-		createFunc func(client *v1.Client, clusterID string, deployment *appv1.Deployment) (*appv1.Deployment, error)
 		verifyFunc func(client *rancher.Client, clusterID, namespace, name string) error
 	}{
-		{"WorkloadDeploymentTest", 1, "nginx:latest", deployment.CreateDeploymentFromConfig, deployment.VerifyDeployment},
-		{"WorkloadSideKickTest", 1, "redis", deployment.CreateDeploymentFromConfig, deployment.VerifyDeploymentSideKick},
-		{"WorkloadUpgradeTest", 1, "nginx:latest", deployment.CreateDeploymentFromConfig, deployment.VerifyDeploymentUpgradeRollback},
-		{"WorkloadPodScaleUpTest", 1, "nginx:latest", deployment.CreateDeploymentFromConfig, deployment.VerifyDeploymentPodScaleUp},
-		{"WorkloadPodScaleDownTest", 3, "nginx:latest", deployment.CreateDeploymentFromConfig, deployment.VerifyDeploymentPodScaleDown},
-		{"WorkloadPauseOrchestrationTest", 1, "nginx:latest", deployment.CreateDeploymentFromConfig, deployment.VerifyDeploymentOrchestration},
+		{"WorkloadDeploymentTest", 1, "nginx:latest", deployment.VerifyDeployment},
+		{"WorkloadSideKickTest", 1, "redis", deployment.VerifyDeploymentSideKick},
+		{"WorkloadUpgradeTest", 1, "nginx:latest", deployment.VerifyDeploymentUpgradeRollback},
+		{"WorkloadPodScaleUpTest", 1, "nginx:latest", deployment.VerifyDeploymentPodScaleUp},
+		{"WorkloadPodScaleDownTest", 3, "nginx:latest", deployment.VerifyDeploymentPodScaleDown},
+		{"WorkloadPauseOrchestrationTest", 1, "nginx:latest", deployment.VerifyDeploymentOrchestration},
 	}
 
 	for _, workloadTest := range workloadTests {
@@ -108,7 +107,7 @@ func (w *WorkloadTestSuite) TestDeployments() {
 			workloadConfigs.Deployment.ObjectMeta.GenerateName = strings.ToLower(workloadTest.name) + "-"
 
 			logrus.Infof("Creating deployment with name prefix: %s", workloadConfigs.Deployment.ObjectMeta.GenerateName)
-			testDeployment, err := workloadTest.createFunc(w.downstreamClient, w.cluster.ID, workloadConfigs.Deployment)
+			testDeployment, err := deployment.CreateDeploymentFromConfig(w.downstreamClient, w.cluster.ID, workloadConfigs.Deployment)
 			require.NoError(w.T(), err)
 
 			logrus.Infof("Verifying deployment with name: %s", testDeployment.Name)
