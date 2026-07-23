@@ -2014,6 +2014,161 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchDeactivateAdminReturns409() {
 	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusConflict, "PATCH active=false on default admin should return 409"))
 }
 
+func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchExternalIDConflictReturns409() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH externalId to a value already held by another user returns 409 (userName mode, where externalId is mutable)")
+
+	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, scimactions.BaselineSCIMConfigMap()))
+
+	externalIDA := namegen.AppendRandomString("ext-conflict-a")
+	_, _, err := scimactions.CreateSCIMUser(s.scimClient, subSession, externalIDA, true)
+	require.NoError(s.T(), err)
+
+	_, userIDB, err := scimactions.CreateSCIMUser(s.scimClient, subSession, namegen.AppendRandomString("ext-conflict-b"), true)
+	require.NoError(s.T(), err)
+
+	resp, err := scimactions.PatchUser(s.scimClient, userIDB, "replace", "externalId", externalIDA)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusConflict, "PATCH externalId to another user's value should return 409"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMPutUserNameConflictReturns409() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PUT userName to a value already held by another user returns 409")
+
+	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "userIdAttribute": "externalId"}))
+
+	userNameA, _, err := scimactions.CreateSCIMUser(s.scimClient, subSession, namegen.AppendRandomString("un-conflict-a-ext"), true)
+	require.NoError(s.T(), err)
+
+	externalIDB := namegen.AppendRandomString("un-conflict-b-ext")
+	_, userIDB, err := scimactions.CreateSCIMUser(s.scimClient, subSession, externalIDB, true)
+	require.NoError(s.T(), err)
+
+	resp, err := s.scimClient.Users().Update(userIDB, scimclient.User{
+		Schemas:    []string{scimclient.SCIMSchemaUser},
+		UserName:   userNameA,
+		ExternalID: externalIDB,
+		Active:     scimclient.BoolPtr(true),
+	})
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusConflict, "PUT userName to another user's value should return 409"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMPrincipalSearchUserNotLocal() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying a SCIM-provisioned user is not returned as a local principal by /v3/principals search")
+
+	userName, _, err := scimactions.CreateSCIMUser(s.scimClient, subSession, "", true)
+	require.NoError(s.T(), err)
+
+	require.NoError(s.T(), authactions.VerifyPrincipalNotLocal(s.client, userName))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMPrincipalSearchGroupNotLocal() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying a SCIM-provisioned group is not returned as a local principal by /v3/principals search")
+
+	groupName, _, err := scimactions.CreateSCIMGroup(s.scimClient, subSession, "")
+	require.NoError(s.T(), err)
+
+	require.NoError(s.T(), authactions.VerifyPrincipalNotLocal(s.client, groupName))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMGetUserMissingUserAttributeReturns200() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying GET /Users/{id} returns 200 for a SCIM user whose UserAttribute is absent (never logged in)")
+
+	_, userID, err := scimactions.ProvisionSCIMUserWithoutAttribute(s.client, s.scimClient, subSession, "")
+	require.NoError(s.T(), err)
+
+	resp, err := s.scimClient.Users().ByID(userID)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "GET /Users/{id} should return 200 even when the user has no UserAttribute"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMPutUserMissingUserAttributeReturns200() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PUT /Users/{id} returns 200 for a SCIM user whose UserAttribute is absent (externalId mode, userName mutable)")
+
+	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "userIdAttribute": "externalId"}))
+
+	externalID := namegen.AppendRandomString("ext-put-recover")
+	_, userID, err := scimactions.ProvisionSCIMUserWithoutAttribute(s.client, s.scimClient, subSession, externalID)
+	require.NoError(s.T(), err)
+
+	resp, err := s.scimClient.Users().Update(userID, scimclient.User{
+		Schemas:  []string{scimclient.SCIMSchemaUser},
+		UserName: namegen.AppendRandomString("put-recovered"),
+		Active:   scimclient.BoolPtr(true),
+	})
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "PUT /Users/{id} should return 200 even when the user has no UserAttribute"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchUserMissingUserAttributeReturns200() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH /Users/{id} returns 200 for a SCIM user whose UserAttribute is absent")
+
+	_, userID, err := scimactions.ProvisionSCIMUserWithoutAttribute(s.client, s.scimClient, subSession, "")
+	require.NoError(s.T(), err)
+
+	resp, err := scimactions.PatchUser(s.scimClient, userID, "replace", "displayName", namegen.AppendRandomString("patched"))
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusOK, "PATCH /Users/{id} should return 200 even when the user has no UserAttribute"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMGroupAddMemberMissingUserAttribute() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH group add member records membership when the member's UserAttribute is absent")
+
+	_, userID, err := scimactions.ProvisionSCIMUserWithoutAttribute(s.client, s.scimClient, subSession, "")
+	require.NoError(s.T(), err)
+
+	_, groupID, err := scimactions.CreateSCIMGroup(s.scimClient, subSession, "")
+	require.NoError(s.T(), err)
+
+	patchResp, err := scimactions.PatchGroup(s.scimClient, groupID, "add", "members", []scimclient.Member{{Value: userID}})
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH group add member should return 200 when the member has no UserAttribute"))
+
+	require.NoError(s.T(), scimactions.WaitForGroupMemberCount(s.scimClient, groupID, 1))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMPrincipalSearchLocalUserIsLocal() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying a genuine local user is still returned as a local principal by /v3/principals search")
+
+	adminUsers, err := s.client.Management.User.List(&types.ListOpts{
+		Filters: map[string]interface{}{"username": "admin"},
+	})
+	require.NoError(s.T(), err)
+	require.NotEmpty(s.T(), adminUsers.Data, "default admin user should exist")
+
+	require.NoError(s.T(), authactions.VerifyPrincipalIsLocal(s.client, adminUsers.Data[0].Username))
+}
+
 func TestSCIMOpenLDAPSuite(t *testing.T) {
 	suite.Run(t, new(SCIMOpenLDAPTestSuite))
 }
