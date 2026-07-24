@@ -58,7 +58,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Get dispatch workflow list
         id: get-dispatch-workflow-list
@@ -230,7 +230,7 @@ jobs:
          uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
          with:
            role-to-assume: ${{ secrets.IAM_ROLE }}
-           aws-region: ${{ secrets.AWS_REGION }}
+           aws-region: ${{ vars.AWS_REGION }}
 
        - name: Check if Slack notification already sent
          id: check_marker
@@ -264,7 +264,7 @@ jobs:
          uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
          with:
            role-to-assume: ${{ secrets.IAM_ROLE }}
-           aws-region: ${{ secrets.AWS_REGION }}
+           aws-region: ${{ vars.AWS_REGION }}
 
        - name: Write Slack notification marker to S3
          if: ${{ steps.check_marker.outputs.skip_slack == 'false' }}
@@ -282,7 +282,7 @@ jobs:
          uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
          with:
            role-to-assume: ${{ secrets.IAM_ROLE }}
-           aws-region: ${{ secrets.AWS_REGION }}
+           aws-region: ${{ vars.AWS_REGION }}
 
        - name: Check if Slack notification already sent
          id: check_marker
@@ -316,7 +316,7 @@ jobs:
          uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
          with:
            role-to-assume: ${{ secrets.IAM_ROLE }}
-           aws-region: ${{ secrets.AWS_REGION }}
+           aws-region: ${{ vars.AWS_REGION }}
 
        - name: Write Slack notification marker to S3
          if: ${{ steps.check_marker.outputs.skip_slack == 'false' }}
@@ -334,7 +334,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Check if Slack notification already sent
         id: check_marker
@@ -368,7 +368,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Write Slack notification marker to S3
         if: ${{ steps.check_marker.outputs.skip_slack == 'false' }}
