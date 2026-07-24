@@ -173,7 +173,6 @@ func WaitForSCIMResourceDeletion(getFunc func() (int, error)) error {
 	)
 }
 
-
 // createSCIMResourceWithRetry invokes create up to scimCreateMaxAttempts times, retrying
 // only when the SCIM response is a transient 5xx. Success and non-5xx errors (e.g. 409
 // duplicate, 400 bad request) return immediately.

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: capa-system
+---
+apiVersion: turtles-capi.cattle.io/v1alpha1
+kind: CAPIProvider
+metadata:
+  name: aws
+  namespace: capa-system
+spec:
+  type: infrastructure
+  variables:
+    AWS_B64ENCODED_CREDENTIALS: ""

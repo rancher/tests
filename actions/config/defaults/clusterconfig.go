@@ -1,6 +1,8 @@
 package defaults
 
 import (
+	"strings"
+
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -20,7 +22,11 @@ func SetK8sDefault(client *rancher.Client, k8sType string, cattleConfig map[stri
 	k8sKeyPath := []string{ClusterConfigKey, K8SVersionKey}
 	k8sKeyValue, err := operations.GetValue(k8sKeyPath, cattleConfig)
 	if err != nil {
-		return nil, err
+		if !strings.Contains(err.Error(), "expected key does not exist") {
+			return nil, err
+		}
+
+		k8sKeyValue = ""
 	}
 
 	if k8sKeyValue == nil || k8sKeyValue == "" {

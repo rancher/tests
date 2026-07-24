@@ -32,10 +32,10 @@ runs:
   steps:
     - id: write-certs
       run: |
-        full_chain_path="${GITHUB_WORKSPACE}/.ssh/${{ inputs.private-full-chain-name }}.pem"
-        full_chain_tfp_path="${GITHUB_WORKSPACE}/tfp-automation/.ssh/${{ inputs.private-full-chain-name }}.pem"
-        cert_key_path="${GITHUB_WORKSPACE}/.ssh/${{ inputs.private-cert-key-name }}.pem"
-        cert_key_tfp_path="${GITHUB_WORKSPACE}/tfp-automation/.ssh/${{ inputs.private-cert-key-name }}.pem"
+        full_chain_path="${GITHUB_WORKSPACE}/.ssh/${{ inputs.private-full-chain-name }}"
+        full_chain_tfp_path="${GITHUB_WORKSPACE}/tfp-automation/.ssh/${{ inputs.private-full-chain-name }}"
+        cert_key_path="${GITHUB_WORKSPACE}/.ssh/${{ inputs.private-cert-key-name }}"
+        cert_key_tfp_path="${GITHUB_WORKSPACE}/tfp-automation/.ssh/${{ inputs.private-cert-key-name }}"
 
         echo "${{ inputs.private-full-chain }}" > "$full_chain_path"
         chmod 600 "$full_chain_path"
