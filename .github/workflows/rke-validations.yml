@@ -26,7 +26,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Create Qase test run
         id: qase
@@ -88,7 +88,7 @@ jobs:
             --subnet-id ${{ secrets.AWS_SUBNET_ID }} \
             --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=rke-validations-${{ github.run_id }}}]' \
             --block-device-mappings '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":100}}]' \
-            --region ${{ secrets.AWS_REGION }} \
+            --region ${{ vars.AWS_REGION }} \
             --query 'Instances[0].InstanceId' \
             --output text)
 

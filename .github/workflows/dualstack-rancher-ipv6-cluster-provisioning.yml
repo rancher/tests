@@ -92,7 +92,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Get AWS credentials from Secrets Manager
         uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa #v3
@@ -117,7 +117,7 @@ jobs:
         uses: ./.github/actions/whitelist-runner-ip
         with:
           prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: Set up SSH Keys
         uses: ./.github/actions/setup-ssh-keys
@@ -214,7 +214,7 @@ jobs:
               awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              region: "${{ secrets.AWS_REGION }}"
+              region: "${{ vars.AWS_REGION }}"
               awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
               awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
               awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
@@ -222,7 +222,7 @@ jobs:
               awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ secrets.DUAL_STACK_AWS_USER }}"
+              awsUser: "${{ vars.DUAL_STACK_AWS_USER }}"
               clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
               serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
               enablePrimaryIPv6: true
@@ -284,14 +284,14 @@ jobs:
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
-            defaultRegion: "${{ secrets.AWS_REGION }}"
+            defaultRegion: "${{ vars.AWS_REGION }}"
 
           awsMachineConfigs:
-            region: "${{ secrets.AWS_REGION }}"
+            region: "${{ vars.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_IPV6_AMI }}"
-              sshUser: "${{ secrets.AWS_USER }}"
+              sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               zone: "${{ vars.IPV6_AWS_ZONE_LETTER }}"
@@ -301,18 +301,18 @@ jobs:
               subnetId: "${{ secrets.AWS_IPV6_SUBNET_ID }}"
 
           awsEC2Configs:
-            region: "${{ secrets.AWS_REGION }}"
+            region: "${{ vars.AWS_REGION }}"
             awsSecretAccessKey: "$AWS_SECRET_KEY"
             awsAccessKeyID: "$AWS_ACCESS_KEY"
             awsEC2Config:
-              - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
+              - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_IPV6_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "rancher-validation"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE }}"
-                awsUser: "${{ secrets.AWS_USER }}"
+                awsUser: "${{ vars.AWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
           sshPath: 
@@ -367,35 +367,35 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: Revoke Runner IP
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
           prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: Set job status output
         if: always()
@@ -462,7 +462,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Get AWS credentials from Secrets Manager
         uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa #v3
@@ -487,7 +487,7 @@ jobs:
         uses: ./.github/actions/whitelist-runner-ip
         with:
           prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: Set up SSH Keys
         uses: ./.github/actions/setup-ssh-keys
@@ -584,7 +584,7 @@ jobs:
               awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              region: "${{ secrets.AWS_REGION }}"
+              region: "${{ vars.AWS_REGION }}"
               awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
               awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
               awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
@@ -592,7 +592,7 @@ jobs:
               awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ secrets.DUAL_STACK_AWS_USER }}"
+              awsUser: "${{ vars.DUAL_STACK_AWS_USER }}"
               clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
               serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
               enablePrimaryIPv6: true
@@ -654,14 +654,14 @@ jobs:
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
-            defaultRegion: "${{ secrets.AWS_REGION }}"
+            defaultRegion: "${{ vars.AWS_REGION }}"
 
           awsMachineConfigs:
-            region: "${{ secrets.AWS_REGION }}"
+            region: "${{ vars.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_IPV6_AMI }}"
-              sshUser: "${{ secrets.AWS_USER }}"
+              sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               zone: "${{ vars.IPV6_AWS_ZONE_LETTER }}"
@@ -671,18 +671,18 @@ jobs:
               subnetId: "${{ secrets.AWS_IPV6_SUBNET_ID }}"
 
           awsEC2Configs:
-            region: "${{ secrets.AWS_REGION }}"
+            region: "${{ vars.AWS_REGION }}"
             awsSecretAccessKey: "$AWS_SECRET_KEY"
             awsAccessKeyID: "$AWS_ACCESS_KEY"
             awsEC2Config:
-              - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
+              - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_IPV6_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "rancher-validation"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE }}"
-                awsUser: "${{ secrets.AWS_USER }}"
+                awsUser: "${{ vars.AWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
           sshPath: 
@@ -737,35 +737,35 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: Revoke Runner IP
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
           prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: Set job status output
         if: always()
@@ -831,7 +831,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Get AWS credentials from Secrets Manager
         uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa #v3
@@ -856,7 +856,7 @@ jobs:
         uses: ./.github/actions/whitelist-runner-ip
         with:
           prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: Set up SSH Keys
         uses: ./.github/actions/setup-ssh-keys
@@ -953,7 +953,7 @@ jobs:
               awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              region: "${{ secrets.AWS_REGION }}"
+              region: "${{ vars.AWS_REGION }}"
               awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
               awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES_PRIME }}]
               awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
@@ -961,7 +961,7 @@ jobs:
               awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
               awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
               awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ secrets.DUAL_STACK_AWS_USER }}"
+              awsUser: "${{ vars.DUAL_STACK_AWS_USER }}"
               clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
               serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
               sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
@@ -1022,14 +1022,14 @@ jobs:
           awsCredentials:
             secretKey: "$AWS_SECRET_KEY"
             accessKey: "$AWS_ACCESS_KEY"
-            defaultRegion: "${{ secrets.AWS_REGION }}"
+            defaultRegion: "${{ vars.AWS_REGION }}"
 
           awsMachineConfigs:
-            region: "${{ secrets.AWS_REGION }}"
+            region: "${{ vars.AWS_REGION }}"
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_IPV6_AMI }}"
-              sshUser: "${{ secrets.AWS_USER }}"
+              sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               zone: "${{ vars.IPV6_AWS_ZONE_LETTER }}"
@@ -1039,18 +1039,18 @@ jobs:
               subnetId: "${{ secrets.AWS_IPV6_SUBNET_ID }}"
 
           awsEC2Configs:
-            region: "${{ secrets.AWS_REGION }}"
+            region: "${{ vars.AWS_REGION }}"
             awsSecretAccessKey: "$AWS_SECRET_KEY"
             awsAccessKeyID: "$AWS_ACCESS_KEY"
             awsEC2Config:
-              - awsRegionAZ: "${{ secrets.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
+              - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_IPV6_AMI }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
                 awsCICDInstanceTag: "rancher-validation"
                 awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE }}"
-                awsUser: "${{ secrets.AWS_USER }}"
+                awsUser: "${{ vars.AWS_USER }}"
                 volumeSize: ${{ vars.AWS_ROOT_SIZE }}
                 roles: ["etcd", "controlplane", "worker"]
           sshPath: 
@@ -1105,35 +1105,35 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: Revoke Runner IP
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
           prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: Set job status output
         if: always()
