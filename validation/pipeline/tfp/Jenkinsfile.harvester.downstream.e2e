@@ -1,0 +1,144 @@
+#!groovy
+node("harvester-vpn-1") {
+    def workPath = "/root/go/src/github.com/rancher/tests/validation/"
+    def rancherRepo = "https://github.com/rancher/tests"
+    def qaInfraRepo = "https://github.com/rancher/qa-infra-automation"
+    def branch = "main"
+    def qaInfraBranch = "main"
+    def job_name = "${JOB_NAME}"
+    if (job_name.contains('/')) {
+        job_names = job_name.split('/')
+        job_name = job_names[job_names.size() - 1]
+    }
+    def buildTestContainer = "${job_name}${env.BUILD_NUMBER}-buildtest"
+    def destroyTestContainer = "${job_name}${env.BUILD_NUMBER}-destroytest"
+    def imageName = "harvester-downstream-validation-${job_name}${env.BUILD_NUMBER}"
+    def validationVolume = "HarvesterDownstreamSharedVolume-${job_name}${env.BUILD_NUMBER}"
+    def envFile = ".env"
+    def terraformConfig = env.TERRAFORM_CONFIG
+    def ansibleConfig = env.ANSIBLE_CONFIG
+    def rke2AnsibleConfig = env.RKE2_ANSIBLE_CONFIG
+    def terraformVarsFilename = "terraform.tfvars"
+    def ansibleVarsFilename = "vars.yaml"
+    def harvesterConfigFilename = "local.yaml"
+    def harvesterConfig = ""
+
+    if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
+        branch = "${env.BRANCH}"
+    }
+    if ("${env.REPO}" != "null" && "${env.REPO}" != "") {
+        rancherRepo = "${env.REPO}"
+    }
+    if ("${env.QA_INFRA_REPO_BRANCH}" != "null" && "${env.QA_INFRA_REPO_BRANCH}" != "") {
+        qaInfraBranch = "${env.QA_INFRA_REPO_BRANCH}"
+    }
+    if ("${env.QA_INFRA_REPO_URL}" != "null" && "${env.QA_INFRA_REPO_URL}" != "") {
+        qaInfraRepo = "${env.QA_INFRA_REPO_URL}"
+    }
+
+    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg': 1]) {
+        withFolderProperties {
+            paramsMap = []
+            params.each {
+                if (it.value && it.value.trim() != "") {
+                    paramsMap << "$it.key=$it.value"
+                }
+            }
+            withCredentials([
+                string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
+                string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
+                string(credentialsId: 'ADMIN_PASSWORD', variable: 'ADMIN_PASSWORD')
+            ]) {
+                withEnv(paramsMap) {
+                    stage('Checkout') {
+                        deleteDir()
+                        dir("./tests") {
+                            echo "cloning rancher tests"
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${branch}"]],
+                                extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                                userRemoteConfigs: [[url: rancherRepo]]
+                            ])
+                        }
+                        dir("./qa-infra-automation") {
+                            echo "cloning qa-infra-automation repo"
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "*/${qaInfraBranch}"]],
+                                extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                                userRemoteConfigs: [[url: qaInfraRepo]]
+                            ])
+                        }
+                    }
+                    stage('Configure and Build') {
+                        ansibleConfig = ansibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
+
+                        if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
+                            dir("./tests/.ssh") {
+                                def decoded = new String(AWS_SSH_PEM_KEY.decodeBase64())
+                                writeFile file: AWS_SSH_KEY_NAME, text: decoded
+                                sh "chmod 600 ${env.AWS_SSH_KEY_NAME}"
+                                harvesterConfig = sh(script: "ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${env.AWS_SSH_KEY_NAME} rancher@${env.HARVESTER_IP} 'sudo cat /etc/rancher/rke2/rke2.yaml'", returnStdout: true)
+                                harvesterConfig = harvesterConfig.replace('127.0.0.1', env.HARVESTER_IP)
+                            }
+                        }
+
+                        dir("./qa-infra-automation") {
+                            dir("./ansible/harvester") {
+                                writeFile file: ansibleVarsFilename, text: ansibleConfig
+                            }
+                            dir("./ansible/rke2/default") {
+                                writeFile file: ansibleVarsFilename, text: rke2AnsibleConfig
+                            }
+                            dir("./tofu/harvester/modules/vm") {
+                                writeFile file: terraformVarsFilename, text: terraformConfig
+                            }
+                            dir("./tofu/harvester/modules") {
+                                writeFile file: harvesterConfigFilename, text: harvesterConfig
+                            }
+                        }
+
+                        dir("./") {
+                            sh "./tests/validation/configure.sh"
+                            sh "docker build . -f ./tests/validation/Dockerfile.e2e -t ${imageName}"
+                            sh "docker volume create --name ${validationVolume}"
+                        }
+                    }
+                    stage('Build Environment') {
+                        try {
+                            sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
+                            "${imageName} sh -c \"${workPath}pipeline/scripts/setup_environment.sh && sh ${workPath}pipeline/scripts/build_harvester_downstream_qa_infra.sh\""
+                        } catch (err) {
+                            sh "docker stop ${buildTestContainer} || true; docker rm ${buildTestContainer} || true"
+                            sh "docker volume rm -f ${validationVolume} || true"
+                            error "Build Environment had failures: ${err}"
+                        }
+                    }
+                    stage('Destroy Harvester Infra') {
+                        if ("${env.CLEANUP}" == "True" || "${env.CLEANUP}" == "true") {
+                            try {
+                                sh "docker run --volumes-from ${buildTestContainer} --name ${destroyTestContainer} -t --env-file ${envFile} " +
+                                "${imageName} sh -c \"sh ${workPath}pipeline/scripts/destroy_harvester_downstream_qa_infra.sh\""
+                            } catch (err) {
+                                sh "docker stop ${destroyTestContainer} || true; docker rm ${destroyTestContainer} || true"
+                                sh "docker stop ${buildTestContainer} || true; docker rm ${buildTestContainer} || true"
+                                sh "docker volume rm -f ${validationVolume} || true"
+                                error "Destroy Harvester Infra had failures: ${err}"
+                            }
+                        }
+                    }
+                    stage('Clean Up Images and Volume') {
+                        echo 'Cleaning test images and volume.'
+                        sh "docker stop ${buildTestContainer} || true; docker rm ${buildTestContainer} || true"
+                        if ("${env.CLEANUP}" == "True" || "${env.CLEANUP}" == "true") {
+                            sh "docker stop ${destroyTestContainer} || true; docker rm ${destroyTestContainer} || true"
+                        }
+                        sh "docker volume rm -f ${validationVolume} || true"
+                        sh "docker rmi ${imageName} || true"
+                    }
+                } // withEnv
+            } // credentials
+        } // folder properties
+    } // wrap
+} // node
