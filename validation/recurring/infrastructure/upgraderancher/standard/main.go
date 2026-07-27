@@ -63,6 +63,13 @@ func main() {
 
 	client, _, _, _ = upgradestandard.UpgradeRancher(t, client, serverNodeOne, testSession, cattleConfig)
 
+	cattleConfig, err = operations.ReplaceValue([]string{"rancher", "adminToken"}, client.RancherConfig.AdminToken, cattleConfig)
+	if err != nil {
+		logrus.Fatalf("Failed to replace admin token: %v", err)
+	}
+
+	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
+
 	logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 	err = deployment.VerifyClusterDeployments(client, cluster)
 	require.NoError(t, err)
