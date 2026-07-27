@@ -2,6 +2,7 @@ airgap-cluster-provisioning.yml
 capi-pnp-cluster-provisioning.yml
 day2-ops-rancher.yml
 day2-ops-rancher-prime.yml
+day2-ops-upgraded-rancher.yml
 cluster-provisioning.yml
 post-release-prime.yml
 rancher-upgrade-cluster-provisioning.yml
