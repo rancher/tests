@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: capa-credentials
+  namespace: capa-system
+type: Opaque
+stringData:
+  AccessKeyID: <required>
+  SecretAccessKey: <required>

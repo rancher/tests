@@ -1,0 +1,162 @@
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: AWSMachineTemplate
+metadata:
+  name: <required>-control-plane
+  namespace: fleet-default
+spec:
+  template:
+    spec:
+      ami:
+        id: <required>
+      iamInstanceProfile: control-plane.cluster-api-provider-aws.sigs.k8s.io
+      instanceType: t3.xlarge
+      sshKeyName: <required>
+      rootVolume:
+        size: 100
+      publicIP: true
+      cloudInit:
+        insecureSkipSecretsManager: true
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: AWSMachineTemplate
+metadata:
+  name: <required>-worker
+  namespace: fleet-default
+spec:
+  template:
+    spec:
+      ami:
+        id: <required>
+      iamInstanceProfile: nodes.cluster-api-provider-aws.sigs.k8s.io
+      instanceType: t3.xlarge
+      sshKeyName: <required>
+      rootVolume:
+        size: 100
+      publicIP: true
+      cloudInit:
+        insecureSkipSecretsManager: true
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: AWSMachineTemplate
+metadata:
+  name: <required>-etcd
+  namespace: fleet-default
+spec:
+  template:
+    spec:
+      ami:
+        id: <required>
+      iamInstanceProfile: nodes.cluster-api-provider-aws.sigs.k8s.io
+      instanceType: t3.xlarge
+      sshKeyName: <required>
+      rootVolume:
+        size: 100
+      publicIP: true
+      cloudInit:
+        insecureSkipSecretsManager: true
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: AWSCluster
+metadata:
+  name: <required>
+  namespace: fleet-default
+spec:
+  identityRef:
+    kind: AWSClusterStaticIdentity
+    name: cluster-identity
+  controlPlaneLoadBalancer:
+    healthCheckProtocol: TCP
+    loadBalancerType: nlb
+  region: <required>
+  network:
+    vpc:
+      id: <required>
+    subnets:
+      - id: <required>
+    securityGroupOverrides:
+      controlplane: <required>
+      node: <required>
+---
+apiVersion: provisioning.cattle.io/v1
+kind: Cluster
+metadata:
+  name: <required>
+  namespace: fleet-default
+spec:
+  kubernetesVersion: <required>
+  rkeConfig:
+    infrastructureRef:
+      kind: AWSCluster
+      name: <required>
+      namespace: fleet-default
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+    machinePools:
+      - name: etcd
+        etcdRole: <required>
+        controlPlaneRole: <required>
+        workerRole: <required>
+        quantity: <required>
+        machineConfigRef:
+          kind: AWSMachineTemplate
+          name: <required>-etcd
+          namespace: fleet-default
+          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+      - name: control-plane
+        etcdRole: <required>
+        controlPlaneRole: <required>
+        workerRole: <required>
+        quantity: <required>
+        machineConfigRef:
+          kind: AWSMachineTemplate
+          name: <required>-control-plane
+          namespace: fleet-default
+          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+      - name: worker
+        etcdRole: <required>
+        controlPlaneRole: <required>
+        workerRole: <required>
+        quantity: <required>
+        machineConfigRef:
+          kind: AWSMachineTemplate
+          name: <required>-worker
+          namespace: fleet-default
+          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+    machineGlobalConfig:
+      cni: calico
+      disable-cloud-controller: true
+      disable-kube-proxy: false
+      etcd-expose-metrics: false
+      ingress-controller: traefik
+      protect-kernel-defaults: false
+      cloud-provider-name: external
+      node-name-from-cloud-provider-metadata: true
+    additionalManifest: |-
+      apiVersion: helm.cattle.io/v1
+      kind: HelmChart
+      metadata:
+        name: aws-cloud-controller-manager
+        namespace: kube-system
+      spec:
+        chart: aws-cloud-controller-manager
+        repo: https://kubernetes.github.io/cloud-provider-aws
+        targetNamespace: kube-system
+        bootstrap: true
+        valuesContent: |-
+          hostNetworking: true
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: "true"
+          args:
+            - --configure-cloud-routes=false
+            - --v=5
+            - --cloud-provider=aws
+          tolerations:
+            - key: node.cloudprovider.kubernetes.io/uninitialized
+              value: "true"
+              effect: NoSchedule
+            - key: node-role.kubernetes.io/master
+              effect: NoSchedule
+            - key: node-role.kubernetes.io/control-plane
+              effect: NoSchedule
+            - key: node-role.kubernetes.io/etcd
+              effect: NoExecute

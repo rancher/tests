@@ -2,27 +2,29 @@ package cli
 
 import (
 	ranchercli "github.com/rancher/shepherd/clients/ranchercli"
-	"github.com/sirupsen/logrus"
 )
 
 const (
-	rancher    = "rancher"
 	context    = "context"
-	projects   = "projects"
+	login      = "login"
 	namespaces = "namespaces"
-	catalog    = "catalog"
+	projects   = "projects"
+	rancher    = "rancher"
 )
 
-// SwitchContext will display the current context and switch to the default one.
-func SwitchContext(client *ranchercli.Client) error {
-	logrus.Infof("Listing the current context...")
-	err := client.ExecuteCommand(rancher, context, "current")
+// Login will log into the Rancher server using the provided URL and token.
+func Login(client *ranchercli.Client, url, token string) error {
+	err := client.ExecuteCommand(rancher, login, url, "--token", token)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Switching to the default context...")
-	err = client.ExecuteCommand(rancher, context, "switch")
+	return nil
+}
+
+// SwitchContext will display the current context and switch to the default one.
+func SwitchContext(client *ranchercli.Client, project string) error {
+	err := client.ExecuteCommand(rancher, context, "switch", project)
 	if err != nil {
 		return err
 	}
@@ -32,13 +34,11 @@ func SwitchContext(client *ranchercli.Client) error {
 
 // CreateProjects will create and projects in the specified cluster.
 func CreateProjects(client *ranchercli.Client, projectName, cluster string) error {
-	logrus.Infof("Creating a project...")
 	err := client.ExecuteCommand(rancher, projects, "create", "--cluster", cluster, projectName)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Validating the project exists...")
 	err = client.Exists(rancher, projects, projectName)
 	if err != nil {
 		return err
@@ -49,13 +49,11 @@ func CreateProjects(client *ranchercli.Client, projectName, cluster string) erro
 
 // DeleteProjects will delete projects in the specified cluster.
 func DeleteProjects(client *ranchercli.Client, projectName string) error {
-	logrus.Infof("Deleting the project...")
 	err := client.Delete(projects, projectName)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Validating the project is deleted...")
 	err = client.ExecuteCommand(rancher, projects, "ls", "|", "grep", projectName)
 	if err != nil {
 		return err
@@ -65,27 +63,13 @@ func DeleteProjects(client *ranchercli.Client, projectName string) error {
 }
 
 // CreateNamespaces will create namespaces in the specified cluster.
-func CreateNamespaces(client *ranchercli.Client, namespaceName, projectName string) error {
-	logrus.Infof("Creating a namespace in default project...")
-	err := client.Create(namespaces, namespaceName)
+func CreateNamespaces(client *ranchercli.Client, cluster, namespaceName string) error {
+	err := client.ExecuteCommand(rancher, namespaces, "create", namespaceName)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Validating the namespace exists...")
 	err = client.Exists(rancher, namespaces, namespaceName)
-	if err != nil {
-		return err
-	}
-
-	logrus.Infof("Creating test project...")
-	err = client.Create(projects, "--cluster", "local", projectName)
-	if err != nil {
-		return err
-	}
-
-	logrus.Infof("Validating the project exists...")
-	err = client.Exists(rancher, projects, projectName)
 	if err != nil {
 		return err
 	}
@@ -94,15 +78,8 @@ func CreateNamespaces(client *ranchercli.Client, namespaceName, projectName stri
 }
 
 // DeleteNamespaces will delete namespaces in the specified cluster.
-func DeleteNamespaces(client *ranchercli.Client, namespaceName, projectName string) error {
-	logrus.Infof("Deleting the namespace...")
+func DeleteNamespaces(client *ranchercli.Client, namespaceName string) error {
 	err := client.Delete(namespaces, namespaceName)
-	if err != nil {
-		return err
-	}
-
-	logrus.Infof("Deleting the project...")
-	err = client.Delete(projects, projectName)
 	if err != nil {
 		return err
 	}
