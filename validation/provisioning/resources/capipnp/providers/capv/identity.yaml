@@ -1,0 +1,11 @@
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: VSphereClusterIdentity
+metadata:
+  name: vsphere-cluster-identity
+spec:
+  secretName: vsphere-credentials
+  allowedNamespaces:
+    selector:
+      matchLabels:
+        kubernetes.io/metadata.name: fleet-default

@@ -11,6 +11,7 @@ type ProviderName string
 
 const (
 	CAPA = "capa"
+	CAPV = "capv"
 )
 
 type ProviderManifestRendererFunc func(documents []map[string]any, config *Config) error
@@ -33,6 +34,12 @@ func CreateCAPIProvider(name string) Provider {
 			RenderProviderManifestFunc:    capaProviderManifest,
 			WaitProviderPrerequisitesFunc: waitCAPAProviderPrerequisitesReady,
 			RenderClusterManifestFunc:     capaCluster,
+		}
+	case name == CAPV:
+		provider = Provider{
+			RenderProviderManifestFunc:    capvProviderManifest,
+			WaitProviderPrerequisitesFunc: waitCAPVProviderPrerequisitesReady,
+			RenderClusterManifestFunc:     capvCluster,
 		}
 	default:
 		panic(fmt.Sprintf("Provider:%v not found", name))
