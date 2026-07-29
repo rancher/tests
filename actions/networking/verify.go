@@ -110,38 +110,39 @@ func VerifyConnectivityFromWorkerNodes(client *rancher.Client, clusterID string,
 	for _, machine := range nodeList.Data {
 		sshNode, err := sshkeys.GetSSHNodeFromMachine(client, &machine)
 		if err != nil {
-			logrus.Debugf("Could not SSH into worker node %s: %s", machine.Name, err.Error())
+			logrus.Infof("Could not SSH into worker node %s: %s", machine.Name, err.Error())
 			continue
 		}
 
-		if ip == "" {
+		nodeIP := ip
+		if nodeIP == "" {
 			newNode := &corev1.Node{}
 			err = v1.ConvertToK8sType(machine.JSONResp, newNode)
 			if err != nil {
 				return fmt.Errorf("failed to convert node %s: %w", machine.Name, err)
 			}
 
-			ip = kubeapinodes.GetNodeIP(newNode, corev1.NodeExternalIP)
-			if ip == "" {
-				ip = kubeapinodes.GetNodeIP(newNode, corev1.NodeInternalIP)
+			nodeIP = kubeapinodes.GetNodeIP(newNode, corev1.NodeExternalIP)
+			if nodeIP == "" {
+				nodeIP = kubeapinodes.GetNodeIP(newNode, corev1.NodeInternalIP)
 			}
 		}
 
-		logrus.Debugf("Curling '%s:%d/name.html' from node %s", ip, port, machine.Name)
-		log, err := sshNode.ExecuteCommand(fmt.Sprintf("curl -s %s:%d/name.html", ip, port))
+		logrus.Infof("Curling '%s:%d/name.html' from node %s", nodeIP, port, machine.Name)
+		log, err := sshNode.ExecuteCommand(fmt.Sprintf("curl -s %s:%d/name.html", nodeIP, port))
 		if err != nil && !errors.Is(err, &ssh.ExitMissingError{}) {
-			logrus.Debugf("Curl failed on node %s: %v", machine.Name, err)
+			logrus.Infof("Curl failed on node %s: %v", machine.Name, err)
 			continue
 		}
 
 		if strings.Contains(log, workloadName) { // This should be one of the pod's names.
 			return nil
 		} else {
-			logrus.Debugf("Curl result %s doesn't contain expected content '%s'", log, workloadName)
+			logrus.Infof("Curl result %s doesn't contain expected content '%s'", log, workloadName)
 		}
 	}
 
-	return fmt.Errorf("Unable to connect to %s:%d/name.html from any worker node", ip, port)
+	return fmt.Errorf("Unable to connect to %s:%d/name.html from any worker node using SSH", ip, port)
 }
 
 func verifyConnectivityFromPod(client *rancher.Client, clusterID string, ip string, port int, workloadName string) error {
@@ -159,7 +160,6 @@ func verifyConnectivityFromPod(client *rancher.Client, clusterID string, ip stri
 }
 
 // VerifyLoadBalancerConnectivity verifies that the Load Balancer service is accessible by curling its IP:port.
-// This includes
 func VerifyLoadBalancerConnectivity(client *rancher.Client, clusterID string, serviceID string, workloadName string) error {
 	steveClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
@@ -186,7 +186,12 @@ func VerifyLoadBalancerConnectivity(client *rancher.Client, clusterID string, se
 	}
 
 	port := k8sService.Spec.Ports[0].Port
-	ip := k8sService.Status.LoadBalancer.Ingress[0].IP
+	ingress := k8sService.Status.LoadBalancer.Ingress[0]
+	ip := ingress.IP
+	if ip == "" {
+		ip = ingress.Hostname
+	}
+
 	logrus.Infof("Testing connectivity with load balancer %s by curling %s:%d/name.html", k8sService.Name, ip, port)
 
 	return verifyConnectivityFromPod(client, clusterID, ip, int(port), workloadName)
