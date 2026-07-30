@@ -24,6 +24,9 @@ outputs:
   failed_workflows_v213:
     description: "Comma-separated list of workflows that did not pass for the given Rancher tag for v2.13"
     value: ${{ steps.check.outputs.failed_workflows_v213 }}
+  failed_workflows_v212:
+    description: "Comma-separated list of workflows that did not pass for the given Rancher tag for v2.12"
+    value: ${{ steps.check.outputs.failed_workflows_v212 }}
 
 runs:
   using: composite
@@ -64,6 +67,9 @@ runs:
           local release_line=""
 
           case "$TAG" in
+            v2.12*)
+              return 1
+              ;;
             v2.13*)
               release_line="v2.13"
               ;;
@@ -167,6 +173,7 @@ runs:
         echo "failed_workflows_v215=$failed_workflows_str" >> $GITHUB_OUTPUT
         echo "failed_workflows_v214=$failed_workflows_str" >> $GITHUB_OUTPUT
         echo "failed_workflows_v213=$failed_workflows_str" >> $GITHUB_OUTPUT
+        echo "failed_workflows_v212=$failed_workflows_str" >> $GITHUB_OUTPUT
       shell: bash
       env:
         DISPATCH_WORKFLOW_LIST: ${{ inputs.dispatch_workflow_list }}
