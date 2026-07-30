@@ -1,4 +1,4 @@
-- projects: [RANCHERINT]
+- projects: [ RANCHERINT ]
   suite: Workload
   cases:
   - title: "Pre-Upgrade cluster"
@@ -30,6 +30,6 @@
       position: 2
     - action: "Upgrade the K8s version of the downstream cluster"
       expectedresult: "Validate that the upgrade was successful"
-      position: 4
+      position: 3
     custom_field:
       "15": "TestWorkloadPostUpgrade"

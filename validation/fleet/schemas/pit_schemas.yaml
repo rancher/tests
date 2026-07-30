@@ -15,7 +15,7 @@
       position: 2
     - action: "Deploy a GitRepo object targetting the specified downstream cluster"
       data: "/validation/fleet/schemas/gitrepo.yaml"
-      expectedresult: "the gitRepo itself comes to an active state and the resources defined in the spec are created on the downstream cluster in the fleet-testns namespace"
+      expectedresult: "the gitRepo itself comes to an active state and the resources defined in the spec are created on the downstream cluster in the test namespace"
       position: 3
     custom_field:
       "15": "TestGitRepoDeployment"

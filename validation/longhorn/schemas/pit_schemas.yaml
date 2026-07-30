@@ -147,27 +147,27 @@
       data: ""
       expectedresult: "Manifest prepared with Longhorn PVC template"
       position: 1
-    - action: "Deploy StatefulSet with 3 replicas via Rancher or kubectl"
+    - action: "Deploy StatefulSet with 1 replica via Rancher"
       data: ""
       expectedresult: "StatefulSet deployment begins"
       position: 2
     - action: "Verify each pod gets dedicated persistent volume"
       data: ""
-      expectedresult: "3 volumes created, each attached to respective pod"
+      expectedresult: "1 volume created, attached to respective pod"
       position: 3
     - action: "Write unique test data to each pod's volume"
       data: ""
       expectedresult: "Data successfully written to all volumes"
       position: 4
-    - action: "Scale StatefulSet up to 5 replicas"
+    - action: "Scale StatefulSet up to number of nodes + 1"
       data: ""
       expectedresult: "Scaling operation succeeds"
       position: 5
     - action: "Verify new pods get new dedicated volumes"
       data: ""
-      expectedresult: "2 additional volumes created and attached"
+      expectedresult: "additional volumes equal to the number of nodes created and attached"
       position: 6
-    - action: "Scale StatefulSet down to 2 replicas"
+    - action: "Scale StatefulSet down to 1 replica"
       data: ""
       expectedresult: "Scaling down completes"
       position: 7
@@ -801,7 +801,7 @@
       data: ""
       expectedresult: "Workload uses encrypted volume"
       position: 3
-    - action: "Verify volume shows as encrypted in Longhorn UI"
+    - action: "Verify volume shows as encrypted in Longhorn API"
       data: ""
       expectedresult: "Volume displays encryption status"
       position: 4

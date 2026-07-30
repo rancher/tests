@@ -1,4 +1,4 @@
-- projects: [RANCHERINT]
+- projects: [ RANCHERINT ]
   suite: Workload
   cases:
   - title: "Create Deployment workload"
@@ -165,9 +165,6 @@
       position: 3
     - action: "Scale Deployment to 2 replicas"
       expectedresult: "Pods available and running"
-      position: 4
-    - action: "Scale Deployment to 3 replicas"
-      expectedresult: "Pods available and running"
       position: 5
     custom_field:
       "15": "WorkloadPodScaleUpTest"
@@ -187,9 +184,6 @@
       expectedresult: "Deployment created successfully"
       position: 3
     - action: "Scale Deployment to 2 replicas"
-      expectedresult: "Deployment scaled successfully"
-      position: 4
-    - action: "Scale Deployment to 1 replica"
       expectedresult: "Deployment scaled successfully"
       position: 5
     custom_field:

@@ -1,4 +1,4 @@
-- projects: [RANCHERINT]
+- projects: [ RANCHERINT ]
   suite: AppCo
   cases:
   - title: "Install in SideCar Mode"
