@@ -56,5 +56,5 @@ func DeleteProviderManifestFromPath(client *rancher.Client, config *Config, yaml
 }
 
 func kubectlDeleteCommand(kubeconfigPath string) []string {
-	return []string{"kubectl", "--kubeconfig", kubeconfigPath, "delete", "-f", "-"}
+	return []string{"kubectl", "--kubeconfig", kubeconfigPath, "--insecure-skip-tls-verify=true", "delete", "-f", "-"}
 }

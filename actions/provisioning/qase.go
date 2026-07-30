@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config/operations"
+	"github.com/rancher/tests/actions/capipnp"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/machinepools"
@@ -24,6 +25,9 @@ func GetProvisioningSchemaParams(client *rancher.Client, cattleConfig map[string
 	terraformConfig := new(config.TerraformConfig)
 	operations.LoadObjectFromMap(config.TerraformConfigurationFileKey, cattleConfig, terraformConfig)
 
+	capiConfig := new(capipnp.Config)
+	operations.LoadObjectFromMap(capipnp.ConfigurationFileKey, cattleConfig, capiConfig)
+
 	params = append(params,
 		getRunType(terraformConfig),
 		getRancherType(terraformConfig),
@@ -32,6 +36,7 @@ func GetProvisioningSchemaParams(client *rancher.Client, cattleConfig map[string
 		getProviderParam(clusterConfig),
 		getK8sParam(clusterConfig),
 		getCNIParam(clusterConfig),
+		getCAPIParam(capiConfig),
 	)
 
 	return params
@@ -212,4 +217,12 @@ func getProviderParam(clusterConfig *clusters.ClusterConfig) upstream.TestCasePa
 
 func getCNIParam(clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
 	return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "CNI", Values: []string{clusterConfig.CNI}}}
+}
+
+func getCAPIParam(capiConfig *capipnp.Config) upstream.TestCaseParameterCreate {
+	if capiConfig == nil {
+		return upstream.TestCaseParameterCreate{}
+	}
+
+	return upstream.TestCaseParameterCreate{ParameterSingle: &upstream.ParameterSingle{Title: "CAPIProvider", Values: []string{capiConfig.Provider}}}
 }

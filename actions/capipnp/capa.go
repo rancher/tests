@@ -184,8 +184,8 @@ func waitCAPAProviderPrerequisitesReady(client *rancher.Client) error {
 	defer cleanup()
 
 	waitCommands := [][]string{
-		{"kubectl", "--kubeconfig", kubeconfigPath, "wait", "--for=condition=Ready", "capiprovider.turtles-capi.cattle.io/aws", "-n", "capa-system", "--timeout=300s"},
-		{"kubectl", "--kubeconfig", kubeconfigPath, "wait", "--for=condition=Ready", "capiprovider/aws", "-n", "capa-system", "--timeout=300s"},
+		{"kubectl", "--kubeconfig", kubeconfigPath, "--insecure-skip-tls-verify=true", "wait", "--for=condition=Ready", "capiprovider.turtles-capi.cattle.io/aws", "-n", "capa-system", "--timeout=300s"},
+		{"kubectl", "--kubeconfig", kubeconfigPath, "--insecure-skip-tls-verify=true", "wait", "--for=condition=Ready", "capiprovider/aws", "-n", "capa-system", "--timeout=300s"},
 	}
 
 	var lastOutput string
@@ -205,7 +205,7 @@ func waitCAPAProviderPrerequisitesReady(client *rancher.Client) error {
 		return fmt.Errorf("wait for CAPA provider readiness failed: %w: %s", lastErr, strings.TrimSpace(lastOutput))
 	}
 
-	output, err := runLocalKubectl([]string{"kubectl", "--kubeconfig", kubeconfigPath, "wait", "--for=create", "secret/capa-credentials", "-n", "capa-system", "--timeout=120s"}, nil)
+	output, err := runLocalKubectl([]string{"kubectl", "--kubeconfig", kubeconfigPath, "--insecure-skip-tls-verify=true", "wait", "--for=create", "secret/capa-credentials", "-n", "capa-system", "--timeout=120s"}, nil)
 	if err != nil {
 		return fmt.Errorf("wait for CAPA credentials secret failed: %w: %s", err, strings.TrimSpace(output))
 	}

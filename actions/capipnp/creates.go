@@ -208,11 +208,11 @@ func resolveManifestPath(path string) string {
 }
 
 func kubectlCreateCommand(kubeconfigPath string) []string {
-	return []string{"kubectl", "--kubeconfig", kubeconfigPath, "create", "-f", "-"}
+	return []string{"kubectl", "--kubeconfig", kubeconfigPath, "--insecure-skip-tls-verify=true", "create", "-f", "-"}
 }
 
 func kubectlGetCommand(kubeconfigPath string) []string {
-	return []string{"kubectl", "--kubeconfig", kubeconfigPath, "get", "-f", "-"}
+	return []string{"kubectl", "--kubeconfig", kubeconfigPath, "--insecure-skip-tls-verify=true", "get", "-f", "-"}
 }
 
 func runLocalKubectl(args []string, input []byte) (string, error) {

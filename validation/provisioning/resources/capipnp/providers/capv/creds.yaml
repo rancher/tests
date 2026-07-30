@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vsphere-credentials
+  namespace: capv-system
+type: Opaque
+stringData:
+  username: <required>
+  password: <required>
