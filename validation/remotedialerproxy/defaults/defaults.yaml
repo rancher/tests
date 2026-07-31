@@ -24,18 +24,15 @@ clusterConfig:
       worker: true
       quantity: 1
   kubernetesVersion: ""
-  cni: "calico"
-  provider: "aws"
-  nodeProvider: "ec2"
-  hardened: false
-  compliance: false
-  psact: ""
+  cni: "<HB_CNI>"
+  provider: "<HB_PROVIDER>"
+  nodeProvider: "<HB_NODE_PROVIDER>"
 
 #Required for all tests except template
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "<required>"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
@@ -48,7 +45,7 @@ awsMachineConfigs:
     rootSize: "<required>"
     sshUser: "<required>"
     vpcId: "<required>"
-    zone: "a"
+    zone: "<HB_AWS_ZONE_LETTER>"
     retries: "5"
   - roles: ["windows"]
     ami: "<required>"
@@ -56,9 +53,9 @@ awsMachineConfigs:
     sshUser: "<required>"
     vpcId: "<required>"
     volumeType: "<required>"
-    zone: "a"
+    zone: "<HB_AWS_ZONE_LETTER>"
     retries: "5"
-    rootSize: "100" 
+    rootSize: "<HB_AWS_ROOT_SIZE>" 
 
 #Required for tests that utilize custom clusters
 awsEC2Configs:
@@ -67,32 +64,30 @@ awsEC2Configs:
   awsAccessKeyID: "<required>"
   awsEC2Config:
     - instanceType: "t3a.medium"
-      awsRegionAZ: ""
       awsAMI: "<required>"
       awsSecurityGroups: ["<required>"]
       awsSSHKeyName: "<required>"
       awsCICDInstanceTag: "<required>"
       awsIAMProfile: ""
       awsUser: "<required>"
-      volumeSize: 100
+      volumeSize: "<HB_AWS_ROOT_SIZE>"
       roles: ["etcd", "controlplane", "worker"]
     - instanceType: "t2.2xlarge"
-      awsRegionAZ: ""
       awsAMI: "<required>"
       awsSecurityGroups: ["<required>"]
       awsSSHKeyName: "<required>"
       awsCICDInstanceTag: "<required>"
       awsIAMProfile: ""
       awsUser: "<required>"
-      volumeSize: 100
+      volumeSize: "<HB_AWS_ROOT_SIZE>"
       roles: ["windows"]
 
 #Required for tests that utilize custom clusters
 sshPath:
-   sshPath: "<required>" 
+   sshPath: "<HB_TESTS_SSH_DIR_PATH>"
 
 logging:
-   level: "info"
+  level: "<HB_LOGGING_LEVEL>"
 
 workloadConfigs:
   deployment:

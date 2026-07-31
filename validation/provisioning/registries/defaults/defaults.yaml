@@ -24,72 +24,75 @@ clusterConfig:
       worker: true
       quantity: 3
   kubernetesVersion: ""
-  cni: "calico"
-  provider: "aws"
-  nodeProvider: "ec2"
+  cni: "<HB_CNI>"
+  provider: "<HB_PROVIDER>"
+  nodeProvider: "<HB_NODE_PROVIDER>"
   registries:
-    rke2Username: ""
-    rke2Password: ""
+    rke2Username: "<HB_DOCKERHUB_USERNAME>"
+    rke2Password: "<HB_DOCKERHUB_PASSWORD>"
     rke2Registries:
       configs:
         <required>:
+  advanced:
+    machineSelectors:
+      - config:
+          data:
+            system-default-registry: "<required>"
 
 #Required for all tests
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "<required>"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
-  region: "us-east-2"
+  region: "<HB_AWS_REGION>"
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
-    ami: "<required>"
-    instanceType: "t3a.xlarge"
-    volumeType: "<required>"
-    rootSize: "<required>"
-    sshUser: "<required>"
-    vpcId: "<required>"
+    ami: "<HB_DEFAULT_AMI>"
+    instanceType: "t3a.medium"
+    volumeType: "<HB_AWS_VOLUME_TYPE>"
+    rootSize: "<HB_AWS_ROOT_SIZE>"
+    sshUser: "<HB_AWS_OS_USER>"
+    vpcId: "<HB_AWS_VPC_ID>"
     retries: "5"
-    zone: "a"
+    zone: "<HB_AWS_ZONE_LETTER>"
   - roles: ["windows"]
-    ami: "<required>"
+    ami: "<HB_DEFAULT_AMI>"
     instanceType: "t2.2xlarge"
-    sshUser: "<required>"
-    vpcId: "<required>"
-    volumeType: "<required>"
-    zone: "a"
+    sshUser: "<HB_AWS_OS_USER>"
+    vpcId: "<HB_AWS_VPC_ID>"
+    volumeType: "<HB_AWS_VOLUME_TYPE>"
+    zone: "<HB_AWS_ZONE_LETTER>"
     retries: "5"
-    rootSize: "100"
+    rootSize: "<HB_AWS_ROOT_SIZE>"
 
 #Required for tests that utilize custom clusters
 awsEC2Configs:
-  region: "us-east-2"
-  awsSecretAccessKey: "<required>"
-  awsAccessKeyID: "<required>"
+  region: "<HB_AWS_REGION>"
+  awsSecretAccessKey: "<AWS_SECRET_ACCESS_KEY>"
+  awsAccessKeyID: "<AWS_ACCESS_KEY_ID>"
   awsEC2Config:
     - instanceType: "t3a.medium"
-      awsRegionAZ: ""
-      awsSSHKeyName: "<required>"
-      awsAMI: "<required>"
-      awsSecurityGroups: ["<required>"]
-      awsSSHKeyName: "<required>"
-      awsCICDInstanceTag: "<required>"
-      awsIAMProfile: ""
-      awsUser: "<required>"
-      volumeSize: 100
+      awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+      awsAMI: "<HB_DEFAULT_AMI>"
+      awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS>"]
+      awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+      awsCICDInstanceTag: "<HB_AWS_CICD_INSTANCE_TAG>"
+      awsIAMProfile: "<HB_AWS_IAM_PROFILE>"
+      awsUser: "<HB_AWS_OS_USER>"
+      volumeSize: "<HB_AWS_ROOT_SIZE>"
       roles: ["etcd", "controlplane", "worker"]
     - instanceType: "t2.2xlarge"
-      awsRegionAZ: ""
-      awsSSHKeyName: "<required>"
-      awsAMI: "<required>"
-      awsSecurityGroups: ["<required>"]
-      awsSSHKeyName: "<required>"
-      awsCICDInstanceTag: "<required>"
-      awsIAMProfile: ""
-      awsUser: "<required>"
-      volumeSize: 100
+      awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+      awsAMI: "<HB_DEFAULT_AMI>"
+      awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS>"]
+      awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+      awsCICDInstanceTag: "<HB_AWS_CICD_INSTANCE_TAG>"
+      awsIAMProfile: "<HB_AWS_IAM_PROFILE>"
+      awsUser: "<HB_AWS_OS_USER>"
+      volumeSize: "<HB_AWS_ROOT_SIZE>"
       roles: ["windows"]
 
 terraform:
@@ -97,3 +100,5 @@ terraform:
     authRegistryFQDN: "<required>"
     globalRegistryFQDN: "<required>"
     nonAuthRegistryFQDN: "<required>"
+logging:
+  level: "<HB_LOGGING_LEVEL>"
