@@ -25,6 +25,23 @@ runs:
         remove_ip_from_prefix_list() {
           local prefix_list_id=$1
           local cidr=$2
+          local base_desc="TFP_GitHubRunner"
+
+          get_refcount() {
+            local description=$1
+
+            if [[ "$description" =~ ^TFP_GitHubRunner:([0-9]+)$ ]]; then
+              echo "${BASH_REMATCH[1]}"
+              return
+            fi
+
+            if [[ "$description" == "TFP_GitHubRunner" || -z "$description" ]]; then
+              echo "1"
+              return
+            fi
+
+            echo "1"
+          }
 
           local max_retries=37
           local attempt=1
@@ -35,24 +52,40 @@ runs:
               --region "$REGION" \
               --query "PrefixLists[0].Version" --output text)
 
-            ip_exists=$(aws ec2 get-managed-prefix-list-entries \
+            entry_json=$(aws ec2 get-managed-prefix-list-entries \
               --prefix-list-id "$prefix_list_id" \
               --region "$REGION" \
-              --query "Entries[?Cidr=='$cidr'] | length(@)" \
-              --output text)
+              --query "Entries[?Cidr=='$cidr'] | [0]" \
+              --output json)
 
-            if [[ "$ip_exists" == "0" ]]; then
+            if [[ "$entry_json" == "null" ]]; then
               echo "Runner IP not present in prefix list, Skipping..."
               break
             else
-              echo "Removing runner from prefix list [attempt $attempt]..."
+              current_desc=$(echo "$entry_json" | jq -r '.Description // ""')
+              current_count=$(get_refcount "$current_desc")
+
               set +e
-              output=$(aws ec2 modify-managed-prefix-list \
-                --prefix-list-id "$prefix_list_id" \
-                --region "$REGION" \
-                --current-version "$current_version" \
-                --remove-entries "Cidr=$cidr" 2>&1)
-              exit_code=$?
+              if (( current_count > 1 )); then
+                new_count=$((current_count - 1))
+                echo "Decrementing runner refcount to $new_count [attempt $attempt]..."
+                output=$(aws ec2 modify-managed-prefix-list \
+                  --prefix-list-id "$prefix_list_id" \
+                  --region "$REGION" \
+                  --current-version "$current_version" \
+                  --remove-entries "Cidr=$cidr" \
+                  --add-entries "Cidr=$cidr,Description=${base_desc}:${new_count}" 2>&1)
+                exit_code=$?
+              else
+                echo "Removing runner from prefix list [attempt $attempt]..."
+                output=$(aws ec2 modify-managed-prefix-list \
+                  --prefix-list-id "$prefix_list_id" \
+                  --region "$REGION" \
+                  --current-version "$current_version" \
+                  --remove-entries "Cidr=$cidr" 2>&1)
+                exit_code=$?
+              fi
+              set -e
 
               if [[ $exit_code -eq 0 ]]; then
                 prefix_list_id_out=$(echo "$output" | jq -r '.PrefixList.PrefixListId')
@@ -61,7 +94,7 @@ runs:
                 echo "::add-mask::$prefix_list_id_out"
                 echo "::add-mask::$prefix_list_arn_out"
 
-                echo "Runner successfully removed from prefix list."
+                echo "Runner prefix-list reference successfully updated."
                 break
               else
                 if echo "$output" | grep -q "PrefixListVersionMismatch"; then
