@@ -8,22 +8,31 @@ on:
 
 permissions:
   actions: write
+  copilot-requests: write
   id-token: write
   contents: read
   pull-requests: write
-  models: read
 
 jobs:
   pr-quality:
-    if: |
-      github.event.pull_request.user.login == 'markusewalker' ||
-      github.event.pull_request.user.login == 'susesgartner' ||
-      github.event.pull_request.user.login == 'navsalehi' ||
-      github.event.pull_request.head.repo.fork == false
+    if: >-
+      ${{
+        (
+          github.event.pull_request.user.login == 'markusewalker' ||
+          github.event.pull_request.user.login == 'susesgartner' ||
+          github.event.pull_request.user.login == 'navsalehi' ||
+          github.event.pull_request.head.repo.fork == false
+        ) &&
+        !(
+          github.event.action == 'edited' &&
+          github.event.changes.body != null &&
+          github.event.changes.title == null
+        )
+      }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: true
 
