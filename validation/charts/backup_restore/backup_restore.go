@@ -12,8 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	actionscharts "github.com/rancher/tests/actions/charts"
+	"github.com/rancher/tests/actions/kubeapi/secrets"
 	"github.com/rancher/tests/actions/projects"
-	"github.com/rancher/tests/actions/secrets"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/interoperability/charts"
@@ -61,7 +61,6 @@ const (
 	cluster          = "local"
 	resourceCount    = 2
 	cniCalico        = "calico"
-	provider         = "aws"
 )
 
 func setBackupObject(broConfig *charts.BackupRestoreConfig) bv1.Backup {
@@ -151,7 +150,7 @@ func createOpaqueS3Secret(steveClient *v1.Client) (string, error) {
 	config.LoadConfig(charts.BackupRestoreConfigurationFileKey, backupRestoreConfig)
 
 	logrus.Infof("Creating an opaque secret with name: %v", secretName)
-	secretTemplate := secrets.NewSecretTemplate(secretName, backupRestoreConfig.CredentialSecretNamespace, map[string][]byte{"accessKey": []byte(backupRestoreConfig.AccessKey), "secretKey": []byte(backupRestoreConfig.SecretKey)}, corev1.SecretTypeOpaque, nil, nil)
+	secretTemplate := secrets.NewSecretTemplate(secretName, backupRestoreConfig.CredentialSecretNamespace, map[string]string{"accessKey": backupRestoreConfig.AccessKey, "secretKey": backupRestoreConfig.SecretKey}, corev1.SecretTypeOpaque, nil, nil)
 	createdSecret, err := steveClient.SteveType(secrets.SecretSteveType).Create(secretTemplate)
 	if err != nil {
 		return "", err

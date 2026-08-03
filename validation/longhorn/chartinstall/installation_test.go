@@ -4,6 +4,7 @@ package longhorn
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -15,6 +16,7 @@ import (
 	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
+	"github.com/rancher/shepherd/extensions/kubeconfig"
 	"github.com/rancher/shepherd/extensions/kubectl"
 	shepherdPods "github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/session"
@@ -25,12 +27,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	appv1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	longhornStorageClass       = "longhorn"
-	longhornStaticStorageClass = "longhorn-static"
 	createDefaultDiskNodeLabel = "node.longhorn.io/create-default-disk=true"
 )
 
@@ -61,7 +60,7 @@ func (l *LonghornChartTestSuite) SetupTest() {
 	chart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(l.T(), err)
 
-	l.longhornTestConfig = *longhorn.GetLonghornTestConfig()
+	l.longhornTestConfig = longhorn.GetLonghornTestConfig()
 
 	if chart.IsAlreadyInstalled {
 		l.T().Skip("Skipping Longhorn chart tests as Longhorn is already installed on the provided cluster.")
@@ -107,28 +106,23 @@ func (l *LonghornChartTestSuite) TestChartInstall() {
 	err := charts.InstallLonghornChart(l.client, l.payloadOpts, nil)
 	require.NoError(l.T(), err)
 
-	l.T().Logf("Create nginx deployment with %s PVC on default namespace", longhornStorageClass)
-	nginxResponse := storage.CreatePVCWorkload(l.T(), l.client, l.cluster.ID, longhornStorageClass)
-
-	err = shepherdCharts.WatchAndWaitDeployments(l.client, l.cluster.ID, namespaces.Default, metav1.ListOptions{})
-	require.NoError(l.T(), err)
+	l.T().Logf("Create nginx deployment with %s PVC on default namespace", charts.LonghornStorageClass)
+	nginxResponse := storage.CreatePVCWorkload(l.T(), l.client, l.cluster.ID, charts.LonghornStorageClass)
 
 	steveClient, err := l.client.Steve.ProxyDownstream(l.cluster.ID)
 	require.NoError(l.T(), err)
 
-	pods, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespaces.Default).List(nil)
+	labelSelector := fmt.Sprintf("labelSelector=%s=%s", storage.DeploymentIdentifierLabel, nginxResponse.Name)
+	query, _ := url.ParseQuery(labelSelector)
+
+	pods, err := steveClient.SteveType(shepherdPods.PodResourceSteveType).NamespacedSteveClient(namespaces.Default).List(query)
 	require.NotEmpty(l.T(), pods)
 	require.NoError(l.T(), err)
 
-	var podName string
-	for _, pod := range pods.Data {
-		if strings.Contains(pod.Name, nginxResponse.ObjectMeta.Name) {
-			podName = pod.Name
-			break
-		}
-	}
+	kubeConfig, err := kubeconfig.GetKubeconfig(l.client, l.cluster.ID)
+	require.NoError(l.T(), err)
 
-	storage.CheckMountedVolume(l.T(), l.client, l.cluster.ID, namespaces.Default, podName, storage.MountPath)
+	storage.CheckMountedVolume(l.T(), kubeConfig, l.cluster.ID, namespaces.Default, pods.Data[0].Name, storage.MountPath)
 }
 
 func (l *LonghornChartTestSuite) TestChartInstallStaticCustomConfig() {
@@ -182,13 +176,13 @@ func (l *LonghornChartTestSuite) TestChartInstallStaticCustomConfig() {
 
 	// Use the "longhorn-static" storage class so we get the expected number of replicas.
 	// Using the "longhorn" storage class will always result in 3 volume replicas.
-	l.T().Logf("Create nginx deployment with %s PVC on default namespace", longhornStaticStorageClass)
-	nginxResponse := storage.CreatePVCWorkload(l.T(), l.client, l.cluster.ID, longhornStaticStorageClass)
+	l.T().Logf("Create nginx deployment with %s PVC on default namespace", charts.LonghornStaticStorageClass)
+	nginxResponse := storage.CreatePVCWorkload(l.T(), l.client, l.cluster.ID, charts.LonghornStaticStorageClass)
 
 	nginxSpec := &appv1.DeploymentSpec{}
 	err = steveV1.ConvertToK8sType(nginxResponse.Spec, nginxSpec)
 	require.NoError(l.T(), err)
-	require.NotEmpty(l.T(), nginxSpec.Template.Spec.Volumes[0])
+	require.NotEmpty(l.T(), nginxSpec.Template.Spec.Volumes)
 
 	// Even though the Longhorn default for number of replicas is 2, Rancher enforces its own default of 3.
 	volumeName := nginxSpec.Template.Spec.Volumes[0].Name

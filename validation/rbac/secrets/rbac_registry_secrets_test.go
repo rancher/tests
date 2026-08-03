@@ -69,8 +69,8 @@ func (rbrs *RbacRegistrySecretTestSuite) TestCreateRegistrySecret() {
 
 	dockerConfigJSON, err := secretapi.CreateRegistrySecretDockerConfigJSON(rbrs.registryConfig)
 	assert.NoError(rbrs.T(), err)
-	secretData := map[string][]byte{
-		corev1.DockerConfigJsonKey: []byte(dockerConfigJSON),
+	secretData := map[string]string{
+		corev1.DockerConfigJsonKey: dockerConfigJSON,
 	}
 
 	for _, tt := range tests {
@@ -117,8 +117,8 @@ func (rbrs *RbacRegistrySecretTestSuite) TestListRegistrySecret() {
 
 	dockerConfigJSON, err := secretapi.CreateRegistrySecretDockerConfigJSON(rbrs.registryConfig)
 	assert.NoError(rbrs.T(), err)
-	secretData := map[string][]byte{
-		corev1.DockerConfigJsonKey: []byte(dockerConfigJSON),
+	secretData := map[string]string{
+		corev1.DockerConfigJsonKey: dockerConfigJSON,
 	}
 
 	for _, tt := range tests {
@@ -168,8 +168,8 @@ func (rbrs *RbacRegistrySecretTestSuite) TestUpdateRegistrySecret() {
 
 	dockerConfigJSON, err := secretapi.CreateRegistrySecretDockerConfigJSON(rbrs.registryConfig)
 	assert.NoError(rbrs.T(), err)
-	secretData := map[string][]byte{
-		corev1.DockerConfigJsonKey: []byte(dockerConfigJSON),
+	secretData := map[string]string{
+		corev1.DockerConfigJsonKey: dockerConfigJSON,
 	}
 
 	for _, tt := range tests {
@@ -223,8 +223,8 @@ func (rbrs *RbacRegistrySecretTestSuite) TestDeleteRegistrySecret() {
 
 	dockerConfigJSON, err := secretapi.CreateRegistrySecretDockerConfigJSON(rbrs.registryConfig)
 	assert.NoError(rbrs.T(), err)
-	secretData := map[string][]byte{
-		corev1.DockerConfigJsonKey: []byte(dockerConfigJSON),
+	secretData := map[string]string{
+		corev1.DockerConfigJsonKey: dockerConfigJSON,
 	}
 
 	for _, tt := range tests {

@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	"github.com/rancher/tests/actions/storage/s3"
 	"github.com/sirupsen/logrus"
 )
 
@@ -24,9 +25,6 @@ const (
 	port              = "port"
 	postWorkload      = "wload-after-backup"
 	serviceAppendName = "service-"
-	s3StorageType     = "s3"
-	s3SchemePrefix    = "s3://"
-	storageAnnotation = "etcdsnapshot.rke.io/storage"
 )
 
 // CreateAndValidateSnapshotV2Prov is a helper that takes a snapshot of a given v2prov cluster and validates is resources after the snapshot
@@ -41,7 +39,7 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, clusterName, cluste
 	createdSnapshotIDs := []string{}
 
 	for _, snapshot := range createdSnapshots {
-		if CheckS3SnapshotLocation(snapshot) {
+		if s3.CheckS3SnapshotLocation(snapshot) {
 			selectedSnapshot = snapshot
 			snapshotToRestore = snapshot.Name
 		}

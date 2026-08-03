@@ -9,11 +9,14 @@ import (
 	"github.com/rancher/rancher/pkg/api/scheme"
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	"github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	wloads "github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/pkg/namegenerator"
+	"github.com/rancher/tests/actions/kubeapi/longhorn"
 	"github.com/rancher/tests/actions/kubeapi/storageclasses"
 	"github.com/rancher/tests/actions/kubeapi/volumes/persistentvolumeclaims"
 	"github.com/sirupsen/logrus"
@@ -28,8 +31,39 @@ const (
 	nginxName                     = "nginx"
 	MountPath                     = "/auto-mnt"
 	defaultStorageClassAnnotation = "storageclass.kubernetes.io/is-default-class"
+	DeploymentIdentifierLabel     = "custom-label/deployment-identifier"
+	StorageClassSteveType         = "storage.k8s.io.storageclass"
+	containerNamePrefix           = "pvcwkld"
 	pollInterval                  = time.Duration(1 * time.Second)
 )
+
+// GetTargetVolume gets a volume that is attached to the given pod that has the specified name.
+// This name will typically point to the template that is used as a source to the volume instead of the volume name itself.
+func GetTargetVolume(pod steveV1.SteveAPIObject, volumeSourceName string) (corev1.Volume, error) {
+	podSpec := &corev1.PodSpec{}
+	err := steveV1.ConvertToK8sType(pod.Spec, podSpec)
+	if err != nil {
+		return corev1.Volume{}, err
+	}
+
+	for _, volume := range podSpec.Volumes {
+		if volume.Name == volumeSourceName {
+			return volume, nil
+		}
+	}
+
+	return corev1.Volume{}, fmt.Errorf("No volumes on pod %s sourced by %s", pod.Name, volumeSourceName)
+}
+
+// GetPersistentVolumeByName returns a PersistentVolume object corresponding to the volume with the provided name.
+func GetPersistentVolumeByName(client *rancher.Client, clusterID string, volumeName string) (*corev1.PersistentVolume, error) {
+	wrangler, err := cluster.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	return wrangler.Core.PersistentVolume().Get(volumeName, metav1.GetOptions{})
+}
 
 // GetStorageClass gets a storage class with the provided name on the provided cluster.
 // If an empty storageClassName is provided, the first one on the list of available storage classes will be used.
@@ -82,20 +116,16 @@ func GetStorageClass(client *rancher.Client, clusterID string, storageClassName 
 	return storageClass, nil
 }
 
-// CreatePVCWorkload creates a workload with a PVC for storage using the provided storageClassName.
-// This helper should be used to test storage class functionality, i.e. for an in-tree / out-of-tree cloud provider.
-// If an empty storageClassName is provided, the first one on the list will be used.
-func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string, storageClassName string) *steveV1.SteveAPIObject {
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	require.NoError(t, err)
-
-	steveclient, err := adminClient.Steve.ProxyDownstream(clusterID)
-	require.NoError(t, err)
-
+func CreatePVC(client *rancher.Client, clusterID string, storageClassName string) (*corev1.PersistentVolumeClaim, string, error) {
 	storageClass, err := GetStorageClass(client, clusterID, storageClassName)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, "", err
+	}
 
-	logrus.Debugf("Creating PVC")
+	wrangler, err := cluster.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, "", err
+	}
 
 	accessModes := []corev1.PersistentVolumeAccessMode{
 		"ReadWriteOnce",
@@ -112,33 +142,58 @@ func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string, s
 		nil,
 		&storageClass,
 	)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, "", err
+	}
 
-	pvcStatus := &corev1.PersistentVolumeClaimStatus{}
-	stevePvc := &steveV1.SteveAPIObject{}
+	pvc := &corev1.PersistentVolumeClaim{}
+	err = wait.PollUntilContextTimeout(context.Background(), pollInterval, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+		pvc, err = wrangler.Core.PersistentVolumeClaim().Get(namespaces.Default, persistentVolumeClaim.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
 
-	err = wait.PollUntilContextTimeout(t.Context(), pollInterval, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
-		stevePvc, err = steveclient.SteveType(persistentvolumeclaims.PersistentVolumeClaimType).ByID(namespaces.Default + "/" + persistentVolumeClaim.Name)
-		require.NoError(t, err)
-
-		err = steveV1.ConvertToK8sType(stevePvc.Status, pvcStatus)
-		require.NoError(t, err)
-
-		if pvcStatus.Phase == persistentvolumeclaims.PersistentVolumeBoundStatus {
+		if pvc.Status.Phase == persistentvolumeclaims.PersistentVolumeBoundStatus {
 			return true, nil
 		}
 		return false, err
 	})
+
+	if err != nil {
+		return nil, "", err
+	}
+
+	client.Session.RegisterCleanupFunc(func() error {
+		return wrangler.Core.PersistentVolume().Delete(pvc.Spec.VolumeName, &metav1.DeleteOptions{})
+	})
+
+	// If this is a Longhorn Storage class, remember to clean up Longhorn's Volume resource.
+	if storageClass.Provisioner == longhorn.LonghornStorageClassProvisioner {
+		client.Session.RegisterCleanupFunc(func() error {
+			return longhorn.DeleteLonghornVolume(client, clusterID, "longhorn-system", pvc.Spec.VolumeName)
+		})
+	}
+
+	return persistentVolumeClaim, pvc.Spec.VolumeName, err
+}
+
+// CreatePVCWorkload creates a workload with a PVC for storage using the provided storageClassName.
+// This helper should be used to test storage class functionality, i.e. for an in-tree / out-of-tree cloud provider.
+// If an empty storageClassName is provided, the first one on the list will be used.
+func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string, storageClassName string) *steveV1.SteveAPIObject {
+	logrus.Debugf("Creating PVC")
+	persistentVolumeClaim, volumeName, err := CreatePVC(client, clusterID, storageClassName)
 	require.NoError(t, err)
 
-	nginxResponse, err := createNginxDeploymentWithPVC(steveclient, "pvcwkld", persistentVolumeClaim.Name, string(stevePvc.Spec.(map[string]interface{})[persistentvolumeclaims.StevePersistentVolumeClaimVolumeName].(string)))
+	logrus.Debugf("Creating Nginx deployment with %s PVC (volume name %s)", persistentVolumeClaim.Name, volumeName)
+	nginxResponse, err := createNginxDeploymentWithPVC(client, clusterID, persistentVolumeClaim.Name, volumeName)
 	require.NoError(t, err)
 
 	return nginxResponse
 }
 
 // createNginxDeploymentWithPVC is a helper function that creates a nginx deployment in a cluster's default namespace
-func createNginxDeploymentWithPVC(steveclient *steveV1.Client, containerNamePrefix, pvcName, volName string) (*steveV1.SteveAPIObject, error) {
+func createNginxDeploymentWithPVC(client *rancher.Client, clusterID string, pvcName, volName string) (*steveV1.SteveAPIObject, error) {
 	logrus.Tracef("Vol: %s", volName)
 	logrus.Tracef("Pod: %s", pvcName)
 
@@ -157,14 +212,23 @@ func createNginxDeploymentWithPVC(steveclient *steveV1.Client, containerNamePref
 		},
 	}
 
+	steveclient, err := client.Steve.ProxyDownstream(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
 	containerTemplate := wloads.NewContainer(nginxName, nginxName, corev1.PullAlways, []corev1.VolumeMount{*volMount}, []corev1.EnvFromSource{}, nil, nil, nil)
-	podTemplate := wloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{podVol}, []corev1.LocalObjectReference{}, nil, nil)
+	podTemplate := wloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{podVol}, []corev1.LocalObjectReference{}, map[string]string{DeploymentIdentifierLabel: containerName}, nil)
 	deployment := wloads.NewDeploymentTemplate(containerName, namespaces.Default, podTemplate, true, nil)
 
 	deploymentResp, err := steveclient.SteveType(stevetypes.Deployment).Create(deployment)
 	if err != nil {
 		return nil, err
 	}
+
+	err = charts.WatchAndWaitDeployments(client, clusterID, namespaces.Default, metav1.ListOptions{
+		FieldSelector: "metadata.name=" + containerName,
+	})
 
 	return deploymentResp, err
 }

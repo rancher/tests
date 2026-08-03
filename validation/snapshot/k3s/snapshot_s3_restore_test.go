@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/tests/actions/etcdsnapshot"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/storage/s3"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/validation/snapshot"
@@ -74,7 +75,7 @@ func TestS3SnapshotRestore(t *testing.T) {
 			err = pods.VerifyClusterPods(s.Client, tt.cluster)
 			require.NoError(t, err)
 
-			err = etcdsnapshot.DeleteS3Bucket(s.S3BucketName, s.S3Region, s.AWSAccessKey, s.AWSSecretKey)
+			err = s3.DeleteS3Bucket(s.S3BucketName, s.S3Region, s.AWSAccessKey, s.AWSSecretKey)
 			assert.NoError(t, err)
 		})
 

@@ -80,14 +80,14 @@ func CreateRegistrySecretDockerConfigJSON(registryconfig *Config) (string, error
 }
 
 // SecretCopyWithNewData is a helper to create a copy of an existing secret with new data.
-func SecretCopyWithNewData(secret *corev1.Secret, newData map[string][]byte) *corev1.Secret {
+func SecretCopyWithNewData(secret *corev1.Secret, newData map[string]string) *corev1.Secret {
 	updatedSecretObj := secret.DeepCopy()
-	if updatedSecretObj.Data == nil {
-		updatedSecretObj.Data = make(map[string][]byte)
+	if updatedSecretObj.StringData == nil {
+		updatedSecretObj.StringData = make(map[string]string)
 	}
 
 	for key, value := range newData {
-		updatedSecretObj.Data[key] = value
+		updatedSecretObj.StringData[key] = value
 	}
 
 	return updatedSecretObj

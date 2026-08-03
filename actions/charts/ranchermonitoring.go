@@ -79,12 +79,14 @@ func InstallRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 		}
 
 		err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
-			if event.Type == watch.Error {
+			switch event.Type {
+			case watch.Error:
 				return false, fmt.Errorf("there was an error uninstalling rancher monitoring chart")
-			} else if event.Type == watch.Deleted {
+			case watch.Deleted:
 				return true, nil
+			default:
+				return false, nil
 			}
-			return false, nil
 		})
 		if err != nil {
 			return err
@@ -139,7 +141,7 @@ func InstallRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 			return true, nil
 		}
 		if state == string(catalogv1.StatusFailed) {
-			return false, fmt.Errorf("monitoring chart installation failed: %s", app.Status.Summary.Error)
+			return false, fmt.Errorf("monitoring chart installation failed with %s status", app.Status.Summary.State)
 		}
 		return false, nil
 	})
@@ -243,7 +245,7 @@ func UpgradeRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 			return true, nil
 		}
 		if state == string(catalogv1.StatusFailed) {
-			return false, fmt.Errorf("monitoring chart upgrade failed: %s", app.Status.Summary.Error)
+			return false, fmt.Errorf("monitoring chart upgrade failed: %t", app.Status.Summary.Error)
 		}
 		return false, nil
 	})
@@ -268,7 +270,7 @@ func UpgradeRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 			return true, nil
 		}
 		if state == string(catalogv1.StatusFailed) {
-			return false, fmt.Errorf("monitoring chart upgrade failed: %s", app.Status.Summary.Error)
+			return false, fmt.Errorf("monitoring chart upgrade failed: %t", app.Status.Summary.Error)
 		}
 		return false, nil
 	})
