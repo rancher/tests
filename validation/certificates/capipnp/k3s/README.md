@@ -1,4 +1,4 @@
-# K3s Encryption Key Rotation
+# K3s Certificates Configs
 
 ## Table of Contents
 1. [Prerequisites](../README.md)
@@ -11,21 +11,21 @@
 ## Test Cases
 All of the test cases in this package are listed below, keep in mind that all configuration for these tests have built in defaults [Configuration Defaults](#defaults). These tests will provision a cluster if one is not provided via the rancher.ClusterName field.
 
-### Encryption Key Rotation Tests
+### Certificate Tests
 
 #### Description:
-The encryption key rotation test verifies that a cluster can successfully perform encryption key rotation
+The certificate test verifies that a cluster can rotate certificates.
 
 #### Required Configurations:
 1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config)
+2. [Cluster Config](#cluster-config) (with IPv6 settings)
 3. [Machine Config](#machine-config)
 
 #### Table Tests:
-1. `K3S_Encryption_Key_Rotation`
+1. `CAPI_PnP_RKE2_Certificate_Rotation`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/encryptionkeyrotation/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestEncryptionKeyRotation -timeout=2h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/capipnp/k3s --junitfile results.xml --jsonfile results.json -- -tags=valdation -run TestCAPIPnPCertRotation -timeout=2h -v`
 
 ## Configurations
 
@@ -39,10 +39,39 @@ rancher:
   insecure: true
 ```
 
-NOTE: If you are providing an existing cluster, it is assumed that secrets encryption is enabled on the cluster; this is a K3s pre-requiste for encryption key rotation.
-
 ### Provisioning cluster
-This test will create a cluster if one is not provided, see the needed cluster configuration [k3s provisioning](../../provisioning/k3s/README.md)
+This test will create a cluster if one is not provided, see the section on having a defined machine pool in this reference README: [k3s provisioning](../../../provisioning/k3s/README.md). Additionally, you will need this section for CAPI configurations:
+
+```yaml
+capipnp:
+  awsCredentials:
+    accessKeyID: "<required>"
+    secretAccessKey: "<required>"
+  awsTemplate:
+    ami: "<required>"
+    controlPlaneSecurityGroup: "sg-<required>"
+    nodeSecurityGroup: "sg-<required>"
+    region: "us-west-1"
+    sshKeyName: "<required>"
+    subnetId: "subnet-<required>"
+    vpcId: "vpc-<required>"
+  vsphereCredentials:
+    username: "<required>"
+    password: "<required>"
+  vsphereTemplate:
+    datacenter: "<required>"
+    datastore: "<required>"
+    diskGiB: 40
+    folder: "<required>"
+    host: "<required>"
+    memoryMiB: 8192
+    networkName: "<required>"
+    numCPUs: 4
+    resourcePool: "<required>"
+    template: "<required>"
+  clusterNamePrefix: "<required>"
+  provider: "<required>"    # capa or capv
+```
 
 ## Defaults
 This package contains a defaults folder which contains default test configuration data for non-sensitive fields. The goal of this data is to: 
@@ -50,7 +79,7 @@ This package contains a defaults folder which contains default test configuratio
 2. Reduce the amount of yaml data that needs to be stored in our pipelines.
 3. Make it easier to run tests
 
-Any data the user provides will override these defaults which are stored here: [defaults](defaults/defaults.yaml). 
+Any data the user provides will override these defaults which are stored here: [defaults](../defaults/defaults.yaml). 
 
 ## Logging
 This package supports several logging levels. You can set the logging levels via the cattle config and all levels above the provided level will be logged while all logs below that logging level will be omitted. 

@@ -1,14 +1,18 @@
 package encryptionkeyrotation
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
+	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -32,14 +36,11 @@ func VerifyEncryptionKeyRotation(client *rancher.Client, clusterStatus *provv1.C
 		return fmt.Errorf("no nodes found in cluster %s", clusterStatus.ClusterName)
 	}
 
-	controlPlaneCount := 0
-
 	for _, machine := range nodeList.Data {
 		if !isControlPlaneMachine(machine.Labels) {
 			continue
 		}
 
-		controlPlaneCount++
 		logrus.Debugf("Selected control-plane node: %s", machine.Name)
 
 		sshNode, err := sshkeys.GetSSHNodeFromMachine(client, &machine)
@@ -70,9 +71,30 @@ func VerifyEncryptionKeyRotation(client *rancher.Client, clusterStatus *provv1.C
 		}
 	}
 
-	if controlPlaneCount == 0 {
-		return fmt.Errorf("no nodes found with control-plane role in cluster %s", clusterStatus.ClusterName)
+	return nil
+}
+
+// VerifyRotationFromControlPlaneStatus checks the RKEControlPlane status for encryption key rotation completion
+func VerifyRotationFromControlPlaneStatus(client *rancher.Client, clusterName string) error {
+	rkeClient, err := client.GetKubeAPIRKEClient()
+	if err != nil {
+		return fmt.Errorf("failed to get kube RKE client for cluster %s: %w", clusterName, err)
 	}
+
+	controlPlane, err := rkeClient.RKEControlPlanes(namespaces.FleetDefault).Get(context.TODO(), clusterName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get RKEControlPlane %s/%s: %w", namespaces.FleetDefault, clusterName, err)
+	}
+
+	if controlPlane.Status.RotateEncryptionKeysPhase == rkev1.RotateEncryptionKeysPhaseFailed {
+		return fmt.Errorf("encryption key rotation failed for cluster %s", clusterName)
+	}
+
+	if controlPlane.Status.RotateEncryptionKeysPhase != rkev1.RotateEncryptionKeysPhaseDone {
+		return fmt.Errorf("expected encryption key rotation phase %q for cluster %s, got %q", rkev1.RotateEncryptionKeysPhaseDone, clusterName, controlPlane.Status.RotateEncryptionKeysPhase)
+	}
+
+	logrus.Debugf("Verified encryption key rotation via RKEControlPlane phase for cluster %s: %s", clusterName, controlPlane.Status.RotateEncryptionKeysPhase)
 
 	return nil
 }

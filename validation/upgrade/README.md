@@ -78,7 +78,37 @@ amazonec2Config:
   usePrivateAddress: false
   volumeType: ""
   vpcId: ""
-  zone: "a"           
+  zone: "a"
+
+# Only required if running a CAPI PnP test
+capipnp:
+  awsCredentials:
+    accessKeyID: "<required>"
+    secretAccessKey: "<required>"
+  awsTemplate:
+    ami: "<required>"
+    controlPlaneSecurityGroup: "sg-<required>"
+    nodeSecurityGroup: "sg-<required>"
+    region: "us-west-1"
+    sshKeyName: "<required>"
+    subnetId: "subnet-<required>"
+    vpcId: "vpc-<required>"
+  vsphereCredentials:
+    username: "<required>"
+    password: "<required>"
+  vsphereTemplate:
+    datacenter: "<required>"
+    datastore: "<required>"
+    diskGiB: 40
+    folder: "<required>"
+    host: "<required>"
+    memoryMiB: 8192
+    networkName: "<required>"
+    numCPUs: 4
+    resourcePool: "<required>"
+    template: "<required>"
+  clusterNamePrefix: "<required>"
+  provider: "<required>"    # capa or capv
 ```
 Note: To see the `provisioningInput` in further detail, please review over the [Provisioning README](../provisioning/README.md).
 See below how to run the test:
@@ -88,6 +118,10 @@ See below how to run the test:
 #### RKE2/K3S
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeKubernetes"` \
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeKubernetes"`
+
+#### CAPI PnP
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/capipnp/rke2 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeCAPIPnPKubernetes"` \
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/capipnp/k3s --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeCAPIPnPKubernetes"`
 
 #### Windows
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/upgrade/rke2 --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestUpgradeWindowsKubernetes"`
