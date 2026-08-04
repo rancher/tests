@@ -201,7 +201,7 @@
       data: ""
       expectedresult: "ServiceMonitor created and Longhorn data is shown in Grafana"
       position: 3
-    - action: "Check current number of existing Longhorn volumes"
+    - action: "Check current number of existing Longhorn volumes (count(longhorn_volume_capacity_bytes) OR on() vector(0))"
       data: ""
       expectedresult: "The query runs successfully"
       position: 4
@@ -209,11 +209,11 @@
       data: ""
       expectedresult: "PVC and Volume are created"
       position: 5
-    - action: "Query Grafana for the volume size of the newly created volume"
+    - action: "Query Grafana for the volume size of the newly created volume (longhorn_volume_capacity_bytes{volume=<volumeName>})"
       data: ""
       expectedresult: "Volume size shows as 1 GiB"
       position: 6
-    - action: "Query Grafana for the new number of existing Longhorn volumes"
+    - action: "Query Grafana for the new number of existing Longhorn volumes (count(longhorn_volume_capacity_bytes) OR on() vector(0))"
       data: ""
       expectedresult: "Number of volumes is equal to the previously quered value + 1"
       position: 7
