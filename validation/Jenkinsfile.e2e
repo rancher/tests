@@ -127,17 +127,17 @@ pipeline {
         )
         string(
             name: 'RANCHER_VERSION',
-            defaultValue: 'latest',
+            defaultValue: '2.15.0',
             description: 'Rancher version to deploy'
         )
         string(
             name: 'RANCHER_IMAGE_TAG',
-            defaultValue: 'head',
+            defaultValue: 'v2.15-head',
             description: 'Rancher container image tag (head for dev builds, version tag for stable)'
         )
         string(
             name: 'RANCHER_CHART_REPO_URL',
-            defaultValue: 'https://releases.rancher.com/server-charts/stable',
+            defaultValue: 'https://releases.rancher.com/server-charts/latest',
             description: 'Rancher Helm chart repository URL'
         )
         string(
@@ -207,21 +207,21 @@ pipeline {
             description: 'Terraform tfvars for the cluster_nodes module (non-airgap)',
             defaultValue: '''aws_access_key = "${AWS_ACCESS_KEY_ID}"
 aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
-aws_ami = "ami-01b0ef1ab7898646f"
+aws_ami = "ami-0600e22b69546c15c"
 instance_type = "t3a.2xlarge"
-aws_security_group = ["sg-07a98dc3474d4eb9f"]
-aws_subnet = "subnet-0377a1ca391d51cae"
+aws_security_group = ["sg-08e8243a8cfbea8a0"]
+aws_subnet = "subnet-ee8cac86"
 airgap_setup = false
 proxy_setup = false
 aws_volume_size = 500
 aws_volume_type = "gp3"
 aws_hostname_prefix = "${HOSTNAME_PREFIX}"
-aws_region = "us-west-1"
+aws_region = "us-east-2"
 aws_route53_zone = "qa.rancher.space"
-aws_ssh_user = "ec2-user"
-aws_vpc = "vpc-081cec85dbe35e9bd"
+aws_ssh_user = "ubuntu"
+aws_vpc = "vpc-bfccf4d7"
 public_ssh_key = "ssh_public_key.pub"
-private_ssh_key = "~/.ssh/\${AWS_SSH_PEM_KEY_NAME}"
+private_ssh_key = "~/.ssh/${AWS_SSH_PEM_KEY_NAME}"
 nodes = [
     {
         count = 3
@@ -240,7 +240,7 @@ nodes = [
 kubernetes_version: ${RKE2_VERSION}
 cni: calico
 kubeconfig_file: "/workspace/qa-infra-automation/ansible/rke2/default/kubeconfig.yaml"
-cert_manager_version: "1.17.4"
+cert_manager_version: "1.20.0"
 bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
 password: "${RANCHER_ADMIN_PASSWORD}"
 rancher_version: ${RANCHER_VERSION}
@@ -262,7 +262,7 @@ server_flags: |
             name: 'CATTLE_TEST_CONFIG',
             defaultValue: '''awsNodeTemplate:
     accessKey: ${AWS_ACCESS_KEY_ID}
-    ami: ami-0b8e245d9e93c05fa
+    ami: ami-0600e22b69546c15c
     blockDurationMinutes: 0
     encryptEbsVolume: false
     httpEndpoint: enabled
@@ -309,18 +309,18 @@ awsCredentials:
     defaultRegion: us-east-2
     secretKey: ${AWS_SECRET_ACCESS_KEY}
 awsEC2Configs:
-    awsAMI: ami-02ec473a7c3a2db48
+    awsAMI: ami-0600e22b69546c15c
     awsAccessKeyID: ${AWS_ACCESS_KEY_ID}
     awsSecretAccessKey: ${AWS_SECRET_ACCESS_KEY}
     region: us-east-2
     awsEC2Config:
-    - awsAMI: ami-053835e36b16f97d0
+    - awsAMI: ami-0600e22b69546c15c
       awsCICDInstanceTag: rancher-validation
       awsIAMProfile: EngineeringUsersUS
       awsSSHKeyName: jenkins-elliptic-validation.pem
       awsSecurityGroups:
-      - sg-08e8243a8cfbea8a0 # qa_default_ipv4
-      awsUser: ec2-user
+      - sg-08e8243a8cfbea8a0
+      awsUser: ubuntu
       instanceType: t3a.2xlarge
       isWindows: false
       volumeSize: 50
@@ -448,19 +448,19 @@ cni = "calico"
 ingress-controller = "traefik"
 }
 node_config = {
-aws_access_key = "\${AWS_ACCESS_KEY_ID}"
-aws_secret_key = "\${AWS_SECRET_ACCESS_KEY}"
-access_key     = "\${AWS_ACCESS_KEY_ID}"
-secret_key     = "\${AWS_SECRET_ACCESS_KEY}"
+aws_access_key = "${AWS_ACCESS_KEY_ID}"
+aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
+access_key     = "${AWS_ACCESS_KEY_ID}"
+secret_key     = "${AWS_SECRET_ACCESS_KEY}"
 
-aws_ami = "ami-01b0ef1ab7898646f"
-aws_ssh_user = "ec2-user"
+aws_ami = ""
+aws_ssh_user = "ubuntu"
 aws_instance_type = "t3a.2xlarge"
-aws_security_group = ["allopen-dualstack"]
+aws_security_group = ["rke2-aws-node"]
 
-aws_subnet = "subnet-0377a1ca391d51cae"
-aws_availability_zone = "b"
-aws_vpc = "vpc-081cec85dbe35e9bd"
+aws_subnet = "subnet-73577c28"
+aws_availability_zone = "a"
+aws_vpc = "vpc-c30925a4"
 aws_region    = "us-west-1"
 aws_volume_size   = 50
 aws_volume_type   = "gp3"
@@ -621,7 +621,7 @@ insecure = true'''
                             // This can be overridden by explicitly setting RANCHER_CHART_REPO_URL.
                             def defaultChartRepoUrl = 'https://releases.rancher.com/server-charts/alpha'
                             if (params.RANCHER_VERSION && params.RANCHER_VERSION ==~ /v?\d+\.\d+\.\d+/) {
-                                defaultChartRepoUrl = 'https://releases.rancher.com/server-charts/stable'
+                                defaultChartRepoUrl = 'https://releases.rancher.com/server-charts/latest'
                             }
                             def rancherChartRepoUrlParam = params.RANCHER_CHART_REPO_URL ?: defaultChartRepoUrl
 
