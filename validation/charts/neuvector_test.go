@@ -57,6 +57,9 @@ func (n *NeuVectorTestSuite) SetupSuite() {
 	latestVersion, err := n.client.Catalog.GetLatestChartVersion(actionsCharts.NeuVectorChartName, catalog.RancherChartRepo)
 	require.NoError(n.T(), err)
 
+	registrySetting, err := n.client.Management.Setting.ByID("system-default-registry")
+	require.NoError(n.T(), err)
+
 	n.chartInstallOptions = &actionsCharts.PayloadOpts{
 		Namespace: actionsCharts.NeuVectorNamespace,
 		InstallOptions: actionsCharts.InstallOptions{
@@ -64,6 +67,7 @@ func (n *NeuVectorTestSuite) SetupSuite() {
 			Version:   latestVersion,
 			ProjectID: n.project.ID,
 		},
+		DefaultRegistry: registrySetting.Value,
 	}
 }
 

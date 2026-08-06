@@ -137,6 +137,9 @@ func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
 	latestVersions, err := n.client.Catalog.GetListChartVersions(actionsCharts.NeuVectorChartName, catalog.RancherChartRepo)
 	require.NoError(n.T(), err)
 
+	registrySetting, err := n.client.Management.Setting.ByID("system-default-registry")
+	require.NoError(n.T(), err)
+
 	payload := actionsCharts.PayloadOpts{
 		Namespace: actionsCharts.NeuVectorNamespace,
 		Host:      n.client.RancherConfig.Host,
@@ -145,8 +148,9 @@ func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
 			Version:   latestVersions[0],
 			ProjectID: project.ID,
 		},
-		K3s:      strings.Contains(n.cfg.CustomCluster.KubernetesVersion, "k3s"),
-		Hardened: true,
+		DefaultRegistry: registrySetting.Value,
+		K3s:             strings.Contains(n.cfg.CustomCluster.KubernetesVersion, "k3s"),
+		Hardened:        true,
 	}
 
 	n.T().Logf("Installing NeuVector %s on cluster %s", latestVersions[0], cluster.Name)
