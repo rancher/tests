@@ -35,7 +35,7 @@ pipeline {
         )
         string(
             name: 'HOSTNAME_PREFIX',
-            defaultValue: 'recurringdaily',
+            defaultValue: 'recurring',
             description: 'Base hostname prefix — version suffix is appended automatically'
         )
 
@@ -404,9 +404,9 @@ insecure = true'''
                     if (isPitJob) {
                         recurringJob = 'go-pit-daily-job'
                         individualJob = 'go-pit-daily-individual-job'
-                        hostnamePrefix = "pit-${hostnamePrefix}"
+                        hostnamePrefix = "pit-daily-${hostnamePrefix}"
                         if (env.JOB_NAME.contains('weekly')) {
-                            validationTags = "pit.weekly"
+                            hostnamePrefix = "pit-weekly-${hostnamePrefix}"
                         }
                     }
 
@@ -416,19 +416,19 @@ insecure = true'''
                     // covers the latest version against the daily suite.
                     def runMatrixByJob = [
                         'go-pit-weekly-multibranch-job': [
-                            [imageTag: 'v2.15-head', validationTags: 'pit.weekly'],
-                            [imageTag: 'v2.14-head', validationTags: 'pit.daily'],
-                            [imageTag: 'v2.13-head', validationTags: 'pit.daily']
+                            [imageTag: 'v2.15-head', validationTags: 'pit.weekly', rke2Version: params.RKE2_VERSION],
+                            [imageTag: 'v2.14-head', validationTags: 'pit.daily', rke2Version: params.RKE2_VERSION],
+                            [imageTag: 'v2.13-head', validationTags: 'pit.daily', rke2Version: 'v1.34.9+rke2r1']
                         ],
                         'go-pit-daily-multibranch-job': [
-                            [imageTag: 'v2.15-head', validationTags: 'pit.daily']
+                            [imageTag: 'v2.15-head', validationTags: 'pit.daily', rke2Version: params.RKE2_VERSION]
                         ]
                     ]
 
                     // Fallback for manual "Build with Parameters" runs (or jobs not in the
                     // map above): apply VALIDATION_TEST_TAGS uniformly across RANCHER_IMAGE_TAGS.
                     def defaultMatrix = params.RANCHER_IMAGE_TAGS.split(',').collect {
-                        [imageTag: it.trim(), validationTags: params.VALIDATION_TEST_TAGS]
+                        [imageTag: it.trim(), validationTags: params.VALIDATION_TEST_TAGS, rke2Version: params.RKE2_VERSION]
                     }
 
                     // Match against env.JOB_NAME via contains() since folder/multibranch
@@ -492,7 +492,7 @@ insecure = true'''
                             string(name: 'QA_INFRA_REPO_URL', value: params.QA_INFRA_REPO_URL),
                             string(name: 'QA_INFRA_BRANCH', value: params.QA_INFRA_BRANCH),
                             string(name: 'HOSTNAME_PREFIX', value: hostname),
-                            string(name: 'RKE2_VERSION', value: params.RKE2_VERSION),
+                            string(name: 'RKE2_VERSION', value: entry.rke2Version),
                             string(name: 'RANCHER_VERSION', value: rancherVersion),
                             string(name: 'RANCHER_IMAGE_TAG', value: tag),
                             string(name: 'RANCHER_CHART_REPO_URL', value: params.RANCHER_CHART_REPO_URL),
