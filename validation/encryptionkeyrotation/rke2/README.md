@@ -18,7 +18,7 @@ The encryption key rotation test verifies that a cluster can successfully perfor
 
 #### Required Configurations:
 1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config) (with IPv6 settings)
+2. [Cluster Config](#cluster-config)
 3. [Machine Config](#machine-config)
 
 #### Table Tests:

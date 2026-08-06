@@ -13,10 +13,12 @@ import (
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -26,6 +28,21 @@ const (
 	pemFileExtension             = ".pem"
 	privateKeySSHKeyRegExPattern = `-----BEGIN RSA PRIVATE KEY-{3,}\n([\s\S]*?)\n-{3,}END RSA PRIVATE KEY-----`
 )
+
+// GetCertRotationGeneration returns the current CertificateRotationGeneration from the RKEControlPlane status.
+func GetCertRotationGeneration(client *rancher.Client, clusterName string) (int64, error) {
+	rkeClient, err := client.GetKubeAPIRKEClient()
+	if err != nil {
+		return 0, err
+	}
+
+	controlPlane, err := rkeClient.RKEControlPlanes(namespaces.FleetDefault).Get(context.TODO(), clusterName, metav1.GetOptions{})
+	if err != nil {
+		return 0, err
+	}
+
+	return controlPlane.Status.CertificateRotationGeneration, nil
+}
 
 // CertRotationCompleteCheckFunc returns a watch check function that checks if the certificate rotation is complete
 func CertRotationCompleteCheckFunc(generation int64) wait.WatchCheckFunc {
@@ -131,7 +148,8 @@ func getCertificatesFromMachine(client *rancher.Client, machineNode *v1.SteveAPI
 
 	sshNode, err := sshkeys.GetSSHNodeFromMachine(client, machineNode)
 	if err != nil {
-		return nil, err
+		logrus.Debugf("Skipping cert collection for machine %s: %v", machineNode.Name, err)
+		return certificates, nil
 	}
 
 	logrus.Debugf("Getting certificates from machine: %s", machineNode.Name)

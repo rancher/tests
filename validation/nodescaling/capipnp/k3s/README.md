@@ -1,0 +1,130 @@
+# K3S Node Scaling Configs
+
+## Table of Contents
+1. [Test Cases](#Test-Cases)
+2. [Configurations](#Configurations)
+3. [Configuration Defaults](#defaults)
+4. [Logging Levels](#Logging)
+5. [Back to general node scaling](../README.md)
+
+## Test Cases
+All of the test cases in this package are listed below, keep in mind that all configuration for these tests have built in defaults [Configuration Defaults](#defaults). These tests will provision a cluster if one is not provided via the rancher.ClusterName field.
+
+### Node Scaling Test
+
+#### Description:
+The node scaling test validates that node pools can be scaled up and down. All configurations are not required if an already provisioned cluster is provided to the test.
+
+#### Required Configurations:
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Machine Config](#machine-config)
+
+#### Table Tests:
+1. `CAPI_PnP_K3S_Scale_Control_Plane`
+2. `CAPI_PnP_K3S_Scale_ETCD`
+3. `CAPI_PnP_K3S_Scale_Worker`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/capipnp/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestScalingCAPIPnPNodePools -timeout=60m -v`
+
+## Configurations
+
+### Existing cluster:
+```yaml
+rancher:
+  host: <rancher-fqdn>
+  adminToken: <rancher-token>
+  clusterName: "<existing cluster name>"
+  cleanup: true
+  insecure: true
+```
+
+### Provisioning cluster
+This test will create a cluster if one is not provided. See to configure a node driver OR custom cluster depending on the node scaling test [k3s provisioning](../../../provisioning/k3s/README.md)
+
+### Cloud Credential Config
+
+```yaml
+rancher:
+  host: ""
+  adminToken: ""
+  insecure: true
+```
+
+### Cluster Config
+```yaml
+clusterConfig:
+  cni: "calico"
+  provider: "aws"
+  nodeProvider: "ec2"
+```
+
+### Machine Config
+```yaml
+awsMachineConfigs:
+  region: "us-east-2"
+  awsMachineConfig:
+  - roles: ["etcd", "controlplane", "worker"]
+    ami: ""
+    instanceType: ""
+    sshUser: ""
+    vpcId: ""
+    volumeType: ""
+    zone: "a"
+    retries: ""
+    rootSize: ""
+    securityGroup: [""]
+```
+
+### CAPI PnP Config
+```yaml
+capipnp:
+  awsCredentials:
+    accessKeyID: "<required>"
+    secretAccessKey: "<required>"
+  awsTemplate:
+    ami: "<required>"
+    controlPlaneSecurityGroup: "sg-<required>"
+    nodeSecurityGroup: "sg-<required>"
+    region: "us-west-1"
+    sshKeyName: "<required>"
+    subnetId: "subnet-<required>"
+    vpcId: "vpc-<required>"
+  vsphereCredentials:
+    username: "<required>"
+    password: "<required>"
+  vsphereTemplate:
+    datacenter: "<required>"
+    datastore: "<required>"
+    diskGiB: 40
+    folder: "<required>"
+    host: "<required>"
+    memoryMiB: 8192
+    networkName: "<required>"
+    numCPUs: 4
+    resourcePool: "<required>"
+    template: "<required>"
+  clusterNamePrefix: "<required>"
+  provider: "<required>"    # capa or capv
+```
+
+## Defaults
+This package contains a defaults folder which contains default test configuration data for non-sensitive fields. The goal of this data is to:
+1. Reduce the number of fields the user needs to provide in the cattle_config file.
+2. Reduce the amount of yaml data that needs to be stored in our pipelines.
+3. Make it easier to run tests
+
+Any data the user provides will override these defaults which are stored here: [defaults](../defaults/defaults.yaml).
+
+## Logging
+This package supports several logging levels. You can set the logging levels via the cattle config and all levels above the provided level will be logged while all logs below that logging level will be omitted.
+
+```yaml
+logging:
+   level: "trace" #trace, debug, info, warning, error
+```
+
+## Additional
+1. If the test passes immediately without warning, try adding the `-count=1` or run `go clean -cache`. This will avoid previous results from interfering with the new test run.
+2. All of the tests utilize parallelism when running for more finite control of how things are run in parallel use the -p and -parallel flags.
