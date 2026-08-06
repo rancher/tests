@@ -215,7 +215,7 @@
       position: 6
     - action: "Query Grafana for the new number of existing Longhorn volumes (count(longhorn_volume_capacity_bytes) OR on() vector(0))"
       data: ""
-      expectedresult: "Number of volumes is equal to the previously quered value + 1"
+      expectedresult: "Number of volumes is equal to the previously queried value + 1"
       position: 7
     custom_field:
       "15": "TestMonitoringIntegration"

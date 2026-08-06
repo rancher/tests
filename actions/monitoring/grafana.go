@@ -18,7 +18,6 @@ import (
 
 const (
 	GrafanaProxyURLTemplate = "https://%s/k8s/clusters/%s/api/v1/namespaces/cattle-monitoring-system/services/http:rancher-monitoring-grafana:80/proxy"
-	LoginURL                = "/login"
 	DsQueryURL              = "/api/ds/query"
 )
 
@@ -35,11 +34,18 @@ type QueryResponse struct {
 }
 
 func doRequest(client http.Client, method string, url string, payload any) ([]byte, []*http.Cookie, error) {
-	req, _ := http.NewRequest(method, url, nil)
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
-		jsonPayload, _ := json.Marshal(payload)
+		jsonPayload, err := json.Marshal(payload)
+		if err != nil {
+			return nil, nil, fmt.Errorf("payload is not proper JSON: %w", err)
+		}
+
 		req.Body = io.NopCloser(bytes.NewBuffer(jsonPayload))
 	}
 
@@ -48,17 +54,21 @@ func doRequest(client http.Client, method string, url string, payload any) ([]by
 		return nil, nil, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated {
 		return body, resp.Cookies(), nil
 	}
 
-	return nil, nil, fmt.Errorf("Request to %s failed with %d: %s\n", url, resp.StatusCode, string(body))
+	return nil, nil, fmt.Errorf("request to %s failed with %d: %s", url, resp.StatusCode, string(body))
 }
 
-// LoginGrafana logs in to a Rancher-proxied Grafana and returns a client embedded with a cookie containing a Ranher user token.
-func LoginGrafana(rancherHost string, rancherToken string, clusterID string, skipTLS bool) (*http.Client, error) {
+// NewGrafanaProxyClient creates Rancher-proxied client to Grafana by embedding it with a cookie containing a Rancher user token and returns it.
+func NewGrafanaProxyClient(rancherHost string, rancherToken string, skipTLS bool) (*http.Client, error) {
 	jar, _ := cookiejar.New(nil)
 	httpClient := &http.Client{
 		Transport: &http.Transport{
@@ -104,7 +114,7 @@ func PrometheusQueryInGrafana(client *http.Client, rancherHost string, clusterID
 		}
 
 		if err := json.Unmarshal(respBytes, &resp); err != nil {
-			return false, err
+			return false, nil
 		}
 
 		if len(resp.Results.A.Frames) == 0 {

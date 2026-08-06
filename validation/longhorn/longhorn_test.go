@@ -19,7 +19,6 @@ import (
 	"github.com/rancher/shepherd/clients/rancher/catalog"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
-	extencharts "github.com/rancher/shepherd/extensions/charts"
 	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/clusters"
@@ -58,7 +57,7 @@ var (
 	LonghornEncryptionSecretBaseName       = "longhorn-crypto"
 	LonghornEncryptionStorageClassBaseName = "longhorn-crypto-global"
 	volumeBytesPrometheusQueryTemplate     = "longhorn_volume_capacity_bytes{volume=\"%s\"}"
-	numberVolumesPrometheusQuery           = "count(longhorn_volume_capacity_bytes) OR on() vector(0)"
+	numberVolumesPrometheusQuery           = "count(longhorn_volume_capacity_bytes) OR on() vector(0)" // Return an empty list instead of nil with OR on() vector(0).
 )
 
 type LonghornTestSuite struct {
@@ -434,7 +433,7 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 
 func (l *LonghornTestSuite) TestMonitoringIntegration() {
 	l.T().Log("Checking if the monitoring chart is already installed")
-	initialMonitoringChart, err := extencharts.GetChartStatus(l.client, l.cluster.ID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
+	initialMonitoringChart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
 	require.NoError(l.T(), err)
 
 	if !initialMonitoringChart.IsAlreadyInstalled {
@@ -480,7 +479,7 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 	require.NoError(l.T(), err)
 	l.T().Logf("ServiceMonitor %s for Longhorn created", serviceMonitorName)
 
-	loggedClient, err := monitoring.LoginGrafana(l.client.RancherConfig.Host, l.client.RancherConfig.AdminToken, l.cluster.ID, true)
+	loggedClient, err := monitoring.NewGrafanaProxyClient(l.client.RancherConfig.Host, l.client.RancherConfig.AdminToken, true)
 	require.NoError(l.T(), err)
 
 	l.T().Logf("Checking number of volumes with Prometheus through Grafana API (%s)", numberVolumesPrometheusQuery)
