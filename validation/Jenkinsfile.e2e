@@ -324,7 +324,7 @@ awsEC2Configs:
       instanceType: t3a.2xlarge
       isWindows: false
       volumeSize: 50
-      roles: [etcd, contolplane, worker]
+      roles: [etcd, controlplane, worker]
 provisioningInput:
     psact: "rancher-privileged"
     cni:
@@ -526,6 +526,7 @@ insecure = true'''
     environment {
         WORKSPACE_NAME = ''
         INFRA_CLEANED  = 'false'
+        YQ_VERSION     = 'v4.47.2'
     }
 
     stages {
@@ -557,8 +558,14 @@ insecure = true'''
 
         stage('Setup Tools') {
             steps {
-                sh 'wget -qO ./yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 || true'
-                sh 'chmod +x ./yq || true'
+                sh """
+                    wget -qO ./yq https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64
+                    wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/checksums
+                    grep -q '^yq_linux_amd64 ' ./yq_checksums
+                    awk '/^yq_linux_amd64 / {print \$19 "  ./yq"}' ./yq_checksums | sha256sum -c -
+                    rm -f ./yq_checksums
+                    chmod +x ./yq
+                """
             }
         }
 
@@ -802,7 +809,7 @@ rancher_use_bundled_system_charts: true
                         // Pipeline Utility Steps plugin (readJSON/writeJSON) is not installed,
                         // and python3 is not available on the Jenkins agent host.
                         sh "docker run --rm -v \$(pwd):/workspace -w /workspace rancher-go-test:latest python3 -c \"import json; d=json.load(open('rancher-token.json')); [d.pop(k,None) for k in ('token','bearerToken','accessKey','secretKey','value')]; json.dump(d,open('rancher-token-metadata.json','w'),indent=2)\""
-                        archiveArtifacts artifacts: 'rancher-token-metadata.json', fingerprint: true
+                        archiveArtifacts artifacts: 'rancher-token-metadata.json'
                         echo 'Archived redacted token metadata: rancher-token-metadata.json'
 
                         // Infrastructure, Rancher deploy, and admin token all succeeded.

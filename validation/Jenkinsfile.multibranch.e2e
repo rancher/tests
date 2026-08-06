@@ -9,7 +9,7 @@
  * prefix, deploys the specified Rancher version, and runs tests.
  *
  * Consumes shared functions from qa-jenkins-library:
- *   property.useWithProperties
+ *   infrastructure.parseAndSubstituteVars
  */
 
 def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
@@ -391,11 +391,6 @@ insecure = true'''
             defaultValue: '',
             description: 'Schema file prefix for Qase operations, for example hostbusters or pit'
         )
-        string(
-            name: 'TEST_RUN_NAME',
-            defaultValue: 'Recurring Test Run',
-            description: 'Test run name for Qase reporting'
-        )
     }
 
     stages {
@@ -406,7 +401,6 @@ insecure = true'''
                     def recurringJob = params.RECURRING_JOB
                     def individualJob = params.INDIVIDUAL_JOB
                     def hostnamePrefix = params.HOSTNAME_PREFIX
-                    def validationTags = params.VALIDATION_TEST_TAGS
                     if (isPitJob) {
                         recurringJob = 'go-pit-daily-job'
                         individualJob = 'go-pit-daily-individual-job'
@@ -416,7 +410,31 @@ insecure = true'''
                         }
                     }
 
-                    def imageTags = params.RANCHER_IMAGE_TAGS.split(',').collect { it.trim() }
+                    // Matrix of (imageTag, validationTags) pairs to trigger per cadence.
+                    // Weekly run covers the latest version against the weekly suite plus
+                    // the two prior minor versions against the daily suite. Daily run only
+                    // covers the latest version against the daily suite.
+                    def runMatrixByJob = [
+                        'go-pit-weekly-multibranch-job': [
+                            [imageTag: 'v2.15-head', validationTags: 'pit.weekly'],
+                            [imageTag: 'v2.14-head', validationTags: 'pit.daily'],
+                            [imageTag: 'v2.13-head', validationTags: 'pit.daily']
+                        ],
+                        'go-pit-daily-multibranch-job': [
+                            [imageTag: 'v2.15-head', validationTags: 'pit.daily']
+                        ]
+                    ]
+
+                    // Fallback for manual "Build with Parameters" runs (or jobs not in the
+                    // map above): apply VALIDATION_TEST_TAGS uniformly across RANCHER_IMAGE_TAGS.
+                    def defaultMatrix = params.RANCHER_IMAGE_TAGS.split(',').collect {
+                        [imageTag: it.trim(), validationTags: params.VALIDATION_TEST_TAGS]
+                    }
+
+                    // Match against env.JOB_NAME via contains() since folder/multibranch
+                    // jobs prefix JOB_NAME with the folder path (e.g. "folder/go-pit-daily-multibranch-job").
+                    def matchedJobKey = runMatrixByJob.keySet().find { env.JOB_NAME.contains(it) }
+                    def runMatrix = matchedJobKey ? runMatrixByJob[matchedJobKey] : defaultMatrix
 
                     // Map image tags to hostname suffixes for unique DNS entries
                     def hostnameSuffixMap = [
@@ -425,6 +443,9 @@ insecure = true'''
                         'v2.10-head': 'v210',
                         'v2.11-head': 'v211',
                         'v2.12-head': 'v212',
+                        'v2.13-head': 'v213',
+                        'v2.14-head': 'v214',
+                        'v2.15-head': 'v215',
                         'head': 'main'
                     ]
 
@@ -435,6 +456,9 @@ insecure = true'''
                         'v2.10-head': '2.10.1',
                         'v2.11-head': '2.11.1',
                         'v2.12-head': '2.12.1',
+                        'v2.13-head': '2.13.1',
+                        'v2.14-head': '2.14.1',
+                        'v2.15-head': '2.15.0',
                         'head': 'latest'
                     ]
 
@@ -443,22 +467,22 @@ insecure = true'''
 
                     def jobs = [:]
 
-                    for (String imageTag : imageTags) {
-                        def tag = imageTag // capture for closure
+                    for (entry in runMatrix) {
+                        def tag = entry.imageTag // capture for closure
+                        def validationTags = entry.validationTags
                         def suffix = hostnameSuffixMap.get(tag, tag.replaceAll('[^a-zA-Z0-9]', ''))
                         def hostname = "${hostnamePrefix}${suffix}"
-                        def rancherVersion = tagChartMap.get(tag, params.RANCHER_VERSION)
+                        def rancherVersion = tagChartMap.get(tag, entry.imageTag)
 
-                        // Update TERRAFORM_CONFIG with per-tag hostname
-                        def tfConfig = params.TERRAFORM_CONFIG.replace(
-                            "aws_hostname_prefix = \"${hostnamePrefix}\"",
-                            "aws_hostname_prefix = \"${hostname}\""
+                        // Render per-tag hostname into TERRAFORM_CONFIG and CATTLE_TEST_CONFIG
+                        def tfConfig = infrastructure.parseAndSubstituteVars(
+                            content: params.TERRAFORM_CONFIG,
+                            envVars: ['HOSTNAME_PREFIX': hostname]
                         )
 
-                        // Update CATTLE_TEST_CONFIG with per-tag hostname
-                        def cattleConfig = params.CATTLE_TEST_CONFIG.replace(
-                            "host: ${hostnamePrefix}.qa.rancher.space",
-                            "host: ${hostname}.qa.rancher.space"
+                        def cattleConfig = infrastructure.parseAndSubstituteVars(
+                            content: params.CATTLE_TEST_CONFIG,
+                            envVars: ['HOSTNAME_PREFIX': hostname]
                         )
 
                         def jobParams = [
@@ -495,13 +519,14 @@ insecure = true'''
                             string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
                         ]
 
-                        jobs["${tag}"] = {
+                        jobs["${tag}-${validationTags}"] = {
                             build job: recurringJob, parameters: jobParams, propagate: false
                         }
                     }
 
-                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.RANCHER_IMAGE_TAGS}"
-                    currentBuild.description = "Testing: ${imageTags.join(', ')} on ${hostnamePrefix}"
+                    def matrixSummary = runMatrix.collect { "${it.imageTag} (${it.validationTags})" }.join(', ')
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${matrixSummary}"
+                    currentBuild.description = "Testing: ${matrixSummary} on ${hostnamePrefix}"
 
                     parallel jobs
                 }
