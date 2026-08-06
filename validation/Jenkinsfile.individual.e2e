@@ -9,6 +9,7 @@
  *
  * Consumes shared functions from qa-jenkins-library:
  *   property.useWithProperties
+ *   naming.extractRancherHost
  *
  * Parameter names (CONFIG, REPO, BRANCH, TAGS, GOTEST_TESTCASE, etc.) match the
  * existing go-automation-freeform-job pattern for compatibility with downstream
@@ -17,19 +18,6 @@
 
 def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
 library "qa-jenkins-library@${libraryBranch}"
-
-/**
- * Extracts the Rancher hostname (rancher.host) from a cattle-config YAML string
- * so downstream naming (build display name, Qase test run name) doesn't need a
- * separate HOSTNAME_PREFIX parameter passed in from the orchestrator.
- */
-def extractRancherHost(String config) {
-    if (!config?.trim()) {
-        return ''
-    }
-    def matcher = config =~ /(?m)^\s*host:\s*(\S+)/
-    return matcher ? matcher[0][1] : ''
-}
 
 pipeline {
     agent any
@@ -126,7 +114,7 @@ pipeline {
                         userRemoteConfigs: [[url: params.REPO]]
                     ])
                     env.TESTS_DIR = pwd()
-                    env.RANCHER_HOSTNAME = extractRancherHost(params.CONFIG)
+                    env.RANCHER_HOSTNAME = naming.extractRancherHost(config: params.CONFIG)
                     def displaySuffix = env.RANCHER_HOSTNAME ? "${params.TAGS} - ${env.RANCHER_HOSTNAME}" : params.TAGS
                     currentBuild.displayName = "#${env.BUILD_NUMBER} - ${displaySuffix}"
                 }
