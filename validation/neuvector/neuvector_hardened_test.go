@@ -24,6 +24,7 @@ import (
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
 	actionsCharts "github.com/rancher/tests/actions/charts"
+	"github.com/rancher/tests/actions/neuvector"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/uiplugins"
@@ -38,8 +39,6 @@ import (
 
 const (
 	uiPluginChartsRepoName = "rancher-ui-plugins"
-	uiPluginChartsURL      = "https://github.com/rancher/ui-plugin-charts"
-	uiPluginChartsBranch   = "main"
 )
 
 type NeuVectorHardenedTestSuite struct {
@@ -71,19 +70,30 @@ func (n *NeuVectorHardenedTestSuite) SetupSuite() {
 	require.NotNil(n.T(), n.cfg.CustomCluster, "customCluster config is required under qaInfraAutomation.customCluster")
 	n.cfg.CustomCluster.Harden = true
 
-	_, err = n.client.Catalog.ClusterRepos().Get(context.TODO(), uiPluginChartsRepoName, metav1.GetOptions{})
-	if k8sErrors.IsNotFound(err) {
-		logrus.Infof("UI plugin repo %q not found, creating it", uiPluginChartsRepoName)
-		err = uiplugins.CreateExtensionsRepo(n.client, uiPluginChartsRepoName, uiPluginChartsURL, uiPluginChartsBranch)
+	neuvectorConfig := new(neuvector.NeuVectorTestConfig)
+	operations.LoadObjectFromMap(neuvector.ConfigurationFileKey, cattleConfig, neuvectorConfig)
+	if neuvectorConfig.UIPluginChartsURL == "" {
+		neuvectorConfig.UIPluginChartsURL = neuvector.DefaultUIPluginChartsURL
 	}
-
-	require.NoError(n.T(), err)
+	if neuvectorConfig.UIPluginChartsBranch == "" {
+		neuvectorConfig.UIPluginChartsBranch = neuvector.DefaultUIPluginChartsBranch
+	}
 
 	n.T().Logf("Checking if NeuVector UI extension [%s] is already installed", interoperablecharts.NeuVectorUIExtensionName)
 	uiExtensionObj, err := charts.GetChartStatus(n.client, "local", interoperablecharts.ExtensionNamespace, interoperablecharts.NeuVectorUIExtensionName)
 	require.NoError(n.T(), err)
 
-	if !uiExtensionObj.IsAlreadyInstalled {
+	if neuvectorConfig.SkipUIExtension || uiExtensionObj.IsAlreadyInstalled {
+		n.T().Logf("Skipping UI plugin repo creation and extension install (skipUIExtension=%t, alreadyInstalled=%t)", neuvectorConfig.SkipUIExtension, uiExtensionObj.IsAlreadyInstalled)
+	} else {
+		_, err = n.client.Catalog.ClusterRepos().Get(context.TODO(), uiPluginChartsRepoName, metav1.GetOptions{})
+		if k8sErrors.IsNotFound(err) {
+			logrus.Infof("UI plugin repo %q not found, creating it from %q", uiPluginChartsRepoName, neuvectorConfig.UIPluginChartsURL)
+			err = uiplugins.CreateExtensionsRepo(n.client, uiPluginChartsRepoName, neuvectorConfig.UIPluginChartsURL, neuvectorConfig.UIPluginChartsBranch)
+		}
+
+		require.NoError(n.T(), err)
+
 		n.T().Logf("Getting the latest chart version for [%s]", interoperablecharts.NeuVectorUIExtensionName)
 		latestVersion, err := n.client.Catalog.GetLatestChartVersion(interoperablecharts.NeuVectorUIExtensionName, uiPluginChartsRepoName)
 		require.NoError(n.T(), err)
