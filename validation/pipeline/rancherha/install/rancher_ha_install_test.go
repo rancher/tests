@@ -74,32 +74,24 @@ func (s *RancherHAInstallTestSuite) provisionCluster() qainfraautomation.Standal
 	k8sVersion := s.infraCfg.StandaloneCluster.KubernetesVersion
 	require.NotEmpty(s.T(), k8sVersion, "qaInfraAutomation.standaloneCluster.kubernetesVersion is required")
 
-	var clusterType string
+	var provisionFunction func(t *testing.T, cfg *qaconfig.Config, clusterCfg *qaconfig.StandaloneClusterConfig) qainfraautomation.StandaloneClusterResult
 	switch {
 	case strings.Contains(k8sVersion, "+k3s"):
-		clusterType = "k3s"
+		logrus.Info("[rancherha] provisioning AWS K3s standalone cluster")
+		provisionFunction = qainfraautomation.ProvisionAWSK3SCluster
 	case strings.Contains(k8sVersion, "+rke2"):
-		clusterType = "rke2"
+		logrus.Info("[rancherha] provisioning AWS RKE2 standalone cluster")
+		provisionFunction = qainfraautomation.ProvisionAWSRKE2Cluster
 	default:
 		s.T().Fatalf("cannot determine cluster type from kubernetesVersion %q: must contain +k3s or +rke2", k8sVersion)
 	}
 
-	switch clusterType {
-	case "rke2":
-		logrus.Info("[rancherha] provisioning AWS RKE2 standalone cluster")
-		return qainfraautomation.ProvisionAWSRKE2Cluster(
-			s.T(),
-			s.infraCfg,
-			s.infraCfg.StandaloneCluster,
-		)
-	default:
-		logrus.Info("[rancherha] provisioning AWS K3s standalone cluster")
-		return qainfraautomation.ProvisionAWSK3SCluster(
-			s.T(),
-			s.infraCfg,
-			s.infraCfg.StandaloneCluster,
-		)
-	}
+	logrus.Info("[rancherha] provisioning AWS RKE2 standalone cluster")
+	return provisionFunction(
+		s.T(),
+		s.infraCfg,
+		s.infraCfg.StandaloneCluster,
+	)
 }
 
 func (s *RancherHAInstallTestSuite) TestInstallRancherHA() {
