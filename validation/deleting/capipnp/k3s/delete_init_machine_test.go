@@ -1,3 +1,5 @@
+//go:build validation || capi
+
 package k3s
 
 import (
