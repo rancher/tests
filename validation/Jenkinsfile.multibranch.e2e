@@ -9,7 +9,7 @@
  * prefix, deploys the specified Rancher version, and runs tests.
  *
  * Consumes shared functions from qa-jenkins-library:
- *   property.useWithProperties
+ *   infrastructure.parseAndSubstituteVars
  */
 
 def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
@@ -30,7 +30,7 @@ pipeline {
         // ── Multi-version parameters ─────────────────────────────
         string(
             name: 'RANCHER_IMAGE_TAGS',
-            defaultValue: 'head',
+            defaultValue: 'v2.15-head',
             description: 'Comma-separated list of Rancher image tags to test in parallel (e.g., head,v2.10-head,v2.9-head)'
         )
         string(
@@ -74,12 +74,12 @@ pipeline {
         )
         string(
             name: 'RANCHER_VERSION',
-            defaultValue: 'latest',
+            defaultValue: '2.15.0',
             description: 'Default Rancher chart version (overridden per-tag when TAG_CHART_MAP applies)'
         )
         string(
             name: 'RANCHER_CHART_REPO_URL',
-            defaultValue: 'https://releases.rancher.com/server-charts/stable',
+            defaultValue: 'https://releases.rancher.com/server-charts/latest',
             description: 'Rancher Helm chart repository URL'
         )
         password(
@@ -124,19 +124,19 @@ pipeline {
             description: 'Terraform tfvars for the cluster_nodes module',
             defaultValue: '''aws_access_key = "${AWS_ACCESS_KEY_ID}"
 aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
-aws_ami = "ami-01b0ef1ab7898646f"
+aws_ami = "ami-0600e22b69546c15c"
 instance_type = "t3a.2xlarge"
-aws_security_group = ["sg-07a98dc3474d4eb9f"]
-aws_subnet = "subnet-0377a1ca391d51cae"
+aws_security_group = ["sg-08e8243a8cfbea8a0"]
+aws_subnet = "subnet-ee8cac86"
 airgap_setup = false
 proxy_setup = false
 aws_volume_size = 500
 aws_volume_type = "gp3"
 aws_hostname_prefix = "${HOSTNAME_PREFIX}"
-aws_region = "us-west-1"
+aws_region = "us-east-2"
 aws_route53_zone = "qa.rancher.space"
-aws_ssh_user = "ec2-user"
-aws_vpc = "vpc-081cec85dbe35e9bd"
+aws_ssh_user = "ubuntu"
+aws_vpc = "vpc-bfccf4d7"
 public_ssh_key = "ssh_public_key.pub"
 private_ssh_key = "~/.ssh/${AWS_SSH_PEM_KEY_NAME}"
 nodes = [
@@ -157,7 +157,7 @@ nodes = [
 kubernetes_version: ${RKE2_VERSION}
 cni: calico
 kubeconfig_file: "/workspace/qa-infra-automation/ansible/rke2/default/kubeconfig.yaml"
-cert_manager_version: "1.17.4"
+cert_manager_version: "1.20.0"
 bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
 password: "${RANCHER_ADMIN_PASSWORD}"
 rancher_version: ${RANCHER_VERSION}
@@ -180,7 +180,7 @@ server_flags: |
             description: 'Test configuration YAML (cattle-config). Token will be injected automatically.',
             defaultValue: '''awsNodeTemplate:
     accessKey: ${AWS_ACCESS_KEY_ID}
-    ami: ami-0b8e245d9e93c05fa
+    ami: ami-0600e22b69546c15c
     blockDurationMinutes: 0
     encryptEbsVolume: false
     httpEndpoint: enabled
@@ -227,12 +227,12 @@ awsCredentials:
     defaultRegion: us-east-2
     secretKey: ${AWS_SECRET_ACCESS_KEY}
 awsEC2Configs:
-    awsAMI: ami-02ec473a7c3a2db48
+    awsAMI: ami-0600e22b69546c15c
     awsAccessKeyID: ${AWS_ACCESS_KEY_ID}
     awsSecretAccessKey: ${AWS_SECRET_ACCESS_KEY}
     region: us-east-2
     awsEC2Config:
-    - awsAMI: ami-053835e36b16f97d0
+    - awsAMI: ami-0600e22b69546c15c
       awsCICDInstanceTag: rancher-validation
       awsIAMProfile: EngineeringUsersUS
       awsSSHKeyName: jenkins-elliptic-validation.pem
@@ -323,14 +323,14 @@ aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
 access_key     = "${AWS_ACCESS_KEY_ID}"
 secret_key     = "${AWS_SECRET_ACCESS_KEY}"
 
-aws_ami = "ami-01b0ef1ab7898646f"
-aws_ssh_user = "ec2-user"
+aws_ami = ""
+aws_ssh_user = "ubuntu"
 aws_instance_type = "t3a.2xlarge"
-aws_security_group = ["allopen-dualstack"]
+aws_security_group = ["rke2-aws-node"]
 
-aws_subnet = "subnet-0377a1ca391d51cae"
-aws_availability_zone = "b"
-aws_vpc = "vpc-081cec85dbe35e9bd"
+aws_subnet = "subnet-73577c28"
+aws_availability_zone = "a"
+aws_vpc = "vpc-c30925a4"
 aws_region    = "us-west-1"
 aws_volume_size   = 50
 aws_volume_type   = "gp3"
@@ -391,11 +391,6 @@ insecure = true'''
             defaultValue: '',
             description: 'Schema file prefix for Qase operations, for example hostbusters or pit'
         )
-        string(
-            name: 'TEST_RUN_NAME',
-            defaultValue: 'Recurring Test Run',
-            description: 'Test run name for Qase reporting'
-        )
     }
 
     stages {
@@ -406,17 +401,40 @@ insecure = true'''
                     def recurringJob = params.RECURRING_JOB
                     def individualJob = params.INDIVIDUAL_JOB
                     def hostnamePrefix = params.HOSTNAME_PREFIX
-                    def validationTags = params.VALIDATION_TEST_TAGS
                     if (isPitJob) {
                         recurringJob = 'go-pit-daily-job'
                         individualJob = 'go-pit-daily-individual-job'
                         hostnamePrefix = "pit-${hostnamePrefix}"
                         if (env.JOB_NAME.contains('weekly')) {
-                            validationTags = "pit.weekly"
+                            hostnamePrefix = "pit-recurringweekly"
                         }
                     }
 
-                    def imageTags = params.RANCHER_IMAGE_TAGS.split(',').collect { it.trim() }
+                    // Matrix of (imageTag, validationTags) pairs to trigger per cadence.
+                    // Weekly run covers the latest version against the weekly suite plus
+                    // the two prior minor versions against the daily suite. Daily run only
+                    // covers the latest version against the daily suite.
+                    def runMatrixByJob = [
+                        'go-pit-weekly-multibranch-job': [
+                            [imageTag: 'v2.15-head', validationTags: 'pit.weekly', rke2Version: params.RKE2_VERSION],
+                            [imageTag: 'v2.14-head', validationTags: 'pit.daily', rke2Version: params.RKE2_VERSION],
+                            [imageTag: 'v2.13-head', validationTags: 'pit.daily', rke2Version: 'v1.34.9+rke2r1']
+                        ],
+                        'go-pit-daily-multibranch-job': [
+                            [imageTag: 'v2.15-head', validationTags: 'pit.daily', rke2Version: params.RKE2_VERSION]
+                        ]
+                    ]
+
+                    // Fallback for manual "Build with Parameters" runs (or jobs not in the
+                    // map above): apply VALIDATION_TEST_TAGS uniformly across RANCHER_IMAGE_TAGS.
+                    def defaultMatrix = params.RANCHER_IMAGE_TAGS.split(',').collect {
+                        [imageTag: it.trim(), validationTags: params.VALIDATION_TEST_TAGS, rke2Version: params.RKE2_VERSION]
+                    }
+
+                    // Match against env.JOB_NAME via contains() since folder/multibranch
+                    // jobs prefix JOB_NAME with the folder path (e.g. "folder/go-pit-daily-multibranch-job").
+                    def matchedJobKey = runMatrixByJob.keySet().find { env.JOB_NAME.contains(it) }
+                    def runMatrix = matchedJobKey ? runMatrixByJob[matchedJobKey] : defaultMatrix
 
                     // Map image tags to hostname suffixes for unique DNS entries
                     def hostnameSuffixMap = [
@@ -425,6 +443,9 @@ insecure = true'''
                         'v2.10-head': 'v210',
                         'v2.11-head': 'v211',
                         'v2.12-head': 'v212',
+                        'v2.13-head': 'v213',
+                        'v2.14-head': 'v214',
+                        'v2.15-head': 'v215',
                         'head': 'main'
                     ]
 
@@ -435,6 +456,9 @@ insecure = true'''
                         'v2.10-head': '2.10.1',
                         'v2.11-head': '2.11.1',
                         'v2.12-head': '2.12.1',
+                        'v2.13-head': '2.13.1',
+                        'v2.14-head': '2.14.1',
+                        'v2.15-head': '2.15.0',
                         'head': 'latest'
                     ]
 
@@ -443,22 +467,22 @@ insecure = true'''
 
                     def jobs = [:]
 
-                    for (String imageTag : imageTags) {
-                        def tag = imageTag // capture for closure
+                    for (entry in runMatrix) {
+                        def tag = entry.imageTag // capture for closure
+                        def validationTags = entry.validationTags
                         def suffix = hostnameSuffixMap.get(tag, tag.replaceAll('[^a-zA-Z0-9]', ''))
                         def hostname = "${hostnamePrefix}${suffix}"
-                        def rancherVersion = tagChartMap.get(tag, params.RANCHER_VERSION)
+                        def rancherVersion = tagChartMap.get(tag, entry.imageTag)
 
-                        // Update TERRAFORM_CONFIG with per-tag hostname
-                        def tfConfig = params.TERRAFORM_CONFIG.replace(
-                            "aws_hostname_prefix = \"${hostnamePrefix}\"",
-                            "aws_hostname_prefix = \"${hostname}\""
+                        // Render per-tag hostname into TERRAFORM_CONFIG and CATTLE_TEST_CONFIG
+                        def tfConfig = infrastructure.parseAndSubstituteVars(
+                            content: params.TERRAFORM_CONFIG,
+                            envVars: ['HOSTNAME_PREFIX': hostname]
                         )
 
-                        // Update CATTLE_TEST_CONFIG with per-tag hostname
-                        def cattleConfig = params.CATTLE_TEST_CONFIG.replace(
-                            "host: ${hostnamePrefix}.qa.rancher.space",
-                            "host: ${hostname}.qa.rancher.space"
+                        def cattleConfig = infrastructure.parseAndSubstituteVars(
+                            content: params.CATTLE_TEST_CONFIG,
+                            envVars: ['HOSTNAME_PREFIX': hostname]
                         )
 
                         def jobParams = [
@@ -468,7 +492,7 @@ insecure = true'''
                             string(name: 'QA_INFRA_REPO_URL', value: params.QA_INFRA_REPO_URL),
                             string(name: 'QA_INFRA_BRANCH', value: params.QA_INFRA_BRANCH),
                             string(name: 'HOSTNAME_PREFIX', value: hostname),
-                            string(name: 'RKE2_VERSION', value: params.RKE2_VERSION),
+                            string(name: 'RKE2_VERSION', value: entry.rke2Version),
                             string(name: 'RANCHER_VERSION', value: rancherVersion),
                             string(name: 'RANCHER_IMAGE_TAG', value: tag),
                             string(name: 'RANCHER_CHART_REPO_URL', value: params.RANCHER_CHART_REPO_URL),
@@ -495,13 +519,14 @@ insecure = true'''
                             string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
                         ]
 
-                        jobs["${tag}"] = {
+                        jobs["${tag}-${validationTags}"] = {
                             build job: recurringJob, parameters: jobParams, propagate: false
                         }
                     }
 
-                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.RANCHER_IMAGE_TAGS}"
-                    currentBuild.description = "Testing: ${imageTags.join(', ')} on ${hostnamePrefix}"
+                    def matrixSummary = runMatrix.collect { "${it.imageTag} (${it.validationTags})" }.join(', ')
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${matrixSummary}"
+                    currentBuild.description = "Testing: ${matrixSummary} on ${hostnamePrefix}"
 
                     parallel jobs
                 }
