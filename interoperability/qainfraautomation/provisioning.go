@@ -728,6 +728,11 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("generate inventory: %v", err)
 	}
 
+	// Defaulting to CWD is too inconsistent so we can set clusterCfg.KubeconfigOutputPath to the playbook dir.
+	if clusterCfg.KubeconfigOutputPath == "" {
+		clusterCfg.KubeconfigOutputPath = filepath.Join(repoPath, filepath.Dir(playbookPath), "kubeconfig.yaml")
+	}
+
 	vars := buildStandaloneVars(clusterCfg)
 	if err := ansibleClient.WriteVarsYAML(varsFile, vars); err != nil {
 		t.Fatalf("write vars.yaml: %v", err)
@@ -748,11 +753,7 @@ func provisionHarvesterStandaloneCluster(
 		t.Fatalf("ansible-playbook (%s): %v", clusterType, err)
 	}
 
-	kubeconfigPath := clusterCfg.KubeconfigOutputPath
-	if kubeconfigPath == "" {
-		kubeconfigPath = filepath.Join(repoPath, filepath.Dir(playbookPath), "kubeconfig.yaml")
-	}
-	return kubeconfigPath
+	return clusterCfg.KubeconfigOutputPath
 }
 
 // ProvisionAWSRKE2Cluster provisions a standalone RKE2 cluster on AWS EC2 instances
@@ -911,11 +912,16 @@ func provisionAWSStandaloneCluster(
 	if err != nil {
 		t.Fatalf("tofu output cluster_nodes_json: %v", err)
 	}
+
 	inventoryPath, err := ansibleClient.GenerateInventoryFromNodes(clusterNodesJSON, clusterType, "default")
 	if err != nil {
 		t.Fatalf("generate inventory: %v", err)
 	}
 
+	// Defaulting to CWD is too inconsistent so we can set clusterCfg.KubeconfigOutputPath to the playbook dir.
+	if clusterCfg.KubeconfigOutputPath == "" {
+		clusterCfg.KubeconfigOutputPath = filepath.Join(repoPath, filepath.Dir(playbookPath), "kubeconfig.yaml")
+	}
 	vars := buildStandaloneVars(clusterCfg)
 	if clusterCfg.ServerFlags != "" {
 		vars["server_flags"] = clusterCfg.ServerFlags
@@ -957,13 +963,8 @@ func provisionAWSStandaloneCluster(
 		logrus.Infof("[qainfraautomation] Route53 FQDN: %s", fqdn)
 	}
 
-	kubeconfigPath := clusterCfg.KubeconfigOutputPath
-	if kubeconfigPath == "" {
-		kubeconfigPath = filepath.Join(repoPath, filepath.Dir(playbookPath), "kubeconfig.yaml")
-	}
-
 	return StandaloneClusterResult{
-		KubeconfigPath: kubeconfigPath,
+		KubeconfigPath: clusterCfg.KubeconfigOutputPath,
 		FQDN:           fqdn,
 	}
 }
