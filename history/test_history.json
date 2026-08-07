@@ -103,5 +103,47 @@
     "workflow": "rancher-upgrade-cluster-provisioning-test",
     "job": "v2-16",
     "timestamp": "2026-08-06T10:54:00Z"
+  },
+  {
+    "date": "August 07, 2026 at 10:54 AM",
+    "status": "success",
+    "workflow": "capi-pnp-cluster-provisioning",
+    "job": "v2-15",
+    "timestamp": "2026-08-07T10:54:00Z"
+  },
+  {
+    "date": "August 07, 2026 at 10:53 AM",
+    "status": "success",
+    "workflow": "capi-pnp-cluster-provisioning",
+    "job": "v2-16",
+    "timestamp": "2026-08-07T10:53:00Z"
+  },
+  {
+    "date": "August 07, 2026 at 12:07 PM",
+    "status": "failure",
+    "workflow": "cluster-provisioning",
+    "job": "v2-16",
+    "timestamp": "2026-08-07T12:07:00Z"
+  },
+  {
+    "date": "August 07, 2026 at 11:17 AM",
+    "status": "success",
+    "workflow": "rancher-upgrade-proxy-cluster-provisioning-test",
+    "job": "v2-14",
+    "timestamp": "2026-08-07T11:17:00Z"
+  },
+  {
+    "date": "August 07, 2026 at 11:03 AM",
+    "status": "failure",
+    "workflow": "rancher-upgrade-proxy-cluster-provisioning-test",
+    "job": "v2-15",
+    "timestamp": "2026-08-07T11:03:00Z"
+  },
+  {
+    "date": "August 07, 2026 at 10:50 AM",
+    "status": "failure",
+    "workflow": "rancher-upgrade-proxy-cluster-provisioning-test",
+    "job": "v2-16",
+    "timestamp": "2026-08-07T10:50:00Z"
   }
 ]
