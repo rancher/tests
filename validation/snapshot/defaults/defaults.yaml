@@ -63,7 +63,7 @@ awsEC2Configs:
   awsSecretAccessKey: "<required>"
   awsAccessKeyID: "<required>"
   awsEC2Config:
-    - instanceType: "t3a.medium"
+    - instanceType: "t3.xlarge"
       awsRegionAZ: ""
       awsSSHKeyName: "<required>"
       awsAMI: "<required>"

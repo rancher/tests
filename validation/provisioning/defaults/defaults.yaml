@@ -43,7 +43,7 @@ awsMachineConfigs:
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
     ami: "<required>"
-    instanceType: "t3a.medium"
+    instanceType: "t3.xlarge"
     volumeType: "<required>"
     rootSize: "<required>"
     sshUser: "<required>"
@@ -85,7 +85,7 @@ terraform:
     awsSecurityGroupNames: ["<required>", "<required>"]
     awsSubnetID: "<required>"
     awsVpcID: "<required>"
-    awsInstanceType: "t3a.medium"
+    awsinstanceType: "t3.xlarge"
     awsZoneLetter: "a"
     awsRootSize: 100
     awsRoute53Zone: "<required>"
@@ -105,7 +105,7 @@ awsEC2Configs:
   awsSecretAccessKey: "<required>"
   awsAccessKeyID: "<required>"
   awsEC2Config:
-    - instanceType: "t3a.medium"
+    - instanceType: "t3.xlarge"
       awsRegionAZ: ""
       awsAMI: "<required>"
       awsSecurityGroups: ["<required>"]

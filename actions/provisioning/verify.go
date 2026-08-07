@@ -58,6 +58,12 @@ const (
 // VerifyClusterReady validates that a non-rke1 cluster and its resources are in a good state, matching a given config.
 func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject) error {
 	var lastErr error
+	if cluster == nil {
+		return fmt.Errorf("cluster is nil")
+	}
+
+	clusterID := cluster.ID
+	clusterName := cluster.Name
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaults.ThirtyMinuteTimeout)
 	defer cancel()
@@ -65,19 +71,24 @@ func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject)
 	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.ThirtyMinuteTimeout, false, func(context.Context) (done bool, err error) {
 		client, err = client.ReLogin()
 		if err != nil {
-			logrus.Debugf("Unable to fetch cluster client (%s), retrying", cluster.Name)
+			logrus.Debugf("Unable to fetch cluster client (%s), retrying", clusterName)
 			return false, nil
 		}
 
-		cluster, err = client.Steve.SteveType(stevetypes.Provisioning).ByID(cluster.ID)
+		latestCluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(clusterID)
 		if err != nil {
+			lastErr = err
+			logrus.Debugf("Unable to fetch provisioning cluster by id (%s/%s), retrying: %v", clusterName, clusterID, err)
 			return false, nil
 		}
+
+		cluster = latestCluster
 
 		clusterStatus := &provv1.ClusterStatus{}
 		err = steveV1.ConvertToK8sType(cluster.Status, clusterStatus)
 		if err != nil {
-			logrus.Debugf("Unable to fetch cluster kube client (%s), retrying", cluster.Name)
+			lastErr = err
+			logrus.Debugf("Unable to fetch cluster kube client (%s), retrying", clusterName)
 			return false, nil
 		}
 
@@ -92,11 +103,11 @@ func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject)
 		return err
 	}
 
-	logrus.Debugf("Waiting for all machines to be ready on cluster (%s)", cluster.Name)
-	err = nodestat.AllMachineReady(client, cluster.ID, defaults.FiveMinuteTimeout)
+	logrus.Debugf("Waiting for all machines to be ready on cluster (%s)", clusterName)
+	err = nodestat.AllMachineReady(client, clusterID, defaults.FiveMinuteTimeout)
 	if err != nil {
-		logrus.Errorf("Cluster (%s) failed to become ready: %v", cluster.Name, err)
-		dumpProvisioningClusterState(ctx, client, cluster.Name, lastErr)
+		logrus.Errorf("Cluster (%s) failed to become ready: %v", clusterName, err)
+		dumpProvisioningClusterState(ctx, client, clusterName, lastErr)
 		return err
 	}
 

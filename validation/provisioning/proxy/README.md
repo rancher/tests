@@ -218,7 +218,7 @@ awsMachineConfigs:                            #default
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
     ami: ""                                   #required
-    instanceType: "t3a.medium"
+    instanceType: "t3.xlarge"
     sshUser: "ubuntu"                         #required
     vpcId: ""                                 #required
     volumeType: "gp3"                         
@@ -350,7 +350,7 @@ Custom clusters are only supported on AWS.
     awsSecretAccessKey: ""
     awsAccessKeyID: ""
     awsEC2Config:
-      - instanceType: "t3a.medium"
+      - instanceType: "t3.xlarge"
         awsRegionAZ: ""
         awsAMI: ""
         awsSecurityGroups: [""]
@@ -361,7 +361,7 @@ Custom clusters are only supported on AWS.
         awsUser: "ubuntu"
         volumeSize: 50
         roles: ["etcd", "controlplane"]
-      - instanceType: "t3a.medium"
+      - instanceType: "t3.xlarge"
         awsRegionAZ: ""
         awsAMI: ""
         awsSecurityGroups: [""]

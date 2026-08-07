@@ -43,7 +43,7 @@ awsMachineConfigs:
  awsMachineConfig:
  - roles: ["etcd","controlplane","worker"]
    ami: "<ami>"
-   instanceType: "t3a.medium"                
+   instanceType: "t3.xlarge"                
    sshUser: "ubuntu"
    vpcId: "<vpc-id>"
    volumeType: "gp2"                         
