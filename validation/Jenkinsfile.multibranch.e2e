@@ -35,7 +35,7 @@ pipeline {
         )
         string(
             name: 'HOSTNAME_PREFIX',
-            defaultValue: 'recurring',
+            defaultValue: 'recurringdaily',
             description: 'Base hostname prefix — version suffix is appended automatically'
         )
 
@@ -404,9 +404,9 @@ insecure = true'''
                     if (isPitJob) {
                         recurringJob = 'go-pit-daily-job'
                         individualJob = 'go-pit-daily-individual-job'
-                        hostnamePrefix = "pit-daily-${hostnamePrefix}"
+                        hostnamePrefix = "pit-${hostnamePrefix}"
                         if (env.JOB_NAME.contains('weekly')) {
-                            hostnamePrefix = "pit-weekly-${hostnamePrefix}"
+                            hostnamePrefix = "pit-recurringweekly"
                         }
                     }
 
