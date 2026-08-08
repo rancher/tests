@@ -180,5 +180,19 @@
     "workflow": "day2-ops-ipv6-rancher",
     "job": "v2-15",
     "timestamp": "2026-08-07T13:25:00Z"
+  },
+  {
+    "date": "August 06, 2026 at 03:14 PM",
+    "status": "failure",
+    "workflow": "proxy-cluster-provisioning",
+    "job": "v2-15",
+    "timestamp": "2026-08-06T15:14:00Z"
+  },
+  {
+    "date": "August 06, 2026 at 03:02 PM",
+    "status": "failure",
+    "workflow": "proxy-cluster-provisioning",
+    "job": "v2-16",
+    "timestamp": "2026-08-06T15:02:00Z"
   }
 ]
