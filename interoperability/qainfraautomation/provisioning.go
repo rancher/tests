@@ -1278,6 +1278,7 @@ func buildStandaloneVars(clusterCfg *config.StandaloneClusterConfig) map[string]
 			absPath = "kubeconfig.yaml"
 		}
 		vars["kubeconfig_file"] = absPath
+		clusterCfg.KubeconfigOutputPath = absPath
 	}
 	return vars
 }
