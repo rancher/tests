@@ -499,7 +499,8 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 	l.T().Logf("Checking volume %s's size with Prometheus through Grafana API (%s)", volumeName, volumeSizeQuery)
 	value, err = monitoring.PrometheusQueryInGrafana(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, volumeSizeQuery)
 	require.NoError(l.T(), err)
-	require.Equal(l.T(), 1*1024*1024*1024, value)
+	gigabyte := 1024 * 1024 * 1024
+	require.Equal(l.T(), gigabyte, value)
 
 	l.T().Logf("Checking new number of volumes with Prometheus through Grafana API (%s)", numberVolumesPrometheusQuery)
 	value, err = monitoring.PrometheusQueryInGrafana(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, numberVolumesPrometheusQuery)
