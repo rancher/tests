@@ -243,5 +243,19 @@
     "workflow": "ipv6-cluster-provisioning",
     "job": "v2-16",
     "timestamp": "2026-08-10T09:40:00Z"
+  },
+  {
+    "date": "August 10, 2026 at 12:45 PM",
+    "status": "success",
+    "workflow": "rancher-upgrade-cluster-provisioning-test",
+    "job": "v2-14",
+    "timestamp": "2026-08-10T12:45:00Z"
+  },
+  {
+    "date": "August 10, 2026 at 12:53 PM",
+    "status": "failure",
+    "workflow": "rancher-upgrade-cluster-provisioning-test",
+    "job": "v2-16",
+    "timestamp": "2026-08-10T12:53:00Z"
   }
 ]
