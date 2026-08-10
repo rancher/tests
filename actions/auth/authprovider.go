@@ -29,6 +29,10 @@ const (
 	ActiveDirectory                      = "activedirectory"
 	OpenLdapPasswordSecretID             = "openldapconfig-serviceaccountpassword"
 	ActiveDirectoryPasswordSecretID      = "activedirectoryconfig-serviceaccountpassword"
+	PrincipalTypeUser                    = "user"
+	PrincipalTypeGroup                   = "group"
+	AccessModeMissingRequiredError       = "accessMode=MissingRequired"
+	PermissionDeniedError                = "PermissionDenied"
 )
 
 type User struct {
@@ -107,7 +111,7 @@ func LoginAsAuthUser(client *rancher.Client, user *v3.User, providerName string)
 func NewPrincipalID(authConfigID, principalType, name, userSearchBase, groupSearchBase string) string {
 	baseDN := userSearchBase
 
-	if principalType == "group" {
+	if principalType == PrincipalTypeGroup {
 		baseDN = groupSearchBase
 	}
 
@@ -206,12 +210,12 @@ func WaitForNamespaceReady(client *rancher.Client, namespaceName string) error {
 
 // GetGroupPrincipalID constructs a group principal ID using the provider's configuration
 func GetGroupPrincipalID(providerName, groupName, userSearchBase, groupSearchBase string) string {
-	return NewPrincipalID(providerName, "group", groupName, userSearchBase, groupSearchBase)
+	return NewPrincipalID(providerName, PrincipalTypeGroup, groupName, userSearchBase, groupSearchBase)
 }
 
 // GetUserPrincipalID constructs a user principal ID using the provider's configuration
 func GetUserPrincipalID(providerName, username, userSearchBase, groupSearchBase string) string {
-	return NewPrincipalID(providerName, "user", username, userSearchBase, groupSearchBase)
+	return NewPrincipalID(providerName, PrincipalTypeUser, username, userSearchBase, groupSearchBase)
 }
 
 // UpdateAccessMode updates the auth config to the specified access mode with optional allowed principal IDs
