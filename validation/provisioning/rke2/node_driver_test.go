@@ -1,4 +1,4 @@
-//go:build validation || recurring || pit.weekly
+//go:build validation || recurring || pit.weekly || sanity || mixed
 
 package rke2
 
@@ -100,6 +100,10 @@ func TestNodeDriver(t *testing.T) {
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
 			clusterConfig.MachinePools = tt.machinePools
+
+			if clusterConfig.MixedArchitecture && len(tt.machinePools) == 1 && tt.machinePools[0].MachinePoolConfig.Worker && tt.machinePools[0].MachinePoolConfig.Etcd {
+				t.Skip("skipping all-roles pool: mixed architecture requires a dedicated worker pool")
+			}
 
 			require.NotNil(t, clusterConfig.Provider)
 

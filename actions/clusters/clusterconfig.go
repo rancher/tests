@@ -37,6 +37,7 @@ type ClusterConfig struct {
 	ResourcePrefix       string                                   `json:"resourcePrefix" yaml:"resourcePrefix" default:""`
 	BastionUser          string                                   `json:"bastionUser" yaml:"bastionUser" default:""`
 	BastionWindowsUser   string                                   `json:"bastionWindowsUser" yaml:"bastionWindowsUser" default:""`
+	MixedArchitecture    bool                                     `json:"mixedArchitecture" yaml:"mixedArchitecture" default:"false"`
 }
 
 // ConvertConfigToClusterConfig converts the config from (user) provisioning input to a cluster config
@@ -67,6 +68,7 @@ func ConvertConfigToClusterConfig(provisioningConfig *provisioningInput.Config) 
 	newConfig.IPv6Cluster = provisioningConfig.IPv6Cluster
 	newConfig.BastionUser = provisioningConfig.BastionUser
 	newConfig.BastionWindowsUser = provisioningConfig.BastionWindowsUser
+	newConfig.MixedArchitecture = provisioningConfig.MixedArchitecture
 
 	return &newConfig
 }

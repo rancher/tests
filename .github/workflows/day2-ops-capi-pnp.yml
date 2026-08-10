@@ -268,6 +268,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               subnetId: "${{ secrets.AWS_SUBNET_ID }}"
@@ -619,6 +620,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               subnetId: "${{ secrets.AWS_SUBNET_ID }}"

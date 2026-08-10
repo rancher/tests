@@ -78,7 +78,6 @@ func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject)
 		latestCluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(clusterID)
 		if err != nil {
 			lastErr = err
-			logrus.Debugf("Unable to fetch provisioning cluster by id (%s/%s), retrying: %v", clusterName, clusterID, err)
 			return false, nil
 		}
 

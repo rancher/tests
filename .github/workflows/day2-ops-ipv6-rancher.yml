@@ -292,6 +292,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_IPV6_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
@@ -666,6 +667,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_IPV6_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
@@ -1040,6 +1042,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_IPV6_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
@@ -1414,6 +1417,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_IPV6_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               volumeType: "${{ vars.AWS_VOLUME_TYPE }}"

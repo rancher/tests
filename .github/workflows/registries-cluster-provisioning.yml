@@ -8,11 +8,6 @@ on:
         description: "Rancher tag version"
       rancher_chart_version:
         description: "Rancher chart version"
-      run_all_versions:
-        description: "Run all supported versions if manually triggered"
-        required: false
-        default: false
-        type: boolean
       reporting:
         description: "Enable reporting to Qase and Slack"
         required: false
@@ -51,7 +46,6 @@ env:
 jobs:
   v2-15:
     if: |
-      github.event.inputs.run_all_versions == 'true' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && contains(github.event.inputs.rancher_version, '-alpha') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ github.event.inputs.rancher_version }}
@@ -140,8 +134,7 @@ jobs:
           value: |
             ${{
               github.event.inputs.rancher_version ||
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
-              (github.event.inputs.run_all_versions == 'true' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
             }}
 
       - name: Set Rancher chart version
@@ -151,8 +144,7 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
-              (github.event.inputs.run_all_versions == 'true' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
       - name: Set Rancher repo
@@ -264,6 +256,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               subnetId: "${{ secrets.AWS_SUBNET_ID }}"
@@ -280,6 +273,7 @@ jobs:
             awsEC2Config:
               - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_AMI }}"
+                instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
@@ -395,7 +389,6 @@ jobs:
 
   v2-14:
     if: |
-      github.event.inputs.run_all_versions == 'true' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && contains(github.event.inputs.rancher_version, '-alpha') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ github.event.inputs.rancher_version }}
@@ -484,8 +477,7 @@ jobs:
           value: |
             ${{
               github.event.inputs.rancher_version ||
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
-              (github.event.inputs.run_all_versions == 'true' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
             }}
 
       - name: Set Rancher chart version
@@ -495,8 +487,7 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
-              (github.event.inputs.run_all_versions == 'true' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
       - name: Set Rancher repo
@@ -608,6 +599,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               subnetId: "${{ secrets.AWS_SUBNET_ID }}"
@@ -624,6 +616,7 @@ jobs:
             awsEC2Config:
               - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_AMI }}"
+                instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
@@ -739,7 +732,6 @@ jobs:
 
   v2-13:
     if: |
-      github.event.inputs.run_all_versions == 'true' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && contains(github.event.inputs.rancher_version, '-alpha') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && contains(inputs.rancher_version, '-alpha')
     name: ${{ github.event.inputs.rancher_version }}
@@ -828,8 +820,7 @@ jobs:
           value: |
             ${{
               github.event.inputs.rancher_version ||
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
-              (github.event.inputs.run_all_versions == 'true' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
             }}
 
       - name: Set Rancher chart version
@@ -839,8 +830,7 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
-              (github.event.inputs.run_all_versions == 'true' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
       - name: Set Rancher repo
@@ -952,6 +942,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               subnetId: "${{ secrets.AWS_SUBNET_ID }}"
@@ -968,6 +959,7 @@ jobs:
             awsEC2Config:
               - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_AMI }}"
+                instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
