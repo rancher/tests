@@ -24,6 +24,7 @@ import (
 	"github.com/rancher/tests/actions/workloads/pods"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
+	"github.com/rancher/tests/validation/recurring/infrastructure/upgraderancher/localcluster"
 	tfpConfig "github.com/rancher/tfp-automation/config"
 	"github.com/rancher/tfp-automation/defaults/keypath"
 	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
@@ -74,9 +75,8 @@ func main() {
 	require.NoError(t, err)
 
 	// If awsEC2Configs is present in the cattleConfig, provision clusters before upgrading Rancher.
-	if _, ok := cattleConfig[ec2.ConfigurationFileKey]; !ok {
-		return
-	} else {
+	// If it is not present, skip provisioning clusters and proceed with upgrading Rancher.
+	if _, ok := cattleConfig[ec2.ConfigurationFileKey]; ok {
 		provisionClustersPreUpgrade(t, client, cattleConfig)
 	}
 
@@ -96,6 +96,13 @@ func main() {
 	logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 	err = pods.VerifyClusterPods(client, cluster)
 	require.NoError(t, err)
+
+	_, terraform, _, standalone := tfpConfig.LoadTFPConfigs(cattleConfig)
+
+	if standalone.UpgradeLocalCluster {
+		err = localcluster.UpgradeLocalCluster(client, terraform)
+		require.NoError(t, err)
+	}
 }
 
 func provisionClustersPreUpgrade(t *testing.T, client *rancher.Client, cattleConfig map[string]any) {
