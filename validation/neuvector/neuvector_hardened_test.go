@@ -6,20 +6,17 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
-	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 
 	"github.com/rancher/shepherd/extensions/charts"
+	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/ingresses"
 	interoperablecharts "github.com/rancher/tests/interoperability/charts"
-	qaconfig "github.com/rancher/tests/interoperability/qainfraautomation/config"
 	"github.com/sirupsen/logrus"
 
-	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -31,6 +28,7 @@ import (
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/rancher/tests/interoperability/qainfraautomation"
+	qaconfig "github.com/rancher/tests/interoperability/qainfraautomation/config"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -43,10 +41,11 @@ const (
 
 type NeuVectorHardenedTestSuite struct {
 	suite.Suite
-	client  *rancher.Client
-	session *session.Session
-	cfg     *qaconfig.Config
-	cluster *v1.SteveAPIObject
+	client          *rancher.Client
+	session         *session.Session
+	cfg             *qaconfig.Config
+	cluster         *clusters.ClusterMeta
+	defaultRegistry string
 }
 
 func (n *NeuVectorHardenedTestSuite) TearDownSuite() {
@@ -64,12 +63,7 @@ func (n *NeuVectorHardenedTestSuite) SetupSuite() {
 
 	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	n.cfg = new(qaconfig.Config)
-	operations.LoadObjectFromMap(qaconfig.ConfigurationFileKey, cattleConfig, n.cfg)
-
-	require.NotNil(n.T(), n.cfg.CustomCluster, "customCluster config is required under qaInfraAutomation.customCluster")
-	n.cfg.CustomCluster.Harden = true
-
+	// Load NeuVector-specific config (UI extension URL/branch, skip flag).
 	neuvectorConfig := new(neuvector.NeuVectorTestConfig)
 	operations.LoadObjectFromMap(neuvector.ConfigurationFileKey, cattleConfig, neuvectorConfig)
 	if neuvectorConfig.UIPluginChartsURL == "" {
@@ -109,37 +103,57 @@ func (n *NeuVectorHardenedTestSuite) SetupSuite() {
 		require.NoError(n.T(), err)
 	}
 
-	clusterObj := qainfraautomation.ProvisionCustomCluster(
-		n.T(),
-		n.client,
-		n.cfg,
-		n.cfg.CustomCluster,
-	)
+	// Use an existing downstream cluster when rancher.clusterName is set;
+	// otherwise provision a new hardened custom cluster.
+	clusterName := client.RancherConfig.ClusterName
+	if clusterName != "" {
+		n.T().Logf("Targeting existing cluster %q", clusterName)
+		n.cluster, err = clusters.NewClusterMeta(n.client, clusterName)
+		require.NoError(n.T(), err)
+	} else {
+		n.T().Log("rancher.clusterName not set; provisioning a new hardened custom cluster")
 
-	require.NotNil(n.T(), clusterObj, "expected a non-nil cluster object")
-	n.T().Logf("cluster %q is ready", clusterObj.Name)
+		n.cfg = new(qaconfig.Config)
+		operations.LoadObjectFromMap(qaconfig.ConfigurationFileKey, cattleConfig, n.cfg)
+		require.NotNil(n.T(), n.cfg.CustomCluster, "customCluster config is required under qaInfraAutomation.customCluster when rancher.clusterName is not set")
+		n.cfg.CustomCluster.Harden = true
 
-	logrus.Infof("Verifying the cluster is ready (%s)", clusterObj.Name)
-	err = provisioning.VerifyClusterReady(n.client, clusterObj)
+		clusterObj := qainfraautomation.ProvisionCustomCluster(
+			n.T(),
+			n.client,
+			n.cfg,
+			n.cfg.CustomCluster,
+		)
+		require.NotNil(n.T(), clusterObj, "expected a non-nil cluster object")
+		n.T().Logf("cluster %q is ready", clusterObj.Name)
+
+		logrus.Infof("Verifying the cluster is ready (%s)", clusterObj.Name)
+		err = provisioning.VerifyClusterReady(n.client, clusterObj)
+		require.NoError(n.T(), err)
+
+		logrus.Infof("Verifying cluster deployments (%s)", clusterObj.Name)
+		err = deployment.VerifyClusterDeployments(n.client, clusterObj)
+		require.NoError(n.T(), err)
+
+		logrus.Infof("Verifying cluster pods (%s)", clusterObj.Name)
+		err = pods.VerifyClusterPods(n.client, clusterObj)
+		require.NoError(n.T(), err)
+
+		// Normalize to ClusterMeta so both paths share the same type downstream.
+		n.cluster, err = clusters.NewClusterMeta(n.client, clusterObj.Name)
+		require.NoError(n.T(), err)
+	}
+
+	// Look up system-default-registry for airgap compatibility (Slice 1, #804).
+	// In non-airgap environments this setting exists but is empty.
+	registrySetting, err := n.client.Management.Setting.ByID("system-default-registry")
 	require.NoError(n.T(), err)
-
-	logrus.Infof("Verifying cluster deployments (%s)", clusterObj.Name)
-	err = deployment.VerifyClusterDeployments(n.client, clusterObj)
-	require.NoError(n.T(), err)
-
-	logrus.Infof("Verifying cluster pods (%s)", clusterObj.Name)
-	err = pods.VerifyClusterPods(n.client, clusterObj)
-	require.NoError(n.T(), err)
-
-	n.cluster = clusterObj
+	n.defaultRegistry = registrySetting.Value
 }
 
 func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
-	cluster, err := clusters.NewClusterMeta(n.client, n.cluster.Name)
-	require.NoError(n.T(), err)
-
 	n.T().Logf("Fetching Project [%s]", actionsCharts.SystemProject)
-	project, err := projects.GetProjectByName(n.client, cluster.ID, actionsCharts.SystemProject)
+	project, err := projects.GetProjectByName(n.client, n.cluster.ID, actionsCharts.SystemProject)
 	require.NoError(n.T(), err)
 	require.Equal(n.T(), actionsCharts.SystemProject, project.Name)
 
@@ -151,35 +165,36 @@ func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
 		Namespace: actionsCharts.NeuVectorNamespace,
 		Host:      n.client.RancherConfig.Host,
 		InstallOptions: actionsCharts.InstallOptions{
-			Cluster:   cluster,
+			Cluster:   n.cluster,
 			Version:   latestVersions[0],
 			ProjectID: project.ID,
 		},
-		K3s:      strings.Contains(n.cfg.CustomCluster.KubernetesVersion, "k3s"),
-		Hardened: true,
+		DefaultRegistry: n.defaultRegistry,
+		K3s:             n.cluster.Provider == clusters.KubernetesProviderK3S,
+		Hardened:        true,
 	}
 
-	n.T().Logf("Installing NeuVector %s on cluster %s", latestVersions[0], cluster.Name)
+	n.T().Logf("Installing NeuVector %s on cluster %s", latestVersions[0], n.cluster.Name)
 	err = actionsCharts.InstallNeuVectorChart(n.client, payload)
 	require.NoError(n.T(), err)
 
 	n.T().Log("Waiting for NeuVector chart to become active")
-	catalogClient, err := n.client.GetClusterCatalogClient(cluster.ID)
+	catalogClient, err := n.client.GetClusterCatalogClient(n.cluster.ID)
 	require.NoError(n.T(), err)
 	err = charts.WaitChartInstall(catalogClient, payload.Namespace, actionsCharts.NeuVectorChartName)
 	require.NoError(n.T(), err)
 
 	n.T().Log("Waiting for resources to become active")
-	err = charts.WatchAndWaitDeployments(n.client, cluster.ID, payload.Namespace, metav1.ListOptions{})
+	err = charts.WatchAndWaitDeployments(n.client, n.cluster.ID, payload.Namespace, metav1.ListOptions{})
 	require.NoError(n.T(), err)
 
-	err = charts.WatchAndWaitDaemonSets(n.client, cluster.ID, payload.Namespace, metav1.ListOptions{})
+	err = charts.WatchAndWaitDaemonSets(n.client, n.cluster.ID, payload.Namespace, metav1.ListOptions{})
 	require.NoError(n.T(), err)
 
 	n.T().Log("Verifying NeuVector manager UI is reachable via service proxy")
 	uiProxyPath := fmt.Sprintf(
 		"k8s/clusters/%s/api/v1/namespaces/%s/services/https:neuvector-service-webui:8443/proxy/",
-		cluster.ID,
+		n.cluster.ID,
 		actionsCharts.NeuVectorNamespace,
 	)
 	_, err = ingresses.GetExternalIngressResponse(n.client, n.client.RancherConfig.Host, uiProxyPath, true)
