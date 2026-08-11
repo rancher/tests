@@ -274,6 +274,9 @@ build_trigger_args() {
   for p in "${params[@]}"; do
     trigger_args+=(--data-urlencode "$p")
   done
+  # CONFIG carries the file CONTENTS (not a path) — the job writes these into
+  # validation/cattle-config.yaml in the build workspace (Jenkinsfile.individual.e2e:146).
+  trigger_args+=(--data-urlencode "CONFIG=$(<"$CONFIG_FILE")")
 }
 
 # Execute the trigger POST and capture status + Location (§4).
@@ -327,16 +330,35 @@ set_build_display_name() {
 if $DRY_RUN; then
   [[ -n "$config_host" ]] && echo "# target host: ${config_host}"
   fetch_crumb
+  build_trigger_args   # same array the real POST uses — single source of truth
   echo "# dry-run — nothing is sent"
-  echo "curl -sS -i -X POST \\"
-  printf '  -u %q:*** \\\n' "$JENKINS_USER"
-  [[ -n "$crumb_header" ]] && printf '  -H %q \\\n' "$crumb_header"
-  for p in "${params[@]}"; do
-    printf '  --data-urlencode %q \\\n' "$p"
+  printf 'curl'
+  i=0
+  while (( i < ${#trigger_args[@]} )); do
+    a="${trigger_args[$i]}"
+    case "$a" in
+      -u)
+        # value is "<user>:<token>" — mask the token
+        cred="${trigger_args[$((i+1))]}"
+        printf ' \\\n  -u %s:***' "${cred%%:*}"
+        i=$((i+2)) ;;
+      -H)
+        printf ' \\\n  -H %q' "${trigger_args[$((i+1))]}"
+        i=$((i+2)) ;;
+      --data-urlencode)
+        v="${trigger_args[$((i+1))]}"
+        if [[ "$v" == CONFIG=* ]]; then
+          printf ' \\\n  --data-urlencode CONFIG=<%s, %s bytes>' "$CONFIG_FILE" "$(wc -c <"$CONFIG_FILE" | tr -d ' ')"
+        else
+          printf ' \\\n  --data-urlencode %q' "$v"
+        fi
+        i=$((i+2)) ;;
+      *)
+        printf ' \\\n  %q' "$a"
+        i=$((i+1)) ;;
+    esac
   done
-  config_summary="CONFIG=<${CONFIG_FILE}, $(wc -c <"$CONFIG_FILE" | tr -d ' ') bytes>"
-  printf '  --data-urlencode %q \\\n' "$config_summary"
-  printf '  %q\n' "$triggerUrl"
+  printf ' \\\n  %q\n' "$triggerUrl"
   if [[ -n "$BUILD_PREFIX" ]]; then
     if [[ -n "$GOTEST_TESTCASE" ]]; then
       echo "# build display name would be: ${BUILD_PREFIX} ${GOTEST_TESTCASE}"
