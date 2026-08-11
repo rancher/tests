@@ -42,6 +42,10 @@ func uninstallChartIfPresent(catalogClient *catalog.Client, namespace, chartName
 		return err
 	}
 	if err := catalogClient.UninstallChart(chartName, namespace, NewChartUninstallAction()); err != nil {
+		if k8sErrors.IsNotFound(err) {
+			// Chart was removed between the Get and the uninstall call — treat as success.
+			return nil
+		}
 		return err
 	}
 	return waitChartGone(catalogClient, namespace, chartName)

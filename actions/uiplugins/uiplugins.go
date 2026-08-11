@@ -2,7 +2,7 @@ package uiplugins
 
 import (
 	"context"
-	"fmt"
+	"time"
 
 	v1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
@@ -11,12 +11,16 @@ import (
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/sirupsen/logrus"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 )
 
 const (
 	extensionNamespace = "cattle-ui-plugin-system"
+	pollInterval       = 5 * time.Second
+	pollTimeout        = 2 * time.Minute
 )
 
 // newUIPluginInstallAction is a private helper function that returns chart install action with the extension payload options.
@@ -47,32 +51,24 @@ func InstallUIPlugin(client *rancher.Client, installExtensionOptions *ExtensionO
 
 		err := catalogClient.UninstallChart(installExtensionOptions.ChartName, extensionNamespace, defaultChartUninstallAction)
 		if err != nil {
+			if k8sErrors.IsNotFound(err) {
+				// Extension was already removed — nothing to clean up.
+				return nil
+			}
 			return err
 		}
 
-		watchAppInterface, err := catalogClient.Apps(extensionNamespace).Watch(context.TODO(), metav1.ListOptions{
-			FieldSelector:  "metadata.name=" + installExtensionOptions.ChartName,
-			TimeoutSeconds: &timeoutSeconds,
-		})
-		if err != nil {
-			return err
-		}
-
-		err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
-			chart := event.Object.(*v1.App)
-			if event.Type == watch.Error {
-				return false, fmt.Errorf("there was an error uninstalling %s extension", installExtensionOptions.ChartName)
-			} else if event.Type == watch.Deleted {
-				logrus.Infof("Uninstalled %s extension successfully.", installExtensionOptions)
-				return true, nil
-			} else if chart == nil {
+		// Poll until the extension App is gone. A watch started after
+		// UninstallChart can miss the Deleted event when the uninstall
+		// completes quickly (same race as the repo-delete cleanup).
+		return kwait.PollUntilContextTimeout(context.Background(), pollInterval, pollTimeout, true, func(ctx context.Context) (bool, error) {
+			_, getErr := catalogClient.Apps(extensionNamespace).Get(ctx, installExtensionOptions.ChartName, metav1.GetOptions{})
+			if k8sErrors.IsNotFound(getErr) {
+				logrus.Infof("Uninstalled %s extension successfully.", installExtensionOptions.ChartName)
 				return true, nil
 			}
-			return false, nil
-
+			return false, getErr
 		})
-
-		return err
 
 	})
 	err = catalogClient.InstallChart(extensionInstallAction, chartRepoName)
@@ -130,28 +126,24 @@ func CreateExtensionsRepo(client *rancher.Client, rancherUiPluginsName, uiExtens
 	client.Session.RegisterCleanupFunc(func() error {
 		err := client.Catalog.ClusterRepos().Delete(context.TODO(), repoObject.Name, metav1.DeleteOptions{})
 		if err != nil {
+			if k8sErrors.IsNotFound(err) {
+				// Repo was already removed — nothing to clean up.
+				return nil
+			}
 			return err
 		}
 
-		watchAppInterface, err := client.Catalog.ClusterRepos().Watch(context.TODO(), metav1.ListOptions{
-			FieldSelector:  "metadata.name=" + repoObject.Name,
-			TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-		})
-		if err != nil {
-			return err
-		}
-
-		err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
-			if event.Type == watch.Error {
-				return false, fmt.Errorf("there was an error deleting the cluster repo")
-			} else if event.Type == watch.Deleted {
+		// Poll until the repo is gone. A watch started after Delete can miss the
+		// Deleted event because the resource is removed synchronously before the
+		// watch connects, causing it to block until the 30-minute watch timeout.
+		return kwait.PollUntilContextTimeout(context.Background(), pollInterval, pollTimeout, true, func(ctx context.Context) (bool, error) {
+			_, getErr := client.Catalog.ClusterRepos().Get(ctx, repoObject.Name, metav1.GetOptions{})
+			if k8sErrors.IsNotFound(getErr) {
 				logrus.Info("Removed extensions repo successfully.")
 				return true, nil
 			}
-			return false, nil
+			return false, getErr
 		})
-
-		return err
 	})
 
 	watchAppInterface, err := client.Catalog.ClusterRepos().Watch(context.TODO(), metav1.ListOptions{
