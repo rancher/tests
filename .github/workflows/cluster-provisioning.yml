@@ -174,7 +174,7 @@ jobs:
           rancher-version: ${{ env.RANCHER_VERSION }}
           fallback-repo: ${{ secrets.RANCHER_REPO }}
           is-prime: false
-          release-community-version: "2.15"
+          release-community-version: "2.16"
 
       - name: Get Qase ID
         id: get-qase-id
@@ -292,6 +292,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               subnetId: "${{ secrets.AWS_SUBNET_ID }}"
@@ -308,6 +309,7 @@ jobs:
             awsEC2Config:
               - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_AMI }}"
+                instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
@@ -681,6 +683,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               subnetId: "${{ secrets.AWS_SUBNET_ID }}"
@@ -697,6 +700,7 @@ jobs:
             awsEC2Config:
               - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_AMI }}"
+                instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
@@ -1071,6 +1075,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               subnetId: "${{ secrets.AWS_SUBNET_ID }}"
@@ -1087,6 +1092,7 @@ jobs:
             awsEC2Config:
               - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_AMI }}"
+                instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
@@ -1460,6 +1466,7 @@ jobs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane", "worker"]
               ami: "${{ secrets.AWS_AMI }}"
+              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               sshUser: "${{ vars.AWS_USER }}"
               vpcId: "${{ secrets.AWS_VPC_ID }}"
               subnetId: "${{ secrets.AWS_SUBNET_ID }}"
@@ -1476,6 +1483,7 @@ jobs:
             awsEC2Config:
               - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
                 awsAMI: "${{ secrets.AWS_AMI }}"
+                instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
                 awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
                 awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
                 awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"

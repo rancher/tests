@@ -4,7 +4,10 @@ day2-ops-rancher.yml
 day2-ops-rancher-prime.yml
 day2-ops-upgraded-rancher.yml
 cluster-provisioning.yml
+hb-sanity.yml
+hb-sanity-upgrade.yml
 post-release-prime.yml
 rancher-upgrade-cluster-provisioning.yml
 rancher-upgrade-airgap-cluster-provisioning.yml
 registries-cluster-provisioning.yml
+turtles-feature-off-cluster-provisioning.yml

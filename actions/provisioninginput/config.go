@@ -182,6 +182,7 @@ type Config struct {
 	IPv6Cluster            bool                                     `json:"ipv6Cluster,omitempty" yaml:"ipv6Cluster,omitempty" default:"false"`
 	BastionUser            string                                   `json:"bastionUser,omitempty" yaml:"bastionUser,omitempty" default:""`
 	BastionWindowsUser     string                                   `json:"bastionWindowsUser,omitempty" yaml:"bastionWindowsUser,omitempty" default:""`
+	MixedArchitecture      bool                                     `json:"mixedArchitecture,omitempty" yaml:"mixedArchitecture,omitempty" default:"false"`
 }
 
 type TemplateConfig struct {

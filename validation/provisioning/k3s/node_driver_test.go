@@ -1,4 +1,4 @@
-//go:build validation || recurring
+//go:build validation || recurring || sanity || mixed
 
 package k3s
 
@@ -98,7 +98,12 @@ func TestNodeDriver(t *testing.T) {
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, k.cattleConfig, clusterConfig)
 			clusterConfig.MachinePools = tt.machinePools
 
+			if clusterConfig.MixedArchitecture && len(tt.machinePools) == 1 && tt.machinePools[0].MachinePoolConfig.Worker && tt.machinePools[0].MachinePoolConfig.Etcd {
+				t.Skip("skipping all-roles pool: mixed architecture requires a dedicated worker pool")
+			}
+
 			require.NotNil(t, clusterConfig.Provider)
+
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := provider.LoadMachineConfigFunc(k.cattleConfig)

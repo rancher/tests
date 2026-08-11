@@ -67,8 +67,11 @@ runs:
           local release_line=""
 
           case "$TAG" in
+            v2.11*)
+              release_line="v2.11"
+              ;;
             v2.12*)
-              return 1
+              release_line="v2.12"
               ;;
             v2.13*)
               release_line="v2.13"
@@ -98,7 +101,7 @@ runs:
           fi
 
           if [[ "$TAG" == *-rc* ]]; then
-            workflow_contains "$workflow_path" "&& contains(github.event.inputs.rancher_version, '-rc')" || workflow_contains "$workflow_path" "&& (contains(github.event.inputs.rancher_version, '-rc')" || workflow_contains "$workflow_path" "&& contains(inputs.rancher_version, '-rc')" || workflow_contains "$workflow_path" "&& (contains(inputs.rancher_version, '-rc')"
+            workflow_contains "$workflow_path" "&& contains(github.event.inputs.rancher_version, '-rc')" || workflow_contains "$workflow_path" "&& (contains(github.event.inputs.rancher_version, '-rc')" || workflow_contains "$workflow_path" "&& contains(inputs.rancher_version, '-rc')" || workflow_contains "$workflow_path" "&& (contains(inputs.rancher_version, '-rc')" || workflow_contains "$workflow_path" "|| contains(github.event.inputs.rancher_version, '-rc')" || workflow_contains "$workflow_path" "|| contains(inputs.rancher_version, '-rc')"
             return $?
           fi
 

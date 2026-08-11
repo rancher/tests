@@ -527,7 +527,7 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 		clusterID = "local"
 		requiredDeployments = []string{Rancher, Webhook, Fleet, CapiControllerManager}
 		if ok, err := actionClusters.IsRancherVersionAbove(client, "v2.13.0"); err == nil && ok {
-			logrus.Info("Version is above 2.13 verifying CapiControllerManager")
+			logrus.Debugf("Version is above 2.13 verifying CapiControllerManager")
 			requiredDeployments = append(requiredDeployments, CapiControllerManager)
 		}
 	}
