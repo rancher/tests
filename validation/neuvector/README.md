@@ -49,10 +49,19 @@ neuvectorTest:
   skipUIExtension: false
 ```
 
-Skip ClusterRepo creation and extension install entirely when the NeuVector UI extension is
-pre-installed (e.g. airgap environments where the Rancher server cannot reach github.com):
+Skip the UI extension install entirely (airgap without a `ui-plugin-charts` mirror):
+
+Use `skipUIExtension: true` when the Rancher server cannot reach `github.com` **and** no
+internal mirror is configured via `uiPluginChartsURL`. In that case the ClusterRepo would
+never sync and the install would fail, so the test skips it rather than attempting the install.
 
 ```yaml
 neuvectorTest:
   skipUIExtension: true
 ```
+
+> **Note:** This flag is **not** needed when the extension is already installed — the test
+> auto-detects an existing install via chart status and skips the install on its own.
+> With the extension skipped, the suite still installs and validates the NeuVector backend
+> chart and reaches the manager UI through the Kubernetes service proxy, so the test remains
+> meaningful without the Rancher UI extension.

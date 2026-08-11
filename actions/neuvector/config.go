@@ -16,6 +16,6 @@ type NeuVectorTestConfig struct {
 	UIPluginChartsURL string `json:"uiPluginChartsURL,omitempty" yaml:"uiPluginChartsURL,omitempty"`
 	// UIPluginChartsBranch overrides the git branch of the UI plugin charts repository.
 	UIPluginChartsBranch string `json:"uiPluginChartsBranch,omitempty" yaml:"uiPluginChartsBranch,omitempty"`
-	// SkipUIExtension skips ClusterRepo creation and UI extension install entirely (e.g. when the extension is pre-installed in airgap environments).
+	// SkipUIExtension skips ClusterRepo creation and UI extension install entirely (e.g. airgap environments where the Rancher server cannot reach github.com and no uiPluginChartsURL mirror is configured). Not required when the extension is already installed; that case is auto-detected.
 	SkipUIExtension bool `json:"skipUIExtension,omitempty" yaml:"skipUIExtension,omitempty"`
 }
