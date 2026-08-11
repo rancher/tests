@@ -10,8 +10,10 @@ import (
 	"net/url"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/rancher/norman/types"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
@@ -36,7 +38,9 @@ import (
 	"github.com/rancher/tests/actions/kubeapi/volumes/persistentvolumeclaims"
 	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
 	statefulsetapi "github.com/rancher/tests/actions/kubeapi/workloads/statefulsets"
+	"github.com/rancher/tests/actions/monitoring"
 	namespaceActions "github.com/rancher/tests/actions/namespaces"
+	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/storage"
 	s3Actions "github.com/rancher/tests/actions/storage/s3"
@@ -52,6 +56,8 @@ import (
 var (
 	LonghornEncryptionSecretBaseName       = "longhorn-crypto"
 	LonghornEncryptionStorageClassBaseName = "longhorn-crypto-global"
+	volumeBytesPrometheusQueryTemplate     = "longhorn_volume_capacity_bytes{volume=\"%s\"}"
+	numberVolumesPrometheusQuery           = "count(longhorn_volume_capacity_bytes) OR on() vector(0)" // Return an empty list instead of nil with OR on() vector(0).
 )
 
 type LonghornTestSuite struct {
@@ -423,6 +429,83 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 	l.T().Logf("Validating that the old volume %s and the new volume %s are writable", volumeName, secondVolumeName)
 	storage.CheckMountedVolume(l.T(), kubeConfig, l.cluster.ID, namespaces.Default, otherPod.Name, storage.MountPath)
 	storage.CheckMountedVolume(l.T(), kubeConfig, l.cluster.ID, namespaces.Default, pod.Name, storage.MountPath)
+}
+
+func (l *LonghornTestSuite) TestMonitoringIntegration() {
+	l.T().Log("Checking if the monitoring chart is already installed")
+	initialMonitoringChart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
+	require.NoError(l.T(), err)
+
+	if !initialMonitoringChart.IsAlreadyInstalled {
+		// Get latest versions of the monitoring chart
+		latestMonitoringVersion, err := l.client.Catalog.GetLatestChartVersion(charts.RancherMonitoringName, catalog.RancherChartRepo)
+		require.NoError(l.T(), err)
+
+		// Get project system projectId
+		monitoringProject, err := projects.GetProjectByName(l.client, l.cluster.ID, charts.SystemProject)
+		require.NoError(l.T(), err)
+
+		chartInstallOptions := &charts.InstallOptions{
+			Cluster:   l.cluster,
+			Version:   latestMonitoringVersion,
+			ProjectID: string(monitoringProject.ID),
+		}
+
+		l.T().Log("Installing monitoring chart")
+		err = charts.InstallRancherMonitoringChart(l.client, chartInstallOptions, &charts.RancherMonitoringOpts{
+			IngressNginx:      true,
+			ControllerManager: true,
+			Etcd:              true,
+			Proxy:             true,
+			Scheduler:         true,
+		})
+		require.NoError(l.T(), err)
+	}
+
+	serviceMonitorSpec := monitoringv1.ServiceMonitorSpec{
+		Selector: metav1.LabelSelector{
+			MatchLabels: map[string]string{"app": "longhorn-manager"},
+		},
+		NamespaceSelector: monitoringv1.NamespaceSelector{
+			MatchNames: []string{charts.LonghornNamespace},
+		},
+		Endpoints: []monitoringv1.Endpoint{
+			{Port: "manager"},
+		},
+	}
+
+	serviceMonitorName := namegenerator.AppendRandomString("longhorn-monitor")
+	_, err = monitoring.CreateServiceMonitor(l.client, l.cluster.ID, serviceMonitorName, charts.LonghornNamespace, serviceMonitorSpec)
+	require.NoError(l.T(), err)
+	l.T().Logf("ServiceMonitor %s for Longhorn created", serviceMonitorName)
+
+	loggedClient, err := monitoring.NewGrafanaProxyClient(l.client.RancherConfig.Host, l.client.RancherConfig.AdminToken, true)
+	require.NoError(l.T(), err)
+
+	l.T().Logf("Checking number of volumes with Prometheus through Grafana API (%s)", numberVolumesPrometheusQuery)
+	previousNumberOfVolumes, err := longhornActions.GetNumberOfLonghornVolumes(l.client, l.cluster.ID)
+	require.NoError(l.T(), err)
+
+	value, err := monitoring.PrometheusQueryInGrafana(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, numberVolumesPrometheusQuery)
+	require.NoError(l.T(), err)
+	require.Equal(l.T(), previousNumberOfVolumes, value)
+
+	_, volumeName, err := storage.CreatePVC(l.client, l.cluster.ID, charts.LonghornStorageClass)
+	require.NoError(l.T(), err)
+	l.T().Logf("Volume %s created using %s PVC", volumeName, charts.LonghornStorageClass)
+
+	// CreatePVC creates a 1GiB volume.
+	volumeSizeQuery := fmt.Sprintf(volumeBytesPrometheusQueryTemplate, strings.TrimSpace(volumeName))
+	l.T().Logf("Checking volume %s's size with Prometheus through Grafana API (%s)", volumeName, volumeSizeQuery)
+	value, err = monitoring.PrometheusQueryInGrafana(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, volumeSizeQuery)
+	require.NoError(l.T(), err)
+	gigabyte := 1024 * 1024 * 1024
+	require.Equal(l.T(), gigabyte, value)
+
+	l.T().Logf("Checking new number of volumes with Prometheus through Grafana API (%s)", numberVolumesPrometheusQuery)
+	value, err = monitoring.PrometheusQueryInGrafana(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, numberVolumesPrometheusQuery)
+	require.NoError(l.T(), err)
+	require.Equal(l.T(), previousNumberOfVolumes+1, value)
 }
 
 // In order for 'go test' to run this suite, we need to create

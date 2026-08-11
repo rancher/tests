@@ -189,7 +189,7 @@
     description: "Verify Longhorn metrics collection and visualization through Rancher's Prometheus and Grafana monitoring stack."
     automation: 0
     steps:
-    - action: "Install Rancher monitoring stack from Apps catalog"
+    - action: "Install Rancher monitoring stack from Apps catalog if not already installed"
       data: ""
       expectedresult: "Monitoring deployment completes"
       position: 1
@@ -197,42 +197,28 @@
       data: ""
       expectedresult: "All monitoring components operational"
       position: 2
-    - action: "Access Longhorn Settings and enable 'Longhorn System Monitoring'"
+    - action: "Create ServiceMonitor resource for Longhorn named 'longhorn-monitor'"
       data: ""
-      expectedresult: "Monitoring integration enabled"
+      expectedresult: "ServiceMonitor created and Longhorn data is shown in Grafana"
       position: 3
-    - action: "Access Grafana through Rancher monitoring section"
+    - action: "Check current number of existing Longhorn volumes (count(longhorn_volume_capacity_bytes) OR on() vector(0))"
       data: ""
-      expectedresult: "Grafana dashboard opens"
+      expectedresult: "The query runs successfully"
       position: 4
-    - action: "Search for 'Longhorn' dashboards in Grafana"
+    - action: "Create a new Longhorn PVC with a 1 GiB Volume"
       data: ""
-      expectedresult: "Longhorn dashboards appear in search results"
+      expectedresult: "PVC and Volume are created"
       position: 5
-    - action: "Open 'Longhorn - Volume' dashboard"
+    - action: "Query Grafana for the volume size of the newly created volume (longhorn_volume_capacity_bytes{volume=<volumeName>})"
       data: ""
-      expectedresult: "Volume metrics dashboard displays"
+      expectedresult: "Volume size shows as 1 GiB"
       position: 6
-    - action: "Open 'Longhorn - Node' dashboard"
+    - action: "Query Grafana for the new number of existing Longhorn volumes (count(longhorn_volume_capacity_bytes) OR on() vector(0))"
       data: ""
-      expectedresult: "Node metrics dashboard displays"
+      expectedresult: "Number of volumes is equal to the previously queried value + 1"
       position: 7
-    - action: "Verify volume health metrics display correctly"
-      data: ""
-      expectedresult: "Volume status, replica count, and health shown"
-      position: 8
-    - action: "Verify storage utilization metrics display"
-      data: ""
-      expectedresult: "Storage usage percentages and capacity shown"
-      position: 9
-    - action: "Verify performance metrics (IOPS, throughput) display"
-      data: ""
-      expectedresult: "Performance data visible and updating"
-      position: 10
-    - action: "Create test volume and verify new metrics appear"
-      data: ""
-      expectedresult: "New volume metrics reflected in dashboard"
-      position: 11
+    custom_field:
+      "15": "TestMonitoringIntegration"
   - title: "Alert Manager Integration"
     description: "Test Longhorn alert integration with Rancher Alert Manager for storage-related events and notifications."
     automation: 0
