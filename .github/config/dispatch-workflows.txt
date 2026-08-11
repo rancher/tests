@@ -1,12 +1,16 @@
 airgap-cluster-provisioning.yml
 capi-pnp-cluster-provisioning.yml
+cluster-provisioning.yml
+community-to-prime-upgrade.yml
 day2-ops-rancher.yml
 day2-ops-rancher-prime.yml
 day2-ops-upgraded-rancher.yml
-cluster-provisioning.yml
+hb-post-release-sanity.yml
+hb-post-release-upgrade-sanity.yml
 hb-sanity.yml
 hb-sanity-upgrade.yml
 post-release-prime.yml
+prime-to-community-upgrade.yml
 rancher-upgrade-cluster-provisioning.yml
 rancher-upgrade-airgap-cluster-provisioning.yml
 registries-cluster-provisioning.yml
