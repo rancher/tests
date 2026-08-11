@@ -24,6 +24,7 @@ import (
 	"github.com/rancher/tests/actions/neuvector"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/registries"
 	"github.com/rancher/tests/actions/uiplugins"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
@@ -161,6 +162,9 @@ func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
 	latestVersions, err := n.client.Catalog.GetListChartVersions(actionsCharts.NeuVectorChartName, catalog.RancherChartRepo)
 	require.NoError(n.T(), err)
 
+	registrySetting, err := n.client.Management.Setting.ByID("system-default-registry")
+	require.NoError(n.T(), err)
+
 	payload := actionsCharts.PayloadOpts{
 		Namespace: actionsCharts.NeuVectorNamespace,
 		Host:      n.client.RancherConfig.Host,
@@ -190,6 +194,13 @@ func (n *NeuVectorHardenedTestSuite) TestNeuVectorInstallation() {
 
 	err = charts.WatchAndWaitDaemonSets(n.client, n.cluster.ID, payload.Namespace, metav1.ListOptions{})
 	require.NoError(n.T(), err)
+
+	if registrySetting.Value != "" {
+		n.T().Logf("Verifying NeuVector pods use registry prefix %q", registrySetting.Value)
+		isUsingRegistry, err := registries.CheckAllClusterPodsForRegistryPrefix(n.client, n.cluster.ID, registrySetting.Value)
+		require.NoError(n.T(), err)
+		require.True(n.T(), isUsingRegistry, "NeuVector pods are not using the expected registry prefix %q", registrySetting.Value)
+	}
 
 	n.T().Log("Verifying NeuVector manager UI is reachable via service proxy")
 	uiProxyPath := fmt.Sprintf(

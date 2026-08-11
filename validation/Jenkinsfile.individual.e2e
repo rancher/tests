@@ -9,6 +9,7 @@
  *
  * Consumes shared functions from qa-jenkins-library:
  *   property.useWithProperties
+ *   naming.extractRancherHost
  *
  * Parameter names (CONFIG, REPO, BRANCH, TAGS, GOTEST_TESTCASE, etc.) match the
  * existing go-automation-freeform-job pattern for compatibility with downstream
@@ -113,7 +114,9 @@ pipeline {
                         userRemoteConfigs: [[url: params.REPO]]
                     ])
                     env.TESTS_DIR = pwd()
-                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.TAGS}"
+                    env.RANCHER_HOSTNAME = naming.extractRancherHost(config: params.CONFIG)
+                    def displaySuffix = env.RANCHER_HOSTNAME ? "${params.TAGS} - ${env.RANCHER_HOSTNAME}" : params.TAGS
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${displaySuffix}"
                 }
             }
         }
@@ -172,7 +175,8 @@ pipeline {
                         def isPitJob = env.JOB_NAME.contains('go-pit')
                         if (isPitJob) {
                             envLines += "QASE_PROJECT_ID=RANCHERINT"
-                            envLines += "TEST_RUN_NAME=${params.TAGS} Test Run"
+                            def testRunName = "${params.TAGS} ${env.RANCHER_HOSTNAME} Test Run"
+                            envLines += "TEST_RUN_NAME=${testRunName}"
                             envLines += "QASE_TEST_RUN_COMPLETE=true"
                         }
                         writeFile file: '.go_test_env', text: envLines.join('\n') + '\n'

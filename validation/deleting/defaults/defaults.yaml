@@ -40,7 +40,7 @@ awsMachineConfigs:
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
     ami: "<required>"
-    instanceType: "t3a.medium"
+    instanceType: "t3.xlarge"
     sshUser: "<required>"
     vpcId: "<required>"
     retries: "5"
