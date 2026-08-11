@@ -206,6 +206,17 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   exit 2
 fi
 
+# Best-effort: surface the target Rancher host from the config so the operator
+# always sees which instance a run hits (CONFIG is a snapshot sent to Jenkins,
+# not the file on the checked-out branch). Tolerant — empty if not found.
+config_host="$(awk '
+  /^[^[:space:]#]/ { in_rancher = ($0 ~ /^rancher:/); next }
+  in_rancher && /^[[:space:]]+host:/ {
+    v=$0; sub(/^[[:space:]]+host:[[:space:]]*/,"",v); gsub(/#.*/,"",v)
+    gsub(/[[:space:]]*$/,"",v); gsub(/^["'\'']|["'\'']$/,"",v); print v; exit
+  }
+' "$CONFIG_FILE")"
+
 # ---------------------------------------------------------------------------
 # Build the non-CONFIG Jenkins parameters (§2)
 # ---------------------------------------------------------------------------
@@ -314,6 +325,7 @@ set_build_display_name() {
 # CONFIG is summarised to its path/size to avoid spraying its adminToken.
 # ---------------------------------------------------------------------------
 if $DRY_RUN; then
+  [[ -n "$config_host" ]] && echo "# target host: ${config_host}"
   fetch_crumb
   echo "# dry-run — nothing is sent"
   echo "curl -sS -i -X POST \\"
@@ -338,6 +350,7 @@ fi
 # ---------------------------------------------------------------------------
 # Trigger the build (§4)
 # ---------------------------------------------------------------------------
+[[ -n "$config_host" ]] && echo "target host: ${config_host}" >&2
 curl_err="$(mktemp)"
 fetch_crumb
 build_trigger_args
