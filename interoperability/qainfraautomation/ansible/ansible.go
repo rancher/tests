@@ -180,6 +180,7 @@ func (c *Client) GenerateInventoryFromNodes(clusterNodesJSON, distro, env string
 	if err != nil {
 		return "", fmt.Errorf("build inventory: %w", err)
 	}
+	logrus.Infof("Showing inventory file content:\n%s", string(inventoryYAML))
 
 	f, err := os.CreateTemp("", "ansible-inventory-*.yml")
 	if err != nil {
