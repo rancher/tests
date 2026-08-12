@@ -6,16 +6,21 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	shepherdConfig "github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/workloads/deployment"
+	"github.com/rancher/tests/actions/workloads/pods"
 	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
 	"github.com/rancher/tfp-automation/defaults/keypath"
 	setupproxy "github.com/rancher/tfp-automation/tests/infrastructure/ranchers/setup/proxy"
 	upgradeproxy "github.com/rancher/tfp-automation/tests/infrastructure/ranchers/upgrade/proxy"
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 )
 
 func main() {
@@ -37,6 +42,25 @@ func main() {
 	testSession := session.NewSession()
 
 	client, proxyBastion, proxyPrivateIP, _, _, cattleConfig := setupproxy.SetupProxyRancher(t, testSession, keypath.ProxyKeyPath, cattleConfig)
+
+	cattleConfig, err = operations.ReplaceValue([]string{"rancher", "adminToken"}, client.RancherConfig.AdminToken, cattleConfig)
+	if err != nil {
+		logrus.Fatalf("Failed to replace admin token: %v", err)
+	}
+
+	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
+
+	cluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetLocal + "/local")
+	require.NoError(t, err)
+
+	logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+	err = deployment.VerifyClusterDeployments(client, cluster)
+	require.NoError(t, err)
+
+	logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+	err = pods.VerifyClusterPods(client, cluster)
+	require.NoError(t, err)
+
 	client, _, _, _ = upgradeproxy.UpgradeProxyRancher(t, client, proxyPrivateIP, proxyBastion, testSession, cattleConfig)
 
 	cattleConfig, err = operations.ReplaceValue([]string{"terraform", "proxy", "proxyBastion"}, proxyBastion, cattleConfig)
@@ -53,4 +77,12 @@ func main() {
 	}
 
 	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
+
+	logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+	err = deployment.VerifyClusterDeployments(client, cluster)
+	require.NoError(t, err)
+
+	logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+	err = pods.VerifyClusterPods(client, cluster)
+	require.NoError(t, err)
 }

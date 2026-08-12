@@ -13,7 +13,7 @@ inputs:
     required: true
   test-suite:
     description: "Suite to test"
-    required: true
+    required: false
   timeout:
     description: "Timeout"
     required: true
@@ -27,8 +27,23 @@ runs:
       continue-on-error: true
       run: |
         set +e
-        gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/${{ inputs.package }} \
-        --junitfile results.xml --jsonfile results.json -- -timeout=${{ inputs.timeout }} -tags=${{ inputs.tag }} -v -run "${{ inputs.test-suite }}"
+
+        if [[ "${{ inputs.test-suite }}" != "" ]]; then
+          gotestsum --format standard-verbose \
+          --packages=github.com/rancher/tests/validation/${{ inputs.package }} \
+          --junitfile results.xml \
+          --jsonfile results.json \
+          -- -timeout=${{ inputs.timeout }} -tags=${{ inputs.tag }} -v -run "${{ inputs.test-suite }}"
+        else
+          gotestsum --format standard-verbose \
+          --packages=github.com/rancher/tests/validation/kdm/... \
+          --junitfile results.xml \
+          --jsonfile results.json \
+          -- -timeout=2h -tags=${{ inputs.tag }} -v
+        fi
+
+        test_exit_code=$?
+        echo "test_exit_code=$test_exit_code" >> "$GITHUB_ENV"
 
         if [[ "${{ inputs.reporting }}" == "true" ]]; then
           ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
@@ -38,23 +53,13 @@ runs:
     - name: Show failed tests
       shell: bash
       run: |
-        declare -A suites=(
-          [exit]="Test Suite: ${{ inputs.test-suite }}:results.json"
-        )
-
-        failed=0
-
-        for exit_code in "${!suites[@]}"; do
-          IFS=: read suite_name results_file <<< "${suites[$exit_code]}"
-          exit_val="${!exit_code}"
-
-          if [ "$exit_val" != "" ] && [ "$exit_val" -ne 0 ]; then
-            echo "Failed $suite_name tests:"
-            jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' "$results_file"
-            failed=1
+        if [ "${test_exit_code:-}" != "" ] && [ "$test_exit_code" -ne 0 ]; then
+          if [[ "${{ inputs.test-suite }}" != "" ]]; then
+            echo "Failed Test Suite: ${{ inputs.test-suite }}"
+          else
+            echo "Failed Test Suite: ${{ inputs.package }}"
           fi
-        done
 
-        if [ "$failed" -eq 1 ]; then
+          jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results.json
           exit 1
         fi
