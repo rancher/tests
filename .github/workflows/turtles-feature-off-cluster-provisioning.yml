@@ -426,15 +426,10 @@ jobs:
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-      - name: Save test result as artifact for weekly summary
+      - name: Save test result weekly summary
         if: always() && github.event_name == 'schedule'
-        run: |
-          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"cluster-provisioning\", \"job\": \"v2-13\" }" > test-result-cluster-provisioning-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
-        shell: bash
-
-      - name: Upload test result weekly summary
-        if: always() && github.event_name == 'schedule'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
+        uses: ./.github/actions/save-weekly-summary-result
         with:
-          name: test-result-cluster-provisioning-v2-13-${{ github.run_id }}
-          path: test-result-cluster-provisioning-v2-13-${{ github.run_id }}-${{ github.run_attempt }}.json
+          rancher_version: ${{ env.UPGRADED_RANCHER_VERSION }}
+          workflow: turtles-feature-off-cluster-provisioning
+          job: v2-13
