@@ -326,7 +326,7 @@ secret_key     = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = ""
 aws_ssh_user = "ubuntu"
 aws_instance_type = "t3a.2xlarge"
-aws_security_group = ["rke2-aws-node"]
+aws_security_group = ["rancher-nodes"]
 
 aws_subnet = "subnet-73577c28"
 aws_availability_zone = "a"
@@ -402,8 +402,8 @@ insecure = true'''
                     def individualJob = params.INDIVIDUAL_JOB
                     def hostnamePrefix = params.HOSTNAME_PREFIX
                     if (isPitJob) {
-                        recurringJob = 'go-pit-daily-job'
-                        individualJob = 'go-pit-daily-individual-job'
+                        recurringJob = 'go-pit-setup-job'
+                        individualJob = 'go-pit-validation-job'
                         hostnamePrefix = "pit-${hostnamePrefix}"
                         if (env.JOB_NAME.contains('weekly')) {
                             hostnamePrefix = "pit-recurringweekly"

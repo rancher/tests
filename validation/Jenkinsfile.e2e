@@ -456,7 +456,7 @@ secret_key     = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = ""
 aws_ssh_user = "ubuntu"
 aws_instance_type = "t3a.2xlarge"
-aws_security_group = ["rke2-aws-node"]
+aws_security_group = ["rancher-nodes"]
 
 aws_subnet = "subnet-73577c28"
 aws_availability_zone = "a"
@@ -478,7 +478,7 @@ insecure = true'''
         // ── Downstream job parameters ─────────────────────────
         string(
             name: 'INDIVIDUAL_JOB',
-            defaultValue: 'go-pit-daily-individual-job',
+            defaultValue: 'go-pit-validation-job',
             description: 'Name of the downstream Jenkins job that runs individual Go test suites'
         )
         string(
