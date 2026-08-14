@@ -57,6 +57,13 @@ func checkPodsForRegistryPrefix(client *rancher.Client, clusterID, namespace, re
 		return false, err
 	}
 
+	if len(podsList.Data) == 0 {
+		if namespace == "" {
+			return false, fmt.Errorf("no pods found in cluster %s", clusterID)
+		}
+		return false, fmt.Errorf("no pods found in namespace %s of cluster %s", namespace, clusterID)
+	}
+
 	for _, pod := range podsList.Data {
 		podSpec := &corev1.PodSpec{}
 		err := v1.ConvertToK8sType(pod.Spec, podSpec)
