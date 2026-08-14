@@ -189,4 +189,5 @@ type TemplateConfig struct {
 	Repo             *v1.ClusterRepo `json:"repo,omitempty" yaml:"repo,omitempty"`
 	TemplateName     string          `json:"templateName,omitempty" yaml:"templateName,omitempty"`
 	TemplateProvider string          `json:"templateProvider,omitempty" yaml:"templateProvider,omitempty"`
+	TemplateValues   map[string]any  `json:"templateValues,omitempty" yaml:"templateValues,omitempty"`
 }

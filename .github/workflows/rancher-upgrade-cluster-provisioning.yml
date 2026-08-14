@@ -336,14 +336,23 @@ jobs:
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
 
-          templateTest:
-            repo:
-              spec:
-                gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
-                gitBranch: main
-                insecureSkipTLSVerify: true
-            templateProvider: "aws"
-            templateName: "cluster-template1"
+          templateChart:
+            templateValues:
+              nodepools:
+                "0":
+                  ami: "${{ secrets.AWS_AMI }}"
+                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+                  vpcId: "${{ secrets.AWS_VPC_ID }}"
+
+                "1":
+                  ami: "${{ secrets.AWS_AMI }}"
+                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+                  vpcId: "${{ secrets.AWS_VPC_ID }}"
+
+                "2":
+                  ami: "${{ secrets.AWS_AMI }}"
+                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+                  vpcId: "${{ secrets.AWS_VPC_ID }}"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -726,14 +735,23 @@ jobs:
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
 
-          templateTest:
-            repo:
-              spec:
-                gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
-                gitBranch: main
-                insecureSkipTLSVerify: true
-            templateProvider: "aws"
-            templateName: "cluster-template1"
+          templateChart:
+            templateValues:
+              nodepools:
+                "0":
+                  ami: "${{ secrets.AWS_AMI }}"
+                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+                  vpcId: "${{ secrets.AWS_VPC_ID }}"
+
+                "1":
+                  ami: "${{ secrets.AWS_AMI }}"
+                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+                  vpcId: "${{ secrets.AWS_VPC_ID }}"
+
+                "2":
+                  ami: "${{ secrets.AWS_AMI }}"
+                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+                  vpcId: "${{ secrets.AWS_VPC_ID }}"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -1118,14 +1136,23 @@ jobs:
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
 
-          templateTest:
-            repo:
-              spec:
-                gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
-                gitBranch: main
-                insecureSkipTLSVerify: true
-            templateProvider: "aws"
-            templateName: "cluster-template1"
+          templateChart:
+            templateValues:
+              nodepools:
+                "0":
+                  ami: "${{ secrets.AWS_AMI }}"
+                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+                  vpcId: "${{ secrets.AWS_VPC_ID }}"
+
+                "1":
+                  ami: "${{ secrets.AWS_AMI }}"
+                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+                  vpcId: "${{ secrets.AWS_VPC_ID }}"
+
+                "2":
+                  ami: "${{ secrets.AWS_AMI }}"
+                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+                  vpcId: "${{ secrets.AWS_VPC_ID }}"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -1509,14 +1536,23 @@ jobs:
           sshPath: 
             sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
 
-          templateTest:
-            repo:
-              spec:
-                gitRepo: "${{ secrets.TEMPLATE_GIT_REPO }}"
-                gitBranch: main
-                insecureSkipTLSVerify: true
-            templateProvider: "aws"
-            templateName: "cluster-template1"
+          templateChart:
+            templateValues:
+              nodepools:
+                "0":
+                  ami: "${{ secrets.AWS_AMI }}"
+                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+                  vpcId: "${{ secrets.AWS_VPC_ID }}"
+
+                "1":
+                  ami: "${{ secrets.AWS_AMI }}"
+                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+                  vpcId: "${{ secrets.AWS_VPC_ID }}"
+
+                "2":
+                  ami: "${{ secrets.AWS_AMI }}"
+                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
+                  vpcId: "${{ secrets.AWS_VPC_ID }}"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG

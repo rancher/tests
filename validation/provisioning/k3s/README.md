@@ -598,16 +598,23 @@ terratest:
 
 ### Template Config
 ```yaml
-templateTest:
-  repo:
-    metadata:
-      name: "templateTest"
-    spec:
-      gitRepo: "https://github.com/repo.git"
-      gitBranch: main
-      insecureSkipTLSVerify: true
-  templateProvider: "aws"
-  templateName: "myTemplateName"                
+templateChart:
+  templateValues:
+    nodepools:
+      "0":
+        ami: ""
+        subnetId: ""
+        vpcId: ""
+
+      "1":
+        ami: ""
+        subnetId: ""
+        vpcId: ""
+
+      "2":
+        ami: ""
+        subnetId: ""
+        vpcId: ""            
 ```
 
 ## Defaults
