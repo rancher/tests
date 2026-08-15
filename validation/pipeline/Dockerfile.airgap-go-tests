@@ -3,14 +3,14 @@
 
 ARG TOFU_VERSION=1.10.7
 ARG GOTESTSUM_VERSION=v1.13.0
-ARG ANSIBLE_VERSION=12.3.0
+ARG ANSIBLE_CORE_VERSION=2.21.1
 ARG AWSCLI_VERSION=1.44.44
 
 FROM --platform=linux/amd64 golang:1.26-alpine3.22@sha256:457d8584db11412777c4196146b8060fdaabe0b0ba7b62c553d08e07d8c22bd3
 
 ARG TOFU_VERSION
 ARG GOTESTSUM_VERSION
-ARG ANSIBLE_VERSION
+ARG ANSIBLE_CORE_VERSION
 ARG AWSCLI_VERSION
 
 # Install runtime dependencies
@@ -26,10 +26,26 @@ RUN apk add --no-cache \
     && ln -sf /bin/bash /usr/bin/bash \
     && rm -rf /var/cache/apk/*
 
-# Install Ansible and AWS CLI (pinned versions for reproducible builds)
+# Install Ansible core and AWS CLI (pinned versions for reproducible builds).
+# ansible-core and the python deps mirror qa-infra-automation/requirements.txt so
+# the container control node matches the locally validated environment.
 RUN pip3 install --no-cache-dir --break-system-packages \
-    ansible==${ANSIBLE_VERSION} \
-    awscli==${AWSCLI_VERSION}
+    ansible-core==${ANSIBLE_CORE_VERSION} \
+    awscli==${AWSCLI_VERSION} \
+    pyyaml==6.0.2 \
+    kubernetes>=29.0.0 \
+    boto3>=1.34.0 \
+    botocore>=1.34.0
+
+# Ansible collections required by the qa-infra-automation playbooks.
+# Versions mirror qa-infra-automation/requirements.yml (kept in sync manually:
+# the rancher/tests build context does not contain that repository).
+RUN ansible-galaxy collection install \
+    kubernetes.core:5.0.0 \
+    community.general:10.1.0 \
+    cloud.terraform:2.2.0 \
+    ansible.posix:1.6.2 \
+    amazon.aws:8.2.0
 
 # Install OpenTofu with checksum verification
 RUN curl -Lo /tmp/tofu_${TOFU_VERSION}_linux_amd64.tar.gz "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.tar.gz" \

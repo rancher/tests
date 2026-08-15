@@ -198,7 +198,6 @@ pipeline {
 aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = "ami-09457fad1d2c34c31"
 instance_type = "t3a.xlarge"
-aws_security_group = ["sg-04f28c5d02555da26"]
 aws_subnet_airgap   = "subnet-0b80e9a553633f5a9"
 aws_subnet_bastion  = "subnet-ee8cac86"
 aws_volume_size = 100
