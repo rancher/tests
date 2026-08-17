@@ -109,3 +109,10 @@ The pit tags organizes Go tests using **build tags**. These tags define when and
 
 ##### pit.event
 -  Tests that should run **when a new Alpha or Release Candidate (RC) is published**
+
+##### airgap.daily
+- Gates membership in the **daily airgap CI schedule**. The tag is passed on the CI job's `go test -tags` flag (e.g. `-tags="validation,airgap.daily"`); it selects which test files compile into that run.
+- Tests that cannot run airgap (external egress, external node-IP dependencies) carry `&& !airgap.daily` so they drop out of airgap runs (convention introduced in #770).
+- Tests that should join the airgap schedule but whose other tag terms would not match the job's `-tags` add `|| airgap.daily` (example: `validation/workloads/workload_test.go`).
+- Airgap-safe tests already reachable via the job's other tags (e.g. `validation`) need **no** airgap term on the file.
+- Environment differences (cluster, private registry, UI-extension mirror) belong in `cattle-config.yaml`, not in separate `*_airgap_test.go` variant files. NeuVector is the reference example: one config-driven suite serves both schedules (see `validation/neuvector/README.md`).
