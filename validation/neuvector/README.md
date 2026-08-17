@@ -72,14 +72,14 @@ neuvectorTest:
 
 One config-driven test binary serves both the airgap and non-airgap schedules; there is **no**
 separate airgap variant file (`*_airgap_test.go`). This is the decided policy (Option B, #808).
-The `airgap` tag appears only on the CI job's `go test -tags` flag to mark an airgap run — it is not
-added to the test file, and scheduling is handled by the CI job, not the tag name. Environment
-differences live entirely in `cattle-config.yaml`.
+The `airgap.pit` tag appears only on the CI job's `go test -tags` flag to mark a pit-scoped airgap
+run — it is not added to the test file, and scheduling is handled by the CI job, not the tag name.
+Environment differences live entirely in `cattle-config.yaml`.
 
 Invocation:
 
 - Non-airgap: `go test -tags=validation -run TestNeuVectorHardenedTestSuite ./validation/neuvector/...`
-- Airgap: `go test -tags="validation,airgap" -run TestNeuVectorHardenedTestSuite ./validation/neuvector/...`
+- Pit-scoped airgap: `go test -tags="pit.daily,airgap.pit" -run TestNeuVectorHardenedTestSuite ./validation/neuvector/...`
 
 Config-difference table:
 
@@ -89,7 +89,8 @@ Config-difference table:
 | Registry | `system-default-registry` setting empty (upstream) | `system-default-registry` set to the private registry (set by the airgap Rancher install) |
 | UI extension | defaults to `https://github.com/rancher/ui-plugin-charts` | `neuvectorTest.skipUIExtension: true`, or `neuvectorTest.uiPluginChartsURL` pointing at an internal mirror |
 
-**Decision record for the charts suite:** the `!airgap` exclusion on
-`validation/charts/neuvector_test.go` (added in #770) was removed in this slice because registry
-propagation (Slice 1, #804) plus the service-proxy-based UI check make the standard chart install
-airgap-safe; both NeuVector suites now compile into airgap runs.
+**Decision record for the charts suite:** the `!airgap.pit` exclusion on
+`validation/charts/neuvector_test.go` (added in #770 as `!airgap.daily`) was removed in this slice
+because registry propagation (Slice 1, #804) plus the service-proxy-based UI check make the standard
+chart install airgap-safe; both NeuVector suites now compile into pit-scoped airgap runs with no
+airgap term.

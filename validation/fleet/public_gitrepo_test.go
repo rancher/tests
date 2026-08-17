@@ -1,4 +1,4 @@
-//go:build (validation || sanity || pit.daily || pit.elemental || pit.harvester.daily) && !airgap
+//go:build (validation || sanity || pit.daily || pit.elemental || pit.harvester.daily) && !airgap.pit
 
 package fleet
 

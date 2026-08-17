@@ -1,4 +1,4 @@
-//go:build (validation || pit.daily || pit.elemental || pit.harvester.daily) && !airgap
+//go:build (validation || pit.daily || pit.elemental || pit.harvester.daily) && !airgap.pit
 
 package upgrade
 
