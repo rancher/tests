@@ -16,13 +16,10 @@ Legacy scripted pipelines (for compatibility reference only):
 * [Jenkinsfile](../../validation/Jenkinsfile)
 * [Jenkinsfile.harvester](../../validation/Jenkinsfile.harvester)
 
-Upgrade pipelines:
-* [Jenkinsfile.upgrade.e2e](../../validation/Jenkinsfile.upgrade.e2e)
-
 Airgap pipelines:
 * [Jenkinsfile.airgap-rke2-tests](../../validation/pipeline/Jenkinsfile.airgap-rke2-tests)
-* [Jenkinsfile.setup.airgap.rke2](../../validation/pipeline/Jenkinsfile.setup.airgap.rke2)
-* [Jenkinsfile.destroy.airgap.rke2](../../validation/pipeline/Jenkinsfile.destroy.airgap.rke2)
+* [Jenkinsfile.setup.airgap-rke2-infra](../../validation/pipeline/Jenkinsfile.setup.airgap-rke2-infra)
+* [Jenkinsfile.destroy.airgap-rke2-infra](../../validation/pipeline/Jenkinsfile.destroy.airgap-rke2-infra)
 
 Recurring pipelines:
 * [Jenkinsfile.recurring](../../validation/pipeline/Jenkinsfile.recurring)
