@@ -4,6 +4,8 @@ package rke2
 
 import (
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -34,8 +36,9 @@ import (
 )
 
 const (
-	localCluster          = "local"
-	templateTestConfigKey = "templateTest"
+	localCluster           = "local"
+	templateChartConfigKey = "templateChart"
+	templateChartDefaults  = "defaults/template-chart.yaml"
 )
 
 type templateTest struct {
@@ -58,7 +61,13 @@ func templateSetup(t *testing.T) templateTest {
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = configDefaults.LoadPackageDefaults(r.cattleConfig, "")
+	_, setupFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+
+	setupDir := filepath.Dir(setupFile)
+	templateChartDefaultsPath := filepath.Join(setupDir, templateChartDefaults)
+
+	r.cattleConfig, err = configDefaults.LoadPackageDefaults(r.cattleConfig, templateChartDefaultsPath)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
@@ -68,7 +77,7 @@ func templateSetup(t *testing.T) templateTest {
 	require.NoError(t, err)
 
 	r.templateConfig = new(provisioninginput.TemplateConfig)
-	operations.LoadObjectFromMap(templateTestConfigKey, r.cattleConfig, r.templateConfig)
+	operations.LoadObjectFromMap(templateChartConfigKey, r.cattleConfig, r.templateConfig)
 
 	provider := provisioning.CreateProvider(r.templateConfig.TemplateProvider)
 	cloudCredentialConfig := cloudcredentials.LoadCloudCredential(r.templateConfig.TemplateProvider)
@@ -109,7 +118,7 @@ func TestTemplate(t *testing.T) {
 			templateClusterName := namegenerator.AppendRandomString(actionsDefaults.RKE2 + "-template")
 
 			logrus.Infof("Provisioning template cluster (%s)", templateClusterName)
-			err = charts.InstallTemplateChart(r.client, r.templateConfig.Repo.ObjectMeta.Name, r.templateConfig.TemplateName, templateClusterName, k8sversions[0], r.cloudCredentials)
+			err = charts.InstallTemplateChart(r.client, r.templateConfig.Repo.ObjectMeta.Name, r.templateConfig.TemplateName, templateClusterName, k8sversions[0], r.cloudCredentials, r.templateConfig.TemplateValues)
 			require.NoError(t, err)
 
 			cluster, err := clusters.GetClusterByName(r.client, templateClusterName)

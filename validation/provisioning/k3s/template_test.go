@@ -4,6 +4,8 @@ package k3s
 
 import (
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -34,8 +36,9 @@ import (
 )
 
 const (
-	localCluster          = "local"
-	templateTestConfigKey = "templateTest"
+	localCluster           = "local"
+	templateChartConfigKey = "templateChart"
+	templateChartDefaults  = "defaults/template-chart.yaml"
 )
 
 type templateTest struct {
@@ -58,7 +61,13 @@ func templateSetup(t *testing.T) templateTest {
 
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	k.cattleConfig, err = configDefaults.LoadPackageDefaults(k.cattleConfig, "")
+	_, setupFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+
+	setupDir := filepath.Dir(setupFile)
+	templateChartDefaultsPath := filepath.Join(setupDir, templateChartDefaults)
+
+	k.cattleConfig, err = configDefaults.LoadPackageDefaults(k.cattleConfig, templateChartDefaultsPath)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
@@ -68,7 +77,7 @@ func templateSetup(t *testing.T) templateTest {
 	require.NoError(t, err)
 
 	k.templateConfig = new(provisioninginput.TemplateConfig)
-	operations.LoadObjectFromMap(templateTestConfigKey, k.cattleConfig, k.templateConfig)
+	operations.LoadObjectFromMap(templateChartConfigKey, k.cattleConfig, k.templateConfig)
 
 	provider := provisioning.CreateProvider(k.templateConfig.TemplateProvider)
 	cloudCredentialConfig := cloudcredentials.LoadCloudCredential(k.templateConfig.TemplateProvider)
@@ -109,7 +118,7 @@ func TestTemplate(t *testing.T) {
 			templateClusterName := namegenerator.AppendRandomString(actionsDefaults.K3S + "-template")
 
 			logrus.Infof("Provisioning template cluster (%s)", templateClusterName)
-			err = charts.InstallTemplateChart(k.client, k.templateConfig.Repo.ObjectMeta.Name, k.templateConfig.TemplateName, templateClusterName, k8sversions[0], k.cloudCredentials)
+			err = charts.InstallTemplateChart(k.client, k.templateConfig.Repo.ObjectMeta.Name, k.templateConfig.TemplateName, templateClusterName, k8sversions[0], k.cloudCredentials, k.templateConfig.TemplateValues)
 			require.NoError(t, err)
 
 			cluster, err := clusters.GetClusterByName(k.client, templateClusterName)

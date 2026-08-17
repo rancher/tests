@@ -40,7 +40,7 @@ awsMachineConfigs:
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
     ami: "<required>"
-    instanceType: "t3a.xlarge"
+    instanceType: "t3.2xlarge"
     volumeType: "<required>"
     rootSize: "<required>"
     sshUser: "<required>"
@@ -63,7 +63,7 @@ awsEC2Configs:
   awsSecretAccessKey: "<required>"
   awsAccessKeyID: "<required>"
   awsEC2Config:
-    - instanceType: "t3.xlarge"
+    - instanceType: "t3.2xlarge"
       awsRegionAZ: ""
       awsSSHKeyName: "<required>"
       awsAMI: "<required>"

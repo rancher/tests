@@ -1,0 +1,59 @@
+# Required for the template test
+templateChart:
+  repo:
+    metadata:
+      name: "test"
+    spec:
+      gitRepo: "https://github.com/rancher/cluster-template-examples"
+      gitBranch: "main"
+      insecureSkipTLSVerify: true
+  templateProvider: "aws"
+  templateName: "cluster-template"
+
+  templateValues:
+    cloudprovider: "amazonec2"
+    cloudCredentialSecretName: "amazonec2"
+
+    nodepools:
+      "0":
+        etcd: true
+        controlplane: false
+        worker: false
+        quantity: 3
+        createSecurityGroup: true
+        ami: "<required>"
+        instanceType: "t3.2xlarge"
+        region: "us-east-2"
+        subnetId: "<required>"
+        vpcId: "<required>"
+        zone: "a"
+        rootSize: 100
+        volumeType: "gp3"
+
+      "1":
+        etcd: false
+        controlplane: true
+        worker: false
+        quantity: 2
+        createSecurityGroup: true
+        ami: "<required>"
+        instanceType: "t3.2xlarge"
+        region: "us-east-2"
+        subnetId: "<required>"
+        vpcId: "<required>"
+        rootSize: 100
+        volumeType: "gp3"
+
+      "2":
+        etcd: false
+        controlplane: false
+        worker: true
+        quantity: 3
+        createSecurityGroup: true
+        ami: "<required>"
+        instanceType: "t3.2xlarge"
+        region: "us-east-2"
+        subnetId: "<required>"
+        vpcId: "<required>"
+        rootSize: 100
+        volumeType: "gp3"

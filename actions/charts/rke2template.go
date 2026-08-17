@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/provisioninginput"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -21,7 +22,7 @@ const (
 )
 
 // InstallTemplateChart installs a template from a repo.
-func InstallTemplateChart(client *rancher.Client, repoName, templateName, clusterName, k8sVersion string, credentials *v1.SteveAPIObject) error {
+func InstallTemplateChart(client *rancher.Client, repoName, templateName, clusterName, k8sVersion string, credentials *v1.SteveAPIObject, customValues map[string]any) error {
 	latestVersion, err := client.Catalog.GetLatestChartVersion(templateName, repoName)
 	if err != nil {
 		return err
@@ -63,7 +64,9 @@ func InstallTemplateChart(client *rancher.Client, repoName, templateName, cluste
 		return err
 	}
 
-	chartInstallAction := TemplateInstallAction(chartInstallActionPayload, repoName, clusterName, credentials.Namespace+":"+credentials.Name, k8sVersion, fleetNamespace, chartValues)
+	chartValues = provisioninginput.MergeMapValues(chartValues, customValues)
+	chartInstallName := clusterName
+	chartInstallAction := TemplateInstallAction(chartInstallActionPayload, repoName, chartInstallName, credentials.Namespace+":"+credentials.Name, k8sVersion, fleetNamespace, chartValues)
 
 	catalogClient, err := client.GetClusterCatalogClient(installOptions.Cluster.ID)
 	if err != nil {
@@ -76,13 +79,13 @@ func InstallTemplateChart(client *rancher.Client, repoName, templateName, cluste
 	}
 
 	client.Session.RegisterCleanupFunc(func() error {
-		err := client.Catalog.UninstallChart(templateName, fleetNamespace, NewChartUninstallAction())
+		err := client.Catalog.UninstallChart(chartInstallName, fleetNamespace, NewChartUninstallAction())
 		if err != nil {
 			return err
 		}
 
 		watchAppInterface, err := catalogClient.Apps(fleetNamespace).Watch(context.TODO(), metav1.ListOptions{
-			FieldSelector:  "metadata.name=" + templateName,
+			FieldSelector:  "metadata.name=" + chartInstallName,
 			TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 		})
 		if err != nil {
@@ -97,21 +100,58 @@ func InstallTemplateChart(client *rancher.Client, repoName, templateName, cluste
 		return nil
 	})
 
-	err = charts.WaitChartInstall(catalogClient, fleetNamespace, templateName)
+	err = charts.WaitChartInstall(catalogClient, fleetNamespace, chartInstallName)
 	if err != nil {
 		return err
 	}
+
 	return err
 }
 
 // TemplateInstallAction creates the payload used when installing a template chart
-func TemplateInstallAction(InstallActionPayload *PayloadOpts, repoName, clusterName, cloudCredential, k8sVersion, namespace string, chartValues map[string]any) *types.ChartInstallAction {
+func TemplateInstallAction(InstallActionPayload *PayloadOpts, repoName, releaseName, cloudCredential, k8sVersion, namespace string, chartValues map[string]any) *types.ChartInstallAction {
+	if chartValues == nil {
+		chartValues = map[string]any{}
+	}
+
 	chartValues["cloudCredentialSecretName"] = cloudCredential
 	chartValues["kubernetesVersion"] = k8sVersion
-	chartValues["cluster"].(map[string]any)["name"] = clusterName
 
-	for index := range chartValues["nodepools"].(map[string]any) {
-		chartValues["nodepools"].(map[string]any)[index].(map[string]any)["name"] = namegenerator.AppendRandomString("nodepool")
+	clusterValue, ok := chartValues["cluster"].(map[string]any)
+	if !ok || clusterValue == nil {
+		clusterValue = map[string]any{}
+		chartValues["cluster"] = clusterValue
+	}
+
+	clusterValue["name"] = releaseName
+
+	switch nodePoolsValue := chartValues["nodepools"].(type) {
+	case map[string]any:
+		for index := range nodePoolsValue {
+			nodePool, ok := nodePoolsValue[index].(map[string]any)
+			if !ok || nodePool == nil {
+				continue
+			}
+
+			if paused, exists := nodePool["paused"]; !exists || paused == nil {
+				nodePool["paused"] = false
+			}
+
+			nodePool["name"] = namegenerator.AppendRandomString("nodepool")
+		}
+	case []any:
+		for i := range nodePoolsValue {
+			nodePool, ok := nodePoolsValue[i].(map[string]any)
+			if !ok || nodePool == nil {
+				continue
+			}
+
+			if paused, exists := nodePool["paused"]; !exists || paused == nil {
+				nodePool["paused"] = false
+			}
+
+			nodePool["name"] = namegenerator.AppendRandomString("nodepool")
+		}
 	}
 
 	chartInstall := NewChartInstall(
@@ -124,6 +164,8 @@ func TemplateInstallAction(InstallActionPayload *PayloadOpts, repoName, clusterN
 		InstallActionPayload.InstallOptions.ProjectID,
 		InstallActionPayload.DefaultRegistry,
 		chartValues)
+
+	chartInstall.ReleaseName = releaseName
 	chartInstalls := []types.ChartInstall{*chartInstall}
 
 	return NewChartInstallAction(namespace, InstallActionPayload.ProjectID, chartInstalls)
