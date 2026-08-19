@@ -3,12 +3,15 @@
 package tokens
 
 import (
+	"context"
 	"strconv"
 	"testing"
 
+	extapi "github.com/rancher/rancher/pkg/apis/ext.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults"
 	extsettingsapi "github.com/rancher/shepherd/extensions/kubeapi/settings"
 	exttokenapi "github.com/rancher/shepherd/extensions/kubeapi/tokens"
 	extuserapi "github.com/rancher/shepherd/extensions/kubeapi/users"
@@ -18,8 +21,11 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 type ExtTokenTestSuite struct {
@@ -32,6 +38,71 @@ type ExtTokenTestSuite struct {
 
 func (ext *ExtTokenTestSuite) TearDownSuite() {
 	ext.session.Cleanup()
+}
+
+func (ext *ExtTokenTestSuite) assertStatusHashEmptyInToken(token *extapi.Token, operation string) {
+	require.NotNil(ext.T(), token, "%s returned a nil token", operation)
+	require.Empty(ext.T(), token.Status.Hash, "%s should not expose status.hash", operation)
+}
+
+func (ext *ExtTokenTestSuite) assertStatusHashEmptyInList(tokens []extapi.Token, operation string) {
+	for _, listedToken := range tokens {
+		require.Empty(ext.T(), listedToken.Status.Hash, "%s should not expose status.hash for token %s", operation, listedToken.Name)
+	}
+}
+
+func (ext *ExtTokenTestSuite) assertWatchEventHasRedactedHash(client *rancher.Client, tokenName, operation string) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaults.OneMinuteTimeout)
+	defer cancel()
+
+	sendInitial := true
+	watcher, err := client.WranglerContext.Ext.Token().Watch(metav1.ListOptions{
+		FieldSelector:        "metadata.name=" + tokenName,
+		SendInitialEvents:    &sendInitial,
+		AllowWatchBookmarks:  true,
+		ResourceVersionMatch: metav1.ResourceVersionMatchNotOlderThan,
+	})
+	require.NoError(ext.T(), err)
+	defer watcher.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			require.FailNow(ext.T(), "%s did not observe a token event before timeout", operation)
+		case event, ok := <-watcher.ResultChan():
+			require.True(ext.T(), ok, "%s watch channel closed unexpectedly", operation)
+
+			if event.Type == watch.Bookmark {
+				continue
+			}
+
+			watchedToken, ok := event.Object.(*extapi.Token)
+			require.True(ext.T(), ok, "%s expected ext token object from watch event", operation)
+			if watchedToken.Name != tokenName {
+				continue
+			}
+
+			require.Empty(ext.T(), watchedToken.Status.Hash, "%s should not expose status.hash", operation)
+			return
+		}
+	}
+}
+
+// deleteCollectionExtTokens executes a DeleteCollection request against the tokens.ext.cattle.io
+// endpoint using the provided client's dynamic client.
+func deleteCollectionExtTokens(client *rancher.Client) error {
+	dynamicClient, err := client.GetRancherDynamicClient()
+	if err != nil {
+		return err
+	}
+
+	tokenGVR := schema.GroupVersionResource{
+		Group:    "ext.cattle.io",
+		Version:  "v1",
+		Resource: "tokens",
+	}
+
+	return dynamicClient.Resource(tokenGVR).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
 }
 
 func (ext *ExtTokenTestSuite) SetupSuite() {
@@ -229,6 +300,77 @@ func (ext *ExtTokenTestSuite) TestUpdateExtTokenTTL() {
 	require.Equal(ext.T(), updatedTTL, updatedAdminExtToken.Spec.TTL, "Expected TTL to equal updated value")
 }
 
+func (ext *ExtTokenTestSuite) TestGetExtTokenAsAdminUser() {
+	subSession := ext.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Create ext token as admin user")
+	adminExtToken, err := tokenapi.CreateExtToken(ext.client, ext.defaultExtTokenTTL)
+	require.NoError(ext.T(), err)
+	adminUserID := ext.client.UserID
+
+	log.Info("Verify ext token data")
+	err = tokenapi.VerifyExtTokenData(ext.client, adminExtToken, adminUserID, ext.defaultExtTokenTTL, true)
+	require.NoError(ext.T(), err)
+
+	log.Info("Create ext token as standard user")
+	standardUser, standardUserClient, err := rbac.SetupUser(ext.client, rbac.StandardUser.String())
+	require.NoError(ext.T(), err)
+	standardUserExtToken, err := tokenapi.CreateExtToken(standardUserClient, ext.defaultExtTokenTTL)
+	require.NoError(ext.T(), err)
+
+	log.Info("Verify ext token data")
+	err = tokenapi.VerifyExtTokenData(ext.client, standardUserExtToken, standardUser.ID, ext.defaultExtTokenTTL, true)
+	require.NoError(ext.T(), err)
+}
+
+func (ext *ExtTokenTestSuite) TestGetExtTokenAsStandardUser() {
+	subSession := ext.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Create ext token as admin user")
+	adminExtToken, err := tokenapi.CreateExtToken(ext.client, ext.defaultExtTokenTTL)
+	require.NoError(ext.T(), err)
+	adminUserID := ext.client.UserID
+
+	log.Info("Verify ext token data")
+	err = tokenapi.VerifyExtTokenData(ext.client, adminExtToken, adminUserID, ext.defaultExtTokenTTL, true)
+	require.NoError(ext.T(), err)
+
+	log.Info("Create ext token as standard user")
+	standardUser, standardUserClient, err := rbac.SetupUser(ext.client, rbac.StandardUser.String())
+	require.NoError(ext.T(), err)
+	standardUserExtToken, err := tokenapi.CreateExtToken(standardUserClient, ext.defaultExtTokenTTL)
+	require.NoError(ext.T(), err)
+
+	log.Info("Verify ext token data")
+	err = tokenapi.VerifyExtTokenData(ext.client, standardUserExtToken, standardUser.ID, ext.defaultExtTokenTTL, true)
+	require.NoError(ext.T(), err)
+}
+
+func (ext *ExtTokenTestSuite) TestListAdminExtTokenAsStandardUser() {
+	subSession := ext.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Create an ext token as admin user")
+	adminExtToken, err := tokenapi.CreateExtToken(ext.client, ext.defaultExtTokenTTL)
+	require.NoError(ext.T(), err)
+	adminUserID := ext.client.UserID
+
+	log.Info("Create ext token as standard user")
+	_, standardUserClient, err := rbac.SetupUser(ext.client, rbac.StandardUser.String())
+	require.NoError(ext.T(), err)
+	_, err = tokenapi.CreateExtToken(standardUserClient, ext.defaultExtTokenTTL)
+	require.NoError(ext.T(), err)
+
+	log.Infof("As standard user, attempt to list ext tokens with admin selector cattle.io/user-id=%s", adminUserID)
+	victimSelector := tokenapi.UserIDLabel + "=" + adminUserID
+	standardUserFilteredList, err := exttokenapi.ListExtTokens(standardUserClient, metav1.ListOptions{LabelSelector: victimSelector})
+	require.NoError(ext.T(), err)
+	require.Len(ext.T(), standardUserFilteredList.Items, 0, "Expected no ext tokens when standard user filters by admin user ID")
+	require.False(ext.T(), tokenapi.VerifyExtTokenExistsInList(standardUserFilteredList.Items, adminExtToken.Name), "Standard user should never see admin user's ext token")
+}
+
 func (ext *ExtTokenTestSuite) TestListExtTokenAsAdmin() {
 	subSession := ext.session.NewSession()
 	defer subSession.Cleanup()
@@ -395,6 +537,64 @@ func (ext *ExtTokenTestSuite) TestExtTokenExtendingTTLRejected() {
 	require.Equal(ext.T(), ext.defaultExtTokenTTL, updatedStandardUserExtToken.Spec.TTL, "Expected ext token TTL to be default value")
 }
 
+func (ext *ExtTokenTestSuite) TestExtTokenHashAbsentFromReadResponse() {
+	subSession := ext.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Create ext token as the admin user")
+	adminUserExtToken, err := tokenapi.CreateExtToken(ext.client, ext.defaultExtTokenTTL)
+	require.NoError(ext.T(), err)
+
+	log.Info("Create ext token as standard user")
+	standardUser, standardUserClient, err := rbac.SetupUser(ext.client, rbac.StandardUser.String())
+	require.NoError(ext.T(), err)
+	ownedExtToken, err := tokenapi.CreateExtToken(standardUserClient, ext.defaultExtTokenTTL)
+	require.NoError(ext.T(), err)
+
+	log.Info("Verifying hash is absent from GET request as standard user")
+	standardUserGetToken, err := exttokenapi.GetExtTokenByName(standardUserClient, ownedExtToken.Name)
+	require.NoError(ext.T(), err)
+	ext.assertStatusHashEmptyInToken(standardUserGetToken, "standard user get")
+
+	log.Info("Verifying hash is absent from LIST request as standard user")
+	standardUserSelector := tokenapi.UserIDLabel + "=" + standardUser.ID
+	standardUserList, err := exttokenapi.ListExtTokens(standardUserClient, metav1.ListOptions{LabelSelector: standardUserSelector})
+	require.NoError(ext.T(), err)
+	require.NotEmpty(ext.T(), standardUserList.Items, "standardUser list should return at least one token")
+	ext.assertStatusHashEmptyInList(standardUserList.Items, "standardUser list")
+
+	log.Info("Verifying hash is absent from WATCH request as standard user")
+	ext.assertWatchEventHasRedactedHash(standardUserClient, ownedExtToken.Name, "standardUser watch")
+
+	log.Info("Verifying hash is absent from UPDATE response as standard user")
+	standardUserTokenToUpdate := standardUserGetToken.DeepCopy()
+	standardUserTokenToUpdate.Labels["hash-redaction-standardUser"] = "true"
+	standardUserUpdatedToken, err := exttokenapi.UpdateExtToken(standardUserClient, standardUserTokenToUpdate)
+	require.NoError(ext.T(), err)
+	ext.assertStatusHashEmptyInToken(standardUserUpdatedToken, "standardUser update")
+
+	log.Info("Verifying hash is absent from GET request as admin")
+	adminGetToken, err := exttokenapi.GetExtTokenByName(ext.client, adminUserExtToken.Name)
+	require.NoError(ext.T(), err)
+	ext.assertStatusHashEmptyInToken(adminGetToken, "admin get")
+
+	log.Info("Verifying hash is absent from LIST request as admin")
+	adminExtTokenList, err := exttokenapi.ListExtTokens(ext.client, metav1.ListOptions{LabelSelector: standardUserSelector})
+	require.NoError(ext.T(), err)
+	require.NotEmpty(ext.T(), adminExtTokenList.Items, "Admin list should return the standardUser's token")
+	ext.assertStatusHashEmptyInList(adminExtTokenList.Items, "admin list")
+
+	log.Info("Verifying hash is absent from WATCH request as admin")
+	ext.assertWatchEventHasRedactedHash(ext.client, adminUserExtToken.Name, "admin watch")
+
+	log.Info("Verifying hash is absent from UPDATE response as admin")
+	adminTokenToUpdate := adminGetToken.DeepCopy()
+	adminTokenToUpdate.Labels["hash-redaction-admin"] = "true"
+	adminUpdatedToken, err := exttokenapi.UpdateExtToken(ext.client, adminTokenToUpdate)
+	require.NoError(ext.T(), err)
+	ext.assertStatusHashEmptyInToken(adminUpdatedToken, "admin update")
+}
+
 func (ext *ExtTokenTestSuite) TestAuthenticateWithExtToken() {
 	subSession := ext.session.NewSession()
 	defer subSession.Cleanup()
@@ -461,6 +661,73 @@ func (ext *ExtTokenTestSuite) TestExtTokenIsDisabledUponUserDisablement() {
 	disabledExtToken, err := tokenapi.WaitForExtTokenToDisable(ext.client, standardUserExtToken.Name, false)
 	require.NoError(ext.T(), err, "Polling for ext token to be disabled failed")
 	require.False(ext.T(), *disabledExtToken.Spec.Enabled, "Expected ext token to be disabled")
+}
+
+func (ext *ExtTokenTestSuite) TestExtTokenDeleteCollectionScoping() {
+	subSession := ext.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Create ext token as standarduserA")
+	standardUserA, standardUserAClient, err := rbac.SetupUser(ext.client, rbac.StandardUser.String())
+	require.NoError(ext.T(), err)
+	_, err = tokenapi.CreateExtToken(standardUserAClient, ext.defaultExtTokenTTL)
+	require.NoError(ext.T(), err)
+
+	log.Info("Create ext token as the standarduserB")
+	standardUserB, standardUserBClient, err := rbac.SetupUser(ext.client, rbac.StandardUser.String())
+	require.NoError(ext.T(), err)
+	_, err = tokenapi.CreateExtToken(standardUserBClient, ext.defaultExtTokenTTL)
+	require.NoError(ext.T(), err)
+
+	log.Info("Grant standarduserB'deletecollection' permissions on tokens.ext.cattle.io")
+	cr := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: "test-deletecollection-"},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"ext.cattle.io"},
+				Resources: []string{"tokens"},
+				Verbs:     []string{"deletecollection"},
+			},
+		},
+	}
+
+	createdCR, err := ext.client.WranglerContext.RBAC.ClusterRole().Create(cr)
+	require.NoError(ext.T(), err)
+
+	crb := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: "test-deletecollection-binding-"},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:     "User",
+				Name:     standardUserB.ID,
+				APIGroup: rbacv1.GroupName,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "ClusterRole",
+			Name:     createdCR.Name,
+			APIGroup: rbacv1.GroupName,
+		},
+	}
+
+	_, err = ext.client.WranglerContext.RBAC.ClusterRoleBinding().Create(crb)
+	require.NoError(ext.T(), err)
+
+	log.Info("Execute DeleteCollection as standarduserB")
+	err = deleteCollectionExtTokens(standardUserBClient)
+	require.NoError(ext.T(), err, "standarduserB should be permitted to execute DeleteCollection")
+
+	log.Info("Verifying standarduserB's tokens were successfully deleted")
+	standardUserBSelector := tokenapi.UserIDLabel + "=" + standardUserB.ID
+	attackerList, err := exttokenapi.ListExtTokens(ext.client, metav1.ListOptions{LabelSelector: standardUserBSelector})
+	require.NoError(ext.T(), err)
+	require.Empty(ext.T(), attackerList.Items, "Attacker's tokens should be completely deleted")
+
+	log.Info("Verifying standarduserA's tokens remain untouched (Scoping Fix Validation)")
+	victimSelector := tokenapi.UserIDLabel + "=" + standardUserA.ID
+	victimList, err := exttokenapi.ListExtTokens(ext.client, metav1.ListOptions{LabelSelector: victimSelector})
+	require.NoError(ext.T(), err)
+	require.NotEmpty(ext.T(), victimList.Items, "standarduserA's tokens MUST NOT be deleted by standardUserB's DeleteCollection call")
 }
 
 func TestExtTokenTestSuite(ext *testing.T) {

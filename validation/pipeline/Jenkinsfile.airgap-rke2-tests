@@ -198,7 +198,6 @@ pipeline {
 aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = "ami-09457fad1d2c34c31"
 instance_type = "t3a.xlarge"
-aws_security_group = ["sg-04f28c5d02555da26"]
 aws_subnet_airgap   = "subnet-0b80e9a553633f5a9"
 aws_subnet_bastion  = "subnet-ee8cac86"
 aws_volume_size = 100
@@ -559,6 +558,14 @@ rancher_system_default_registry: "${PRIVATE_REGISTRY_URL}"'''
             }
             steps {
                 script {
+                    // Bind private registry credentials for this stage: the
+                    // 'Configure Downstream Registry' gate reads env.PRIVATE_REGISTRY_URL,
+                    // which is only populated inside property.useWithProperties.
+                    property.useWithProperties([
+                        'PRIVATE_REGISTRY_URL',
+                        'PRIVATE_REGISTRY_USERNAME',
+                        'PRIVATE_REGISTRY_PASSWORD'
+                    ]) {
                     // Best-effort guard: the downstream make/playbook targets require
                     // a 'downstream' inventory group, which only exists when tofu
                     // provisions downstream nodes via node_groups in TERRAFORM_CONFIG.
@@ -613,6 +620,7 @@ rancher_system_default_registry: "${PRIVATE_REGISTRY_URL}"'''
                             ],
                             passAwsCreds: false
                         )
+                    }
                     }
                 }
             }

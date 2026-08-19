@@ -1,24 +1,39 @@
 # NeuVector Validation Tests
 
 Tests in this directory verify NeuVector installation on Rancher-managed downstream clusters.
-The suite targets an existing downstream cluster when `rancher.clusterName` is set in the config
-(the airgap pipeline injects this key); it provisions a hardened custom cluster via the
-`interoperability/qainfraautomation` package only when `rancher.clusterName` is unset.
+
+The test supports two modes:
+
+- **Existing cluster** (default for airgap): set `rancher.clusterName` to target a pre-provisioned cluster. No provisioning tooling required.
+- **Self-provisioned cluster**: when `rancher.clusterName` is empty, the test provisions a hardened custom cluster via the `interoperability/qainfraautomation` package.
 
 ## Prerequisites
 
 - A running Rancher instance reachable by the test binary
-- OpenTofu installed and in `$PATH` *(provisioning path only)*
-- Ansible installed and in `$PATH` *(provisioning path only)*
-- provider defined in qaInfraAutomation for use in a custom cluster *(provisioning path only; custom cluster required for hardening)*
+- **Existing cluster mode**: a downstream cluster already imported/created in Rancher, with `rancher.clusterName` set in the config
+- **Self-provisioned cluster mode**: OpenTofu and Ansible in `$PATH`, plus a provider defined in `qaInfraAutomation` for a custom cluster (custom cluster required for hardening)
+
+> **Airgap?** See [AIRGAP.md](./AIRGAP.md) for the full list of cluster prerequisites (private registry, mirrored images, `system-default-registry`, etc.).
 
 ## Config
 
 The test reads configuration from a YAML file pointed to by `$CATTLE_TEST_CONFIG`.
 
+### Existing cluster (recommended for airgap)
+
+Set `rancher.clusterName` to target a cluster already present in Rancher. The test skips all provisioning and runs directly against the named cluster:
+
+```yaml
+rancher:
+  clusterName: "my-existing-cluster"
+```
+
+### Self-provisioned custom cluster (Ansible-registered nodes)
+
+When `rancher.clusterName` is empty, the test provisions its own cluster. Requires `qaInfraAutomation` config:
+
 Top-level key: `qaInfraAutomation`
 
-### Custom cluster (Ansible-registered nodes)
 
 Set exactly one supported provider alongside `customCluster`:
 

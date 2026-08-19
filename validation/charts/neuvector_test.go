@@ -113,7 +113,7 @@ func (n *NeuVectorTestSuite) TestNeuVectorInstallation() {
 
 	if n.chartInstallOptions.DefaultRegistry != "" {
 		n.T().Logf("Verifying NeuVector pods use registry prefix %q", n.chartInstallOptions.DefaultRegistry)
-		isUsingRegistry, err := registries.CheckAllClusterPodsForRegistryPrefix(client, n.cluster.ID, n.chartInstallOptions.DefaultRegistry)
+		isUsingRegistry, err := registries.CheckNamespacedPodsForRegistryPrefix(client, n.cluster.ID, actionsCharts.NeuVectorNamespace, n.chartInstallOptions.DefaultRegistry)
 		require.NoError(n.T(), err)
 		require.True(n.T(), isUsingRegistry, "NeuVector pods are not using the expected registry prefix %q", n.chartInstallOptions.DefaultRegistry)
 	}
