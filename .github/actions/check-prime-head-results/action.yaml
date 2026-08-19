@@ -1,0 +1,74 @@
+---
+name: Check Prime Head Results
+description: "Checks if all dispatch workflows have successful prime head job completions for specified release lines"
+
+inputs:
+  dispatch-workflow-list:
+    description: "Comma-separated list of dispatch workflow names to check"
+    required: true
+
+outputs:
+  complete_v215:
+    description: "Whether v2.15 prime head release testing is complete"
+    value: ${{ steps.check-releases.outputs.complete_v215 }}
+  failed_workflows_v215:
+    description: "Comma-separated list of workflows that need v2.15 re-run"
+    value: ${{ steps.check-releases.outputs.failed_workflows_v215 }}
+
+runs:
+  using: composite
+  steps:
+    - id: check-releases
+      env:
+        SANITIZED_RELEASES: "v215"
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        WORKFLOWS="${{ inputs.dispatch-workflow-list }}"
+        
+        for release in $SANITIZED_RELEASES; do
+          ALL_PASSED=true
+          FAILED_WORKFLOWS=""
+          JOB_KEY="v${release:1:1}-${release:2}"
+          JOB_VERSION="v${release:1:1}.${release:2}-head"
+          
+          echo "Checking $release jobs..."
+          for workflow in ${WORKFLOWS//,/ }; do
+            RUN_IDS=$(gh api repos/${{ github.repository }}/actions/workflows/${workflow}/runs \
+              --jq '[.workflow_runs[] | select(.head_branch=="main" and (.event=="schedule" or .event=="workflow_dispatch"))] | .[0:30] | .[].id')
+
+            if [[ -z "$RUN_IDS" ]]; then
+              echo "  $workflow: No recent runs found"
+              ALL_PASSED=false
+              FAILED_WORKFLOWS="${FAILED_WORKFLOWS}${workflow},"
+              continue
+            fi
+
+            JOB_FOUND=""
+            for RUN_ID in $RUN_IDS; do
+              JOB_SUCCESS=$(gh api repos/${{ github.repository }}/actions/runs/${RUN_ID}/jobs \
+                --jq ".jobs[] | select((.name==\"${JOB_KEY}\" or .name==\"${JOB_VERSION}\") and .conclusion==\"success\") | .name" 2>/dev/null)
+              if [[ -n "$JOB_SUCCESS" ]]; then
+                JOB_FOUND="true"
+                break
+              fi
+            done
+
+            if [[ -z "$JOB_FOUND" ]]; then
+              echo "  - $workflow did not pass, needs to re-run..."
+              ALL_PASSED=false
+              FAILED_WORKFLOWS="${FAILED_WORKFLOWS}${workflow},"
+            else
+              echo "  - $workflow has a successful run!"
+            fi
+          done
+
+          if [[ "$ALL_PASSED" == "true" ]]; then
+            echo "complete_${release}=true" >> $GITHUB_OUTPUT
+          else
+            echo "complete_${release}=false" >> $GITHUB_OUTPUT
+          fi
+          
+          FAILED_WORKFLOWS="${FAILED_WORKFLOWS%,}"
+          echo "failed_workflows_${release}=${FAILED_WORKFLOWS}" >> $GITHUB_OUTPUT
+        done
+      shell: bash
