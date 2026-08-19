@@ -60,7 +60,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: upgrade-community-head
+    environment: upgrade-community-prime-head
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_16 }}"
       HOSTNAME_PREFIX: "ghap-up-216"
@@ -168,15 +168,6 @@ jobs:
               (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_15)
             }}
 
-      - name: Set upgraded Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.UPGRADED_RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.UPGRADED_RANCHER_REPO }}
-          is-prime: false
-          release-community-version: "2.16"
-          env-var-name: UPGRADED_RANCHER_REPO
-
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
@@ -184,16 +175,6 @@ jobs:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
           qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_16 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_16 }}
-
-      - name: Set upgraded Rancher chart url
-        uses: ./.github/actions/set-rancher-chart-url
-        with:
-          rancher-repo: ${{ env.UPGRADED_RANCHER_REPO }}
-          is-prime: false
-          community-chart-url: ${{ vars.COMMUNITY_HELM_CHART_URL }}
-          staging-chart-url: ${{ secrets.STAGING_RANCHER_HELM_CHART_URL }}
-          fallback-chart-url: ${{ secrets.UPGRADED_RANCHER_HELM_CHART_URL }}
-          env-var-name: UPGRADED_RANCHER_HELM_CHART_URL
 
       - name: Create config.yaml
         run: |
@@ -258,10 +239,10 @@ jobs:
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
-              upgradedRancherChartRepository: "${{ env.UPGRADED_RANCHER_HELM_CHART_URL }}"
+              upgradedRancherChartRepository: "${{ secrets.UPGRADED_RANCHER_HELM_CHART_URL }}"
               upgradedRancherChartVersion: "${{ env.UPGRADED_RANCHER_CHART_VERSION }}"
               upgradedRancherImage: "${{ secrets.UPGRADED_RANCHER_IMAGE }}"
-              upgradedRancherRepo: "${{ env.UPGRADED_RANCHER_REPO }}"
+              upgradedRancherRepo: "${{ secrets.UPGRADED_RANCHER_REPO }}"
               upgradedRancherTagVersion: "${{ env.UPGRADED_RANCHER_VERSION }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -380,8 +361,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: proxy
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -451,7 +430,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: upgrade-community-head
+    environment: upgrade-community-prime-head
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_15 }}"
       HOSTNAME_PREFIX: "ghap-up-215"
@@ -559,15 +538,6 @@ jobs:
               (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_15)
             }}
 
-      - name: Set upgraded Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.UPGRADED_RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.UPGRADED_RANCHER_REPO }}
-          is-prime: false
-          release-community-version: "2.15"
-          env-var-name: UPGRADED_RANCHER_REPO
-
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
@@ -575,16 +545,6 @@ jobs:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
           qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_15 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_15 }}
-
-      - name: Set upgraded Rancher chart url
-        uses: ./.github/actions/set-rancher-chart-url
-        with:
-          rancher-repo: ${{ env.UPGRADED_RANCHER_REPO }}
-          is-prime: false
-          community-chart-url: ${{ vars.COMMUNITY_HELM_CHART_URL }}
-          staging-chart-url: ${{ secrets.STAGING_RANCHER_HELM_CHART_URL }}
-          fallback-chart-url: ${{ secrets.UPGRADED_RANCHER_HELM_CHART_URL }}
-          env-var-name: UPGRADED_RANCHER_HELM_CHART_URL
 
       - name: Create config.yaml
         run: |
@@ -649,10 +609,10 @@ jobs:
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
-              upgradedRancherChartRepository: "${{ env.UPGRADED_RANCHER_HELM_CHART_URL }}"
+              upgradedRancherChartRepository: "${{ secrets.UPGRADED_RANCHER_HELM_CHART_URL }}"
               upgradedRancherChartVersion: "${{ env.UPGRADED_RANCHER_CHART_VERSION }}"
               upgradedRancherImage: "${{ secrets.UPGRADED_RANCHER_IMAGE }}"
-              upgradedRancherRepo: "${{ env.UPGRADED_RANCHER_REPO }}"
+              upgradedRancherRepo: "${{ secrets.UPGRADED_RANCHER_REPO }}"
               upgradedRancherTagVersion: "${{ env.UPGRADED_RANCHER_VERSION }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -771,8 +731,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: proxy
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1163,8 +1121,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: proxy
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1554,8 +1510,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: proxy
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()

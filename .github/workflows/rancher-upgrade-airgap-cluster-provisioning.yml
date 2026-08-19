@@ -47,11 +47,11 @@ env:
 jobs:
   v2-15:
     if: |
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && contains(github.event.inputs.rancher_version, '-alpha') ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && contains(inputs.rancher_version, '-alpha')
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15-head')) ||
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: upgrade-community-community
+    environment: upgrade-community-prime-head
     env:
       HOSTNAME_PREFIX: "agu-215"
       REPORTING_ENABLED: >-
@@ -148,13 +148,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set upgraded Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.UPGRADED_RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.UPGRADED_RANCHER_REPO }}
-          env-var-name: UPGRADED_RANCHER_REPO
-
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
@@ -222,13 +215,14 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}-internal.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ vars.RELEASED_RANCHER_VERSION_2_15 }}"
-              registryUsername: "${{ secrets.PRIVATE_REGISTRY_USERNAME }}"
-              registryPassword: "${{ secrets.PRIVATE_REGISTRY_PASSWORD }}"
+              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
+              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
+              upgradedRancherAgentImage: "${{ secrets.UPGRADED_RANCHER_AGENT_IMAGE }}"
               upgradedRancherChartRepository: "${{ secrets.UPGRADED_RANCHER_HELM_CHART_URL }}"
               upgradedRancherChartVersion: "${{ env.UPGRADED_RANCHER_CHART_VERSION }}"
-              upgradedRancherRepo: "${{ env.UPGRADED_RANCHER_REPO }}"
+              upgradedRancherRepo: "${{ secrets.UPGRADED_RANCHER_REPO }}"
               upgradedRancherImage: "${{ secrets.UPGRADED_RANCHER_IMAGE }}"
               upgradedRancherTagVersion: "${{ env.UPGRADED_RANCHER_VERSION }}"
             standaloneRegistry:
@@ -317,8 +311,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: airgap
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -551,8 +543,8 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}-internal.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ vars.RELEASED_RANCHER_VERSION_2_14 }}"
-              registryUsername: "${{ secrets.PRIVATE_REGISTRY_USERNAME }}"
-              registryPassword: "${{ secrets.PRIVATE_REGISTRY_PASSWORD }}"
+              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
+              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_14 }}"
               upgradedRancherAgentImage: "${{ secrets.UPGRADED_RANCHER_AGENT_IMAGE }}"
@@ -647,8 +639,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: airgap
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -881,8 +871,8 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}-internal.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ vars.RELEASED_RANCHER_VERSION_2_13 }}"
-              registryUsername: "${{ secrets.PRIVATE_REGISTRY_USERNAME }}"
-              registryPassword: "${{ secrets.PRIVATE_REGISTRY_PASSWORD }}"
+              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
+              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
               upgradedRancherAgentImage: "${{ secrets.UPGRADED_RANCHER_AGENT_IMAGE }}"
@@ -977,8 +967,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: airgap
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()

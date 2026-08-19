@@ -46,11 +46,10 @@ env:
 jobs:
   v2-15:
     if: |
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && contains(github.event.inputs.rancher_version, '-alpha') ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && contains(inputs.rancher_version, '-alpha')
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: staging-alpha
+    environment: prime-head
     env:
       HOSTNAME_PREFIX: "r215"
       REPORTING_ENABLED: >-
@@ -147,12 +146,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
@@ -218,9 +211,9 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
-              registryUsername: "${{ secrets.PRIVATE_REGISTRY_USERNAME }}"
-              registryPassword: "${{ secrets.PRIVATE_REGISTRY_PASSWORD }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
+              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
             standaloneRegistry:
               assetsPath: "${{ secrets.ASSETS_PATH }}"
@@ -331,12 +324,10 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: registries
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/registries/aws
+        working-directory: tfp-automation/modules/registries/authGlobal
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
@@ -561,8 +552,8 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
-              registryUsername: "${{ secrets.PRIVATE_REGISTRY_USERNAME }}"
-              registryPassword: "${{ secrets.PRIVATE_REGISTRY_PASSWORD }}"
+              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
+              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_14 }}"
             standaloneRegistry:
@@ -674,12 +665,10 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: registries
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/registries/aws
+        working-directory: tfp-automation/modules/registries/unauthGlobal
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
@@ -904,8 +893,8 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
-              registryUsername: "${{ secrets.PRIVATE_REGISTRY_USERNAME }}"
-              registryPassword: "${{ secrets.PRIVATE_REGISTRY_PASSWORD }}"
+              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
+              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ env.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
             standaloneRegistry:
@@ -1017,12 +1006,10 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: registries
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
-        working-directory: tfp-automation/modules/registries/aws
+        working-directory: tfp-automation/modules/registries/unauthGlobal
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials

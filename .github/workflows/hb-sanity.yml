@@ -354,8 +354,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: sanity
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -719,8 +717,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: sanity
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1085,8 +1081,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: sanity
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1450,8 +1444,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: sanity
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1815,8 +1807,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: sanity
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()

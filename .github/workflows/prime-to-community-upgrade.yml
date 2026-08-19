@@ -240,8 +240,8 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ vars.RELEASED_RANCHER_VERSION_2_15 }}"
-              registryUsername: "${{ secrets.PRIVATE_REGISTRY_USERNAME }}"
-              registryPassword: "${{ secrets.PRIVATE_REGISTRY_PASSWORD }}"
+              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
+              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
               upgradedRancherChartRepository: "${{ env.UPGRADED_RANCHER_HELM_CHART_URL }}"
@@ -359,8 +359,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: sanity
-          run_ace: "false"
-          run_template: "false"
 
       - name: Cleanup Infrastructure
         if: always()
