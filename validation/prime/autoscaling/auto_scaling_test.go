@@ -75,7 +75,7 @@ func TestAutoScalingUp(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster autoscaler (%s)", cluster.Name)
-			scaling.VerifyAutoscaler(t, s.client, cluster)
+			scaling.VerifyAutoscaler(s.client, cluster)
 
 			v3ClusterID, err := shepherdClusters.GetClusterIDByName(s.client, cluster.Name)
 			require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestAutoScalingDown(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster autoscaler (%s)", cluster.Name)
-			scaling.VerifyAutoscaler(t, s.client, cluster)
+			scaling.VerifyAutoscaler(s.client, cluster)
 
 			v3ClusterID, err := shepherdClusters.GetClusterIDByName(tt.client, cluster.Name)
 			require.NoError(t, err)
@@ -269,7 +269,7 @@ func TestAutoScalingPause(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster autoscaler (%s)", cluster.Name)
-			scaling.VerifyAutoscaler(t, s.client, cluster)
+			scaling.VerifyAutoscaler(s.client, cluster)
 
 			v3ClusterID, err := shepherdClusters.GetClusterIDByName(s.client, cluster.Name)
 			require.NoError(t, err)
@@ -297,7 +297,7 @@ func TestAutoScalingPause(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster autoscaler (%s)", cluster.Name)
-			scaling.VerifyAutoscaler(t, s.client, cluster)
+			scaling.VerifyAutoscaler(s.client, cluster)
 
 			logrus.Infof("Verifying the cluster scales (%s)", cluster.Name)
 			err = scaling.WatchAndWaitForAutoscaling(s.client, cluster, tt.maxNodeCount, time.Minute*5)
