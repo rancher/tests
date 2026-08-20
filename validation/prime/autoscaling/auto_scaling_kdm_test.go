@@ -5,7 +5,9 @@ package autoscaling
 import (
 	"testing"
 
+	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
@@ -94,7 +96,14 @@ func TestAutoScalingKDM(t *testing.T) {
 				require.NoError(t, err)
 
 				logrus.Infof("Verifying cluster autoscaler (%s)", cluster.Name)
-				scaling.VerifyAutoscaler(t, s.client, cluster)
+				err = scaling.VerifyAutoscaler(s.client, cluster)
+				clusterSpec := &provv1.ClusterSpec{}
+				specErr := steveV1.ConvertToK8sType(cluster.Spec, clusterSpec)
+				if specErr != nil {
+					require.NoError(t, specErr, "Failed to convert cluster spec for cluster %s", cluster.Name)
+				}
+
+				require.NoError(t, err, "Failed to verify cluster autoscaler for cluster %s with Kubernetes version %s", cluster.Name, clusterSpec.KubernetesVersion)
 			}
 		})
 

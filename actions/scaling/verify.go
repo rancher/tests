@@ -2,7 +2,7 @@ package scaling
 
 import (
 	"context"
-	"testing"
+	"fmt"
 	"time"
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -13,7 +13,6 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 	appv1 "k8s.io/api/apps/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
@@ -23,14 +22,20 @@ const (
 	autoscalerPausedAnnotation = "provisioning.cattle.io/cluster-autoscaler-paused"
 )
 
-func VerifyAutoscaler(t *testing.T, client *rancher.Client, cluster *v1.SteveAPIObject) {
+func VerifyAutoscaler(client *rancher.Client, cluster *v1.SteveAPIObject) error {
 	status := &provv1.ClusterStatus{}
 	err := steveV1.ConvertToK8sType(cluster.Status, status)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
 	downstreamClient, err := client.Steve.ProxyDownstream(status.ClusterName)
-	require.NoError(t, err)
-	require.NotNil(t, downstreamClient)
+	if err != nil {
+		return err
+	}
+	if downstreamClient == nil {
+		return fmt.Errorf("downstream client is nil")
+	}
 
 	deploymentClient := downstreamClient.SteveType(stevetypes.Deployment)
 
@@ -50,11 +55,19 @@ func VerifyAutoscaler(t *testing.T, client *rancher.Client, cluster *v1.SteveAPI
 
 		return true, nil
 	})
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
 	if cluster.Annotations[autoscalerPausedAnnotation] == "true" {
-		require.Zero(t, *deployment.Spec.Replicas)
+		if 0 != *deployment.Spec.Replicas {
+			return fmt.Errorf("expected 0 replicas, got %d", *deployment.Spec.Replicas)
+		}
 	} else {
-		require.NotZero(t, *deployment.Spec.Replicas)
+		if 0 == *deployment.Spec.Replicas {
+			return fmt.Errorf("expected non-zero replicas, got %d", *deployment.Spec.Replicas)
+		}
 	}
+
+	return nil
 }
