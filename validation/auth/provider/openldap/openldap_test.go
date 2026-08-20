@@ -800,6 +800,63 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPPrincipalSearchAfterProviderDisa
 	require.NoError(a.T(), err, "No OpenLDAP principal should be returned while the provider is disabled")
 }
 
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPLoginAttachesExternalPrincipal() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+	require.NoError(a.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	ldapUser := a.authConfig.Users[0]
+	userPrincipalID := authactions.GetUserPrincipalID(authactions.OpenLdap, ldapUser.Username, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
+
+	logrus.Infof("Logging in as OpenLDAP user %s so that the login flow attaches its external principal", ldapUser.Username)
+	err = authactions.VerifyUserLogins(authAdmin, authactions.OpenLdap, []authactions.User{ldapUser}, "external principal attachment", true)
+	require.NoError(a.T(), err, "OpenLDAP user should be able to login")
+
+	logrus.Infof("Verifying that a user record carrying the external principal %s exists", userPrincipalID)
+	attachedUser, err := userapi.WaitForUserByPrincipalID(a.client, userPrincipalID)
+	require.NoError(a.T(), err, "Login should attach the external principal to a user record")
+	require.Contains(a.T(), attachedUser.PrincipalIDs, userPrincipalID, "User record should carry the external principal")
+	require.Contains(a.T(), attachedUser.PrincipalIDs, authactions.LocalPrincipalPrefix+attachedUser.Name, "User record should also carry its local principal")
+}
+
+func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPDisableRemovesExternalPrincipals() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.OpenLdap)
+	require.NoError(a.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	ldapUser := a.authConfig.Users[0]
+	userPrincipalID := authactions.GetUserPrincipalID(authactions.OpenLdap, ldapUser.Username, a.client.Auth.OLDAP.Config.Users.SearchBase, a.client.Auth.OLDAP.Config.Groups.SearchBase)
+
+	logrus.Infof("Logging in as OpenLDAP user %s so that a user record carrying its external principal exists", ldapUser.Username)
+	err = authactions.VerifyUserLogins(authAdmin, authactions.OpenLdap, []authactions.User{ldapUser}, "external principal attachment", true)
+	require.NoError(a.T(), err, "OpenLDAP user should be able to login")
+
+	attachedUser, err := userapi.WaitForUserByPrincipalID(a.client, userPrincipalID)
+	require.NoError(a.T(), err, "Login should attach the external principal to a user record")
+	require.ElementsMatch(a.T(), []string{userPrincipalID, authactions.LocalPrincipalPrefix + attachedUser.Name}, attachedUser.PrincipalIDs,
+		"User %s should carry only the OpenLDAP principal and the local principal added alongside it, so that disabling the provider leaves it with no external identity", attachedUser.Name)
+
+	logrus.Info("Disabling OpenLDAP so that the cleanup service reconciles principals it emitted")
+	err = a.client.Auth.OLDAP.Disable()
+	require.NoError(a.T(), err, "Failed to disable OpenLDAP")
+
+	subSession.RegisterCleanupFunc(func() error {
+		logrus.Info("Re-enabling OpenLDAP so that a failure here does not leave the provider disabled for later tests")
+		return authactions.EnsureAuthProviderEnabled(a.client, authactions.OpenLdap)
+	})
+
+	_, err = authactions.WaitForAuthProviderAnnotationUpdate(a.client, authactions.OpenLdap, authactions.AuthProvCleanupAnnotationValLocked)
+	require.NoError(a.T(), err, "Failed waiting for annotation update")
+
+	logrus.Infof("Verifying that no user record still carries the external principal %s", userPrincipalID)
+	err = userapi.WaitForUserByPrincipalIDDeletion(a.client, userPrincipalID)
+	require.NoError(a.T(), err, "Disabling the provider should leave no user carrying an OpenLDAP principal")
+
+	logrus.Infof("Verifying that user %s was removed rather than left behind holding only its local principal", attachedUser.Name)
+	err = userapi.WaitForUserDeletion(a.client, attachedUser.Name)
+	require.NoError(a.T(), err, "Disabling the provider should remove a user whose only external identity that provider emitted, leaving no record that could later be rebound")
+}
+
 func TestOpenLDAPAuthProviderSuite(t *testing.T) {
 	suite.Run(t, new(OpenLDAPAuthProviderSuite))
 }

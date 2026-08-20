@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -151,6 +152,111 @@ func WaitForUserLastRefreshUpdate(client *rancher.Client, name string, beforeTim
 	})
 
 	return afterTime, err
+}
+
+// WaitForUserPrincipalID polls until the user carries the given principal ID and returns the principal IDs it settled on
+func WaitForUserPrincipalID(client *rancher.Client, name, principalID string) ([]string, error) {
+	var principalIDs []string
+
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		user, err := extuserapi.GetUserByName(client, name)
+		if err != nil {
+			return false, nil
+		}
+
+		principalIDs = user.PrincipalIDs
+
+		return slices.Contains(principalIDs, principalID), nil
+	})
+
+	if err != nil {
+		return principalIDs, fmt.Errorf("timed out waiting for user %s principal IDs %v to contain %s: %w", name, principalIDs, principalID, err)
+	}
+
+	return principalIDs, nil
+}
+
+// WaitForUserByPrincipalID polls until a user carrying the given principal ID exists and returns it
+func WaitForUserByPrincipalID(client *rancher.Client, principalID string) (*v3.User, error) {
+	var user *v3.User
+
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		user, _ = findUserByPrincipalID(client, principalID)
+
+		return user != nil, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("timed out waiting for a user carrying principal ID %s: %w", principalID, err)
+	}
+
+	return user, nil
+}
+
+// WaitForUserByPrincipalIDDeletion polls until no user carries the given principal ID
+func WaitForUserByPrincipalIDDeletion(client *rancher.Client, principalID string) error {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		user, err := findUserByPrincipalID(client, principalID)
+		if err != nil {
+			return false, nil
+		}
+
+		return user == nil, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("timed out waiting for the user carrying principal ID %s to be removed: %w", principalID, err)
+	}
+
+	return nil
+}
+
+// WaitForUserDeletion polls until the named user no longer exists
+func WaitForUserDeletion(client *rancher.Client, name string) error {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		_, err := extuserapi.GetUserByName(client, name)
+		if k8serrors.IsNotFound(err) {
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("timed out waiting for user %s to be removed: %w", name, err)
+	}
+
+	return nil
+}
+
+// ListUsersByPrincipalID returns every user carrying the given principal ID
+func ListUsersByPrincipalID(client *rancher.Client, principalID string) ([]v3.User, error) {
+	userList, err := extuserapi.ListUsers(client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
+	}
+
+	var matches []v3.User
+	for i := range userList.Items {
+		if slices.Contains(userList.Items[i].PrincipalIDs, principalID) {
+			matches = append(matches, userList.Items[i])
+		}
+	}
+
+	return matches, nil
+}
+
+func findUserByPrincipalID(client *rancher.Client, principalID string) (*v3.User, error) {
+	matches, err := ListUsersByPrincipalID(client, principalID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(matches) == 0 {
+		return nil, nil
+	}
+
+	return &matches[0], nil
 }
 
 // AddUserWithRoleToCluster creates a user based on the global role and then adds the user to cluster with provided permissions and returns a v3.User and a user-scoped client for the created user.

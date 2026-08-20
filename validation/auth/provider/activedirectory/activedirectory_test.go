@@ -801,6 +801,63 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryPrincipalSearchAft
 	require.NoError(a.T(), err, "No Active Directory principal should be returned while the provider is disabled")
 }
 
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryLoginAttachesExternalPrincipal() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
+	require.NoError(a.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	adUser := a.authConfig.Users[0]
+	userPrincipalID := authactions.GetUserPrincipalID(authactions.ActiveDirectory, adUser.Username, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
+
+	logrus.Infof("Logging in as Active Directory user %s so that the login flow attaches its external principal", adUser.Username)
+	err = authactions.VerifyUserLogins(authAdmin, authactions.ActiveDirectory, []authactions.User{adUser}, "external principal attachment", true)
+	require.NoError(a.T(), err, "Active Directory user should be able to login")
+
+	logrus.Infof("Verifying that a user record carrying the external principal %s exists", userPrincipalID)
+	attachedUser, err := userapi.WaitForUserByPrincipalID(a.client, userPrincipalID)
+	require.NoError(a.T(), err, "Login should attach the external principal to a user record")
+	require.Contains(a.T(), attachedUser.PrincipalIDs, userPrincipalID, "User record should carry the external principal")
+	require.Contains(a.T(), attachedUser.PrincipalIDs, authactions.LocalPrincipalPrefix+attachedUser.Name, "User record should also carry its local principal")
+}
+
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryDisableRemovesExternalPrincipals() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
+	require.NoError(a.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	adUser := a.authConfig.Users[0]
+	userPrincipalID := authactions.GetUserPrincipalID(authactions.ActiveDirectory, adUser.Username, a.client.Auth.ActiveDirectory.Config.Users.SearchBase, a.client.Auth.ActiveDirectory.Config.Groups.SearchBase)
+
+	logrus.Infof("Logging in as Active Directory user %s so that a user record carrying its external principal exists", adUser.Username)
+	err = authactions.VerifyUserLogins(authAdmin, authactions.ActiveDirectory, []authactions.User{adUser}, "external principal attachment", true)
+	require.NoError(a.T(), err, "Active Directory user should be able to login")
+
+	attachedUser, err := userapi.WaitForUserByPrincipalID(a.client, userPrincipalID)
+	require.NoError(a.T(), err, "Login should attach the external principal to a user record")
+	require.ElementsMatch(a.T(), []string{userPrincipalID, authactions.LocalPrincipalPrefix + attachedUser.Name}, attachedUser.PrincipalIDs,
+		"User %s should carry only the Active Directory principal and the local principal added alongside it, so that disabling the provider leaves it with no external identity", attachedUser.Name)
+
+	logrus.Info("Disabling Active Directory so that the cleanup service reconciles principals it emitted")
+	err = a.client.Auth.ActiveDirectory.Disable()
+	require.NoError(a.T(), err, "Failed to disable Active Directory")
+
+	subSession.RegisterCleanupFunc(func() error {
+		logrus.Info("Re-enabling Active Directory so that a failure here does not leave the provider disabled for later tests")
+		return authactions.EnsureAuthProviderEnabled(a.client, authactions.ActiveDirectory)
+	})
+
+	_, err = authactions.WaitForAuthProviderAnnotationUpdate(a.client, authactions.ActiveDirectory, authactions.AuthProvCleanupAnnotationValLocked)
+	require.NoError(a.T(), err, "Failed waiting for annotation update")
+
+	logrus.Infof("Verifying that no user record still carries the external principal %s", userPrincipalID)
+	err = userapi.WaitForUserByPrincipalIDDeletion(a.client, userPrincipalID)
+	require.NoError(a.T(), err, "Disabling the provider should leave no user carrying an Active Directory principal")
+
+	logrus.Infof("Verifying that user %s was removed rather than left behind holding only its local principal", attachedUser.Name)
+	err = userapi.WaitForUserDeletion(a.client, attachedUser.Name)
+	require.NoError(a.T(), err, "Disabling the provider should remove a user whose only external identity that provider emitted, leaving no record that could later be rebound")
+}
+
 func TestActiveDirectoryAuthProviderSuite(t *testing.T) {
 	suite.Run(t, new(ActiveDirectoryAuthProviderSuite))
 }

@@ -33,6 +33,7 @@ const (
 	PrincipalTypeGroup                   = "group"
 	AccessModeMissingRequiredError       = "accessMode=MissingRequired"
 	PermissionDeniedError                = "PermissionDenied"
+	LocalPrincipalPrefix                 = "local://"
 )
 
 type User struct {
