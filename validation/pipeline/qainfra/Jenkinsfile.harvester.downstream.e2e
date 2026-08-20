@@ -86,8 +86,6 @@ node("harvester-vpn-1") {
                   harvesterConfig = harvesterConfig.replace('127.0.0.1', env.HARVESTER_IP)
                 }
               }
-
-
               dir("./qa-infra-automation") {
                 dir ("./tofu/harvester/modules/vm") {
                   writeFile file: harvesterTerraformVarsfilename, text: harvesterTerraformConfig
@@ -103,7 +101,6 @@ node("harvester-vpn-1") {
                   }
                 }
               }
-              
               dir ("./") {
                 sh "./tests/validation/configure.sh"
                 sh "docker build . -f ./tests/validation/Dockerfile.e2e -t ${imageName}"
@@ -120,7 +117,6 @@ node("harvester-vpn-1") {
                   error "Build Environment had failures."
               }
             }
-            
             stage('Cleanup Rancher Environment') {
               if ("${env.CLEANUP_RANCHER}" == "True" || "${env.CLEANUP_RANCHER}" == "true") {
                 try {

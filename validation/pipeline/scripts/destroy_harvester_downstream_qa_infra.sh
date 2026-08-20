@@ -10,5 +10,3 @@ echo "Destroy Harvester downstream infra"
 cd "$QAINFRA_SCRIPT_PATH"
 
 tofu -chdir="$HARVESTER_TOFU_PATH" destroy -auto-approve -var-file=$HARVESTER_TFVARS_FILE
-
-
