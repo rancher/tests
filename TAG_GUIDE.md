@@ -109,3 +109,10 @@ The pit tags organizes Go tests using **build tags**. These tags define when and
 
 ##### pit.event
 -  Tests that should run **when a new Alpha or Release Candidate (RC) is published**
+
+##### airgap.pit
+- Marks a **pit-scoped airgap CI run**. The tag is passed on the CI job's `go test -tags` flag, paired with the relevant `pit.*` tags (e.g. `-tags="pit.daily,airgap.pit"`); it selects which test files compile into that run.
+- Pit-tagged tests that cannot run airgap (external egress, external node-IP dependencies) carry `&& !airgap.pit` so they drop out of pit-scoped airgap runs (convention derived from #770).
+- Airgap-compatible pit tests need **no** airgap term on the file — they join merely by their `pit.*` tag.
+- The `airgap.pit` tag is scoped to pit-scheduled tests only. Bare `airgap` (provisioning, recurring) is a separate tag for infrastructure airgap tests (`validation/provisioning/airgap/*`), which run in their own airgap provisioning job and are **not** pulled into pit-scoped airgap runs — bare `airgap` is not set on those invocations.
+- The tag gates airgap compatibility only; scheduling is handled by the CI job, not by the tag name. Environment differences (cluster, private registry, UI-extension mirror) belong in `cattle-config.yaml`, not in separate `*_airgap_test.go` variant files. NeuVector is the reference example: one config-driven suite serves both schedules (see `validation/neuvector/README.md`).

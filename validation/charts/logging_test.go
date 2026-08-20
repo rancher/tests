@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || sanity || pit.daily || pit.elemental || pit.harvester.daily) && !stress && !extended && !airgap.daily
+//go:build (validation || infra.any || cluster.any || sanity || pit.daily || pit.elemental || pit.harvester.daily) && !stress && !extended && !airgap.pit
 
 package charts
 
