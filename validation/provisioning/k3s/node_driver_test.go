@@ -48,7 +48,7 @@ func nodeDriverSetup(t *testing.T) nodeDriverTest {
 	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)
 	require.NoError(t, err)
 
-	err = defaults.VerifyCattleConfig(k.cattleConfig)
+	err = defaults.VerifyCattleConfig(k.cattleConfig, nil)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

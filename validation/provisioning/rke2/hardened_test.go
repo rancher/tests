@@ -56,7 +56,7 @@ func hardenedSetup(t *testing.T) hardenedTest {
 	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
 	require.NoError(t, err)
 
-	err = defaults.VerifyCattleConfig(r.cattleConfig)
+	err = defaults.VerifyCattleConfig(r.cattleConfig, nil)
 	require.NoError(t, err)
 
 	splitter := r.cattleConfig["sshPath"].(map[string]any)["sshPath"].(string)

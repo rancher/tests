@@ -49,7 +49,7 @@ func hostnameTruncationSetup(t *testing.T) hostnameTruncationTest {
 	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)
 	require.NoError(t, err)
 
-	err = defaults.VerifyCattleConfig(k.cattleConfig)
+	err = defaults.VerifyCattleConfig(k.cattleConfig, nil)
 	require.NoError(t, err)
 
 

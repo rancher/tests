@@ -73,7 +73,7 @@ func templateSetup(t *testing.T) templateTest {
 	k.cattleConfig, err = configDefaults.LoadSecretsManagerDefaults(k.cattleConfig)
 	require.NoError(t, err)
 
-	err = configDefaults.VerifyCattleConfig(k.cattleConfig)
+	err = configDefaults.VerifyCattleConfig(k.cattleConfig, nil)
 	require.NoError(t, err)
 
 

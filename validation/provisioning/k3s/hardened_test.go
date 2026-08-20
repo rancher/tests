@@ -56,7 +56,7 @@ func hardenedSetup(t *testing.T) hardenedTest {
 	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)
 	require.NoError(t, err)
 
-	err = defaults.VerifyCattleConfig(k.cattleConfig)
+	err = defaults.VerifyCattleConfig(k.cattleConfig, nil)
 	require.NoError(t, err)
 
 	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), k.cattleConfig)

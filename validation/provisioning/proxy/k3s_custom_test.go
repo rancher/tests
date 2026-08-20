@@ -53,7 +53,7 @@ func customK3SProxySetup(t *testing.T) customK3SProxyTest {
 	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)
 	require.NoError(t, err)
 
-	err = defaults.VerifyCattleConfig(k.cattleConfig)
+	err = defaults.VerifyCattleConfig(k.cattleConfig, nil)
 	require.NoError(t, err)
 
 

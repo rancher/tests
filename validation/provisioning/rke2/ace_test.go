@@ -55,7 +55,7 @@ func aceSetup(t *testing.T) aceTest {
 	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
 	require.NoError(t, err)
 
-	err = defaults.VerifyCattleConfig(r.cattleConfig)
+	err = defaults.VerifyCattleConfig(r.cattleConfig, nil)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

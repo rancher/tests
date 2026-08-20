@@ -52,7 +52,7 @@ func nodeDriverK3SProxySetup(t *testing.T) nodeDriverK3SProxyTest {
 	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)
 	require.NoError(t, err)
 
-	err = defaults.VerifyCattleConfig(k.cattleConfig)
+	err = defaults.VerifyCattleConfig(k.cattleConfig, nil)
 	require.NoError(t, err)
 
 

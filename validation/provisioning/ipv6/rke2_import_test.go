@@ -50,7 +50,7 @@ func importRKE2IPv6Setup(t *testing.T) importRKE2IPv6Test {
 	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
 	require.NoError(t, err)
 
-	err = defaults.VerifyCattleConfig(r.cattleConfig)
+	err = defaults.VerifyCattleConfig(r.cattleConfig, nil)
 	require.NoError(t, err)
 
 

@@ -44,7 +44,7 @@ func main() {
 		logrus.Fatalf("Failed to load Secrets Manager defaults: %v", err)
 	}
 
-	err = defaults.VerifyCattleConfig(cattleConfig)
+	err = defaults.VerifyCattleConfig(cattleConfig, nil)
 	if err != nil {
 		logrus.Fatalf("Cattle config verification failed: %v", err)
 	}
