@@ -560,7 +560,10 @@ rancher_system_default_registry: "${PRIVATE_REGISTRY_URL}"'''
                 script {
                     // Bind private registry credentials for this stage: the
                     // 'Configure Downstream Registry' gate reads env.PRIVATE_REGISTRY_URL,
-                    // which is only populated inside property.useWithProperties.
+                    // which is only populated inside property.useWithProperties. Without
+                    // this wrapper the gate always skipped, downstream nodes never got
+                    // registries.yaml, and the cattle-cluster-agent pull failed with
+                    // x509 on the private registry's certificate.
                     property.useWithProperties([
                         'PRIVATE_REGISTRY_URL',
                         'PRIVATE_REGISTRY_USERNAME',
