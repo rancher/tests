@@ -419,7 +419,7 @@ jobs:
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AIRGAP_AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
+          prefix-list-id: ${{ secrets.AIRGAP_AWS_MANAGED_PREFIX_LIST_ID }}
           region: "${{ vars.AWS_REGION }}"
 
       - name: Set up SSH Keys
@@ -663,7 +663,7 @@ jobs:
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AIRGAP_AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
+          prefix-list-id: ${{ secrets.AIRGAP_AWS_MANAGED_PREFIX_LIST_ID }}
           region: "${{ vars.AWS_REGION }}"
 
       - name: Set job status output
@@ -739,7 +739,7 @@ jobs:
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AIRGAP_AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
+          prefix-list-id: ${{ secrets.AIRGAP_AWS_MANAGED_PREFIX_LIST_ID }}
           region: "${{ vars.AWS_REGION }}"
 
       - name: Set up SSH Keys
@@ -983,7 +983,7 @@ jobs:
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AIRGAP_AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
+          prefix-list-id: ${{ secrets.AIRGAP_AWS_MANAGED_PREFIX_LIST_ID }}
           region: "${{ vars.AWS_REGION }}"
 
       - name: Set job status output
