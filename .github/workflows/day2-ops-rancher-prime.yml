@@ -2,6 +2,8 @@
 name: Day 2 Operations - Rancher Prime
 
 on:
+  schedule:
+    - cron: "0 7 * * 1"
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -52,6 +54,7 @@ env:
 jobs:
   v2-15:
     if: |
+      github.event_name == 'schedule' ||
       github.event.inputs.run_all_versions == 'true' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15-head')) ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15-head'))

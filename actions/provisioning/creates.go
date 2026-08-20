@@ -165,7 +165,17 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 	}
 
 	logrus.Debugf("Creating cluster steve object (%s)", clusterName)
-	_, err = shepherdclusters.CreateK3SRKE2Cluster(client, cluster)
+	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, err = shepherdclusters.CreateK3SRKE2Cluster(client, cluster)
+		if err != nil {
+			if strings.Contains(err.Error(), "401") {
+				return false, nil
+			}
+
+			return false, err
+		}
+		return true, nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +255,19 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 		cluster = clusters.HardenRKE2ClusterConfig(clusterName, namespaces.FleetDefault, clustersConfig, nil, "")
 	}
 
-	clusterResp, err := shepherdclusters.CreateK3SRKE2Cluster(client, cluster)
+	logrus.Debugf("Creating cluster steve object (%s)", clusterName)
+	var clusterResp *v1.SteveAPIObject
+	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		clusterResp, err = shepherdclusters.CreateK3SRKE2Cluster(client, cluster)
+		if err != nil {
+			if strings.Contains(err.Error(), "401") {
+				return false, nil
+			}
+
+			return false, err
+		}
+		return true, nil
+	})
 	if err != nil {
 		return nil, err
 	}

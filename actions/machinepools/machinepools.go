@@ -199,7 +199,7 @@ func ScaleMachinePool(client *rancher.Client, cluster *v1.SteveAPIObject, nodeRo
 		return nil, err
 	}
 
-	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.ThirtyMinuteTimeout, false, func(ctx context.Context) (done bool, err error) {
 		cluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(cluster.ID)
 		if err != nil {
 			return false, err

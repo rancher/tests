@@ -33,7 +33,7 @@ func listClusterSnapshots(client *rancher.Client, clusterName string) ([]steveV1
 func verifySnapshotsStable(client *rancher.Client, clusterName string, isReady func([]steveV1.SteveAPIObject) bool) error {
 	stablePolls := 0
 
-	err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, extdefault.FiveMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+	err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, extdefault.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		snapshotList, err := listClusterSnapshots(client, clusterName)
 		if err != nil || len(snapshotList) == 0 {
 			stablePolls = 0

@@ -15,9 +15,10 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	tfpConfig "github.com/rancher/tfp-automation/config"
+	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -76,21 +77,20 @@ func Setup(t *testing.T, clusterType string, isWindows bool) *upgradeTest {
 		machineConfigSpec := provider.LoadMachineConfigFunc(u.CattleConfig)
 
 		if isWindows {
-			nodeRolesStandard := []provisioninginput.MachinePools{
-				provisioninginput.EtcdMachinePool,
-				provisioninginput.ControlPlaneMachinePool,
-				provisioninginput.WorkerMachinePool,
-				provisioninginput.WindowsMachinePool,
+			nodeRolesStandard := []tfpConfig.Nodepool{
+				{Quantity: 1, Etcd: true},
+				{Quantity: 1, Controlplane: true},
+				{Quantity: 1, Worker: true},
+				{Quantity: 1, Windows: true},
 			}
 
-			nodeRolesStandard[0].MachinePoolConfig.Quantity = 1
-			nodeRolesStandard[1].MachinePoolConfig.Quantity = 1
-			nodeRolesStandard[2].MachinePoolConfig.Quantity = 1
-			nodeRolesStandard[3].MachinePoolConfig.Quantity = 1
+			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(u.CattleConfig)
+			terratestConfig.Nodepools = nodeRolesStandard
 
 			logrus.Info("Provisioning RKE2 windows cluster")
-			u.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, defaults.RKE2, provider, *clusterConfig, machineConfigSpec, awsEC2Configs, false, true)
-			require.NoError(t, err)
+			_, _, _, cluster := tfpCustom.CreateCustomCluster(t, u.Client, rancherConfig, terraformConfig, terratestConfig, "rke2_windows_2022", "validation/provisioning/rke2", true)
+
+			u.Cluster = cluster
 		} else {
 			logrus.Infof("Provisioning %s cluster", clusterType)
 			u.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, *clusterConfig, machineConfigSpec, nil, false, false)

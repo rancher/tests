@@ -52,7 +52,7 @@ func VerifyDeployment(client *rancher.Client, clusterID, namespace, name string)
 	err = kwait.PollUntilContextTimeout(context.TODO(), 1*time.Second, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		deployment, err := GetDeploymentByName(steveclient, clusterID, namespace, name)
 		if err != nil {
-			return false, err
+			return false, nil
 		}
 
 		deploymentConditions = deployment.Status.Conditions

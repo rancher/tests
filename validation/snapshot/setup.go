@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -22,15 +23,18 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/storage/s3"
 	"github.com/rancher/tests/actions/workloads"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	tfpConfig "github.com/rancher/tfp-automation/config"
+	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	corev1 "k8s.io/api/core/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -145,21 +149,20 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 		}
 
 		if isWindows {
-			nodeRolesStandard := []provisioninginput.MachinePools{
-				provisioninginput.EtcdMachinePool,
-				provisioninginput.ControlPlaneMachinePool,
-				provisioninginput.WorkerMachinePool,
-				provisioninginput.WindowsMachinePool,
+			nodeRolesStandard := []tfpConfig.Nodepool{
+				{Quantity: 1, Etcd: true},
+				{Quantity: 1, Controlplane: true},
+				{Quantity: 1, Worker: true},
+				{Quantity: 1, Windows: true},
 			}
 
-			nodeRolesStandard[0].MachinePoolConfig.Quantity = 1
-			nodeRolesStandard[1].MachinePoolConfig.Quantity = 1
-			nodeRolesStandard[2].MachinePoolConfig.Quantity = 1
-			nodeRolesStandard[3].MachinePoolConfig.Quantity = 1
+			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(s.CattleConfig)
+			terratestConfig.Nodepools = nodeRolesStandard
 
 			logrus.Info("Provisioning RKE2 windows cluster")
-			s.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, defaults.RKE2, provider, *clusterConfig, machineConfigSpec, awsEC2Configs, true, true)
-			require.NoError(t, err)
+			_, _, _, cluster := tfpCustom.CreateCustomCluster(t, s.Client, rancherConfig, terraformConfig, terratestConfig, "rke2_windows_2022", "validation/provisioning/rke2", true)
+
+			s.Cluster = cluster
 		} else {
 			logrus.Infof("Provisioning %s cluster", clusterType)
 			s.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, *clusterConfig, machineConfigSpec, nil, false, false)
@@ -183,7 +186,16 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 
 // CreateSnapshotDeployment is a helper function to create a deployment on a downstream cluster.
 func CreateSnapshotDeployment(client *rancher.Client, workloadClient *v1.Client, clusterID, deploymentName string, workloadsConfig *workloads.Workloads) error {
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(client, clusterID)
+	var namespace *corev1.Namespace
+	err := kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		var pollErr error
+		_, namespace, pollErr = projectsapi.CreateProjectAndNamespace(client, clusterID)
+		if pollErr != nil {
+			return false, nil
+		}
+
+		return true, nil
+	})
 	if err != nil {
 		return err
 	}

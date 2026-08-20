@@ -129,6 +129,18 @@ func RestoreRKE2K3SSnapshot(client *rancher.Client, snapshotRestore *rkev1.ETCDS
 		return err
 	}
 
+	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		cluster, err := client.Steve.SteveType(clusters.ProvisioningSteveResourceType).ByID(updatedCluster.ID)
+		if err != nil || cluster.State == nil {
+			return false, nil
+		}
+
+		return cluster.State.Name == active, nil
+	})
+	if err != nil {
+		return err
+	}
+
 	logrus.Debugf("Successfully restored snapshot %s for cluster: %s", snapshotRestore.Name, clusterName)
 
 	return nil
