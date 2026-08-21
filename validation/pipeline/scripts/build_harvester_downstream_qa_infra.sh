@@ -1,5 +1,5 @@
 #!/bin/bash
-set -uo pipefail
+set -euo pipefail
 
 echo "Provisioning Harvester VMs and importing them as a downstream cluster into Rancher"
 
@@ -41,6 +41,10 @@ fi
 echo "Provisioned VM IP address: $IP_ADDRESS"
 
 SSH_KEY_PATH=$(tofu output -raw ssh_private_key_path)
+if [ -z "$SSH_KEY_PATH" ]; then
+    echo "Error: Failed to retrieve SSH private key path from tofu output."
+    exit 1
+fi
 
 cd "$QAINFRA_SCRIPT_PATH/$RKE2_DEFAULT_PATH"
 sed -i "s|\${IP_ADDRESS}|$IP_ADDRESS|g; s|\${SSH_KEY_PATH}|$SSH_KEY_PATH|g" "$HARVESTER_VARS_FILE" "$RKE2_INVENTORY_FILE"

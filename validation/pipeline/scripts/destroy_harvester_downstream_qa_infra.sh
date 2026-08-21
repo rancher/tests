@@ -1,5 +1,5 @@
 #!/bin/bash
-set -ex
+set -eux
 
 echo "Destroy Harvester downstream infra"
 
