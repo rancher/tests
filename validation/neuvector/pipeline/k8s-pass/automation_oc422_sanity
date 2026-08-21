@@ -1,9 +1,9 @@
 #!/groovy
 node('neuvector') {
     stage('Execution') {
-   withCredentials([string(credentialsId: 'NEUVECTOR_PASSWORD', variable: 'NEUVECTOR_PASSWORD'), string(credentialsId: 'NEUVECTOR_K8S_SERVER_11', variable: 'NEUVECTOR_K8S_SERVER_11')]) {
+   withCredentials([string(credentialsId: 'NEUVECTOR_PASSWORD', variable: 'NEUVECTOR_PASSWORD'), string(credentialsId: 'NEUVECTOR_K8S_SERVER_11', variable: 'NEUVECTOR_K8S_SERVER_11'), string(credentialsId: 'NEUVECTOR_K8S_OC_USERNAME', variable: 'NEUVECTOR_K8S_OC_USERNAME')]) {
     sh '''
-      ssh -o "StrictHostKeyChecking no" -i /root/.ssh/id_rsa root@$NEUVECTOR_K8S_SERVER_11 "/mnt/nfs/share/QA/automation/k8s_script.sh $_JOB_TYPE_ $_BUILD_TAG_ $_DIR_"
+      ssh -o "StrictHostKeyChecking no" -i /$NEUVECTOR_K8S_OC_USERNAME/.ssh/id_rsa $NEUVECTOR_K8S_OC_USERNAME@$NEUVECTOR_K8S_SERVER_11 "/mnt/nfs/share/QA/automation/k8s_script.sh $_JOB_TYPE_ $_BUILD_TAG_ $_DIR_"
     '''
   }
  }
