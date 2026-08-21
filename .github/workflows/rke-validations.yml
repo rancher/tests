@@ -28,6 +28,29 @@ jobs:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      - name: Get SSH key material from Secrets Manager
+        uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa #v3
+        with:
+          secret-ids: |
+            HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
+            HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
+            HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
+
+      - name: Mask SSH key material
+        run: |
+          mask_multiline() {
+            local content="$1"
+            while IFS= read -r line; do
+              if [[ -n "$line" ]]; then
+                echo "::add-mask::$line"
+              fi
+            done <<< "$content"
+          }
+
+          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
+
       - name: Create Qase test run
         id: qase
         run: |
@@ -65,12 +88,13 @@ jobs:
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
       - name: Set up SSH Keys
+        id: setup-ssh-keys
         uses: ./.github/actions/setup-ssh-keys
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
-          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
-          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+          ssh-private-key: ${{ env.HB_SSH_PRIVATE_KEY }}
+          ssh-private-key-name: ${{ env.HB_SSH_PRIVATE_KEY_NAME }}
+          windows-ssh-private-key: ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
+          windows-ssh-private-key-name: ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME }}
 
       - name: Install gotestsum
         run: |
@@ -83,7 +107,7 @@ jobs:
           INSTANCE_ID=$(aws ec2 run-instances \
             --image-id ${{ secrets.AWS_RKE_AMI }} \
             --instance-type ${{ vars.AWS_INSTANCE_TYPE }} \
-            --key-name ${{ secrets.SSH_PRIVATE_KEY_NAME }} \
+            --key-name ${{ steps.setup-ssh-keys.outputs.ssh-private-key-name }} \
             --security-group-ids ${{ secrets.AWS_RKE_SECURITY_GROUPS }} \
             --subnet-id ${{ secrets.AWS_SUBNET_ID }} \
             --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=rke-validations-${{ github.run_id }}}]' \
@@ -113,7 +137,7 @@ jobs:
         env:
           RKE_VERSION: ${{ github.event.inputs.rke_version }}
           QASE_TEST_RUN_ID: ${{ steps.qase.outputs.run_id }}
-          PEM_FILE: /home/runner/work/tests/tests/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem
+          PEM_FILE: ${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}
           REGISTRY: ${{ secrets.RKE_STG_REGISTRY }}
           REGISTRY_USER: ${{ secrets.RKE_STG_REGISTRY_USER }}
           REGISTRY_PASSWORD: ${{ secrets.RKE_STG_REGISTRY_PASSWORD }}
@@ -132,7 +156,7 @@ jobs:
         env:
           RKE_VERSION: ${{ github.event.inputs.rke_version }}
           QASE_TEST_RUN_ID: ${{ steps.qase.outputs.run_id }}
-          PEM_FILE: /home/runner/work/tests/tests/.ssh/${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem
+          PEM_FILE: ${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}
           REGISTRY: ${{ secrets.RKE_REGISTRY }}
           REGISTRY_USER: ${{ secrets.RKE_REGISTRY_USER }}
           REGISTRY_PASSWORD: ${{ secrets.RKE_REGISTRY_PASSWORD }}

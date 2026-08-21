@@ -44,6 +44,32 @@ runs:
             echo "1"
           }
 
+          wait_for_entry() {
+            local max_wait_attempts=$1
+            local wait_attempt=1
+
+            while (( wait_attempt <= max_wait_attempts )); do
+              local observed_json
+              observed_json=$(aws ec2 get-managed-prefix-list-entries \
+                --prefix-list-id "$prefix_list_id" \
+                --region "$REGION" \
+                --query "Entries[?Cidr=='$cidr'] | [0]" \
+                --output json 2>/dev/null || true)
+
+              if [[ "$observed_json" != "null" && "$observed_json" != "" ]]; then
+                echo "Runner CIDR is now present in the prefix list."
+                return 0
+              fi
+
+              echo "Waiting for runner CIDR to propagate in prefix list [attempt ${wait_attempt}/${max_wait_attempts}]..."
+              sleep 5
+              ((wait_attempt++))
+            done
+
+            echo "Timed out waiting for runner CIDR to appear in the prefix list."
+            return 1
+          }
+
           local max_retries=37
           local attempt=1
 
@@ -94,6 +120,9 @@ runs:
               echo "::add-mask::$prefix_list_arn_out"
 
               echo "Runner prefix-list reference successfully updated."
+              if ! wait_for_entry 12; then
+                exit 1
+              fi
               break
             else
               if echo "$output" | grep -q "PrefixListVersionMismatch"; then

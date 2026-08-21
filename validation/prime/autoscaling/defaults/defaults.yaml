@@ -1,26 +1,30 @@
 #Required for all tests that provision clusters
 clusterConfig:
   kubernetesVersion: ""
-  cni: "calico"
-  provider: "aws"
-  nodeProvider: "ec2"
+  cni: "<HB_CNI>"
+  provider: "<HB_PROVIDER>"
+  nodeProvider: "<HB_NODE_PROVIDER>"
 
 #Required for all tests
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "<required>"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
-  region: "us-east-2"
+  region: "<HB_AWS_REGION>"
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
-    ami: "<required>"
-    instanceType: "t3a.xlarge"
-    volumeType: "<required>"
-    rootSize: "<required>"
-    sshUser: "<required>"
-    vpcId: "<required>"
+    ami: "<HB_DEFAULT_AMI>"
+    instanceType: "t3.xlarge"
+    volumeType: "<HB_AWS_VOLUME_TYPE>"
+    rootSize: "<HB_AWS_ROOT_SIZE>"
+    sshUser: "<HB_AWS_OS_USER>"
+    subnetId: "<HB_AWS_SUBNET_ID>"
+    vpcId: "<HB_AWS_VPC_ID>"
+    securityGroup: <HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>
     retries: "5"
-    zone: "a"
+    zone: "<HB_AWS_ZONE_LETTER>"
+logging:
+  level: "<HB_LOGGING_LEVEL>"

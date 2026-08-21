@@ -23,3 +23,5 @@ terraform:
     ipv6AddressCount: "1"
     networking:
       stackPreference: "<required>"
+logging:
+  level: "<HB_LOGGING_LEVEL>"

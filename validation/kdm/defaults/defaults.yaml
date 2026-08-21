@@ -43,10 +43,11 @@ awsMachineConfigs:
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
     ami: "<required>"
-    instanceType: "<required>"
+    instanceType: "t3.xlarge"
     volumeType: "<required>"
     rootSize: "<required>"
     sshUser: "<required>"
     vpcId: "<required>"
+    securityGroup: <HB_AWS_SECURITY_GROUP_NAMES>
     zone: "a"
     retries: "5"

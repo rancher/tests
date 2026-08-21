@@ -34,6 +34,11 @@ runs:
         RANCHER_REPO="${{ inputs.rancher-repo }}"
         IS_PRIME="${{ inputs.is-prime }}"
 
+        # Register all possible chart URLs for masking before selection.
+        echo "::add-mask::${{ inputs.community-chart-url }}"
+        echo "::add-mask::${{ inputs.staging-chart-url }}"
+        echo "::add-mask::${{ inputs.fallback-chart-url }}"
+
         if [[ "$IS_PRIME" == "true" ]]; then
           if [[ "$RANCHER_REPO" == "latest" ]] || [[ "$RANCHER_REPO" == "alpha" ]]; then
             CHART_URL="${{ inputs.staging-chart-url }}"
@@ -47,6 +52,8 @@ runs:
             CHART_URL="${{ inputs.fallback-chart-url }}"
           fi
         fi
+
+        echo "::add-mask::$CHART_URL"
 
         echo "chart_url=$CHART_URL" >> $GITHUB_OUTPUT
     
