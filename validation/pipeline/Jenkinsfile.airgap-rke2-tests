@@ -121,7 +121,7 @@ pipeline {
         password(
             name: 'RANCHER_BOOTSTRAP_PASSWORD',
             defaultValue: 'rancherrocks',
-            description: 'Rancher bootstrap password for initial setup'
+            description: 'Rancher bootstrap and admin password (must be >= 12 characters — the Rancher setpassword API rejects shorter values)'
         )
 
         // ── Qase test reporting ────────────────────────────────────
@@ -284,6 +284,10 @@ install_helm: true
 
 rancher_hostname: "${HOSTNAME_PREFIX}.qa.rancher.space"
 rancher_bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
+# Permanent password set by rancher_auth after first login. The Rancher setpassword
+# API (v2.13+) requires >= 12 characters even though bootstrapPassword accepts less,
+# so RANCHER_BOOTSTRAP_PASSWORD must be at least 12 characters (default qualifies).
+rancher_admin_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
 rancher_image_tag: ${RANCHER_VERSION}
 rancher_use_bundled_system_charts: true
 rancher_system_default_registry: "${PRIVATE_REGISTRY_URL}"'''
