@@ -381,11 +381,11 @@ jobs:
 
   v2-14:
     if: |
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && contains(github.event.inputs.rancher_version, '-alpha') ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && contains(inputs.rancher_version, '-alpha')
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14-head')) ||
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: staging-alpha
+    environment: prime-head
     env:
       HOSTNAME_PREFIX: "r214"
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_14 }}"
@@ -483,12 +483,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
@@ -556,7 +550,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_14 }}"
             standaloneRegistry:
               assetsPath: "${{ secrets.ASSETS_PATH }}"
@@ -723,11 +717,11 @@ jobs:
 
   v2-13:
     if: |
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && contains(github.event.inputs.rancher_version, '-alpha') ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && contains(inputs.rancher_version, '-alpha')
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13-head')) ||
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: staging-alpha
+    environment: prime-head
     env:
       HOSTNAME_PREFIX: "r213"
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_13 }}"
@@ -825,12 +819,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
@@ -898,7 +886,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
             standaloneRegistry:
               assetsPath: "${{ secrets.ASSETS_PATH }}"

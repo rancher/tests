@@ -15,15 +15,12 @@ inputs:
     description: "GitHub token for API access"
     required: true
 outputs:
-  failed_workflows_v214:
-    description: "Comma-separated list of workflows that did not pass for the given Rancher tag for v2.14"
-    value: ${{ steps.check.outputs.failed_workflows_v214 }}
-  failed_workflows_v213:
-    description: "Comma-separated list of workflows that did not pass for the given Rancher tag for v2.13"
-    value: ${{ steps.check.outputs.failed_workflows_v213 }}
   failed_workflows_v212:
     description: "Comma-separated list of workflows that did not pass for the given Rancher tag for v2.12"
     value: ${{ steps.check.outputs.failed_workflows_v212 }}
+  failed_workflows_v211:
+    description: "Comma-separated list of workflows that did not pass for the given Rancher tag for v2.11"
+    value: ${{ steps.check.outputs.failed_workflows_v211 }}
 
 runs:
   using: composite
@@ -33,7 +30,8 @@ runs:
         TAG="${{ inputs.rancher_tag }}"
         if [[ -z "$TAG" ]]; then
           echo "No Rancher tag provided, skipping check."
-          echo "failed_workflows=" >> $GITHUB_OUTPUT
+          echo "failed_workflows_v212=" >> $GITHUB_OUTPUT
+          echo "failed_workflows_v211=" >> $GITHUB_OUTPUT
           exit 0
         fi
 
@@ -69,12 +67,6 @@ runs:
               ;;
             v2.12*)
               release_line="v2.12"
-              ;;
-            v2.13*)
-              release_line="v2.13"
-              ;;
-            v2.14*)
-              release_line="v2.14"
               ;;
             *)
               return 0
@@ -167,9 +159,8 @@ runs:
         done
 
         failed_workflows_str=$(IFS=,; echo "${cleaned_failed_workflows[*]}")
-        echo "failed_workflows_v214=$failed_workflows_str" >> $GITHUB_OUTPUT
-        echo "failed_workflows_v213=$failed_workflows_str" >> $GITHUB_OUTPUT
         echo "failed_workflows_v212=$failed_workflows_str" >> $GITHUB_OUTPUT
+        echo "failed_workflows_v211=$failed_workflows_str" >> $GITHUB_OUTPUT
       shell: bash
       env:
         DISPATCH_WORKFLOW_LIST: ${{ inputs.dispatch_workflow_list }}

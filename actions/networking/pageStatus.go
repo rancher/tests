@@ -1,12 +1,15 @@
 package networking
 
 import (
+	"context"
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/sirupsen/logrus"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 // GetPageStatus is a function that will attempt to load the Rancher UI's ui.min.js file from both the /v3 and /v1 API endpoints.
@@ -23,15 +26,48 @@ func GetPageStatus(rancherConfig *rancher.Config, setting string) error {
 	endpoints := []string{"/v3", "/v1"}
 	for _, endpoint := range endpoints {
 		url := "https://" + rancherConfig.Host + "/api-ui/1.1.11/ui.min.js"
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			return err
+
+		doRequest := func() (*http.Response, time.Duration, error) {
+			req, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				return nil, 0, err
+			}
+
+			req.Header.Set("Authorization", "Bearer "+rancherConfig.AdminToken)
+			start := time.Now()
+			resp, err := client.Do(req)
+			elapsed := time.Since(start)
+			return resp, elapsed, err
 		}
 
-		req.Header.Set("Authorization", "Bearer "+rancherConfig.AdminToken)
-		start := time.Now()
-		resp, err := client.Do(req)
-		elapsed := time.Since(start)
+		var resp *http.Response
+		var elapsed time.Duration
+		var err error
+
+		if setting == "dynamic" || setting == "true" {
+			var lastErr error
+			err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (done bool, pollErr error) {
+				if resp != nil {
+					resp.Body.Close()
+					resp = nil
+				}
+
+				resp, elapsed, lastErr = doRequest()
+				if lastErr != nil {
+					return false, nil
+				}
+
+				return true, nil
+			})
+			if err != nil {
+				if lastErr != nil {
+					return lastErr
+				}
+				return err
+			}
+		} else {
+			resp, elapsed, err = doRequest()
+		}
 
 		defer func(resp *http.Response) {
 			if resp != nil {
@@ -41,7 +77,11 @@ func GetPageStatus(rancherConfig *rancher.Config, setting string) error {
 
 		if setting == "dynamic" || setting == "true" {
 			if err != nil {
-				logrus.Errorf("error loading ui.min.js for %s: %v", endpoint, err)
+				return err
+			}
+
+			if resp == nil {
+				return fmt.Errorf("nil response received for %s", endpoint)
 			}
 
 			if resp.StatusCode != 200 {
@@ -53,15 +93,11 @@ func GetPageStatus(rancherConfig *rancher.Config, setting string) error {
 			}
 		} else if setting == "false" {
 			if err != nil {
-				return err
+				continue
 			}
 
-			if resp.StatusCode != 200 {
-				logrus.Errorf("unexpected status code %d for %s", resp.StatusCode, endpoint)
-			}
-
-			if elapsed < 10*time.Second {
-				logrus.Errorf("request to %s was expected to take longer: %s", endpoint, elapsed)
+			if resp.StatusCode == 200 && elapsed < 10*time.Second {
+				return fmt.Errorf("request to %s unexpectedly succeeded quickly while remote UI was preferred: %s", endpoint, elapsed)
 			}
 		}
 	}

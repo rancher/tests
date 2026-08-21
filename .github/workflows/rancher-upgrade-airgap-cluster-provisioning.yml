@@ -367,11 +367,11 @@ jobs:
   
   v2-14:
     if: |
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && contains(github.event.inputs.rancher_version, '-alpha') ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && contains(inputs.rancher_version, '-alpha')
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14-head')) ||
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: upgrade-prime-staging
+    environment: upgrade-prime-prime-head
     env:
       HOSTNAME_PREFIX: "agu-214"
       REPORTING_ENABLED: >-
@@ -468,13 +468,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set upgraded Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.UPGRADED_RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.UPGRADED_RANCHER_REPO }}
-          env-var-name: UPGRADED_RANCHER_REPO
-
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
@@ -550,7 +543,7 @@ jobs:
               upgradedRancherAgentImage: "${{ secrets.UPGRADED_RANCHER_AGENT_IMAGE }}"
               upgradedRancherChartRepository: "${{ secrets.UPGRADED_RANCHER_HELM_CHART_URL }}"
               upgradedRancherChartVersion: "${{ env.UPGRADED_RANCHER_CHART_VERSION }}"
-              upgradedRancherRepo: "${{ env.UPGRADED_RANCHER_REPO }}"
+              upgradedRancherRepo: "${{ secrets.UPGRADED_RANCHER_REPO }}"
               upgradedRancherImage: "${{ secrets.UPGRADED_RANCHER_IMAGE }}"
               upgradedRancherTagVersion: "${{ env.UPGRADED_RANCHER_VERSION }}"
             standaloneRegistry:
@@ -695,11 +688,11 @@ jobs:
 
   v2-13:
     if: |
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && contains(github.event.inputs.rancher_version, '-alpha') ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && contains(inputs.rancher_version, '-alpha')
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13-head')) ||
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: upgrade-prime-staging
+    environment: upgrade-prime-prime-head
     env:
       HOSTNAME_PREFIX: "agu-213"
       REPORTING_ENABLED: >-
@@ -796,13 +789,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set upgraded Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.UPGRADED_RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.UPGRADED_RANCHER_REPO }}
-          env-var-name: UPGRADED_RANCHER_REPO
-
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
@@ -878,7 +864,7 @@ jobs:
               upgradedRancherAgentImage: "${{ secrets.UPGRADED_RANCHER_AGENT_IMAGE }}"
               upgradedRancherChartRepository: "${{ secrets.UPGRADED_RANCHER_HELM_CHART_URL }}"
               upgradedRancherChartVersion: "${{ env.UPGRADED_RANCHER_CHART_VERSION }}"
-              upgradedRancherRepo: "${{ env.UPGRADED_RANCHER_REPO }}"
+              upgradedRancherRepo: "${{ secrets.UPGRADED_RANCHER_REPO }}"
               upgradedRancherImage: "${{ secrets.UPGRADED_RANCHER_IMAGE }}"
               upgradedRancherTagVersion: "${{ env.UPGRADED_RANCHER_VERSION }}"
             standaloneRegistry:

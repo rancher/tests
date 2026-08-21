@@ -50,7 +50,8 @@ func TestUIOfflinePreferred(t *testing.T) {
 			updatedSetting, err := tt.client.Management.Setting.Update(defaultSetting, setting)
 			require.NoError(t, err)
 
-			networking.GetPageStatus(r.rancherConfig, updatedSetting.Value)
+			err = networking.GetPageStatus(r.rancherConfig, updatedSetting.Value)
+			require.NoError(t, err)
 		})
 
 		params := provisioning.GetCustomSchemaParams(tt.client, r.cattleConfig)
