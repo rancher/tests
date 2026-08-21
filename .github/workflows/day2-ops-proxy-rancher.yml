@@ -62,6 +62,7 @@ jobs:
     environment: prime-head
     env:
       HOSTNAME_PREFIX: "ghap-r216"
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_16 }}"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
@@ -417,6 +418,7 @@ jobs:
     environment: prime-head
     env:
       HOSTNAME_PREFIX: "ghap-r215"
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_15 }}"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
@@ -772,6 +774,7 @@ jobs:
     environment: staging-latest
     env:
       HOSTNAME_PREFIX: "ghap-r214"
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_14 }}"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
@@ -1144,6 +1147,7 @@ jobs:
     environment: staging-latest
     env:
       HOSTNAME_PREFIX: "ghap-r213"
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_13 }}"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||

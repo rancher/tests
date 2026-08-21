@@ -52,6 +52,7 @@ jobs:
     environment: prime-head
     env:
       HOSTNAME_PREFIX: "r215"
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_15 }}"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'workflow_call' ||
@@ -387,6 +388,7 @@ jobs:
     environment: staging-alpha
     env:
       HOSTNAME_PREFIX: "r214"
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_14 }}"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'workflow_call' ||
@@ -728,6 +730,7 @@ jobs:
     environment: staging-alpha
     env:
       HOSTNAME_PREFIX: "r213"
+      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_13 }}"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'workflow_call' ||
