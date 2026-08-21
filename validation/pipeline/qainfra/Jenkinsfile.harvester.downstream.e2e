@@ -24,6 +24,8 @@ node("harvester-vpn-1") {
     def inventoryfilename = "inventory.yml"
     def harvesterConfig = ""
     def harvesterConfigfilename = "local.yaml"
+    def downstreamInventoryConfig = env.DOWNSTREAM_INVENTORY_CONFIG
+    def downstreamInventoryFilename = "downstream_cluster_inventory.ini"
 
     if ("${env.BRANCH}" != "null" && "${env.BRANCH}" != "") {
       branch = "${env.BRANCH}"
@@ -100,6 +102,7 @@ node("harvester-vpn-1") {
                     writeFile file: inventoryfilename, text: inventoryConfig
                   }
                 }
+                writeFile file: downstreamInventoryFilename, text: downstreamInventoryConfig
               }
               dir ("./") {
                 sh "./tests/validation/configure.sh"
