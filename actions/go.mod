@@ -12,7 +12,7 @@ replace (
 
 	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260527150105-ae26ccbc3fed
-	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260820213451-a51829dbe482
+	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260821223243-c2a810e171b5
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
 	go.opentelemetry.io/otel => go.opentelemetry.io/otel v1.28.0
@@ -62,7 +62,7 @@ require (
 	github.com/qase-tms/qase-go/qase-api-client v1.2.11
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20260804191050-69556e75d7d6
-	github.com/rancher/tfp-automation v0.0.0-20260820213451-a51829dbe482
+	github.com/rancher/tfp-automation v0.0.0-20260821223243-c2a810e171b5
 )
 
 require (
@@ -79,7 +79,7 @@ require (
 	github.com/rancher/norman v0.10.0
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/wrangler v1.1.2
-	github.com/sirupsen/logrus v1.9.4
+	github.com/sirupsen/logrus v1.10.0
 	github.com/stretchr/testify v1.12.0
 	golang.org/x/crypto v0.55.0
 	gopkg.in/yaml.v2 v2.4.0

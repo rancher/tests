@@ -10,11 +10,6 @@ on:
         description: "Rancher tag version"
       rancher_chart_version:
         description: "Rancher chart version"
-      run_all_versions:
-        description: "Run all supported versions if manually triggered"
-        required: false
-        default: false
-        type: boolean
       reporting:
         description: "Enable reporting to Qase and Slack"
         required: false
@@ -55,12 +50,11 @@ env:
 jobs:
   v2-13:
     if: |
-      github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && contains(github.event.inputs.rancher_version, '-alpha') ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && contains(inputs.rancher_version, '-alpha')
+      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13-head')) ||
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: staging-latest
+    environment: prime-head
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_13 }}"
       HOSTNAME_PREFIX: "ts-off-213"
@@ -152,8 +146,7 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_13_HEAD) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_13_HEAD)
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_13_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -164,17 +157,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_13) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_13)
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_13)
             }}
-
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-          is-prime: true
-          release-prime-version: "2.13"
 
       - name: Get Qase ID
         id: get-qase-id
@@ -183,15 +167,6 @@ jobs:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
           qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_13 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
-
-      - name: Set Rancher chart url
-        uses: ./.github/actions/set-rancher-chart-url
-        with:
-          rancher-repo: ${{ env.RANCHER_REPO }}
-          is-prime: true
-          community-chart-url: ${{ vars.COMMUNITY_HELM_CHART_URL }}
-          staging-chart-url: ${{ secrets.STAGING_RANCHER_HELM_CHART_URL }}
-          fallback-chart-url: ${{ secrets.RANCHER_HELM_CHART_URL }}
 
       - name: Create config.yaml
         run: |
@@ -249,13 +224,13 @@ jobs:
               osUser: "${{ vars.OS_USER }}"
               osGroup: "${{ vars.OS_GROUP }}"
               rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
-              rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
+              rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
               featureFlags:
                 turtles: "false"
