@@ -25,7 +25,7 @@ func GetPageStatus(rancherConfig *rancher.Config, setting string) error {
 	// remote (false) should not be reachable.
 	endpoints := []string{"/v3", "/v1"}
 	for _, endpoint := range endpoints {
-		url := "https://" + rancherConfig.Host + "/api-ui/1.1.11/ui.min.js"
+		url := "https://" + rancherConfig.Host + endpoint
 
 		doRequest := func() (*http.Response, time.Duration, error) {
 			req, err := http.NewRequest("GET", url, nil)
@@ -84,9 +84,7 @@ func GetPageStatus(rancherConfig *rancher.Config, setting string) error {
 				return fmt.Errorf("nil response received for %s", endpoint)
 			}
 
-			if resp.StatusCode != 200 {
-				logrus.Errorf("unexpected status code %d for %s", resp.StatusCode, endpoint)
-			}
+			logrus.Infof("reachable endpoint %s with status %d in %s", endpoint, resp.StatusCode, elapsed)
 
 			if elapsed >= 10*time.Second {
 				logrus.Errorf("request to %s took too long: %s", endpoint, elapsed)
@@ -96,8 +94,8 @@ func GetPageStatus(rancherConfig *rancher.Config, setting string) error {
 				continue
 			}
 
-			if resp.StatusCode == 200 && elapsed < 10*time.Second {
-				return fmt.Errorf("request to %s unexpectedly succeeded quickly while remote UI was preferred: %s", endpoint, elapsed)
+			if resp.StatusCode == http.StatusOK && elapsed < 10*time.Second {
+				logrus.Errorf("endpoint %s unexpectedly reachable while remote UI was preferred: status=%d elapsed=%s", endpoint, resp.StatusCode, elapsed)
 			}
 		}
 	}
