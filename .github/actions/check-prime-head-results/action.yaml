@@ -47,9 +47,7 @@ runs:
           fi
 
           grep -qF "startsWith(github.event.inputs.rancher_version, '$job_version')" "$workflow_path" || \
-          grep -qF "startsWith(inputs.rancher_version, '$job_version')" "$workflow_path" || \
-          grep -qF "startsWith(github.event.inputs.rancher_version, 'head')" "$workflow_path" || \
-          grep -qF "startsWith(inputs.rancher_version, 'head')" "$workflow_path"
+          grep -qF "startsWith(inputs.rancher_version, '$job_version')" "$workflow_path"
         }
 
         for release in ${SANITIZED_RELEASES//,/ }; do
@@ -60,6 +58,11 @@ runs:
           
           echo "Checking $release jobs..."
           for workflow in ${WORKFLOWS//,/ }; do
+            if ! workflow_applies_to_head_release "$workflow" "$JOB_VERSION"; then
+              echo "  - $workflow does not run for $JOB_VERSION, skipping..."
+              continue
+            fi
+
             RUN_IDS=$(gh api repos/${{ github.repository }}/actions/workflows/${workflow}/runs \
               --jq '[.workflow_runs[] | select(.head_branch=="main" and (.event=="schedule" or .event=="workflow_dispatch"))] | .[0:30] | .[].id')
 
@@ -71,11 +74,6 @@ runs:
             fi
 
             JOB_FOUND=""
-            if ! workflow_applies_to_head_release "$workflow" "$JOB_VERSION"; then
-              echo "  - $workflow does not run for $JOB_VERSION, skipping..."
-              continue
-            fi
-
             for RUN_ID in $RUN_IDS; do
               JOB_SUCCESS=$(gh api repos/${{ github.repository }}/actions/runs/${RUN_ID}/jobs \
                 --jq ".jobs[] | select((.name==\"${JOB_KEY}\" or .name==\"${JOB_VERSION}\") and .conclusion==\"success\") | .name" 2>/dev/null)
