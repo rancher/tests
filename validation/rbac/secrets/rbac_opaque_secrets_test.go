@@ -234,7 +234,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestUpdateSecret() {
 				assert.NoError(rbos.T(), err, "failed to update secret")
 				assert.NotNil(rbos.T(), updatedSecret)
 				assert.Contains(rbos.T(), updatedSecret.Data, "foo")
-				assert.Equal(rbos.T(), updatedSecret.Data["foo"], "bar")
+				assert.Equal(rbos.T(), updatedSecret.Data["foo"], []byte("bar"))
 
 				log.Infof("As a %v, create a deployment using the updated secret.", tt.role.String())
 				_, err = deploymentapi.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, "", 1, updatedSecret.Name, "", true, false, false, true)
@@ -342,7 +342,7 @@ func (rbos *RbacOpaqueSecretTestSuite) TestCrudSecretAsClusterMember() {
 	require.NoError(rbos.T(), err, "failed to update secret")
 	require.NotNil(rbos.T(), updatedSecret)
 	require.Contains(rbos.T(), updatedSecret.Data, "foo")
-	require.Equal(rbos.T(), updatedSecret.Data["foo"], "bar")
+	require.Equal(rbos.T(), updatedSecret.Data["foo"], []byte("bar"))
 
 	log.Infof("As a %v, create a deployment using the secret as an environment variable.", role)
 	_, err = deploymentapi.CreateDeployment(standardUserClient, rbos.cluster.ID, namespace.Name, "", 1, updatedSecret.Name, "", true, false, false, true)
