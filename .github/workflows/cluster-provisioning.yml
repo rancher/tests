@@ -105,6 +105,31 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME, HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME
+            HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
+            HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
+            HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
+            HB_PRIVATE_FULL_CHAIN, HB_PRIVATE_FULL_CHAIN
+            HB_PRIVATE_FULL_CHAIN_NAME, HB_PRIVATE_FULL_CHAIN_NAME
+            HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
+            HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
+            HB_AWS_REGION, HB_AWS_REGION
+            HB_TERRAFORM_VERSION, HB_TERRAFORM_VERSION
+            HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
+            HB_RANCHER_VERSION_HEAD, HB_RANCHER_VERSION_HEAD
+            HB_RELEASED_RANCHER_CHART_VERSION_2_15, HB_RELEASED_RANCHER_CHART_VERSION_2_15
+            HB_RKE2_VERSION_2_16, HB_RKE2_VERSION_2_16
+            HB_K3S_VERSION_2_16, HB_K3S_VERSION_2_16
+            HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
+            HB_QASE_RELEASE_TEST_RUN_ID_2_16, HB_QASE_RELEASE_TEST_RUN_ID_2_16
+            HB_QASE_RECURRING_TEST_RUN_ID_2_16, HB_QASE_RECURRING_TEST_RUN_ID_2_16
+            HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
+            HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
+            HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
+            HB_RANCHER_HELM_CHART_URL, HB_RANCHER_HELM_CHART_URL
+            HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
+            HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
       - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -115,31 +140,46 @@ jobs:
 
       - name: Mask Dockerhub Credentials
         run: |
+          mask_multiline() {
+            local content="$1"
+            while IFS= read -r line; do
+              if [[ -n "$line" ]]; then
+                echo "::add-mask::$line"
+              fi
+            done <<< "$content"
+          }
+
           echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
           echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_PRIVATE_FULL_CHAIN }}"
+          mask_multiline "${{ env.HB_PRIVATE_CERT_KEY }}"
 
       - name: Whitelist Runner IP
+        id: whitelist-runner-ip
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
-          region: "${{ vars.AWS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Set up SSH Keys
+        id: setup-ssh-keys
         uses: ./.github/actions/setup-ssh-keys
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
-          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
-          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+          ssh-private-key: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY).value }}
+          ssh-private-key-name: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY_NAME).value }}
+          windows-ssh-private-key: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY).value }}
+          windows-ssh-private-key-name: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME).value }}
 
       - name: Set up certificates
         id: setup-certs
         uses: ./.github/actions/setup-certs
         with:
-          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
-          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+          private-full-chain: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN).value }}
+          private-full-chain-name: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN_NAME).value }}
+          private-cert-key: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY).value }}
+          private-cert-key-name: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY_NAME).value }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -152,8 +192,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_16_HEAD) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_16_HEAD)
+              (github.event_name == 'schedule' && fromJSON(env.HB_RANCHER_VERSION_HEAD).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RANCHER_VERSION_HEAD).value)
             }}
 
       - name: Set Rancher chart version
@@ -164,8 +204,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_15) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_15)
+              (github.event_name == 'schedule' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_15).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_15).value)
             }}
 
       - name: Get Qase ID
@@ -173,166 +213,91 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_16 }}
-          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_16 }}
+          qase_release_id: ${{ fromJSON(env.HB_QASE_RELEASE_TEST_RUN_ID_2_16).value }}
+          qase_recurring_id: ${{ fromJSON(env.HB_QASE_RECURRING_TEST_RUN_ID_2_16).value }}
 
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
           rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-            adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-            insecure: true
-            cleanup: true
+            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+
+          awsCredentials:
+            accessKey: "$AWS_ACCESS_KEY"
+            secretKey: "$AWS_SECRET_KEY"
+            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+
           terraform:
-            cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
-            privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            awsCredentials:
-              awsAccessKey: "$AWS_ACCESS_KEY"
-              awsSecretKey: "$AWS_SECRET_KEY"
-            awsConfig:
-              ami: "${{ secrets.AWS_AMI }}"
-              awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
-              awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              region: "${{ vars.AWS_REGION }}"
-              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
-              awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-              awsVpcID: "${{ secrets.AWS_VPC_ID }}"
-              awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
-              awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
-              awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ vars.AWS_USER }}"
-              sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
-              timeout: "${{ vars.TIMEOUT }}"
-              windowsAWSUser: "${{ vars.AWS_WINDOWS_USER }}" 
-              windows2019AMI: "${{ secrets.WINDOWS_2019_AMI }}"
-              windows2022AMI: "${{ secrets.WINDOWS_2022_AMI }}"
-              windows2019Password: "${{ secrets.AWS_WINDOWS_2019_PASSWORD }}"
-              windows2022Password: "${{ secrets.AWS_WINDOWS_2022_PASSWORD }}"
-              windowsInstanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
-              loadBalancerType: "${{ vars.LOAD_BALANCER_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+
             standalone:
-              bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-              certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              k3sVersion: "${{ vars.K3S_VERSION_2_16 }}${{ vars.K3S_VERSION_SUFFIX }}"
-              osUser: "${{ vars.OS_USER }}"
-              osGroup: "${{ vars.OS_GROUP }}"
-              rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-              rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ secrets.RANCHER_REPO }}"
-              rke2Version: "${{ vars.RKE2_VERSION_2_16 }}"
-          terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
+              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+              rke2Version: "<HB_RKE2_VERSION_2_16>"
+              k3sVersion: "<HB_K3S_VERSION_2_16><HB_K3S_VERSION_SUFFIX>"
 
+          awsMachineConfigs:
+            region: "<HB_AWS_REGION>"
+            awsMachineConfig:
+            - roles: ["etcd","controlplane","worker"]
+              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+              ami: "<HB_DEFAULT_AMI>"
+              instanceType: "t3.xlarge"
+              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              rootSize: "<HB_AWS_ROOT_SIZE>"
+              sshUser: "<HB_AWS_OS_USER>"
+              subnetId: "<HB_AWS_SUBNET_ID>"
+              vpcId: "<HB_AWS_VPC_ID>"
+              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+              zone: "<HB_AWS_ZONE_LETTER>"
+              retries: "5"
+            - roles: ["windows"]
+              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+              ami: "<HB_DEFAULT_AMI>"
+              instanceType: "t3.xlarge"
+              sshUser: "<HB_AWS_OS_USER>"
+              subnetId: "<HB_AWS_SUBNET_ID>"
+              vpcId: "<HB_AWS_VPC_ID>"
+              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              zone: "<HB_AWS_ZONE_LETTER>"
+              retries: "5"
+              rootSize: "<HB_AWS_ROOT_SIZE>" 
+              
           clusterConfig:
-            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            cni: "${{ vars.CNI }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
-                    endpoint: ["https://${{ secrets.QA_PRIVATE_REGISTRY_NAME }}"]
+                    endpoint: ["https://${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}"]
                 configs:
-                  "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
+                  "${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}":
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
-
-          logging:
-            level: "${{ vars.LOGGING_LEVEL }}"
-          
-          awsCredentials:
-            secretKey: "$AWS_SECRET_KEY"
-            accessKey: "$AWS_ACCESS_KEY"
-            defaultRegion: "${{ vars.AWS_REGION }}"
-
-          awsMachineConfigs:
-            region: "${{ vars.AWS_REGION }}"
-            awsMachineConfig:
-            - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_AMI }}"
-              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              sshUser: "${{ vars.AWS_USER }}"
-              vpcId: "${{ secrets.AWS_VPC_ID }}"
-              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-              volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.AWS_ZONE_LETTER }}"
-              retries: "5"
-              rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
-              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-
-          awsEC2Configs:
-            region: "${{ vars.AWS_REGION }}"
-            awsSecretAccessKey: "$AWS_SECRET_KEY"
-            awsAccessKeyID: "$AWS_ACCESS_KEY"
-            awsEC2Config:
-              - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_AMI }}"
-                instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-                awsUser: "${{ vars.AWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["etcd", "controlplane", "worker"]
-              - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-                awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsUser: "${{ vars.AWS_WINDOWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["windows"]
-          sshPath: 
-            sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
-
-          templateChart:
-            templateValues:
-              nodepools:
-                "0":
-                  ami: "${{ secrets.AWS_AMI }}"
-                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-                  vpcId: "${{ secrets.AWS_VPC_ID }}"
-
-                "1":
-                  ami: "${{ secrets.AWS_AMI }}"
-                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-                  vpcId: "${{ secrets.AWS_VPC_ID }}"
-
-                "2":
-                  ami: "${{ secrets.AWS_AMI }}"
-                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-                  vpcId: "${{ secrets.AWS_VPC_ID }}"
           EOF
+
+      - name: Mask config.yaml sensitive values
+        run: |
+          mask_if_set() {
+            local value="$1"
+            if [[ -n "$value" ]]; then
+              echo "::add-mask::$value"
+            fi
+          }
+
+          mask_if_set "${{ env.RANCHER_HELM_CHART_URL }}"
+          mask_if_set "${{ fromJSON(env.HB_RANCHER_ADMIN_PASSWORD).value }}"
 
       - name: Export CATTLE_TEST_CONFIG
         run: echo "CATTLE_TEST_CONFIG=${{ github.workspace }}/config.yaml" >> $GITHUB_ENV
@@ -352,19 +317,22 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
         with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
+          terraform_version: "${{ fromJSON(env.HB_TERRAFORM_VERSION).value }}"
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
+        shell: bash
+        run: |
+          set -o pipefail
+          exec > >(stdbuf -o0 perl -pe 's/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' | tee /tmp/rancher-server-setup.log) 2>&1
+          stdbuf -o0 -e0 go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
       - name: Run Provisioning tests
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
-          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
+          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
@@ -381,35 +349,35 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Revoke Runner IP
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
-          region: "${{ vars.AWS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Set job status output
         if: always()
@@ -422,7 +390,7 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          slack-webhook-url: ${{ fromJSON(env.HB_SLACK_WEBHOOK_URL).value }}
 
       - name: Save test result weekly summary
         if: always() && github.event_name == 'schedule'
@@ -485,6 +453,31 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME, HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME
+            HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
+            HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
+            HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
+            HB_PRIVATE_FULL_CHAIN, HB_PRIVATE_FULL_CHAIN
+            HB_PRIVATE_FULL_CHAIN_NAME, HB_PRIVATE_FULL_CHAIN_NAME
+            HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
+            HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
+            HB_AWS_REGION, HB_AWS_REGION
+            HB_TERRAFORM_VERSION, HB_TERRAFORM_VERSION
+            HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
+            HB_RANCHER_VERSION_2_15_HEAD, HB_RANCHER_VERSION_2_15_HEAD
+            HB_RELEASED_RANCHER_CHART_VERSION_2_15, HB_RELEASED_RANCHER_CHART_VERSION_2_15
+            HB_RKE2_VERSION_2_15, HB_RKE2_VERSION_2_15
+            HB_K3S_VERSION_2_15, HB_K3S_VERSION_2_15
+            HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
+            HB_QASE_RELEASE_TEST_RUN_ID_2_15, HB_QASE_RELEASE_TEST_RUN_ID_2_15
+            HB_QASE_RECURRING_TEST_RUN_ID_2_15, HB_QASE_RECURRING_TEST_RUN_ID_2_15
+            HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
+            HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
+            HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
+            HB_RANCHER_HELM_CHART_URL, HB_RANCHER_HELM_CHART_URL
+            HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
+            HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
       - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -495,31 +488,46 @@ jobs:
 
       - name: Mask Dockerhub Credentials
         run: |
+          mask_multiline() {
+            local content="$1"
+            while IFS= read -r line; do
+              if [[ -n "$line" ]]; then
+                echo "::add-mask::$line"
+              fi
+            done <<< "$content"
+          }
+
           echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
           echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_PRIVATE_FULL_CHAIN }}"
+          mask_multiline "${{ env.HB_PRIVATE_CERT_KEY }}"
 
       - name: Whitelist Runner IP
+        id: whitelist-runner-ip
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
-          region: "${{ vars.AWS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Set up SSH Keys
+        id: setup-ssh-keys
         uses: ./.github/actions/setup-ssh-keys
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
-          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
-          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+          ssh-private-key: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY).value }}
+          ssh-private-key-name: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY_NAME).value }}
+          windows-ssh-private-key: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY).value }}
+          windows-ssh-private-key-name: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME).value }}
 
       - name: Set up certificates
         id: setup-certs
         uses: ./.github/actions/setup-certs
         with:
-          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
-          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+          private-full-chain: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN).value }}
+          private-full-chain-name: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN_NAME).value }}
+          private-cert-key: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY).value }}
+          private-cert-key-name: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY_NAME).value }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -532,8 +540,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_15_HEAD) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_15_HEAD)
+              (github.event_name == 'schedule' && fromJSON(env.HB_RANCHER_VERSION_2_15_HEAD).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RANCHER_VERSION_2_15_HEAD).value)
             }}
 
       - name: Set Rancher chart version
@@ -544,8 +552,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_15) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_15)
+              (github.event_name == 'schedule' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_15).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_15).value)
             }}
 
       - name: Get Qase ID
@@ -553,166 +561,91 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_15 }}
-          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_15 }}
+          qase_release_id: ${{ fromJSON(env.HB_QASE_RELEASE_TEST_RUN_ID_2_15).value }}
+          qase_recurring_id: ${{ fromJSON(env.HB_QASE_RECURRING_TEST_RUN_ID_2_15).value }}
 
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
           rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-            adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-            insecure: true
-            cleanup: true
+            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+
+          awsCredentials:
+            accessKey: "$AWS_ACCESS_KEY"
+            secretKey: "$AWS_SECRET_KEY"
+            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+
           terraform:
-            cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
-            privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            awsCredentials:
-              awsAccessKey: "$AWS_ACCESS_KEY"
-              awsSecretKey: "$AWS_SECRET_KEY"
-            awsConfig:
-              ami: "${{ secrets.AWS_AMI }}"
-              awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
-              awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              region: "${{ vars.AWS_REGION }}"
-              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
-              awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-              awsVpcID: "${{ secrets.AWS_VPC_ID }}"
-              awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
-              awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
-              awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ vars.AWS_USER }}"
-              sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
-              timeout: "${{ vars.TIMEOUT }}"
-              windowsAWSUser: "${{ vars.AWS_WINDOWS_USER }}" 
-              windows2019AMI: "${{ secrets.WINDOWS_2019_AMI }}"
-              windows2022AMI: "${{ secrets.WINDOWS_2022_AMI }}"
-              windows2019Password: "${{ secrets.AWS_WINDOWS_2019_PASSWORD }}"
-              windows2022Password: "${{ secrets.AWS_WINDOWS_2022_PASSWORD }}"
-              windowsInstanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
-              loadBalancerType: "${{ vars.LOAD_BALANCER_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+
             standalone:
-              bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-              certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              k3sVersion: "${{ vars.K3S_VERSION_2_15 }}${{ vars.K3S_VERSION_SUFFIX }}"
-              osUser: "${{ vars.OS_USER }}"
-              osGroup: "${{ vars.OS_GROUP }}"
-              rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-              rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ secrets.RANCHER_REPO }}"
-              rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
-          terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
+              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+              rke2Version: "<HB_RKE2_VERSION_2_15>"
+              k3sVersion: "<HB_K3S_VERSION_2_15><HB_K3S_VERSION_SUFFIX>"
+
+          awsMachineConfigs:
+            region: "<HB_AWS_REGION>"
+            awsMachineConfig:
+            - roles: ["etcd","controlplane","worker"]
+              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+              ami: "<HB_DEFAULT_AMI>"
+              instanceType: "t3.xlarge"
+              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              rootSize: "<HB_AWS_ROOT_SIZE>"
+              sshUser: "<HB_AWS_OS_USER>"
+              subnetId: "<HB_AWS_SUBNET_ID>"
+              vpcId: "<HB_AWS_VPC_ID>"
+              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+              zone: "<HB_AWS_ZONE_LETTER>"
+              retries: "5"
+            - roles: ["windows"]
+              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+              ami: "<HB_DEFAULT_AMI>"
+              instanceType: "t3.xlarge"
+              sshUser: "<HB_AWS_OS_USER>"
+              subnetId: "<HB_AWS_SUBNET_ID>"
+              vpcId: "<HB_AWS_VPC_ID>"
+              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              zone: "<HB_AWS_ZONE_LETTER>"
+              retries: "5"
+              rootSize: "<HB_AWS_ROOT_SIZE>" 
 
           clusterConfig:
-            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            cni: "${{ vars.CNI }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
-                    endpoint: ["https://${{ secrets.QA_PRIVATE_REGISTRY_NAME }}"]
+                    endpoint: ["https://${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}"]
                 configs:
-                  "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
+                  "${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}":
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
-
-          logging:
-            level: "${{ vars.LOGGING_LEVEL }}"
-          
-          awsCredentials:
-            secretKey: "$AWS_SECRET_KEY"
-            accessKey: "$AWS_ACCESS_KEY"
-            defaultRegion: "${{ vars.AWS_REGION }}"
-
-          awsMachineConfigs:
-            region: "${{ vars.AWS_REGION }}"
-            awsMachineConfig:
-            - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_AMI }}"
-              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              sshUser: "${{ vars.AWS_USER }}"
-              vpcId: "${{ secrets.AWS_VPC_ID }}"
-              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-              volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.AWS_ZONE_LETTER }}"
-              retries: "5"
-              rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
-              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-
-          awsEC2Configs:
-            region: "${{ vars.AWS_REGION }}"
-            awsSecretAccessKey: "$AWS_SECRET_KEY"
-            awsAccessKeyID: "$AWS_ACCESS_KEY"
-            awsEC2Config:
-              - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_AMI }}"
-                instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-                awsUser: "${{ vars.AWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["etcd", "controlplane", "worker"]
-              - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-                awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsUser: "${{ vars.AWS_WINDOWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["windows"]
-          sshPath: 
-            sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
-
-          templateChart:
-            templateValues:
-              nodepools:
-                "0":
-                  ami: "${{ secrets.AWS_AMI }}"
-                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-                  vpcId: "${{ secrets.AWS_VPC_ID }}"
-
-                "1":
-                  ami: "${{ secrets.AWS_AMI }}"
-                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-                  vpcId: "${{ secrets.AWS_VPC_ID }}"
-
-                "2":
-                  ami: "${{ secrets.AWS_AMI }}"
-                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-                  vpcId: "${{ secrets.AWS_VPC_ID }}"
           EOF
+
+      - name: Mask config.yaml sensitive values
+        run: |
+          mask_if_set() {
+            local value="$1"
+            if [[ -n "$value" ]]; then
+              echo "::add-mask::$value"
+            fi
+          }
+
+          mask_if_set "${{ env.RANCHER_HELM_CHART_URL }}"
+          mask_if_set "${{ fromJSON(env.HB_RANCHER_ADMIN_PASSWORD).value }}"
 
       - name: Export CATTLE_TEST_CONFIG
         run: echo "CATTLE_TEST_CONFIG=${{ github.workspace }}/config.yaml" >> $GITHUB_ENV
@@ -732,24 +665,26 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
         with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
+          terraform_version: "${{ fromJSON(env.HB_TERRAFORM_VERSION).value }}"
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
+        shell: bash
+        run: |
+          set -o pipefail
+          exec > >(stdbuf -o0 perl -pe 's/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' | tee /tmp/rancher-server-setup.log) 2>&1
+          stdbuf -o0 -e0 go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
       - name: Run Provisioning tests
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
-          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
+          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: recurring
-          run_ace: true
 
       - name: Cleanup Infrastructure
         if: always()
@@ -761,35 +696,35 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Revoke Runner IP
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
-          region: "${{ vars.AWS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Set job status output
         if: always()
@@ -802,7 +737,7 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          slack-webhook-url: ${{ fromJSON(env.HB_SLACK_WEBHOOK_URL).value }}
 
       - name: Save test result weekly summary
         if: always() && github.event_name == 'schedule'
@@ -865,6 +800,31 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME, HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME
+            HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
+            HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
+            HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
+            HB_PRIVATE_FULL_CHAIN, HB_PRIVATE_FULL_CHAIN
+            HB_PRIVATE_FULL_CHAIN_NAME, HB_PRIVATE_FULL_CHAIN_NAME
+            HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
+            HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
+            HB_AWS_REGION, HB_AWS_REGION
+            HB_TERRAFORM_VERSION, HB_TERRAFORM_VERSION
+            HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
+            HB_RANCHER_VERSION_2_14_HEAD, HB_RANCHER_VERSION_2_14_HEAD
+            HB_RELEASED_RANCHER_CHART_VERSION_2_14, HB_RELEASED_RANCHER_CHART_VERSION_2_14
+            HB_RKE2_VERSION_2_14, HB_RKE2_VERSION_2_14
+            HB_K3S_VERSION_2_14, HB_K3S_VERSION_2_14
+            HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
+            HB_QASE_RELEASE_TEST_RUN_ID_2_14, HB_QASE_RELEASE_TEST_RUN_ID_2_14
+            HB_QASE_RECURRING_TEST_RUN_ID_2_14, HB_QASE_RECURRING_TEST_RUN_ID_2_14
+            HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
+            HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
+            HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
+            HB_RANCHER_HELM_CHART_URL, HB_RANCHER_HELM_CHART_URL
+            HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
+            HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
       - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -875,31 +835,46 @@ jobs:
 
       - name: Mask Dockerhub Credentials
         run: |
+          mask_multiline() {
+            local content="$1"
+            while IFS= read -r line; do
+              if [[ -n "$line" ]]; then
+                echo "::add-mask::$line"
+              fi
+            done <<< "$content"
+          }
+
           echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
           echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_PRIVATE_FULL_CHAIN }}"
+          mask_multiline "${{ env.HB_PRIVATE_CERT_KEY }}"
 
       - name: Whitelist Runner IP
+        id: whitelist-runner-ip
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
-          region: "${{ vars.AWS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Set up SSH Keys
+        id: setup-ssh-keys
         uses: ./.github/actions/setup-ssh-keys
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
-          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
-          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+          ssh-private-key: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY).value }}
+          ssh-private-key-name: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY_NAME).value }}
+          windows-ssh-private-key: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY).value }}
+          windows-ssh-private-key-name: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME).value }}
 
       - name: Set up certificates
         id: setup-certs
         uses: ./.github/actions/setup-certs
         with:
-          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
-          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+          private-full-chain: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN).value }}
+          private-full-chain-name: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN_NAME).value }}
+          private-cert-key: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY).value }}
+          private-cert-key-name: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY_NAME).value }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -912,8 +887,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_14_HEAD) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_14_HEAD)
+              (github.event_name == 'schedule' && fromJSON(env.HB_RANCHER_VERSION_2_14_HEAD).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RANCHER_VERSION_2_14_HEAD).value)
             }}
 
       - name: Set Rancher chart version
@@ -924,8 +899,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_14) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_14)
+              (github.event_name == 'schedule' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_14).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_14).value)
             }}
 
       - name: Get Qase ID
@@ -933,166 +908,91 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_14 }}
-          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_14 }}
+          qase_release_id: ${{ fromJSON(env.HB_QASE_RELEASE_TEST_RUN_ID_2_14).value }}
+          qase_recurring_id: ${{ fromJSON(env.HB_QASE_RECURRING_TEST_RUN_ID_2_14).value }}
 
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
           rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-            adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-            insecure: true
-            cleanup: true
+            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+
+          awsCredentials:
+            accessKey: "$AWS_ACCESS_KEY"
+            secretKey: "$AWS_SECRET_KEY"
+            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+
           terraform:
-            cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
-            privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            awsCredentials:
-              awsAccessKey: "$AWS_ACCESS_KEY"
-              awsSecretKey: "$AWS_SECRET_KEY"
-            awsConfig:
-              ami: "${{ secrets.AWS_AMI }}"
-              awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
-              awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              region: "${{ vars.AWS_REGION }}"
-              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
-              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES_PRIME }}]
-              awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-              awsVpcID: "${{ secrets.AWS_VPC_ID }}"
-              awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
-              awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
-              awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ vars.AWS_USER }}"
-              sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
-              timeout: "${{ vars.TIMEOUT }}"
-              windowsAWSUser: "${{ vars.AWS_WINDOWS_USER }}" 
-              windows2019AMI: "${{ secrets.WINDOWS_2019_AMI }}"
-              windows2022AMI: "${{ secrets.WINDOWS_2022_AMI }}"
-              windows2019Password: "${{ secrets.AWS_WINDOWS_2019_PASSWORD }}"
-              windows2022Password: "${{ secrets.AWS_WINDOWS_2022_PASSWORD }}"
-              windowsInstanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
-              loadBalancerType: "${{ vars.LOAD_BALANCER_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+
             standalone:
-              bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-              certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              k3sVersion: "${{ vars.K3S_VERSION_2_14 }}${{ vars.K3S_VERSION_SUFFIX }}"
-              osUser: "${{ vars.OS_USER }}"
-              osGroup: "${{ vars.OS_GROUP }}"
-              rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-              rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ secrets.RANCHER_REPO }}"
-              rke2Version: "${{ vars.RKE2_VERSION_2_14 }}"
-          terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
+              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+              rke2Version: "<HB_RKE2_VERSION_2_14>"
+              k3sVersion: "<HB_K3S_VERSION_2_16><HB_K3S_VERSION_SUFFIX>"
+
+          awsMachineConfigs:
+            region: "<HB_AWS_REGION>"
+            awsMachineConfig:
+            - roles: ["etcd","controlplane","worker"]
+              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+              ami: "<HB_DEFAULT_AMI>"
+              instanceType: "t3.xlarge"
+              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              rootSize: "<HB_AWS_ROOT_SIZE>"
+              sshUser: "<HB_AWS_OS_USER>"
+              subnetId: "<HB_AWS_SUBNET_ID>"
+              vpcId: "<HB_AWS_VPC_ID>"
+              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+              zone: "<HB_AWS_ZONE_LETTER>"
+              retries: "5"
+            - roles: ["windows"]
+              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+              ami: "<HB_DEFAULT_AMI>"
+              instanceType: "t3.xlarge"
+              sshUser: "<HB_AWS_OS_USER>"
+              subnetId: "<HB_AWS_SUBNET_ID>"
+              vpcId: "<HB_AWS_VPC_ID>"
+              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              zone: "<HB_AWS_ZONE_LETTER>"
+              retries: "5"
+              rootSize: "<HB_AWS_ROOT_SIZE>" 
 
           clusterConfig:
-            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            cni: "${{ vars.CNI }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
-                    endpoint: ["https://${{ secrets.QA_PRIVATE_REGISTRY_NAME }}"]
+                    endpoint: ["https://${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}"]
                 configs:
-                  "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
+                  "${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}":
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
-
-          logging:
-            level: "${{ vars.LOGGING_LEVEL }}"
-          
-          awsCredentials:
-            secretKey: "$AWS_SECRET_KEY"
-            accessKey: "$AWS_ACCESS_KEY"
-            defaultRegion: "${{ vars.AWS_REGION }}"
-
-          awsMachineConfigs:
-            region: "${{ vars.AWS_REGION }}"
-            awsMachineConfig:
-            - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_AMI }}"
-              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              sshUser: "${{ vars.AWS_USER }}"
-              vpcId: "${{ secrets.AWS_VPC_ID }}"
-              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-              volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.AWS_ZONE_LETTER }}"
-              retries: "5"
-              rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES_PRIME }}]
-              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-
-          awsEC2Configs:
-            region: "${{ vars.AWS_REGION }}"
-            awsSecretAccessKey: "$AWS_SECRET_KEY"
-            awsAccessKeyID: "$AWS_ACCESS_KEY"
-            awsEC2Config:
-              - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_AMI }}"
-                instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-                awsUser: "${{ vars.AWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["etcd", "controlplane", "worker"]
-              - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-                awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsUser: "${{ vars.AWS_WINDOWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["windows"]
-          sshPath: 
-            sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
-
-          templateChart:
-            templateValues:
-              nodepools:
-                "0":
-                  ami: "${{ secrets.AWS_AMI }}"
-                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-                  vpcId: "${{ secrets.AWS_VPC_ID }}"
-
-                "1":
-                  ami: "${{ secrets.AWS_AMI }}"
-                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-                  vpcId: "${{ secrets.AWS_VPC_ID }}"
-
-                "2":
-                  ami: "${{ secrets.AWS_AMI }}"
-                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-                  vpcId: "${{ secrets.AWS_VPC_ID }}"
           EOF
+
+      - name: Mask config.yaml sensitive values
+        run: |
+          mask_if_set() {
+            local value="$1"
+            if [[ -n "$value" ]]; then
+              echo "::add-mask::$value"
+            fi
+          }
+
+          mask_if_set "${{ env.RANCHER_HELM_CHART_URL }}"
+          mask_if_set "${{ fromJSON(env.HB_RANCHER_ADMIN_PASSWORD).value }}"
 
       - name: Export CATTLE_TEST_CONFIG
         run: echo "CATTLE_TEST_CONFIG=${{ github.workspace }}/config.yaml" >> $GITHUB_ENV
@@ -1112,19 +1012,22 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
         with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
+          terraform_version: "${{ fromJSON(env.HB_TERRAFORM_VERSION).value }}"
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
+        shell: bash
+        run: |
+          set -o pipefail
+          exec > >(stdbuf -o0 perl -pe 's/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' | tee /tmp/rancher-server-setup.log) 2>&1
+          stdbuf -o0 -e0 go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
       - name: Run Provisioning tests
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
-          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
+          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
@@ -1141,35 +1044,35 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Revoke Runner IP
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
-          region: "${{ vars.AWS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Set job status output
         if: always()
@@ -1182,15 +1085,20 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          slack-webhook-url: ${{ fromJSON(env.HB_SLACK_WEBHOOK_URL).value }}
 
-      - name: Save test result weekly summary
+      - name: Save test result as artifact for weekly summary
         if: always() && github.event_name == 'schedule'
-        uses: ./.github/actions/save-weekly-summary-result
+        run: |
+          echo "{\"date\": \"$(date -u "+%B %d, %Y at %I:%M %p")\", \"status\": \"${{ job.status }}\", \"rancher_version\": \"${{ env.RANCHER_VERSION }}\", \"workflow\": \"cluster-provisioning\", \"job\": \"v2-14\" }" > test-result-cluster-provisioning-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
+        shell: bash
+
+      - name: Upload test result weekly summary
+        if: always() && github.event_name == 'schedule'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7
         with:
-          rancher_version: ${{ env.UPGRADED_RANCHER_VERSION }}
-          workflow: cluster-provisioning
-          job: v2-14
+          name: test-result-cluster-provisioning-v2-14-${{ github.run_id }}
+          path: test-result-cluster-provisioning-v2-14-${{ github.run_id }}-${{ github.run_attempt }}.json
   
   v2-13:
     if: |
@@ -1244,6 +1152,31 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME, HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME
+            HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
+            HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
+            HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
+            HB_PRIVATE_FULL_CHAIN, HB_PRIVATE_FULL_CHAIN
+            HB_PRIVATE_FULL_CHAIN_NAME, HB_PRIVATE_FULL_CHAIN_NAME
+            HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
+            HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
+            HB_AWS_REGION, HB_AWS_REGION
+            HB_TERRAFORM_VERSION, HB_TERRAFORM_VERSION
+            HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
+            HB_RANCHER_VERSION_2_13_HEAD, HB_RANCHER_VERSION_2_13_HEAD
+            HB_RELEASED_RANCHER_CHART_VERSION_2_13, HB_RELEASED_RANCHER_CHART_VERSION_2_13
+            HB_RKE2_VERSION_2_13, HB_RKE2_VERSION_2_13
+            HB_K3S_VERSION_2_13, HB_K3S_VERSION_2_13
+            HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
+            HB_QASE_RELEASE_TEST_RUN_ID_2_13, HB_QASE_RELEASE_TEST_RUN_ID_2_13
+            HB_QASE_RECURRING_TEST_RUN_ID_2_13, HB_QASE_RECURRING_TEST_RUN_ID_2_13
+            HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
+            HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
+            HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
+            HB_RANCHER_HELM_CHART_URL, HB_RANCHER_HELM_CHART_URL
+            HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
+            HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
       - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -1254,31 +1187,46 @@ jobs:
 
       - name: Mask Dockerhub Credentials
         run: |
+          mask_multiline() {
+            local content="$1"
+            while IFS= read -r line; do
+              if [[ -n "$line" ]]; then
+                echo "::add-mask::$line"
+              fi
+            done <<< "$content"
+          }
+
           echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
           echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_PRIVATE_FULL_CHAIN }}"
+          mask_multiline "${{ env.HB_PRIVATE_CERT_KEY }}"
 
       - name: Whitelist Runner IP
+        id: whitelist-runner-ip
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
-          region: "${{ vars.AWS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Set up SSH Keys
+        id: setup-ssh-keys
         uses: ./.github/actions/setup-ssh-keys
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
-          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
-          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+          ssh-private-key: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY).value }}
+          ssh-private-key-name: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY_NAME).value }}
+          windows-ssh-private-key: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY).value }}
+          windows-ssh-private-key-name: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME).value }}
 
       - name: Set up certificates
         id: setup-certs
         uses: ./.github/actions/setup-certs
         with:
-          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
-          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+          private-full-chain: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN).value }}
+          private-full-chain-name: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN_NAME).value }}
+          private-cert-key: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY).value }}
+          private-cert-key-name: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY_NAME).value }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -1291,8 +1239,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_13_HEAD) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_13_HEAD)
+              (github.event_name == 'schedule' && fromJSON(env.HB_RANCHER_VERSION_2_13_HEAD).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RANCHER_VERSION_2_13_HEAD).value)
             }}
 
       - name: Set Rancher chart version
@@ -1303,8 +1251,8 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_13) ||
-              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_13)
+              (github.event_name == 'schedule' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_13).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_13).value)
             }}
 
       - name: Get Qase ID
@@ -1312,166 +1260,91 @@ jobs:
         uses: ./.github/actions/get-qase-id
         with:
           triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_13 }}
-          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
+          qase_release_id: ${{ fromJSON(env.HB_QASE_RELEASE_TEST_RUN_ID_2_13).value }}
+          qase_recurring_id: ${{ fromJSON(env.HB_QASE_RECURRING_TEST_RUN_ID_2_13).value }}
 
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
           rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-            adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-            insecure: true
-            cleanup: true
+            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+
+          awsCredentials:
+            accessKey: "$AWS_ACCESS_KEY"
+            secretKey: "$AWS_SECRET_KEY"
+            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+
           terraform:
-            cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
-            privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            awsCredentials:
-              awsAccessKey: "$AWS_ACCESS_KEY"
-              awsSecretKey: "$AWS_SECRET_KEY"
-            awsConfig:
-              ami: "${{ secrets.AWS_AMI }}"
-              awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
-              awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              region: "${{ vars.AWS_REGION }}"
-              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
-              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES_PRIME }}]
-              awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-              awsVpcID: "${{ secrets.AWS_VPC_ID }}"
-              awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
-              awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
-              awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ vars.AWS_USER }}"
-              sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
-              timeout: "${{ vars.TIMEOUT }}"
-              windowsAWSUser: "${{ vars.AWS_WINDOWS_USER }}" 
-              windows2019AMI: "${{ secrets.WINDOWS_2019_AMI }}"
-              windows2022AMI: "${{ secrets.WINDOWS_2022_AMI }}"
-              windows2019Password: "${{ secrets.AWS_WINDOWS_2019_PASSWORD }}"
-              windows2022Password: "${{ secrets.AWS_WINDOWS_2022_PASSWORD }}"
-              windowsInstanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
-              loadBalancerType: "${{ vars.LOAD_BALANCER_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+
             standalone:
-              bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-              certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              k3sVersion: "${{ vars.K3S_VERSION_2_13 }}${{ vars.K3S_VERSION_SUFFIX }}"
-              osUser: "${{ vars.OS_USER }}"
-              osGroup: "${{ vars.OS_GROUP }}"
-              rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-              rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ secrets.RANCHER_REPO }}"
-              rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
-          terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
+              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+              rke2Version: "<HB_RKE2_VERSION_2_13>"
+              k3sVersion: "${{ fromJSON(env.HB_K3S_VERSION_2_13).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
 
+          awsMachineConfigs:
+            region: "<HB_AWS_REGION>"
+            awsMachineConfig:
+            - roles: ["etcd","controlplane","worker"]
+              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+              ami: "<HB_DEFAULT_AMI>"
+              instanceType: "t3.xlarge"
+              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              rootSize: "<HB_AWS_ROOT_SIZE>"
+              sshUser: "<HB_AWS_OS_USER>"
+              subnetId: "<HB_AWS_SUBNET_ID>"
+              vpcId: "<HB_AWS_VPC_ID>"
+              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+              zone: "<HB_AWS_ZONE_LETTER>"
+              retries: "5"
+            - roles: ["windows"]
+              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+              ami: "<HB_DEFAULT_AMI>"
+              instanceType: "t3.xlarge"
+              sshUser: "<HB_AWS_OS_USER>"
+              subnetId: "<HB_AWS_SUBNET_ID>"
+              vpcId: "<HB_AWS_VPC_ID>"
+              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              zone: "<HB_AWS_ZONE_LETTER>"
+              retries: "5"
+              rootSize: "<HB_AWS_ROOT_SIZE>" 
+    
           clusterConfig:
-            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            cni: "${{ vars.CNI }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
-                    endpoint: ["https://${{ secrets.QA_PRIVATE_REGISTRY_NAME }}"]
+                    endpoint: ["https://${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}"]
                 configs:
-                  "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
+                  "${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}":
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
-
-          logging:
-            level: "${{ vars.LOGGING_LEVEL }}"
-          
-          awsCredentials:
-            secretKey: "$AWS_SECRET_KEY"
-            accessKey: "$AWS_ACCESS_KEY"
-            defaultRegion: "${{ vars.AWS_REGION }}"
-
-          awsMachineConfigs:
-            region: "${{ vars.AWS_REGION }}"
-            awsMachineConfig:
-            - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_AMI }}"
-              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              sshUser: "${{ vars.AWS_USER }}"
-              vpcId: "${{ secrets.AWS_VPC_ID }}"
-              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-              volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.AWS_ZONE_LETTER }}"
-              retries: "5"
-              rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES_PRIME }}]
-              iamInstanceProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-
-          awsEC2Configs:
-            region: "${{ vars.AWS_REGION }}"
-            awsSecretAccessKey: "$AWS_SECRET_KEY"
-            awsAccessKeyID: "$AWS_ACCESS_KEY"
-            awsEC2Config:
-              - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_AMI }}"
-                instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE}}"
-                awsUser: "${{ vars.AWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["etcd", "controlplane", "worker"]
-              - instanceType: "${{ vars.AWS_WINDOWS_INSTANCE_TYPE }}"
-                awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.WINDOWS_2022_AMI }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsUser: "${{ vars.AWS_WINDOWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["windows"]
-          sshPath: 
-            sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
-
-          templateChart:
-            templateValues:
-              nodepools:
-                "0":
-                  ami: "${{ secrets.AWS_AMI }}"
-                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-                  vpcId: "${{ secrets.AWS_VPC_ID }}"
-
-                "1":
-                  ami: "${{ secrets.AWS_AMI }}"
-                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-                  vpcId: "${{ secrets.AWS_VPC_ID }}"
-
-                "2":
-                  ami: "${{ secrets.AWS_AMI }}"
-                  subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-                  vpcId: "${{ secrets.AWS_VPC_ID }}"
           EOF
+
+      - name: Mask config.yaml sensitive values
+        run: |
+          mask_if_set() {
+            local value="$1"
+            if [[ -n "$value" ]]; then
+              echo "::add-mask::$value"
+            fi
+          }
+
+          mask_if_set "${{ env.RANCHER_HELM_CHART_URL }}"
+          mask_if_set "${{ fromJSON(env.HB_RANCHER_ADMIN_PASSWORD).value }}"
 
       - name: Export CATTLE_TEST_CONFIG
         run: echo "CATTLE_TEST_CONFIG=${{ github.workspace }}/config.yaml" >> $GITHUB_ENV
@@ -1491,24 +1364,26 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
         with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
+          terraform_version: "${{ fromJSON(env.HB_TERRAFORM_VERSION).value }}"
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
+        shell: bash
+        run: |
+          set -o pipefail
+          exec > >(stdbuf -o0 perl -pe 's/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' | tee /tmp/rancher-server-setup.log) 2>&1
+          stdbuf -o0 -e0 go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
       - name: Run Provisioning tests
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
-          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
+          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: recurring
-          run_ace: true
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1520,35 +1395,35 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
         if: always()
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Revoke Runner IP
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
-          region: "${{ vars.AWS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Set job status output
         if: always()
@@ -1561,7 +1436,7 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          slack-webhook-url: ${{ fromJSON(env.HB_SLACK_WEBHOOK_URL).value }}
 
       - name: Save test result weekly summary
         if: always() && github.event_name == 'schedule'

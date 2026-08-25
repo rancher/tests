@@ -70,6 +70,12 @@ func templateSetup(t *testing.T) templateTest {
 	r.cattleConfig, err = configDefaults.LoadPackageDefaults(r.cattleConfig, templateChartDefaultsPath)
 	require.NoError(t, err)
 
+	r.cattleConfig, err = configDefaults.LoadSecretsManagerDefaults(r.cattleConfig)
+	require.NoError(t, err)
+
+	err = configDefaults.VerifyCattleConfig(r.cattleConfig, nil)
+	require.NoError(t, err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
 

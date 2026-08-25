@@ -25,14 +25,27 @@ runs:
       continue-on-error: true
       run: |
         set +e
+        set -o pipefail
+
+        redacted_gotestsum() {
+          local package_path="$1"
+          local json_output="$2"
+          local stream_label="$3"
+          shift 3
+
+          gotestsum --format standard-verbose \
+            --packages="$package_path" \
+            --junitfile results.xml \
+            --jsonfile "$json_output" \
+            -- "$@" 2>&1 \
+            | stdbuf -o0 -e0 perl -pe 's/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' \
+            | tee "/tmp/${stream_label}.log"
+
+          return ${PIPESTATUS[0]}
+        }
 
         if [[ "${{ inputs.run_ace }}" == "true" ]]; then
-          gotestsum --format standard-verbose \
-            --packages=github.com/rancher/tests/validation/provisioning/k3s \
-            --junitfile results.xml \
-            --jsonfile results_k3s_ace.json \
-            -- -timeout=3h -tags=ace -v
-
+          redacted_gotestsum "github.com/rancher/tests/validation/provisioning/k3s" "results_k3s_ace.json" "k3s_ace" -timeout=3h -tags=ace -v
           k3s_ace_exit=$?
           echo "k3s_ace_exit=$k3s_ace_exit" >> "$GITHUB_ENV"
           cp results_k3s_ace.json results.json
@@ -42,12 +55,7 @@ runs:
             ./validation/reporter
           fi
 
-          gotestsum --format standard-verbose \
-            --packages=github.com/rancher/tests/validation/provisioning/rke2 \
-            --junitfile results.xml \
-            --jsonfile results_rke2_ace.json \
-            -- -timeout=3h -tags=ace -v
-
+          redacted_gotestsum "github.com/rancher/tests/validation/provisioning/rke2" "results_rke2_ace.json" "rke2_ace" -timeout=3h -tags=ace -v
           rke2_ace_exit=$?
           echo "rke2_ace_exit=$rke2_ace_exit" >> "$GITHUB_ENV"
           cp results_rke2_ace.json results.json
@@ -58,12 +66,7 @@ runs:
           fi
         fi
 
-        gotestsum --format standard-verbose \
-          --packages=github.com/rancher/tests/validation/provisioning/... \
-          --junitfile results.xml \
-          --jsonfile results_provisioning.json \
-          -- -parallel 4 -timeout=3h -tags=${{ inputs.tags }} -v
-
+        redacted_gotestsum "github.com/rancher/tests/validation/provisioning/..." "results_provisioning.json" "provisioning" -parallel 4 -timeout=3h -tags=${{ inputs.tags }} -v
         provisioning_exit=$?
         echo "provisioning_exit=$provisioning_exit" >> "$GITHUB_ENV"
         cp results_provisioning.json results.json

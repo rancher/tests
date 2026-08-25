@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +54,7 @@ const (
 	DefaultRancherDataDir       = "/var/lib/rancher"
 	oneSecondInterval           = time.Duration(1 * time.Second)
 	notFound                    = "404 Not Found"
+	ipv4Pattern                 = `\b(?:\d{1,3}\.){3}\d{1,3}\b`
 )
 
 // VerifyClusterReady validates that a non-rke1 cluster and its resources are in a good state, matching a given config.
@@ -510,7 +512,8 @@ func VerifyACELocalUnavailable(t *testing.T, rancherClient *rancher.Client, clus
 	nodes, err := localClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	require.NoError(t, err, "failed to list nodes in local cluster")
 
-	var controlPlaneIP string
+	var controlPlaneIPs []string
+	seenIPs := map[string]struct{}{}
 
 	for _, node := range nodes.Items {
 
@@ -535,26 +538,49 @@ func VerifyACELocalUnavailable(t *testing.T, rancherClient *rancher.Client, clus
 				continue
 			}
 
-			controlPlaneIP = ip
-			break
-		}
+			if _, exists := seenIPs[ip]; exists {
+				continue
+			}
 
-		if controlPlaneIP != "" {
-			break
+			seenIPs[ip] = struct{}{}
+			controlPlaneIPs = append(controlPlaneIPs, ip)
 		}
 	}
-	require.NotEmpty(t, controlPlaneIP, "no usable public IP found on any node")
+	require.NotEmpty(t, controlPlaneIPs, "no usable public IP found on any node")
 
-	scpCmd := exec.Command(
-		"ssh",
-		"-i", pemFilePath,
-		"-o", "StrictHostKeyChecking=no",
-		fmt.Sprintf("%s@%s", sshUser, controlPlaneIP),
-		"sudo cat /etc/rancher/rke2/rke2.yaml || sudo cat /etc/rancher/k3s/k3s.yaml",
-	)
+	var scpOutput []byte
+	var fetchErr error
+	var controlPlaneIP string
+	redactIPv4 := regexp.MustCompile(ipv4Pattern).ReplaceAllString
 
-	scpOutput, err := scpCmd.Output()
-	require.NoErrorf(t, err, "failed to fetch kubeconfig: %s", string(scpOutput))
+	_ = kwait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
+		for _, candidateIP := range controlPlaneIPs {
+			logrus.Info("Attempting kubeconfig fetch from candidate node")
+
+			scpCmd := exec.CommandContext(
+				ctx,
+				"ssh",
+				"-i", pemFilePath,
+				"-o", "StrictHostKeyChecking=no",
+				fmt.Sprintf("%s@%s", sshUser, candidateIP),
+				"sudo cat /etc/rancher/rke2/rke2.yaml || sudo cat /etc/rancher/k3s/k3s.yaml",
+			)
+
+			output, err := scpCmd.CombinedOutput()
+			if err == nil {
+				scpOutput = output
+				controlPlaneIP = candidateIP
+				return true, nil
+			}
+
+			fetchErr = err
+			scpOutput = output
+		}
+
+		return false, nil
+	})
+
+	require.NoErrorf(t, fetchErr, "failed to fetch kubeconfig: %s", redactIPv4(string(scpOutput), "[REDACTED_IP]"))
 	err = os.WriteFile(localKubeconfigPath, scpOutput, 0600)
 	require.NoError(t, err)
 
