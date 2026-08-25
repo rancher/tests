@@ -209,8 +209,9 @@ pipeline {
 aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = "ami-0600e22b69546c15c"
 instance_type = "t3a.2xlarge"
-aws_security_group = ["sg-08e8243a8cfbea8a0"]
-aws_subnet = "subnet-ee8cac86"
+# aws_vpc, aws_subnet, aws_security_group intentionally omitted: cluster_nodes
+# self-provisions an ephemeral VPC/subnet/security group when unset, destroyed
+# automatically by `make infra-down` alongside every other resource.
 airgap_setup = false
 proxy_setup = false
 aws_volume_size = 500
@@ -219,7 +220,6 @@ aws_hostname_prefix = "${HOSTNAME_PREFIX}"
 aws_region = "us-east-2"
 aws_route53_zone = "qa.rancher.space"
 aws_ssh_user = "ubuntu"
-aws_vpc = "vpc-bfccf4d7"
 public_ssh_key = "ssh_public_key.pub"
 private_ssh_key = "~/.ssh/${AWS_SSH_PEM_KEY_NAME}"
 nodes = [
@@ -390,14 +390,12 @@ qaInfraAutomation:
         region: us-east-2
         route53Zone: qa.rancher.space
         secretKey: ${AWS_SECRET_ACCESS_KEY}
-        securityGroups:
-            - sg-08e8243a8cfbea8a0
+        # securityGroups, subnet, vpc intentionally omitted: cluster_nodes
+        # self-provisions an ephemeral VPC/subnet/security group when unset.
         awsSSHKeyName: "jenkins-elliptic-validation"
         sshUser: ec2-user
-        subnet: subnet-ee8cac86
         volumeSize: 50
         volumeType: gp3
-        vpc: vpc-bfccf4d7
     customCluster:
         generateName: tf-pit-daily
         harden: true
@@ -456,11 +454,11 @@ secret_key     = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = ""
 aws_ssh_user = "ubuntu"
 aws_instance_type = "t3a.2xlarge"
-aws_security_group = ["rancher-nodes"]
+# aws_vpc, aws_subnet, aws_security_group intentionally omitted: tofu/rancher/cluster
+# self-provisions an ephemeral VPC/subnet/security group when unset, destroyed
+# automatically alongside the downstream cluster on teardown.
 
-aws_subnet = "subnet-73577c28"
-aws_availability_zone = "a"
-aws_vpc = "vpc-c30925a4"
+aws_availability_zone = "b"
 aws_region    = "us-west-1"
 aws_volume_size   = 50
 aws_volume_type   = "gp3"
