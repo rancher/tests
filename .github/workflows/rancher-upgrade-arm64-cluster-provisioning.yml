@@ -874,7 +874,9 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_14_HEAD) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RANCHER_VERSION_2_14_HEAD)
             }}
 
       - name: Set upgraded Rancher chart version
@@ -884,7 +886,9 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_14) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_14)
             }}
 
       - name: Get Qase ID
