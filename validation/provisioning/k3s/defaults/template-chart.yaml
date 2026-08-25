@@ -21,11 +21,11 @@ templateChart:
         worker: false
         quantity: 3
         createSecurityGroup: true
-        ami: "<required>"
+        ami: "<HB_DEFAULT_AMI>"
         instanceType: "t3.2xlarge"
         region: "us-east-2"
-        subnetId: "<required>"
-        vpcId: "<required>"
+        subnetId: "<HB_AWS_SUBNET_ID>"
+        vpcId: "<HB_AWS_VPC_ID>"
         zone: "a"
         rootSize: 100
         volumeType: "gp3"
@@ -36,11 +36,11 @@ templateChart:
         worker: false
         quantity: 2
         createSecurityGroup: true
-        ami: "<required>"
+        ami: "<HB_DEFAULT_AMI>"
         instanceType: "t3.2xlarge"
         region: "us-east-2"
-        subnetId: "<required>"
-        vpcId: "<required>"
+        subnetId: "<HB_AWS_SUBNET_ID>"
+        vpcId: "<HB_AWS_VPC_ID>"
         rootSize: 100
         volumeType: "gp3"
 
@@ -50,10 +50,10 @@ templateChart:
         worker: true
         quantity: 3
         createSecurityGroup: true
-        ami: "<required>"
+        ami: "<HB_DEFAULT_AMI>"
         instanceType: "t3.2xlarge"
         region: "us-east-2"
-        subnetId: "<required>"
-        vpcId: "<required>"
+        subnetId: "<HB_AWS_SUBNET_ID>"
+        vpcId: "<HB_AWS_VPC_ID>"
         rootSize: 100
         volumeType: "gp3"

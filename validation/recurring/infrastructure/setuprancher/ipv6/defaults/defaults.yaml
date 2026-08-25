@@ -5,8 +5,8 @@ rancher:
   cleanup: true
 
 awsCredentials:
-  awsAccessKey: "<required>"
-  awsSecretKey: "<required>"
+  accessKey: "<required>"
+  secretKey: "<required>"
 
 terraform:
   awsCredentials:
