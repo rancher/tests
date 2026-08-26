@@ -1693,4 +1693,4 @@ jobs:
         with:
           qase_run_id: ${{ needs.create-qase-run.outputs.run_id }}
           qase_project_id: ${{ secrets.HB_QASE_PROJECT_ID }}
-          qase_token: ${{ secrets.QASE_TOKEN }}
+          qase_token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
