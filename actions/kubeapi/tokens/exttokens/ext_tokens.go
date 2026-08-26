@@ -139,6 +139,17 @@ func AuthenticateWithExtToken(baseURL, tokenName, tokenValue, apiPath string) er
 	return nil
 }
 
+// WaitForUserExtTokensDeletion polls until no ext tokens matching the given label selector exist, or the timeout is reached.
+func WaitForUserExtTokensDeletion(client *rancher.Client, labelSelector string) error {
+	return kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		tokenList, err := exttokenapi.ListExtTokens(client, metav1.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			return false, err
+		}
+		return len(tokenList.Items) == 0, nil
+	})
+}
+
 // DeleteLegacyTokenWithExtToken sends a raw HTTP DELETE request to the /v3/tokens endpoint using an ext token for Bearer authentication.
 func DeleteLegacyTokenWithExtToken(client *rancher.Client, legacyTokenID string, extTokenValue string) error {
 	deleteURL := fmt.Sprintf("https://%s/v3/tokens/%s", client.RancherConfig.Host, legacyTokenID)
