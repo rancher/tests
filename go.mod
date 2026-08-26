@@ -17,7 +17,7 @@ replace (
 
 	github.com/rancher/tests/actions => ./actions
 	github.com/rancher/tests/interoperability => ./interoperability
-	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260824223215-1c331ca937d8
+	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260826174707-2c34c14eac9c
 
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
@@ -70,12 +70,12 @@ require (
 	github.com/gruntwork-io/terratest v1.0.1
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/qase-tms/qase-go/pkg/qase-go v1.0.7
-	github.com/qase-tms/qase-go/qase-api-client v1.2.11
+	github.com/qase-tms/qase-go/qase-api-client v1.2.12
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/shepherd v0.0.0-20260824145520-00de4a01fb4d
 	github.com/rancher/tests/actions v0.0.0-20260807182903-06ab37e1aeac
 	github.com/rancher/tests/interoperability v0.0.0
-	github.com/rancher/tfp-automation v0.0.0-20260824223215-1c331ca937d8
+	github.com/rancher/tfp-automation v0.0.0-20260826174707-2c34c14eac9c
 )
 
 require (
@@ -107,7 +107,7 @@ require (
 	github.com/rancher/wrangler v1.1.2 // indirect
 	github.com/rancher/wrangler/v3 v3.7.0 // indirect
 	github.com/sirupsen/logrus v1.10.0
-	github.com/stretchr/testify v1.12.0
+	github.com/stretchr/testify v1.12.1
 	golang.org/x/crypto v0.55.0
 	golang.org/x/net v0.57.0
 	golang.org/x/oauth2 v0.36.0 // indirect
@@ -219,7 +219,7 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/zclconf/go-cty v1.19.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect
