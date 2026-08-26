@@ -719,11 +719,10 @@ func (ext *ExtTokenTestSuite) TestExtTokenDeleteCollectionScoping() {
 
 	log.Info("Verifying standarduserB's tokens were successfully deleted")
 	standardUserBSelector := tokenapi.UserIDLabel + "=" + standardUserB.ID
-	attackerList, err := exttokenapi.ListExtTokens(ext.client, metav1.ListOptions{LabelSelector: standardUserBSelector})
-	require.NoError(ext.T(), err)
-	require.Empty(ext.T(), attackerList.Items, "Attacker's tokens should be completely deleted")
+	err = tokenapi.WaitForUserExtTokensDeletion(ext.client, standardUserBSelector)
+	require.NoError(ext.T(), err, "Timed out waiting for standarduserB's tokens to be deleted")
 
-	log.Info("Verifying standarduserA's tokens remain untouched (Scoping Fix Validation)")
+	log.Info("Verifying standarduserA's tokens have not been deleted by standarduserB's DeleteCollection call")
 	victimSelector := tokenapi.UserIDLabel + "=" + standardUserA.ID
 	victimList, err := exttokenapi.ListExtTokens(ext.client, metav1.ListOptions{LabelSelector: victimSelector})
 	require.NoError(ext.T(), err)
