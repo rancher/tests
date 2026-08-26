@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/providers"
 	"github.com/rancher/shepherd/extensions/defaults/stevestates"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/steve"
@@ -27,7 +28,12 @@ const (
 
 // CreateNodes creates `quantityPerPool[n]` number of ec2 instances
 func CreateNodes(client *rancher.Client, rolesPerPool []string, quantityPerPool []int32, ec2Configs *rancherEc2.AWSEC2Configs, ipv6Cluster bool) (ec2Nodes []*nodes.Node, err error) {
-	ec2Client, err := client.GetEC2Client()
+	awsCredentials := cloudcredentials.LoadCloudCredential(providers.AWS).AmazonEC2CredentialConfig
+	if awsCredentials == nil {
+		return nil, errors.New("AWS credentials are not configured")
+	}
+
+	ec2Client, err := rancherEc2.NewClientFromConfig(awsCredentials)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +182,12 @@ func CreateNodes(client *rancher.Client, rolesPerPool []string, quantityPerPool 
 
 // CreateNodes creates `quantityPerPool[n]` number of ec2 instances
 func CreateAirgappedNodes(client *rancher.Client, rolesPerPool []string, quantityPerPool []int32, ec2Configs *rancherEc2.AWSEC2Configs) (ec2Nodes []*nodes.Node, err error) {
-	ec2Client, err := client.GetEC2Client()
+	awsCredentials := cloudcredentials.LoadCloudCredential(providers.AWS).AmazonEC2CredentialConfig
+	if awsCredentials == nil {
+		return nil, errors.New("AWS credentials are not configured")
+	}
+
+	ec2Client, err := rancherEc2.NewClientFromConfig(awsCredentials)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +336,12 @@ func MatchRoleToConfig(poolRole string, ec2Configs []rancherEc2.AWSEC2Config) *r
 
 // DeleteNodes terminates ec2 instances that have been created.
 func DeleteNodes(client *rancher.Client, nodes []*nodes.Node) error {
-	ec2Client, err := client.GetEC2Client()
+	awsCredentials := cloudcredentials.LoadCloudCredential(providers.AWS).AmazonEC2CredentialConfig
+	if awsCredentials == nil {
+		return errors.New("AWS credentials are not configured")
+	}
+
+	ec2Client, err := rancherEc2.NewClientFromConfig(awsCredentials)
 	if err != nil {
 		return err
 	}

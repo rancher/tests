@@ -228,7 +228,9 @@ func getSecretValueByName(ctx context.Context, client *secretsmanager.Client, se
 			return nil, false, nil
 		}
 
-		return nil, false, err
+		secretErr := fmt.Errorf("failed to load secret %q: %w", secretName, err)
+		logrus.WithField("secret", secretName).Error(secretErr)
+		return nil, false, secretErr
 	}
 
 	rawSecret := ""

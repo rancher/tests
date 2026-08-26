@@ -42,14 +42,18 @@ runs:
         if [[ "$IS_PRIME" == "true" ]]; then
           if [[ "$RANCHER_REPO" == "latest" ]] || [[ "$RANCHER_REPO" == "alpha" ]]; then
             CHART_URL="${{ inputs.staging-chart-url }}"
+            echo "Selected chart URL source: staging for repo=$RANCHER_REPO"
           else
             CHART_URL="${{ inputs.fallback-chart-url }}"
+            echo "Selected chart URL source: fallback for repo=$RANCHER_REPO"
           fi
         elif [[ "$IS_PRIME" == "false" ]]; then
           if [[ "$RANCHER_REPO" == "latest" ]] || [[ "$RANCHER_REPO" == "alpha" ]]; then
             CHART_URL="${{ inputs.community-chart-url }}"
+            echo "Selected chart URL source: community for repo=$RANCHER_REPO"
           else
             CHART_URL="${{ inputs.fallback-chart-url }}"
+            echo "Selected chart URL source: fallback for repo=$RANCHER_REPO"
           fi
         fi
 

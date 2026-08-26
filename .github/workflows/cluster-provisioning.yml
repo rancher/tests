@@ -254,7 +254,7 @@ jobs:
             - roles: ["etcd","controlplane","worker"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
               ami: "<HB_DEFAULT_AMI>"
-              instanceType: "t3.xlarge"
+              instanceType: "<HB_AWS_INSTANCE_TYPE>"
               volumeType: "<HB_AWS_VOLUME_TYPE>"
               rootSize: "<HB_AWS_ROOT_SIZE>"
               sshUser: "<HB_AWS_OS_USER>"
@@ -266,7 +266,7 @@ jobs:
             - roles: ["windows"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
               ami: "<HB_DEFAULT_AMI>"
-              instanceType: "t3.xlarge"
+              instanceType: "<HB_AWS_INSTANCE_TYPE>"
               sshUser: "<HB_AWS_OS_USER>"
               subnetId: "<HB_AWS_SUBNET_ID>"
               vpcId: "<HB_AWS_VPC_ID>"
@@ -600,7 +600,7 @@ jobs:
             - roles: ["etcd","controlplane","worker"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
               ami: "<HB_DEFAULT_AMI>"
-              instanceType: "t3.xlarge"
+              instanceType: "<HB_AWS_INSTANCE_TYPE>"
               volumeType: "<HB_AWS_VOLUME_TYPE>"
               rootSize: "<HB_AWS_ROOT_SIZE>"
               sshUser: "<HB_AWS_OS_USER>"
@@ -612,7 +612,7 @@ jobs:
             - roles: ["windows"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
               ami: "<HB_DEFAULT_AMI>"
-              instanceType: "t3.xlarge"
+              instanceType: "<HB_AWS_INSTANCE_TYPE>"
               sshUser: "<HB_AWS_OS_USER>"
               subnetId: "<HB_AWS_SUBNET_ID>"
               vpcId: "<HB_AWS_VPC_ID>"
@@ -945,7 +945,7 @@ jobs:
             - roles: ["etcd","controlplane","worker"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
               ami: "<HB_DEFAULT_AMI>"
-              instanceType: "t3.xlarge"
+              instanceType: "<HB_AWS_INSTANCE_TYPE>"
               volumeType: "<HB_AWS_VOLUME_TYPE>"
               rootSize: "<HB_AWS_ROOT_SIZE>"
               sshUser: "<HB_AWS_OS_USER>"
@@ -957,7 +957,7 @@ jobs:
             - roles: ["windows"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
               ami: "<HB_DEFAULT_AMI>"
-              instanceType: "t3.xlarge"
+              instanceType: "<HB_AWS_INSTANCE_TYPE>"
               sshUser: "<HB_AWS_OS_USER>"
               subnetId: "<HB_AWS_SUBNET_ID>"
               vpcId: "<HB_AWS_VPC_ID>"
@@ -1295,7 +1295,7 @@ jobs:
             - roles: ["etcd","controlplane","worker"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
               ami: "<HB_DEFAULT_AMI>"
-              instanceType: "t3.xlarge"
+              instanceType: "<HB_AWS_INSTANCE_TYPE>"
               volumeType: "<HB_AWS_VOLUME_TYPE>"
               rootSize: "<HB_AWS_ROOT_SIZE>"
               sshUser: "<HB_AWS_OS_USER>"
@@ -1307,7 +1307,7 @@ jobs:
             - roles: ["windows"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
               ami: "<HB_DEFAULT_AMI>"
-              instanceType: "t3.xlarge"
+              instanceType: "<HB_AWS_INSTANCE_TYPE>"
               sshUser: "<HB_AWS_OS_USER>"
               subnetId: "<HB_AWS_SUBNET_ID>"
               vpcId: "<HB_AWS_VPC_ID>"

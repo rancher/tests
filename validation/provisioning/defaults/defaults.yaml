@@ -41,7 +41,7 @@ awsMachineConfigs:
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
     ami: "<HB_DEFAULT_AMI>"
-    instanceType: "t3.xlarge"
+    instanceType: "<HB_AWS_INSTANCE_TYPE>"
     volumeType: "<HB_AWS_VOLUME_TYPE>"
     rootSize: "<HB_AWS_ROOT_SIZE>"
     sshUser: "<HB_AWS_OS_USER>"
@@ -49,8 +49,8 @@ awsMachineConfigs:
     zone: "<HB_AWS_ZONE_LETTER>"
     retries: "5"
   - roles: ["windows"]
-    ami: "<HB_DEFAULT_AMI>"
-    instanceType: "t3.xlarge"
+    ami: "<HB_WINDOWS_2022_AMI>"
+    instanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
     sshUser: "<HB_AWS_OS_USER>"
     vpcId: "<HB_AWS_VPC_ID>"
     volumeType: "<HB_AWS_VOLUME_TYPE>"
@@ -83,7 +83,7 @@ terraform:
     awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
     awsSubnetID: "<HB_AWS_SUBNET_ID>"
     awsVpcID: "<HB_AWS_VPC_ID>"
-    awsInstanceType: "t3.xlarge"
+    awsInstanceType: "<HB_AWS_INSTANCE_TYPE>"
     awsZoneLetter: "a"
     awsRootSize: 100
     awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
@@ -98,7 +98,7 @@ terraform:
     windows2022AMI: "<HB_WINDOWS_2022_AMI>"
     windows2019Password: "<HB_AWS_WINDOWS_2019_PASSWORD>"
     windows2022Password: "<HB_AWS_WINDOWS_2022_PASSWORD>"
-    windowsInstanceType: "t3.xlarge"
+    windowsInstanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
   standalone:
     osUser: "<HB_AWS_OS_USER>"
     osGroup: "<HB_AWS_OS_GROUP>"
@@ -115,7 +115,7 @@ awsEC2Configs:
   awsSecretAccessKey: "<AWS_SECRET_ACCESS_KEY>"
   awsAccessKeyID: "<AWS_ACCESS_KEY_ID>"
   awsEC2Config:
-    - instanceType: "t3.xlarge"
+    - instanceType: "<HB_AWS_INSTANCE_TYPE>"
       awsAMI: "<HB_DEFAULT_AMI>"
       awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_PRIME>"]
       awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>.pem"
@@ -124,10 +124,10 @@ awsEC2Configs:
       awsUser: "<HB_AWS_OS_USER>"
       volumeSize: "<HB_AWS_ROOT_SIZE>"
       roles: ["etcd", "controlplane", "worker"]
-    - instanceType: "t3.xlarge"
-      awsAMI: "<HB_DEFAULT_AMI>"
+    - instanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
+      awsAMI: "<HB_WINDOWS_2022_AMI>"
       awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_PRIME>"]
-      awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>.pem"
+      awsSSHKeyName: "<HB_WINDOWS_SSH_PRIVATE_KEY_NAME>.pem"
       awsCICDInstanceTag: "<HB_AWS_CICD_INSTANCE_TAG>"
       awsIAMProfile: "<HB_AWS_IAM_PROFILE>"
       awsUser: "<HB_AWS_OS_USER>"
