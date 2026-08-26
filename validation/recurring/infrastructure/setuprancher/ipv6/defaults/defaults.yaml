@@ -26,7 +26,7 @@ terraform:
     awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
     region: "<HB_AWS_REGION>"
     awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS>"]
-    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES>"]
+    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
     awsSubnetID: "<HB_AWS_IPV6_SUBNET_ID>"
     awsVpcID: "<HB_AWS_VPC_ID>"
     awsZoneLetter: "<HB_IPV6_AWS_ZONE_LETTER>"
