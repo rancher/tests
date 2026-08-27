@@ -23,6 +23,7 @@ import (
 	wloads "github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/charts"
+	"github.com/rancher/tests/actions/monitoring"
 	"github.com/rancher/tests/actions/serviceaccounts"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -48,6 +49,8 @@ const (
 	prometheusRulesSteveType = "monitoring.coreos.com.prometheusrule"
 	// rancherShellSettingID is the setting ID that used to grab rancher/shell image
 	rancherShellSettingID = "shell-image"
+	// systemDefaultRegistrySettingID is the setting ID for the Rancher system-default-registry used to prefix images in airgap environments
+	systemDefaultRegistrySettingID = "system-default-registry"
 	// Kubeconfig that linked to webhook deployment
 	kubeConfig = `
 apiVersion: v1
@@ -332,7 +335,7 @@ func createPrometheusRule(client *rancher.Client, clusterID string) error {
 // The deployment has two different containers with a shared volume, one for kubectl commands, and the other one to receive requests and write access logs to the shared empty dir volume.
 // Container that uses rancher/shell has a mounted volume to use the kubeconfig of the cluster. And it watches the access logs until a request from "alermanager" is received.
 // When the request is received it sets its deployment annotation "didReceiveRequestFromAlertmanager" to "true" while the annotations being watched by the test itself.
-func createAlertWebhookReceiverDeployment(client *rancher.Client, clusterID, namespace, deploymentName string) (*v1.SteveAPIObject, error) {
+func createAlertWebhookReceiverDeployment(client *rancher.Client, clusterID, namespace, deploymentName, webhookImage string) (*v1.SteveAPIObject, error) {
 	serviceAccountName := "alert-receiver-sa-" + namegenerator.RandStringLower(defaultRandStringLength)
 	clusterRoleBindingName := "alert-receiver-cluster-admin-" + namegenerator.RandStringLower(defaultRandStringLength)
 	configMapName := "alert-receiver-cm-" + namegenerator.RandStringLower(defaultRandStringLength)
@@ -404,6 +407,13 @@ func createAlertWebhookReceiverDeployment(client *rancher.Client, clusterID, nam
 		return nil, err
 	}
 
+	// The setting always exists via the management API; its value is empty in non-airgap environments.
+	registrySetting, err := client.Management.Setting.ByID(systemDefaultRegistrySettingID)
+	if err != nil {
+		return nil, err
+	}
+	webhookImage = monitoring.ResolveImageReference(registrySetting.Value, webhookImage)
+
 	// Create webhook receiver deployment
 	var runAsUser int64
 	var runAsGroup int64
@@ -437,7 +447,7 @@ func createAlertWebhookReceiverDeployment(client *rancher.Client, clusterID, nam
 				},
 				{
 					Name:  "traefik",
-					Image: "traefik:latest",
+					Image: webhookImage,
 					Args: []string{
 						"--entrypoints.web.address=:80", "--api.dashboard=true", "--api.insecure=true", "--accesslog=true", "--accesslog.filepath=/var/log/traefik/access.log", "--log.level=INFO", "--accesslog.fields.headers.defaultmode=keep",
 					},
