@@ -34,7 +34,7 @@ on:
           - rke2
       local_cluster_k8s_version:
         description: "Kubernetes version for the local cluster (i.e. v1.35.6, remove suffix)"
-        required: false
+        required: true
 
 permissions:
   id-token: write
@@ -211,10 +211,11 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 #v6
         with:
-          go-version-file: "./go.mod"
+          go-version-file: "tfp-automation/go.mod"
 
       - name: Build Packages
-        run: ./.github/scripts/go-build.sh
+        working-directory: tfp-automation
+        run: ./.github/scripts/build-packages.sh
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
@@ -223,7 +224,8 @@ jobs:
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
+        working-directory: tfp-automation
+        run: go run tests/infrastructure/main.go --normal fresh
 
       - name: Refresh AWS credentials
         if: always()
@@ -412,10 +414,11 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 #v6
         with:
-          go-version-file: "./go.mod"
+          go-version-file: "tfp-automation/go.mod"
 
       - name: Build Packages
-        run: ./.github/scripts/go-build.sh
+        working-directory: tfp-automation
+        run: ./.github/scripts/build-packages.sh
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
@@ -424,7 +427,8 @@ jobs:
           terraform_wrapper: false
 
       - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
+        working-directory: tfp-automation
+        run: go run tests/infrastructure/main.go --normal fresh
 
       - name: Refresh AWS credentials
         if: always()
