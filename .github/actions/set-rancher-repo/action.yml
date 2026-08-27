@@ -41,6 +41,9 @@ runs:
           REPO="latest"
         elif [[ "$RANCHER_VERSION" == *"-alpha"* ]]; then
           REPO="alpha"
+        elif [[ "$RANCHER_VERSION" =~ ^v?([0-9]+\.[0-9]+) ]]; then
+          VERSION_RELEASE="${BASH_REMATCH[1]}"
+          REPO="release-$VERSION_RELEASE"
         elif [[ "$IS_PRIME" == "true" && -z "$RELEASE_PRIME_VERSION" ]]; then
           REPO="prime"
         elif [[ "$IS_PRIME" == "true" && -n "$RELEASE_PRIME_VERSION" ]]; then
@@ -50,7 +53,7 @@ runs:
         else
           REPO="$FALLBACK_REPO"
         fi
-        
+
         echo "repo=$REPO" >> $GITHUB_OUTPUT
     
     - name: Set environment variable
