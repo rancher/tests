@@ -6592,5 +6592,124 @@
     "workflow": "rancher-upgrade-proxy-cluster-provisioning",
     "job": "v2-16",
     "timestamp": "2026-08-28T15:58:59Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "capi-pnp-cluster-provisioning",
+    "job": "v2-15",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "capi-pnp-cluster-provisioning",
+    "job": "v2-16",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "success",
+    "workflow": "cluster-provisioning",
+    "job": "v2-15",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "success",
+    "workflow": "cluster-provisioning",
+    "job": "v2-16",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "day2-ops-dualstack-rancher",
+    "job": "v2-15",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "day2-ops-dualstack-rancher",
+    "job": "v2-16",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "day2-ops-ipv6-rancher",
+    "job": "v2-15",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "day2-ops-ipv6-rancher",
+    "job": "v2-16",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "day2-ops-upgraded-rancher",
+    "job": "v2-14",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "day2-ops-upgraded-rancher",
+    "job": "v2-15",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "day2-ops-upgraded-rancher",
+    "job": "v2-16",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "proxy-cluster-provisioning",
+    "job": "v2-14",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "cancelled",
+    "workflow": "proxy-cluster-provisioning",
+    "job": "v2-15",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "proxy-cluster-provisioning",
+    "job": "v2-16",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "rancher-upgrade-proxy-cluster-provisioning",
+    "job": "v2-14",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "rancher-upgrade-proxy-cluster-provisioning",
+    "job": "v2-15",
+    "timestamp": "2026-08-28T21:22:30Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "rancher-upgrade-proxy-cluster-provisioning",
+    "job": "v2-16",
+    "timestamp": "2026-08-28T21:22:30Z"
   }
 ]
