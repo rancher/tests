@@ -2,15 +2,12 @@
 name: Get Qase ID
 description: "Accepts a rancher tag and returns the corresponding Qase ID for a release test run"
 inputs:
-  triggered_tag:
-    description: "Rancher server tag version from triggered action"
-    required: true
+  qase_recurring_id:
+    description: "Qase ID for the recurring test run"
+    required: false
   qase_release_id:
     description: "Qase ID for the release test run (alpha or rc)"
     required: false
-  qase_recurring_id:
-    description: "Qase ID for the recurring test run"
-    required: true
 
 outputs:
   id:
@@ -22,17 +19,13 @@ runs:
     - id: set-qase-id
       run: |
         set -euo pipefail
-        TRIGGERED_TAG="${{ inputs.triggered_tag }}"
-        QASE_ID=""
 
-        if [[ -n "$TRIGGERED_TAG" ]]; then
-          if [[ "$TRIGGERED_TAG" == *"-rc"* || "$TRIGGERED_TAG" == *"-alpha"* ]]; then
-            QASE_ID="${{ inputs.qase_release_id }}"
-          else
-            QASE_ID="${{ inputs.qase_recurring_id }}"
-          fi
-        else
+        if [[ -n "${{ inputs.qase_recurring_id }}" ]]; then
           QASE_ID="${{ inputs.qase_recurring_id }}"
+        elif [[ -n "${{ inputs.qase_release_id }}" ]]; then
+          QASE_ID="${{ inputs.qase_release_id }}"
+        else
+          QASE_ID=""
         fi
 
         echo "Qase ID for tag: $QASE_ID"
