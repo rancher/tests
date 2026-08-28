@@ -24,12 +24,14 @@ import (
 	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
 	statefulsetapi "github.com/rancher/tests/actions/kubeapi/workloads/statefulsets"
 	"github.com/rancher/tests/actions/rbac"
+	wname "github.com/rancher/wrangler/v3/pkg/name"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -61,7 +63,6 @@ func (inr *InheritedNamespacedRulesTestSuite) SetupSuite() {
 }
 
 func (inr *InheritedNamespacedRulesTestSuite) createTestResources(client *rancher.Client, cluster *management.Cluster) (*v3.Project, *corev1.Namespace, *v3.User, string, *appsv1.Deployment, *corev1.Pod, *appsv1.StatefulSet, error) {
-	log.Info("Creating the required resources for the test.")
 	createdProject, err := projectapi.CreateProject(client, cluster.ID)
 	require.NoError(inr.T(), err, "Failed to create project")
 
@@ -938,6 +939,42 @@ func (inr *InheritedNamespacedRulesTestSuite) TestRoleAndRoleBindingCleanupWhenN
 	require.NoError(inr.T(), rbacapi.VerifyUserPermission(userClient, extclusterapi.LocalCluster, "list", "statefulsets", statefulset.Namespace, "", true, false))
 }
 
+func (inr *InheritedNamespacedRulesTestSuite) TestNamespaceCreatedAfterGlobalRole() {
+	subSession := inr.session.NewSession()
+	defer subSession.Cleanup()
+
+	nonExistentNamespaceName := namegen.AppendRandomString("testns-")
+	log.Infof("Create a project for namespace %s.", nonExistentNamespaceName)
+	createdProject, err := projectapi.CreateProject(inr.client, inr.cluster.ID)
+	require.NoError(inr.T(), err, "Failed to create project")
+
+	expectedRules := append(rbacapi.PolicyRules["readPods"], rbacapi.PolicyRules["readDeployments"]...)
+	inheritedNamespacedRules := map[string][]rbacv1.PolicyRule{
+		nonExistentNamespaceName: expectedRules,
+	}
+
+	log.Infof("Create a GlobalRole with inheritedNamespacedRules for non-existent namespace %s.", nonExistentNamespaceName)
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithAllRules(inr.client, []string{rbac.ClusterMember.String()}, nil, nil, inheritedNamespacedRules)
+	require.NoError(inr.T(), err, "Failed to create GlobalRole")
+
+	expectedRoleName := fmt.Sprintf("%s-%s", createdGlobalRole.Name, nonExistentNamespaceName)
+	err = rbacapi.WaitForRoleExistence(inr.client, inr.cluster.ID, nonExistentNamespaceName, expectedRoleName, false)
+	require.NoError(inr.T(), err, "Role %s should not exist before namespace %s is created", expectedRoleName, nonExistentNamespaceName)
+
+	log.Infof("Create namespace %s after the GlobalRole exists.", nonExistentNamespaceName)
+	_, err = namespaceapi.CreateNamespace(inr.client, inr.cluster.ID, createdProject.Name, nonExistentNamespaceName, "", nil, nil)
+	require.NoError(inr.T(), err, "Failed to create namespace %s", nonExistentNamespaceName)
+
+	log.Infof("Verify that Role %s is created with the inherited rules.", expectedRoleName)
+	err = rbacapi.WaitForRoleExistence(inr.client, inr.cluster.ID, nonExistentNamespaceName, expectedRoleName, true)
+	require.NoError(inr.T(), err, "Failed to get role %s in namespace %s", expectedRoleName, nonExistentNamespaceName)
+	createdRole, err := extrbacapi.GetRoleByName(inr.client, inr.cluster.ID, nonExistentNamespaceName, expectedRoleName)
+	require.NoError(inr.T(), err, "Failed to get role %s in namespace %s", expectedRoleName, nonExistentNamespaceName)
+	require.NotNil(inr.T(), createdRole)
+	require.Equal(inr.T(), createdGlobalRole.Name, createdRole.Labels["authz.management.cattle.io/gr-owner"])
+	require.Equal(inr.T(), expectedRules, createdRole.Rules)
+}
+
 func (inr *InheritedNamespacedRulesTestSuite) TestNamespaceCreatedAfterGlobalRoleBindingExists() {
 	subSession := inr.session.NewSession()
 	defer subSession.Cleanup()
@@ -1379,6 +1416,166 @@ func (inr *InheritedNamespacedRulesTestSuite) TestCRTBDeletionRevokesAccess() {
 	require.NoError(inr.T(), rbacapi.VerifyUserPermission(userClient, inr.cluster.ID, "list", "statefulsets", testNamespaceName, "", false, false))
 	require.NoError(inr.T(), rbacapi.VerifyUserPermission(userClient, extclusterapi.LocalCluster, "get", "statefulsets", statefulset.Namespace, statefulset.Name, true, false))
 	require.NoError(inr.T(), rbacapi.VerifyUserPermission(userClient, extclusterapi.LocalCluster, "list", "statefulsets", statefulset.Namespace, "", true, false))
+}
+
+func (inr *InheritedNamespacedRulesTestSuite) TestLongGlobalRoleNameRoleBindingReferencesRole() {
+	subSession := inr.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Create a project and user for the long GlobalRole name test.")
+	createdProject, err := projectapi.CreateProject(inr.client, inr.cluster.ID)
+	require.NoError(inr.T(), err, "Failed to create project")
+	createdUser, userPassword, err := userapi.CreateUserWithRoles(inr.client, rbac.StandardUser.String())
+	require.NoError(inr.T(), err, "Failed to create user")
+
+	namespaceName := namegen.AppendRandomString("long-ns-")
+	longGlobalRoleName := fmt.Sprintf("global-role-with-a-name-longer-than-sixty-three-characters-for-%s", namegen.AppendRandomString("test"))
+	expectedRules := rbacapi.PolicyRules["readPods"]
+	inheritedNamespacedRules := map[string][]rbacv1.PolicyRule{
+		namespaceName: expectedRules,
+	}
+
+	globalRole := &v3.GlobalRole{
+		ObjectMeta:               metav1.ObjectMeta{Name: longGlobalRoleName},
+		InheritedClusterRoles:    []string{rbac.ClusterMember.String()},
+		InheritedNamespacedRules: inheritedNamespacedRules,
+	}
+	log.Infof("Create the long-named GlobalRole %s.", longGlobalRoleName)
+	createdGlobalRole, err := extrbacapi.CreateGlobalRole(inr.client, globalRole)
+	require.NoError(inr.T(), err, "Failed to create long-named GlobalRole")
+
+	log.Infof("Create a GlobalRoleBinding for user %s.", createdUser.Username)
+	globalRoleBinding, err := rbacapi.CreateGlobalRoleBinding(inr.client, createdGlobalRole.Name, createdUser.Username, "", "")
+	require.NoError(inr.T(), err, "Failed to create GlobalRoleBinding")
+	log.Infof("Create namespace %s after the GlobalRoleBinding exists.", namespaceName)
+	_, err = namespaceapi.CreateNamespace(inr.client, inr.cluster.ID, createdProject.Name, namespaceName, "", nil, nil)
+	require.NoError(inr.T(), err, "Failed to create namespace %s", namespaceName)
+
+	expectedRoleName := wname.SafeConcatName(createdGlobalRole.Name, namespaceName)
+	log.Infof("Verify that Role %s is created with the safe concatenated name.", expectedRoleName)
+	err = rbacapi.WaitForRoleExistence(inr.client, inr.cluster.ID, namespaceName, expectedRoleName, true)
+	require.NoError(inr.T(), err, "Role %s should be created in namespace %s", expectedRoleName, namespaceName)
+	createdRole, err := extrbacapi.GetRoleByName(inr.client, inr.cluster.ID, namespaceName, expectedRoleName)
+	require.NoError(inr.T(), err, "Failed to get Role %s in namespace %s", expectedRoleName, namespaceName)
+
+	expectedRoleBindingName := fmt.Sprintf("%s-%s", globalRoleBinding.Name, namespaceName)
+	log.Infof("Verify that RoleBinding %s references Role %s.", expectedRoleBindingName, expectedRoleName)
+	_, err = extrbacapi.WaitForRoleBindingToExist(inr.client, inr.cluster.ID, namespaceName, expectedRoleBindingName)
+	require.NoError(inr.T(), err, "RoleBinding %s should be created in namespace %s", expectedRoleBindingName, namespaceName)
+
+	createdRoleBinding, err := extrbacapi.GetRoleBindingByName(inr.client, inr.cluster.ID, namespaceName, expectedRoleBindingName)
+	require.NoError(inr.T(), err, "Failed to get RoleBinding %s in namespace %s", expectedRoleBindingName, namespaceName)
+	require.Equal(inr.T(), createdRole.Name, createdRoleBinding.RoleRef.Name)
+
+	log.Infof("Verify user permissions for user %s in the downstream namespace.", createdUser.Username)
+	userClient, err := inr.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(inr.T(), err)
+	require.NoError(inr.T(), rbacapi.VerifyUserPermission(userClient, inr.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(inr.T(), rbacapi.VerifyUserPermission(userClient, inr.cluster.ID, "create", "pods", namespaceName, "", false, false))
+	require.NoError(inr.T(), rbacapi.VerifyUserPermission(userClient, inr.cluster.ID, "list", "pods", rbac.DefaultNamespace, "", false, false))
+}
+
+func (inr *InheritedNamespacedRulesTestSuite) TestInheritedNamespacedRulesExcludeLocalCluster() {
+	subSession := inr.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Create projects in the downstream and local clusters.")
+	createdDownstreamProject, err := projectapi.CreateProject(inr.client, inr.cluster.ID)
+	require.NoError(inr.T(), err, "Failed to create downstream project")
+	createdLocalProject, err := projectapi.CreateProject(inr.client, extclusterapi.LocalCluster)
+	require.NoError(inr.T(), err, "Failed to create local project")
+
+	createdUser, userPassword, err := userapi.CreateUserWithRoles(inr.client, rbac.StandardUser.String())
+	require.NoError(inr.T(), err, "Failed to create user")
+
+	namespaceName := namegen.AppendRandomString("scope-ns-")
+	log.Infof("Create namespace %s in both downstream and local clusters.", namespaceName)
+	_, err = namespaceapi.CreateNamespace(inr.client, inr.cluster.ID, createdDownstreamProject.Name, namespaceName, "", nil, nil)
+	require.NoError(inr.T(), err, "Failed to create downstream namespace %s", namespaceName)
+	_, err = namespaceapi.CreateNamespace(inr.client, extclusterapi.LocalCluster, createdLocalProject.Name, namespaceName, "", nil, nil)
+	require.NoError(inr.T(), err, "Failed to create local namespace %s", namespaceName)
+
+	globalRole, err := rbacapi.CreateGlobalRoleWithAllRules(inr.client, []string{rbac.ClusterMember.String()}, nil, nil, map[string][]rbacv1.PolicyRule{
+		namespaceName: rbacapi.PolicyRules["readPods"],
+	})
+	require.NoError(inr.T(), err, "Failed to create GlobalRole")
+
+	log.Infof("Create a GlobalRoleBinding for user %s.", createdUser.Username)
+	globalRoleBinding, err := rbacapi.CreateGlobalRoleBinding(inr.client, globalRole.Name, createdUser.Username, "", "")
+	require.NoError(inr.T(), err, "Failed to create GlobalRoleBinding")
+
+	expectedRoleName := fmt.Sprintf("%s-%s", globalRole.Name, namespaceName)
+	log.Infof("Verify inherited Role and RoleBinding exist only in downstream namespace %s.", namespaceName)
+	err = rbacapi.WaitForRoleExistence(inr.client, inr.cluster.ID, namespaceName, expectedRoleName, true)
+	require.NoError(inr.T(), err, "Role %s should be created in downstream namespace %s", expectedRoleName, namespaceName)
+	expectedRoleBindingName := fmt.Sprintf("%s-%s", globalRoleBinding.Name, namespaceName)
+	_, err = extrbacapi.WaitForRoleBindingToExist(inr.client, inr.cluster.ID, namespaceName, expectedRoleBindingName)
+	require.NoError(inr.T(), err, "RoleBinding %s should be created in downstream namespace %s", expectedRoleBindingName, namespaceName)
+
+	err = rbacapi.WaitForRoleExistence(inr.client, extclusterapi.LocalCluster, namespaceName, expectedRoleName, false)
+	require.NoError(inr.T(), err, "Role %s should not be created in local namespace %s", expectedRoleName, namespaceName)
+	_, err = extrbacapi.GetRoleBindingByName(inr.client, extclusterapi.LocalCluster, namespaceName, expectedRoleBindingName)
+	require.Error(inr.T(), err, "RoleBinding %s should not be created in local namespace %s", expectedRoleBindingName, namespaceName)
+	require.True(inr.T(), apierrors.IsNotFound(err), "Expected local RoleBinding lookup to return NotFound, got %v", err)
+
+	log.Infof("Verify user permissions for user %s are limited to the downstream cluster.", createdUser.Username)
+	userClient, err := inr.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(inr.T(), err)
+	require.NoError(inr.T(), rbacapi.VerifyUserPermission(userClient, inr.cluster.ID, "list", "pods", namespaceName, "", true, false))
+	require.NoError(inr.T(), rbacapi.VerifyUserPermission(userClient, extclusterapi.LocalCluster, "list", "pods", namespaceName, "", false, false))
+}
+
+func (inr *InheritedNamespacedRulesTestSuite) TestInheritedNamespacedRulesIgnoreUnrelatedNamespaceEvents() {
+	subSession := inr.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Create a project and user for the targeted namespace event test.")
+	createdProject, err := projectapi.CreateProject(inr.client, inr.cluster.ID)
+	require.NoError(inr.T(), err, "Failed to create project")
+	createdUser, _, err := userapi.CreateUserWithRoles(inr.client, rbac.StandardUser.String())
+	require.NoError(inr.T(), err, "Failed to create user")
+
+	targetNamespaceName := namegen.AppendRandomString("target-ns-")
+	inheritedNamespacedRules := map[string][]rbacv1.PolicyRule{
+		targetNamespaceName: rbacapi.PolicyRules["readPods"],
+	}
+	createdGlobalRole, err := rbacapi.CreateGlobalRoleWithAllRules(inr.client, []string{rbac.ClusterMember.String()}, nil, nil, inheritedNamespacedRules)
+	require.NoError(inr.T(), err, "Failed to create GlobalRole")
+	log.Infof("Create a GlobalRoleBinding for user %s targeting namespace %s.", createdUser.Username, targetNamespaceName)
+	createdGlobalRoleBinding, err := rbacapi.CreateGlobalRoleBinding(inr.client, createdGlobalRole.Name, createdUser.Username, "", "")
+	require.NoError(inr.T(), err, "Failed to create GlobalRoleBinding")
+
+	namespaceNames := []string{
+		targetNamespaceName,
+		namegen.AppendRandomString("unrelated-a-"),
+		namegen.AppendRandomString("unrelated-b-"),
+		namegen.AppendRandomString("unrelated-c-"),
+	}
+	log.Infof("Create the target namespace %s and unrelated namespaces.", targetNamespaceName)
+	for _, namespaceName := range namespaceNames {
+		_, err = namespaceapi.CreateNamespace(inr.client, inr.cluster.ID, createdProject.Name, namespaceName, "", nil, nil)
+		require.NoError(inr.T(), err, "Failed to create namespace %s", namespaceName)
+	}
+
+	expectedRoleName := wname.SafeConcatName(createdGlobalRole.Name, targetNamespaceName)
+	log.Infof("Verify inherited Role and RoleBinding are created only for target namespace %s.", targetNamespaceName)
+	err = rbacapi.WaitForRoleExistence(inr.client, inr.cluster.ID, targetNamespaceName, expectedRoleName, true)
+	require.NoError(inr.T(), err, "Role %s should be created in target namespace %s", expectedRoleName, targetNamespaceName)
+	expectedRoleBindingName := wname.SafeConcatName(createdGlobalRoleBinding.Name, targetNamespaceName)
+	_, err = extrbacapi.WaitForRoleBindingToExist(inr.client, inr.cluster.ID, targetNamespaceName, expectedRoleBindingName)
+	require.NoError(inr.T(), err, "RoleBinding %s should be created in target namespace %s", expectedRoleBindingName, targetNamespaceName)
+
+	log.Info("Verify unrelated namespace events did not create inherited RBAC resources.")
+	for _, namespaceName := range namespaceNames[1:] {
+		unrelatedRoleName := wname.SafeConcatName(createdGlobalRole.Name, namespaceName)
+		err = rbacapi.WaitForRoleExistence(inr.client, inr.cluster.ID, namespaceName, unrelatedRoleName, false)
+		require.NoError(inr.T(), err, "Role %s should not be created in unrelated namespace %s", unrelatedRoleName, namespaceName)
+
+		unrelatedRoleBindingName := wname.SafeConcatName(createdGlobalRoleBinding.Name, namespaceName)
+		_, err = extrbacapi.GetRoleBindingByName(inr.client, inr.cluster.ID, namespaceName, unrelatedRoleBindingName)
+		require.Error(inr.T(), err, "RoleBinding %s should not be created in unrelated namespace %s", unrelatedRoleBindingName, namespaceName)
+		require.True(inr.T(), apierrors.IsNotFound(err), "Expected unrelated RoleBinding lookup to return NotFound, got %v", err)
+	}
 }
 
 func TestInheritedNamespacedRulesTestSuite(t *testing.T) {
