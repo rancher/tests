@@ -96,10 +96,11 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
+      - name: Mask Credentials
         run: |
           echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
           echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+          echo "::add-mask::$RANCHER_PASSWORD"
 
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
@@ -169,7 +170,7 @@ jobs:
           cat > config.yaml <<EOF
           rancher:
             host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-            adminPassword: "${{ env.RANCHER_PASSWORD }}"
+            adminPassword: "$RANCHER_PASSWORD"
             insecure: true
             cleanup: true
           terraform:
@@ -205,7 +206,7 @@ jobs:
               loadBalancerType: "${{ vars.LOAD_BALANCER_DUALSTACK_TYPE }}"
               targetType: "${{ vars.TARGET_TYPE }}"
             standalone:
-              bootstrapPassword: "${{ env.RANCHER_PASSWORD }}"
+              bootstrapPassword: "$RANCHER_PASSWORD"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
               k3sVersion: "${{ env.LOCAL_CLUSTER_K8S_VERSION }}${{ vars.K3S_VERSION_SUFFIX }}"
