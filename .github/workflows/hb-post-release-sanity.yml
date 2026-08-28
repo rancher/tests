@@ -84,11 +84,12 @@ jobs:
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-head')
+    name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: latest
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_15 }}"
-      HOSTNAME_PREFIX: "pr-215"
+      HOSTNAME_PREFIX: "hb-com-215"
       REPORTING_ENABLED: >-
         ${{
           github.event_name == 'workflow_call' ||
@@ -188,12 +189,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
@@ -248,7 +243,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -449,13 +444,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-          is-prime: true
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
@@ -511,7 +499,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -712,13 +700,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-          is-prime: true
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
@@ -774,7 +755,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_14 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -975,13 +956,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-          is-prime: true
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
@@ -1044,7 +1018,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -1245,13 +1219,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-          is-prime: true
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
@@ -1314,7 +1281,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_12 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -1515,13 +1482,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-          is-prime: true
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
@@ -1584,7 +1544,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_11 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"

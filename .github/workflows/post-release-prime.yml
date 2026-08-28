@@ -43,6 +43,10 @@ env:
       (github.event_name == 'workflow_dispatch' && github.event.inputs.local_cluster_type) || 
       (github.event_name == 'schedule' && 'rke2') || 'rke2' 
     }}
+  PACKAGE: "postrelease"
+  TAG: "prime"
+  TEST_SUITE: "^TestPostReleasePrimeUITestSuite$"
+  TIMEOUT: "1h"
 
 jobs:
   create-qase-run:
@@ -178,12 +182,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
@@ -237,7 +235,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -275,19 +273,20 @@ jobs:
           terraform_version: "${{ vars.TERRAFORM_VERSION }}"
           terraform_wrapper: false
 
-      - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
-      - name: Run Prime UI Checks
+      - name: Run Post Release Test Suite
         env:
           QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-prime-ui-checks
+        uses: ./.github/actions/run-test-suite
         with:
+          package: ${{ env.PACKAGE }}
           reporting: ${{ env.REPORTING_ENABLED }}
+          tag: ${{ env.TAG }}
+          test-suite: ${{ env.TEST_SUITE }}
+          timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
         if: always()
@@ -436,12 +435,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
@@ -495,7 +488,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_14 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -533,19 +526,20 @@ jobs:
           terraform_version: "${{ vars.TERRAFORM_VERSION }}"
           terraform_wrapper: false
 
-      - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
-      - name: Run Prime UI Checks
+      - name: Run Post Release Test Suite
         env:
           QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-prime-ui-checks
+        uses: ./.github/actions/run-test-suite
         with:
+          package: ${{ env.PACKAGE }}
           reporting: ${{ env.REPORTING_ENABLED }}
+          tag: ${{ env.TAG }}
+          test-suite: ${{ env.TEST_SUITE }}
+          timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
         if: always()
@@ -694,12 +688,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
@@ -753,7 +741,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -791,19 +779,20 @@ jobs:
           terraform_version: "${{ vars.TERRAFORM_VERSION }}"
           terraform_wrapper: false
 
-      - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
-      - name: Run Prime UI Checks
+      - name: Run Post Release Test Suite
         env:
           QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-prime-ui-checks
+        uses: ./.github/actions/run-test-suite
         with:
+          package: ${{ env.PACKAGE }}
           reporting: ${{ env.REPORTING_ENABLED }}
+          tag: ${{ env.TAG }}
+          test-suite: ${{ env.TEST_SUITE }}
+          timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
         if: always()
@@ -952,12 +941,6 @@ jobs:
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
@@ -1012,7 +995,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_12 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -1050,19 +1033,20 @@ jobs:
           terraform_version: "${{ vars.TERRAFORM_VERSION }}"
           terraform_wrapper: false
 
-      - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
-      - name: Run Prime UI Checks
+      - name: Run Post Release Test Suite
         env:
           QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-prime-ui-checks
+        uses: ./.github/actions/run-test-suite
         with:
+          package: ${{ env.PACKAGE }}
           reporting: ${{ env.REPORTING_ENABLED }}
+          tag: ${{ env.TAG }}
+          test-suite: ${{ env.TEST_SUITE }}
+          timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
         if: always()
