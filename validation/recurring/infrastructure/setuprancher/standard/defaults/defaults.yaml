@@ -4,11 +4,6 @@ rancher:
   insecure: true
   cleanup: true
 
-awsCredentials:
-  accessKey: "<required>"
-  secretKey: "<required>"
-  defaultRegion: "<required>"
-
 terraform:
   provider: "<HB_PROVIDER>"
   downstreamClusterProvider: "<HB_PROVIDER>"
