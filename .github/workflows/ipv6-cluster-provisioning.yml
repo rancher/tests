@@ -8,8 +8,10 @@ on:
     inputs:
       rancher_version:
         description: "Rancher tag version"
+        required: true
       rancher_chart_version:
         description: "Rancher chart version"
+        required: true
       run_all_versions:
         description: "Run all supported versions if manually triggered"
         required: false

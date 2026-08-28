@@ -2,12 +2,16 @@
 name: Airgap Cluster Provisioning
 
 on:
+  schedule:
+    - cron: "0 9 * * 4"
   workflow_dispatch:
     inputs:
       rancher_version:
         description: "Rancher tag version"
+        required: true
       rancher_chart_version:
         description: "Rancher chart version"
+        required: true
       reporting:
         description: "Enable reporting to Qase and Slack"
         required: false
@@ -43,10 +47,18 @@ env:
       (github.event_name == 'workflow_dispatch' && github.event.inputs.local_cluster_type) || 
       (github.event_name == 'schedule' && 'rke2') || 'rke2' 
     }}
+  REPORTING_ENABLED: >-
+    ${{
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_call' ||
+      github.actor == 'github-actions[bot]' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
+    }}
 
 jobs:
   v2-15:
     if: |
+      github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15-head')) ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15-head'))
     name: ${{ github.event.inputs.rancher_version }}
@@ -54,12 +66,6 @@ jobs:
     environment: prime-head
     env:
       HOSTNAME_PREFIX: "ag-215"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -135,7 +141,8 @@ jobs:
           value: |
             ${{
               github.event.inputs.rancher_version ||
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_15_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -145,15 +152,14 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_15)
             }}
 
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_15 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_15 }}
 
       - name: Update /etc/hosts to add Rancher FQDN
@@ -361,6 +367,7 @@ jobs:
 
   v2-14:
     if: |
+      github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14-head')) ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14-head'))
     name: ${{ github.event.inputs.rancher_version }}
@@ -368,12 +375,6 @@ jobs:
     environment: prime-head
     env:
       HOSTNAME_PREFIX: "ag-214"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -449,7 +450,8 @@ jobs:
           value: |
             ${{
               github.event.inputs.rancher_version ||
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_15_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -459,15 +461,14 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_14)
             }}
 
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_14 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_14 }}
 
       - name: Update /etc/hosts to add Rancher FQDN
@@ -675,6 +676,7 @@ jobs:
 
   v2-13:
     if: |
+      github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13-head')) ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13-head'))
     name: ${{ github.event.inputs.rancher_version }}
@@ -682,12 +684,6 @@ jobs:
     environment: prime-head
     env:
       HOSTNAME_PREFIX: "ag-213"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -763,7 +759,8 @@ jobs:
           value: |
             ${{
               github.event.inputs.rancher_version ||
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
+              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_13_HEAD)
             }}
 
       - name: Set Rancher chart version
@@ -773,15 +770,14 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
+              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_13)
             }}
 
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_13 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
 
       - name: Update /etc/hosts to add Rancher FQDN

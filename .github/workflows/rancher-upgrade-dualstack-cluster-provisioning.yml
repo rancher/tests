@@ -8,8 +8,10 @@ on:
     inputs:
       rancher_version:
         description: "Rancher tag version"
+        required: true
       rancher_chart_version:
         description: "Rancher chart version"
+        required: true
       run_all_versions:
         description: "Run all supported versions if manually triggered"
         required: false
@@ -181,8 +183,6 @@ jobs:
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_16 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_16 }}
 
       - name: Set upgraded Rancher chart url
@@ -557,8 +557,6 @@ jobs:
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_15 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_15 }}
 
       - name: Set upgraded Rancher chart url
@@ -932,8 +930,6 @@ jobs:
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_14 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_14 }}
 
       - name: Set upgraded Rancher chart url
@@ -1308,8 +1304,6 @@ jobs:
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_13 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
 
       - name: Set upgraded Rancher chart url
