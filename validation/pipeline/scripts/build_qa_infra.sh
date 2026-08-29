@@ -201,6 +201,18 @@ fi
 
 # --- Rancher Cluster Module ---
 if [[ "$BUILD_DOWNSTREAM_CLUSTER" == "true" ]]; then
+    # Look up the Rancher server's own security group ID from the cluster_nodes
+    # module's tofu state. The Rancher server SSHes into downstream nodes to
+    # provision them, so its SG is allow-listed on the downstream ephemeral SG
+    # instead of opening SSH to 0.0.0.0/0 — see rancher_server_security_group_id
+    # in tofu/rancher/cluster/variables.tf.
+    RANCHER_SERVER_SG_ID=$(tofu -chdir="$TERRAFORM_DIR" output -json security_group_ids 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin)[0])" 2>/dev/null)
+    if [ -z "$RANCHER_SERVER_SG_ID" ]; then
+        echo "WARNING: could not resolve rancher server security group id; falling back to CIDR-scoped SSH ingress only."
+    else
+        echo "rancher_server_security_group_id = \"$RANCHER_SERVER_SG_ID\"" >> "$DOWNSTREAM_TFVARS_FILE"
+    fi
+
     tofu -chdir="tofu/rancher/cluster" init
     tofu -chdir="tofu/rancher/cluster" apply -auto-approve -var-file=$DOWNSTREAM_TFVARS_FILE -var-file=$GENERATED_TFVARS_FILE
     DOWNSTREAM_CLUSTER_NAME=$(tofu -chdir="tofu/rancher/cluster" output -raw name)
