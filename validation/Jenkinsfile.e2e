@@ -62,11 +62,7 @@ def destroyInfrastructure(String reason) {
                     'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
                     'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
                     'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
-                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME,
-                    // RUNNER_PUBLIC_IP only affects the (already-created) SG's
-                    // ingress rule; on destroy it's just re-rendered into the
-                    // tfvars file for validity and has no effect on teardown.
-                    'RUNNER_PUBLIC_IP':      env.RUNNER_PUBLIC_IP ?: '0.0.0.0'
+                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
                 ]
             )
             infrastructure.writeConfig(
@@ -456,15 +452,15 @@ secret_key     = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = ""
 aws_ssh_user = "ubuntu"
 aws_instance_type = "t3a.2xlarge"
-aws_vpc = "vpc-c30925a4"
-aws_subnet = "subnet-73577c28"
+aws_vpc = "vpc-bfccf4d7"
+aws_subnet = "subnet-6127e62d"
+aws_security_group = ["tf-pitdaily-sg"]
 
-aws_availability_zone = "b"
-aws_region    = "us-west-1"
+aws_availability_zone = "c"
+aws_region    = "us-east-2"
 aws_volume_size   = 50
 aws_volume_type   = "gp3"
 }
-ephemeral_sg_ingress_cidrs = ["${RUNNER_PUBLIC_IP}/32"]
 
 cloud_provider = "aws"
 insecure = true'''
