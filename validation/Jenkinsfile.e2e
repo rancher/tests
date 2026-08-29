@@ -62,7 +62,11 @@ def destroyInfrastructure(String reason) {
                     'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
                     'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
                     'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
-                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME,
+                    // RUNNER_PUBLIC_IP only affects the (already-created) SG's
+                    // ingress rule; on destroy it's just re-rendered into the
+                    // tfvars file for validity and has no effect on teardown.
+                    'RUNNER_PUBLIC_IP':      env.RUNNER_PUBLIC_IP ?: '0.0.0.0'
                 ]
             )
             infrastructure.writeConfig(
@@ -209,9 +213,9 @@ pipeline {
 aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = "ami-0600e22b69546c15c"
 instance_type = "t3a.2xlarge"
-# aws_vpc, aws_subnet, aws_security_group intentionally omitted: cluster_nodes
-# self-provisions an ephemeral VPC/subnet/security group when unset, destroyed
-# automatically by `make infra-down` alongside every other resource.
+aws_vpc = "vpc-bfccf4d7"
+aws_subnet = "subnet-ee8cac86"
+ephemeral_sg_ingress_cidrs = ["${RUNNER_PUBLIC_IP}/32"]
 airgap_setup = false
 proxy_setup = false
 aws_volume_size = 500
@@ -390,8 +394,6 @@ qaInfraAutomation:
         region: us-east-2
         route53Zone: qa.rancher.space
         secretKey: ${AWS_SECRET_ACCESS_KEY}
-        # securityGroups, subnet, vpc intentionally omitted: cluster_nodes
-        # self-provisions an ephemeral VPC/subnet/security group when unset.
         awsSSHKeyName: "jenkins-elliptic-validation"
         sshUser: ec2-user
         volumeSize: 50
@@ -454,15 +456,15 @@ secret_key     = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = ""
 aws_ssh_user = "ubuntu"
 aws_instance_type = "t3a.2xlarge"
-# aws_vpc, aws_subnet, aws_security_group intentionally omitted: tofu/rancher/cluster
-# self-provisions an ephemeral VPC/subnet/security group when unset, destroyed
-# automatically alongside the downstream cluster on teardown.
+aws_vpc = "vpc-c30925a4"
+aws_subnet = "subnet-73577c28"
 
 aws_availability_zone = "b"
 aws_region    = "us-west-1"
 aws_volume_size   = 50
 aws_volume_type   = "gp3"
 }
+ephemeral_sg_ingress_cidrs = ["${RUNNER_PUBLIC_IP}/32"]
 
 cloud_provider = "aws"
 insecure = true'''
@@ -567,6 +569,32 @@ insecure = true'''
             }
         }
 
+        // Auto-detect this runner's public IP so the ephemeral security
+        // group's SSH/LB ingress rule (ephemeral_sg_ingress_cidrs) allows
+        // the IP that Ansible/SSH will actually originate from. Falls back
+        // to a couple of alternate services if the first one is unreachable.
+        stage('Detect Public IP') {
+            steps {
+                script {
+                    def publicIp = sh(
+                        script: '''
+                            (curl -4 -fsS --max-time 5 https://ifconfig.me ||
+                             curl -4 -fsS --max-time 5 https://api.ipify.org ||
+                             curl -4 -fsS --max-time 5 https://ipinfo.io/ip) | tr -d '[:space:]'
+                        ''',
+                        returnStdout: true
+                    ).trim()
+
+                    if (!(publicIp ==~ /^(\d{1,3}\.){3}\d{1,3}$/)) {
+                        error "Failed to auto-detect a valid public IPv4 address (got: '${publicIp}')"
+                    }
+
+                    env.RUNNER_PUBLIC_IP = publicIp
+                    echo "Detected runner public IP: ${env.RUNNER_PUBLIC_IP}"
+                }
+            }
+        }
+
         stage('Provision Infrastructure') {
             steps {
                 script {
@@ -605,7 +633,8 @@ insecure = true'''
                                     'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
                                     'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
                                     'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
-                                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME,
+                                    'RUNNER_PUBLIC_IP':      env.RUNNER_PUBLIC_IP
                                 ]
                             )
                             infrastructure.writeConfig(
@@ -857,7 +886,8 @@ rancher_use_bundled_system_charts: true
                             envVars: [
                                 'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
                                 'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
-                                'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX
+                                'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
+                                'RUNNER_PUBLIC_IP':      env.RUNNER_PUBLIC_IP
                             ]
                         )
                         infrastructure.writeConfig(
