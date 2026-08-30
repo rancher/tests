@@ -62,7 +62,8 @@ def destroyInfrastructure(String reason) {
                     'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
                     'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
                     'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
-                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME,
+                    'RUNNER_PUBLIC_IP':      env.RUNNER_PUBLIC_IP
                 ]
             )
             infrastructure.writeConfig(
