@@ -126,7 +126,6 @@ pipeline {
 aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = "ami-0600e22b69546c15c"
 instance_type = "t3a.2xlarge"
-aws_security_group = ["sg-08e8243a8cfbea8a0"]
 aws_subnet = "subnet-ee8cac86"
 airgap_setup = false
 proxy_setup = false
@@ -137,6 +136,7 @@ aws_region = "us-east-2"
 aws_route53_zone = "qa.rancher.space"
 aws_ssh_user = "ubuntu"
 aws_vpc = "vpc-bfccf4d7"
+ephemeral_sg_ingress_cidrs = ["${RUNNER_PUBLIC_IP}/32"]
 public_ssh_key = "ssh_public_key.pub"
 private_ssh_key = "~/.ssh/${AWS_SSH_PEM_KEY_NAME}"
 nodes = [
@@ -236,8 +236,6 @@ awsEC2Configs:
       awsCICDInstanceTag: rancher-validation
       awsIAMProfile: EngineeringUsersUS
       awsSSHKeyName: jenkins-elliptic-validation.pem
-      awsSecurityGroups:
-      - sg-08e8243a8cfbea8a0
       awsUser: ec2-user
       instanceType: t3a.2xlarge
       isWindows: false
@@ -326,12 +324,12 @@ secret_key     = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = ""
 aws_ssh_user = "ubuntu"
 aws_instance_type = "t3a.2xlarge"
-aws_security_group = ["rancher-nodes"]
+aws_security_group = ["tf-pitdaily-sg"]
 
-aws_subnet = "subnet-73577c28"
-aws_availability_zone = "a"
-aws_vpc = "vpc-c30925a4"
-aws_region    = "us-west-1"
+aws_subnet = "subnet-6127e62d"
+aws_availability_zone = "c"
+aws_vpc = "vpc-bfccf4d7"
+aws_region    = "us-east-2"
 aws_volume_size   = 50
 aws_volume_type   = "gp3"
 }
