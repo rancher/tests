@@ -15,6 +15,7 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/workloads"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -116,6 +117,24 @@ func TestImported(t *testing.T) {
 
 			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
 			err = clusters.VerifyServiceAccountTokenSecret(k.client, cluster.Name)
+			require.NoError(t, err)
+
+			workloadConfigs := new(workloads.Workloads)
+			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, k.cattleConfig, workloadConfigs)
+
+			// workloads are not registered for cleanup; terraform destroys the cluster they live on
+			workloadSession := session.NewSession()
+			workloadSession.CleanupEnabled = false
+
+			workloadClient, err := k.client.WithSession(workloadSession)
+			require.NoError(t, err)
+
+			logrus.Infof("Creating workloads (%s)", cluster.Name)
+			createdWorkloads, err := workloads.CreateWorkloads(workloadClient, cluster.Name, *workloadConfigs)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying workloads (%s)", cluster.Name)
+			_, err = workloads.VerifyWorkloads(workloadClient, cluster.Name, *createdWorkloads)
 			require.NoError(t, err)
 		})
 
