@@ -18,7 +18,7 @@ terraform:
   awsConfig:
     ami: "<HB_DEFAULT_AMI>"
     awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
-    awsInstanceType: "t3.xlarge"
+    awsInstanceType: "t2.2xlarge"
     awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
     region: "<HB_AWS_REGION>"
     awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_PRIME>"]
