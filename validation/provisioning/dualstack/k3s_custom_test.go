@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
 	tfpConfig "github.com/rancher/tfp-automation/config"
 	"github.com/rancher/tfp-automation/framework/cleanup"
 	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
@@ -46,6 +47,14 @@ func customK3SDualstackSetup(t *testing.T) customK3SDualstackTest {
 
 	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
 	require.NoError(t, err)
+
+	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)
+	require.NoError(t, err)
+
+	err = defaults.VerifyCattleConfig(k.cattleConfig, nil)
+	require.NoError(t, err)
+
+	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), k.cattleConfig)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)

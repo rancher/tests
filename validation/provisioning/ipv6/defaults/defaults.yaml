@@ -9,11 +9,19 @@ clusterConfig:
       flannel-ipv6-masq: true
 
 awsMachineConfigs:
+  region: "<HB_AWS_REGION>"
   awsMachineConfig:
-  - ami: "<HB_AWS_IPV6_AMI>"
+  - roles: ["etcd", "controlplane", "worker"]
+    ami: "<HB_AWS_IPV6_AMI>"
+    instanceType: "<HB_AWS_INSTANCE_TYPE>"
+    volumeType: "<HB_AWS_VOLUME_TYPE>"
+    rootSize: "<HB_AWS_ROOT_SIZE>"
+    sshUser: "<HB_DUAL_STACK_AWS_USER>"
+    vpcId: "<HB_AWS_VPC_ID>"
     zone: "<HB_IPV6_AWS_ZONE_LETTER>"
     subnetId: "<HB_AWS_IPV6_SUBNET_ID>"
     securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
+    retries: "5"
     enablePrimaryIPv6: true
     httpProtocolIpv6: "enabled"
     ipv6AddressOnly: true
