@@ -56,7 +56,7 @@ func VerifyDeployment(client *rancher.Client, clusterID, namespace, name string)
 		}
 
 		deploymentConditions = deployment.Status.Conditions
-		if *deployment.Spec.Replicas == deployment.Status.AvailableReplicas {
+		if deployment.Spec.Replicas != nil && deployment.Status.AvailableReplicas == *deployment.Spec.Replicas {
 			return true, nil
 		}
 
@@ -64,7 +64,11 @@ func VerifyDeployment(client *rancher.Client, clusterID, namespace, name string)
 	})
 
 	if err != nil {
-		logrus.Warningf("Failed to verify deployment: %s", deploymentConditions[0].Message)
+		if len(deploymentConditions) > 0 {
+			logrus.Warningf("Failed to verify deployment: %s", deploymentConditions[0].Message)
+		} else {
+			logrus.Warningf("Failed to verify deployment %s: no deployment conditions returned", name)
+		}
 	}
 
 	return err
@@ -556,6 +560,10 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 				return false, nil
 			}
 
+			if k8sDeployment == nil || k8sDeployment.Name == "" || k8sDeployment.Spec.Replicas == nil {
+				continue
+			}
+
 			if slices.Contains(requiredDeployments, k8sDeployment.Name) {
 				requiredDeployments = slices.Delete(requiredDeployments, slices.Index(requiredDeployments, k8sDeployment.Name), slices.Index(requiredDeployments, k8sDeployment.Name)+1)
 			}
@@ -587,6 +595,9 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 				return false, nil
 			}
 
+			if k8sDeployment == nil || k8sDeployment.Name == "" || k8sDeployment.Spec.Replicas == nil {
+				continue
+			}
 			if k8sDeployment.Status.AvailableReplicas != *k8sDeployment.Spec.Replicas {
 				failedDeployments = append(failedDeployments, *k8sDeployment)
 			}

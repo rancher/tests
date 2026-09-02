@@ -20,6 +20,7 @@ import (
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -46,6 +47,14 @@ func customRKE2IPv6Setup(t *testing.T) customRKE2IPv6Test {
 
 	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
 	require.NoError(t, err)
+
+	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
+	require.NoError(t, err)
+
+	err = defaults.VerifyCattleConfig(r.cattleConfig, nil)
+	require.NoError(t, err)
+
+	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), r.cattleConfig)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)

@@ -22,13 +22,13 @@ templateChart:
         quantity: 3
         createSecurityGroup: true
         ami: "<HB_DEFAULT_AMI>"
-        instanceType: "t3.2xlarge"
-        region: "us-east-2"
+        instanceType: "<HB_AWS_INSTANCE_TYPE>"
+        region: "<HB_AWS_REGION>"
         subnetId: "<HB_AWS_SUBNET_ID>"
         vpcId: "<HB_AWS_VPC_ID>"
-        zone: "a"
-        rootSize: 100
-        volumeType: "gp3"
+        zone: "<HB_AWS_ZONE>"
+        rootSize: "<HB_AWS_ROOT_SIZE>"
+        volumeType: "<HB_AWS_VOLUME_TYPE>"
 
       "1":
         etcd: false
@@ -37,12 +37,12 @@ templateChart:
         quantity: 2
         createSecurityGroup: true
         ami: "<HB_DEFAULT_AMI>"
-        instanceType: "t3.2xlarge"
-        region: "us-east-2"
+        instanceType: "<HB_AWS_INSTANCE_TYPE>"
+        region: "<HB_AWS_REGION>"
         subnetId: "<HB_AWS_SUBNET_ID>"
         vpcId: "<HB_AWS_VPC_ID>"
-        rootSize: 100
-        volumeType: "gp3"
+        rootSize: "<HB_AWS_ROOT_SIZE>"
+        volumeType: "<HB_AWS_VOLUME_TYPE>"
 
       "2":
         etcd: false
@@ -51,9 +51,9 @@ templateChart:
         quantity: 3
         createSecurityGroup: true
         ami: "<HB_DEFAULT_AMI>"
-        instanceType: "t3.2xlarge"
-        region: "us-east-2"
+        instanceType: "<HB_AWS_INSTANCE_TYPE>"
+        region: "<HB_AWS_REGION>"
         subnetId: "<HB_AWS_SUBNET_ID>"
         vpcId: "<HB_AWS_VPC_ID>"
-        rootSize: 100
-        volumeType: "gp3"
+        rootSize: "<HB_AWS_ROOT_SIZE>"
+        volumeType: "<HB_AWS_VOLUME_TYPE>"
