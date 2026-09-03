@@ -39,7 +39,6 @@ const (
 	// Doc: https://developers.qase.io/reference/create-run
 	descriptionLimit = 10000
 	imageReportPath  = "/app/image-report/image-report.txt"
-	testResultsJSON  = "results.json"
 )
 
 func main() {
