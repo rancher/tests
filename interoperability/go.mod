@@ -68,7 +68,7 @@ require (
 	github.com/rancher/norman v0.10.0
 	github.com/rancher/qa-infra-automation v0.0.0-20260514152023-976143409dc3
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20260824145520-00de4a01fb4d
+	github.com/rancher/shepherd v0.0.0-20260903195701-8ef40de47b98
 	github.com/rancher/tests/actions v0.0.0-20260807182903-06ab37e1aeac
 	github.com/rancher/tfp-automation v0.0.0-20260827195232-25e15390e420
 	github.com/sirupsen/logrus v1.10.1
@@ -216,3 +216,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+replace github.com/rancher/shepherd => github.com/dasarinaidu/shepherd v0.0.0-20260903195701-8ef40de47b98
