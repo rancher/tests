@@ -8,10 +8,10 @@ on:
     inputs:
       rancher_version:
         description: "Rancher tag version"
-        required: true
+        required: false
       rancher_chart_version:
         description: "Rancher chart version"
-        required: true
+        required: false
       run_all_versions:
         description: "Run all supported versions if manually triggered"
         required: false
@@ -39,11 +39,11 @@ on:
     inputs:
       rancher_version:
         description: "Rancher tag version provided from check-rancher-tag workflow"
-        required: true
+        required: false
         type: string
       rancher_chart_version:
         description: "Rancher chart version provided from check-rancher-tag workflow"
-        required: true
+        required: false
         type: string
 
 permissions:
