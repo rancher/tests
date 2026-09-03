@@ -391,6 +391,11 @@ insecure = true'''
             defaultValue: '',
             description: 'Schema file prefix for Qase operations, for example hostbusters or pit'
         )
+        string(
+            name: 'QASE_TEST_RUN_CUSTOM_NAME',
+            defaultValue: '',
+            description: 'Optional custom name for the created Qase test run (if Qase reporting is enabled). If disabled the run will be determined automatically by the downstream job.'
+        )
     }
 
     stages {
@@ -401,12 +406,35 @@ insecure = true'''
                     def recurringJob = params.RECURRING_JOB
                     def individualJob = params.INDIVIDUAL_JOB
                     def hostnamePrefix = params.HOSTNAME_PREFIX
+                    def qaseTestRunCustomName = params.QASE_TEST_RUN_CUSTOM_NAME
                     if (isPitJob) {
                         recurringJob = 'go-pit-setup-job'
                         individualJob = 'go-pit-validation-job'
                         hostnamePrefix = "pit-${hostnamePrefix}"
                         if (env.JOB_NAME.contains('weekly')) {
                             hostnamePrefix = "pit-recurringweekly"
+                        }
+                    }
+
+                    // Determine the effective Qase test run name. When QASE_TEST_RUN_CUSTOM_NAME
+                    // is empty, fall back to  some value depending on the job's triigger and environment.
+                    if (env.JOB_NAME.contains('go-pit')) {
+                        def cadence = env.JOB_NAME.contains('daily') ? 'daily' : env.JOB_NAME.contains('weekly') ? 'weekly' : 'custom'
+
+                        if (!qaseTestRunCustomName?.trim()) {
+                            def triggeredByTimer = !currentBuild.getBuildCauses(
+                                'hudson.triggers.TimerTrigger$TimerTriggerCause'
+                            ).isEmpty()
+
+                            if (triggeredByTimer) {
+                                qaseTestRunCustomName = "PIT ${cadence} Test Run"
+                            } else {
+                                qaseTestRunCustomName = "PIT manual Test Run"
+                            }
+
+                            if (!(env.JENKINS_URL ?: '').contains('baler')) {
+                                qaseTestRunCustomName = "PIT staging Test Run"
+                            }
                         }
                     }
 
@@ -517,6 +545,7 @@ insecure = true'''
                             string(name: 'TEST_TIMEOUT', value: params.TEST_TIMEOUT),
                             string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
                             string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
+                            string(name: 'QASE_TEST_RUN_CUSTOM_NAME', value: qaseTestRunCustomName),
                         ]
 
                         jobs["${tag}-${validationTags}"] = {

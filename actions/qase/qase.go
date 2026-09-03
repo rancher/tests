@@ -23,6 +23,7 @@ type Service struct {
 
 const (
 	schemas        = "schemas.yaml"
+	failStatus     = "failed"
 	requestLimit   = 100
 	runSourceID    = 16
 	recurringRunID = 1
