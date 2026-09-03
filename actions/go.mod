@@ -61,7 +61,7 @@ replace (
 require (
 	github.com/qase-tms/qase-go/qase-api-client v1.2.12
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20260824145520-00de4a01fb4d
+	github.com/rancher/shepherd v0.0.0-20260903195701-8ef40de47b98
 	github.com/rancher/tfp-automation v0.0.0-20260827195232-25e15390e420
 )
 
@@ -248,3 +248,5 @@ require (
 	sigs.k8s.io/kustomize/api v0.21.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.21.1 // indirect
 )
+
+replace github.com/rancher/shepherd => github.com/dasarinaidu/shepherd v0.0.0-20260903195701-8ef40de47b98
