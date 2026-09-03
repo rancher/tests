@@ -402,24 +402,19 @@ insecure = true'''
         stage('Trigger Per-Version Jobs') {
             steps {
                 script {
-                    def isPitJob = env.JOB_NAME.contains('go-pit')
                     def recurringJob = params.RECURRING_JOB
                     def individualJob = params.INDIVIDUAL_JOB
-                    def hostnamePrefix = params.HOSTNAME_PREFIX
+                    def commonPrefix = params.HOSTNAME_PREFIX
                     def qaseTestRunCustomName = params.QASE_TEST_RUN_CUSTOM_NAME
-                    if (isPitJob) {
-                        recurringJob = 'go-pit-setup-job'
-                        individualJob = 'go-pit-validation-job'
-                        hostnamePrefix = "pit-${hostnamePrefix}"
-                        if (env.JOB_NAME.contains('weekly')) {
-                            hostnamePrefix = "pit-recurringweekly"
-                        }
-                    }
 
-                    // Determine the effective Qase test run name. When QASE_TEST_RUN_CUSTOM_NAME
+                    // Determine the effective Qase test run name and hostname prefix. When QASE_TEST_RUN_CUSTOM_NAME
                     // is empty, fall back to  some value depending on the job's triigger and environment.
                     if (env.JOB_NAME.contains('go-pit')) {
                         def cadence = env.JOB_NAME.contains('daily') ? 'daily' : env.JOB_NAME.contains('weekly') ? 'weekly' : 'custom'
+
+                        if (commonPrefix?.trim()) {
+                            commonPrefix = "pit-${cadence}"
+                        }
 
                         if (!qaseTestRunCustomName?.trim()) {
                             def triggeredByTimer = !currentBuild.getBuildCauses(
@@ -464,18 +459,11 @@ insecure = true'''
                     def matchedJobKey = runMatrixByJob.keySet().find { env.JOB_NAME.contains(it) }
                     def runMatrix = matchedJobKey ? runMatrixByJob[matchedJobKey] : defaultMatrix
 
-                    // Map image tags to hostname suffixes for unique DNS entries
-                    def hostnameSuffixMap = [
-                        'v2.8-head': 'v28',
-                        'v2.9-head': 'v29',
-                        'v2.10-head': 'v210',
-                        'v2.11-head': 'v211',
-                        'v2.12-head': 'v212',
-                        'v2.13-head': 'v213',
-                        'v2.14-head': 'v214',
-                        'v2.15-head': 'v215',
-                        'head': 'main'
-                    ]
+                    // Map image tags to hostname suffixes for unique DNS entries.
+                    // e.g. 'v2.8-head' -> 'v28', 'v2.15-head' -> 'v215', 'head' -> 'head'.
+                    def hostnameSuffix = { tag ->
+                        tag == 'head' ? 'main' : tag.replaceAll('-head$', '').replaceAll('[^a-zA-Z0-9]', '')
+                    }
 
                     // Map image tags to Rancher chart versions
                     def tagChartMap = [
@@ -490,27 +478,24 @@ insecure = true'''
                         'head': 'latest'
                     ]
 
-                    // Tags that should use the prime chart repo
-                    def primeChartTags = ['head', 'v2.9-head']
-
                     def jobs = [:]
 
                     for (entry in runMatrix) {
                         def tag = entry.imageTag // capture for closure
                         def validationTags = entry.validationTags
-                        def suffix = hostnameSuffixMap.get(tag, tag.replaceAll('[^a-zA-Z0-9]', ''))
-                        def hostname = "${hostnamePrefix}${suffix}"
+                        def suffix = hostnameSuffix(tag)
+                        def hostnamePrefix = "${commonPrefix}${suffix}"
                         def rancherVersion = tagChartMap.get(tag, entry.imageTag)
 
                         // Render per-tag hostname into TERRAFORM_CONFIG and CATTLE_TEST_CONFIG
                         def tfConfig = infrastructure.parseAndSubstituteVars(
                             content: params.TERRAFORM_CONFIG,
-                            envVars: ['HOSTNAME_PREFIX': hostname]
+                            envVars: ['HOSTNAME_PREFIX': hostnamePrefix]
                         )
 
                         def cattleConfig = infrastructure.parseAndSubstituteVars(
                             content: params.CATTLE_TEST_CONFIG,
-                            envVars: ['HOSTNAME_PREFIX': hostname]
+                            envVars: ['HOSTNAME_PREFIX': hostnamePrefix]
                         )
 
                         def jobParams = [
@@ -519,7 +504,7 @@ insecure = true'''
                             string(name: 'TESTS_BRANCH', value: params.TESTS_BRANCH),
                             string(name: 'QA_INFRA_REPO_URL', value: params.QA_INFRA_REPO_URL),
                             string(name: 'QA_INFRA_BRANCH', value: params.QA_INFRA_BRANCH),
-                            string(name: 'HOSTNAME_PREFIX', value: hostname),
+                            string(name: 'HOSTNAME_PREFIX', value: hostnamePrefix),
                             string(name: 'RKE2_VERSION', value: entry.rke2Version),
                             string(name: 'RANCHER_VERSION', value: rancherVersion),
                             string(name: 'RANCHER_IMAGE_TAG', value: tag),
@@ -555,7 +540,7 @@ insecure = true'''
 
                     def matrixSummary = runMatrix.collect { "${it.imageTag} (${it.validationTags})" }.join(', ')
                     currentBuild.displayName = "#${env.BUILD_NUMBER} - ${matrixSummary}"
-                    currentBuild.description = "Testing: ${matrixSummary} on ${hostnamePrefix}"
+                    currentBuild.description = "Testing: ${matrixSummary}"
 
                     parallel jobs
                 }
