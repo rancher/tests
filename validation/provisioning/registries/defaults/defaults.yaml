@@ -23,10 +23,6 @@ clusterConfig:
       controlplane: false
       worker: true
       quantity: 3
-  kubernetesVersion: ""
-  cni: "calico"
-  provider: "aws"
-  nodeProvider: "ec2"
   registries:
     rke2Username: ""
     rke2Password: ""
@@ -34,24 +30,16 @@ clusterConfig:
       configs:
         <required>:
 
-#Required for all tests
-awsCredentials:
-  secretKey: "<required>"
-  accessKey: "<required>"
-  defaultRegion: "us-east-2" 
-
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
   region: "us-east-2"
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
     ami: "<required>"
-    instanceType: "t3a.xlarge"
     volumeType: "<required>"
     rootSize: "<required>"
     sshUser: "<required>"
     vpcId: "<required>"
-    retries: "5"
     zone: "a"
   - roles: ["windows"]
     ami: "<required>"
@@ -60,7 +48,6 @@ awsMachineConfigs:
     vpcId: "<required>"
     volumeType: "<required>"
     zone: "a"
-    retries: "5"
     rootSize: "100"
 
 #Required for tests that utilize custom clusters
