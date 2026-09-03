@@ -4,10 +4,6 @@ rancher:
   insecure: true
   cleanup: true
 
-awsCredentials:
-  accessKey: "<required>"
-  secretKey: "<required>"
-
 terraform:
   awsCredentials:
     awsAccessKey: "<required>"
