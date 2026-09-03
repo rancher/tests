@@ -62,13 +62,13 @@ func InstallComplianceChart(client *rancher.Client, ChartInstallActionPayload *P
 			return err
 		}
 
-		err = catalogClient.UninstallChart(ChartInstallActionPayload.Name+"-crd", ChartInstallActionPayload.Name, defaultChartUninstallAction)
+		err = catalogClient.UninstallChart(ChartInstallActionPayload.Name+"-crd", ChartInstallActionPayload.Namespace, defaultChartUninstallAction)
 		if err != nil {
 			return err
 		}
 
 		watchAppInterface, err = catalogClient.Apps(ChartInstallActionPayload.Namespace).Watch(context.TODO(), metav1.ListOptions{
-			FieldSelector:  "metadata.name=" + ChartInstallActionPayload.Name,
+			FieldSelector:  "metadata.name=" + ChartInstallActionPayload.Name + "-crd",
 			TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 		})
 		if err != nil {
