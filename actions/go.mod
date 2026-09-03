@@ -75,7 +75,7 @@ require (
 	github.com/rancher/norman v0.10.0
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20260824145520-00de4a01fb4d
+	github.com/rancher/shepherd v0.0.0-20260921153737-8e09fea6aaaf
 	github.com/rancher/tfp-automation v0.0.0-20260922151001-6bafd3d62c5e
 	github.com/rancher/wrangler v1.1.2
 	github.com/sirupsen/logrus v1.10.2
