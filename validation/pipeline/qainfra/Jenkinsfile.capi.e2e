@@ -105,11 +105,10 @@ node {
                   returnStdout: true
               ).trim()
 
-def octets = publicIp.tokenize('.')
-if (octets.size() != 4 || !octets.every { it ==~ /\d{1,3}/ && it.toInteger() >= 0 && it.toInteger() <= 255 }) {
-    error "Failed to auto-detect a valid public IPv4 address (got: '${publicIp}')"
-}
-
+              def octets = publicIp.tokenize('.')
+              if (octets.size() != 4 || !octets.every { it ==~ /\d{1,3}/ && it.toInteger() >= 0 && it.toInteger() <= 255 }) {
+                  error "Failed to auto-detect a valid public IPv4 address (got: '${publicIp}')"
+              }
   
               echo "Detected runner public IP: ${env.RUNNER_PUBLIC_IP}"
 
@@ -124,7 +123,6 @@ if (octets.size() != 4 || !octets.every { it ==~ /\d{1,3}/ && it.toInteger() >= 
               capiConfig = capiConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
               capiConfig = capiConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
               capiClusterConfig = capiClusterConfig.replace('${JENKINS_CAPI_SSH_KEY_NAME}', env.JENKINS_CAPI_SSH_KEY_NAME)
-
 
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
                 dir("./tests/.ssh") {

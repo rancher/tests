@@ -310,7 +310,7 @@ etcd_role = true
 quantity = 1
 } ]
 create_new = true
-generate_name = "recurring-tf"
+generate_name = "${HOSTNAME_PREFIX}-tf"
 machine_global_config = {
 cni = "calico"
 ingress-controller = "traefik"
@@ -324,7 +324,7 @@ secret_key     = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = ""
 aws_ssh_user = "ubuntu"
 aws_instance_type = "t3a.2xlarge"
-aws_security_group = ["tf-pitdaily-sg"]
+aws_security_group = ["tf-${HOSTNAME_PREFIX}-sg"]
 
 aws_subnet = "subnet-6127e62d"
 aws_availability_zone = "c"
