@@ -121,6 +121,33 @@ pipeline {
             }
         }
 
+        // Auto-detect this runner's public IP so the ephemeral security
+        // group's SSH/LB ingress rule (ephemeral_sg_ingress_cidrs) allows
+        // the IP that Ansible/SSH will actually originate from. Falls back
+        // to a couple of alternate services if the first one is unreachable.
+        stage('Detect Public IP') {
+            steps {
+                script {
+                    def publicIp = sh(
+                        script: '''
+                            (curl -4 -fsS --max-time 5 https://ifconfig.me ||
+                             curl -4 -fsS --max-time 5 https://api.ipify.org ||
+                             curl -4 -fsS --max-time 5 https://ipinfo.io/ip) | tr -d '[:space:]'
+                        ''',
+                        returnStdout: true
+                    ).trim()
+
+                    def octets = publicIp.tokenize('.')
+                    if (octets.size() != 4 || !octets.every { it ==~ /\d{1,3}/ && it.toInteger() >= 0 && it.toInteger() <= 255 }) {
+                        error "Failed to auto-detect a valid public IPv4 address (got: '${publicIp}')"
+                    }
+
+                    env.RUNNER_PUBLIC_IP = publicIp
+                    echo "Detected runner public IP: ${env.RUNNER_PUBLIC_IP}"
+                }
+            }
+        }
+
         stage('Build Test Image') {
             steps {
                 sh 'docker build --no-cache --platform linux/amd64 -t rancher-go-test:latest -f validation/pipeline/Dockerfile.airgap-go-tests .'
