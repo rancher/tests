@@ -62,7 +62,8 @@ def destroyInfrastructure(String reason) {
                     'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
                     'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
                     'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
-                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME,
+                    'RUNNER_PUBLIC_IP':      env.RUNNER_PUBLIC_IP
                 ]
             )
             infrastructure.writeConfig(
@@ -209,8 +210,10 @@ pipeline {
 aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = "ami-0600e22b69546c15c"
 instance_type = "t3a.2xlarge"
-aws_security_group = ["sg-08e8243a8cfbea8a0"]
+aws_security_group = ["tf-${HOSTNAME_PREFIX}-sg"]
+aws_vpc = "vpc-bfccf4d7"
 aws_subnet = "subnet-ee8cac86"
+ephemeral_sg_ingress_cidrs = ["${RUNNER_PUBLIC_IP}/32"]
 airgap_setup = false
 proxy_setup = false
 aws_volume_size = 500
@@ -219,7 +222,6 @@ aws_hostname_prefix = "${HOSTNAME_PREFIX}"
 aws_region = "us-east-2"
 aws_route53_zone = "qa.rancher.space"
 aws_ssh_user = "ubuntu"
-aws_vpc = "vpc-bfccf4d7"
 public_ssh_key = "ssh_public_key.pub"
 private_ssh_key = "~/.ssh/${AWS_SSH_PEM_KEY_NAME}"
 nodes = [
@@ -279,7 +281,7 @@ server_flags: |
     rootSize: 16
     secretKey: ${AWS_SECRET_ACCESS_KEY}
     securityGroup:
-    - qa_default_ipv4
+    - tf-${HOSTNAME_PREFIX}-sg
     securityGroupReadonly: false
     spotPrice: 0.5
     sshUser: ubuntu
@@ -378,7 +380,7 @@ qaInfraAutomation:
         accessKey: ${AWS_ACCESS_KEY_ID}
         airgapSetup: false
         ami: ami-05bca07e340ee4f45
-        hostnamePrefix: tf-pit-daily
+        hostnamePrefix: tf-${HOSTNAME_PREFIX}
         instanceType: t3a.2xlarge
         nodes:
         - count: 1
@@ -391,7 +393,7 @@ qaInfraAutomation:
         route53Zone: qa.rancher.space
         secretKey: ${AWS_SECRET_ACCESS_KEY}
         securityGroups:
-            - sg-08e8243a8cfbea8a0
+            - tf-${HOSTNAME_PREFIX}-sg
         awsSSHKeyName: "jenkins-elliptic-validation"
         sshUser: ec2-user
         subnet: subnet-ee8cac86
@@ -399,7 +401,7 @@ qaInfraAutomation:
         volumeType: gp3
         vpc: vpc-bfccf4d7
     customCluster:
-        generateName: tf-pit-daily
+        generateName: tf-${HOSTNAME_PREFIX}
         harden: true
         isNetworkPolicy: false
         kubernetesVersion: v1.34.4+k3s1
@@ -408,7 +410,7 @@ qaInfraAutomation:
             - count: 1
               role: [etcd, cp, worker]
     repoPath: /infratest
-    workspace: tf-pit-daily
+    workspace: tf-${HOSTNAME_PREFIX}
 rancher:
     host: ${HOSTNAME_PREFIX}.qa.rancher.space
     adminPassword: ${ADMIN_PASSWORD}
@@ -442,7 +444,7 @@ etcd_role = true
 quantity = 3
 } ]
 create_new = true
-generate_name = "pitdaily-tf"
+generate_name = "${HOSTNAME_PREFIX}-tf"
 machine_global_config = {
 cni = "calico"
 ingress-controller = "traefik"
@@ -456,12 +458,12 @@ secret_key     = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = ""
 aws_ssh_user = "ubuntu"
 aws_instance_type = "t3a.2xlarge"
-aws_security_group = ["rancher-nodes"]
+aws_vpc = "vpc-bfccf4d7"
+aws_subnet = "subnet-6127e62d"
+aws_security_group = ["tf-${HOSTNAME_PREFIX}-sg"]
 
-aws_subnet = "subnet-73577c28"
-aws_availability_zone = "a"
-aws_vpc = "vpc-c30925a4"
-aws_region    = "us-west-1"
+aws_availability_zone = "c"
+aws_region    = "us-east-2"
 aws_volume_size   = 50
 aws_volume_type   = "gp3"
 }
@@ -569,6 +571,33 @@ insecure = true'''
             }
         }
 
+        // Auto-detect this runner's public IP so the ephemeral security
+        // group's SSH/LB ingress rule (ephemeral_sg_ingress_cidrs) allows
+        // the IP that Ansible/SSH will actually originate from. Falls back
+        // to a couple of alternate services if the first one is unreachable.
+        stage('Detect Public IP') {
+            steps {
+                script {
+                    def publicIp = sh(
+                        script: '''
+                            (curl -4 -fsS --max-time 5 https://ifconfig.me ||
+                             curl -4 -fsS --max-time 5 https://api.ipify.org ||
+                             curl -4 -fsS --max-time 5 https://ipinfo.io/ip) | tr -d '[:space:]'
+                        ''',
+                        returnStdout: true
+                    ).trim()
+
+                    def octets = publicIp.tokenize('.')
+                    if (octets.size() != 4 || !octets.every { it ==~ /\d{1,3}/ && it.toInteger() >= 0 && it.toInteger() <= 255 }) {
+                        error "Failed to auto-detect a valid public IPv4 address (got: '${publicIp}')"
+                    }
+
+                    env.RUNNER_PUBLIC_IP = publicIp
+                    echo "Detected runner public IP: ${env.RUNNER_PUBLIC_IP}"
+                }
+            }
+        }
+
         stage('Provision Infrastructure') {
             steps {
                 script {
@@ -607,7 +636,8 @@ insecure = true'''
                                     'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
                                     'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
                                     'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
-                                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME
+                                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME,
+                                    'RUNNER_PUBLIC_IP':      env.RUNNER_PUBLIC_IP
                                 ]
                             )
                             infrastructure.writeConfig(
@@ -859,7 +889,8 @@ rancher_use_bundled_system_charts: true
                             envVars: [
                                 'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
                                 'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
-                                'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX
+                                'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
+                                'RUNNER_PUBLIC_IP':      env.RUNNER_PUBLIC_IP
                             ]
                         )
                         infrastructure.writeConfig(

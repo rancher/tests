@@ -5,11 +5,17 @@
  * Triggered as a downstream job by validation/Jenkinsfile.e2e after infrastructure
  * provisioning, Rancher deployment, and admin token injection are complete.
  *
- * Does NOT provision infrastructure or deploy Rancher.
+ * Does NOT provision infrastructure or deploy Rancher. It does, however,
+ * temporarily authorize this runner's public IP on the target security
+ * group via validation/pipeline/scripts/security_group.sh, which drives
+ * the tofu/aws/modules/sg module directly (no matching Makefile target
+ * exists for this standalone module; every other Tofu module in this
+ * repo is driven through make.runTarget).
  *
  * Consumes shared functions from qa-jenkins-library:
  *   property.useWithProperties
  *   naming.extractRancherHost
+ *   airgap.standardCheckout
  *
  * Parameter names (CONFIG, REPO, BRANCH, TAGS, GOTEST_TESTCASE, etc.) match the
  * existing go-automation-freeform-job pattern for compatibility with downstream
@@ -26,6 +32,10 @@ pipeline {
         ansiColor('xterm')
         timeout(time: 180, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+
+    environment {
+        YQ_VERSION = 'v4.47.2'
     }
 
     parameters {
@@ -95,6 +105,27 @@ pipeline {
             defaultValue: 'main',
             description: 'Branch of qa-jenkins-library to use'
         )
+        text(
+            name: 'TERRAFORM_CONFIG',
+            description: 'Terraform tfvars for the cluster_nodes module (non-airgap)',
+            defaultValue: '''aws_access_key = "${AWS_ACCESS_KEY_ID}"
+aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
+'''
+        )
+        // ── Security group parameters ────────────────────────────
+        // SECURITY_GROUP_NAME and AWS_REGION are derived from CONFIG
+        // (.awsEC2Configs.awsEC2Config[0].awsSecurityGroups[0] and
+        // .awsEC2Configs.region) — see 'Parse Config' stage below.
+        string(
+            name: 'QA_INFRA_REPO_URL',
+            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            description: 'URL of qa-infra-automation repository (provides tofu/aws/modules/sg)'
+        )
+        string(
+            name: 'QA_INFRA_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch of qa-infra-automation repository'
+        )
         booleanParam(
             name: 'CAPTURE_IMAGES',
             defaultValue: true,
@@ -107,13 +138,12 @@ pipeline {
             steps {
                 script {
                     deleteDir()
-                    checkout([
-                        $class: 'GitSCM',
-                        branches: [[name: "*/${params.BRANCH}"]],
-                        extensions: [[$class: 'CleanCheckout']],
-                        userRemoteConfigs: [[url: params.REPO]]
-                    ])
-                    env.TESTS_DIR = pwd()
+                    def dirs = airgap.standardCheckout(
+                        testsRepo: [url: params.REPO, branch: params.BRANCH],
+                        infraRepo: [url: params.QA_INFRA_REPO_URL, branch: params.QA_INFRA_BRANCH]
+                    )
+                    env.TESTS_DIR = dirs.testsDir
+                    env.INFRA_DIR = dirs.infraDir
                     env.RANCHER_HOSTNAME = naming.extractRancherHost(config: params.CONFIG)
                     def displaySuffix = env.RANCHER_HOSTNAME ? "${params.TAGS} - ${env.RANCHER_HOSTNAME}" : params.TAGS
                     currentBuild.displayName = "#${env.BUILD_NUMBER} - ${displaySuffix}"
@@ -121,9 +151,127 @@ pipeline {
             }
         }
 
+        stage('Setup Tools') {
+            steps {
+                sh """
+                    wget -qO ./yq https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64
+                    wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/checksums
+                    grep -q '^yq_linux_amd64 ' ./yq_checksums
+                    awk '/^yq_linux_amd64 / {print \$19 "  ./yq"}' ./yq_checksums | sha256sum -c -
+                    rm -f ./yq_checksums
+                    chmod +x ./yq
+                """
+            }
+        }
+
+        // Extract the security group and region from CONFIG (cattle-config)
+        // instead of requiring separate job parameters, keeping a single
+        // source of truth for AWS values across all downstream stages.
+        stage('Parse Config') {
+            when {
+                expression {
+                    return params.CONFIG?.trim()
+                }
+            }
+            steps {
+                script {
+                    writeFile file: 'cattle-config.yaml', text: params.CONFIG.trim() + '\n'
+
+                    env.SECURITY_GROUP_NAME = sh(
+                        script: "./yq '.awsNodeTemplate.securityGroup[0] // \"\"' cattle-config.yaml",
+                        returnStdout: true
+                    ).trim()
+                    env.VPC_ID = sh(
+                        script: "./yq '.awsNodeTemplate.vpcId // \"\"' cattle-config.yaml",
+                        returnStdout: true
+                    ).trim()
+                    env.AWS_REGION = sh(
+                        script: "./yq '.awsNodeTemplate.region // \"\"' cattle-config.yaml",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Parsed from CONFIG - VPC_ID:${env.VPC_ID}, SECURITY_GROUP_NAME: ${env.SECURITY_GROUP_NAME}, AWS_REGION: ${env.AWS_REGION}"
+                }
+            }
+        }
+
+        // Auto-detect this runner's public IP so the ephemeral security
+        // group's SSH/LB ingress rule (ephemeral_sg_ingress_cidrs) allows
+        // the IP that Ansible/SSH will actually originate from. Falls back
+        // to a couple of alternate services if the first one is unreachable.
+        stage('Detect Public IP') {
+            steps {
+                script {
+                    def publicIp = sh(
+                        script: '''
+                            (curl -4 -fsS --max-time 5 https://ifconfig.me ||
+                             curl -4 -fsS --max-time 5 https://api.ipify.org ||
+                             curl -4 -fsS --max-time 5 https://ipinfo.io/ip) | tr -d '[:space:]'
+                        ''',
+                        returnStdout: true
+                    ).trim()
+
+                    def octets = publicIp.tokenize('.')
+                    if (octets.size() != 4 || !octets.every { it ==~ /\d{1,3}/ && it.toInteger() >= 0 && it.toInteger() <= 255 }) {
+                        error "Failed to auto-detect a valid public IPv4 address (got: '${publicIp}')"
+                    }
+
+                    env.RUNNER_PUBLIC_IP = publicIp
+                    echo "Detected runner public IP: ${env.RUNNER_PUBLIC_IP}"
+                }
+            }
+        }
+
+        // Temporarily authorize this runner's detected public IP for all
+        // ports/protocols (ingress + egress) on the target security group
+        // via validation/pipeline/scripts/security_group.sh, run inside the
+        // rancher-go-test image (which bundles tofu). The rules are revoked
+        // again in the post block (by destroying this module's state)
+        // regardless of build outcome. env.SG_CLEANED guards against
+        // double-cleanup, matching the INFRA_CLEANED pattern in
+        // Jenkinsfile.e2e.
         stage('Build Test Image') {
             steps {
-                sh 'docker build --no-cache --platform linux/amd64 -t rancher-go-test:latest -f validation/pipeline/Dockerfile.airgap-go-tests .'
+                // rancher-infra-tools:latest — used by make.groovy / infra.* for all make targets
+                sh "docker build --no-cache --platform linux/amd64 -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.infra ."
+                // rancher-go-test:latest — used for qase binary build and admin-token playbook
+                sh "docker build --no-cache --platform linux/amd64 -t rancher-go-test:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.airgap-go-tests ."
+            }
+        }
+
+        stage('Authorize Security Group') {
+            when {
+                expression { return env.VPC_ID?.trim() && env.SECURITY_GROUP_NAME?.trim() && env.AWS_REGION?.trim() }
+            }
+            steps {
+                script {
+                    env.SG_MODULE_DIR = "${env.INFRA_DIR}/tofu/aws/modules/sg"
+                    def workspace = pwd()
+                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
+                        writeFile file: '.sg_env', text: [
+                            "AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
+                            "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
+                            "AWS_DEFAULT_REGION=${env.AWS_REGION}",
+                            "QAINFRA_SCRIPT_PATH=/workspace/${env.INFRA_DIR}",
+                            "SECURITY_GROUP_NAME=${env.SECURITY_GROUP_NAME}",
+                            "VPC_ID=${env.VPC_ID}",
+                            "RUNNER_PUBLIC_IP=${env.RUNNER_PUBLIC_IP}"
+                        ].join('\n') + '\n'
+
+                        try {
+                            sh """
+                                docker run --rm --platform linux/amd64 \
+                                    --env-file .sg_env \
+                                    -v ${workspace}:/workspace \
+                                    -w /workspace \
+                                    rancher-go-test:latest \
+                                    sh -c 'set -e; ${env.TESTS_DIR}/validation/pipeline/scripts/security_group.sh'
+                            """
+                        } finally {
+                            sh 'rm -f .sg_env'
+                        }
+                    }
+                }
             }
         }
 
@@ -146,11 +294,11 @@ pipeline {
                         if (!params.CONFIG?.trim()) {
                             error 'CONFIG parameter is empty — cannot run tests without a cattle-config'
                         }
-                        writeFile file: 'validation/cattle-config.yaml', text: params.CONFIG.trim() + '\n'
+                        writeFile file: "${env.TESTS_DIR}/validation/cattle-config.yaml", text: params.CONFIG.trim() + '\n'
 
                         // ── Build environment file for Docker ─────────
                         def envLines = []
-                        envLines += "CATTLE_TEST_CONFIG=/workspace/validation/cattle-config.yaml"
+                        envLines += "CATTLE_TEST_CONFIG=/workspace/${env.TESTS_DIR}/validation/cattle-config.yaml"
                         envLines += "AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}"
                         envLines += "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}"
                         envLines += "ADMIN_PASSWORD=${env.ADMIN_PASSWORD}"
@@ -184,14 +332,14 @@ pipeline {
                         // ── Start image capturer ──────────────────────
                         if (params.CAPTURE_IMAGES) {
                             catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-                                sh 'mkdir -p ./validation/image-report'
+                                sh "mkdir -p ./${env.TESTS_DIR}/validation/image-report"
                                 sh """
                                     docker run -d --name imageCapturer \
                                         -v ${workspace}:/workspace \
-                                        -v ${workspace}/validation/image-report:/app/image-report \
-                                        -v ${workspace}/validation/cattle-config.yaml:/app/config.yaml \
+                                        -v ${workspace}/${env.TESTS_DIR}/validation/image-report:/app/image-report \
+                                        -v ${workspace}/${env.TESTS_DIR}/validation/cattle-config.yaml:/app/config.yaml \
                                         rancher-go-test:latest sh -c \
-                                        'go build -o /app/capturer /workspace/scripts/capture_images/capture_images.go && \
+                                        'go build -o /app/capturer /workspace/${env.TESTS_DIR}/scripts/capture_images/capture_images.go && \
                                         CATTLE_TEST_CONFIG=/app/config.yaml exec /app/capturer'
                                 """
                                 timeout(time: 2, unit: 'MINUTES') {
@@ -205,7 +353,7 @@ pipeline {
 
                         // ── Build gotestsum command ────────────────────
                         def goPackage = params.TEST_PACKAGE ?: './validation/...'
-                        def testCmd = "gotestsum --format standard-verbose --packages=${goPackage} --junitfile /workspace/results.xml --jsonfile /workspace/results.json -- -tags=${params.TAGS}"
+                        def testCmd = "gotestsum --format standard-verbose --packages=${goPackage} --junitfile /workspace/${env.TESTS_DIR}/results.xml --jsonfile /workspace/${env.TESTS_DIR}/results.json -- -tags=${params.TAGS}"
 
                         def testCase = params.GOTEST_TESTCASE?.trim()
                         if (testCase) {
@@ -220,9 +368,9 @@ pipeline {
                                 docker run --rm --platform linux/amd64 \
                                     --env-file .go_test_env \
                                     -v ${workspace}:/workspace \
-                                    -w /workspace \
+                                    -w /workspace/${env.TESTS_DIR} \
                                     rancher-go-test:latest \
-                                    sh -c 'set -e; set -o pipefail; ${testCmd} | tee /workspace/validation/go-test.log'
+                                    sh -c 'set -e; set -o pipefail; ${testCmd} | tee /workspace/${env.TESTS_DIR}/validation/go-test.log'
                             """
                         }
 
@@ -230,7 +378,7 @@ pipeline {
                         if (params.CAPTURE_IMAGES) {
                             catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                                 sh 'docker stop imageCapturer'
-                                echo readFile('./validation/image-report/image-report.txt')
+                                echo readFile("./${env.TESTS_DIR}/validation/image-report/image-report.txt")
                                 sh 'docker rm imageCapturer'
                             }
                         }
@@ -246,7 +394,7 @@ pipeline {
                     junit allowEmptyResults: true, testResults: '**/results.xml'
 
                     // Archive test artifacts
-                    archiveArtifacts allowEmptyArchive: true, artifacts: 'validation/go-test.log, results.xml, results.json, validation/image-report/**'
+                    archiveArtifacts allowEmptyArchive: true, artifacts: "${env.TESTS_DIR}/validation/go-test.log, ${env.TESTS_DIR}/results.xml, ${env.TESTS_DIR}/results.json, ${env.TESTS_DIR}/validation/image-report/**"
 
                     // Qase reporting
                     property.useWithProperties(['QASE_AUTOMATION_TOKEN']) {
@@ -255,7 +403,7 @@ pipeline {
 
                             def workspace = pwd()
                             def reporterScript = params.QASE_REPORTER_SCRIPT ?: 'build_qase_reporter_v2.sh'
-                            def imageReportMount = params.CAPTURE_IMAGES ? "-v ${workspace}/validation/image-report:/app/image-report" : ''
+                            def imageReportMount = params.CAPTURE_IMAGES ? "-v ${workspace}/${env.TESTS_DIR}/validation/image-report:/app/image-report" : ''
                             catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                                 sh """
                                     docker run --rm --platform linux/amd64 \
@@ -267,9 +415,9 @@ pipeline {
                                         rancher-go-test:latest \
                                         sh -c '
                                             set -e
-                                            validation/pipeline/scripts/${reporterScript}
-                                            if [ -f /home/runner/tests/validation/reporter ]; then
-                                                /home/runner/tests/validation/reporter
+                                            ${env.TESTS_DIR}/validation/pipeline/scripts/${reporterScript}
+                                            if [ -f /home/runner/tests/${env.TESTS_DIR}/validation/reporter ]; then
+                                                /home/runner/tests/${env.TESTS_DIR}/validation/reporter
                                             else
                                                 echo "Reporter binary not found — reporter script may have skipped build"
                                             fi
