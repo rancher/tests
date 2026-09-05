@@ -15,8 +15,8 @@ echo "Authorize security group access for this runner"
 cd "$QAINFRA_SCRIPT_PATH/$SG_MODULE_PATH"
 
 cat > "$SG_TFVARS_FILE" <<EOF
-VPC_ID            = "$VPC_ID"
-SECURITY_GROUP_NAME = "$SECURITY_GROUP_NAME"
+vpc_id            = "$VPC_ID"
+security_group_name = "$SECURITY_GROUP_NAME"
 allowed_cidrs     = ["$RUNNER_PUBLIC_IP"]
 description       = "$SG_DESCRIPTION"
 EOF

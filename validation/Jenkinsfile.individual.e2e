@@ -182,7 +182,7 @@ aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
                         returnStdout: true
                     ).trim()
                     env.VPC_ID = sh(
-                        script: "./yq '..awsNodeTemplate.vpcId // \"\"' cattle-config.yaml",
+                        script: "./yq '.awsNodeTemplate.vpcId // \"\"' cattle-config.yaml",
                         returnStdout: true
                     ).trim()
                     env.AWS_REGION = sh(
@@ -190,7 +190,7 @@ aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
                         returnStdout: true
                     ).trim()
 
-                    echo "Parsed from CONFIG - SECURITY_GROUP_NAME: VPC_ID:${env.VPC_ID}, ${env.SECURITY_GROUP_NAME}, AWS_REGION: ${env.AWS_REGION}"
+                    echo "Parsed from CONFIG - VPC_ID:${env.VPC_ID}, SECURITY_GROUP_NAME: ${env.SECURITY_GROUP_NAME}, AWS_REGION: ${env.AWS_REGION}"
                 }
             }
         }
