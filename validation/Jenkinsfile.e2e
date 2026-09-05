@@ -210,6 +210,7 @@ pipeline {
 aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = "ami-0600e22b69546c15c"
 instance_type = "t3a.2xlarge"
+aws_security_group = ["tf-${HOSTNAME_PREFIX}-sg"]
 aws_vpc = "vpc-bfccf4d7"
 aws_subnet = "subnet-ee8cac86"
 ephemeral_sg_ingress_cidrs = ["${RUNNER_PUBLIC_IP}/32"]
@@ -280,7 +281,7 @@ server_flags: |
     rootSize: 16
     secretKey: ${AWS_SECRET_ACCESS_KEY}
     securityGroup:
-    - qa_default_ipv4
+    - tf-${HOSTNAME_PREFIX}-sg
     securityGroupReadonly: false
     spotPrice: 0.5
     sshUser: ubuntu
@@ -379,7 +380,7 @@ qaInfraAutomation:
         accessKey: ${AWS_ACCESS_KEY_ID}
         airgapSetup: false
         ami: ami-05bca07e340ee4f45
-        hostnamePrefix: tf-pit-daily
+        hostnamePrefix: tf-${HOSTNAME_PREFIX}
         instanceType: t3a.2xlarge
         nodes:
         - count: 1
@@ -391,12 +392,16 @@ qaInfraAutomation:
         region: us-east-2
         route53Zone: qa.rancher.space
         secretKey: ${AWS_SECRET_ACCESS_KEY}
+        securityGroups:
+            - tf-${HOSTNAME_PREFIX}-sg
         awsSSHKeyName: "jenkins-elliptic-validation"
         sshUser: ec2-user
+        subnet: subnet-ee8cac86
         volumeSize: 50
         volumeType: gp3
+        vpc: vpc-bfccf4d7
     customCluster:
-        generateName: tf-pit-daily
+        generateName: tf-${HOSTNAME_PREFIX}
         harden: true
         isNetworkPolicy: false
         kubernetesVersion: v1.34.4+k3s1
@@ -405,7 +410,7 @@ qaInfraAutomation:
             - count: 1
               role: [etcd, cp, worker]
     repoPath: /infratest
-    workspace: tf-pit-daily
+    workspace: tf-${HOSTNAME_PREFIX}
 rancher:
     host: ${HOSTNAME_PREFIX}.qa.rancher.space
     adminPassword: ${ADMIN_PASSWORD}

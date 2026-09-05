@@ -197,7 +197,7 @@ server_flags: |
     rootSize: 16
     secretKey: ${AWS_SECRET_ACCESS_KEY}
     securityGroup:
-    - qa_default_ipv4
+    - tf-${HOSTNAME_PREFIX}-sg
     securityGroupReadonly: false
     spotPrice: 0.5
     sshUser: ubuntu
@@ -217,7 +217,7 @@ awsMachineConfigs:
       retries: "5"
       rootSize: "100"
       securityGroup:
-      - qa_default_ipv4
+      - tf-${HOSTNAME_PREFIX}-sg
       sshUser: ubuntu
       volumeType: gp3
       vpcId: vpc-bfccf4d7
@@ -236,6 +236,8 @@ awsEC2Configs:
       awsCICDInstanceTag: rancher-validation
       awsIAMProfile: EngineeringUsersUS
       awsSSHKeyName: jenkins-elliptic-validation.pem
+      awsSecurityGroups:
+      - tf-${HOSTNAME_PREFIX}-sg
       awsUser: ec2-user
       instanceType: t3a.2xlarge
       isWindows: false
