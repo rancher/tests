@@ -113,7 +113,7 @@ aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
 '''
         )
         // ── Security group parameters ────────────────────────────
-        // SECURITY_GROUP_ID and AWS_REGION are derived from CONFIG
+        // SECURITY_GROUP_NAME and AWS_REGION are derived from CONFIG
         // (.awsEC2Configs.awsEC2Config[0].awsSecurityGroups[0] and
         // .awsEC2Configs.region) — see 'Parse Config' stage below.
         string(
@@ -177,16 +177,20 @@ aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
                 script {
                     writeFile file: 'cattle-config.yaml', text: params.CONFIG.trim() + '\n'
 
-                    env.SECURITY_GROUP_ID = sh(
-                        script: "./yq '.awsEC2Configs.awsEC2Config[0].awsSecurityGroups[0] // \"\"' cattle-config.yaml",
+                    env.SECURITY_GROUP_NAME = sh(
+                        script: "./yq '.awsNodeTemplate.securityGroup[0] // \"\"' cattle-config.yaml",
+                        returnStdout: true
+                    ).trim()
+                    env.VPC_ID = sh(
+                        script: "./yq '..awsNodeTemplate.vpcId // \"\"' cattle-config.yaml",
                         returnStdout: true
                     ).trim()
                     env.AWS_REGION = sh(
-                        script: "./yq '.awsEC2Configs.region // \"\"' cattle-config.yaml",
+                        script: "./yq '.awsNodeTemplate.region // \"\"' cattle-config.yaml",
                         returnStdout: true
                     ).trim()
 
-                    echo "Parsed from CONFIG - SECURITY_GROUP_ID: ${env.SECURITY_GROUP_ID}, AWS_REGION: ${env.AWS_REGION}"
+                    echo "Parsed from CONFIG - SECURITY_GROUP_NAME: VPC_ID:${env.VPC_ID}, ${env.SECURITY_GROUP_NAME}, AWS_REGION: ${env.AWS_REGION}"
                 }
             }
         }
@@ -237,7 +241,7 @@ aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
 
         stage('Authorize Security Group') {
             when {
-                expression { return env.SECURITY_GROUP_ID?.trim() && env.AWS_REGION?.trim() }
+                expression { return env.VPC_ID?.trim() && env.SECURITY_GROUP_NAME?.trim() && env.AWS_REGION?.trim() }
             }
             steps {
                 script {
@@ -249,7 +253,8 @@ aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
                             "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
                             "AWS_DEFAULT_REGION=${env.AWS_REGION}",
                             "QAINFRA_SCRIPT_PATH=/workspace/${env.INFRA_DIR}",
-                            "SECURITY_GROUP_ID=${env.SECURITY_GROUP_ID}",
+                            "SECURITY_GROUP_NAME=${env.SECURITY_GROUP_NAME}",
+                            "VPC_ID=${env.VPC_ID}",
                             "RUNNER_PUBLIC_IP=${env.RUNNER_PUBLIC_IP}"
                         ].join('\n') + '\n'
 
