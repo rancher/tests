@@ -26,6 +26,7 @@ import (
 	"github.com/rancher/tests/actions/monitoring"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/registries"
 	"github.com/rancher/tests/actions/services"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -160,6 +161,19 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 			return extencharts.WatchAndWaitStatefulSets(client, m.project.ClusterID, charts.RancherMonitoringNamespace, metav1.ListOptions{})
 		})
 		require.NoError(m.T(), err)
+	}
+
+	// Airgap verification: when system-default-registry is set, every pod in the monitoring
+	// namespace must pull images prefixed with it; silent Docker Hub fallbacks must fail loudly.
+	registrySetting, err := client.Management.Setting.ByID(systemDefaultRegistrySettingID)
+	require.NoError(m.T(), err)
+	if registrySetting.Value != "" {
+		m.T().Logf("Verifying monitoring pods use registry prefix %q", registrySetting.Value)
+		isUsingRegistry, err := registries.CheckNamespacedPodsForRegistryPrefix(client, m.project.ClusterID, charts.RancherMonitoringNamespace, registrySetting.Value)
+		require.NoError(m.T(), err)
+		require.True(m.T(), isUsingRegistry, "pods in %s are not using the expected registry prefix %q (offending images are logged as warnings above)", charts.RancherMonitoringNamespace, registrySetting.Value)
+	} else {
+		m.T().Log("system-default-registry is empty; skipping registry prefix verification (non-airgap)")
 	}
 
 	paths := []string{alertManagerPath, grafanaPath, prometheusGraphPath, prometheusRulesPath, prometheusTargetsPath}
