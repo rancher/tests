@@ -47,10 +47,11 @@ monitoringTest:
   private networks where nodes have no external addresses, the internal fallback keeps the check
   working.
 
-> **Note:** the webhook receiver accessibility check makes a direct HTTP call from the test runner to
-> the selected node address, so the runner must be able to route to it. In airgap environments where
-> nodes only have internal addresses, run the test binary from a host inside that network (e.g. the
-> bastion).
+> **Note:** how the webhook receiver accessibility check runs depends on the selected node address
+> type. `ExternalIP` selections keep the direct HTTP call from the test runner (unchanged
+> behavior). `InternalIP` selections are probed in-cluster instead: the test curls the receiver
+> from a short-lived shell-image job created through the Rancher proxy (`kubectl.Command`), so the
+> runner does not need a route into the node subnet — the position airgap CI runs from.
 
 ## Note
 * For webhook charts, validations are run on the local cluster and the cluster name provided in the config.yaml. Please make sure to provide a downstream cluster name in the config.yaml instead of local cluster, so the validations are not run on the local cluster twice.
