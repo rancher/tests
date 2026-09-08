@@ -55,3 +55,4 @@ monitoringTest:
 
 ## Note
 * For webhook charts, validations are run on the local cluster and the cluster name provided in the config.yaml. Please make sure to provide a downstream cluster name in the config.yaml instead of local cluster, so the validations are not run on the local cluster twice.
+* For airgap environments, see [AIRGAP.md](AIRGAP.md) for monitoring/alerting prerequisites (private registry, mirrored images, cattle-config).
