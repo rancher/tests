@@ -30,6 +30,7 @@ import (
 	"github.com/rancher/shepherd/pkg/environmentflag"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/nodes"
+	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/rancher/tests/actions/cloudprovider"
 	"github.com/rancher/tests/actions/clusters"
@@ -83,21 +84,38 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 
 	var machinePoolResponses []v1.SteveAPIObject
 
+	// steve registers a delete for every object it creates, using the schemas cached at
+	// login; those deletes are discarded and re-registered below with an admin client
+	provisioningClient, err := client.WithSession(client.Session)
+	if err != nil {
+		return nil, err
+	}
+
+	provisioningClient.Steve.Ops.Session = session.NewSession()
+
 	logrus.Debugf("Creating Machine Pools (%s)", clusterName)
 	for _, machinePoolConfig := range machinePoolConfigs {
-		machinePoolConfigResp, err := client.Steve.
+		machinePoolConfigResp, err := provisioningClient.Steve.
 			SteveType(provider.MachineConfigPoolResourceSteveType).
 			Create(&machinePoolConfig)
 		if err != nil {
 			return nil, err
 		}
+
 		machinePoolResponses = append(machinePoolResponses, *machinePoolConfigResp)
+
+		machineConfigID := machinePoolConfigResp.ID
+		client.Session.RegisterCleanupFunc(func() error {
+			return deleteMachineConfig(client, provider.MachineConfigPoolResourceSteveType, machineConfigID)
+		})
 	}
 
 	if clustersConfig.Registries != nil {
 		if clustersConfig.Registries.RKE2Registries != nil {
 			if clustersConfig.Registries.RKE2Username != "" && clustersConfig.Registries.RKE2Password != "" {
-				steveClient, err := client.Steve.ProxyDownstream("local")
+				// the proxy client inherits the throwaway session, so steve's delete is
+				// discarded and re-registered below with an admin client
+				steveClient, err := provisioningClient.Steve.ProxyDownstream("local")
 				if err != nil {
 					return nil, err
 				}
@@ -116,6 +134,10 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 				if err != nil {
 					return nil, err
 				}
+
+				client.Session.RegisterCleanupFunc(func() error {
+					return deleteRegistrySecret(client, registrySecret.ID)
+				})
 
 				for registryName, registry := range clustersConfig.Registries.RKE2Registries.Configs {
 					registry.AuthConfigSecretName = registrySecret.Name
@@ -164,9 +186,11 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 		}
 	}
 
+	// steve registers a delete for every object it creates; the cluster's delete is
+	// discarded here so only the watch based one from CreateK3SRKE2Cluster runs
 	logrus.Debugf("Creating cluster steve object (%s)", clusterName)
 	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
-		_, err = shepherdclusters.CreateK3SRKE2Cluster(client, cluster)
+		_, err = shepherdclusters.CreateK3SRKE2Cluster(provisioningClient, cluster)
 		if err != nil {
 			if strings.Contains(err.Error(), "401") {
 				return false, nil
@@ -191,6 +215,51 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 	}
 
 	return createdCluster, nil
+}
+
+// deleteMachineConfig deletes a machine config using an admin client, whose schemas
+// are retrieved after the machine config type is accessible to the test user
+func deleteMachineConfig(client *rancher.Client, machineConfigType, machineConfigID string) error {
+	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
+	if err != nil {
+		return err
+	}
+
+	machineConfig, err := adminClient.Steve.SteveType(machineConfigType).ByID(machineConfigID)
+	if err != nil {
+		if strings.Contains(err.Error(), "404 Not Found") {
+			return nil
+		}
+
+		return err
+	}
+
+	return adminClient.Steve.SteveType(machineConfigType).Delete(machineConfig)
+}
+
+// deleteRegistrySecret deletes the private registry secret using an admin client, as the
+// test user loses its permissions to the secret once the cluster is deleted
+func deleteRegistrySecret(client *rancher.Client, secretID string) error {
+	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
+	if err != nil {
+		return err
+	}
+
+	steveClient, err := adminClient.Steve.ProxyDownstream("local")
+	if err != nil {
+		return err
+	}
+
+	registrySecret, err := steveClient.SteveType(secrets.SecretSteveType).ByID(secretID)
+	if err != nil {
+		if strings.Contains(err.Error(), "404 Not Found") {
+			return nil
+		}
+
+		return err
+	}
+
+	return steveClient.SteveType(secrets.SecretSteveType).Delete(registrySecret)
 }
 
 // CreateProvisioningCustomCluster provisions a non-rke1 cluster using a 3rd party client for its nodes, then runs verify checks
@@ -255,10 +324,20 @@ func CreateProvisioningCustomCluster(client *rancher.Client, externalNodeProvide
 		cluster = clusters.HardenRKE2ClusterConfig(clusterName, namespaces.FleetDefault, clustersConfig, nil, "")
 	}
 
+	// steve registers a delete for every object it creates, using the schemas cached at
+	// login; the cluster's delete is discarded here so only the watch based one from
+	// CreateK3SRKE2Cluster runs
+	provisioningClient, err := client.WithSession(client.Session)
+	if err != nil {
+		return nil, err
+	}
+
+	provisioningClient.Steve.Ops.Session = session.NewSession()
+
 	logrus.Debugf("Creating cluster steve object (%s)", clusterName)
 	var clusterResp *v1.SteveAPIObject
 	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
-		clusterResp, err = shepherdclusters.CreateK3SRKE2Cluster(client, cluster)
+		clusterResp, err = shepherdclusters.CreateK3SRKE2Cluster(provisioningClient, cluster)
 		if err != nil {
 			if strings.Contains(err.Error(), "401") {
 				return false, nil

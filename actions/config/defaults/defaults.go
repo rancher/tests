@@ -33,15 +33,15 @@ func LoadPackageDefaults(cattleConfig map[string]any, filePath string) (map[stri
 
 		var packageDefaultsConfig map[string]any
 		_, err = os.Stat(packagePath + "/" + DefaultFilePath)
-		if err == nil {
+		packageDefaultsFound := err == nil
+		if packageDefaultsFound {
 			packageDefaultsConfig = config.LoadConfigFromFile(packagePath + "/" + DefaultFilePath)
-		} else {
-			logrus.Warningf("No defaults found in: %s", packagePath)
 		}
 
 		var parentDefaultsConfig map[string]any
 		_, err = os.Stat(parentPath + DefaultFilePath)
-		if err == nil {
+		parentDefaultsFound := err == nil
+		if parentDefaultsFound {
 			parentDefaultsConfig = config.LoadConfigFromFile(parentPath + DefaultFilePath)
 			defaultsConfig, err = DeepMerge(packageDefaultsConfig, parentDefaultsConfig, true)
 			if err != nil {
@@ -49,7 +49,10 @@ func LoadPackageDefaults(cattleConfig map[string]any, filePath string) (map[stri
 			}
 		} else {
 			defaultsConfig = packageDefaultsConfig
-			logrus.Warningf("No defaults found in: %s", parentPath)
+		}
+
+		if !packageDefaultsFound && !parentDefaultsFound {
+			logrus.Warningf("No defaults found in: %s or %s", packagePath, parentPath)
 		}
 	} else {
 		_, err := os.Stat(filePath)
