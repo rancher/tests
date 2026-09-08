@@ -255,7 +255,7 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 		workerNodes = append(workerNodes, *newNode)
 	}
 
-	randWorkerNodeIP, err := monitoring.PickNodeAddress(workerNodes, m.monitoringConfig.NodeAddressTypes())
+	randWorkerNodeIP, selectedAddressType, err := monitoring.PickNodeAddressWithType(workerNodes, m.monitoringConfig.NodeAddressTypes())
 	require.NoError(m.T(), err)
 
 	// Get URL and string versions of origin with the random node address
@@ -302,11 +302,19 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 	require.NoError(m.T(), err)
 	assert.Equal(m.T(), editedRouteSecretResp.Name, charts.RancherMonitoringAlertSecret)
 
-	m.T().Logf("Validating traefik is accessible externally")
-	host := fmt.Sprintf("%v:%v", randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort)
-	result, err := ingresses.IsIngressExternallyAccessible(client, host, "dashboard", false)
-	assert.NoError(m.T(), err)
-	assert.True(m.T(), result)
+	if monitoring.ProbeModeForAddressType(selectedAddressType) == monitoring.ProbeModeRunner {
+		m.T().Logf("Validating traefik is accessible externally")
+		host := fmt.Sprintf("%v:%v", randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort)
+		result, err := ingresses.IsIngressExternallyAccessible(client, host, "dashboard", false)
+		assert.NoError(m.T(), err)
+		assert.True(m.T(), result)
+	} else {
+		logrus.Infof("Selected node address type %q is not runner-reachable; probing the webhook receiver in-cluster via the Rancher proxy", selectedAddressType)
+		probeURL := monitoring.WebhookReceiverProbeURL(randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort, "dashboard")
+		output, err := monitoring.ProbeHTTPInCluster(client, m.project.ClusterID, probeURL)
+		assert.NoError(m.T(), err)
+		assert.True(m.T(), monitoring.IsReachableHTTPStatus(output), "webhook receiver not reachable in-cluster (HTTP status %q)", output)
+	}
 
 	m.T().Logf("Validating webhook deploy")
 	err = shepherdCharts.WatchAndWaitDeployments(client, m.project.ClusterID, webhookReceiverNamespace.Name, metav1.ListOptions{})
