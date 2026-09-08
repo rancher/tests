@@ -411,13 +411,13 @@ aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
                                         -e BUILD_URL=${env.BUILD_URL} \
                                         -v ${workspace}:/home/runner/tests \
                                         ${imageReportMount} \
-                                        -w /home/runner/tests \
+                                        -w /home/runner/tests/${env.TESTS_DIR} \
                                         rancher-go-test:latest \
                                         sh -c '
                                             set -e
-                                            ${env.TESTS_DIR}/validation/pipeline/scripts/${reporterScript}
-                                            if [ -f /home/runner/tests/${env.TESTS_DIR}/validation/reporter ]; then
-                                                /home/runner/tests/${env.TESTS_DIR}/validation/reporter
+                                            ./validation/pipeline/scripts/${reporterScript}
+                                            if [ -f ./validation/reporter ]; then
+                                                ./validation/reporter
                                             else
                                                 echo "Reporter binary not found — reporter script may have skipped build"
                                             fi
