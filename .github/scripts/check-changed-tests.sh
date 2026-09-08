@@ -105,7 +105,20 @@ wait
 # curl needs non-escaped newlines to read properly into json
 curl_digestable_string=""
 count=0
+# a given suite/test is appended once per matching diff line, and can be picked up
+# by both passes above, so de-duplicate before building the comment body.
+declare -A seen_tests
 while IFS= read -r official_tests; do
+    # drop blank lines, which come from greps that matched nothing
+    if [[ -z "${official_tests//[[:space:]]/}" ]]; then
+        continue
+    fi
+
+    if [[ -n "${seen_tests[$official_tests]:-}" ]]; then
+        continue
+    fi
+    seen_tests["$official_tests"]=1
+
     curl_digestable_string+=$"\n$official_tests"
     ((count++))
 done < "$TEMP_DIR/diff.used-anywhere"
