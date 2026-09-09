@@ -9,7 +9,7 @@ echo "Authorize security group access for this runner"
 : "${SECURITY_GROUP_NAME:?SECURITY_GROUP_NAME is required}"
 : "${VPC_ID:?VPC_ID is required}"
 : "${RUNNER_PUBLIC_IP:?RUNNER_PUBLIC_IP is required}"
-: "${SG_DESCRIPTION:=jenkins-runner-${BUILD_TAG:-unknown}}"
+: "${SG_DESCRIPTION:=jenkins-runner}"
 : "${AWS_DEFAULT_REGION:=us-east-2}"
 
 cd "$QAINFRA_SCRIPT_PATH/$SG_MODULE_PATH"

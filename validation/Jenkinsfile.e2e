@@ -210,7 +210,6 @@ pipeline {
 aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
 aws_ami = "ami-0600e22b69546c15c"
 instance_type = "t3a.2xlarge"
-aws_security_group = ["tf-${HOSTNAME_PREFIX}-sg"]
 aws_vpc = "vpc-bfccf4d7"
 aws_subnet = "subnet-ee8cac86"
 ephemeral_sg_ingress_cidrs = ["${RUNNER_PUBLIC_IP}/32"]

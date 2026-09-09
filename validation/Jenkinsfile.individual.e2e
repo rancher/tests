@@ -105,13 +105,6 @@ pipeline {
             defaultValue: 'main',
             description: 'Branch of qa-jenkins-library to use'
         )
-        text(
-            name: 'TERRAFORM_CONFIG',
-            description: 'Terraform tfvars for the cluster_nodes module (non-airgap)',
-            defaultValue: '''aws_access_key = "${AWS_ACCESS_KEY_ID}"
-aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
-'''
-        )
         // ── Security group parameters ────────────────────────────
         // SECURITY_GROUP_NAME and AWS_REGION are derived from CONFIG
         // (.awsEC2Configs.awsEC2Config[0].awsSecurityGroups[0] and
@@ -323,8 +316,9 @@ aws_secret_key = "${AWS_SECRET_ACCESS_KEY}"
                                         -v ${workspace}:/workspace \
                                         -v ${workspace}/${env.TESTS_DIR}/validation/image-report:/app/image-report \
                                         -v ${workspace}/${env.TESTS_DIR}/validation/cattle-config.yaml:/app/config.yaml \
+                                        -w /workspace/${env.TESTS_DIR} \
                                         rancher-go-test:latest sh -c \
-                                        'go build -o /app/capturer /workspace/${env.TESTS_DIR}/scripts/capture_images/capture_images.go && \
+                                        'go build -o /app/capturer ./scripts/capture_images/capture_images.go && \
                                         CATTLE_TEST_CONFIG=/app/config.yaml exec /app/capturer'
                                 """
                                 timeout(time: 2, unit: 'MINUTES') {
