@@ -154,7 +154,7 @@ docker push "${REGISTRY}/traefik:v3.7.12"
 
 ## 4. `rancher-charts` Repo Mirrored
 
-The airgap Rancher must have `rancher-monitoring`, `rancher-monitoring-crd` and `rancher-alerting-drivers` available in its local `rancher-charts` mirror. This is part of the standard airgap Rancher setup — the Rancher airgap installation tooling mirrors the charts catalog.
+The airgap Rancher must have `rancher-monitoring`, `rancher-monitoring-crd` and `rancher-alerting-drivers` available in its local `rancher-charts` mirror. With qa-infra-automation this is provided by the `airgap_rke2_charts_mirror` role (`enable_charts_mirror: true` in `ANSIBLE_VARIABLES`): the bastion mirrors the full release branch of `git.rancher.io/charts` over git smart-HTTP and the Rancher deploy repoints the `rancher-charts` ClusterRepo at it. A trimmed or hand-copied mirror is not sufficient — a latest-version-only mirror satisfies neither requirement below.
 
 The tests fetch chart versions via:
 
@@ -184,6 +184,8 @@ With the in-cluster reachability probe, node address selection follows `monitori
 - **ExternalIP selected (non-airgap default)** — the existing runner-side check runs unchanged.
 
 The Grafana/Prometheus/Alertmanager UI validations always go through the Rancher proxy (`ingresses.IsIngressExternallyAccessible` against `rancher.host` on service proxy paths), so they never require direct node reachability.
+
+The in-cluster probe (and the chart-resource teardown helpers) execute through a Rancher-generated kubeconfig, whose server address comes from the `server-url` setting. `server-url` must therefore be resolvable and routable **from the runner**, not only from inside the airgap network — the qa-infra deploy defaults it to the public hostname, which in-VPC DNS resolves to the private IP for nodes and cluster agents. A `server-url` pointing at an internal-only name makes every kubeconfig-based operation time out from external runners.
 
 ---
 
