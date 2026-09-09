@@ -237,6 +237,10 @@ jobs:
         working-directory: tfp-automation
         run: go run tests/infrastructure/main.go --airgap fresh
 
+      - name: Update /etc/hosts to remove Rancher FQDN
+        run: |
+          sudo sed -i 's/127\.0\.0\.1 localhost ${{ env.HOSTNAME_PREFIX }}-internal.${{ secrets.AWS_ROUTE_53_ZONE }}/127.0.0.1 localhost/' /etc/hosts
+
       - name: Refresh AWS credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
