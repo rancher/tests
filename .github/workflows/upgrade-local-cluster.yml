@@ -30,6 +30,11 @@ on:
         options:
           - k3s
           - rke2
+      environment_cleanup:
+        description: "Enable environment cleanup after test run"
+        required: false
+        default: true
+        type: boolean
   workflow_call:
     inputs:
       rancher_version:
@@ -268,7 +273,7 @@ jobs:
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/upgraderancher/standard/main.go
 
       - name: Cleanup Infrastructure
-        if: always()
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -280,7 +285,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always()
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
@@ -538,7 +543,7 @@ jobs:
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/upgraderancher/standard/main.go
 
       - name: Cleanup Infrastructure
-        if: always()
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -550,7 +555,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always()
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
@@ -828,7 +833,7 @@ jobs:
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/upgraderancher/standard/main.go
 
       - name: Cleanup Infrastructure
-        if: always()
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -840,7 +845,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always()
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
@@ -1118,7 +1123,7 @@ jobs:
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/upgraderancher/standard/main.go
 
       - name: Cleanup Infrastructure
-        if: always()
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -1130,7 +1135,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always()
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
