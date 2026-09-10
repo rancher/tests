@@ -330,7 +330,7 @@ jobs:
           timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
-        if: always() && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -342,14 +342,14 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always() && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
@@ -644,7 +644,7 @@ jobs:
           timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
-        if: always() && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -656,14 +656,14 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always() && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
@@ -959,7 +959,7 @@ jobs:
           timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
-        if: always() && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -971,14 +971,14 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always() && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
@@ -1274,7 +1274,7 @@ jobs:
           timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
-        if: always() && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -1286,14 +1286,14 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always() && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"

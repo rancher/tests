@@ -58,6 +58,20 @@ env:
       (github.event_name == 'schedule' && 'rke2') || 'rke2' 
     }}
   LOCALS_PROVIDER_VERSION: "${{ vars.LOCALS_PROVIDER_VERSION }}"
+  REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          github.event_name == 'workflow_call' ||
+          github.actor == 'github-actions[bot]' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
+        }}
+  CLEANUP_ENABLED: >-
+    ${{
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_call' ||
+      github.actor == 'github-actions[bot]' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment_cleanup == 'true' )
+    }}
 
 jobs:
   v2-16:
@@ -71,13 +85,6 @@ jobs:
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_16 }}"
       HOSTNAME_PREFIX: "gha-prov-216"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'schedule' ||
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -339,7 +346,7 @@ jobs:
           run_ace: true
 
       - name: Cleanup Infrastructure
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -351,21 +358,21 @@ jobs:
           aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
@@ -411,13 +418,6 @@ jobs:
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_15 }}"
       HOSTNAME_PREFIX: "gha-prov-215"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'schedule' ||
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -678,7 +678,7 @@ jobs:
           tags: recurring
 
       - name: Cleanup Infrastructure
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -690,21 +690,21 @@ jobs:
           aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
@@ -750,13 +750,6 @@ jobs:
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_14 }}"
       HOSTNAME_PREFIX: "gha-prov-214"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'schedule' ||
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -1018,7 +1011,7 @@ jobs:
           run_ace: true
 
       - name: Cleanup Infrastructure
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -1030,21 +1023,21 @@ jobs:
           aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
@@ -1094,13 +1087,6 @@ jobs:
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_13 }}"
       HOSTNAME_PREFIX: "gha-prov-213"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'schedule' ||
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -1361,7 +1347,7 @@ jobs:
           tags: recurring
 
       - name: Cleanup Infrastructure
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -1373,21 +1359,21 @@ jobs:
           aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
