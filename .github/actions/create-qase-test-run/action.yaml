@@ -11,6 +11,10 @@ inputs:
   qase_token:
     description: "Qase token"
     required: true
+  qase_milestone:
+    description: "Qase milestone to assign to the test run"
+    required: false
+    default: ""
 
 outputs:
   id:
@@ -26,13 +30,33 @@ runs:
       run: |
         PROJECT="${{ inputs.qase_project_id }}"
         TOKEN="${{ inputs.qase_token }}"
-
+        MILESTONE="${{ inputs.qase_milestone }}"
         RUN_NAME="${{ inputs.test_run_name }} - $(date +'%m/%d/%Y')"
+        REQUEST_BODY=$(jq -n --arg title "$RUN_NAME" '{title: $title, is_autotest: true}')
+
+        if [ -n "$MILESTONE" ]; then
+          MILESTONE_RESPONSE=$(curl -s -G \
+            -H "Content-Type: application/json" \
+            -H "Token: $TOKEN" \
+            --data-urlencode "search=$MILESTONE" \
+            --data-urlencode "limit=100" \
+            "https://api.qase.io/v1/milestone/$PROJECT")
+
+          MILESTONE_ID=$(echo "$MILESTONE_RESPONSE" | jq -r --arg title "$MILESTONE" '.result.entities[]? | select(.title == $title) | .id' | head -n 1)
+
+          if [ -z "$MILESTONE_ID" ] || [ "$MILESTONE_ID" = "null" ]; then
+            echo "Failed to find Qase milestone '$MILESTONE': $MILESTONE_RESPONSE"
+            exit 1
+          fi
+
+          REQUEST_BODY=$(echo "$REQUEST_BODY" | jq --argjson milestone_id "$MILESTONE_ID" '. + {milestone_id: $milestone_id}')
+          echo "Found Qase milestone ID: $MILESTONE_ID"
+        fi
 
         RESPONSE=$(curl -s -X POST \
           -H "Content-Type: application/json" \
           -H "Token: $TOKEN" \
-          -d "{\"title\": \"$RUN_NAME\", \"is_autotest\": true}" \
+          -d "$REQUEST_BODY" \
           "https://api.qase.io/v1/run/$PROJECT")
 
         RUN_ID=$(echo "$RESPONSE" | jq -r '.result.id')
