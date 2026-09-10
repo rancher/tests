@@ -50,22 +50,22 @@ env:
   TEST_SUITE: "^TestPostReleasePrimeUITestSuite$"
   TIMEOUT: "1h"
   REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'schedule' ||
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
+    ${{
+      github.event_name == 'workflow_call' ||
+      github.actor == 'github-actions[bot]' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
+    }}
 
 jobs:
   create-qase-run:
     if: |
+      (github.event_name == 'workflow_call' || github.actor == 'github-actions[bot]' || (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true')) && (
       ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
       ((github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-head'))
+      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-head')))
     runs-on: ubuntu-latest
     outputs:
       run_id: ${{ steps.create-qase-run.outputs.id }}
@@ -82,16 +82,18 @@ jobs:
           test_run_name: "[${{ github.event.inputs.rancher_version || inputs.rancher_version }}] Post Rancher Prime Release UI Validations"
           qase_project_id: ${{ secrets.HB_QASE_PROJECT_ID }}
           qase_token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          qase_milestone: ${{ github.event.inputs.rancher_version || inputs.rancher_version }}
   
   v2-15:
     needs: [create-qase-run]
     if: |
+      !cancelled() && needs.create-qase-run.result != 'failure' && (
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && !contains(github.event.inputs.rancher_version, '-head') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-head')
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: prime
@@ -335,12 +337,13 @@ jobs:
   v2-14:
     needs: [create-qase-run]
     if: |
+      !cancelled() && needs.create-qase-run.result != 'failure' && (
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-head') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && !contains(inputs.rancher_version, '-head')
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && !contains(inputs.rancher_version, '-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: prime
@@ -584,12 +587,13 @@ jobs:
   v2-13:
     needs: [create-qase-run]
     if: |
+      !cancelled() && needs.create-qase-run.result != 'failure' && (
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-head') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && !contains(inputs.rancher_version, '-head')
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && !contains(inputs.rancher_version, '-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: prime
@@ -833,12 +837,13 @@ jobs:
   v2-12:
     needs: [create-qase-run]
     if: |
+      !cancelled() && needs.create-qase-run.result != 'failure' && (
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.12')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.12')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.12')) && !contains(github.event.inputs.rancher_version, '-head') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12')) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12')) && !contains(inputs.rancher_version, '-head')
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12')) && !contains(inputs.rancher_version, '-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: prime
@@ -1082,7 +1087,7 @@ jobs:
 
   close-qase-run:
     needs: [create-qase-run, v2-15, v2-14, v2-13, v2-12]
-    if: always() && (
+    if: always() && needs.create-qase-run.result == 'success' && (github.event_name == 'workflow_call' || github.actor == 'github-actions[bot]' || (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true')) && (
         ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
         (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
         (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
