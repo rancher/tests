@@ -93,7 +93,7 @@ pipeline {
         )
         string(
             name: 'RANCHER_VERSION',
-            defaultValue: 'v2.13.2',
+            defaultValue: 'v2.15.0',
             description: 'Rancher version to deploy'
         )
 
@@ -290,7 +290,7 @@ rancher_bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
 rancher_admin_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
 rancher_image_tag: ${RANCHER_VERSION}
 rancher_use_bundled_system_charts: true
-rancher_system_default_registry: "${PRIVATE_REGISTRY_URL}"'''
+rancher_system_default_registry: "${PRIVATE_REGISTRY_URL}/proxycache"'''
         )
     }
 
