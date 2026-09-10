@@ -133,30 +133,23 @@ jobs:
             HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
             HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
-        run: |
-          mask_multiline() {
-            local content="$1"
-            while IFS= read -r line; do
-              if [[ -n "$line" ]]; then
-                echo "::add-mask::$line"
-              fi
-            done <<< "$content"
-          }
-
-          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
-          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
-          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
-          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
-          mask_multiline "${{ env.HB_PRIVATE_FULL_CHAIN }}"
-          mask_multiline "${{ env.HB_PRIVATE_CERT_KEY }}"
+      - name: Masking Secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets: |
+            ${{ env.DOCKERHUB_USERNAME }}
+            ${{ env.DOCKERHUB_PASSWORD }}
+            ${{ env.HB_SSH_PRIVATE_KEY }}
+            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
+            ${{ env.HB_PRIVATE_FULL_CHAIN }}
+            ${{ env.HB_PRIVATE_CERT_KEY }}
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -240,9 +233,6 @@ jobs:
           cat > config.yaml <<EOF
           rancher:
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
-            adminPassword: "${{ fromJSON(env.HB_RANCHER_ADMIN_PASSWORD).value }}"
-            insecure: true
-            cleanup: true
 
           awsCredentials:
             accessKey: "$AWS_ACCESS_KEY"
@@ -452,30 +442,23 @@ jobs:
             HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
             HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
-        run: |
-          mask_multiline() {
-            local content="$1"
-            while IFS= read -r line; do
-              if [[ -n "$line" ]]; then
-                echo "::add-mask::$line"
-              fi
-            done <<< "$content"
-          }
-
-          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
-          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
-          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
-          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
-          mask_multiline "${{ env.HB_PRIVATE_FULL_CHAIN }}"
-          mask_multiline "${{ env.HB_PRIVATE_CERT_KEY }}"
+      - name: Masking Secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets: |
+            ${{ env.DOCKERHUB_USERNAME }}
+            ${{ env.DOCKERHUB_PASSWORD }}
+            ${{ env.HB_SSH_PRIVATE_KEY }}
+            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
+            ${{ env.HB_PRIVATE_FULL_CHAIN }}
+            ${{ env.HB_PRIVATE_CERT_KEY }}
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -558,9 +541,6 @@ jobs:
           cat > config.yaml <<EOF
           rancher:
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
-            adminPassword: "${{ fromJSON(env.HB_RANCHER_ADMIN_PASSWORD).value }}"
-            insecure: true
-            cleanup: true
 
           awsCredentials:
             accessKey: "$AWS_ACCESS_KEY"
@@ -769,30 +749,23 @@ jobs:
             HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
             HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
-        run: |
-          mask_multiline() {
-            local content="$1"
-            while IFS= read -r line; do
-              if [[ -n "$line" ]]; then
-                echo "::add-mask::$line"
-              fi
-            done <<< "$content"
-          }
-
-          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
-          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
-          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
-          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
-          mask_multiline "${{ env.HB_PRIVATE_FULL_CHAIN }}"
-          mask_multiline "${{ env.HB_PRIVATE_CERT_KEY }}"
+      - name: Masking Secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets: |
+            ${{ env.DOCKERHUB_USERNAME }}
+            ${{ env.DOCKERHUB_PASSWORD }}
+            ${{ env.HB_SSH_PRIVATE_KEY }}
+            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
+            ${{ env.HB_PRIVATE_FULL_CHAIN }}
+            ${{ env.HB_PRIVATE_CERT_KEY }}
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -875,9 +848,6 @@ jobs:
           cat > config.yaml <<EOF
           rancher:
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
-            adminPassword: "${{ fromJSON(env.HB_RANCHER_ADMIN_PASSWORD).value }}"
-            insecure: true
-            cleanup: true
 
           awsCredentials:
             accessKey: "$AWS_ACCESS_KEY"
@@ -1086,30 +1056,23 @@ jobs:
             HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
             HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
-        run: |
-          mask_multiline() {
-            local content="$1"
-            while IFS= read -r line; do
-              if [[ -n "$line" ]]; then
-                echo "::add-mask::$line"
-              fi
-            done <<< "$content"
-          }
-
-          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
-          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
-          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
-          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
-          mask_multiline "${{ env.HB_PRIVATE_FULL_CHAIN }}"
-          mask_multiline "${{ env.HB_PRIVATE_CERT_KEY }}"
+      - name: Masking Secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets: |
+            ${{ env.DOCKERHUB_USERNAME }}
+            ${{ env.DOCKERHUB_PASSWORD }}
+            ${{ env.HB_SSH_PRIVATE_KEY }}
+            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
+            ${{ env.HB_PRIVATE_FULL_CHAIN }}
+            ${{ env.HB_PRIVATE_CERT_KEY }}
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -1192,9 +1155,6 @@ jobs:
           cat > config.yaml <<EOF
           rancher:
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
-            adminPassword: "${{ fromJSON(env.HB_RANCHER_ADMIN_PASSWORD).value }}"
-            insecure: true
-            cleanup: true
 
           awsCredentials:
             accessKey: "$AWS_ACCESS_KEY"
