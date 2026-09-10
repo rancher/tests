@@ -290,7 +290,14 @@ rancher_bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
 rancher_admin_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
 rancher_image_tag: ${RANCHER_VERSION}
 rancher_use_bundled_system_charts: true
-rancher_system_default_registry: "${PRIVATE_REGISTRY_URL}/proxycache"'''
+rancher_system_default_registry: "${PRIVATE_REGISTRY_URL}/proxycache"
+
+# Airgap bastion mirrors. The charts mirror serves a settled ref one publish
+# behind the branch head so catalog installs cannot race upstream chart
+# publishes, and the Rancher deploy repoints the rancher-charts ClusterRepo at
+# it; the ui-plugin mirror backs NeuVector UI extension installs.
+enable_charts_mirror: true
+enable_ui_plugin_mirror: true'''
         )
     }
 
