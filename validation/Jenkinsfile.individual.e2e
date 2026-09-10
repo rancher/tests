@@ -204,8 +204,8 @@ pipeline {
         // ports/protocols (ingress + egress) on the target security group
         // via validation/pipeline/scripts/security_group.sh, run inside the
         // rancher-go-test image (which bundles tofu). The rules are revoked
-        // again in the post block (by destroying this module's state)
-        // regardless of build outcome. env.SG_CLEANED guards against
+        // again in the post block (by re-running the same script with
+        // ACTION=destroy against this module's local, workspace-mounted state)
         // double-cleanup, matching the INFRA_CLEANED pattern in
         // Jenkinsfile.e2e.
         stage('Build Test Image') {
@@ -414,6 +414,38 @@ pipeline {
 
     post {
         always {
+            script {
+                // Revoke the runner IP rules added in 'Authorize Security Group',
+                // regardless of build outcome. SG_MODULE_DIR is only set if that stage ran
+                if (env.SG_MODULE_DIR?.trim()) {
+                    property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
+                        def workspace = pwd()
+                        writeFile file: '.sg_env', text: [
+                            "AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
+                            "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
+                            "AWS_DEFAULT_REGION=${env.AWS_REGION}",
+                            "QAINFRA_SCRIPT_PATH=/workspace/${env.INFRA_DIR}",
+                            "SECURITY_GROUP_NAME=${env.SECURITY_GROUP_NAME}",
+                            "VPC_ID=${env.VPC_ID}",
+                            "RUNNER_PUBLIC_IP=${env.RUNNER_PUBLIC_IP}",
+                            "ACTION=destroy"
+                        ].join('\n') + '\n'
+
+                        try {
+                            sh """
+                                docker run --rm --platform linux/amd64 \
+                                    --env-file .sg_env \
+                                    -v ${workspace}:/workspace \
+                                    -w /workspace \
+                                    rancher-go-test:latest \
+                                    sh -c 'set -e; ${env.TESTS_DIR}/validation/pipeline/scripts/security_group.sh'
+                            """
+                        } finally {
+                            sh 'rm -f .sg_env'
+                        }
+                    }
+                }
+            }
             sh 'docker rmi -f rancher-go-test:latest || true'
             sh 'rm -f .go_test_env'
         }
