@@ -1,0 +1,45 @@
+#Required for all tests except template
+clusterConfig:
+  machinePools:
+  - machinePoolConfig:
+      etcd: true
+      controlplane: false
+      worker: false
+      quantity: 3
+  - machinePoolConfig:
+      etcd: false
+      controlplane: true
+      worker: false
+      quantity: 2
+  - machinePoolConfig:
+      etcd: false
+      controlplane: false
+      worker: true
+      quantity: 3
+
+#Required for tests that utilize node driver clusters
+awsMachineConfigs:
+  region: "<HB_AWS_REGION>"
+  awsMachineConfig:
+  - roles: ["etcd","controlplane","worker"]
+    ami: "<required>"
+    instanceType: "<required>"
+    volumeType: "<required>"
+    rootSize: "<required>"
+    sshUser: "<required>"
+    vpcId: "<HB_AWS_VPC_ID>"
+    zone: "<HB_AWS_ZONE_LETTER>"
+    retries: "5"
+
+
+#terraform and terratest variables required for custom cluster provisioning
+terraform:
+  awsConfig:
+    ami: "<required>"
+    awsVolumeType: "<required>"
+    awsInstanceType: "<required>"
+    awsRootSize: "<required>"
+    awsUser: "<required>"
+  standalone:
+    osUser: "<required>"
+    osGroup: "<required>"

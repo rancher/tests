@@ -2,6 +2,11 @@
 name: OS Testing
 
 on:
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "0 10 * * 3,5"
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -20,6 +25,15 @@ on:
         required: false
         default: false
         type: boolean
+      os_name:
+        description: "Operating system name used for the Qase test run"
+        required: true
+        default: "OS"
+        type: string
+      qase_test_run_id:
+        description: "Optional Qase test run ID override"
+        required: false
+        type: string
       environment_cleanup:
         description: "Enable environment cleanup after test run"
         required: false
@@ -33,6 +47,36 @@ on:
         options:
           - k3s
           - rke2
+      ami:
+        description: "AMI for provisioned instances"
+        required: true
+        default: "<required>"
+        type: string
+      instance_type:
+        description: "EC2 instance type"
+        required: true
+        default: "<required>"
+        type: string
+      root_size:
+        description: "Root volume size"
+        required: true
+        default: "<required>"
+        type: string
+      volume_type:
+        description: "Root EBS volume type"
+        required: true
+        default: "<required>"
+        type: string
+      os_user:
+        description: "Operating system SSH user"
+        required: true
+        default: "<required>"
+        type: string
+      os_group:
+        description: "Operating system user group"
+        required: true
+        default: "<required>"
+        type: string
   workflow_call:
     inputs:
       rancher_version:
@@ -42,6 +86,44 @@ on:
       rancher_chart_version:
         description: "Rancher chart version provided from check-rancher-tag workflow"
         required: false
+        type: string
+      os_name:
+        description: "Operating system name used for the Qase test run"
+        required: true
+        type: string
+      qase_test_run_id:
+        description: "Optional Qase test run ID override"
+        required: false
+        type: string
+      ami:
+        description: "AMI for provisioned instances"
+        required: true
+        default: "<required>"
+        type: string
+      instance_type:
+        description: "EC2 instance type"
+        required: true
+        default: "<required>"
+        type: string
+      root_size:
+        description: "Root volume size"
+        required: true
+        default: "<required>"
+        type: string
+      volume_type:
+        description: "Root EBS volume type"
+        required: true
+        default: "<required>"
+        type: string
+      os_user:
+        description: "Operating system SSH user"
+        required: true
+        default: "<required>"
+        type: string
+      os_group:
+        description: "Operating system user group"
+        required: true
+        default: "<required>"
         type: string
 
 permissions:
@@ -127,8 +209,6 @@ jobs:
             HB_RKE2_VERSION_2_16, HB_RKE2_VERSION_2_16
             HB_K3S_VERSION_2_16, HB_K3S_VERSION_2_16
             HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
-            HB_QASE_RELEASE_TEST_RUN_ID_2_16, HB_QASE_RELEASE_TEST_RUN_ID_2_16
-            HB_QASE_RECURRING_TEST_RUN_ID_2_16, HB_QASE_RECURRING_TEST_RUN_ID_2_16
             HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
             HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
             HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
@@ -136,23 +216,30 @@ jobs:
             HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
             HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
-      - name: Fetch and Set DockerHub Credentials
+      - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Masking Secrets
-        uses: ./.github/actions/mask-secrets
-        with:
-          secrets: |
-            ${{ env.DOCKERHUB_USERNAME }}
-            ${{ env.DOCKERHUB_PASSWORD }}
-            ${{ env.HB_SSH_PRIVATE_KEY }}
-            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
-            ${{ env.HB_PRIVATE_FULL_CHAIN }}
-            ${{ env.HB_PRIVATE_CERT_KEY }}
+      - name: Mask Dockerhub Credentials
+        run: |
+          mask_multiline() {
+            local content="$1"
+            while IFS= read -r line; do
+              if [[ -n "$line" ]]; then
+                echo "::add-mask::$line"
+              fi
+            done <<< "$content"
+          }
+
+          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
+          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_PRIVATE_FULL_CHAIN }}"
+          mask_multiline "${{ env.HB_PRIVATE_CERT_KEY }}"
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -206,11 +293,21 @@ jobs:
               (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_15).value)
             }}
 
-      - name: Get Qase ID
-        id: get-qase-id
-        uses: ./.github/actions/get-qase-id
+      - name: Create Qase test run
+        id: create-qase-run
+        if: env.REPORTING_ENABLED == 'true' && inputs.qase_test_run_id == ''
+        uses: ./.github/actions/create-qase-test-run
         with:
-          qase_recurring_id: ${{ fromJSON(env.HB_QASE_RECURRING_TEST_RUN_ID_2_16).value }}
+          test_run_name: "[${{ inputs.os_name || 'OS' }}] OS Testing"
+          qase_project_id: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
+          qase_token: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
+
+      - name: Set Qase test run ID
+        id: set-qase-run
+        env:
+          QASE_OVERRIDE: ${{ inputs.qase_test_run_id }}
+          CREATED_QASE_RUN_ID: ${{ steps.create-qase-run.outputs.id }}
+        run: echo "id=${QASE_OVERRIDE:-$CREATED_QASE_RUN_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Create config.yaml
         run: |
@@ -229,6 +326,12 @@ jobs:
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
+            awsConfig:
+              ami: "${{ inputs.ami }}"
+              awsInstanceType: "${{ inputs.instance_type }}"
+              awsVolumeType: "${{ inputs.volume_type }}"
+              awsRootSize: "${{ inputs.root_size }}"
+              awsUser: "${{ inputs.os_user }}"
 
             standalone:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
@@ -238,34 +341,25 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
               rke2Version: "<HB_RKE2_VERSION_2_16>"
               k3sVersion: "<HB_K3S_VERSION_2_16><HB_K3S_VERSION_SUFFIX>"
+              osUser: "${{ inputs.os_user }}"
+              osGroup: "${{ inputs.os_group }}"
 
           awsMachineConfigs:
             region: "<HB_AWS_REGION>"
             awsMachineConfig:
             - roles: ["etcd","controlplane","worker"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
-              rootSize: "<HB_AWS_ROOT_SIZE>"
-              sshUser: "<HB_AWS_OS_USER>"
+              ami: "${{ inputs.ami }}"
+              instanceType: "${{ inputs.instance_type }}"
+              volumeType: "${{ inputs.volume_type }}"
+              rootSize: "${{ inputs.root_size }}"
+              sshUser: "${{ inputs.os_user }}"
+              osGroup: "${{ inputs.os_group }}"
               subnetId: "<HB_AWS_SUBNET_ID>"
               vpcId: "<HB_AWS_VPC_ID>"
               securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
               zone: "<HB_AWS_ZONE_LETTER>"
               retries: "5"
-            - roles: ["windows"]
-              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              sshUser: "<HB_AWS_OS_USER>"
-              subnetId: "<HB_AWS_SUBNET_ID>"
-              vpcId: "<HB_AWS_VPC_ID>"
-              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
-              zone: "<HB_AWS_ZONE_LETTER>"
-              retries: "5"
-              rootSize: "<HB_AWS_ROOT_SIZE>" 
               
           clusterConfig:
             registries:
@@ -322,10 +416,9 @@ jobs:
           set -o pipefail
           exec > >(stdbuf -o0 perl -pe 's/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' | tee /tmp/rancher-server-setup.log) 2>&1
           stdbuf -o0 -e0 go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
       - name: Run OS tests
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ steps.set-qase-run.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
@@ -333,11 +426,11 @@ jobs:
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: recurring
+          tags: os
           run_ace: true
 
       - name: Cleanup Infrastructure
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -349,21 +442,21 @@ jobs:
           aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
@@ -467,8 +560,6 @@ jobs:
             HB_RKE2_VERSION_2_15, HB_RKE2_VERSION_2_15
             HB_K3S_VERSION_2_15, HB_K3S_VERSION_2_15
             HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
-            HB_QASE_RELEASE_TEST_RUN_ID_2_15, HB_QASE_RELEASE_TEST_RUN_ID_2_15
-            HB_QASE_RECURRING_TEST_RUN_ID_2_15, HB_QASE_RECURRING_TEST_RUN_ID_2_15
             HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
             HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
             HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
@@ -476,23 +567,30 @@ jobs:
             HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
             HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
-      - name: Fetch and Set DockerHub Credentials
+      - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Masking Secrets
-        uses: ./.github/actions/mask-secrets
-        with:
-          secrets: |
-            ${{ env.DOCKERHUB_USERNAME }}
-            ${{ env.DOCKERHUB_PASSWORD }}
-            ${{ env.HB_SSH_PRIVATE_KEY }}
-            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
-            ${{ env.HB_PRIVATE_FULL_CHAIN }}
-            ${{ env.HB_PRIVATE_CERT_KEY }}
+      - name: Mask Dockerhub Credentials
+        run: |
+          mask_multiline() {
+            local content="$1"
+            while IFS= read -r line; do
+              if [[ -n "$line" ]]; then
+                echo "::add-mask::$line"
+              fi
+            done <<< "$content"
+          }
+
+          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
+          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_PRIVATE_FULL_CHAIN }}"
+          mask_multiline "${{ env.HB_PRIVATE_CERT_KEY }}"
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -546,11 +644,21 @@ jobs:
               (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_15).value)
             }}
 
-      - name: Get Qase ID
-        id: get-qase-id
-        uses: ./.github/actions/get-qase-id
+      - name: Create Qase test run
+        id: create-qase-run
+        if: env.REPORTING_ENABLED == 'true' && inputs.qase_test_run_id == ''
+        uses: ./.github/actions/create-qase-test-run
         with:
-          qase_recurring_id: ${{ fromJSON(env.HB_QASE_RECURRING_TEST_RUN_ID_2_15).value }}
+          test_run_name: "[${{ inputs.os_name || 'OS' }}] OS Testing"
+          qase_project_id: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
+          qase_token: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
+
+      - name: Set Qase test run ID
+        id: set-qase-run
+        env:
+          QASE_OVERRIDE: ${{ inputs.qase_test_run_id }}
+          CREATED_QASE_RUN_ID: ${{ steps.create-qase-run.outputs.id }}
+        run: echo "id=${QASE_OVERRIDE:-$CREATED_QASE_RUN_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Create config.yaml
         run: |
@@ -569,6 +677,12 @@ jobs:
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
+            awsConfig:
+              ami: "${{ inputs.ami }}"
+              awsInstanceType: "${{ inputs.instance_type }}"
+              awsVolumeType: "${{ inputs.volume_type }}"
+              awsRootSize: "${{ inputs.root_size }}"
+              awsUser: "${{ inputs.os_user }}"
 
             standalone:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
@@ -578,17 +692,20 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
               rke2Version: "<HB_RKE2_VERSION_2_15>"
               k3sVersion: "<HB_K3S_VERSION_2_15><HB_K3S_VERSION_SUFFIX>"
+              osUser: "${{ inputs.os_user }}"
+              osGroup: "${{ inputs.os_group }}"
 
           awsMachineConfigs:
             region: "<HB_AWS_REGION>"
             awsMachineConfig:
             - roles: ["etcd","controlplane","worker"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
-              rootSize: "<HB_AWS_ROOT_SIZE>"
-              sshUser: "<HB_AWS_OS_USER>"
+              ami: "${{ inputs.ami }}"
+              instanceType: "${{ inputs.instance_type }}"
+              volumeType: "${{ inputs.volume_type }}"
+              rootSize: "${{ inputs.root_size }}"
+              sshUser: "${{ inputs.os_user }}"
+              osGroup: "${{ inputs.os_group }}"
               subnetId: "<HB_AWS_SUBNET_ID>"
               vpcId: "<HB_AWS_VPC_ID>"
               securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
@@ -596,16 +713,17 @@ jobs:
               retries: "5"
             - roles: ["windows"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              sshUser: "<HB_AWS_OS_USER>"
+              ami: "${{ inputs.ami }}"
+              instanceType: "${{ inputs.instance_type }}"
+              sshUser: "${{ inputs.os_user }}"
+              osGroup: "${{ inputs.os_group }}"
               subnetId: "<HB_AWS_SUBNET_ID>"
               vpcId: "<HB_AWS_VPC_ID>"
               securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              volumeType: "${{ inputs.volume_type }}"
               zone: "<HB_AWS_ZONE_LETTER>"
               retries: "5"
-              rootSize: "<HB_AWS_ROOT_SIZE>" 
+              rootSize: "${{ inputs.root_size }}" 
 
           clusterConfig:
             registries:
@@ -662,10 +780,9 @@ jobs:
           set -o pipefail
           exec > >(stdbuf -o0 perl -pe 's/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' | tee /tmp/rancher-server-setup.log) 2>&1
           stdbuf -o0 -e0 go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
       - name: Run OS tests
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ steps.set-qase-run.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
@@ -673,10 +790,10 @@ jobs:
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: recurring
+          tags: os
 
       - name: Cleanup Infrastructure
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -688,21 +805,21 @@ jobs:
           aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
@@ -806,8 +923,6 @@ jobs:
             HB_RKE2_VERSION_2_14, HB_RKE2_VERSION_2_14
             HB_K3S_VERSION_2_14, HB_K3S_VERSION_2_14
             HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
-            HB_QASE_RELEASE_TEST_RUN_ID_2_14, HB_QASE_RELEASE_TEST_RUN_ID_2_14
-            HB_QASE_RECURRING_TEST_RUN_ID_2_14, HB_QASE_RECURRING_TEST_RUN_ID_2_14
             HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
             HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
             HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
@@ -815,23 +930,30 @@ jobs:
             HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
             HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
-      - name: Fetch and Set DockerHub Credentials
+      - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Masking Secrets
-        uses: ./.github/actions/mask-secrets
-        with:
-          secrets: |
-            ${{ env.DOCKERHUB_USERNAME }}
-            ${{ env.DOCKERHUB_PASSWORD }}
-            ${{ env.HB_SSH_PRIVATE_KEY }}
-            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
-            ${{ env.HB_PRIVATE_FULL_CHAIN }}
-            ${{ env.HB_PRIVATE_CERT_KEY }}
+      - name: Mask Dockerhub Credentials
+        run: |
+          mask_multiline() {
+            local content="$1"
+            while IFS= read -r line; do
+              if [[ -n "$line" ]]; then
+                echo "::add-mask::$line"
+              fi
+            done <<< "$content"
+          }
+
+          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
+          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_PRIVATE_FULL_CHAIN }}"
+          mask_multiline "${{ env.HB_PRIVATE_CERT_KEY }}"
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -885,11 +1007,21 @@ jobs:
               (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_14).value)
             }}
 
-      - name: Get Qase ID
-        id: get-qase-id
-        uses: ./.github/actions/get-qase-id
+      - name: Create Qase test run
+        id: create-qase-run
+        if: env.REPORTING_ENABLED == 'true' && inputs.qase_test_run_id == ''
+        uses: ./.github/actions/create-qase-test-run
         with:
-          qase_recurring_id: ${{ fromJSON(env.HB_QASE_RECURRING_TEST_RUN_ID_2_14).value }}
+          test_run_name: "[${{ inputs.os_name || 'OS' }}] OS Testing"
+          qase_project_id: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
+          qase_token: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
+
+      - name: Set Qase test run ID
+        id: set-qase-run
+        env:
+          QASE_OVERRIDE: ${{ inputs.qase_test_run_id }}
+          CREATED_QASE_RUN_ID: ${{ steps.create-qase-run.outputs.id }}
+        run: echo "id=${QASE_OVERRIDE:-$CREATED_QASE_RUN_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Create config.yaml
         run: |
@@ -908,6 +1040,12 @@ jobs:
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
+            awsConfig:
+              ami: "${{ inputs.ami }}"
+              awsInstanceType: "${{ inputs.instance_type }}"
+              awsVolumeType: "${{ inputs.volume_type }}"
+              awsRootSize: "${{ inputs.root_size }}"
+              awsUser: "${{ inputs.os_user }}"
 
             standalone:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
@@ -917,17 +1055,20 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
               rke2Version: "<HB_RKE2_VERSION_2_14>"
               k3sVersion: "<HB_K3S_VERSION_2_16><HB_K3S_VERSION_SUFFIX>"
+              osUser: "${{ inputs.os_user }}"
+              osGroup: "${{ inputs.os_group }}"
 
           awsMachineConfigs:
             region: "<HB_AWS_REGION>"
             awsMachineConfig:
             - roles: ["etcd","controlplane","worker"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
-              rootSize: "<HB_AWS_ROOT_SIZE>"
-              sshUser: "<HB_AWS_OS_USER>"
+              ami: "${{ inputs.ami }}"
+              instanceType: "${{ inputs.instance_type }}"
+              volumeType: "${{ inputs.volume_type }}"
+              rootSize: "${{ inputs.root_size }}"
+              sshUser: "${{ inputs.os_user }}"
+              osGroup: "${{ inputs.os_group }}"
               subnetId: "<HB_AWS_SUBNET_ID>"
               vpcId: "<HB_AWS_VPC_ID>"
               securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
@@ -935,16 +1076,17 @@ jobs:
               retries: "5"
             - roles: ["windows"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              sshUser: "<HB_AWS_OS_USER>"
+              ami: "${{ inputs.ami }}"
+              instanceType: "${{ inputs.instance_type }}"
+              sshUser: "${{ inputs.os_user }}"
+              osGroup: "${{ inputs.os_group }}"
               subnetId: "<HB_AWS_SUBNET_ID>"
               vpcId: "<HB_AWS_VPC_ID>"
               securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              volumeType: "${{ inputs.volume_type }}"
               zone: "<HB_AWS_ZONE_LETTER>"
               retries: "5"
-              rootSize: "<HB_AWS_ROOT_SIZE>" 
+              rootSize: "${{ inputs.root_size }}" 
 
           clusterConfig:
             registries:
@@ -1001,10 +1143,9 @@ jobs:
           set -o pipefail
           exec > >(stdbuf -o0 perl -pe 's/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' | tee /tmp/rancher-server-setup.log) 2>&1
           stdbuf -o0 -e0 go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
-      - name: Run OS tests
+      - name: Run Provisioning tests
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ steps.set-qase-run.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
@@ -1012,11 +1153,11 @@ jobs:
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: recurring
+          tags: os
           run_ace: true
 
       - name: Cleanup Infrastructure
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -1028,21 +1169,21 @@ jobs:
           aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
@@ -1150,8 +1291,6 @@ jobs:
             HB_RKE2_VERSION_2_13, HB_RKE2_VERSION_2_13
             HB_K3S_VERSION_2_13, HB_K3S_VERSION_2_13
             HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
-            HB_QASE_RELEASE_TEST_RUN_ID_2_13, HB_QASE_RELEASE_TEST_RUN_ID_2_13
-            HB_QASE_RECURRING_TEST_RUN_ID_2_13, HB_QASE_RECURRING_TEST_RUN_ID_2_13
             HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
             HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
             HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
@@ -1159,23 +1298,30 @@ jobs:
             HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
             HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
-      - name: Fetch and Set DockerHub Credentials
+      - name: "Fetch and Set DockerHub Credentials"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Masking Secrets
-        uses: ./.github/actions/mask-secrets
-        with:
-          secrets: |
-            ${{ env.DOCKERHUB_USERNAME }}
-            ${{ env.DOCKERHUB_PASSWORD }}
-            ${{ env.HB_SSH_PRIVATE_KEY }}
-            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
-            ${{ env.HB_PRIVATE_FULL_CHAIN }}
-            ${{ env.HB_PRIVATE_CERT_KEY }}
+      - name: Mask Dockerhub Credentials
+        run: |
+          mask_multiline() {
+            local content="$1"
+            while IFS= read -r line; do
+              if [[ -n "$line" ]]; then
+                echo "::add-mask::$line"
+              fi
+            done <<< "$content"
+          }
+
+          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
+          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+          mask_multiline "${{ env.HB_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}"
+          mask_multiline "${{ env.HB_PRIVATE_FULL_CHAIN }}"
+          mask_multiline "${{ env.HB_PRIVATE_CERT_KEY }}"
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -1229,11 +1375,21 @@ jobs:
               (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_13).value)
             }}
 
-      - name: Get Qase ID
-        id: get-qase-id
-        uses: ./.github/actions/get-qase-id
+      - name: Create Qase test run
+        id: create-qase-run
+        if: env.REPORTING_ENABLED == 'true' && inputs.qase_test_run_id == ''
+        uses: ./.github/actions/create-qase-test-run
         with:
-          qase_recurring_id: ${{ fromJSON(env.HB_QASE_RECURRING_TEST_RUN_ID_2_13).value }}
+          test_run_name: "[${{ inputs.os_name || 'OS' }}] OS Testing"
+          qase_project_id: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
+          qase_token: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
+
+      - name: Set Qase test run ID
+        id: set-qase-run
+        env:
+          QASE_OVERRIDE: ${{ inputs.qase_test_run_id }}
+          CREATED_QASE_RUN_ID: ${{ steps.create-qase-run.outputs.id }}
+        run: echo "id=${QASE_OVERRIDE:-$CREATED_QASE_RUN_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Create config.yaml
         run: |
@@ -1252,6 +1408,12 @@ jobs:
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
+            awsConfig:
+              ami: "${{ inputs.ami }}"
+              awsInstanceType: "${{ inputs.instance_type }}"
+              awsVolumeType: "${{ inputs.volume_type }}"
+              awsRootSize: "${{ inputs.root_size }}"
+              awsUser: "${{ inputs.os_user }}"
 
             standalone:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
@@ -1261,17 +1423,20 @@ jobs:
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
               rke2Version: "<HB_RKE2_VERSION_2_13>"
               k3sVersion: "${{ fromJSON(env.HB_K3S_VERSION_2_13).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
+              osUser: "${{ inputs.os_user }}"
+              osGroup: "${{ inputs.os_group }}"
 
           awsMachineConfigs:
             region: "<HB_AWS_REGION>"
             awsMachineConfig:
             - roles: ["etcd","controlplane","worker"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
-              rootSize: "<HB_AWS_ROOT_SIZE>"
-              sshUser: "<HB_AWS_OS_USER>"
+              ami: "${{ inputs.ami }}"
+              instanceType: "${{ inputs.instance_type }}"
+              volumeType: "${{ inputs.volume_type }}"
+              rootSize: "${{ inputs.root_size }}"
+              sshUser: "${{ inputs.os_user }}"
+              osGroup: "${{ inputs.os_group }}"
               subnetId: "<HB_AWS_SUBNET_ID>"
               vpcId: "<HB_AWS_VPC_ID>"
               securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
@@ -1279,16 +1444,17 @@ jobs:
               retries: "5"
             - roles: ["windows"]
               iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              sshUser: "<HB_AWS_OS_USER>"
+              ami: "${{ inputs.ami }}"
+              instanceType: "${{ inputs.instance_type }}"
+              sshUser: "${{ inputs.os_user }}"
+              osGroup: "${{ inputs.os_group }}"
               subnetId: "<HB_AWS_SUBNET_ID>"
               vpcId: "<HB_AWS_VPC_ID>"
               securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              volumeType: "${{ inputs.volume_type }}"
               zone: "<HB_AWS_ZONE_LETTER>"
               retries: "5"
-              rootSize: "<HB_AWS_ROOT_SIZE>" 
+              rootSize: "${{ inputs.root_size }}" 
     
           clusterConfig:
             registries:
@@ -1345,10 +1511,9 @@ jobs:
           set -o pipefail
           exec > >(stdbuf -o0 perl -pe 's/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' | tee /tmp/rancher-server-setup.log) 2>&1
           stdbuf -o0 -e0 go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
-      - name: Run OS tests
+      - name: Run Provisioning tests
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ steps.set-qase-run.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
@@ -1356,10 +1521,10 @@ jobs:
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
-          tags: recurring
+          tags: os
 
       - name: Cleanup Infrastructure
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -1371,21 +1536,21 @@ jobs:
           aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
-        if: always() && github.event.inputs.environment_cleanup == 'true' && github.event.inputs.environment_cleanup == 'true'
+        if: always() && github.event.inputs.environment_cleanup == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
