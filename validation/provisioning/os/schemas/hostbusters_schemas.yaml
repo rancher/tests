@@ -1,0 +1,185 @@
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/OS
+  cases:
+  - description: Provisions and validates a custom RKE2 cluster
+    title: OS_RKE2_Custom
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision a custom RKE2 cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state and workloads
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions and validates a custom K3s cluster
+    title: OS_K3S_Custom
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision a custom K3s cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state and workloads
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/OS
+  cases:
+  - description: Provisions and validates an imported RKE2 cluster
+    title: OS_RKE2_Imported
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision an imported RKE2 cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state and workloads
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions and validates an imported K3s cluster
+    title: OS_K3S_Imported
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision an imported K3s cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state and workloads
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/OS
+  cases:
+  - description: Provisions and validates an RKE2 node driver cluster
+    title: OS_RKE2_Node_Driver
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision an RKE2 node driver cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state and workloads
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions and validates a K3s node driver cluster
+    title: OS_K3S_Node_Driver
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision a K3s node driver cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state and workloads
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/OS
+  cases:
+  - description: Reboots one etcd, control-plane, and worker node in an RKE2 cluster
+    title: OS_RKE2_Reboot
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision and verify an RKE2 cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Reboot one etcd, control-plane, and worker node
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state and workloads after reboot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Reboots one etcd, control-plane, and worker node in a K3s cluster
+    title: OS_K3S_Reboot
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision and verify a K3s cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Reboot one etcd, control-plane, and worker node
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster state and workloads after reboot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

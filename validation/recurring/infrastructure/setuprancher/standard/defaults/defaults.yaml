@@ -15,25 +15,26 @@ terraform:
   awsCredentials:
     awsAccessKey: "<AWS_ACCESS_KEY_ID>"
     awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
-  awsConfig:
-    ami: "<HB_DEFAULT_AMI>"
-    awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
-    awsInstanceType: "t2.2xlarge"
-    awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
-    region: "<HB_AWS_REGION>"
-    awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_PRIME>"]
-    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
-    awsSubnetID: "<HB_AWS_SUBNET_ID>"
-    awsVpcID: "<HB_AWS_VPC_ID>"
-    awsZoneLetter: "<HB_AWS_ZONE_LETTER>"
-    awsRootSize: "<HB_AWS_ROOT_SIZE>"
-    awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
-    ipAddressType: "<HB_IP_ADDRESS_TYPE>"
-    loadBalancerType: "<HB_LOAD_BALANCER_TYPE>"
-    targetType: "<HB_TARGET_TYPE>"
-    awsUser: "<HB_AWS_OS_USER>"
-    sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
-    timeout: "<HB_SSH_TIMEOUT>"
+  rancherConfig:
+    awsConfig:
+      ami: "<HB_DEFAULT_AMI>"
+      awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+      awsInstanceType: "<HB_RANCHER_AWS_INSTANCE_TYPE>"
+      awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
+      region: "<HB_AWS_REGION>"
+      awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_PRIME>"]
+      awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+      awsSubnetID: "<HB_AWS_SUBNET_ID>"
+      awsVpcID: "<HB_AWS_VPC_ID>"
+      awsZoneLetter: "<HB_AWS_ZONE_LETTER>"
+      awsRootSize: "<HB_AWS_ROOT_SIZE>"
+      awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
+      ipAddressType: "<HB_IP_ADDRESS_TYPE>"
+      loadBalancerType: "<HB_LOAD_BALANCER_TYPE>"
+      targetType: "<HB_TARGET_TYPE>"
+      awsUser: "<HB_AWS_OS_USER>"
+      sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
+      timeout: "<HB_SSH_TIMEOUT>"
   standalone:
     chartVersion: "<required>"
     rancherTagVersion: "<required>"

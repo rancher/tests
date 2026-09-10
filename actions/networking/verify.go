@@ -1,30 +1,168 @@
 package networking
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	kubeapinodes "github.com/rancher/shepherd/extensions/kubeapi/nodes"
+	extdaemonsetapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/daemonsets"
 	"github.com/rancher/shepherd/extensions/kubectl"
-	"github.com/rancher/shepherd/extensions/sshkeys"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/tests/actions/clusters"
+	servicesapi "github.com/rancher/tests/actions/kubeapi/services"
+	"github.com/rancher/tests/actions/services"
+	"github.com/rancher/tests/actions/workloads"
+	"github.com/rancher/tests/actions/workloads/daemonset"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/crypto/ssh"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
-	nodeRole       = "control-plane"
-	pingCmd        = "ping -c 1"
-	successfulPing = "0% packet loss"
+	nodeRole           = "control-plane"
+	podHTTPPort        = 80
+	serviceNamePrefix  = "test-service"
+	connectivityPrefix = "connectivity-check-"
+	hostPortNamePrefix = "host-port-connectivity-"
+	nodePortNamePrefix = "node-port-connectivity-"
+	proxyClientError   = "failed creating Proxy Client"
 )
 
-// VerifyNetworkPolicy verifies that the network policy is working by pinging the pods from the node
+// VerifyPodConnectivity creates a daemonset and verifies its pods are reachable from control-plane nodes.
+func VerifyPodConnectivity(client *rancher.Client, downstreamClient *v1.Client, clusterID, namespaceName, testName string, workloadConfigs *workloads.Workloads) error {
+	if workloadConfigs == nil || workloadConfigs.DaemonSet == nil {
+		return errors.New("daemonset workload config is required")
+	}
+
+	daemonSetConfig := workloadConfigs.DaemonSet.DeepCopy()
+	if err := waitForDownstreamNamespace(client, clusterID, namespaceName); err != nil {
+		return fmt.Errorf("failed waiting for namespace %s: %w", namespaceName, err)
+	}
+
+	daemonSetConfig.ObjectMeta.Namespace = namespaceName
+	daemonSetConfig.ObjectMeta.GenerateName = strings.ToLower(testName)
+
+	logrus.Info("Creating pod connectivity daemonset")
+	testDaemonset, err := daemonset.CreateDaemonSetFromConfig(downstreamClient, clusterID, daemonSetConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create connectivity daemonset: %w", err)
+	}
+
+	logrus.Infof("Verifying daemonset %s is running", testDaemonset.Name)
+	err = extdaemonsetapi.WaitForDaemonSetReady(client, clusterID, namespaceName, testDaemonset.Name)
+	if err != nil {
+		return fmt.Errorf("failed waiting for daemonset %s: %w", testDaemonset.Name, err)
+	}
+
+	logrus.Info("Verifying pod connectivity from control plane node")
+	if err := VerifyNetworkPolicy(client, clusterID, namespaceName); err != nil {
+		return fmt.Errorf("failed to verify pod connectivity: %w", err)
+	}
+
+	return nil
+}
+
+// VerifyHostPortConnectivity creates a daemonset and verifies its host port from worker nodes.
+func VerifyHostPortConnectivity(client *rancher.Client, downstreamClient *v1.Client, clusterID, namespaceName string, hostPort int, endpoint string, workloadConfigs *workloads.Workloads) error {
+	if workloadConfigs == nil || workloadConfigs.DaemonSet == nil || len(workloadConfigs.DaemonSet.Spec.Template.Spec.Containers) == 0 {
+		return errors.New("daemonset workload config with a container is required")
+	}
+
+	daemonSetConfig := workloadConfigs.DaemonSet.DeepCopy()
+	if err := waitForDownstreamNamespace(client, clusterID, namespaceName); err != nil {
+		return fmt.Errorf("failed waiting for namespace %s: %w", namespaceName, err)
+	}
+
+	daemonSetConfig.ObjectMeta.Namespace = namespaceName
+	daemonSetConfig.ObjectMeta.GenerateName = hostPortNamePrefix
+	daemonSetConfig.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{{
+		HostPort:      int32(hostPort),
+		ContainerPort: podHTTPPort,
+		Protocol:      corev1.ProtocolTCP,
+	}}
+
+	logrus.Infof("Creating daemonset with name prefix: %s", daemonSetConfig.ObjectMeta.GenerateName)
+	testDaemonset, err := daemonset.CreateDaemonSetFromConfig(downstreamClient, clusterID, daemonSetConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create host port daemonset: %w", err)
+	}
+
+	logrus.Infof("Verifying daemonset %s is running", testDaemonset.Name)
+	if err := extdaemonsetapi.WaitForDaemonSetReady(client, clusterID, namespaceName, testDaemonset.Name); err != nil {
+		return fmt.Errorf("failed waiting for daemonset %s: %w", testDaemonset.Name, err)
+	}
+
+	logrus.Infof("Verifying host port %d for daemonset %s", hostPort, testDaemonset.Name)
+	if err := VerifyConnectivityFromWorkerNodes(client, clusterID, "localhost", hostPort, endpoint, expectedEndpointContent(endpoint, testDaemonset.Name)); err != nil {
+		return fmt.Errorf("failed to verify host port connectivity: %w", err)
+	}
+
+	return nil
+}
+
+// VerifyNodePortConnectivity creates a daemonset and service and verifies the node port from worker nodes.
+func VerifyNodePortConnectivity(client *rancher.Client, downstreamClient *v1.Client, clusterID, namespaceName string, nodePort int, endpoint string, workloadConfigs *workloads.Workloads) error {
+	if workloadConfigs == nil || workloadConfigs.DaemonSet == nil {
+		return errors.New("daemonset workload config is required")
+	}
+
+	daemonSetConfig := workloadConfigs.DaemonSet.DeepCopy()
+	if err := waitForDownstreamNamespace(client, clusterID, namespaceName); err != nil {
+		return fmt.Errorf("failed waiting for namespace %s: %w", namespaceName, err)
+	}
+
+	daemonSetConfig.ObjectMeta.Namespace = namespaceName
+	daemonSetConfig.ObjectMeta.GenerateName = nodePortNamePrefix
+
+	logrus.Infof("Creating daemonset with name prefix: %s", daemonSetConfig.ObjectMeta.GenerateName)
+	testDaemonset, err := daemonset.CreateDaemonSetFromConfig(downstreamClient, clusterID, daemonSetConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create node port daemonset: %w", err)
+	}
+
+	logrus.Infof("Verifying daemonset %s is running", testDaemonset.Name)
+	if err := extdaemonsetapi.WaitForDaemonSetReady(client, clusterID, namespaceName, testDaemonset.Name); err != nil {
+		return fmt.Errorf("failed waiting for daemonset %s: %w", testDaemonset.Name, err)
+	}
+
+	serviceName := namegen.AppendRandomString(serviceNamePrefix)
+	logrus.Infof("Creating NodePort service %s on port %d", serviceName, nodePort)
+	ports := []corev1.ServicePort{{
+		Protocol: corev1.ProtocolTCP,
+		Port:     podHTTPPort,
+		NodePort: int32(nodePort),
+	}}
+	nodePortService := servicesapi.NewServiceTemplate(serviceName, namespaceName, corev1.ServiceTypeNodePort, ports, daemonSetConfig.Spec.Template.Labels)
+	serviceResp, err := services.CreateService(downstreamClient, nodePortService)
+	if err != nil {
+		return fmt.Errorf("failed to create node port service: %w", err)
+	}
+
+	logrus.Infof("Verifying service %s is ready", serviceResp.Name)
+	if err := services.VerifyService(downstreamClient, serviceResp); err != nil {
+		return fmt.Errorf("failed to verify service %s: %w", serviceResp.Name, err)
+	}
+
+	logrus.Infof("Verifying node port %d for daemonset %s", nodePort, testDaemonset.Name)
+	if err := VerifyConnectivityFromWorkerNodes(client, clusterID, "", nodePort, endpoint, expectedEndpointContent(endpoint, testDaemonset.Name)); err != nil {
+		return fmt.Errorf("failed to verify node port connectivity: %w", err)
+	}
+
+	return nil
+}
+
+// VerifyNetworkPolicy verifies that pods are reachable from the node.
 func VerifyNetworkPolicy(client *rancher.Client, clusterID string, namespaceName string) error {
 	steveclient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
@@ -55,11 +193,7 @@ func VerifyNetworkPolicy(client *rancher.Client, clusterID string, namespaceName
 	}
 
 	for _, machine := range nodeList.Data {
-		sshNode, err := sshkeys.GetSSHNodeFromMachine(client, &machine)
-		if err != nil {
-			return fmt.Errorf("failed to get ssh node for machine %s: %w", machine.Name, err)
-		}
-
+		logrus.Info("Verifying pod connectivity from control plane node")
 		for i := 0; i < len(pods.Data); i++ {
 			podStatus := &corev1.PodStatus{}
 			err = v1.ConvertToK8sType(pods.Data[i].Status, podStatus)
@@ -72,12 +206,12 @@ func VerifyNetworkPolicy(client *rancher.Client, clusterID string, namespaceName
 				return fmt.Errorf("pod %s in namespace %s has empty podIP", pods.Data[i].Name, namespaceName)
 			}
 
-			pingExecCmd := pingCmd + " " + podIP
-			excmdLog, err := sshNode.ExecuteCommand(pingExecCmd)
+			curlCommand := []string{"curl", "-fsS", "--connect-timeout", "10", fmt.Sprintf("http://%s:%d/", podIP, podHTTPPort)}
+			excmdLog, err := executeCommandFromNode(client, clusterID, machine.Name, curlCommand)
 			logrus.Debug(excmdLog)
 
-			if err != nil || !strings.Contains(excmdLog, successfulPing) {
-				return fmt.Errorf("unable to ping pod %s (%s) from machine %s: %s", pods.Data[i].Name, podIP, machine.Name, excmdLog)
+			if err != nil {
+				return fmt.Errorf("unable to connect to pod %s (%s) from machine %s: %w: %s", pods.Data[i].Name, podIP, machine.Name, err, excmdLog)
 			}
 		}
 	}
@@ -85,9 +219,46 @@ func VerifyNetworkPolicy(client *rancher.Client, clusterID string, namespaceName
 	return nil
 }
 
-// VerifyConnectivityFromWorkerNodes verifies if any worker node in the cluster is able to access the provided ip:port
-// and retrieve the expected content from name.html. Each node's own ip is used as default if no address is provided.
-func VerifyConnectivityFromWorkerNodes(client *rancher.Client, clusterID string, ip string, port int, workloadName string) error {
+func expectedEndpointContent(endpoint, workloadName string) string {
+	if endpoint == "/name.html" {
+		return workloadName
+	}
+
+	return ""
+}
+
+func waitForDownstreamNamespace(client *rancher.Client, clusterID, namespaceName string) error {
+	return kwait.PollUntilContextTimeout(context.Background(), 5*time.Second, time.Minute, true, func(ctx context.Context) (bool, error) {
+		client, err := client.ReLogin()
+		if err != nil {
+			return false, err
+		}
+
+		dynamicClient, err := client.GetDownStreamClusterClient(clusterID)
+		if err != nil {
+			return false, err
+		}
+
+		_, err = dynamicClient.Resource(schema.GroupVersionResource{Version: "v1", Resource: "namespaces"}).Get(ctx, namespaceName, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, nil
+			}
+
+			return false, err
+		}
+
+		return true, nil
+	})
+}
+
+// VerifyConnectivityFromWorkerNodes verifies if any worker node can access the provided IP, port, and endpoint.
+// When expectedContent is set, the response must contain it. Each node's own IP is used if no address is provided.
+func VerifyConnectivityFromWorkerNodes(client *rancher.Client, clusterID string, ip string, port int, endpoint, expectedContent string) error {
+	if endpoint == "" || !strings.HasPrefix(endpoint, "/") {
+		return fmt.Errorf("endpoint must start with '/': %q", endpoint)
+	}
+
 	query, err := url.ParseQuery(clusters.LabelWorker)
 	if err != nil {
 		return err
@@ -108,12 +279,6 @@ func VerifyConnectivityFromWorkerNodes(client *rancher.Client, clusterID string,
 	}
 
 	for _, machine := range nodeList.Data {
-		sshNode, err := sshkeys.GetSSHNodeFromMachine(client, &machine)
-		if err != nil {
-			logrus.Infof("Could not SSH into worker node %s: %s", machine.Name, err.Error())
-			continue
-		}
-
 		nodeIP := ip
 		if nodeIP == "" {
 			newNode := &corev1.Node{}
@@ -128,21 +293,74 @@ func VerifyConnectivityFromWorkerNodes(client *rancher.Client, clusterID string,
 			}
 		}
 
-		logrus.Infof("Curling '%s:%d/name.html' from node %s", nodeIP, port, machine.Name)
-		log, err := sshNode.ExecuteCommand(fmt.Sprintf("curl -s %s:%d/name.html", nodeIP, port))
-		if err != nil && !errors.Is(err, &ssh.ExitMissingError{}) {
+		url := fmt.Sprintf("http://%s:%d%s", nodeIP, port, endpoint)
+		logrus.Infof("Curling port %d from worker node", port)
+		curlCommand := []string{"curl", "-fsS", "--connect-timeout", "10", url}
+		log, err := executeCommandFromNode(client, clusterID, machine.Name, curlCommand)
+		if err != nil {
 			logrus.Infof("Curl failed on node %s: %v", machine.Name, err)
 			continue
 		}
 
-		if strings.Contains(log, workloadName) { // This should be one of the pod's names.
+		if expectedContent == "" || strings.Contains(log, expectedContent) {
 			return nil
 		} else {
-			logrus.Infof("Curl result %s doesn't contain expected content '%s'", log, workloadName)
+			logrus.Infof("Curl result %s doesn't contain expected content '%s'", log, expectedContent)
 		}
 	}
 
-	return fmt.Errorf("Unable to connect to %s:%d/name.html from any worker node using SSH", ip, port)
+	return fmt.Errorf("unable to connect to %s:%d%s from any worker node", ip, port, endpoint)
+}
+
+func executeCommandFromNode(client *rancher.Client, clusterID, nodeName string, command []string) (string, error) {
+	overrides, err := json.Marshal(map[string]any{
+		"spec": map[string]any{
+			"hostNetwork": true,
+			"nodeName":    nodeName,
+			"tolerations": []map[string]string{{"operator": "Exists"}},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	kubectlCommand := []string{
+		"kubectl", "run", namegen.AppendRandomString(connectivityPrefix),
+		"--image=curlimages/curl:8.12.1", "--restart=Never", "--rm", "--attach", "--quiet",
+		"--overrides=" + string(overrides), "--command", "--",
+	}
+	kubectlCommand = append(kubectlCommand, command...)
+
+	commandClient := client
+	var commandLog string
+	var commandErr error
+	pollErr := kwait.PollUntilContextTimeout(context.Background(), 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		commandLog, commandErr = kubectl.Command(commandClient, nil, clusterID, kubectlCommand, "")
+		if commandErr == nil {
+			return true, nil
+		}
+		if !strings.Contains(commandErr.Error(), proxyClientError) {
+			return false, commandErr
+		}
+
+		logrus.Warnf("Downstream proxy creation failed for cluster %s: %v", clusterID, commandErr)
+		refreshedClient, err := client.ReLogin()
+		if err != nil {
+			logrus.Warnf("Failed to refresh Rancher client for cluster %s: %v", clusterID, err)
+			return false, nil
+		}
+		commandClient = refreshedClient
+
+		return false, nil
+	})
+	if pollErr != nil {
+		if commandErr != nil {
+			return commandLog, fmt.Errorf("failed to execute connectivity command within two minutes: %w", commandErr)
+		}
+		return commandLog, pollErr
+	}
+
+	return commandLog, nil
 }
 
 func verifyConnectivityFromPod(client *rancher.Client, clusterID string, ip string, port int, workloadName string) error {
@@ -197,7 +415,7 @@ func VerifyLoadBalancerConnectivity(client *rancher.Client, clusterID string, se
 	return verifyConnectivityFromPod(client, clusterID, ip, int(port), workloadName)
 }
 
-// VerifyClusterConnectivity verifies that the ClusterIP service is accessible via SSH from a worker node
+// VerifyClusterConnectivity verifies that the ClusterIP service is accessible from a worker node.
 func VerifyClusterConnectivity(client *rancher.Client, clusterID string, serviceID string, port int, content string) error {
 	steveClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
@@ -215,5 +433,5 @@ func VerifyClusterConnectivity(client *rancher.Client, clusterID string, service
 		return err
 	}
 
-	return VerifyConnectivityFromWorkerNodes(client, clusterID, newService.Spec.ClusterIP, port, content)
+	return VerifyConnectivityFromWorkerNodes(client, clusterID, newService.Spec.ClusterIP, port, "/name.html", content)
 }

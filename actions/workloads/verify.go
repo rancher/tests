@@ -1,7 +1,10 @@
 package workloads
 
 import (
+	"context"
+	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters"
@@ -14,6 +17,7 @@ import (
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	"github.com/sirupsen/logrus"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -86,7 +90,7 @@ func VerifyWorkloads(client *rancher.Client, clusterName string, workloads Workl
 
 	if workloads.Job != nil {
 		logrus.Debugf("Verifying job on cluster: %s", clusterName)
-		err = extjobsapi.WaitForJobActive(client, clusterID, workloads.Job.Namespace, workloads.Job.Name)
+		err = waitForJobCompletion(client, clusterID, workloads.Job.Namespace, workloads.Job.Name)
 		if err != nil {
 			logrus.Warningf("Job verification failed: %s, attempting to continue with other verifications", err)
 		}
@@ -117,4 +121,19 @@ func VerifyWorkloads(client *rancher.Client, clusterName string, workloads Workl
 
 	return &workloads, nil
 
+}
+
+func waitForJobCompletion(client *rancher.Client, clusterID, namespaceName, jobName string) error {
+	return kwait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
+		job, err := extjobsapi.GetJobByName(client, clusterID, namespaceName, jobName)
+		if err != nil {
+			return false, nil
+		}
+
+		if job.Status.Failed > 0 {
+			return false, fmt.Errorf("job %s/%s failed", namespaceName, jobName)
+		}
+
+		return job.Status.Active > 0 || job.Status.Succeeded > 0 || job.Status.CompletionTime != nil, nil
+	})
 }

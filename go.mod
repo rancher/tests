@@ -17,7 +17,7 @@ replace (
 
 	github.com/rancher/tests/actions => ./actions
 	github.com/rancher/tests/interoperability => ./interoperability
-	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260922151001-6bafd3d62c5e
+	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260923202911-66f965f186f9
 
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
@@ -87,7 +87,7 @@ require (
 	github.com/rancher/shepherd v0.0.0-20260921153737-8e09fea6aaaf
 	github.com/rancher/tests/actions v0.0.0-20260807182903-06ab37e1aeac
 	github.com/rancher/tests/interoperability v0.0.0
-	github.com/rancher/tfp-automation v0.0.0-20260922151001-6bafd3d62c5e
+	github.com/rancher/tfp-automation v0.0.0-20260923202911-66f965f186f9
 	github.com/rancher/wrangler/v3 v3.7.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
@@ -182,7 +182,7 @@ require (
 	github.com/hashicorp/go-getter/v2 v2.2.3 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-safetemp v1.0.0 // indirect
-	github.com/hashicorp/hcl/v2 v2.24.0 // indirect
+	github.com/hashicorp/hcl/v2 v2.25.0 // indirect
 	github.com/hashicorp/terraform-json v0.23.0 // indirect
 	github.com/henrygd/beszel v0.18.7 // indirect
 	github.com/imdario/mergo v1.0.2 // indirect

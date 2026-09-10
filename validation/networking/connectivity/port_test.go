@@ -93,24 +93,7 @@ func (p *PortTestSuite) TestHostPort() {
 	operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, p.cattleConfig, workloadConfigs)
 	hostPort := rand.Intn(55283) + 10251
 
-	workloadConfigs.DaemonSet.ObjectMeta.Namespace = p.namespace.Name
-	workloadConfigs.DaemonSet.ObjectMeta.GenerateName = "host-port-connectivity-"
-	workloadConfigs.DaemonSet.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{{
-		HostPort:      int32(hostPort),
-		ContainerPort: defaultPort,
-		Protocol:      corev1.ProtocolTCP,
-	}}
-
-	logrus.Infof("Creating daemonset with name prefix: %s", workloadConfigs.DaemonSet.ObjectMeta.GenerateName)
-	testDaemonset, err := daemonset.CreateDaemonSetFromConfig(p.downstreamClient, p.cluster.ID, workloadConfigs.DaemonSet)
-	require.NoError(p.T(), err)
-
-	logrus.Infof("Verifying daemonset %s is running", testDaemonset.Name)
-	err = extdaemonsetapi.WaitForDaemonSetReady(p.client, p.cluster.ID, p.namespace.Name, testDaemonset.Name)
-	require.NoError(p.T(), err)
-
-	logrus.Infof("Verifying host port %d for daemonset %s", hostPort, testDaemonset.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "localhost", hostPort, testDaemonset.Name)
+	err := networking.VerifyHostPortConnectivity(p.client, p.downstreamClient, p.cluster.ID, p.namespace.Name, hostPort, "/name.html", workloadConfigs)
 	require.NoError(p.T(), err)
 }
 
@@ -119,36 +102,7 @@ func (p *PortTestSuite) TestNodePort() {
 	operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, p.cattleConfig, workloadConfigs)
 	nodePort := rand.Intn(2767) + 30000
 
-	workloadConfigs.DaemonSet.ObjectMeta.Namespace = p.namespace.Name
-	workloadConfigs.DaemonSet.ObjectMeta.GenerateName = "node-port-connectivity-"
-
-	logrus.Infof("Creating daemonset with name prefix: %s", workloadConfigs.DaemonSet.ObjectMeta.GenerateName)
-	testDaemonset, err := daemonset.CreateDaemonSetFromConfig(p.downstreamClient, p.cluster.ID, workloadConfigs.DaemonSet)
-	require.NoError(p.T(), err)
-
-	logrus.Infof("Verifying daemonset %s is running", testDaemonset.Name)
-	err = extdaemonsetapi.WaitForDaemonSetReady(p.client, p.cluster.ID, p.namespace.Name, testDaemonset.Name)
-	require.NoError(p.T(), err)
-
-	serviceName := namegen.AppendRandomString("test-service")
-	logrus.Infof("Creating NodePort service %s on port %d", serviceName, nodePort)
-	ports := []corev1.ServicePort{
-		{
-			Protocol: corev1.ProtocolTCP,
-			Port:     defaultPort,
-			NodePort: int32(nodePort),
-		},
-	}
-	nodePortService := servicesapi.NewServiceTemplate(serviceName, p.namespace.Name, corev1.ServiceTypeNodePort, ports, workloadConfigs.DaemonSet.Spec.Template.Labels)
-	serviceResp, err := services.CreateService(p.downstreamClient, nodePortService)
-	require.NoError(p.T(), err)
-
-	logrus.Infof("Verifying service %s is ready", serviceResp.Name)
-	err = services.VerifyService(p.downstreamClient, serviceResp)
-	require.NoError(p.T(), err)
-
-	logrus.Infof("Verifying node port %d for daemonset %s", nodePort, testDaemonset.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "", nodePort, testDaemonset.Name)
+	err := networking.VerifyNodePortConnectivity(p.client, p.downstreamClient, p.cluster.ID, p.namespace.Name, nodePort, "/name.html", workloadConfigs)
 	require.NoError(p.T(), err)
 }
 
@@ -344,7 +298,7 @@ func (p *PortTestSuite) TestHostPortScaleAndUpgrade() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying host port connectivity after scale up for deployment %s", testDeployment.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "localhost", hostPort, testDeployment.Name)
+	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "localhost", hostPort, "/name.html", testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Scaling down deployment %s to 2 replicas", testDeployment.Name)
@@ -354,7 +308,7 @@ func (p *PortTestSuite) TestHostPortScaleAndUpgrade() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying host port connectivity after scale down for deployment %s", testDeployment.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "localhost", hostPort, testDeployment.Name)
+	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "localhost", hostPort, "/name.html", testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Upgrading deployment %s container", testDeployment.Name)
@@ -363,7 +317,7 @@ func (p *PortTestSuite) TestHostPortScaleAndUpgrade() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying host port connectivity after upgrade for deployment %s", testDeployment.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "localhost", hostPort, testDeployment.Name)
+	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "localhost", hostPort, "/name.html", testDeployment.Name)
 	require.NoError(p.T(), err)
 }
 
@@ -412,7 +366,7 @@ func (p *PortTestSuite) TestNodePortScaleAndUpgrade() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying node port connectivity after scale up for deployment %s", testDeployment.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "", nodePort, testDeployment.Name)
+	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "", nodePort, "/name.html", testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Scaling down deployment %s to 2 replicas", testDeployment.Name)
@@ -422,7 +376,7 @@ func (p *PortTestSuite) TestNodePortScaleAndUpgrade() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying node port connectivity after scale down for deployment %s", testDeployment.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "", nodePort, testDeployment.Name)
+	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "", nodePort, "/name.html", testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Upgrading deployment %s container", testDeployment.Name)
@@ -431,7 +385,7 @@ func (p *PortTestSuite) TestNodePortScaleAndUpgrade() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying node port connectivity after upgrade for deployment %s", testDeployment.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "", nodePort, testDeployment.Name)
+	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "", nodePort, "/name.html", testDeployment.Name)
 	require.NoError(p.T(), err)
 }
 
