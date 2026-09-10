@@ -2,11 +2,6 @@
 name: OS Testing
 
 on:
-  pull_request:
-    branches:
-      - main
-  schedule:
-    - cron: "0 10 * * 3,5"
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -60,12 +55,12 @@ on:
       root_size:
         description: "Root volume size"
         required: true
-        default: "<required>"
+        default: "100"
         type: string
       volume_type:
         description: "Root EBS volume type"
         required: true
-        default: "<required>"
+        default: "gp3"
         type: string
       os_user:
         description: "Operating system SSH user"
@@ -330,7 +325,7 @@ jobs:
               ami: "${{ inputs.ami }}"
               awsInstanceType: "${{ inputs.instance_type }}"
               awsVolumeType: "${{ inputs.volume_type }}"
-              awsRootSize: "${{ inputs.root_size }}"
+              awsRootSize: ${{ inputs.root_size }}
               awsUser: "${{ inputs.os_user }}"
 
             standalone:
@@ -427,7 +422,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: os
-          run_ace: true
 
       - name: Cleanup Infrastructure
         if: always() && github.event.inputs.environment_cleanup == 'true'
@@ -681,7 +675,7 @@ jobs:
               ami: "${{ inputs.ami }}"
               awsInstanceType: "${{ inputs.instance_type }}"
               awsVolumeType: "${{ inputs.volume_type }}"
-              awsRootSize: "${{ inputs.root_size }}"
+              awsRootSize: ${{ inputs.root_size }}
               awsUser: "${{ inputs.os_user }}"
 
             standalone:
@@ -711,19 +705,6 @@ jobs:
               securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
               zone: "<HB_AWS_ZONE_LETTER>"
               retries: "5"
-            - roles: ["windows"]
-              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "${{ inputs.ami }}"
-              instanceType: "${{ inputs.instance_type }}"
-              sshUser: "${{ inputs.os_user }}"
-              osGroup: "${{ inputs.os_group }}"
-              subnetId: "<HB_AWS_SUBNET_ID>"
-              vpcId: "<HB_AWS_VPC_ID>"
-              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
-              volumeType: "${{ inputs.volume_type }}"
-              zone: "<HB_AWS_ZONE_LETTER>"
-              retries: "5"
-              rootSize: "${{ inputs.root_size }}" 
 
           clusterConfig:
             registries:
@@ -1044,7 +1025,7 @@ jobs:
               ami: "${{ inputs.ami }}"
               awsInstanceType: "${{ inputs.instance_type }}"
               awsVolumeType: "${{ inputs.volume_type }}"
-              awsRootSize: "${{ inputs.root_size }}"
+              awsRootSize: ${{ inputs.root_size }}
               awsUser: "${{ inputs.os_user }}"
 
             standalone:
@@ -1074,19 +1055,6 @@ jobs:
               securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
               zone: "<HB_AWS_ZONE_LETTER>"
               retries: "5"
-            - roles: ["windows"]
-              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "${{ inputs.ami }}"
-              instanceType: "${{ inputs.instance_type }}"
-              sshUser: "${{ inputs.os_user }}"
-              osGroup: "${{ inputs.os_group }}"
-              subnetId: "<HB_AWS_SUBNET_ID>"
-              vpcId: "<HB_AWS_VPC_ID>"
-              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
-              volumeType: "${{ inputs.volume_type }}"
-              zone: "<HB_AWS_ZONE_LETTER>"
-              retries: "5"
-              rootSize: "${{ inputs.root_size }}" 
 
           clusterConfig:
             registries:
@@ -1154,7 +1122,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: os
-          run_ace: true
 
       - name: Cleanup Infrastructure
         if: always() && github.event.inputs.environment_cleanup == 'true'
@@ -1412,7 +1379,7 @@ jobs:
               ami: "${{ inputs.ami }}"
               awsInstanceType: "${{ inputs.instance_type }}"
               awsVolumeType: "${{ inputs.volume_type }}"
-              awsRootSize: "${{ inputs.root_size }}"
+              awsRootSize: ${{ inputs.root_size }}
               awsUser: "${{ inputs.os_user }}"
 
             standalone:
@@ -1442,19 +1409,6 @@ jobs:
               securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
               zone: "<HB_AWS_ZONE_LETTER>"
               retries: "5"
-            - roles: ["windows"]
-              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "${{ inputs.ami }}"
-              instanceType: "${{ inputs.instance_type }}"
-              sshUser: "${{ inputs.os_user }}"
-              osGroup: "${{ inputs.os_group }}"
-              subnetId: "<HB_AWS_SUBNET_ID>"
-              vpcId: "<HB_AWS_VPC_ID>"
-              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
-              volumeType: "${{ inputs.volume_type }}"
-              zone: "<HB_AWS_ZONE_LETTER>"
-              retries: "5"
-              rootSize: "${{ inputs.root_size }}" 
     
           clusterConfig:
             registries:
