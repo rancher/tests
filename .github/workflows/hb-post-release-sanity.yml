@@ -50,6 +50,13 @@ env:
   TAG: "postrelease"
   TEST_SUITE: "^TestPostReleaseTestSuite$"
   TIMEOUT: "1h"
+  REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          github.event_name == 'workflow_call' ||
+          github.actor == 'github-actions[bot]' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
+        }}
 
 jobs:  
   create-qase-run:
@@ -92,12 +99,6 @@ jobs:
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_15 }}"
       HOSTNAME_PREFIX: "hb-com-215"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -349,12 +350,6 @@ jobs:
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_15 }}"
       HOSTNAME_PREFIX: "pr-215"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -607,12 +602,6 @@ jobs:
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_14 }}"
       HOSTNAME_PREFIX: "pr-214"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -865,12 +854,6 @@ jobs:
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_13 }}"
       HOSTNAME_PREFIX: "pr-213"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -1130,12 +1113,6 @@ jobs:
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_12 }}"
       HOSTNAME_PREFIX: "pr-212"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -1395,12 +1372,6 @@ jobs:
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_11 }}"
       HOSTNAME_PREFIX: "pr-211"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository

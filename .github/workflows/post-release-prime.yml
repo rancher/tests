@@ -49,6 +49,13 @@ env:
   TAG: "prime"
   TEST_SUITE: "^TestPostReleasePrimeUITestSuite$"
   TIMEOUT: "1h"
+  REPORTING_ENABLED: >-
+        ${{
+          github.event_name == 'schedule' ||
+          github.event_name == 'workflow_call' ||
+          github.actor == 'github-actions[bot]' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
+        }}
 
 jobs:
   create-qase-run:
@@ -90,12 +97,6 @@ jobs:
     environment: prime
     env:
       HOSTNAME_PREFIX: "gha-prime-215"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -345,12 +346,6 @@ jobs:
     environment: prime
     env:
       HOSTNAME_PREFIX: "gha-prime-214"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -600,12 +595,6 @@ jobs:
     environment: prime
     env:
       HOSTNAME_PREFIX: "gha-prime-213"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -855,12 +844,6 @@ jobs:
     environment: prime
     env:
       HOSTNAME_PREFIX: "gha-prime-212"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
