@@ -394,7 +394,7 @@ qaInfraAutomation:
         securityGroups:
             - tf-${HOSTNAME_PREFIX}-sg
         awsSSHKeyName: "jenkins-elliptic-validation"
-        sshUser: ec2-user
+        sshUser: ubuntu
         subnet: subnet-ee8cac86
         volumeSize: 50
         volumeType: gp3

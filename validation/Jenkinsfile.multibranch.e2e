@@ -238,7 +238,7 @@ awsEC2Configs:
       awsSSHKeyName: jenkins-elliptic-validation.pem
       awsSecurityGroups:
       - tf-${HOSTNAME_PREFIX}-sg
-      awsUser: ec2-user
+      awsUser: ubuntu
       instanceType: t3a.2xlarge
       isWindows: false
       volumeSize: 50
