@@ -101,6 +101,7 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_AWS_MANAGED_PREFIX_LIST_ID, HB_AWS_MANAGED_PREFIX_LIST_ID
             HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
             HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
             HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
@@ -137,6 +138,10 @@ jobs:
           secrets: |
             ${{ env.DOCKERHUB_USERNAME }}
             ${{ env.DOCKERHUB_PASSWORD }}
+            ${{ env.HB_SSH_PRIVATE_KEY }}
+            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
+            ${{ env.HB_PRIVATE_FULL_CHAIN }}
+            ${{ env.HB_PRIVATE_CERT_KEY }}
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -336,28 +341,28 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: Revoke Runner IP
         if: always()
@@ -418,6 +423,7 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_AWS_MANAGED_PREFIX_LIST_ID, HB_AWS_MANAGED_PREFIX_LIST_ID
             HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
             HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
             HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
@@ -454,6 +460,10 @@ jobs:
           secrets: |
             ${{ env.DOCKERHUB_USERNAME }}
             ${{ env.DOCKERHUB_PASSWORD }}
+            ${{ env.HB_SSH_PRIVATE_KEY }}
+            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
+            ${{ env.HB_PRIVATE_FULL_CHAIN }}
+            ${{ env.HB_PRIVATE_CERT_KEY }}
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -653,28 +663,28 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: Revoke Runner IP
         if: always()
@@ -772,6 +782,10 @@ jobs:
           secrets: |
             ${{ env.DOCKERHUB_USERNAME }}
             ${{ env.DOCKERHUB_PASSWORD }}
+            ${{ env.HB_SSH_PRIVATE_KEY }}
+            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
+            ${{ env.HB_PRIVATE_FULL_CHAIN }}
+            ${{ env.HB_PRIVATE_CERT_KEY }}
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -971,28 +985,28 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: Revoke Runner IP
         if: always()
@@ -1089,6 +1103,10 @@ jobs:
           secrets: |
             ${{ env.DOCKERHUB_USERNAME }}
             ${{ env.DOCKERHUB_PASSWORD }}
+            ${{ env.HB_SSH_PRIVATE_KEY }}
+            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
+            ${{ env.HB_PRIVATE_FULL_CHAIN }}
+            ${{ env.HB_PRIVATE_CERT_KEY }}
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -1286,28 +1304,28 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Custom
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Revoke Runner IP
         if: always()
