@@ -144,12 +144,12 @@ func TestACE(t *testing.T) {
 		k.session.Cleanup()
 	})
 
-	t.Run("Local_Available", func(t *testing.T) {
+	t.Run("K3S_Local_Available", func(t *testing.T) {
 		logrus.Infof("Verifying ACE (%s)", cluster.Name)
 		provisioning.VerifyACE(t, k.client, cluster)
 	})
 
-	t.Run("Local_Unavailable", func(t *testing.T) {
+	t.Run("K3S_Local_Unavailable", func(t *testing.T) {
 		logrus.Infof("Verifying ACE (%s), with local unavailable", cluster.Name)
 		provisioning.VerifyACELocalUnavailable(t, k.client, cluster, clusterStatus, pemFilePath, sshUser)
 	})

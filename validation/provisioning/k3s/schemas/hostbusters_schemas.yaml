@@ -598,43 +598,6 @@
     customfield:
       "14": Validation
       "18": Hostbusters
-- projects:
-  - RRT
-  - RM
-  suite: Go Automation/Provisioning/K3S/HostnameTruncation
-  cases:
-  - description: Provisions a 3 node split roles cluster with hostname truncation
-      enabled
-    title: K3S_Hostname_Truncation|10_Characters
-    priority: 4
-    type: 8
-    automation: 2
-    attachments: []
-    steps:
-    - action: Create rancher provider credentials
-      expectedresult: ""
-      data: ""
-      position: 1
-      attachments: []
-      steps: []
-    - action: Provision a cluster with hostname limit set to 10
-      expectedresult: ""
-      data: ""
-      position: 2
-      attachments: []
-      steps: []
-    - action: Verify that the hostname limit is respected
-      expectedresult: ""
-      data: ""
-      position: 3
-      attachments: []
-      steps: []
-    tags: []
-    params: {}
-    parameters: []
-    customfield:
-      "14": Validation
-      "18": Hostbusters
   - description: Provisions a 3 node split roles cluster with hostname truncation
       enabled
     title: K3S_Hostname_Truncation|31_Characters
@@ -704,8 +667,8 @@
   - RM
   suite: Go Automation/Provisioning/K3S/ACE
   cases:
-  - description: Provisions a 3etcd/2cp/2worker node driver cluster with ACE enabled
-    title: K3S_ACE
+  - description: Verifies local access to a K3S cluster with ACE enabled
+    title: K3S_Local_Available
     priority: 5
     type: 8
     automation: 2
@@ -717,13 +680,44 @@
       position: 1
       attachments: []
       steps: []
-    - action: Provision a k3s cluster
+    - action: Provision a K3S cluster with ACE enabled
       expectedresult: ""
       data: ""
       position: 2
       attachments: []
       steps: []
-    - action: Verify cluster state
+    - action: Verify local access to the cluster
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Verifies cluster behavior when local access is unavailable
+    title: K3S_Local_Unavailable
+    priority: 5
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a K3S cluster with ACE enabled
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster behavior when local access is unavailable
       expectedresult: ""
       data: ""
       position: 3
