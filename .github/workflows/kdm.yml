@@ -6,8 +6,10 @@ on:
     inputs:
       rancher_version:
         description: "Rancher tag version"
+        required: false
       rancher_chart_version:
         description: "Rancher chart version"
+        required: false
       run_all_versions:
         description: "Run all supported versions if manually triggered"
         required: false
@@ -26,15 +28,20 @@ on:
         options:
           - k3s
           - rke2
+      environment_cleanup:
+        description: "Enable environment cleanup after test run"
+        required: false
+        default: true
+        type: boolean
   workflow_call:
     inputs:
       rancher_version:
         description: "Rancher tag version provided from check-rancher-tag workflow"
-        required: true
+        required: false
         type: string
       rancher_chart_version:
         description: "Rancher chart version provided from check-rancher-tag workflow"
-        required: true
+        required: false
         type: string
 
 permissions:
@@ -56,15 +63,16 @@ env:
 jobs:  
   v2-15:
     if: |
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
+      github.event.inputs.run_all_versions == 'true' ||
+      ((github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && !contains(github.event.inputs.rancher_version, '-head') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-head')
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
-    environment: latest
+    environment: prime
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_15 }}"
       HOSTNAME_PREFIX: "kdm-215"
@@ -110,22 +118,24 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
-        run: |
-          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
-          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+      - name: Masking Secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets: |
+            ${{ env.DOCKERHUB_USERNAME }}
+            ${{ env.DOCKERHUB_PASSWORD }}
 
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
+          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
           region: "${{ vars.AWS_REGION }}"
 
       - name: Set up SSH Keys
@@ -155,7 +165,8 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_VERSION_2_15)
             }}
 
       - name: Set Rancher chart version
@@ -165,21 +176,14 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_15)
             }}
-
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
 
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_15 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_15 }}
 
       - name: Create config.yaml
@@ -210,8 +214,8 @@ jobs:
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               region: "${{ vars.AWS_REGION }}"
-              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
+              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
+              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES_PRIME }}]
               awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
               awsVpcID: "${{ secrets.AWS_VPC_ID }}"
               awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
@@ -230,13 +234,14 @@ jobs:
               k3sVersion: "${{ vars.K3S_VERSION_2_15 }}${{ vars.K3S_VERSION_SUFFIX }}"
               osUser: "${{ vars.OS_USER }}"
               osGroup: "${{ vars.OS_GROUP }}"
+              rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
               rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -325,7 +330,7 @@ jobs:
           timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -337,14 +342,14 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
@@ -354,7 +359,7 @@ jobs:
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
+          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
           region: "${{ vars.AWS_REGION }}"
 
       - name: Set job status output
@@ -372,12 +377,13 @@ jobs:
 
   v2-14:
     if: |
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
+      github.event.inputs.run_all_versions == 'true' ||
+      ((github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-head') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && !contains(inputs.rancher_version, '-head')
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && !contains(inputs.rancher_version, '-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: prime
@@ -426,17 +432,19 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
-        run: |
-          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
-          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+      - name: Masking Secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets: |
+            ${{ env.DOCKERHUB_USERNAME }}
+            ${{ env.DOCKERHUB_PASSWORD }}
 
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
@@ -471,7 +479,8 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_VERSION_2_14)
             }}
 
       - name: Set Rancher chart version
@@ -481,22 +490,14 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_14)
             }}
-
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-          is-prime: true
 
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_14 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_14 }}
 
       - name: Create config.yaml
@@ -554,7 +555,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_14 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -643,7 +644,7 @@ jobs:
           timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -655,14 +656,14 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
@@ -690,12 +691,13 @@ jobs:
   
   v2-13:
     if: |
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
+      github.event.inputs.run_all_versions == 'true' ||
+      ((github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-head') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && !contains(inputs.rancher_version, '-head')
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && !contains(inputs.rancher_version, '-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: prime
@@ -744,17 +746,19 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
-        run: |
-          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
-          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+      - name: Masking Secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets: |
+            ${{ env.DOCKERHUB_USERNAME }}
+            ${{ env.DOCKERHUB_PASSWORD }}
 
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
@@ -789,7 +793,8 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_VERSION_2_13)
             }}
 
       - name: Set Rancher chart version
@@ -799,22 +804,14 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_13)
             }}
-
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-          is-prime: true
 
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_13 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_13 }}
 
       - name: Create config.yaml
@@ -873,7 +870,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -962,7 +959,7 @@ jobs:
           timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -974,14 +971,14 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
@@ -1009,12 +1006,13 @@ jobs:
 
   v2-12:
     if: |
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.12')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
+      github.event.inputs.run_all_versions == 'true' ||
+      ((github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.12')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.12')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.12')) && !contains(github.event.inputs.rancher_version, '-head') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12')) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12')) && !contains(inputs.rancher_version, '-head')
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12')) && !contains(inputs.rancher_version, '-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: prime
@@ -1063,17 +1061,19 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
-        run: |
-          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
-          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+      - name: Masking Secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets: |
+            ${{ env.DOCKERHUB_USERNAME }}
+            ${{ env.DOCKERHUB_PASSWORD }}
 
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
@@ -1108,7 +1108,8 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_VERSION_2_12)
             }}
 
       - name: Set Rancher chart version
@@ -1118,22 +1119,14 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
+              (github.event.inputs.run_all_versions == 'true' && vars.RELEASED_RANCHER_CHART_VERSION_2_12)
             }}
-
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
-          is-prime: true
 
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ vars.HB_QASE_RELEASE_TEST_RUN_ID_2_12 }}
           qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_12 }}
 
       - name: Create config.yaml
@@ -1192,7 +1185,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_12 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -1281,7 +1274,7 @@ jobs:
           timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         working-directory: tfp-automation/modules/sanity/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
@@ -1293,14 +1286,14 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ vars.AWS_REGION }}"
 
       - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"

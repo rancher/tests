@@ -707,6 +707,9 @@ This package contains a defaults folder which contains default test configuratio
 
 Any data the user provides will override these defaults which are stored here: [defaults](defaults/defaults.yaml). 
 
+Note: these defaults intentionally use AWS Secrets Manager placeholder values for sensitive configuration such as AWS credentials and related resource identifiers. The defaults assume the environment is configured to resolve those placeholders before the tests runs, in the case that you do not provide AWS credentials you must provide all of those placeholder values that are necessary. 
+
+Note: these defaults are written to assume Prime behavior by default, including Prime-oriented network and resource selections unless the user explicitly overrides them with community-specific values.
 
 ## Logging
 This package supports several logging levels. You can set the logging levels via the cattle config and all levels above the provided level will be logged while all logs below that logging level will be omitted. 

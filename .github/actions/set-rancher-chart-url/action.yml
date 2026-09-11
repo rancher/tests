@@ -34,19 +34,30 @@ runs:
         RANCHER_REPO="${{ inputs.rancher-repo }}"
         IS_PRIME="${{ inputs.is-prime }}"
 
+        # Register all possible chart URLs for masking before selection.
+        echo "::add-mask::${{ inputs.community-chart-url }}"
+        echo "::add-mask::${{ inputs.staging-chart-url }}"
+        echo "::add-mask::${{ inputs.fallback-chart-url }}"
+
         if [[ "$IS_PRIME" == "true" ]]; then
           if [[ "$RANCHER_REPO" == "latest" ]] || [[ "$RANCHER_REPO" == "alpha" ]]; then
             CHART_URL="${{ inputs.staging-chart-url }}"
+            echo "Selected chart URL source: staging for repo=$RANCHER_REPO"
           else
             CHART_URL="${{ inputs.fallback-chart-url }}"
+            echo "Selected chart URL source: fallback for repo=$RANCHER_REPO"
           fi
         elif [[ "$IS_PRIME" == "false" ]]; then
           if [[ "$RANCHER_REPO" == "latest" ]] || [[ "$RANCHER_REPO" == "alpha" ]]; then
             CHART_URL="${{ inputs.community-chart-url }}"
+            echo "Selected chart URL source: community for repo=$RANCHER_REPO"
           else
             CHART_URL="${{ inputs.fallback-chart-url }}"
+            echo "Selected chart URL source: fallback for repo=$RANCHER_REPO"
           fi
         fi
+
+        echo "::add-mask::$CHART_URL"
 
         echo "chart_url=$CHART_URL" >> $GITHUB_OUTPUT
     

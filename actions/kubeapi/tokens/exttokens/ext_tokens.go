@@ -19,8 +19,10 @@ const (
 	UserIDLabel                                       = "cattle.io/user-id"
 	ExtTokenStatusCurrentValue                        = false
 	ExtTokenStatusExpiredValue                        = false
+	ExtTokenAPIPath                                   = "/v1/ext.cattle.io.tokens"
 	TrueConditionStatus        metav1.ConditionStatus = "True"
 	FalseConditionStatus       metav1.ConditionStatus = "False"
+
 )
 
 // CreateExtToken creates an ext token with the TTL value provided using wrangler context and returns the created ext token object
@@ -137,6 +139,17 @@ func AuthenticateWithExtToken(baseURL, tokenName, tokenValue, apiPath string) er
 		return fmt.Errorf("authentication failed: expected status 200 OK, but got %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// WaitForUserExtTokensDeletion polls until no ext tokens matching the given label selector exist, or the timeout is reached.
+func WaitForUserExtTokensDeletion(client *rancher.Client, labelSelector string) error {
+	return kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		tokenList, err := exttokenapi.ListExtTokens(client, metav1.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			return false, err
+		}
+		return len(tokenList.Items) == 0, nil
+	})
 }
 
 // DeleteLegacyTokenWithExtToken sends a raw HTTP DELETE request to the /v3/tokens endpoint using an ext token for Bearer authentication.

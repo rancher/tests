@@ -1,27 +1,59 @@
-#Required for all dualstack/ipv6 tests
+# Required for all dualstack/ipv6 tests.
 clusterConfig:
   networking:
-    clusterCIDR: "<required>"
-    serviceCIDR: "<required>"
-    stackPreference: "<required>"
+    clusterCIDR: "<HB_IPV6_CLUSTER_CIDR>"
+    serviceCIDR: "<HB_IPV6_SERVICE_CIDR>"
+    stackPreference: "ipv6"
   advanced:
     machineGlobalConfig:
       flannel-ipv6-masq: true
-      
+
 awsMachineConfigs:
   awsMachineConfig:
-  - enablePrimaryIPv6: true
+  - ami: "<HB_AWS_IPV6_AMI>"
+    zone: "<HB_IPV6_AWS_ZONE_LETTER>"
+    subnetId: "<HB_AWS_IPV6_SUBNET_ID>"
+    securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
+    enablePrimaryIPv6: true
     httpProtocolIpv6: "enabled"
     ipv6AddressOnly: true
     ipv6AddressCount: "1"
 
+awsEC2Configs:
+  region: "<HB_AWS_REGION>"
+  awsSecretAccessKey: "<AWS_SECRET_ACCESS_KEY>"
+  awsAccessKeyID: "<AWS_ACCESS_KEY_ID>"
+  awsEC2Config:
+    - instanceType: "<HB_AWS_INSTANCE_TYPE>"
+      awsAMI: "<HB_AWS_IPV6_AMI>"
+      awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_COMMUNITY>"]
+      awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
+      awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>.pem"
+      awsCICDInstanceTag: "<HB_AWS_CICD_INSTANCE_TAG>"
+      awsIAMProfile: "<HB_AWS_IAM_PROFILE>"
+      awsUser: "<HB_AWS_OS_USER>"
+      volumeSize: "<HB_AWS_ROOT_SIZE>"
+      roles: ["etcd", "controlplane", "worker"]
+
+sshPath:
+   sshPath: "<HB_TESTS_SSH_DIR_PATH>"
+   
 terraform:
   awsConfig:
-    clusterCIDR: "<required>"
-    serviceCIDR: "<required>"
+    ami: "<HB_AWS_IPV6_AMI>"
+    awsUser: "<HB_IPV6_AWS_USER>"
+    clusterCIDR: "<HB_IPV6_CLUSTER_CIDR>"
+    serviceCIDR: "<HB_IPV6_SERVICE_CIDR>"
     enablePrimaryIPv6: true
     httpProtocolIpv6: "enabled"
     ipv6AddressOnly: true
-    ipv6AddressCount: "1"    
+    ipAddressType: "ipv6"
+    targetType: "ip"
+    ipv6AddressCount: "1"
+    awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_COMMUNITY>"]
+    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
     networking:
-      stackPreference: "<required>"
+      stackPreference: "ipv6"
+  standalone:
+    osUser: "<HB_IPV6_OS_USER>"
+    osGroup: "<HB_IPV6_OS_GROUP>"

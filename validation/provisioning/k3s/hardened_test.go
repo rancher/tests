@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
+
 	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
@@ -50,6 +52,14 @@ func hardenedSetup(t *testing.T) hardenedTest {
 
 	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
 	require.NoError(t, err)
+
+	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)
+	require.NoError(t, err)
+
+	err = defaults.VerifyCattleConfig(k.cattleConfig, nil)
+	require.NoError(t, err)
+
+	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), k.cattleConfig)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, k.cattleConfig, loggingConfig)

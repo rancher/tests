@@ -123,11 +123,41 @@ kubectl get clusterrepo rancher-charts -o jsonpath='{.status.conditions}'
 
 ---
 
-## 5. NeuVector UI Extension (optional)
+## 5. NeuVector UI Extension
 
-The NeuVector UI extension (`neuvector-ui-ext`) runs on the **local** Rancher cluster, not the downstream cluster. In airgap, choose one:
+The NeuVector UI extension (`neuvector-ui-ext`) runs on the **local** Rancher cluster, not the downstream cluster. Its chart repo is cloned by the Rancher catalog controller over git HTTP (`ClusterRepo` `Spec.GitRepo`), so in airgap the clone target must be reachable from the `local` cluster with no `github.com` egress. Preferred order: **A** (install via bastion mirror), **B** (pre-installed), **C** (skip — fallback only).
 
-### Option A: Pre-install the extension
+### Option A (recommended): Bastion-hosted `ui-plugin-charts` mirror
+
+The airgap bastion has internet access and is reachable from the airgap cluster. qa-infra-automation ships a role that mirrors the repo on the bastion and serves it over smart HTTP (rancher/tests#821 / rancher/qa-infra-automation#179):
+
+- Role: `ansible/roles/airgap_rke2_ui_plugin_mirror`, gated by `enable_ui_plugin_mirror` (default `false` — non-NeuVector airgap runs unaffected)
+- Standalone use: `make ui-plugin-mirror ENV=airgap`
+- Provisioning wiring: `rke2-registry-config-playbook.yml` applies the role on the bastion when the gate is on, so the NeuVector CI job enables it purely via `ANSIBLE_VARIABLES` (`enable_ui_plugin_mirror: true`) — no pipeline edit
+- Served URL: `http://<bastion-private-ip>:8080/ui-plugin-charts.git` (port and paths are role variables; the published host defaults to the bastion's primary private IPv4, since airgap nodes have no public-DNS route)
+
+> **Why smart HTTP:** Rancher's catalog controller clones ClusterRepos with `git clone --depth=1` (shallow). Dumb HTTP (`git update-server-info` + a static file server) cannot serve shallow clones — it fails with `dumb http transport does not support shallow capabilities`, visible in the Rancher UI as a "Head failure" on the ClusterRepo. The role therefore serves smart HTTP via Apache + `git-http-backend`.
+
+Point the test at the mirror:
+
+```yaml
+neuvectorTest:
+  uiPluginChartsURL: "http://<bastion-private-ip>:8080/ui-plugin-charts.git"
+  uiPluginChartsBranch: "main"
+```
+
+Verify the mirror exactly the way the catalog consumes it (from an airgap node or the Rancher server pod):
+
+```bash
+git clone --depth=1 -n -b main http://<bastion-private-ip>:8080/ui-plugin-charts.git
+curl -o /dev/null -w '%{http_code}\n' \
+  'http://<bastion-private-ip>:8080/ui-plugin-charts.git/info/refs?service=git-upload-pack'   # expect 200
+```
+
+> **Stale ClusterRepo:** the test creates `rancher-ui-plugins` only when it does not already exist; it never rewrites an existing repo's URL. If an earlier run left one pointing at `github.com` or an old mirror address, delete it before re-running:
+> `kubectl delete clusterrepo.catalog.cattle.io rancher-ui-plugins`
+
+### Option B: Pre-install the extension
 
 If the extension is already installed, the test auto-detects it via chart status and skips the install:
 
@@ -138,26 +168,16 @@ if uiExtensionObj.IsAlreadyInstalled { /* skip */ }
 
 No configuration needed — the test handles it.
 
-### Option B: Internal git mirror
+### Option C: Skip the extension entirely (fallback)
 
-Point the UI plugin charts ClusterRepo at an internal mirror reachable from the Rancher server:
-
-```yaml
-neuvectorTest:
-  uiPluginChartsURL: "https://internal-git.example.com/rancher/ui-plugin-charts"
-  uiPluginChartsBranch: "main"
-```
-
-### Option C: Skip the extension entirely
-
-When the Rancher server cannot reach `github.com` **and** no internal mirror is configured:
+When the Rancher server cannot reach `github.com` **and** no mirror is configured:
 
 ```yaml
 neuvectorTest:
   skipUIExtension: true
 ```
 
-The suite still installs and validates the NeuVector backend chart and reaches the manager UI through the Kubernetes service proxy, so the test remains meaningful without the Rancher UI extension.
+The suite still installs and validates the NeuVector backend chart and reaches the manager UI through the Kubernetes service proxy, so the test remains meaningful without the Rancher UI extension — but extension coverage is lost, which is why Options A/B are preferred.
 
 ---
 
@@ -172,15 +192,15 @@ rancher:
   cleanup: true
 
 neuvectorTest:
-  skipUIExtension: true    # Option C (adjust per your airgap setup)
-  # OR:
-  # uiPluginChartsURL: "https://internal-git.example.com/rancher/ui-plugin-charts"
-  # uiPluginChartsBranch: "main"
-```
+  # Recommended: bastion-hosted mirror (Option A) — the extension is installed and validated.
+  uiPluginChartsURL: "http://<bastion-private-ip>:8080/ui-plugin-charts.git"
+  uiPluginChartsBranch: "main"
+  # Fallback only, when no mirror is configured (Option C): the extension is skipped.
+  # skipUIExtension: true
 
 Key differences from non-airgap config:
 - `rancher.clusterName` is set (no `qaInfraAutomation.customCluster` provisioning section)
-- `neuvectorTest.skipUIExtension` or `neuvectorTest.uiPluginChartsURL` is configured
+- `neuvectorTest.uiPluginChartsURL` points at the bastion `ui-plugin-charts` mirror (Option A), or `skipUIExtension: true` as the no-mirror fallback (Option C)
 - The `system-default-registry` setting is configured on Rancher by the pipeline, not by the test
 
 ---
@@ -213,16 +233,16 @@ kubectl get pods -n cattle-neuvector-system -o jsonpath='{range .items[*]}{.meta
 
 ## Pipeline Reference (Slice 4, #807)
 
-The airgap pipeline (`Jenkinsfile.neuvector.airgap-rke2`) is responsible for provisioning all prerequisites listed above:
+Tests run through the **generic** airgap pipeline `validation/pipeline/Jenkinsfile.airgap-rke2-tests`, reused — not copied — by the dedicated Jenkins job `airgap-rke2-neuvector-tests-pipeline` (JJB definition `qa-airgap-rke2-neuvector-tests.yml` in [`rancherlabs/jenkins-job-builder`](https://github.com/rancherlabs/jenkins-job-builder)). The job passes NeuVector-defaulted parameters (`GO_TEST_PACKAGE=./validation/neuvector/...`, `GO_TEST_CASE=-run TestNeuVectorHardenedTestSuite`) and enables the bastion mirror via `ANSIBLE_VARIABLES` (`enable_ui_plugin_mirror: true`). Set `neuvectorTest.uiPluginChartsURL` in the job's `CATTLE_TEST_CONFIG` to the bastion mirror URL for your environment.
 
 | Pipeline Stage           | Prerequisite Satisfied                     |
 |--------------------------|--------------------------------------------|
 | Deploy Cluster           | RKE2/K3s nodes with `registries.yaml` (#1) |
-| Deploy Registry          | Private registry with mirrored images (#3) |
+| Deploy Registry (+ gated `airgap_rke2_ui_plugin_mirror` role) | Private registry with mirrored images (#3); bastion `ui-plugin-charts` mirror (#5, Option A) |
 | Deploy Rancher           | Rancher with `system-default-registry` (#2) and `rancher-charts` mirror (#4) |
-| (pre-install or config)  | NeuVector UI extension (#5, if applicable) |
+| Register downstream cluster (`add-downstream-cluster.yml`) | cattle-config receives `rancher.clusterName`; no `qaInfraAutomation` provisioning section |
 
-The pipeline generates a cattle-config with `rancher.clusterName` targeting the provisioned cluster — no `qaInfraAutomation` provisioning section is needed.
+In CI, `rancher.host`/`adminToken`/`clusterName` are injected by the pipeline; the mirror URL is environment-specific and belongs in `CATTLE_TEST_CONFIG`. For manual runs, `make ui-plugin-mirror ENV=airgap` stands up the mirror independently.
 
 ---
 
@@ -233,3 +253,5 @@ The pipeline generates a cattle-config with `rancher.clusterName` targeting the 
 - [#806](https://github.com/rancher/tests/issues/806) — Slice 3: This document
 - [#807](https://github.com/rancher/tests/issues/807) — Slice 4: Airgap pipeline
 - [#808](https://github.com/rancher/tests/issues/808) — Slice 5: Build-tag policy
+- [#821](https://github.com/rancher/tests/issues/821) — Slice 6: Bastion ui-plugin-charts mirror (Option A recipe)
+- [rancher/qa-infra-automation#179](https://github.com/rancher/qa-infra-automation/issues/179) — `airgap_rke2_ui_plugin_mirror` role + `make ui-plugin-mirror`

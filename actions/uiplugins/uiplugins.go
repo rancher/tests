@@ -71,7 +71,7 @@ func InstallUIPlugin(client *rancher.Client, installExtensionOptions *ExtensionO
 		})
 
 	})
-	err = catalogClient.InstallChart(extensionInstallAction, chartRepoName)
+	err = installChartWithRetry(catalogClient, extensionInstallAction, chartRepoName, installExtensionOptions.ChartName)
 	if err != nil {
 		return err
 	}
