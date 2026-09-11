@@ -1,4 +1,5 @@
 #!groovy
+library('qa-jenkins-library')
 node {
     def workPath = "/root/go/src/github.com/rancher/tests/validation/"
     def rancherRepo = "https://github.com/rancher/tests"
@@ -96,11 +97,14 @@ node {
           }
           dir ("./") {
             stage('Configure and Build') {
+              def publicIp = infrastructure.detectPublicIp()
+
               terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
               terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
               terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION)
               terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC)
               terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS)
+              terraformConfig = terraformConfig.replace('${RUNNER_PUBLIC_IP}', publicIp)
               ansibleConfig = ansibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
               elementalTerraformConfig = elementalTerraformConfig.replace('${GOOGLE_CLOUD_PROJECT}', env.GOOGLE_CLOUD_PROJECT)
               elementalTerraformConfig = elementalTerraformConfig.replace('${RANCHER_GKE_CREDENTIAL}', googleCredentialsFilename)
