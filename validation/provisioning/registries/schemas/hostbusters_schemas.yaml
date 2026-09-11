@@ -20,4 +20,188 @@
       data: ""
       position: 2
       attachments: []
-    - action: Verify cluster state
+    - action: Verify the registry behavior
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/Registries
+  cases:
+  - description: Verifies an authenticated registry with K3S
+    title: Auth_K3S
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision a K3S cluster with the registry configuration
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify the registry behavior
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Verifies an ECR registry with RKE2
+    title: ECR_RKE2
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision an RKE2 cluster with the registry configuration
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify the registry behavior
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Verifies an ECR registry with K3S
+    title: ECR_K3S
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision a K3S cluster with the registry configuration
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify the registry behavior
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Verifies a global registry with RKE2
+    title: Global_Registry_RKE2
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision an RKE2 cluster with the registry configuration
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify the registry behavior
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Verifies a global registry with K3S
+    title: Global_Registry_K3S
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision a K3S cluster with the registry configuration
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify the registry behavior
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Verifies a global registry with Windows nodes
+    title: Global_Registry_RKE2_Windows
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision an RKE2 cluster with Windows nodes and the registry configuration
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify the registry behavior
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Verifies an unauthenticated registry with RKE2
+    title: Unauth_RKE2
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision an RKE2 cluster with the registry configuration
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify the registry behavior
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Verifies an unauthenticated registry with K3S
+    title: Unauth_K3S
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision a K3S cluster with the registry configuration
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify the registry behavior
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Verifies an unauthenticated registry with RKE2 Windows nodes
+    title: Unauth_RKE2_Windows
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision an RKE2 cluster with Windows nodes and the registry configuration
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify the registry behavior
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

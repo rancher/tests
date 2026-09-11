@@ -3,58 +3,6 @@
   - RM
   suite: Go Automation/Provisioning/IPv6/Custom
   cases:
-  - description: Provisions an 8 node 3etcd/2cp/3worker custom cluster with cluster/service CIDR defined
-    title: RKE2_IPv6_Custom_CIDR
-    priority: 4
-    type: 8
-    is_flaky: 0
-    automation: 2
-    steps:
-    - action: Create rancher provider credentials
-      expectedresult: ""
-      data: ""
-      position: 1
-      attachments: []
-    - action: Provision a rke2 custom cluster
-      expectedresult: ""
-      data: ""
-      position: 2
-      attachments: []
-    - action: Verify cluster state
-      expectedresult: ""
-      data: ""
-      position: 3
-      attachments: []
-    custom_field:
-      "14": Validation
-      "18": Hostbusters
-
-  - description: Provisions a 8 node 3etcd/2cp/3worker custom cluster with stack preference set to ipv6
-    title: RKE2_IPv6_Custom_Stack_Preference
-    priority: 4
-    type: 8
-    is_flaky: 0
-    automation: 2
-    steps:
-    - action: Create rancher provider credentials
-      expectedresult: ""
-      data: ""
-      position: 1
-      attachments: []
-    - action: Provision a rke2 custom cluster
-      expectedresult: ""
-      data: ""
-      position: 2
-      attachments: []
-    - action: Verify cluster state
-      expectedresult: ""
-      data: ""
-      position: 3
-      attachments: []
-    custom_field:
-      "14": Validation
-      "18": Hostbusters
-
   - description: Provisions a 8 node 3etcd/2cp/3worker custom cluster with cluster/service CIDR defined and stack preference set to ipv6
     title: RKE2_IPv6_Custom_CIDR_Stack_Preference
     priority: 4
@@ -68,58 +16,6 @@
       position: 1
       attachments: []
     - action: Provision a rke2 custom cluster
-      expectedresult: ""
-      data: ""
-      position: 2
-      attachments: []
-    - action: Verify cluster state
-      expectedresult: ""
-      data: ""
-      position: 3
-      attachments: []
-    custom_field:
-      "14": Validation
-      "18": Hostbusters
-
-  - description: Provisions an 8 node 3etcd/2cp/3worker custom cluster with cluster/service CIDR defined
-    title: K3S_IPv6_Custom_CIDR
-    priority: 4
-    type: 8
-    is_flaky: 0
-    automation: 2
-    steps:
-    - action: Create rancher provider credentials
-      expectedresult: ""
-      data: ""
-      position: 1
-      attachments: []
-    - action: Provision a k3s custom cluster
-      expectedresult: ""
-      data: ""
-      position: 2
-      attachments: []
-    - action: Verify cluster state
-      expectedresult: ""
-      data: ""
-      position: 3
-      attachments: []
-    custom_field:
-      "14": Validation
-      "18": Hostbusters
-
-  - description: Provisions a 8 node 3etcd/2cp/3worker custom cluster with stack preference set to ipv6
-    title: K3S_IPv6_Custom_Stack_Preference
-    priority: 4
-    type: 8
-    is_flaky: 0
-    automation: 2
-    steps:
-    - action: Create rancher provider credentials
-      expectedresult: ""
-      data: ""
-      position: 1
-      attachments: []
-    - action: Provision a k3s custom cluster
       expectedresult: ""
       data: ""
       position: 2
@@ -418,8 +314,8 @@
   - RM
   suite: Go Automation/Provisioning/IPv6/NodeDriver
   cases:
-  - description: Provisions an 8 node 3etcd/2cp/3worker node driver cluster with cluster/service CIDR defined
-    title: RKE2_IPv6_Node_Driver_CIDR
+  - description: Provisions an 8 node 3etcd/2cp/3worker node driver cluster with cluster/service CIDR defined and stack preference set to ipv6
+    title: RKE2_IPv6_Node_Driver_CIDR_Stack_Preference
     priority: 4
     type: 8
     is_flaky: 0
@@ -451,72 +347,15 @@
     is_flaky: 0
     automation: 2
     steps:
-    - action: Create rancher provider credentials
+    - action: Provision an RKE2 node driver cluster with IPv6 stack preference
       expectedresult: ""
       data: ""
       position: 1
       attachments: []
-    - action: Provision a rke2 node driver cluster
-      expectedresult: ""
-      data: ""
-      position: 2
-      attachments: []
     - action: Verify cluster state
       expectedresult: ""
       data: ""
-      position: 3
-      attachments: []
-    custom_field:
-      "14": Validation
-      "18": Hostbusters
-
-  - description: Provisions an 8 node 3etcd/2cp/3worker node driver cluster with cluster/service CIDR defined and stack preference set to ipv6
-    title: RKE2_IPv6_Node_Driver_CIDR_Stack_Preference
-    priority: 4
-    type: 8
-    is_flaky: 0
-    automation: 2
-    steps:
-    - action: Create rancher provider credentials
-      expectedresult: ""
-      data: ""
-      position: 1
-      attachments: []
-    - action: Provision a rke2 node driver cluster
-      expectedresult: ""
-      data: ""
       position: 2
-      attachments: []
-    - action: Verify cluster state
-      expectedresult: ""
-      data: ""
-      position: 3
-      attachments: []
-    custom_field:
-      "14": Validation
-      "18": Hostbusters
-
-  - description: Provisions an 8 node 3etcd/2cp/3worker node driver cluster with cluster/service CIDR defined
-    title: K3S_IPv6_Node_Driver_CIDR
-    priority: 4
-    type: 8
-    is_flaky: 0
-    automation: 2
-    steps:
-    - action: Create rancher provider credentials
-      expectedresult: ""
-      data: ""
-      position: 1
-      attachments: []
-    - action: Provision a k3s node driver cluster
-      expectedresult: ""
-      data: ""
-      position: 2
-      attachments: []
-    - action: Verify cluster state
-      expectedresult: ""
-      data: ""
-      position: 3
       attachments: []
     custom_field:
       "14": Validation

@@ -1,4 +1,4 @@
-- suite: Go Automation/Upgrade
+- suite: Go Automation/Upgrade/Local
   projects: [RRT, RM]
   cases:
   - description: Upgrading the local cluster for Rancher
