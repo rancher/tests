@@ -646,6 +646,17 @@ enable_ui_plugin_mirror: true'''
                     def goTestPackage = params.GO_TEST_PACKAGE?.trim() ?: './validation/...'
                     def goTestCase    = params.GO_TEST_CASE?.trim() ?: ''
                     def goTags        = params.GO_TAGS ?: 'validation'
+
+                    // Derive the Rancher minor version tag (e.g. v2.15.0 -> 2.15) from
+                    // RANCHER_VERSION and append it to the go build tags when not already
+                    // present, so version-gated suites match the Rancher under test (e.g.
+                    // the alerting suite is excluded on 2.15 until a compatible
+                    // rancher-alerting-drivers chart ships).
+                    def rancherMinor = (params.RANCHER_VERSION ?: '').replaceAll(/^v?(2\.\d+)([.-].*)?$/, '$1')
+                    if (rancherMinor != params.RANCHER_VERSION && rancherMinor && !goTags.split().toList().contains(rancherMinor)) {
+                        goTags += " ${rancherMinor}"
+                        echo "Derived Rancher version tag '${rancherMinor}'; effective GO_TAGS: ${goTags}"
+                    }
                     def goTimeout     = params.GO_TIMEOUT ?: '45m'
                     def testCases     = goTestCase ?: goTestPackage
 

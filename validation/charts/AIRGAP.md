@@ -13,8 +13,23 @@ The cluster nodes — the local Rancher cluster nodes and the registered downstr
 **RKE2** — `/etc/rancher/rke2/registries.yaml`:
 
 ```yaml
+mirrors:
+  # Hostless image references (e.g. rancher/shell, the kubectl sidecar of the webhook
+  # receiver) resolve to docker.io/quay.io and are served through these mirrors.
+  docker.io:
+    endpoint:
+      - "<PRIVATE_REGISTRY_URL>"
+    rewrite:
+      "^(.*)": "proxycache/$1"
+  quay.io:
+    endpoint:
+      - "<PRIVATE_REGISTRY_URL>"
+    rewrite:
+      "^(.*)": "quaycache/$1"
 configs:
-  "{}":
+  # Keyed by the actual registry endpoint — RKE2/K3s apply auth and TLS only to
+  # pulls from that exact host; there is no wildcard or "{}" key.
+  "<PRIVATE_REGISTRY_URL>":
     auth:
       username: registry-user
       password: <PRIVATE_REGISTRY_PASSWORD>
@@ -24,7 +39,7 @@ configs:
 
 **K3s** — `/etc/rancher/k3s/registries.yaml` (same format).
 
-This ensures all container runtime image pulls (chart workloads + test-created webhook receiver pods) resolve against the private registry.
+This ensures all container runtime image pulls (chart workloads + test-created webhook receiver pods) resolve against the private registry: `system-default-registry`-prefixed images hit `configs` auth/TLS directly, and hostless `docker.io`/`quay.io` references are rewritten into the mirror cache projects. This is exactly the layout qa-infra-automation's `airgap_rke2_registry_config` role generates; a hand-built environment should match it.
 
 ---
 
@@ -46,7 +61,7 @@ Three consumers make this setting load-bearing for the monitoring/alerting suite
 
 **(b) The webhook receiver traefik image is auto-prefixed.** The webhook receiver deployment's traefik image is pinned to `traefik:v3.7.12` (configurable via `monitoringTest.webhookReceiverImage`). When the configured image carries no registry host, the deployment helper resolves the `system-default-registry` prefix and renders `<REGISTRY_HOST>:<PORT>/traefik:v3.7.12`.
 
-**(c) The suite asserts the prefix on the running pods.** When the setting is non-empty, the suite verifies that every pod in `cattle-monitoring-system` uses the registry prefix (`registries.CheckNamespacedPodsForRegistryPrefix`). A pod that silently fell back to Docker Hub fails the test loudly instead of passing with an internet pull.
+**(c) The suite asserts the prefix on the running pods.** When the setting is non-empty, the suite verifies that every container and init-container image of every pod in `cattle-monitoring-system` starts with the registry prefix (`registries.CheckNamespacedPodsForRegistryPrefix`, the strict namespace-scoped check). Images that carry no registry host at all ("rancher/foo", "nginx") fail too — a pod that silently fell back to Docker Hub fails the test loudly instead of passing with an internet pull.
 
 In non-airgap environments this setting is empty — no prefix is applied and no assertion runs, so behavior is unchanged.
 

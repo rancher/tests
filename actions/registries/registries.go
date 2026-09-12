@@ -13,29 +13,36 @@ import (
 )
 
 // CheckAllClusterPodsForRegistryPrefix checks every pod in a cluster and reports whether
-// all pod images that carry a registry FQDN start with the expected registry prefix.
+// all container and init-container images that carry a registry FQDN start with the
+// expected registry prefix.
 //
-// Note: on airgap clusters, RKE2/Rancher system pods (kube-system, calico-system,
-// tigera-operator, ...) are mirrored at the containerd level, so their image strings keep
-// the original registry (e.g. docker.io) even though they are pulled from the private
-// registry. To verify a specific application's pods without tripping on those system pods,
-// use CheckNamespacedPodsForRegistryPrefix instead.
+// Note: this check is lenient by design. Images whose string carries no registry host
+// (e.g. "rancher/foo", "nginx") resolve to Docker Hub and are skipped: on airgap
+// clusters, RKE2/Rancher system pods (kube-system, calico-system, tigera-operator, ...)
+// are mirrored at the containerd level, so their image strings keep the original
+// registry (e.g. docker.io) even though they are pulled from the private registry.
+// To assert that every image is prefixed, use CheckNamespacedPodsForRegistryPrefix.
 func CheckAllClusterPodsForRegistryPrefix(client *rancher.Client, clusterID, registryPrefix string) (bool, error) {
-	return checkPodsForRegistryPrefix(client, clusterID, "", registryPrefix)
+	return checkPodsForRegistryPrefix(client, clusterID, "", registryPrefix, false)
 }
 
-// CheckNamespacedPodsForRegistryPrefix is like CheckAllClusterPodsForRegistryPrefix but
-// scoped to a single namespace. Use it to verify a specific application's pods (e.g.
-// NeuVector in cattle-neuvector-system) without false-failing on containerd-mirrored
-// system pods whose image strings are not rewritten.
+// CheckNamespacedPodsForRegistryPrefix is the strict, namespace-scoped counterpart of
+// CheckAllClusterPodsForRegistryPrefix: every container and init-container image of
+// every pod in the namespace must start with registryPrefix — including images whose
+// string carries no registry host ("rancher/foo", "nginx"), which would otherwise
+// silently resolve to Docker Hub. Use it only for workloads whose images are all
+// expected to be prefixed (e.g. charts rendered with global.cattle.systemDefaultRegistry,
+// such as rancher-monitoring); workloads that legitimately rely on containerd mirrors
+// for hostless images need the lenient cluster-wide check instead.
 func CheckNamespacedPodsForRegistryPrefix(client *rancher.Client, clusterID, namespace, registryPrefix string) (bool, error) {
-	return checkPodsForRegistryPrefix(client, clusterID, namespace, registryPrefix)
+	return checkPodsForRegistryPrefix(client, clusterID, namespace, registryPrefix, true)
 }
 
 // checkPodsForRegistryPrefix lists pods (cluster-wide when namespace is empty, otherwise
-// restricted to namespace) and reports false if any pod image that carries a registry FQDN
-// does not start with registryPrefix.
-func checkPodsForRegistryPrefix(client *rancher.Client, clusterID, namespace, registryPrefix string) (bool, error) {
+// restricted to namespace) and reports false if any container or init-container image
+// violates registryPrefix: host-qualified images that lack the prefix always fail,
+// and in strict mode hostless images (Docker Hub references) fail too.
+func checkPodsForRegistryPrefix(client *rancher.Client, clusterID, namespace, registryPrefix string, strict bool) (bool, error) {
 	if strings.Contains(registryPrefix, "registry-1.docker.io") {
 		logrus.Infof("Skipping registry prefix check for public docker registry: %s", registryPrefix)
 		return true, nil
@@ -71,16 +78,28 @@ func checkPodsForRegistryPrefix(client *rancher.Client, clusterID, namespace, re
 			return false, err
 		}
 
+		images := make([]string, 0, len(podSpec.Containers)+len(podSpec.InitContainers))
 		for _, container := range podSpec.Containers {
-			image := container.Image
+			images = append(images, container.Image)
+		}
+		for _, container := range podSpec.InitContainers {
+			images = append(images, container.Image)
+		}
+
+		for _, image := range images {
 			parts := strings.Split(image, "/")
-			if len(parts) > 1 && strings.Contains(parts[0], ".") {
-				if !strings.HasPrefix(image, registryPrefix) {
-					logrus.Warnf("pod/containerImage %s/%s is not using the correct registry prefix", pod.Name, image)
-					return false, nil
-				}
+			hostless := len(parts) == 1 || !strings.Contains(parts[0], ".")
+			if hostless && !strict {
+				// Lenient mode: hostless images resolve to Docker Hub and are served by
+				// containerd mirrors on airgap nodes, so their spec strings are not rewritten.
+				logrus.Debugf("pod/containerImage %s/%s is using the public registry", pod.Name, image)
+				continue
 			}
-			logrus.Debugf("pod/containerImage %s/%s is using the public registry", pod.Name, image)
+			if !strings.HasPrefix(image, registryPrefix) {
+				logrus.Warnf("pod/containerImage %s/%s is not using the correct registry prefix", pod.Name, image)
+				return false, nil
+			}
+			logrus.Debugf("pod/containerImage %s/%s is using the expected registry prefix", pod.Name, image)
 		}
 	}
 	return true, nil

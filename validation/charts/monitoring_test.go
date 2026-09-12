@@ -168,12 +168,12 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 	registrySetting, err := client.Management.Setting.ByID(systemDefaultRegistrySettingID)
 	require.NoError(m.T(), err)
 	if registrySetting.Value != "" {
-		m.T().Logf("Verifying monitoring pods use registry prefix %q", registrySetting.Value)
+		logrus.Infof("Verifying monitoring pods use registry prefix %q", registrySetting.Value)
 		isUsingRegistry, err := registries.CheckNamespacedPodsForRegistryPrefix(client, m.project.ClusterID, charts.RancherMonitoringNamespace, registrySetting.Value)
 		require.NoError(m.T(), err)
 		require.True(m.T(), isUsingRegistry, "pods in %s are not using the expected registry prefix %q (offending images are logged as warnings above)", charts.RancherMonitoringNamespace, registrySetting.Value)
 	} else {
-		m.T().Log("system-default-registry is empty; skipping registry prefix verification (non-airgap)")
+		logrus.Info("system-default-registry is empty; skipping registry prefix verification (non-airgap)")
 	}
 
 	paths := []string{alertManagerPath, grafanaPath, prometheusGraphPath, prometheusRulesPath, prometheusTargetsPath}
