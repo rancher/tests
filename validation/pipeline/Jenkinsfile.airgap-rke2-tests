@@ -655,8 +655,15 @@ enable_ui_plugin_mirror: true'''
                     // present, so version-gated suites match the Rancher under test (e.g.
                     // the alerting suite is excluded on 2.15 until a compatible
                     // rancher-alerting-drivers chart ships).
-                    def versionTagMatcher = (params.RANCHER_VERSION ?: '') =~ /^v?(2\.\d+)([.-].*)?$/
-                    def derivedVersionTag = versionTagMatcher.matches() ? versionTagMatcher.group(1) : null
+                    // Plain strings only: a java.util.regex.Matcher held in a local across a
+                    // later pipeline step (fileExists below) breaks CPS program-state
+                    // serialization with NotSerializableException. replaceAll returns the
+                    // input unchanged on no match, so validate the shape afterwards and
+                    // treat anything else (main, latest, empty) as "no derivable version".
+                    def derivedVersionTag = (params.RANCHER_VERSION ?: '').replaceAll(/^v?(2\.\d+)([.-].*)?$/, '$1')
+                    if (!(derivedVersionTag ==~ /\d+\.\d+/)) {
+                        derivedVersionTag = null
+                    }
                     // GO_TAGS may arrive comma- or space-separated; tokenize on both so version-tag
                     // detection sees real tags, and rejoin with commas (go test's -tags separator)
                     // so an appended tag can never split into a bare package pattern downstream.
