@@ -104,6 +104,8 @@ Notes:
 
 Example tags from `rancher-alerting-drivers` `109.0.0`.
 
+> **Note (Rancher 2.15 compatibility):** `rancher-alerting-drivers` currently has no 2.15-compatible release, so `TestAlertingTestSuite` is compile-time excluded on 2.15 (`&& !2.15` build tag in `alerting_test.go`) — every prerequisite below can be satisfied and an airgap 2.15 run still reports **no alerting coverage** (only `TestMonitoringTestSuite` runs; the pipeline passes the derived `2.15` version tag automatically). The gate resolves on 2.14 and older; remove the `!2.15` tag once a compatible chart ships in `rancher-charts`.
+
 | Component                    | Image Repository (upstream default `docker.io/…`)         | Example Tag | When Needed                                              |
 |------------------------------|------------------------------------------------------------|-------------|----------------------------------------------------------|
 | Alerting drivers CLI         | `rancher/kuberlr-kubectl`                                  | `v7.0.3`    | Always (chart entrypoint)                                |

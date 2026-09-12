@@ -658,7 +658,7 @@ enable_ui_plugin_mirror: true'''
                     def versionTagMatcher = (params.RANCHER_VERSION ?: '') =~ /^v?(2\.\d+)([.-].*)?$/
                     def derivedVersionTag = versionTagMatcher.matches() ? versionTagMatcher.group(1) : null
                     def suppliedVersionTags = goTags.split().findAll { it ==~ /\d+\.\d+/ }
-                    if (derivedVersionTag && suppliedVersionTags && !suppliedVersionTags.contains(derivedVersionTag)) {
+                    if (derivedVersionTag && suppliedVersionTags.any { it != derivedVersionTag }) {
                         error "GO_TAGS '${goTags}' carries Rancher version tag(s) ${suppliedVersionTags.join(', ')} that conflict with " +
                             "RANCHER_VERSION ${params.RANCHER_VERSION} (derived '${derivedVersionTag}'); align them so exactly one " +
                             "Rancher version tag is active — two active version tags would enable deprecated suites for the wrong release"

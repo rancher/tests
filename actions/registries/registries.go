@@ -50,8 +50,12 @@ func checkPodsForRegistryPrefix(client *rancher.Client, clusterID, namespace, re
 
 	// Normalize to exactly one trailing slash so the comparison ends at a registry or
 	// project boundary: prefix "registry.local/proxycache" must not match images under
-	// "registry.local/proxycache-foreign/...".
-	registryPrefix = strings.TrimRight(registryPrefix, "/") + "/"
+	// "registry.local/proxycache-foreign/...". An empty prefix keeps the historical
+	// no-op behavior (every image matches) that non-airgap callers rely on when
+	// system-default-registry is unset.
+	if registryPrefix != "" {
+		registryPrefix = strings.TrimRight(registryPrefix, "/") + "/"
+	}
 
 	downstreamClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
