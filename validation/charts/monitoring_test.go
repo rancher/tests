@@ -1,4 +1,4 @@
-//go:build (validation || infra.rke1 || cluster.any || stress || pit.daily || pit.elemental || pit.harvester.daily) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke2k3s && !sanity && !extended && !airgap.pit
+//go:build (validation || infra.rke1 || cluster.any || stress || pit.daily || pit.elemental || pit.harvester.daily) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke2k3s && !sanity && !extended
 
 package charts
 
@@ -26,6 +26,7 @@ import (
 	"github.com/rancher/tests/actions/monitoring"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/registries"
 	"github.com/rancher/tests/actions/services"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -162,6 +163,19 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 		require.NoError(m.T(), err)
 	}
 
+	// Airgap verification: when system-default-registry is set, every pod in the monitoring
+	// namespace must pull images prefixed with it; silent Docker Hub fallbacks must fail loudly.
+	registrySetting, err := client.Management.Setting.ByID(systemDefaultRegistrySettingID)
+	require.NoError(m.T(), err)
+	if registrySetting.Value != "" {
+		logrus.Infof("Verifying monitoring pods use registry prefix %q", registrySetting.Value)
+		isUsingRegistry, err := registries.CheckNamespacedPodsForRegistryPrefix(client, m.project.ClusterID, charts.RancherMonitoringNamespace, registrySetting.Value)
+		require.NoError(m.T(), err)
+		require.True(m.T(), isUsingRegistry, "pods in %s are not using the expected registry prefix %q (offending images are logged as warnings above)", charts.RancherMonitoringNamespace, registrySetting.Value)
+	} else {
+		logrus.Info("system-default-registry is empty; skipping registry prefix verification (non-airgap)")
+	}
+
 	paths := []string{alertManagerPath, grafanaPath, prometheusGraphPath, prometheusRulesPath, prometheusTargetsPath}
 	for _, path := range paths {
 		m.T().Logf("Validating %s is accessible", path)
@@ -241,11 +255,11 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 		workerNodes = append(workerNodes, *newNode)
 	}
 
-	randWorkerNodeIP, err := monitoring.PickNodeAddress(workerNodes, m.monitoringConfig.NodeAddressTypes())
+	randWorkerNodeIP, selectedAddressType, err := monitoring.PickNodeAddressWithType(workerNodes, m.monitoringConfig.NodeAddressTypes())
 	require.NoError(m.T(), err)
 
 	// Get URL and string versions of origin with the random node address
-	hostWithProtocol := fmt.Sprintf("http://%v:%v", randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort)
+	hostWithProtocol := "http://" + monitoring.JoinNodeAddressPort(randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort)
 	urlOfHost, err := url.Parse(hostWithProtocol)
 	require.NoError(m.T(), err)
 
@@ -288,11 +302,19 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 	require.NoError(m.T(), err)
 	assert.Equal(m.T(), editedRouteSecretResp.Name, charts.RancherMonitoringAlertSecret)
 
-	m.T().Logf("Validating traefik is accessible externally")
-	host := fmt.Sprintf("%v:%v", randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort)
-	result, err := ingresses.IsIngressExternallyAccessible(client, host, "dashboard", false)
-	assert.NoError(m.T(), err)
-	assert.True(m.T(), result)
+	if monitoring.ProbeModeForAddressType(selectedAddressType) == monitoring.ProbeModeRunner {
+		m.T().Logf("Validating traefik is accessible externally")
+		host := monitoring.JoinNodeAddressPort(randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort)
+		result, err := ingresses.IsIngressExternallyAccessible(client, host, "dashboard", false)
+		assert.NoError(m.T(), err)
+		assert.True(m.T(), result)
+	} else {
+		logrus.Infof("Selected node address type %q is not runner-reachable; probing the webhook receiver in-cluster via the Rancher proxy", selectedAddressType)
+		probeURL := monitoring.WebhookReceiverProbeURL(randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort, "dashboard")
+		output, err := monitoring.ProbeHTTPInCluster(client, m.project.ClusterID, probeURL)
+		assert.NoError(m.T(), err)
+		assert.True(m.T(), monitoring.IsReachableHTTPStatus(output), "webhook receiver not reachable in-cluster (HTTP status %q)", output)
+	}
 
 	m.T().Logf("Validating webhook deploy")
 	err = shepherdCharts.WatchAndWaitDeployments(client, m.project.ClusterID, webhookReceiverNamespace.Name, metav1.ListOptions{})
