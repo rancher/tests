@@ -4,8 +4,8 @@ package charts
 
 import (
 	"fmt"
-	"math/rand"
 	"net/url"
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -17,11 +17,13 @@ import (
 	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/ingresses"
-	kubeapinodes "github.com/rancher/shepherd/extensions/kubeapi/nodes"
+	"github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
 	actionsClusters "github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/kubeapi/secrets"
+	"github.com/rancher/tests/actions/monitoring"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/services"
@@ -42,6 +44,7 @@ type MonitoringTestSuite struct {
 	chartInstallOptions *charts.InstallOptions
 	chartFeatureOptions *charts.RancherMonitoringOpts
 	cluster             *clusters.ClusterMeta
+	monitoringConfig    *monitoring.MonitoringTestConfig
 }
 
 func (m *MonitoringTestSuite) TearDownSuite() {
@@ -58,6 +61,14 @@ func (m *MonitoringTestSuite) SetupSuite() {
 	require.NoError(m.T(), err)
 
 	m.client = client
+
+	// Load monitoring-specific config (webhook receiver image, skip flag, node address preference).
+	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	monitoringConfig := new(monitoring.MonitoringTestConfig)
+	operations.LoadObjectFromMap(monitoring.ConfigurationFileKey, cattleConfig, monitoringConfig)
+	monitoringConfig.ApplyDefaults()
+	require.NoError(m.T(), monitoringConfig.Validate())
+	m.monitoringConfig = monitoringConfig
 
 	// Get clusterName from config yaml
 	clusterName := client.RancherConfig.ClusterName
@@ -164,12 +175,17 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 	require.NoError(m.T(), err)
 	require.True(m.T(), prometheusTargetsResult)
 
+	if m.monitoringConfig.SkipWebhookReceiver {
+		logrus.Infof("Skipping webhook receiver validation: %s.skipWebhookReceiver is true", monitoring.ConfigurationFileKey)
+		return
+	}
+
 	m.T().Log("Creating webhook receiver's namespace")
 	webhookReceiverNamespace, err := namespaces.CreateNamespace(client, webhookReceiverNamespaceName, "{}", map[string]string{}, map[string]string{}, m.project)
 	require.NoError(m.T(), err)
 
 	m.T().Log("Creating alert webhook receiver deployment and its resources")
-	alertWebhookReceiverDeploymentResp, err := createAlertWebhookReceiverDeployment(client, m.project.ClusterID, webhookReceiverNamespace.Name, webhookReceiverDeploymentName)
+	alertWebhookReceiverDeploymentResp, err := createAlertWebhookReceiverDeployment(client, m.project.ClusterID, webhookReceiverNamespace.Name, webhookReceiverDeploymentName, m.monitoringConfig.WebhookReceiverImage)
 	require.NoError(m.T(), err)
 	assert.Equal(m.T(), alertWebhookReceiverDeploymentResp.Name, webhookReceiverDeploymentName)
 
@@ -205,7 +221,7 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 	err = v1.ConvertToK8sType(webhookReceiverServiceResp.Spec, webhookReceiverServiceSpec)
 	require.NoError(m.T(), err)
 
-	// Get a random worker node' public external IP of a specific cluster
+	// Get a random worker node address of a specific cluster using the configured address preference
 	logrus.Infof("Getting the node using the label [%v]", actionsClusters.LabelWorker)
 	query, err := url.ParseQuery(actionsClusters.LabelWorker)
 	require.NoError(m.T(), err)
@@ -213,9 +229,8 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 	nodeList, err := steveclient.SteveType("node").List(query)
 	require.NoError(m.T(), err)
 
-	workerNodePublicIPs := []string{}
+	workerNodes := []corev1.Node{}
 	for _, machine := range nodeList.Data {
-		logrus.Info("Getting the node IP")
 		newNode := &corev1.Node{}
 		err = steveV1.ConvertToK8sType(machine.JSONResp, newNode)
 		if err != nil {
@@ -223,19 +238,14 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 			continue // Skip invalid nodes instead of failing completely
 		}
 
-		nodeIP := kubeapinodes.GetNodeIP(newNode, corev1.NodeExternalIP)
-		if nodeIP == "" {
-			logrus.Warnf("Node %s has no external IP", newNode.Name)
-			continue
-		}
-		workerNodePublicIPs = append(workerNodePublicIPs, nodeIP)
+		workerNodes = append(workerNodes, *newNode)
 	}
 
-	require.NotEmpty(m.T(), workerNodePublicIPs, "No worker nodes with external IPs found")
-	randWorkerNodePublicIP := workerNodePublicIPs[rand.Intn(len(workerNodePublicIPs))]
+	randWorkerNodeIP, err := monitoring.PickNodeAddress(workerNodes, m.monitoringConfig.NodeAddressTypes())
+	require.NoError(m.T(), err)
 
-	// Get URL and string versions of origin with random node' public IP
-	hostWithProtocol := fmt.Sprintf("http://%v:%v", randWorkerNodePublicIP, webhookReceiverServiceSpec.Ports[0].NodePort)
+	// Get URL and string versions of origin with the random node address
+	hostWithProtocol := fmt.Sprintf("http://%v:%v", randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort)
 	urlOfHost, err := url.Parse(hostWithProtocol)
 	require.NoError(m.T(), err)
 
@@ -279,7 +289,7 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 	assert.Equal(m.T(), editedRouteSecretResp.Name, charts.RancherMonitoringAlertSecret)
 
 	m.T().Logf("Validating traefik is accessible externally")
-	host := fmt.Sprintf("%v:%v", randWorkerNodePublicIP, webhookReceiverServiceSpec.Ports[0].NodePort)
+	host := fmt.Sprintf("%v:%v", randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort)
 	result, err := ingresses.IsIngressExternallyAccessible(client, host, "dashboard", false)
 	assert.NoError(m.T(), err)
 	assert.True(m.T(), result)
