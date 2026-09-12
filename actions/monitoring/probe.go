@@ -54,9 +54,13 @@ func IsReachableHTTPStatus(status string) bool {
 }
 
 // ProbeHTTPInCluster curls probeURL from inside the target cluster and returns the raw log
-// output (the curl-written HTTP status code). The command runs in a short-lived shell-image
-// job on the target cluster through the Rancher proxy (the same mechanism DeleteMonitoringResources
-// uses for teardown), so the go test runner needs no route into the node subnet.
+// output (the curl-written HTTP status code). Redirects are followed (-L) so the reported
+// status is the final response — Traefik answers GET /dashboard with a 302 to /dashboard/,
+// and the runner-side Go client follows redirects automatically, so the in-cluster probe
+// must match that behavior instead of failing on the healthy redirect. The command runs in
+// a short-lived shell-image job on the target cluster through the Rancher proxy (the same
+// mechanism DeleteMonitoringResources uses for teardown), so the go test runner needs no
+// route into the node subnet.
 func ProbeHTTPInCluster(client *rancher.Client, clusterID, probeURL string) (string, error) {
-	return kubectl.Command(client, nil, clusterID, []string{"curl", "-sS", "-o", "/dev/null", "-w", "%{http_code}", probeURL}, "")
+	return kubectl.Command(client, nil, clusterID, []string{"curl", "-sSL", "-o", "/dev/null", "-w", "%{http_code}", probeURL}, "")
 }
