@@ -14,8 +14,9 @@ The cluster nodes — the local Rancher cluster nodes and the registered downstr
 
 ```yaml
 mirrors:
-  # Hostless image references (e.g. rancher/shell, the kubectl sidecar of the webhook
-  # receiver) resolve to docker.io/quay.io and are served through these mirrors.
+  # Hostless image references (e.g. rancher/shell, the kubectl sidecar of the
+  # webhook receiver) normalize to docker.io and are served through the docker.io
+  # mirror; only explicitly qualified quay.io/... references use the quay.io mirror.
   docker.io:
     endpoint:
       - "<PRIVATE_REGISTRY_URL>"

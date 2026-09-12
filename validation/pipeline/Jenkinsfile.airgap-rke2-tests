@@ -656,9 +656,16 @@ enable_ui_plugin_mirror: true'''
                     // the alerting suite is excluded on 2.15 until a compatible
                     // rancher-alerting-drivers chart ships).
                     def versionTagMatcher = (params.RANCHER_VERSION ?: '') =~ /^v?(2\.\d+)([.-].*)?$/
-                    if (versionTagMatcher.matches() && !goTags.split().toList().contains(versionTagMatcher.group(1))) {
-                        goTags += " ${versionTagMatcher.group(1)}"
-                        echo "Derived Rancher version tag '${versionTagMatcher.group(1)}'; effective GO_TAGS: ${goTags}"
+                    def derivedVersionTag = versionTagMatcher.matches() ? versionTagMatcher.group(1) : null
+                    def suppliedVersionTags = goTags.split().findAll { it ==~ /\d+\.\d+/ }
+                    if (derivedVersionTag && suppliedVersionTags && !suppliedVersionTags.contains(derivedVersionTag)) {
+                        error "GO_TAGS '${goTags}' carries Rancher version tag(s) ${suppliedVersionTags.join(', ')} that conflict with " +
+                            "RANCHER_VERSION ${params.RANCHER_VERSION} (derived '${derivedVersionTag}'); align them so exactly one " +
+                            "Rancher version tag is active — two active version tags would enable deprecated suites for the wrong release"
+                    }
+                    if (derivedVersionTag && !suppliedVersionTags.contains(derivedVersionTag)) {
+                        goTags += " ${derivedVersionTag}"
+                        echo "Derived Rancher version tag '${derivedVersionTag}'; effective GO_TAGS: ${goTags}"
                     }
                     def goTimeout     = params.GO_TIMEOUT ?: '45m'
                     def testCases     = goTestCase ?: goTestPackage
